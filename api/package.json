@@ -1,0 +1,44 @@
+{
+  "name": "top-ai-ideas-api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.build.json",
+    "start": "node dist/index.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx src/scripts/seed.ts",
+    "db:reset": "rm -f /data/app.db && drizzle-kit migrate",
+    "openapi:json": "tsx src/openapi/export.ts",
+    "openapi:html": "tsx src/openapi/html.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.10.3",
+    "@hono/zod-validator": "^0.1.11",
+    "better-sqlite3": "^9.0.0",
+    "drizzle-orm": "^0.30.10",
+    "hono": "^4.3.7",
+    "pino": "^9.1.0",
+    "pino-pretty": "^11.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.14.2",
+    "@typescript-eslint/eslint-plugin": "^7.8.0",
+    "@typescript-eslint/parser": "^7.8.0",
+    "drizzle-kit": "^0.26.1",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  }
+}

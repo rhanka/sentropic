@@ -1,0 +1,53 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: npm run dev
+    volumes:
+      - ./api:/app
+      - ./data:/data
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=sqlite:///data/app.db
+    ports:
+      - "8787:8787"
+    depends_on:
+      - sqlite
+    tty: true
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    volumes:
+      - ./ui:/app
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8787/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    tty: true
+
+  sqlite:
+    image: keinos/sqlite3:latest
+    command: tail -f /dev/null
+    volumes:
+      - ./data:/data
+
+  litestream:
+    image: litestream/litestream:0.3
+    volumes:
+      - ./data:/data
+      - ./api/litestream.yml:/etc/litestream.yml:ro
+    command: replicate
+    depends_on:
+      - sqlite
+
+volumes:
+  data:
+    driver: local

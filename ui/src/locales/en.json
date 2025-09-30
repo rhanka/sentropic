@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Home",
+    "folders": "Folders",
+    "companies": "Companies",
+    "business": "Business configuration",
+    "useCases": "Use cases",
+    "matrix": "Matrix",
+    "dashboard": "Dashboard",
+    "design": "Design",
+    "data": "Data",
+    "settings": "Settings"
+  }
+}
