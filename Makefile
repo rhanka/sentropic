@@ -1,6 +1,7 @@
-
 SHELL := /bin/bash
 DOCKER_COMPOSE ?= docker compose
+COMPOSE_RUN_UI := $(DOCKER_COMPOSE) run --rm ui
+COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
 
 .DEFAULT_GOAL := help
 
@@ -21,47 +22,47 @@ build: build-ui build-api ## Build UI and API artifacts
 
 .PHONY: build-ui
 build-ui: ## Build the SvelteKit UI (static)
-	$(DOCKER_COMPOSE) run --rm ui npm run build
+	$(COMPOSE_RUN_UI) npm run build
 
 .PHONY: build-api
 build-api: ## Compile the TypeScript API
-	$(DOCKER_COMPOSE) run --rm api npm run build
+	$(COMPOSE_RUN_API) npm run build
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
 
 .PHONY: typecheck-ui
 typecheck-ui:
-	$(DOCKER_COMPOSE) run --rm ui npm run check
+	$(COMPOSE_RUN_UI) npm run check
 
 .PHONY: typecheck-api
 typecheck-api:
-	$(DOCKER_COMPOSE) run --rm api npm run typecheck
+	$(COMPOSE_RUN_API) npm run typecheck
 
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
 
 .PHONY: lint-ui
 lint-ui:
-	$(DOCKER_COMPOSE) run --rm ui npm run lint
+	$(COMPOSE_RUN_UI) npm run lint
 
 .PHONY: lint-api
 lint-api:
-	$(DOCKER_COMPOSE) run --rm api npm run lint
+	$(COMPOSE_RUN_API) npm run lint
 
 .PHONY: format
 format:
-	$(DOCKER_COMPOSE) run --rm ui npm run format
-	$(DOCKER_COMPOSE) run --rm api npm run format
+	$(COMPOSE_RUN_UI) npm run format
+	$(COMPOSE_RUN_API) npm run format
 
 .PHONY: format-check
 format-check:
-	$(DOCKER_COMPOSE) run --rm ui npm run format:check
-	$(DOCKER_COMPOSE) run --rm api npm run format:check
+	$(COMPOSE_RUN_UI) npm run format:check
+	$(COMPOSE_RUN_API) npm run format:check
 
 .PHONY: audit
 audit:
-	@echo "Audit to be implemented" && exit 0
+	@echo "Audit placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
 # Testing
@@ -71,11 +72,11 @@ test: test-ui test-api ## Run all tests
 
 .PHONY: test-ui
 test-ui:
-	$(DOCKER_COMPOSE) run --rm ui npm run test
+	$(COMPOSE_RUN_UI) npm run test
 
 .PHONY: test-api
 test-api:
-	$(DOCKER_COMPOSE) run --rm api npm run test
+	$(COMPOSE_RUN_API) npm run test
 
 .PHONY: test-int
 test-int:
@@ -134,52 +135,52 @@ logs:
 
 .PHONY: sh-ui
 sh-ui:
-	$(DOCKER_COMPOSE) run --rm ui sh
+	$(COMPOSE_RUN_UI) sh
 
 .PHONY: sh-api
 sh-api:
-	$(DOCKER_COMPOSE) run --rm api sh
+	$(COMPOSE_RUN_API) sh
 
 # -----------------------------------------------------------------------------
 # Database helpers
 # -----------------------------------------------------------------------------
 .PHONY: db-generate
 db-generate:
-	$(DOCKER_COMPOSE) run --rm api npm run db:generate
+	$(COMPOSE_RUN_API) npm run db:generate
 
 .PHONY: db-migrate
 db-migrate:
-	$(DOCKER_COMPOSE) run --rm api npm run db:migrate
+	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
 db-reset:
-	$(DOCKER_COMPOSE) run --rm api npm run db:reset
+	$(COMPOSE_RUN_API) npm run db:reset
 
 .PHONY: db-seed
 db-seed:
-	$(DOCKER_COMPOSE) run --rm api npm run db:seed
+	$(COMPOSE_RUN_API) npm run db:seed
 
 .PHONY: db-lint
 db-lint:
-	@echo "DB lint placeholder" && exit 0
+	@echo "Database lint placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
-# OpenAPI & client generation
+# API documentation & client generation
 # -----------------------------------------------------------------------------
 .PHONY: openapi-json
 openapi-json:
-	$(DOCKER_COMPOSE) run --rm api npm run openapi:json
+	$(COMPOSE_RUN_API) npm run openapi:json
 
 .PHONY: openapi-html
 openapi-html:
-	$(DOCKER_COMPOSE) run --rm api npm run openapi:html
+	$(COMPOSE_RUN_API) npm run openapi:html
 
 .PHONY: client-gen
 client-gen:
-	$(DOCKER_COMPOSE) run --rm ui npm run client:generate
+	$(COMPOSE_RUN_UI) npm run client:generate
 
 # -----------------------------------------------------------------------------
-# Prompts & AI governance
+# Prompts workflow
 # -----------------------------------------------------------------------------
 .PHONY: prompts-lint
 prompts-lint:
@@ -187,7 +188,7 @@ prompts-lint:
 
 .PHONY: prompts-test
 prompts-test:
-	@echo "Prompts tests placeholder" && exit 0
+	@echo "Prompts test placeholder" && exit 0
 
 .PHONY: prompts-freeze
 prompts-freeze:
@@ -199,7 +200,7 @@ prompts-diff:
 
 .PHONY: prompts-doc
 prompts-doc:
-	@echo "Prompts doc placeholder" && exit 0
+	@echo "Prompts documentation placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
 # Security & compliance
@@ -245,11 +246,11 @@ deploy-api:
 
 .PHONY: release
 release:
-	@echo "Release pipeline placeholder" && exit 0
+	@echo "Release process placeholder" && exit 0
 
 .PHONY: tag
 tag:
-	@echo "Tag placeholder" && exit 0
+	@echo "Tagging placeholder" && exit 0
 
 .PHONY: version-bump
 version-bump:
