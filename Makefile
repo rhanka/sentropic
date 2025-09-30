@@ -14,8 +14,9 @@ help:
 # Installation & Build
 # -----------------------------------------------------------------------------
 .PHONY: install
-install: ## Install UI and API dependencies inside Docker images
-	$(DOCKER_COMPOSE) build
+install: ## Install UI and API dependencies inside Docker containers
+	$(COMPOSE_RUN_API) npm install
+	$(COMPOSE_RUN_UI) npm install
 
 .PHONY: build
 build: build-ui build-api ## Build UI and API artifacts
@@ -111,15 +112,15 @@ coverage-report:
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) up
+	$(DOCKER_COMPOSE) up --build
 
 .PHONY: dev-ui
 dev-ui:
-	$(DOCKER_COMPOSE) up ui
+	$(DOCKER_COMPOSE) up --build ui
 
 .PHONY: dev-api
 dev-api:
-	$(DOCKER_COMPOSE) up api
+	$(DOCKER_COMPOSE) up --build api
 
 .PHONY: up
 up: ## Start the full stack in detached mode

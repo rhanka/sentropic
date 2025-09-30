@@ -4,7 +4,8 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    command: npm run dev
+      target: dev
+    command: sh -c "npm install && npm run dev"
     volumes:
       - ./api:/app
       - api_node_modules:/app/node_modules
@@ -22,7 +23,8 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+      target: dev
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     volumes:
       - ./ui:/app
       - ui_node_modules:/app/node_modules
@@ -51,7 +53,5 @@ services:
       - sqlite
 
 volumes:
-  data:
-    driver: local
   api_node_modules:
   ui_node_modules:

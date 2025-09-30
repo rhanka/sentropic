@@ -1,13 +1,14 @@
 access-key-id: ${SCW_ACCESS_KEY}
 secret-access-key: ${SCW_SECRET_KEY}
-replicas:
-  - url: ${S3_ENDPOINT}/${S3_BUCKET_NAME}
-    region: ${S3_REGION}
-    bucket: ${S3_BUCKET_NAME}
-    path: app.db
-    snapshot-interval: 1m
-    retention: 24h
-    validation-interval: 5m
+
 dbs:
   - path: /data/app.db
-    replicas: ${S3_ENDPOINT}/${S3_BUCKET_NAME}
+    replicas:
+      - type: s3
+        bucket: ${S3_BUCKET_NAME}
+        path: app.db
+        endpoint: ${S3_ENDPOINT}
+        region: ${S3_REGION}
+        snapshot-interval: 1m
+        retention: 24h
+        validation-interval: 5m
