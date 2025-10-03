@@ -1,14 +1,21 @@
+export type LevelDescription = {
+  level: number;
+  description: string;
+};
+
 export type MatrixAxis = {
   id: string;
   name: string;
   weight: number;
   description?: string;
+  levelDescriptions?: LevelDescription[];
 };
 
 export type MatrixThreshold = {
   level: number;
   points: number;
   threshold: number;
+  cases?: number;
 };
 
 export type MatrixConfig = {
@@ -16,6 +23,4 @@ export type MatrixConfig = {
   complexityAxes: MatrixAxis[];
   valueThresholds: MatrixThreshold[];
   complexityThresholds: MatrixThreshold[];
-  valueLevelDescriptions?: string[];
-  complexityLevelDescriptions?: string[];
 };

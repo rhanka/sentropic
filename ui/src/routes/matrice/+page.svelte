@@ -5,6 +5,10 @@
   import { onMount } from 'svelte';
 
   let isLoading = false;
+  let editedConfig = { ...$matrixStore };
+  let selectedAxis: any = null;
+  let isValueAxis = false;
+  let showDescriptionsDialog = false;
 
   onMount(async () => {
     await loadMatrix();
@@ -32,6 +36,7 @@
           ? JSON.parse(folder.matrixConfig) 
           : folder.matrixConfig;
         matrixStore.set(matrix);
+        editedConfig = { ...matrix };
         addToast({
           type: 'success',
           message: `Matrice du dossier "${folder.name}" chargée`
@@ -53,47 +58,62 @@
     }
   };
 
-  const addAxis = (type: 'valueAxes' | 'complexityAxes') => {
-    matrixStore.update((matrix) => ({
-      ...matrix,
-      [type]: [
-        ...matrix[type],
-        { name: 'Nouvel axe', weight: 1 }
-      ]
-    }));
+  const handleValueWeightChange = (index: number, weight: string) => {
+    const newWeight = parseFloat(weight);
+    if (isNaN(newWeight)) return;
+    
+    const newValueAxes = [...editedConfig.valueAxes];
+    newValueAxes[index] = { ...newValueAxes[index], weight: newWeight };
+    editedConfig = { ...editedConfig, valueAxes: newValueAxes };
+  };
+  
+  const handleComplexityWeightChange = (index: number, weight: string) => {
+    const newWeight = parseFloat(weight);
+    if (isNaN(newWeight)) return;
+    
+    const newComplexityAxes = [...editedConfig.complexityAxes];
+    newComplexityAxes[index] = { ...newComplexityAxes[index], weight: newWeight };
+    editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
   };
 
-  const addThreshold = (type: 'valueThresholds' | 'complexityThresholds') => {
-    matrixStore.update((matrix) => ({
-      ...matrix,
-      [type]: [
-        ...matrix[type],
-        { level: matrix[type].length + 1, points: 10, threshold: 10 }
-      ]
-    }));
+  const handleThresholdChange = (isValue: boolean, level: number, field: string, value: string | number) => {
+    if (isValue && editedConfig.valueThresholds) {
+      const newThresholds = [...editedConfig.valueThresholds];
+      const index = newThresholds.findIndex(t => t.level === level);
+      if (index !== -1) {
+        newThresholds[index] = { ...newThresholds[index], [field]: value };
+        editedConfig = { ...editedConfig, valueThresholds: newThresholds };
+      }
+    } else if (!isValue && editedConfig.complexityThresholds) {
+      const newThresholds = [...editedConfig.complexityThresholds];
+      const index = newThresholds.findIndex(t => t.level === level);
+      if (index !== -1) {
+        newThresholds[index] = { ...newThresholds[index], [field]: value };
+        editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
+      }
+    }
   };
 
-  const saveMatrix = async () => {
+  const saveChanges = async () => {
     if (!$currentFolderId) return;
-
+    
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`, {
+      const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          matrixConfig: JSON.stringify($matrixStore)
-        }),
+        body: JSON.stringify(editedConfig)
       });
 
       if (!response.ok) {
         throw new Error('Failed to save matrix');
       }
 
+      matrixStore.set(editedConfig);
       addToast({
         type: 'success',
-        message: 'Matrice sauvegardée avec succès !'
+        message: 'Configuration de la matrice mise à jour'
       });
     } catch (error) {
       console.error('Failed to save matrix:', error);
@@ -103,94 +123,433 @@
       });
     }
   };
+
+  const openAxisDescriptions = (axis: any, isValue: boolean) => {
+    selectedAxis = axis;
+    isValueAxis = isValue;
+    showDescriptionsDialog = true;
+  };
+
+  const renderValueLevels = (stars: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <span class={`text-xl ${i < stars ? "text-yellow-500" : "text-gray-300"}`}>★</span>
+    ));
+  };
+  
+  const renderComplexityLevels = (crosses: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <span class={`font-bold ${i < crosses ? "text-gray-800" : "text-gray-300"}`}>X</span>
+    ));
+  };
+
+  const getLevelDescription = (axis: any, level: number): string => {
+    if (!axis.levelDescriptions) return `Niveau ${level}`;
+    
+    const levelDesc = axis.levelDescriptions.find((ld: any) => ld.level === level);
+    return levelDesc?.description || `Niveau ${level}`;
+  };
+
+  const updateLevelDescription = (levelNum: number, description: string) => {
+    if (!selectedAxis) return;
+    
+    if (isValueAxis) {
+      const axisIndex = editedConfig.valueAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      if (axisIndex === -1) return;
+      
+      const newValueAxes = [...editedConfig.valueAxes];
+      const currentLevelDescs = [...(newValueAxes[axisIndex].levelDescriptions || [])];
+      
+      const levelIndex = currentLevelDescs.findIndex((ld: any) => ld.level === levelNum);
+      if (levelIndex >= 0) {
+        currentLevelDescs[levelIndex] = { ...currentLevelDescs[levelIndex], description };
+      } else {
+        currentLevelDescs.push({ level: levelNum, description });
+      }
+      
+      newValueAxes[axisIndex] = { 
+        ...newValueAxes[axisIndex], 
+        levelDescriptions: currentLevelDescs 
+      };
+      
+      editedConfig = { ...editedConfig, valueAxes: newValueAxes };
+    } else {
+      const axisIndex = editedConfig.complexityAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      if (axisIndex === -1) return;
+      
+      const newComplexityAxes = [...editedConfig.complexityAxes];
+      const currentLevelDescs = [...(newComplexityAxes[axisIndex].levelDescriptions || [])];
+      
+      const levelIndex = currentLevelDescs.findIndex((ld: any) => ld.level === levelNum);
+      if (levelIndex >= 0) {
+        currentLevelDescs[levelIndex] = { ...currentLevelDescs[levelIndex], description };
+      } else {
+        currentLevelDescs.push({ level: levelNum, description });
+      }
+      
+      newComplexityAxes[axisIndex] = { 
+        ...newComplexityAxes[axisIndex], 
+        levelDescriptions: currentLevelDescs 
+      };
+      
+      editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
+    }
+  };
 </script>
 
-<section class="space-y-6">
-  <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold">Configuration de la matrice</h1>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={saveMatrix}>
-      Sauvegarder
-    </button>
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de la Matrice Valeur/Complexité</h1>
+  
+  {#if $currentFolderId}
+    <p class="text-gray-600 -mt-4 mb-6">
+      Dossier sélectionné
+    </p>
+  {/if}
+  
+  <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8">
+    <div class="flex">
+      <svg class="h-6 w-6 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <div>
+        <p class="mb-2">
+          Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.
+        </p>
+        <p class="text-sm">
+          La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun.
+          Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux.
+        </p>
+      </div>
+    </div>
   </div>
-
+  
   {#if isLoading}
-    <div class="rounded border border-blue-200 bg-blue-50 p-4">
-      <p class="text-sm text-blue-700">Chargement de la matrice...</p>
+    <div class="text-center py-8">
+      <p class="text-gray-600">Chargement de la matrice...</p>
+    </div>
+  {:else if !$matrixStore.valueAxes || $matrixStore.valueAxes.length === 0}
+    <div class="text-center py-8">
+      <p class="text-gray-600">Aucune matrice configurée pour ce dossier</p>
+    </div>
+  {:else}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <!-- Value Axes Configuration -->
+      <div class="bg-white rounded-lg shadow-md">
+        <div class="bg-gradient-to-r from-navy to-blue-700 p-4 rounded-t-lg">
+          <h2 class="text-white text-lg font-semibold flex items-center">
+            <span class="mr-2">Axes de Valeur</span>
+            {#each Array.from({ length: 3 })}
+              <span class="text-yellow-500 text-xl">★</span>
+            {/each}
+            {#each Array.from({ length: 2 })}
+              <span class="text-gray-300 text-xl">★</span>
+            {/each}
+          </h2>
+        </div>
+        <div class="p-0">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each editedConfig.valueAxes as axis, index}
+                <tr class="border-t">
+                  <td class="px-4 py-3 font-medium">{axis.name}</td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="3"
+                      step="0.5"
+                      value={axis.weight}
+                      on:input={(e) => handleValueWeightChange(index, e.target.value)}
+                      class="w-20 px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3">
+                    <button 
+                      class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                      on:click={() => openAxisDescriptions(axis, true)}
+                    >
+                      Voir niveaux
+                    </button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Complexity Axes Configuration -->
+      <div class="bg-white rounded-lg shadow-md">
+        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
+          <h2 class="text-white text-lg font-semibold flex items-center">
+            <span class="mr-2">Axes de Complexité</span>
+            {#each Array.from({ length: 3 })}
+              <span class="text-gray-800 font-bold">X</span>
+            {/each}
+            {#each Array.from({ length: 2 })}
+              <span class="text-gray-300 font-bold">X</span>
+            {/each}
+          </h2>
+        </div>
+        <div class="p-0">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each editedConfig.complexityAxes as axis, index}
+                <tr class="border-t">
+                  <td class="px-4 py-3 font-medium">{axis.name}</td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="3"
+                      step="0.5"
+                      value={axis.weight}
+                      on:input={(e) => handleComplexityWeightChange(index, e.target.value)}
+                      class="w-20 px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3">
+                    <button 
+                      class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                      on:click={() => openAxisDescriptions(axis, false)}
+                    >
+                      Voir niveaux
+                    </button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <!-- Value Threshold Configuration -->
+      <div class="bg-white rounded-lg shadow-md">
+        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
+          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Valeur</h2>
+        </div>
+        <div class="p-0">
+          <table class="w-full">
+            <thead class="bg-purple-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Valeur</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-2/5">Seuil</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="bg-gray-100 border-t">
+                <td class="px-4 py-3 font-medium">Poids du critère</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+              </tr>
+              {#each editedConfig.valueThresholds as threshold}
+                <tr class="border-t">
+                  <td class="px-4 py-3 font-medium">
+                    <div class="flex">
+                      {#each Array.from({ length: threshold.level })}
+                        <span class="text-yellow-500 text-xl">★</span>
+                      {/each}
+                      {#each Array.from({ length: 5 - threshold.level })}
+                        <span class="text-gray-300 text-xl">★</span>
+                      {/each}
+                    </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      value={threshold.points}
+                      on:input={(e) => handleThresholdChange(true, threshold.level, "points", parseInt(e.target.value))}
+                      class="w-20 px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      value={threshold.threshold}
+                      on:input={(e) => handleThresholdChange(true, threshold.level, "threshold", parseInt(e.target.value))}
+                      class="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3 text-center font-semibold">
+                    {threshold.cases || 0}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Complexity Threshold Configuration -->
+      <div class="bg-white rounded-lg shadow-md">
+        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
+          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Complexité</h2>
+        </div>
+        <div class="p-0">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Complexité</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-2/5">Seuil</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="bg-gray-100 border-t">
+                <td class="px-4 py-3 font-medium">Poids du critère</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+                <td class="px-4 py-3 text-center">N/A</td>
+              </tr>
+              {#each editedConfig.complexityThresholds as threshold}
+                <tr class="border-t">
+                  <td class="px-4 py-3 font-medium">
+                    <div class="flex">
+                      {#each Array.from({ length: threshold.level })}
+                        <span class="text-gray-800 font-bold">X</span>
+                      {/each}
+                      {#each Array.from({ length: 5 - threshold.level })}
+                        <span class="text-gray-300 font-bold">X</span>
+                      {/each}
+                    </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      value={threshold.points}
+                      on:input={(e) => handleThresholdChange(false, threshold.level, "points", parseInt(e.target.value))}
+                      class="w-20 px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="number"
+                      value={threshold.threshold}
+                      on:input={(e) => handleThresholdChange(false, threshold.level, "threshold", parseInt(e.target.value))}
+                      class="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </td>
+                  <td class="px-4 py-3 text-center font-semibold">
+                    {threshold.cases || 0}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-8">
+      <div class="flex">
+        <svg class="h-6 w-6 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+        </svg>
+        <p>
+          Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.
+        </p>
+      </div>
+    </div>
+    
+    <div class="flex justify-end">
+      <button 
+        on:click={saveChanges}
+        class="bg-navy hover:bg-navy/90 text-white px-4 py-2 rounded flex items-center"
+      >
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+        </svg>
+        Enregistrer la configuration
+      </button>
     </div>
   {/if}
+</div>
 
-  {#if !$currentFolderId}
-    <div class="rounded border border-amber-200 bg-amber-50 p-4">
-      <p class="text-sm text-amber-700">Veuillez sélectionner ou créer un dossier pour configurer sa matrice.</p>
+<!-- Dialog for displaying and editing detailed level descriptions -->
+{#if showDescriptionsDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
+      <div class="p-6">
+        <h3 class="text-lg font-semibold mb-2">
+          {selectedAxis?.name} - Description des niveaux
+        </h3>
+        <p class="text-gray-600 mb-4">
+          Vous pouvez modifier les descriptions des 5 niveaux pour ce critère en cliquant sur le texte:
+        </p>
+        
+        <table class="w-full">
+          <thead>
+            <tr class="border-b">
+              <th class="text-left py-2">Niveau</th>
+              <th class="text-left py-2">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each Array.from({ length: 5 }) as _, level}
+              {@const levelNum = level + 1}
+              <tr class="border-b">
+                <td class="py-3 align-top">
+                  {#if isValueAxis}
+                    <div class="flex">
+                      {#each Array.from({ length: levelNum })}
+                        <span class="text-yellow-500 text-xl">★</span>
+                      {/each}
+                      {#each Array.from({ length: 5 - levelNum })}
+                        <span class="text-gray-300 text-xl">★</span>
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="flex">
+                      {#each Array.from({ length: levelNum })}
+                        <span class="text-gray-800 font-bold">X</span>
+                      {/each}
+                      {#each Array.from({ length: 5 - levelNum })}
+                        <span class="text-gray-300 font-bold">X</span>
+                      {/each}
+                    </div>
+                  {/if}
+                </td>
+                <td class="py-3">
+                  <textarea
+                    value={getLevelDescription(selectedAxis, levelNum)}
+                    on:input={(e) => updateLevelDescription(levelNum, e.target.value)}
+                    class="w-full px-3 py-2 border border-gray-300 rounded resize-none"
+                    rows="3"
+                  ></textarea>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        
+        <div class="flex justify-end mt-4">
+          <button 
+            on:click={() => showDescriptionsDialog = false}
+            class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
     </div>
-  {/if}
-
-  <div class="grid gap-6 md:grid-cols-2">
-    <section class="rounded border border-slate-200 bg-white p-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium">Axes de valeur</h2>
-        <button class="text-sm text-primary" on:click={() => addAxis('valueAxes')}>
-          Ajouter un axe
-        </button>
-      </div>
-      <ul class="mt-3 space-y-2 text-sm text-slate-600">
-        {#each $matrixStore.valueAxes as axis}
-          <li class="flex items-center justify-between rounded border border-slate-200 p-2">
-            <span>{axis.name}</span>
-            <span>Poids: {axis.weight}</span>
-          </li>
-        {/each}
-      </ul>
-    </section>
-    <section class="rounded border border-slate-200 bg-white p-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium">Axes de complexité</h2>
-        <button class="text-sm text-primary" on:click={() => addAxis('complexityAxes')}>
-          Ajouter un axe
-        </button>
-      </div>
-      <ul class="mt-3 space-y-2 text-sm text-slate-600">
-        {#each $matrixStore.complexityAxes as axis}
-          <li class="flex items-center justify-between rounded border border-slate-200 p-2">
-            <span>{axis.name}</span>
-            <span>Poids: {axis.weight}</span>
-          </li>
-        {/each}
-      </ul>
-    </section>
   </div>
-  <div class="grid gap-6 md:grid-cols-2">
-    <section class="rounded border border-slate-200 bg-white p-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium">Seuils valeur</h2>
-        <button class="text-sm text-primary" on:click={() => addThreshold('valueThresholds')}>
-          Ajouter un seuil
-        </button>
-      </div>
-      <ul class="mt-3 space-y-2 text-sm text-slate-600">
-        {#each $matrixStore.valueThresholds as threshold}
-          <li class="flex items-center justify-between rounded border border-slate-200 p-2">
-            <span>Niveau {threshold.level}</span>
-            <span>Points: {threshold.points} – Seuil: {threshold.threshold}</span>
-          </li>
-        {/each}
-      </ul>
-    </section>
-    <section class="rounded border border-slate-200 bg-white p-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium">Seuils complexité</h2>
-        <button class="text-sm text-primary" on:click={() => addThreshold('complexityThresholds')}>
-          Ajouter un seuil
-        </button>
-      </div>
-      <ul class="mt-3 space-y-2 text-sm text-slate-600">
-        {#each $matrixStore.complexityThresholds as threshold}
-          <li class="flex items-center justify-between rounded border border-slate-200 p-2">
-            <span>Niveau {threshold.level}</span>
-            <span>Points: {threshold.points} – Seuil: {threshold.threshold}</span>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  </div>
-</section>
+{/if}
