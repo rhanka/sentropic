@@ -5,6 +5,7 @@ import { db } from '../../db/client';
 import { companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
+import { enrichCompany } from '../../services/openai';
 
 const companyInput = z.object({
   name: z.string().min(1),
@@ -56,4 +57,26 @@ companiesRouter.delete('/:id', async (c) => {
   const id = c.req.param('id');
   await db.delete(companies).where(eq(companies.id, id));
   return c.body(null, 204);
+});
+
+// Endpoint pour l'enrichissement automatique des entreprises
+const aiEnrichInput = z.object({
+  name: z.string().min(1)
+});
+
+companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
+  try {
+    const { name } = c.req.valid('json');
+    const enrichedData = await enrichCompany({ companyName: name });
+    return c.json(enrichedData);
+  } catch (error) {
+    console.error('Error in ai-enrich endpoint:', error);
+    return c.json(
+      { 
+        message: 'Failed to enrich company data', 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, 
+      500
+    );
+  }
 });
