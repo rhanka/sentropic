@@ -86,6 +86,10 @@ Réponse attendue au format JSON:
 const useCaseDetailPrompt = `Génère un cas d'usage détaillé pour "{{use_case}}" dans le contexte suivant: {{user_input}}. 
 Utilise la matrice valeur/complexité fournie: {{matrix}} pour évaluer chaque axe de valeur et complexité.
 
+SYSTÈME DE SCORING FIBONACCI:
+Pour chaque axe, tu DOIS utiliser UNIQUEMENT une de ces valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
+Ces scores sont ensuite mappés aux étoiles (1-5) pour l'affichage.
+
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
   "name": "{{use_case}}",
@@ -129,22 +133,28 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   "valueScores": [
     {
       "axisId": "Nom du 1er axe de valeur",
-      "rating": 4,
-      "description": "Justification du score"
+      "rating": 21,
+      "description": "Justification du score Fibonacci choisi"
     }
     // Complète pour TOUS les axes de valeur présents dans la matrice
+    // Utilise UNIQUEMENT: 0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100
   ],
   "complexityScores": [
     {
       "axisId": "Nom du 1er axe de complexité",
-      "rating": 2,
-      "description": "Justification du score"
+      "rating": 8,
+      "description": "Justification du score Fibonacci choisi"
     }
     // Complète pour TOUS les axes de complexité présents dans la matrice
+    // Utilise UNIQUEMENT: 0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100
   ]
 }
 
-IMPORTANT: Réponds UNIQUEMENT avec le JSON, sans texte avant ou après. Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores.`;
+IMPORTANT: 
+- Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
+- Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
+- Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
+- Justifie chaque score Fibonacci choisi dans la description`;
 
 export type GeneratedFolder = {
   name: string;

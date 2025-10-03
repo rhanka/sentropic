@@ -167,27 +167,6 @@ foldersRouter.get('/list/with-matrices', async (c) => {
   return c.json({ items });
 });
 
-// Endpoint de test pour le mapping Fibonacci
-foldersRouter.get('/fibonacci-test', async (c) => {
-  const testScores = [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100];
-  const results = testScores.map(score => {
-    // Mapping simple pour le test
-    let stars = 1;
-    if (score <= 1) stars = 1;
-    else if (score <= 8) stars = 2;
-    else if (score <= 21) stars = 3;
-    else if (score <= 55) stars = 4;
-    else stars = 5;
-    
-    return { fibonacciScore: score, starLevel: stars };
-  });
-  
-  return c.json({
-    fibonacciValues: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100],
-    starMapping: [0, 2, 8, 34, 100],
-    testResults: results
-  });
-});
 
 foldersRouter.put('/:id/matrix', zValidator('json', matrixSchema), async (c) => {
   const id = c.req.param('id');
