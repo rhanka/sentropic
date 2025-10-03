@@ -40,7 +40,6 @@ const matrixSchema = z.object({
     z.object({
       level: z.number(),
       points: z.number(),
-      threshold: z.number(),
       cases: z.number().optional()
     })
   ),
@@ -48,7 +47,6 @@ const matrixSchema = z.object({
     z.object({
       level: z.number(),
       points: z.number(),
-      threshold: z.number(),
       cases: z.number().optional()
     })
   )

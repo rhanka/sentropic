@@ -184,17 +184,17 @@ export const defaultMatrixConfig: MatrixConfig = {
     }
   ],
   valueThresholds: [
-    { level: 1, points: 0, threshold: 300, cases: 0 },
-    { level: 2, points: 40, threshold: 700, cases: 0 },
-    { level: 3, points: 100, threshold: 1000, cases: 0 },
-    { level: 4, points: 400, threshold: 1500, cases: 0 },
-    { level: 5, points: 2000, threshold: 4000, cases: 0 }
+    { level: 1, points: 1, cases: 0 },
+    { level: 2, points: 2, cases: 0 },
+    { level: 3, points: 3, cases: 0 },
+    { level: 4, points: 5, cases: 0 },
+    { level: 5, points: 8, cases: 0 }
   ],
   complexityThresholds: [
-    { level: 1, points: 0, threshold: 100, cases: 0 },
-    { level: 2, points: 50, threshold: 250, cases: 0 },
-    { level: 3, points: 100, threshold: 500, cases: 0 },
-    { level: 4, points: 250, threshold: 1000, cases: 0 },
-    { level: 5, points: 1000, threshold: 2000, cases: 0 }
+    { level: 1, points: 1, cases: 0 },
+    { level: 2, points: 2, cases: 0 },
+    { level: 3, points: 3, cases: 0 },
+    { level: 4, points: 5, cases: 0 },
+    { level: 5, points: 8, cases: 0 }
   ]
 };

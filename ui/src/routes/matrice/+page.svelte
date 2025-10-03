@@ -80,19 +80,19 @@
     editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
   };
 
-  const handleThresholdChange = (isValue: boolean, level: number, field: string, value: string | number) => {
+  const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
     if (isValue && editedConfig.valueThresholds) {
       const newThresholds = [...editedConfig.valueThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], [field]: value };
+        newThresholds[index] = { ...newThresholds[index], points: points };
         editedConfig = { ...editedConfig, valueThresholds: newThresholds };
       }
     } else if (!isValue && editedConfig.complexityThresholds) {
       const newThresholds = [...editedConfig.complexityThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], [field]: value };
+        newThresholds[index] = { ...newThresholds[index], points: points };
         editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
       }
     }
@@ -301,7 +301,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-navy to-blue-700 p-4 rounded-t-lg">
+        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
             {#each Array.from({ length: 3 }) as _}
@@ -414,18 +414,17 @@
           <table class="w-full">
             <thead class="bg-purple-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Valeur</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-2/5">Seuil</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Valeur</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Points Fibonacci</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Nombre de cas</th>
               </tr>
             </thead>
             <tbody>
               <tr class="bg-gray-100 border-t">
                 <td class="px-4 py-3 font-medium">Poids du critère</td>
-                <td class="px-4 py-3 text-center">N/A</td>
-                <td class="px-4 py-3 text-center">N/A</td>
-                <td class="px-4 py-3 text-center">N/A</td>
+                
+                
+                
               </tr>
               {#each editedConfig.valueThresholds as threshold}
                 <tr class="border-t">
@@ -443,16 +442,13 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handleThresholdChange(true, threshold.level, "points", parseInt(e.target.value))}
+                      on:input={(e) => handlePointsChange(true, threshold.level, parseInt(e.target.value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
                   <td class="px-4 py-3">
                     <input
                       type="number"
-                      value={threshold.threshold}
-                      on:input={(e) => handleThresholdChange(true, threshold.level, "threshold", parseInt(e.target.value))}
-                      class="w-full px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
                   <td class="px-4 py-3 text-center font-semibold">
@@ -476,16 +472,15 @@
               <tr>
                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Complexité</th>
                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-2/5">Seuil</th>
                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
               </tr>
             </thead>
             <tbody>
               <tr class="bg-gray-100 border-t">
                 <td class="px-4 py-3 font-medium">Poids du critère</td>
-                <td class="px-4 py-3 text-center">N/A</td>
-                <td class="px-4 py-3 text-center">N/A</td>
-                <td class="px-4 py-3 text-center">N/A</td>
+                
+                
+                
               </tr>
               {#each editedConfig.complexityThresholds as threshold}
                 <tr class="border-t">
@@ -503,16 +498,13 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handleThresholdChange(false, threshold.level, "points", parseInt(e.target.value))}
+                      on:input={(e) => handlePointsChange(false, threshold.level, parseInt(e.target.value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
                   <td class="px-4 py-3">
                     <input
                       type="number"
-                      value={threshold.threshold}
-                      on:input={(e) => handleThresholdChange(false, threshold.level, "threshold", parseInt(e.target.value))}
-                      class="w-full px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
                   <td class="px-4 py-3 text-center font-semibold">

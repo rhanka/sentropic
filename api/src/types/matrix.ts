@@ -14,7 +14,6 @@ export type MatrixAxis = {
 export type MatrixThreshold = {
   level: number;
   points: number;
-  threshold: number;
   cases?: number;
 };
 
