@@ -82,7 +82,7 @@ export const defaultMatrixConfig: MatrixConfig = {
   valueAxes: [
     {
       id: 'sponsorship',
-      name: 'Niveau de Sponsorship',
+      name: 'Urgence à agir',
       weight: 2.0,
       description: 'Niveau de support hiérarchique pour le projet',
       levelDescriptions: defaultValueDescriptions["Niveau de Sponsorship"].map((desc, index) => ({
@@ -184,17 +184,17 @@ export const defaultMatrixConfig: MatrixConfig = {
     }
   ],
   valueThresholds: [
-    { level: 1, points: 1, cases: 0 },
+    { level: 1, points: 0, cases: 0 },
     { level: 2, points: 2, cases: 0 },
-    { level: 3, points: 3, cases: 0 },
-    { level: 4, points: 5, cases: 0 },
-    { level: 5, points: 8, cases: 0 }
+    { level: 3, points: 8, cases: 0 },
+    { level: 4, points: 34, cases: 0 },
+    { level: 5, points: 100, cases: 0 }
   ],
   complexityThresholds: [
-    { level: 1, points: 1, cases: 0 },
+    { level: 1, points: 0, cases: 0 },
     { level: 2, points: 2, cases: 0 },
-    { level: 3, points: 3, cases: 0 },
-    { level: 4, points: 5, cases: 0 },
-    { level: 5, points: 8, cases: 0 }
+    { level: 3, points: 8, cases: 0 },
+    { level: 4, points: 34, cases: 0 },
+    { level: 5, points: 100, cases: 0 }
   ]
 };
