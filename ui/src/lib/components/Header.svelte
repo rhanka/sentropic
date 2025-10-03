@@ -1,7 +1,7 @@
 <script lang="ts">
   import { derived } from 'svelte/store';
   import { page } from '$app/stores';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
   import { userStore } from '../stores/auth';
   import { setLocale } from '../i18n';
 
@@ -15,7 +15,8 @@
     { href: '/dashboard', label: 'nav.dashboard' },
     { href: '/design', label: 'nav.design' },
     { href: '/donnees', label: 'nav.data' },
-    { href: '/parametres', label: 'nav.settings' }
+    { href: '/parametres', label: 'nav.settings' },
+    { href: '/admin', label: 'Administration' }
   ];
 
   const currentPath = derived(page, ($page) => $page.url.pathname);
@@ -23,6 +24,16 @@
   const onLocaleChange = (event: Event) => {
     const target = event.target as HTMLSelectElement;
     setLocale(target.value);
+  };
+
+  // Fonction pour traduire avec fallback
+  const translate = (key: string) => {
+    try {
+      return $_(key);
+    } catch (error) {
+      // Fallback si i18n n'est pas encore initialisé
+      return key;
+    }
   };
 </script>
 
@@ -34,7 +45,7 @@
           href={item.href}
           class:active-link={$currentPath === item.href}
           class="rounded px-2 py-1 text-slate-600 transition hover:bg-slate-100"
-          >{$_(item.label)}</a
+          >{translate(item.label)}</a
         >
       {/each}
     </nav>
