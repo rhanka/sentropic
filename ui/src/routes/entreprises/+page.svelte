@@ -1,6 +1,6 @@
 <script lang="ts">
   import { companiesStore, fetchCompanies, createCompany, deleteCompany, enrichCompany, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
-  import { addToast } from '$lib/stores/toast';
+  import { addToast, removeToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
 
   let showForm = false;
@@ -29,41 +29,56 @@
     }
   });
 
-  const handleEnrichCompany = async () => {
-    if (!draft.name?.trim()) return;
-    
-    isEnriching = true;
-    
-    try {
-      const enrichedData: CompanyEnrichmentData = await enrichCompany(draft.name);
-      
-      // Mettre à jour le draft avec les données enrichies
-      draft = {
-        ...draft,
-        name: enrichedData.normalizedName,
-        industry: enrichedData.industry,
-        size: enrichedData.size,
-        products: enrichedData.products,
-        processes: enrichedData.processes,
-        challenges: enrichedData.challenges,
-        objectives: enrichedData.objectives,
-        technologies: enrichedData.technologies
+      const handleEnrichCompany = async () => {
+        if (!draft.name?.trim()) return;
+        
+        isEnriching = true;
+        let progressToastId = '';
+        
+        try {
+          // Toaster de progression
+          progressToastId = addToast({
+            type: 'info',
+            message: 'Enrichissement en cours avec l\'IA...',
+            duration: 0 // Toaster persistant
+          });
+          
+          const enrichedData: CompanyEnrichmentData = await enrichCompany(draft.name);
+          
+          // Mettre à jour le draft avec les données enrichies
+          draft = {
+            ...draft,
+            name: enrichedData.normalizedName,
+            industry: enrichedData.industry,
+            size: enrichedData.size,
+            products: enrichedData.products,
+            processes: enrichedData.processes,
+            challenges: enrichedData.challenges,
+            objectives: enrichedData.objectives,
+            technologies: enrichedData.technologies
+          };
+          
+          // Remplacer le toaster de progression par un message de succès
+          if (progressToastId) {
+            removeToast(progressToastId);
+          }
+          addToast({
+            type: 'success',
+            message: 'Entreprise enrichie avec succès !'
+          });
+        } catch (err) {
+          console.error('Failed to enrich company:', err);
+          if (progressToastId) {
+            removeToast(progressToastId);
+          }
+          addToast({
+            type: 'error',
+            message: err instanceof Error ? err.message : 'Erreur lors de l\'enrichissement'
+          });
+        } finally {
+          isEnriching = false;
+        }
       };
-      
-      addToast({
-        type: 'success',
-        message: 'Entreprise enrichie avec succès !'
-      });
-    } catch (err) {
-      console.error('Failed to enrich company:', err);
-      addToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de l\'enrichissement'
-      });
-    } finally {
-      isEnriching = false;
-    }
-  };
 
   const handleCreateCompany = async () => {
     if (!draft.name?.trim()) return;
@@ -200,12 +215,13 @@
                   Nom de l'entreprise *
                 </label>
                 <div class="flex gap-2">
-                  <input
-                    id="company-name"
-                    class="flex-1 rounded border border-slate-300 p-2"
-                    placeholder="Nom de l'entreprise"
-                    bind:value={draft.name}
-                  />
+                      <input
+                        id="company-name"
+                        class="flex-1 rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                        placeholder="Nom de l'entreprise"
+                        bind:value={draft.name}
+                        disabled={isEnriching}
+                      />
                   <button 
                     class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
                     on:click={handleEnrichCompany}
@@ -222,12 +238,13 @@
                 <label for="company-industry" class="block text-sm font-medium text-slate-700 mb-1">
                   Secteur d'activité
                 </label>
-                <input
-                  id="company-industry"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Secteur d'activité"
-                  bind:value={draft.industry}
-                />
+                    <input
+                      id="company-industry"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Secteur d'activité"
+                      bind:value={draft.industry}
+                      disabled={isEnriching}
+                    />
               </div>
 
               <!-- Taille -->
@@ -235,12 +252,13 @@
                 <label for="company-size" class="block text-sm font-medium text-slate-700 mb-1">
                   Taille de l'entreprise
                 </label>
-                <input
-                  id="company-size"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Nombre d'employés, chiffre d'affaires..."
-                  bind:value={draft.size}
-                />
+                    <input
+                      id="company-size"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Nombre d'employés, chiffre d'affaires..."
+                      bind:value={draft.size}
+                      disabled={isEnriching}
+                    />
               </div>
 
               <!-- Produits/Services -->
@@ -248,13 +266,14 @@
                 <label for="company-products" class="block text-sm font-medium text-slate-700 mb-1">
                   Produits et services
                 </label>
-                <textarea
-                  id="company-products"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Description des principaux produits ou services"
-                  bind:value={draft.products}
-                  rows="3"
-                ></textarea>
+                    <textarea
+                      id="company-products"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Description des principaux produits ou services"
+                      bind:value={draft.products}
+                      rows="3"
+                      disabled={isEnriching}
+                    ></textarea>
               </div>
 
               <!-- Processus -->
@@ -262,13 +281,14 @@
                 <label for="company-processes" class="block text-sm font-medium text-slate-700 mb-1">
                   Processus métier clés
                 </label>
-                <textarea
-                  id="company-processes"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Description des processus métier principaux"
-                  bind:value={draft.processes}
-                  rows="2"
-                ></textarea>
+                    <textarea
+                      id="company-processes"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Description des processus métier principaux"
+                      bind:value={draft.processes}
+                      rows="2"
+                      disabled={isEnriching}
+                    ></textarea>
               </div>
 
               <!-- Défis -->
@@ -276,13 +296,14 @@
                 <label for="company-challenges" class="block text-sm font-medium text-slate-700 mb-1">
                   Défis principaux
                 </label>
-                <textarea
-                  id="company-challenges"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Défis auxquels l'entreprise est confrontée"
-                  bind:value={draft.challenges}
-                  rows="2"
-                ></textarea>
+                    <textarea
+                      id="company-challenges"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Défis auxquels l'entreprise est confrontée"
+                      bind:value={draft.challenges}
+                      rows="2"
+                      disabled={isEnriching}
+                    ></textarea>
               </div>
 
               <!-- Objectifs -->
@@ -290,13 +311,14 @@
                 <label for="company-objectives" class="block text-sm font-medium text-slate-700 mb-1">
                   Objectifs stratégiques
                 </label>
-                <textarea
-                  id="company-objectives"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Objectifs stratégiques de l'entreprise"
-                  bind:value={draft.objectives}
-                  rows="2"
-                ></textarea>
+                    <textarea
+                      id="company-objectives"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Objectifs stratégiques de l'entreprise"
+                      bind:value={draft.objectives}
+                      rows="2"
+                      disabled={isEnriching}
+                    ></textarea>
               </div>
 
               <!-- Technologies -->
@@ -304,13 +326,14 @@
                 <label for="company-technologies" class="block text-sm font-medium text-slate-700 mb-1">
                   Technologies utilisées
                 </label>
-                <textarea
-                  id="company-technologies"
-                  class="w-full rounded border border-slate-300 p-2"
-                  placeholder="Technologies et systèmes d'information utilisés"
-                  bind:value={draft.technologies}
-                  rows="2"
-                ></textarea>
+                    <textarea
+                      id="company-technologies"
+                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
+                      placeholder="Technologies et systèmes d'information utilisés"
+                      bind:value={draft.technologies}
+                      rows="2"
+                      disabled={isEnriching}
+                    ></textarea>
               </div>
             </div>
 
@@ -323,13 +346,13 @@
               >
                 Annuler
               </button>
-          <button 
-            class="rounded bg-primary px-4 py-2 text-white" 
-            on:click={handleCreateCompany}
-            disabled={!draft.name?.trim()}
-          >
-            Enregistrer
-          </button>
+              <button 
+                class="rounded bg-primary px-4 py-2 text-white disabled:opacity-50" 
+                on:click={handleCreateCompany}
+                disabled={!draft.name?.trim() || isEnriching}
+              >
+                {isEnriching ? 'Enrichissement...' : 'Enregistrer'}
+              </button>
         </div>
       </div>
     </div>

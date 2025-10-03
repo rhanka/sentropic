@@ -42,23 +42,27 @@ const defaultBusinessConfig = {
   ]
 };
 
-const companyInfoPrompt = `Recherchez et fournissez des informations complètes sur l'entreprise {{company_name}}. 
-Les secteurs d'activité disponibles sont: ${defaultBusinessConfig.sectors.map(s => s.name).join(', ')}.
-Normalisez le nom de l'entreprise selon son usage officiel.
+    const companyInfoPrompt = `Recherchez et fournissez des informations complètes sur l'entreprise {{company_name}}. 
+    Les secteurs d'activité disponibles sont: ${defaultBusinessConfig.sectors.map(s => s.name).join(', ')}.
+    Normalisez le nom de l'entreprise selon son usage officiel.
 
-IMPORTANT: Tous les champs doivent être des chaînes de caractères lisibles, pas des objets JSON.
+    IMPORTANT: 
+    - Répondez UNIQUEMENT avec du JSON valide
+    - Ne commencez pas par du texte explicatif
+    - Tous les champs doivent être des chaînes de caractères lisibles
+    - L'industrie DOIT correspondre exactement à un des secteurs listés
 
-Retournez les informations UNIQUEMENT au format JSON suivant:
-{
-  "normalizedName": "Nom normalisé de l'entreprise",
-  "industry": "Secteur d'activité (DOIT correspondre à un des secteurs listés)",
-  "size": "Taille en nombre d'employés et chiffre d'affaires si disponible (format texte lisible)",
-  "products": "Description détaillée des principaux produits ou services (format texte lisible)",
-  "processes": "Description des processus métier clés (format texte lisible)",
-  "challenges": "Défis principaux auxquels l'entreprise est confrontée actuellement (format texte lisible)",
-  "objectives": "Objectifs stratégiques connus de l'entreprise (format texte lisible)",
-  "technologies": "Technologies ou systèmes d'information déjà utilisés (format texte lisible)"
-}`;
+    Format de réponse JSON strict:
+    {
+      "normalizedName": "Nom normalisé de l'entreprise",
+      "industry": "Secteur d'activité (DOIT correspondre à un des secteurs listés)",
+      "size": "Taille en nombre d'employés et chiffre d'affaires si disponible",
+      "products": "Description détaillée des principaux produits ou services",
+      "processes": "Description des processus métier clés",
+      "challenges": "Défis principaux auxquels l'entreprise est confrontée actuellement",
+      "objectives": "Objectifs stratégiques connus de l'entreprise",
+      "technologies": "Technologies ou systèmes d'information déjà utilisés"
+    }`;
 
 // Prompts selon la spécification
 const folderNamePrompt = `Génère un nom et une brève description pour un dossier qui contiendra des cas d'usage d'IA pour le contexte suivant: {{user_input}}.
@@ -289,8 +293,18 @@ export const enrichCompany = async (params: CompanyEnrichmentParams): Promise<Co
       throw new Error('No content received from OpenAI');
     }
 
-        // Parser le JSON de la réponse
-        const enrichedData = JSON.parse(content) as CompanyEnrichmentResult;
+    // Nettoyer le contenu pour extraire le JSON
+    let jsonContent = content.trim();
+    
+    // Si le contenu commence par du texte explicatif, extraire le JSON
+    const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonContent = jsonMatch[0];
+    }
+
+    try {
+      // Parser le JSON de la réponse
+      const enrichedData = JSON.parse(jsonContent) as CompanyEnrichmentResult;
         
         // Valider que l'industrie correspond à un secteur disponible
         const validIndustries = defaultBusinessConfig.sectors.map(s => s.name);
@@ -324,6 +338,11 @@ export const enrichCompany = async (params: CompanyEnrichmentParams): Promise<Co
         };
 
         return serializedData;
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      console.error('Raw content:', content);
+      throw new Error(`Failed to parse OpenAI response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
   } catch (error) {
     console.error('Error enriching company:', error);
     throw new Error(`Failed to enrich company: ${error instanceof Error ? error.message : 'Unknown error'}`);
