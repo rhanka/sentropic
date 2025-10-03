@@ -148,13 +148,25 @@ foldersRouter.get('/:id/matrix', async (c) => {
     return c.json({ message: 'Not found' }, 404);
   }
   return c.json(
-    parseMatrix(folder.matrixConfig ?? null) ?? {
-      valueAxes: [],
-      complexityAxes: [],
-      valueThresholds: [],
-      complexityThresholds: []
-    }
+    parseMatrix(folder.matrixConfig ?? null) ?? defaultMatrixConfig
   );
+});
+
+// Endpoint pour récupérer la matrice de base par défaut
+foldersRouter.get('/matrix/default', async (c) => {
+  return c.json(defaultMatrixConfig);
+});
+
+// Endpoint pour lister les dossiers avec leurs matrices (pour copier)
+foldersRouter.get('/list/with-matrices', async (c) => {
+  const rows = await db.select().from(folders);
+  const items = rows.map((folder) => ({
+    id: folder.id,
+    name: folder.name,
+    description: folder.description,
+    hasMatrix: !!folder.matrixConfig
+  }));
+  return c.json({ items });
 });
 
 foldersRouter.put('/:id/matrix', zValidator('json', matrixSchema), async (c) => {

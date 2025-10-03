@@ -9,6 +9,10 @@
   let selectedAxis: any = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
+  let showCreateMatrixDialog = false;
+  let createMatrixType = 'default'; // 'default', 'copy', 'blank'
+  let availableFolders = [];
+  let selectedFolderToCopy = '';
 
   onMount(async () => {
     await loadMatrix();
@@ -130,17 +134,7 @@
     showDescriptionsDialog = true;
   };
 
-  const renderValueLevels = (stars: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <span class={`text-xl ${i < stars ? "text-yellow-500" : "text-gray-300"}`}>★</span>
-    ));
-  };
-  
-  const renderComplexityLevels = (crosses: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <span class={`font-bold ${i < crosses ? "text-gray-800" : "text-gray-300"}`}>X</span>
-    ));
-  };
+  // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
 
   const getLevelDescription = (axis: any, level: number): string => {
     if (!axis.levelDescriptions) return `Niveau ${level}`;
@@ -194,6 +188,73 @@
       editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
     }
   };
+
+  const loadAvailableFolders = async () => {
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/folders/list/with-matrices');
+      if (response.ok) {
+        const data = await response.json();
+        availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
+      }
+    } catch (error) {
+      console.error('Failed to load folders:', error);
+    }
+  };
+
+  const createNewMatrix = async () => {
+    if (!$currentFolderId) return;
+    
+    try {
+      let matrixToUse;
+      
+      if (createMatrixType === 'default') {
+        // Utiliser la matrice de base par défaut
+        const response = await fetch('http://localhost:8787/api/v1/folders/matrix/default');
+        matrixToUse = await response.json();
+      } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
+        // Copier une matrice existante
+        const response = await fetch(`http://localhost:8787/api/v1/folders/${selectedFolderToCopy}/matrix`);
+        matrixToUse = await response.json();
+      } else if (createMatrixType === 'blank') {
+        // Matrice vierge
+        matrixToUse = {
+          valueAxes: [],
+          complexityAxes: [],
+          valueThresholds: [],
+          complexityThresholds: []
+        };
+      }
+      
+      if (matrixToUse) {
+        const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(matrixToUse)
+        });
+        
+        if (response.ok) {
+          matrixStore.set(matrixToUse);
+          editedConfig = { ...matrixToUse };
+          showCreateMatrixDialog = false;
+          addToast({
+            type: 'success',
+            message: 'Nouvelle matrice créée avec succès'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to create matrix:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la création de la matrice'
+      });
+    }
+  };
+
+  const openCreateMatrixDialog = async () => {
+    await loadAvailableFolders();
+    showCreateMatrixDialog = true;
+  };
 </script>
 
 <div class="container mx-auto px-4 py-8">
@@ -228,7 +289,13 @@
     </div>
   {:else if !$matrixStore.valueAxes || $matrixStore.valueAxes.length === 0}
     <div class="text-center py-8">
-      <p class="text-gray-600">Aucune matrice configurée pour ce dossier</p>
+      <p class="text-gray-600 mb-4">Aucune matrice configurée pour ce dossier</p>
+      <button 
+        on:click={openCreateMatrixDialog}
+        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+      >
+        Créer une nouvelle matrice
+      </button>
     </div>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -237,10 +304,10 @@
         <div class="bg-gradient-to-r from-navy to-blue-700 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
-            {#each Array.from({ length: 3 })}
+            {#each Array.from({ length: 3 }) as _}
               <span class="text-yellow-500 text-xl">★</span>
             {/each}
-            {#each Array.from({ length: 2 })}
+            {#each Array.from({ length: 2 }) as _}
               <span class="text-gray-300 text-xl">★</span>
             {/each}
           </h2>
@@ -289,10 +356,10 @@
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
-            {#each Array.from({ length: 3 })}
+            {#each Array.from({ length: 3 }) as _}
               <span class="text-gray-800 font-bold">X</span>
             {/each}
-            {#each Array.from({ length: 2 })}
+            {#each Array.from({ length: 2 }) as _}
               <span class="text-gray-300 font-bold">X</span>
             {/each}
           </h2>
@@ -470,7 +537,16 @@
       </div>
     </div>
     
-    <div class="flex justify-end">
+    <div class="flex justify-between">
+      <button 
+        on:click={openCreateMatrixDialog}
+        class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
+      >
+        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        Créer une nouvelle matrice
+      </button>
       <button 
         on:click={saveChanges}
         class="bg-navy hover:bg-navy/90 text-white px-4 py-2 rounded flex items-center"
@@ -547,6 +623,93 @@
             class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
           >
             Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Dialog for creating a new matrix -->
+{#if showCreateMatrixDialog}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg max-w-md w-full mx-4">
+      <div class="p-6">
+        <h3 class="text-lg font-semibold mb-4">
+          Créer une nouvelle matrice
+        </h3>
+        <p class="text-gray-600 mb-6">
+          Choisissez le type de matrice à créer :
+        </p>
+        
+        <div class="space-y-4">
+          <!-- Option 1: Matrice de base -->
+          <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+            <input 
+              type="radio" 
+              bind:group={createMatrixType} 
+              value="default" 
+              class="mr-3"
+            />
+            <div>
+              <div class="font-medium">Matrice de base</div>
+              <div class="text-sm text-gray-600">Utiliser la matrice par défaut avec toutes les descriptions complètes</div>
+            </div>
+          </label>
+          
+          <!-- Option 2: Copier une matrice existante -->
+          <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+            <input 
+              type="radio" 
+              bind:group={createMatrixType} 
+              value="copy" 
+              class="mr-3"
+            />
+            <div class="flex-1">
+              <div class="font-medium">Copier une matrice existante</div>
+              <div class="text-sm text-gray-600 mb-2">Copier la matrice d'un autre dossier</div>
+              {#if createMatrixType === 'copy'}
+                <select 
+                  bind:value={selectedFolderToCopy}
+                  class="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                >
+                  <option value="">Sélectionner un dossier...</option>
+                  {#each availableFolders as folder}
+                    <option value={folder.id}>{folder.name}</option>
+                  {/each}
+                </select>
+              {/if}
+            </div>
+          </label>
+          
+          <!-- Option 3: Matrice vierge -->
+          <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+            <input 
+              type="radio" 
+              bind:group={createMatrixType} 
+              value="blank" 
+              class="mr-3"
+            />
+            <div>
+              <div class="font-medium">Matrice vierge</div>
+              <div class="text-sm text-gray-600">Commencer avec une matrice vide</div>
+            </div>
+          </label>
+        </div>
+        
+        <div class="flex justify-end gap-3 mt-6">
+          <button 
+            on:click={() => showCreateMatrixDialog = false}
+            class="px-4 py-2 text-gray-600 hover:text-gray-800"
+          >
+            Annuler
+          </button>
+          <button 
+            on:click={createNewMatrix}
+            disabled={createMatrixType === 'copy' && !selectedFolderToCopy}
+            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Créer
           </button>
         </div>
       </div>
