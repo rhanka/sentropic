@@ -38,7 +38,7 @@
 </script>
 
 <header class="border-b border-slate-200 bg-white">
-  <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+  <div class="mx-auto flex max-w-8xl items-center justify-between px-4 py-3">
     <nav class="flex flex-1 flex-wrap items-center gap-4 text-sm font-medium">
       {#each navItems as item}
         <a

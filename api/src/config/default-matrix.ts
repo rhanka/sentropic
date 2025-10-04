@@ -2,47 +2,26 @@ import type { MatrixConfig } from '../types/matrix';
 
 // Descriptions par défaut pour les axes de valeur
 const defaultValueDescriptions = {
-  "Urgence à agir": [
-    "Projet non prioritaire / Peut attendre",
-    "Amélioration souhaitable / Priorité faible",
-    "Projet important / Priorité moyenne",
-    "Projet critique / Priorité élevée",
-    "Urgence absolue / Priorité maximale"
+  "Valeur d'affaire": [
+    "Amélioration interne mineure, invisible pour les clients.",
+    "Optimise un petit processus, utile à une seule équipe.",
+    "Améliore l'efficacité ou l'expérience pour plusieurs équipes ou un segment de clients.",
+    "Impact direct sur la satisfaction client ou la productivité globale.",
+    "Augmente les revenus, renforce la position de marché ou différencie l'entreprise"
   ],
-  "Niveau de Sponsorship": [
-    "Équipe locale / Aucun sponsor clair",
-    "Opérationnel / Gestionnaire 1er niveau",
-    "Direction Service Client / TI",
-    "Direction Principale / VP Service Client",
-    "Vice-Présidence Exécutive / Comité Exécutif"
+  "Urgence dans le temps": [
+    "Peut être reporté sans aucun impact d'affaires.",
+    "Retarde une opportunité mineure",
+    "Retarde un lancement, une saison ou un jalon de projet",
+    "Un retard expose l'entreprise à des pertes financières ou contractuelles.",
+    "Un retard entraîne des pénalités légales, perte de clients ou réputation."
   ],
-  "Impact Satisfaction Client (CSAT/NPS)": [
-    "Impact négligeable ou très localisé sur la satisfaction client.",
-    "Amélioration mineure d'un point de contact peu fréquent ou irritant mineur.",
-    "Réduction notable des irritants sur motifs courants (ex: facturation simple). Impact mesurable sur le CSAT.",
-    "Amélioration sensible de l'expérience sur motifs importants (déménagement) OU réduction significative de l'effort client.",
-    "Amélioration majeure sur motifs critiques (pannes) OU refonte positive d'un parcours client clé. Fort impact potentiel sur CSAT/NPS."
-  ],
-  "Gains de Productivité (Agents & Opérations)": [
-    "Impact quasi nul sur le TMT (<2%) ou les ETP (<0.5).",
-    "Réduction mineure du TMT (2-5%) ou RPC, économie 0.5-1 ETP.",
-    "Réduction significative du TMT (5-10%), amélioration du RPC, économie 1-3 ETP.",
-    "Réduction importante du TMT (10-15%), automatisation partielle d'une tâche, économie 3-5 ETP.",
-    "Réduction majeure du TMT (>15%) ou RPC, forte automatisation/déviation vers self-service, économie > 5 ETP."
-  ],
-  "Amélioration Expérience Agent & Rétention": [
-    "Pas d'impact notable sur le travail de l'agent.",
-    "Simplifie une tâche très spécifique ou rarement frustrante.",
-    "Simplifie des tâches modérément complexes, réduit le stress sur certains types d'appels, aide à la formation initiale.",
-    "Automatise une partie des tâches répétitives, fournit une assistance contextuelle utile.",
-    "Automatise tâches frustrantes, assistance temps réel précieuse, réduit la charge cognitive, améliore satisfaction agent."
-  ],
-  "Conformité & Image Publique": [
-    "N/A ou impact neutre.",
-    "Aide marginale à la conformité (ex: logging simple).",
-    "Aide à maintenir la conformité OU améliore l'image sur un aspect spécifique (ex: transparence facturation).",
-    "Renforce la conformité sur un point précis OU améliore l'image sur un sujet sensible.",
-    "Renforce significativement la conformité (traçabilité, données) OU améliore l'image publique sur des enjeux clés (pannes)."
+  "Réduction du risque / opportunité": [
+    "N'atténue aucun risque, n'ouvre aucune nouvelle voie.",
+    "Réduit un petit irritant opérationnel ou ouvre une opportunité mineure.",
+    "Diminue un risque identifié par la direction ou ouvre un marché de niche",
+    "Réduit un risque stratégique (ex. sécurité, conformité) ou crée une nouvelle ligne d'affaires.",
+    "Élimine un risque critique pouvant menacer l'entreprise ou ouvre une opportunité majeure (nouveau marché, partenariat stratégique)."
   ]
 };
 
@@ -88,51 +67,31 @@ const defaultComplexityDescriptions = {
 export const defaultMatrixConfig: MatrixConfig = {
   valueAxes: [
     {
-      id: 'sponsorship',
-      name: 'Urgence à agir',
+      id: 'business_value',
+      name: 'Valeur d\'affaire',
       weight: 2.0,
-      description: 'Niveau d\'urgence et de priorité du projet',
-      levelDescriptions: defaultValueDescriptions["Urgence à agir"].map((desc, index) => ({
+      description: 'Impact sur la valeur d\'affaire de l\'entreprise',
+      levelDescriptions: defaultValueDescriptions["Valeur d'affaire"].map((desc, index) => ({
         level: index + 1,
         description: desc
       }))
     },
     {
-      id: 'customer_satisfaction',
-      name: 'Impact Satisfaction Client (CSAT/NPS)',
+      id: 'time_urgency',
+      name: 'Urgence dans le temps',
       weight: 1.5,
-      description: 'Impact sur la satisfaction client',
-      levelDescriptions: defaultValueDescriptions["Impact Satisfaction Client (CSAT/NPS)"].map((desc, index) => ({
+      description: 'Urgence temporelle du projet',
+      levelDescriptions: defaultValueDescriptions["Urgence dans le temps"].map((desc, index) => ({
         level: index + 1,
         description: desc
       }))
     },
     {
-      id: 'productivity',
-      name: 'Gains de Productivité (Agents & Opérations)',
+      id: 'risk_reduction_opportunity',
+      name: 'Réduction du risque / opportunité',
       weight: 1.5,
-      description: 'Amélioration de la productivité',
-      levelDescriptions: defaultValueDescriptions["Gains de Productivité (Agents & Opérations)"].map((desc, index) => ({
-        level: index + 1,
-        description: desc
-      }))
-    },
-    {
-      id: 'agent_experience',
-      name: 'Amélioration Expérience Agent & Rétention',
-      weight: 1.0,
-      description: 'Impact sur l\'expérience des agents',
-      levelDescriptions: defaultValueDescriptions["Amélioration Expérience Agent & Rétention"].map((desc, index) => ({
-        level: index + 1,
-        description: desc
-      }))
-    },
-    {
-      id: 'compliance',
-      name: 'Conformité & Image Publique',
-      weight: 1.0,
-      description: 'Impact sur la conformité et l\'image',
-      levelDescriptions: defaultValueDescriptions["Conformité & Image Publique"].map((desc, index) => ({
+      description: 'Réduction des risques et création d\'opportunités',
+      levelDescriptions: defaultValueDescriptions["Réduction du risque / opportunité"].map((desc, index) => ({
         level: index + 1,
         description: desc
       }))

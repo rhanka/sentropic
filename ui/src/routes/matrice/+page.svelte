@@ -2,16 +2,18 @@
   import { matrixStore } from '$lib/stores/matrix';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
+  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
+  import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
   let originalConfig = { ...$matrixStore };
-  let hasUnsavedChanges = false;
   let selectedAxis: any = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
   let showCreateMatrixDialog = false;
+  let showCloseWarning = false;
   let createMatrixType = 'default'; // 'default', 'copy', 'blank'
   let availableFolders = [];
   let selectedFolderToCopy = '';
@@ -44,7 +46,6 @@
         matrixStore.set(matrix);
         editedConfig = { ...matrix };
         originalConfig = { ...matrix };
-        hasUnsavedChanges = false;
         addToast({
           type: 'success',
           message: `Matrice du dossier "${folder.name}" chargée`
@@ -142,12 +143,47 @@
       newAxes[index] = { ...newAxes[index], name: newName };
       editedConfig = { ...editedConfig, complexityAxes: newAxes };
     }
+    
+    // Les modifications sont maintenant gérées par le store unsavedChanges
   };
 
   const openAxisDescriptions = (axis: any, isValue: boolean) => {
     selectedAxis = axis;
     isValueAxis = isValue;
     showDescriptionsDialog = true;
+  };
+
+  const handleCloseDescriptionsDialog = () => {
+    // Vérifier s'il y a des modifications non sauvegardées via le store
+    if ($unsavedChangesStore.changes.length > 0) {
+      showCloseWarning = true;
+    } else {
+      showDescriptionsDialog = false;
+    }
+  };
+
+  const handleCloseWarningCancel = () => {
+    showCloseWarning = false;
+  };
+
+  const handleCloseWarningDiscard = () => {
+    unsavedChangesStore.reset();
+    showCloseWarning = false;
+    showDescriptionsDialog = false;
+  };
+
+  const handleCloseWarningSave = async () => {
+    try {
+      await unsavedChangesStore.saveAll();
+      showCloseWarning = false;
+      showDescriptionsDialog = false;
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la sauvegarde'
+      });
+    }
   };
 
   // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
@@ -203,6 +239,8 @@
       
       editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
     }
+    
+    // Les modifications sont maintenant gérées par le store unsavedChanges
   };
 
   const loadAvailableFolders = async () => {
@@ -333,7 +371,7 @@
             {/each}
             {#each Array.from({ length: 2 }) as _}
               <span class="text-gray-300 text-xl">★</span>
-            {/each}
+        {/each}
           </h2>
         </div>
         <div class="p-0">
@@ -349,12 +387,19 @@
               {#each editedConfig.valueAxes as axis, index}
                 <tr class="border-t">
                   <td class="px-4 py-3">
-                    <input
-                      type="text"
-                      value={axis.name}
-                      on:input={(e) => updateAxisName(true, index, e.target.value)}
-                      class="w-full px-2 py-1 border border-gray-300 rounded text-sm font-medium"
-                    />
+                    <div class="text-sm">
+                      <EditableInput
+                        value={axis.name}
+                        originalValue={originalConfig.valueAxes[index]?.name || ""}
+                        changeId={`value-axis-${index}-name`}
+                        apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                        fullData={editedConfig}
+                        on:change={(e) => updateAxisName(true, index, e.detail.value)}
+                        on:saved={() => {
+                          originalConfig = { ...editedConfig };
+                        }}
+                      />
+                    </div>
                   </td>
                   <td class="px-4 py-3">
                     <input
@@ -369,11 +414,16 @@
                   </td>
                   <td class="px-4 py-3">
                     <button 
-                      class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
                       on:click={() => openAxisDescriptions(axis, true)}
+                      title="Voir les niveaux"
+                      aria-label="Voir les niveaux de {axis.name}"
                     >
-                      Voir niveaux
-                    </button>
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                      </svg>
+        </button>
                   </td>
                 </tr>
               {/each}
@@ -392,7 +442,7 @@
             {/each}
             {#each Array.from({ length: 2 }) as _}
               <span class="text-gray-300 font-bold">X</span>
-            {/each}
+        {/each}
           </h2>
         </div>
         <div class="p-0">
@@ -408,12 +458,19 @@
               {#each editedConfig.complexityAxes as axis, index}
                 <tr class="border-t">
                   <td class="px-4 py-3">
-                    <input
-                      type="text"
-                      value={axis.name}
-                      on:input={(e) => updateAxisName(false, index, e.target.value)}
-                      class="w-full px-2 py-1 border border-gray-300 rounded text-sm font-medium"
-                    />
+                    <div class="text-sm">
+                      <EditableInput
+                        value={axis.name}
+                        originalValue={originalConfig.complexityAxes[index]?.name || ""}
+                        changeId={`complexity-axis-${index}-name`}
+                        apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                        fullData={editedConfig}
+                        on:change={(e) => updateAxisName(false, index, e.detail.value)}
+                        on:saved={() => {
+                          originalConfig = { ...editedConfig };
+                        }}
+                      />
+  </div>
                   </td>
                   <td class="px-4 py-3">
                     <input
@@ -428,11 +485,16 @@
                   </td>
                   <td class="px-4 py-3">
                     <button 
-                      class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
                       on:click={() => openAxisDescriptions(axis, false)}
+                      title="Voir les niveaux"
+                      aria-label="Voir les niveaux de {axis.name}"
                     >
-                      Voir niveaux
-                    </button>
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                      </svg>
+        </button>
                   </td>
                 </tr>
               {/each}
@@ -462,10 +524,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level })}
+                      {#each Array.from({ length: threshold.level }) as _}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level })}
+                      {#each Array.from({ length: 5 - threshold.level }) as _}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
@@ -507,10 +569,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level })}
+                      {#each Array.from({ length: threshold.level }) as _}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level })}
+                      {#each Array.from({ length: 5 - threshold.level }) as _}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
@@ -594,41 +656,46 @@
                 <td class="py-3 align-top">
                   {#if isValueAxis}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum })}
+                      {#each Array.from({ length: levelNum }) as _}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum })}
+                      {#each Array.from({ length: 5 - levelNum }) as _}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
                   {:else}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum })}
+                      {#each Array.from({ length: levelNum }) as _}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum })}
+                      {#each Array.from({ length: 5 - levelNum }) as _}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
                   {/if}
                 </td>
                 <td class="py-3">
-                  <textarea
+                  <EditableInput
                     value={getLevelDescription(selectedAxis, levelNum)}
-                    on:input={(e) => updateLevelDescription(levelNum, e.target.value)}
-                    class="w-full px-3 py-2 border border-gray-300 rounded resize-none"
-                    rows="3"
-                  ></textarea>
+                    originalValue={getLevelDescription(selectedAxis, levelNum)}
+                    changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis ? selectedAxis.name : 'unknown'}-level-${levelNum}`}
+                    apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                    fullData={editedConfig}
+                    on:change={(e) => updateLevelDescription(levelNum, e.detail.value)}
+                    on:saved={() => {
+                      originalConfig = { ...editedConfig };
+                    }}
+                  />
                 </td>
               </tr>
-            {/each}
+        {/each}
           </tbody>
         </table>
         
-        <div class="flex justify-end mt-4">
+        <div class="flex justify-end gap-3 mt-6">
           <button 
-            on:click={() => showDescriptionsDialog = false}
-            class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            on:click={handleCloseDescriptionsDialog}
+            class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
           >
             Fermer
           </button>
@@ -684,7 +751,7 @@
                   <option value="">Sélectionner un dossier...</option>
                   {#each availableFolders as folder}
                     <option value={folder.id}>{folder.name}</option>
-                  {/each}
+        {/each}
                 </select>
               {/if}
             </div>
@@ -720,6 +787,47 @@
             Créer
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Warning popup for unsaved changes when closing descriptions dialog -->
+{#if showCloseWarning}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+      <div class="flex items-center mb-4">
+        <svg class="w-6 h-6 text-yellow-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-900">
+          Modifications non sauvegardées
+        </h3>
+      </div>
+      
+      <p class="text-gray-600 mb-6">
+        Vous avez des modifications non sauvegardées. Que souhaitez-vous faire ?
+      </p>
+      
+      <div class="flex justify-end gap-3">
+        <button 
+          on:click={handleCloseWarningCancel}
+          class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+        >
+          Annuler
+        </button>
+        <button 
+          on:click={handleCloseWarningDiscard}
+          class="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded"
+        >
+          Ignorer et fermer
+        </button>
+        <button 
+          on:click={handleCloseWarningSave}
+          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Sauvegarder et fermer
+        </button>
       </div>
     </div>
   </div>
