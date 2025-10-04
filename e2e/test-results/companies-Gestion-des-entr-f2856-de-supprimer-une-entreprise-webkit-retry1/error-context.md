@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - navigation [ref=e6]:
+        - link "Accueil" [ref=e7]:
+          - /url: /
+        - link "Dossiers" [ref=e8]:
+          - /url: /dossiers
+        - link "Entreprises" [ref=e9]:
+          - /url: /entreprises
+        - link "Configuration métier" [ref=e10]:
+          - /url: /configuration-metier
+        - link "Cas d'usage" [ref=e11]:
+          - /url: /cas-usage
+        - link "Matrice" [ref=e12]:
+          - /url: /matrice
+        - link "Dashboard" [ref=e13]:
+          - /url: /dashboard
+        - link "Design" [ref=e14]:
+          - /url: /design
+        - link "Données" [ref=e15]:
+          - /url: /donnees
+        - link "Paramètres" [ref=e16]:
+          - /url: /parametres
+      - generic [ref=e17]:
+        - combobox [ref=e18]:
+          - option "FR" [selected]
+          - option "EN"
+        - button "Connexion" [ref=e19] [cursor=pointer]
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - heading "Entreprises" [level=1] [ref=e23]
+        - button "Ajouter" [ref=e24] [cursor=pointer]
+      - generic [ref=e25]: Load failed
+      - generic [ref=e27]:
+        - heading "Nouvelle entreprise" [level=2] [ref=e28]
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - textbox "Nom de l'entreprise" [ref=e31]: Company to Delete
+            - button "IA" [ref=e32] [cursor=pointer]
+          - textbox "Secteur d'activité" [ref=e33]: Test
+          - textbox "Taille (employés, CA)" [ref=e34]
+          - textbox "Produits et services" [ref=e35]
+          - textbox "Processus métier clés" [ref=e36]
+          - textbox "Défis principaux" [ref=e37]
+          - textbox "Objectifs stratégiques" [ref=e38]
+          - textbox "Technologies utilisées" [ref=e39]
+        - generic [ref=e40]:
+          - button "Annuler" [ref=e41] [cursor=pointer]
+          - button "Enregistrer" [active] [ref=e42] [cursor=pointer]
+```

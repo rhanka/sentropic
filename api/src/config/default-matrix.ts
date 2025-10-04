@@ -2,6 +2,13 @@ import type { MatrixConfig } from '../types/matrix';
 
 // Descriptions par défaut pour les axes de valeur
 const defaultValueDescriptions = {
+  "Urgence à agir": [
+    "Projet non prioritaire / Peut attendre",
+    "Amélioration souhaitable / Priorité faible",
+    "Projet important / Priorité moyenne",
+    "Projet critique / Priorité élevée",
+    "Urgence absolue / Priorité maximale"
+  ],
   "Niveau de Sponsorship": [
     "Équipe locale / Aucun sponsor clair",
     "Opérationnel / Gestionnaire 1er niveau",
@@ -84,8 +91,8 @@ export const defaultMatrixConfig: MatrixConfig = {
       id: 'sponsorship',
       name: 'Urgence à agir',
       weight: 2.0,
-      description: 'Niveau de support hiérarchique pour le projet',
-      levelDescriptions: defaultValueDescriptions["Niveau de Sponsorship"].map((desc, index) => ({
+      description: 'Niveau d\'urgence et de priorité du projet',
+      levelDescriptions: defaultValueDescriptions["Urgence à agir"].map((desc, index) => ({
         level: index + 1,
         description: desc
       }))

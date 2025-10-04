@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  e2e:
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    volumes:
+      - ./e2e:/app
+    environment:
+      - CI=true
+    command: sh -c "npm install && npx playwright install --with-deps && npx playwright test"
+    networks:
+      - top-ai-ideas-fullstack_default
+
+networks:
+  top-ai-ideas-fullstack_default:
+    external: true

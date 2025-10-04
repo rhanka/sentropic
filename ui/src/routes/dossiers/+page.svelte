@@ -78,6 +78,10 @@
 
       const newFolder = await response.json();
       foldersStore.update((items) => [...items, newFolder]);
+      
+      // Sélectionner automatiquement le nouveau dossier
+      currentFolderId.set(newFolder.id);
+      
       name = '';
       description = '';
       showCreate = false;

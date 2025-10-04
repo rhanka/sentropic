@@ -5,7 +5,8 @@ const config = {
   kit: {
     adapter: adapter(),
     prerender: {
-      handleHttpError: 'warn'
+      handleHttpError: 'warn',
+      handleUnseenRoutes: 'ignore'
     }
   },
   preprocess: vitePreprocess()

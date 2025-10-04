@@ -202,7 +202,7 @@ const callOpenAI = async (prompt: string, systemMessage: string = 'Tu es un expe
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4',
+      model: 'gpt-5-nano',
       messages: [
         {
           role: 'system',
@@ -213,7 +213,6 @@ const callOpenAI = async (prompt: string, systemMessage: string = 'Tu es un expe
           content: prompt
         }
       ],
-      temperature: 0.7,
       max_tokens: 2000
     })
   });

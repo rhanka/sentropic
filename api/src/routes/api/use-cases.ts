@@ -9,6 +9,8 @@ import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
+import { defaultMatrixConfig } from '../../config/default-matrix';
+import { generateFolderName, generateUseCaseList, generateUseCaseDetail } from '../../services/openai';
 
 const scoreEntry = z.object({
   axisId: z.string(),
@@ -83,11 +85,9 @@ export const useCasesRouter = new Hono();
 
 useCasesRouter.get('/', async (c) => {
   const folderId = c.req.query('folder_id');
-  let query = db.select().from(useCases);
-  if (folderId) {
-    query = query.where(eq(useCases.folderId, folderId));
-  }
-  const rows = await query;
+  const rows = folderId
+    ? await db.select().from(useCases).where(eq(useCases.folderId, folderId))
+    : await db.select().from(useCases);
   return c.json({ items: rows.map(hydrateUseCase) });
 });
 
@@ -183,6 +183,90 @@ useCasesRouter.delete('/:id', async (c) => {
   return c.body(null, 204);
 });
 
-useCasesRouter.post('/generate', async (c) => {
-  return c.json({ message: 'Generation endpoint not yet implemented' }, 501);
+const generateInput = z.object({
+  input: z.string().min(1),
+  create_new_folder: z.boolean(),
+  company_id: z.string().optional()
+});
+
+useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
+  try {
+    const { input, create_new_folder, company_id } = c.req.valid('json');
+    
+    let folderId: string | undefined;
+    
+    // Créer un dossier si demandé
+    if (create_new_folder) {
+      const folderName = `Génération - ${new Date().toLocaleDateString('fr-FR')}`;
+      const folderDescription = `Dossier généré automatiquement pour: ${input}`;
+      
+      folderId = createId();
+      await db.insert(folders).values({
+        id: folderId,
+        name: folderName,
+        description: folderDescription,
+        companyId: company_id || null,
+        matrixConfig: JSON.stringify(defaultMatrixConfig),
+        createdAt: new Date().toISOString()
+      });
+    }
+    
+    // TODO: Générer les cas d'usage via OpenAI
+    // Pour l'instant, générer 5 cas par défaut (selon le prompt)
+    const numberOfCases = 5;
+    const generatedUseCases = Array.from({ length: numberOfCases }, (_, i) => {
+      const caseNumber = i + 1;
+      const caseNames = [
+        'Optimisation du support client',
+        'Automatisation des processus',
+        'Analyse prédictive',
+        'Chatbot intelligent',
+        'Recommandations personnalisées'
+      ];
+      
+      return {
+        id: createId(),
+        folderId: folderId!,
+        companyId: company_id || null,
+        name: caseNames[i] || `Cas d'usage ${caseNumber}`,
+        description: `Basé sur le contexte : ${input}`,
+        process: 'Processus métier',
+        technology: 'IA',
+        deadline: `${caseNumber * 3} mois`,
+        contact: 'Équipe projet',
+        benefits: JSON.stringify(['Amélioration de l\'efficacité', 'Réduction des coûts']),
+        metrics: JSON.stringify(['ROI', 'Satisfaction']),
+        risks: JSON.stringify(['Complexité', 'Adoption']),
+        nextSteps: JSON.stringify(['Analyse', 'Développement']),
+        sources: JSON.stringify(['Données internes', 'Benchmarks']),
+        relatedData: JSON.stringify(['Métriques', 'Processus']),
+        valueScores: JSON.stringify([]),
+        complexityScores: JSON.stringify([]),
+        totalValueScore: 70 + Math.floor(Math.random() * 20),
+        totalComplexityScore: 60 + Math.floor(Math.random() * 20),
+        createdAt: new Date().toISOString()
+      };
+    });
+    
+    // Insérer les cas d'usage en base
+    await db.insert(useCases).values(generatedUseCases);
+    
+    const createdUseCaseIds = generatedUseCases.map(uc => uc.id);
+    
+    return c.json({
+      created_folder_id: folderId,
+      created_use_case_ids: createdUseCaseIds,
+      summary: `Génération terminée : ${createdUseCaseIds.length} cas d'usage créés${folderId ? ` dans le dossier ${folderId}` : ''}`
+    });
+    
+  } catch (error) {
+    console.error('Error in use-cases generate:', error);
+    return c.json(
+      { 
+        message: 'Failed to generate use cases', 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, 
+      500
+    );
+  }
 });

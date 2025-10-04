@@ -6,6 +6,8 @@
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
+  let originalConfig = { ...$matrixStore };
+  let hasUnsavedChanges = false;
   let selectedAxis: any = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
@@ -41,6 +43,8 @@
           : folder.matrixConfig;
         matrixStore.set(matrix);
         editedConfig = { ...matrix };
+        originalConfig = { ...matrix };
+        hasUnsavedChanges = false;
         addToast({
           type: 'success',
           message: `Matrice du dossier "${folder.name}" chargée`
@@ -128,6 +132,18 @@
     }
   };
 
+  const updateAxisName = (isValue: boolean, index: number, newName: string) => {
+    if (isValue) {
+      const newAxes = [...editedConfig.valueAxes];
+      newAxes[index] = { ...newAxes[index], name: newName };
+      editedConfig = { ...editedConfig, valueAxes: newAxes };
+    } else {
+      const newAxes = [...editedConfig.complexityAxes];
+      newAxes[index] = { ...newAxes[index], name: newName };
+      editedConfig = { ...editedConfig, complexityAxes: newAxes };
+    }
+  };
+
   const openAxisDescriptions = (axis: any, isValue: boolean) => {
     selectedAxis = axis;
     isValueAxis = isValue;
@@ -202,15 +218,21 @@
   };
 
   const createNewMatrix = async () => {
-    if (!$currentFolderId) return;
+    console.log('createNewMatrix called, currentFolderId:', $currentFolderId);
+    if (!$currentFolderId) {
+      console.log('No currentFolderId, returning');
+      return;
+    }
     
     try {
       let matrixToUse;
       
       if (createMatrixType === 'default') {
         // Utiliser la matrice de base par défaut
+        console.log('Fetching default matrix...');
         const response = await fetch('http://localhost:8787/api/v1/folders/matrix/default');
         matrixToUse = await response.json();
+        console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
         const response = await fetch(`http://localhost:8787/api/v1/folders/${selectedFolderToCopy}/matrix`);
@@ -226,12 +248,14 @@
       }
       
       if (matrixToUse) {
+        console.log('Saving matrix to folder:', $currentFolderId);
         const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(matrixToUse)
         });
         
+        console.log('Response status:', response.status);
         if (response.ok) {
           matrixStore.set(matrixToUse);
           editedConfig = { ...matrixToUse };
@@ -324,7 +348,14 @@
             <tbody>
               {#each editedConfig.valueAxes as axis, index}
                 <tr class="border-t">
-                  <td class="px-4 py-3 font-medium">{axis.name}</td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="text"
+                      value={axis.name}
+                      on:input={(e) => updateAxisName(true, index, e.target.value)}
+                      class="w-full px-2 py-1 border border-gray-300 rounded text-sm font-medium"
+                    />
+                  </td>
                   <td class="px-4 py-3">
                     <input
                       type="number"
@@ -376,7 +407,14 @@
             <tbody>
               {#each editedConfig.complexityAxes as axis, index}
                 <tr class="border-t">
-                  <td class="px-4 py-3 font-medium">{axis.name}</td>
+                  <td class="px-4 py-3">
+                    <input
+                      type="text"
+                      value={axis.name}
+                      on:input={(e) => updateAxisName(false, index, e.target.value)}
+                      class="w-full px-2 py-1 border border-gray-300 rounded text-sm font-medium"
+                    />
+                  </td>
                   <td class="px-4 py-3">
                     <input
                       type="number"
@@ -420,12 +458,6 @@
               </tr>
             </thead>
             <tbody>
-              <tr class="bg-gray-100 border-t">
-                <td class="px-4 py-3 font-medium">Poids du critère</td>
-                
-                
-                
-              </tr>
               {#each editedConfig.valueThresholds as threshold}
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
@@ -444,11 +476,6 @@
                       value={threshold.points}
                       on:input={(e) => handlePointsChange(true, threshold.level, parseInt(e.target.value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
-                    />
-                  </td>
-                  <td class="px-4 py-3">
-                    <input
-                      type="number"
                     />
                   </td>
                   <td class="px-4 py-3 text-center font-semibold">
@@ -471,17 +498,11 @@
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Complexité</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points Fibonacci</th>
                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="bg-gray-100 border-t">
-                <td class="px-4 py-3 font-medium">Poids du critère</td>
-                
-                
-                
-              </tr>
               {#each editedConfig.complexityThresholds as threshold}
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
@@ -500,11 +521,6 @@
                       value={threshold.points}
                       on:input={(e) => handlePointsChange(false, threshold.level, parseInt(e.target.value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
-                    />
-                  </td>
-                  <td class="px-4 py-3">
-                    <input
-                      type="number"
                     />
                   </td>
                   <td class="px-4 py-3 text-center font-semibold">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import Header from '$lib/components/Header.svelte';
+  import Toast from '$lib/components/Toast.svelte';
   import '$lib/i18n';
 </script>
 
@@ -13,4 +14,5 @@
   <main class="mx-auto max-w-6xl px-4 py-8">
     <slot />
   </main>
+  <Toast />
 </div>

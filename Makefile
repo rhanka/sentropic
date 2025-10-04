@@ -69,7 +69,7 @@ audit:
 # Testing
 # -----------------------------------------------------------------------------
 .PHONY: test
-test: test-ui test-api ## Run all tests
+test: test-ui test-api test-e2e ## Run all tests
 
 .PHONY: test-ui
 test-ui:
@@ -88,12 +88,20 @@ test-contract:
 	@echo "Contract tests placeholder" && exit 0
 
 .PHONY: test-e2e
-test-e2e:
-	@echo "E2E tests placeholder" && exit 0
+test-e2e: up ## Run E2E tests with Playwright
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 10
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+	@echo "🛑 Stopping services..."
+	@$(DOCKER_COMPOSE) down
 
 .PHONY: test-smoke
-test-smoke:
-	@echo "Smoke tests placeholder" && exit 0
+test-smoke: up ## Run smoke tests (quick E2E subset)
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 10
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx playwright test --grep "devrait charger"
+	@echo "🛑 Stopping services..."
+	@$(DOCKER_COMPOSE) down
 
 .PHONY: test-load
 test-load:
@@ -108,11 +116,33 @@ coverage-report:
 	@echo "Coverage report placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
+# Cleanup
+# -----------------------------------------------------------------------------
+.PHONY: clean
+clean: ## Clean all containers, volumes and images
+	$(DOCKER_COMPOSE) down -v --remove-orphans
+	docker system prune -f
+
+.PHONY: clean-all
+clean-all: clean ## Clean everything including images
+	docker system prune -a -f
+
+.PHONY: clean-db
+clean-db: ## Clean database files and restart services
+	@echo "🗑️  Cleaning database..."
+	$(DOCKER_COMPOSE) down
+	rm -f data/app.db*
+	@echo "✅ Database cleaned!"
+	@echo "🚀 Restarting services..."
+	$(MAKE) dev
+
+# -----------------------------------------------------------------------------
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) up --build
+	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) up
 
 .PHONY: dev-ui
 dev-ui:
@@ -130,9 +160,36 @@ up: ## Start the full stack in detached mode
 down: ## Stop and remove containers, networks, volumes
 	$(DOCKER_COMPOSE) down -v
 
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
 .PHONY: logs
-logs:
-	$(DOCKER_COMPOSE) logs -f
+logs: ## Show logs for all services
+	$(DOCKER_COMPOSE) logs --tail=50
+
+.PHONY: logs-api
+logs-api: ## Show logs for API service
+	$(DOCKER_COMPOSE) logs --tail=50 api
+
+.PHONY: logs-ui
+logs-ui: ## Show logs for UI service
+	$(DOCKER_COMPOSE) logs --tail=50 ui
+
+.PHONY: logs-db
+logs-db: ## Show logs for database service
+	$(DOCKER_COMPOSE) logs -f sqlite
+
+.PHONY: logs-tail
+logs-tail: ## Show last 50 lines of all services
+	$(DOCKER_COMPOSE) logs --tail=50
+
+.PHONY: logs-api-tail
+logs-api-tail: ## Show last 50 lines of API logs
+	$(DOCKER_COMPOSE) logs --tail=50 api
+
+.PHONY: logs-ui-tail
+logs-ui-tail: ## Show last 50 lines of UI logs
+	$(DOCKER_COMPOSE) logs --tail=50 ui
 
 .PHONY: sh-ui
 sh-ui:
