@@ -320,7 +320,7 @@
 </script>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'Évaluation Valeur/Complexité</h1>
+  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
   
   {#if $currentFolderId}
     <p class="text-gray-600 -mt-4 mb-6">
