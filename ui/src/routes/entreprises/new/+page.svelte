@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { createCompany, enrichCompany, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
+  import { createCompany, createDraftCompany, startCompanyEnrichment, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
   import { addToast, removeToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -35,47 +35,28 @@
     if (!company.name?.trim()) return;
     
     isEnriching = true;
-    let progressToastId = '';
     
     try {
-      // Toaster de progression
-      progressToastId = addToast({
-        type: 'info',
-        message: 'Enrichissement en cours avec l\'IA...',
-        duration: 0 // Toaster persistant
-      });
+      // Créer l'entreprise en mode draft
+      const draftCompany = await createDraftCompany(company.name);
       
-      const enrichedData: CompanyEnrichmentData = await enrichCompany(company.name);
+      // Démarrer l'enrichissement asynchrone
+      await startCompanyEnrichment(draftCompany.id);
       
-      // Mettre à jour l'entreprise avec les données enrichies
-      company = {
-        ...company,
-        name: enrichedData.normalizedName,
-        industry: enrichedData.industry,
-        size: enrichedData.size,
-        products: enrichedData.products,
-        processes: enrichedData.processes,
-        challenges: enrichedData.challenges,
-        objectives: enrichedData.objectives,
-        technologies: enrichedData.technologies
-      };
-      
-      // Remplacer le toaster de progression par un message de succès
-      if (progressToastId) {
-        removeToast(progressToastId);
-      }
+      // Afficher un message de succès et rediriger vers la liste
       addToast({
         type: 'success',
-        message: 'Entreprise enrichie avec succès !'
+        message: 'Entreprise créée ! L\'enrichissement avec l\'IA est en cours...'
       });
+      
+      // Rediriger vers la liste des entreprises
+      goto('/entreprises');
+      
     } catch (err) {
-      console.error('Failed to enrich company:', err);
-      if (progressToastId) {
-        removeToast(progressToastId);
-      }
+      console.error('Failed to create and enrich company:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de l\'enrichissement'
+        message: err instanceof Error ? err.message : 'Erreur lors de la création de l\'entreprise'
       });
     } finally {
       isEnriching = false;

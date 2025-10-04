@@ -10,6 +10,7 @@ export type Company = {
   challenges?: string;
   objectives?: string;
   technologies?: string;
+  status?: 'draft' | 'enriching' | 'completed';
 };
 
 export type CompanyEnrichmentData = {
@@ -88,4 +89,32 @@ export const enrichCompany = async (companyName: string): Promise<CompanyEnrichm
     throw new Error(errorData.message || 'Failed to enrich company');
   }
   return response.json();
+};
+
+export const createDraftCompany = async (name: string): Promise<Company> => {
+  const response = await fetch(`${API_BASE_URL}/companies/draft`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to create draft company');
+  }
+  return response.json();
+};
+
+export const startCompanyEnrichment = async (companyId: string): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/enrich`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to start enrichment');
+  }
 };

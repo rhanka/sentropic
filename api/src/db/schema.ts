@@ -11,6 +11,7 @@ export const companies = sqliteTable('companies', {
   challenges: text('challenges'),
   objectives: text('objectives'),
   technologies: text('technologies'),
+  status: text('status').default('completed'), // 'draft', 'enriching', 'completed'
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`)
 });
@@ -21,6 +22,7 @@ export const folders = sqliteTable('folders', {
   description: text('description'),
   companyId: text('company_id').references(() => companies.id),
   matrixConfig: text('matrix_config'),
+  status: text('status').default('completed'), // 'generating', 'completed'
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`)
 });
 
