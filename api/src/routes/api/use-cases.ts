@@ -12,6 +12,7 @@ import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { generateUseCaseList, generateUseCaseDetail } from '../../services/context-usecase';
 import { defaultPrompts } from '../../config/default-prompts';
+import { queueManager } from '../../services/queue-manager';
 
 // Récupération des prompts depuis la configuration centralisée
 const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
@@ -218,86 +219,20 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       });
     }
     
-    // Récupérer les informations de l'entreprise si company_id est fourni
-    let companyInfo = '';
-    if (company_id) {
-      try {
-        const [company] = await db.select().from(companies).where(eq(companies.id, company_id));
-        if (company) {
-          companyInfo = JSON.stringify({
-            name: company.name,
-            industry: company.industry,
-            size: company.size,
-            products: company.products,
-            processes: company.processes,
-            challenges: company.challenges,
-            objectives: company.objectives,
-            technologies: company.technologies
-          }, null, 2);
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la récupération des informations de l\'entreprise:', error);
-      }
-    }
-    
-    // Générer la liste de cas d'usage avec le service de contexte
-    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel);
-    const matrixConfig = defaultMatrixConfig;
-    
-    // Mettre à jour le nom du dossier avec le nom généré par l'IA
-    if (folderId && useCaseList.dossier) {
-      await db.update(folders)
-        .set({ 
-          name: useCaseList.dossier,
-          description: `Dossier généré automatiquement pour: ${input}`
-        })
-        .where(eq(folders.id, folderId));
-    }
-    
-    // Créer d'abord des cas d'usage en mode "draft" avec juste le titre
-    const draftUseCases = useCaseList.useCases.map((useCaseItem: any) => {
-      const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
-      return {
-        id: createId(),
-        folderId: folderId!,
-        companyId: company_id || null,
-        name: title,
-        description: useCaseItem.description || '',
-        process: null,
-        technology: null,
-        deadline: null,
-        contact: null,
-        benefits: null,
-        metrics: null,
-        risks: null,
-        nextSteps: null,
-        sources: null,
-        relatedData: null,
-        valueScores: null,
-        complexityScores: null,
-        totalValueScore: null,
-        totalComplexityScore: null,
-        status: 'draft',
-        createdAt: new Date().toISOString()
-      };
+    // Ajouter le job à la queue
+    const jobId = await queueManager.addJob('usecase_list', {
+      folderId: folderId!,
+      input,
+      companyId: company_id,
+      model: selectedModel
     });
     
-    // Insérer les cas d'usage en base
-    await db.insert(useCases).values(draftUseCases);
-    
-    // Marquer le dossier comme "completed" après l'insertion des cas d'usage
-    if (folderId) {
-      await db.update(folders)
-        .set({ status: 'completed' })
-        .where(eq(folders.id, folderId));
-    }
-    
-    const createdUseCaseIds = draftUseCases.map((uc: any) => uc.id);
-    
     return c.json({
+      success: true,
+      message: 'Génération démarrée',
+      status: 'generating',
       created_folder_id: folderId,
-      created_use_case_ids: createdUseCaseIds,
-      summary: `Génération terminée : ${createdUseCaseIds.length} cas d'usage créés${folderId ? ` dans le dossier ${folderId}` : ''}`
+      jobId
     });
     
   } catch (error) {
@@ -342,13 +277,19 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
       .set({ status: 'detailing' })
       .where(eq(useCases.id, id));
     
-    // Lancer le détail en arrière-plan
-    detailUseCaseAsync(id, useCase.name, useCase.folderId, matrixConfig, selectedModel);
+    // Ajouter le job à la queue
+    const jobId = await queueManager.addJob('usecase_detail', {
+      useCaseId: id,
+      useCaseName: useCase.name,
+      folderId: useCase.folderId,
+      model: selectedModel
+    });
     
     return c.json({
       success: true,
       message: 'Détail du cas d\'usage démarré',
-      status: 'detailing'
+      status: 'detailing',
+      jobId
     });
     
   } catch (error) {
@@ -360,53 +301,5 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
   }
 });
 
-// Fonction pour détailler un cas d'usage de manière asynchrone
-async function detailUseCaseAsync(useCaseId: string, useCaseName: string, folderId: string, matrixConfig: any, model: string) {
-  try {
-    console.log(`Starting async detail for use case ${useCaseId}: ${useCaseName}`);
-    
-    // Récupérer les informations du dossier pour le contexte
-    const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
-    const context = folder?.description || '';
-    
-    // Générer le détail du cas d'usage avec le service de contexte
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, model);
-    
-    // Calculer les scores avec la matrice
-    const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
-    
-    // Mettre à jour le cas d'usage avec les détails
-    await db.update(useCases)
-      .set({
-        name: useCaseDetail.name,
-        description: useCaseDetail.description,
-        process: useCaseDetail.process,
-        technology: useCaseDetail.technology,
-        deadline: useCaseDetail.deadline,
-        contact: useCaseDetail.contact,
-        benefits: JSON.stringify(useCaseDetail.benefits),
-        metrics: JSON.stringify(useCaseDetail.metrics),
-        risks: JSON.stringify(useCaseDetail.risks),
-        nextSteps: JSON.stringify(useCaseDetail.nextSteps),
-        sources: JSON.stringify(useCaseDetail.sources),
-        relatedData: JSON.stringify(useCaseDetail.relatedData),
-        valueScores: JSON.stringify(useCaseDetail.valueScores),
-        complexityScores: JSON.stringify(useCaseDetail.complexityScores),
-        totalValueScore: computed.totalValueScore,
-        totalComplexityScore: computed.totalComplexityScore,
-        status: 'completed'
-      })
-      .where(eq(useCases.id, useCaseId));
-    
-    console.log(`✅ Use case ${useCaseId} detailed successfully`);
-  } catch (error) {
-    console.error(`❌ Error detailing use case ${useCaseId}:`, error);
-    
-    // Remettre le statut à "draft" en cas d'erreur
-    await db.update(useCases)
-      .set({ status: 'draft' })
-      .where(eq(useCases.id, useCaseId));
-  }
-}
 
 export default useCasesRouter;

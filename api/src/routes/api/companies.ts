@@ -6,6 +6,7 @@ import { companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichCompany } from '../../services/context-company';
+import { queueManager } from '../../services/queue-manager';
 
 // Fonction d'enrichissement asynchrone
 async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-5') {
@@ -100,13 +101,18 @@ companiesRouter.post('/:id/enrich', async (c) => {
       .set({ status: 'enriching' })
       .where(eq(companies.id, id));
     
-    // Lancer l'enrichissement en arrière-plan (sans attendre)
-    enrichCompanyAsync(id, company.name, selectedModel);
+    // Ajouter le job à la queue
+    const jobId = await queueManager.addJob('company_enrich', {
+      companyId: id,
+      companyName: company.name,
+      model: selectedModel
+    });
     
     return c.json({ 
       success: true, 
       message: 'Enrichissement démarré',
-      status: 'enriching'
+      status: 'enriching',
+      jobId
     });
   } catch (error) {
     console.error('Error starting enrichment:', error);
