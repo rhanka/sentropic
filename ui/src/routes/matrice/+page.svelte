@@ -48,7 +48,7 @@
         originalConfig = { ...matrix };
         addToast({
           type: 'success',
-          message: `Matrice du dossier "${folder.name}" chargée`
+          message: `Évaluation du dossier "${folder.name}" chargée`
         });
       } else {
         addToast({
@@ -276,7 +276,7 @@
         const response = await fetch(`http://localhost:8787/api/v1/folders/${selectedFolderToCopy}/matrix`);
         matrixToUse = await response.json();
       } else if (createMatrixType === 'blank') {
-        // Matrice vierge
+        // Évaluation vierge
         matrixToUse = {
           valueAxes: [],
           complexityAxes: [],
@@ -320,7 +320,7 @@
 </script>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de la Matrice Valeur/Complexité</h1>
+  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'Évaluation Valeur/Complexité</h1>
   
   {#if $currentFolderId}
     <p class="text-gray-600 -mt-4 mb-6">
@@ -727,7 +727,7 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Matrice de base</div>
+              <div class="font-medium">Évaluation de base</div>
               <div class="text-sm text-gray-600">Utiliser la matrice par défaut avec toutes les descriptions complètes</div>
             </div>
           </label>
@@ -766,7 +766,7 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Matrice vierge</div>
+              <div class="font-medium">Évaluation vierge</div>
               <div class="text-sm text-gray-600">Commencer avec une matrice vide</div>
             </div>
           </label>
