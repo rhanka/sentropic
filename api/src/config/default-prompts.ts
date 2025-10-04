@@ -46,7 +46,10 @@ Réponds UNIQUEMENT avec un JSON valide:
     id: 'use_case_list',
     name: 'Liste de cas d\'usage',
     description: 'Prompt pour générer une liste de cas d\'usage',
-    content: `Génère une liste de cas d'usage d'IA innovants pour le domaine suivant: {{user_input}}.
+    content: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
+    - la demande utilisateur spécifique suivante: {{user_input}},
+    - les informations de l'entreprise: {{company_info}},
+    - le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
 
@@ -57,13 +60,14 @@ IMPORTANT:
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
+  "dossier": "titre court du dossier",
   "useCases": [
     {"titre: "titre court 1", "description": "Description cas d'usage 1", "ref": "références 1 en liste markdown avec liens web vers des références "},
     {"titre: "titre court 2", "description": "Description cas d'usage 2", "ref": "références 1 en liste markdown avec liens web vers des références "},
     ...
   ]
 }`,
-    variables: ['user_input']
+    variables: ['user_input', 'company_info']
   },
   {
     id: 'use_case_detail',

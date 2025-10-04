@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, useCases } from '../../db/schema';
+import { folders, useCases, companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
@@ -218,9 +218,33 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       });
     }
     
+    // Récupérer les informations de l'entreprise si company_id est fourni
+    let companyInfo = '';
+    if (company_id) {
+      try {
+        const [company] = await db.select().from(companies).where(eq(companies.id, company_id));
+        if (company) {
+          companyInfo = JSON.stringify({
+            name: company.name,
+            industry: company.industry,
+            size: company.size,
+            products: company.products,
+            processes: company.processes,
+            challenges: company.challenges,
+            objectives: company.objectives,
+            technologies: company.technologies
+          }, null, 2);
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération des informations de l\'entreprise:', error);
+      }
+    }
+    
     // Générer les cas d'usage via OpenAI avec recherche web
     // Générer la liste de cas d'usage avec recherche web
-    const useCaseListPrompt_filled = useCaseListPrompt.replace('{{user_input}}', input);
+    const useCaseListPrompt_filled = useCaseListPrompt
+      .replace('{{user_input}}', input)
+      .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible');
     const useCaseListResponse = await askWithWebSearch(useCaseListPrompt_filled, 'gpt-5');
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
@@ -230,6 +254,16 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     }
     const useCaseList = JSON.parse(useCaseListContent);
     const matrixConfig = defaultMatrixConfig;
+    
+    // Mettre à jour le nom du dossier avec le nom généré par l'IA
+    if (folderId && useCaseList.dossier) {
+      await db.update(folders)
+        .set({ 
+          name: useCaseList.dossier,
+          description: `Dossier généré automatiquement pour: ${input}`
+        })
+        .where(eq(folders.id, folderId));
+    }
     
     const generatedUseCases = await Promise.all(
       useCaseList.useCases.map(async (title) => {
