@@ -15,9 +15,30 @@
   let promptName = '';
   let promptDescription = '';
   let promptVariables = [];
+  
+  // Configuration IA
+  let aiSettings = {
+    concurrency: 10,
+    defaultModel: 'gpt-5',
+    processingInterval: 5000
+  };
+  let isLoadingAISettings = false;
+  let isSavingAISettings = false;
+  
+  // Gestion de la queue
+  let queueStats = {
+    total: 0,
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0
+  };
+  let isPurgingQueue = false;
 
   onMount(async () => {
     await loadPrompts();
+    await loadAISettings();
+    await loadQueueStats();
   });
 
   const loadPrompts = async () => {
@@ -115,6 +136,106 @@
     selectedPrompt = null;
   };
 
+  // Fonctions pour la configuration IA
+  const loadAISettings = async () => {
+    isLoadingAISettings = true;
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/ai-settings');
+      if (response.ok) {
+        aiSettings = await response.json();
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres IA:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors du chargement des paramètres IA'
+      });
+    } finally {
+      isLoadingAISettings = false;
+    }
+  };
+
+  const saveAISettings = async () => {
+    isSavingAISettings = true;
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/ai-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiSettings)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        aiSettings = result.settings;
+        addToast({
+          type: 'success',
+          message: 'Paramètres IA mis à jour avec succès !'
+        });
+      } else {
+        throw new Error('Erreur lors de la sauvegarde');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde des paramètres IA:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la sauvegarde des paramètres IA'
+      });
+    } finally {
+      isSavingAISettings = false;
+    }
+  };
+
+  // Fonctions pour la gestion de la queue
+  const loadQueueStats = async () => {
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/queue/stats');
+      if (response.ok) {
+        queueStats = await response.json();
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques de queue:', error);
+    }
+  };
+
+  const purgeQueue = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir purger tous les jobs en attente ? Cette action est irréversible.')) {
+      return;
+    }
+
+    isPurgingQueue = true;
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'pending' })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        addToast({
+          type: 'success',
+          message: result.message
+        });
+        
+        await loadQueueStats();
+      } else {
+        throw new Error('Erreur lors de la purge');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la purge de la queue:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la purge de la queue'
+      });
+    } finally {
+      isPurgingQueue = false;
+    }
+  };
+
   const resetAllData = async () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.')) {
       return;
@@ -183,6 +304,127 @@
           </div>
         </div>
       {/each}
+    </div>
+  </div>
+
+  <!-- Section Configuration IA -->
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800 mb-4">Configuration IA</h2>
+    <p class="text-sm text-slate-600 mb-4">
+      Configurez les paramètres de l'intelligence artificielle et de la queue de traitement.
+    </p>
+    
+    {#if isLoadingAISettings}
+      <div class="flex items-center gap-3">
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+        <p class="text-sm text-blue-700">Chargement des paramètres...</p>
+      </div>
+    {:else}
+      <div class="grid gap-6 md:grid-cols-2">
+        <!-- Modèle par défaut -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Modèle OpenAI par défaut</label>
+          <select 
+            bind:value={aiSettings.defaultModel}
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="gpt-5">GPT-5</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o Mini</option>
+            <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">Modèle utilisé par défaut pour toutes les opérations IA</p>
+        </div>
+
+        <!-- Concurrence -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Jobs simultanés</label>
+          <input 
+            type="number" 
+            bind:value={aiSettings.concurrency}
+            min="1" 
+            max="50"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p class="text-xs text-slate-500 mt-1">Nombre de jobs IA traités en parallèle (1-50)</p>
+        </div>
+
+        <!-- Intervalle de traitement -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Intervalle de traitement (ms)</label>
+          <input 
+            type="number" 
+            bind:value={aiSettings.processingInterval}
+            min="1000" 
+            max="60000"
+            step="1000"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p class="text-xs text-slate-500 mt-1">Délai entre les cycles de traitement de la queue (1000-60000ms)</p>
+        </div>
+
+        <!-- Bouton de sauvegarde -->
+        <div class="flex items-end">
+          <button 
+            on:click={saveAISettings}
+            disabled={isSavingAISettings}
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSavingAISettings ? 'Sauvegarde...' : 'Sauvegarder les paramètres'}
+          </button>
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Section Gestion de la Queue -->
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800 mb-4">Gestion de la Queue IA</h2>
+    <p class="text-sm text-slate-600 mb-4">
+      Surveillez et gérez la queue de traitement des jobs IA.
+    </p>
+    
+    <!-- Statistiques de la queue -->
+    <div class="grid gap-4 md:grid-cols-5">
+      <div class="bg-slate-50 rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-slate-900">{queueStats.total}</div>
+        <div class="text-sm text-slate-600">Total</div>
+      </div>
+      <div class="bg-orange-50 rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-orange-600">{queueStats.pending}</div>
+        <div class="text-sm text-orange-600">En attente</div>
+      </div>
+      <div class="bg-blue-50 rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-blue-600">{queueStats.processing}</div>
+        <div class="text-sm text-blue-600">En cours</div>
+      </div>
+      <div class="bg-green-50 rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-green-600">{queueStats.completed}</div>
+        <div class="text-sm text-green-600">Terminés</div>
+      </div>
+      <div class="bg-red-50 rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-red-600">{queueStats.failed}</div>
+        <div class="text-sm text-red-600">Échoués</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3">
+      <button 
+        on:click={loadQueueStats}
+        class="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700"
+      >
+        Actualiser
+      </button>
+      <button 
+        on:click={purgeQueue}
+        disabled={isPurgingQueue || queueStats.pending === 0}
+        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isPurgingQueue ? 'Purge en cours...' : `Purger les jobs en attente (${queueStats.pending})`}
+      </button>
     </div>
   </div>
 

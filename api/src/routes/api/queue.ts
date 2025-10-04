@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { queueManager } from '../../services/queue-manager';
+import { db } from '../../db/client';
+import { sql } from 'drizzle-orm';
 
 const queueRouter = new Hono();
 
@@ -102,6 +104,45 @@ queueRouter.get('/stats', async (c) => {
   } catch (error) {
     console.error('Error fetching queue stats:', error);
     return c.json({ message: 'Failed to fetch queue stats' }, 500);
+  }
+});
+
+// POST /queue/purge - Purger les jobs en attente
+queueRouter.post('/purge', async (c) => {
+  try {
+    const { status } = await c.req.json().catch(() => ({ status: 'pending' }));
+    
+    // Récupérer les jobs à purger
+    const jobs = await queueManager.getAllJobs();
+    const jobsToPurge = jobs.filter(job => job.status === status);
+    
+    if (jobsToPurge.length === 0) {
+      return c.json({ 
+        success: true, 
+        message: `Aucun job avec le statut '${status}' à purger`,
+        purgedCount: 0
+      });
+    }
+    
+    // Marquer les jobs comme failed
+    for (const job of jobsToPurge) {
+      await db.run(sql`
+        UPDATE job_queue 
+        SET status = 'failed', error = 'Purgé par l''utilisateur', completed_at = CURRENT_TIMESTAMP 
+        WHERE id = ${job.id}
+      `);
+    }
+    
+    console.log(`🧹 Purged ${jobsToPurge.length} jobs with status '${status}'`);
+    
+    return c.json({ 
+      success: true, 
+      message: `${jobsToPurge.length} jobs purgés avec succès`,
+      purgedCount: jobsToPurge.length
+    });
+  } catch (error) {
+    console.error('Error purging queue:', error);
+    return c.json({ message: 'Failed to purge queue' }, 500);
   }
 });
 
