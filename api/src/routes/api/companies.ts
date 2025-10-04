@@ -32,7 +32,7 @@ const industries = {
 const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
 
 // Fonction d'enrichissement asynchrone
-async function enrichCompanyAsync(companyId: string, companyName: string) {
+async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-5') {
   try {
     console.log(`Starting async enrichment for company ${companyId}: ${companyName}`);
     
@@ -42,7 +42,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string) {
       .replace('{{company_name}}', companyName)
       .replace('{{industries}}', industriesList);
     
-    const enrichedData = await askWithWebSearch(prompt, 'gpt-5');
+    const enrichedData = await askWithWebSearch(prompt, model);
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const content = enrichedData.choices[0]?.message?.content;
@@ -122,6 +122,8 @@ companiesRouter.post('/draft', zValidator('json', z.object({
 // POST /api/v1/companies/:id/enrich - Enrichir une entreprise de manière asynchrone
 companiesRouter.post('/:id/enrich', async (c) => {
   const id = c.req.param('id');
+  const { model } = await c.req.json().catch(() => ({}));
+  const selectedModel = model || 'gpt-5';
   
   try {
     // Récupérer l'entreprise
@@ -136,7 +138,7 @@ companiesRouter.post('/:id/enrich', async (c) => {
       .where(eq(companies.id, id));
     
     // Lancer l'enrichissement en arrière-plan (sans attendre)
-    enrichCompanyAsync(id, company.name);
+    enrichCompanyAsync(id, company.name, selectedModel);
     
     return c.json({ 
       success: true, 
@@ -180,12 +182,14 @@ companiesRouter.delete('/:id', async (c) => {
 
 // Endpoint pour l'enrichissement automatique des entreprises
 const aiEnrichInput = z.object({
-  name: z.string().min(1)
+  name: z.string().min(1),
+  model: z.string().optional()
 });
 
 companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
   try {
-    const { name } = c.req.valid('json');
+    const { name, model } = c.req.valid('json');
+    const selectedModel = model || 'gpt-5';
     
     // Utiliser le prompt company_info avec recherche web
     const industriesList = industries.industries.map(i => i.name).join(', ');
@@ -193,7 +197,7 @@ companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) 
       .replace('{{company_name}}', name)
       .replace('{{industries}}', industriesList);
     
-    const enrichedData = await askWithWebSearch(prompt, 'gpt-5');
+    const enrichedData = await askWithWebSearch(prompt, selectedModel);
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const content = enrichedData.choices[0]?.message?.content;

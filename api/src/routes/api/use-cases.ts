@@ -192,12 +192,14 @@ useCasesRouter.delete('/:id', async (c) => {
 const generateInput = z.object({
   input: z.string().min(1),
   create_new_folder: z.boolean(),
-  company_id: z.string().optional()
+  company_id: z.string().optional(),
+  model: z.string().optional()
 });
 
 useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
   try {
-    const { input, create_new_folder, company_id } = c.req.valid('json');
+    const { input, create_new_folder, company_id, model } = c.req.valid('json');
+    const selectedModel = model || 'gpt-5';
     
     let folderId: string | undefined;
     
@@ -245,7 +247,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     const useCaseListPrompt_filled = useCaseListPrompt
       .replace('{{user_input}}', input)
       .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible');
-    const useCaseListResponse = await askWithWebSearch(useCaseListPrompt_filled, 'gpt-5');
+    const useCaseListResponse = await askWithWebSearch(useCaseListPrompt_filled, selectedModel);
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const useCaseListContent = useCaseListResponse.choices[0]?.message?.content;
@@ -273,7 +275,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
           .replace(/\{\{use_case\}\}/g, title)
           .replace('{{user_input}}', input)
           .replace('{{matrix}}', JSON.stringify(matrixConfig));
-        const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, 'gpt-5');
+        const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, selectedModel);
         
         // Extraire le contenu de la réponse OpenAI et parser le JSON
         const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;
