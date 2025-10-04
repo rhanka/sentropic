@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(8787),
   DATABASE_URL: z.string().default('sqlite:///data/app.db'),
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-5'),
   TAVILY_API_KEY: z.string().optional(),
   SCW_ACCESS_KEY: z.string().optional(),
   SCW_SECRET_KEY: z.string().optional(),

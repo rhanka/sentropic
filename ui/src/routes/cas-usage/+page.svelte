@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
+  import { useCasesStore, fetchUseCases, deleteUseCase, detailUseCase } from '$lib/stores/useCases';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
   import { page } from '$app/stores';

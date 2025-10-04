@@ -219,9 +219,17 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       });
     }
     
+    // Vérifier qu'on a un folderId
+    if (!folderId) {
+      return c.json({
+        success: false,
+        message: 'Aucun dossier spécifié et création de dossier désactivée'
+      }, 400);
+    }
+    
     // Ajouter le job à la queue
     const jobId = await queueManager.addJob('usecase_list', {
-      folderId: folderId!,
+      folderId: folderId,
       input,
       companyId: company_id,
       model: selectedModel
