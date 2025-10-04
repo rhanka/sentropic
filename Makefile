@@ -338,3 +338,28 @@ test-vitest-queue: ## Run queue tests with Vitest
 test-vitest-all: ## Run all Vitest tests
 	@echo "🧪 Running all Vitest tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 npm run test:all
+
+# -----------------------------------------------------------------------------
+# API Backend Tests (Vitest)
+# -----------------------------------------------------------------------------
+.PHONY: test-api-smoke test-api-endpoints test-api-ai test-api-queue test-api-all
+
+test-api-smoke: ## Run API smoke tests (basic health checks) [FILTER=*]
+	@echo "🧪 Running API smoke tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_FILTER=$(FILTER) npm run test:smoke"
+
+test-api-endpoints: ## Run API endpoint tests (CRUD functionality) [ENDPOINT=*] [METHOD=*]
+	@echo "🧪 Running API endpoint tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
+
+test-api-ai: ## Run API AI tests (generation and enrichment) [TYPE=*] [MODEL=*]
+	@echo "🧪 Running API AI tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
+
+test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
+	@echo "🧪 Running API queue tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
+
+test-api-all: ## Run all API tests [SUITE=*]
+	@echo "🧪 Running all API tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_SUITE=$(SUITE) npm run test:all"
