@@ -3,6 +3,7 @@
   import Header from '$lib/components/Header.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
+  import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import '$lib/i18n';
 </script>
 
@@ -17,4 +18,5 @@
   </main>
   <Toast />
   <NavigationGuard />
+  <QueueMonitor />
 </div>

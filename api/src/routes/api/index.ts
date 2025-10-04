@@ -8,6 +8,7 @@ import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
 import promptsRouter from './prompts';
+import queueRouter from './queue';
 
 export const apiRouter = new Hono();
 
@@ -20,3 +21,4 @@ apiRouter.route('/business-config', businessConfigRouter);
 apiRouter.route('/analytics', analyticsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/prompts', promptsRouter);
+apiRouter.route('/queue', queueRouter);
