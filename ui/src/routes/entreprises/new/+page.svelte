@@ -1,72 +1,121 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchCompanies, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
+  import { createCompany, enrichCompany, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
-  import { addToast } from '$lib/stores/toast';
+  import { addToast, removeToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
 
-  let company: Company | null = null;
-  let error = '';
+  let company: Partial<Company> = { 
+    name: '', 
+    industry: '', 
+    size: '', 
+    products: '', 
+    processes: '', 
+    challenges: '', 
+    objectives: '', 
+    technologies: '' 
+  };
+  let isEnriching = false;
+  let isCreating = false;
   
   // Variables réactives pour les données des EditableInput
-  $: companyData = company ? {
-    name: company.name,
-    industry: company.industry,
-    size: company.size,
-    technologies: company.technologies,
-    products: company.products,
-    processes: company.processes,
-    challenges: company.challenges,
-    objectives: company.objectives
-  } : {};
+  $: companyData = {
+    name: company.name || '',
+    industry: company.industry || '',
+    size: company.size || '',
+    technologies: company.technologies || '',
+    products: company.products || '',
+    processes: company.processes || '',
+    challenges: company.challenges || '',
+    objectives: company.objectives || ''
+  };
 
-  onMount(async () => {
-    const companyId = $page.params.id;
-    if (!companyId) return;
-
+  const handleEnrichCompany = async () => {
+    if (!company.name?.trim()) return;
+    
+    isEnriching = true;
+    let progressToastId = '';
+    
     try {
-      const companies = await fetchCompanies();
-      company = companies.find(c => c.id === companyId) || null;
-      if (!company) {
-        error = 'Entreprise non trouvée';
-        return;
+      // Toaster de progression
+      progressToastId = addToast({
+        type: 'info',
+        message: 'Enrichissement en cours avec l\'IA...',
+        duration: 0 // Toaster persistant
+      });
+      
+      const enrichedData: CompanyEnrichmentData = await enrichCompany(company.name);
+      
+      // Mettre à jour l'entreprise avec les données enrichies
+      company = {
+        ...company,
+        name: enrichedData.normalizedName,
+        industry: enrichedData.industry,
+        size: enrichedData.size,
+        products: enrichedData.products,
+        processes: enrichedData.processes,
+        challenges: enrichedData.challenges,
+        objectives: enrichedData.objectives,
+        technologies: enrichedData.technologies
+      };
+      
+      // Remplacer le toaster de progression par un message de succès
+      if (progressToastId) {
+        removeToast(progressToastId);
       }
+      addToast({
+        type: 'success',
+        message: 'Entreprise enrichie avec succès !'
+      });
     } catch (err) {
-      console.error('Failed to fetch company:', err);
-      error = 'Erreur lors du chargement de l\'entreprise';
+      console.error('Failed to enrich company:', err);
+      if (progressToastId) {
+        removeToast(progressToastId);
+      }
+      addToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erreur lors de l\'enrichissement'
+      });
+    } finally {
+      isEnriching = false;
     }
-  });
+  };
 
   const handleFieldUpdate = (field: string, value: string) => {
-    if (!company) return;
     // Mettre à jour l'objet company localement immédiatement
     company = { ...company, [field]: value };
     // Mettre à jour companyData pour que fullData soit réactif
     companyData = { ...companyData, [field]: value };
   };
 
-  const handleDelete = async () => {
-    if (!company) return;
+  const handleCreateCompany = async () => {
+    if (!company.name?.trim()) return;
     
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ?')) return;
-    
+    isCreating = true;
     try {
-      await deleteCompany(company.id);
-      goto('/entreprises');
+      const newCompany = await createCompany(company as Omit<Company, 'id'>);
+      addToast({
+        type: 'success',
+        message: 'Entreprise créée avec succès !'
+      });
+      // Rediriger vers la page de détail de la nouvelle entreprise
+      goto(`/entreprises/${newCompany.id}`);
     } catch (err) {
-      console.error('Failed to delete company:', err);
-      error = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+      console.error('Failed to create company:', err);
+      addToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erreur lors de la création'
+      });
+    } finally {
+      isCreating = false;
     }
   };
 
+  const handleCancel = () => {
+    goto('/entreprises');
+  };
 </script>
-
-{#if error}
-  <div class="rounded bg-red-50 border border-red-200 p-4 text-red-700 mb-6">
-    {error}
-  </div>
-{/if}
 
 {#if company}
   <div class="space-y-6">
@@ -75,10 +124,10 @@
       <div>
         <h1 class="text-3xl font-semibold">
           <EditableInput
-            value={company.name}
-            originalValue={company.name}
-            changeId="company-name"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            value={company.name || 'Nouvelle entreprise'}
+            originalValue=""
+            changeId="new-company-name"
+            apiEndpoint=""
             fullData={companyData}
             on:change={(e) => handleFieldUpdate('name', e.detail.value)}
             on:saved={() => {}}
@@ -89,9 +138,9 @@
             <span class="font-medium">Secteur:</span> 
             <EditableInput
               value={company.industry}
-              originalValue={company.industry}
-              changeId="company-industry"
-              apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+              originalValue=""
+              changeId="new-company-industry"
+              apiEndpoint=""
               fullData={companyData}
               on:change={(e) => handleFieldUpdate('industry', e.detail.value)}
               on:saved={() => {}}
@@ -102,10 +151,25 @@
       
       <div class="flex gap-2">
         <button 
-          class="rounded bg-red-500 px-4 py-2 text-white"
-          on:click={handleDelete}
+          class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
+          on:click={handleEnrichCompany}
+          disabled={isEnriching || !company.name?.trim()}
+          title="Enrichir automatiquement avec l'IA"
         >
-          Supprimer
+          {isEnriching ? 'IA...' : 'IA'}
+        </button>
+        <button 
+          class="rounded bg-green-500 px-4 py-2 text-white disabled:opacity-50"
+          on:click={handleCreateCompany}
+          disabled={!company.name?.trim() || isCreating}
+        >
+          {isCreating ? 'Création...' : 'Créer'}
+        </button>
+        <button 
+          class="rounded bg-gray-500 px-4 py-2 text-white"
+          on:click={handleCancel}
+        >
+          Annuler
         </button>
       </div>
     </div>
@@ -118,9 +182,9 @@
         <div class="text-slate-600">
           <EditableInput
             value={company.size || 'Non renseigné'}
-            originalValue={company.size || ''}
-            changeId="company-size"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            originalValue=""
+            changeId="new-company-size"
+            apiEndpoint=""
             fullData={companyData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('size', e.detail.value)}
@@ -135,9 +199,9 @@
         <div class="text-slate-600">
           <EditableInput
             value={company.technologies || 'Non renseigné'}
-            originalValue={company.technologies || ''}
-            changeId="company-technologies"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            originalValue=""
+            changeId="new-company-technologies"
+            apiEndpoint=""
             fullData={companyData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('technologies', e.detail.value)}
@@ -153,9 +217,9 @@
       <div class="text-slate-600">
         <EditableInput
           value={company.products || 'Non renseigné'}
-          originalValue={company.products || ''}
-          changeId="company-products"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          originalValue=""
+          changeId="new-company-products"
+          apiEndpoint=""
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('products', e.detail.value)}
@@ -170,9 +234,9 @@
       <div class="text-slate-600">
         <EditableInput
           value={company.processes || 'Non renseigné'}
-          originalValue={company.processes || ''}
-          changeId="company-processes"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          originalValue=""
+          changeId="new-company-processes"
+          apiEndpoint=""
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('processes', e.detail.value)}
@@ -187,9 +251,9 @@
       <div class="text-slate-600">
         <EditableInput
           value={company.challenges || 'Non renseigné'}
-          originalValue={company.challenges || ''}
-          changeId="company-challenges"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          originalValue=""
+          changeId="new-company-challenges"
+          apiEndpoint=""
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('challenges', e.detail.value)}
@@ -204,9 +268,9 @@
       <div class="text-slate-600">
         <EditableInput
           value={company.objectives || 'Non renseigné'}
-          originalValue={company.objectives || ''}
-          changeId="company-objectives"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          originalValue=""
+          changeId="new-company-objectives"
+          apiEndpoint=""
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('objectives', e.detail.value)}
@@ -215,7 +279,7 @@
       </div>
     </div>
   </div>
-{:else if !error}
+{:else}
   <div class="text-center py-12">
     <p class="text-slate-500">Chargement...</p>
   </div>

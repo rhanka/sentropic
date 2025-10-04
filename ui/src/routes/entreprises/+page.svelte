@@ -1,20 +1,7 @@
 <script lang="ts">
-  import { companiesStore, fetchCompanies, createCompany, deleteCompany, enrichCompany, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
-  import { addToast, removeToast } from '$lib/stores/toast';
+  import { companiesStore, fetchCompanies, deleteCompany, type Company } from '$lib/stores/companies';
+  import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
-
-  let showForm = false;
-  let draft: Partial<Company> = { 
-    name: '', 
-    industry: '', 
-    size: '', 
-    products: '', 
-    processes: '', 
-    challenges: '', 
-    objectives: '', 
-    technologies: '' 
-  };
-  let isEnriching = false;
 
   onMount(async () => {
     try {
@@ -28,88 +15,6 @@
       });
     }
   });
-
-      const handleEnrichCompany = async () => {
-        if (!draft.name?.trim()) return;
-        
-        isEnriching = true;
-        let progressToastId = '';
-        
-        try {
-          // Toaster de progression
-          progressToastId = addToast({
-            type: 'info',
-            message: 'Enrichissement en cours avec l\'IA...',
-            duration: 0 // Toaster persistant
-          });
-          
-          const enrichedData: CompanyEnrichmentData = await enrichCompany(draft.name);
-          
-          // Mettre à jour le draft avec les données enrichies
-          draft = {
-            ...draft,
-            name: enrichedData.normalizedName,
-            industry: enrichedData.industry,
-            size: enrichedData.size,
-            products: enrichedData.products,
-            processes: enrichedData.processes,
-            challenges: enrichedData.challenges,
-            objectives: enrichedData.objectives,
-            technologies: enrichedData.technologies
-          };
-          
-          // Remplacer le toaster de progression par un message de succès
-          if (progressToastId) {
-            removeToast(progressToastId);
-          }
-          addToast({
-            type: 'success',
-            message: 'Entreprise enrichie avec succès !'
-          });
-        } catch (err) {
-          console.error('Failed to enrich company:', err);
-          if (progressToastId) {
-            removeToast(progressToastId);
-          }
-          addToast({
-            type: 'error',
-            message: err instanceof Error ? err.message : 'Erreur lors de l\'enrichissement'
-          });
-        } finally {
-          isEnriching = false;
-        }
-      };
-
-  const handleCreateCompany = async () => {
-    if (!draft.name?.trim()) return;
-    
-    try {
-      const newCompany = await createCompany(draft as Omit<Company, 'id'>);
-      companiesStore.update((items) => [...items, newCompany]);
-      draft = { 
-        name: '', 
-        industry: '', 
-        size: '', 
-        products: '', 
-        processes: '', 
-        challenges: '', 
-        objectives: '', 
-        technologies: '' 
-      };
-      showForm = false;
-      
-      addToast({
-        type: 'success',
-        message: 'Entreprise créée avec succès !'
-      });
-    } catch (err) {
-      console.error('Failed to create company:', err);
-      addToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de la création'
-      });
-    }
-  };
 
   const handleDeleteCompany = async (id: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ?')) return;
@@ -135,11 +40,10 @@
 <section class="space-y-6">
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Entreprises</h1>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => (showForm = true)}>
+    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => window.location.href = '/entreprises/new'}>
       Ajouter
     </button>
   </div>
-
 
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {#each $companiesStore as company}
@@ -167,15 +71,6 @@
               </svg>
             </button>
             <button 
-              class="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded"
-              on:click|stopPropagation={() => window.location.href = `/entreprises/${company.id}`}
-              title="Modifier"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-              </svg>
-            </button>
-            <button 
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
               on:click|stopPropagation={() => handleDeleteCompany(company.id)}
               title="Supprimer"
@@ -187,7 +82,7 @@
           </div>
         </div>
         {#if company.products}
-          <p class="mt-2 text-sm text-slate-600 line-clamp-2">{company.products}</p>
+          <div class="mt-2 text-sm text-slate-600 line-clamp-2">{company.products}</div>
         {/if}
         <div class="mt-3 flex items-center justify-between">
           <span class="text-xs text-slate-400">
@@ -202,159 +97,4 @@
       </article>
     {/each}
   </div>
-
-  {#if showForm}
-    <div class="fixed inset-0 bg-slate-900/40 z-50">
-      <div class="mx-auto mt-8 max-w-2xl rounded bg-white p-6 shadow-lg max-h-[90vh] overflow-y-auto">
-        <h2 class="text-lg font-semibold mb-4">Nouvelle entreprise</h2>
-        
-            <div class="space-y-4">
-              <!-- Nom avec bouton d'enrichissement -->
-              <div>
-                <label for="company-name" class="block text-sm font-medium text-slate-700 mb-1">
-                  Nom de l'entreprise *
-                </label>
-                <div class="flex gap-2">
-                      <input
-                        id="company-name"
-                        class="flex-1 rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                        placeholder="Nom de l'entreprise"
-                        bind:value={draft.name}
-                        disabled={isEnriching}
-                      />
-                  <button 
-                    class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
-                    on:click={handleEnrichCompany}
-                    disabled={isEnriching || !draft.name?.trim()}
-                    title="Enrichir automatiquement avec l'IA"
-                  >
-                    {isEnriching ? '...' : 'IA'}
-                  </button>
-                </div>
-              </div>
-
-              <!-- Secteur -->
-              <div>
-                <label for="company-industry" class="block text-sm font-medium text-slate-700 mb-1">
-                  Secteur d'activité
-                </label>
-                    <input
-                      id="company-industry"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Secteur d'activité"
-                      bind:value={draft.industry}
-                      disabled={isEnriching}
-                    />
-              </div>
-
-              <!-- Taille -->
-              <div>
-                <label for="company-size" class="block text-sm font-medium text-slate-700 mb-1">
-                  Taille de l'entreprise
-                </label>
-                    <input
-                      id="company-size"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Nombre d'employés, chiffre d'affaires..."
-                      bind:value={draft.size}
-                      disabled={isEnriching}
-                    />
-              </div>
-
-              <!-- Produits/Services -->
-              <div>
-                <label for="company-products" class="block text-sm font-medium text-slate-700 mb-1">
-                  Produits et services
-                </label>
-                    <textarea
-                      id="company-products"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Description des principaux produits ou services"
-                      bind:value={draft.products}
-                      rows="3"
-                      disabled={isEnriching}
-                    ></textarea>
-              </div>
-
-              <!-- Processus -->
-              <div>
-                <label for="company-processes" class="block text-sm font-medium text-slate-700 mb-1">
-                  Processus métier clés
-                </label>
-                    <textarea
-                      id="company-processes"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Description des processus métier principaux"
-                      bind:value={draft.processes}
-                      rows="2"
-                      disabled={isEnriching}
-                    ></textarea>
-              </div>
-
-              <!-- Défis -->
-              <div>
-                <label for="company-challenges" class="block text-sm font-medium text-slate-700 mb-1">
-                  Défis principaux
-                </label>
-                    <textarea
-                      id="company-challenges"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Défis auxquels l'entreprise est confrontée"
-                      bind:value={draft.challenges}
-                      rows="2"
-                      disabled={isEnriching}
-                    ></textarea>
-              </div>
-
-              <!-- Objectifs -->
-              <div>
-                <label for="company-objectives" class="block text-sm font-medium text-slate-700 mb-1">
-                  Objectifs stratégiques
-                </label>
-                    <textarea
-                      id="company-objectives"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Objectifs stratégiques de l'entreprise"
-                      bind:value={draft.objectives}
-                      rows="2"
-                      disabled={isEnriching}
-                    ></textarea>
-              </div>
-
-              <!-- Technologies -->
-              <div>
-                <label for="company-technologies" class="block text-sm font-medium text-slate-700 mb-1">
-                  Technologies utilisées
-                </label>
-                    <textarea
-                      id="company-technologies"
-                      class="w-full rounded border border-slate-300 p-2 disabled:opacity-50 disabled:bg-slate-100"
-                      placeholder="Technologies et systèmes d'information utilisés"
-                      bind:value={draft.technologies}
-                      rows="2"
-                      disabled={isEnriching}
-                    ></textarea>
-              </div>
-            </div>
-
-        <div class="mt-6 flex justify-end gap-2">
-              <button 
-                class="rounded border border-slate-200 px-4 py-2" 
-                on:click={() => {
-                  showForm = false;
-                }}
-              >
-                Annuler
-              </button>
-              <button 
-                class="rounded bg-primary px-4 py-2 text-white disabled:opacity-50" 
-                on:click={handleCreateCompany}
-                disabled={!draft.name?.trim() || isEnriching}
-              >
-                {isEnriching ? 'Enrichissement...' : 'Enregistrer'}
-              </button>
-        </div>
-      </div>
-    </div>
-  {/if}
 </section>

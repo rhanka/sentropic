@@ -85,7 +85,7 @@
     }
   };
   
-  // Gérer les changements de valeur
+  // Gérer les changements de valeur (pour les inputs HTML)
   const handleInput = (event) => {
     const newValue = event.target.value;
     value = newValue;
@@ -93,6 +93,33 @@
     // Ne marquer comme modifié que si la valeur a vraiment changé
     hasUnsavedChanges = newValue !== originalValue;
     adjustWidth();
+    
+    // Ajouter au store des modifications non sauvegardées seulement si nécessaire
+    if (changeId && apiEndpoint && hasUnsavedChanges) {
+      unsavedChangesStore.addChange({
+        id: changeId,
+        component: 'EditableInput',
+        value: value,
+        saveFunction: performSave
+      });
+    } else if (changeId && !hasUnsavedChanges) {
+      // Supprimer du store si pas de modifications
+      unsavedChangesStore.removeChange(changeId);
+    }
+    
+    if (hasUnsavedChanges) {
+      saveWithBuffer();
+    }
+    dispatch('change', { value });
+  };
+
+  // Gérer les changements de valeur (pour TipTap)
+  const handleTipTapChange = (event) => {
+    const newValue = event.detail.value;
+    value = newValue;
+    
+    // Ne marquer comme modifié que si la valeur a vraiment changé
+    hasUnsavedChanges = newValue !== originalValue;
     
     // Ajouter au store des modifications non sauvegardées seulement si nécessaire
     if (changeId && apiEndpoint && hasUnsavedChanges) {
@@ -198,7 +225,7 @@
     </div>
   {:else}
     <div class="markdown-wrapper">
-      <TipTap bind:value={value}/>
+      <TipTap bind:value={value} on:change={handleTipTapChange}/>
     </div>
   {/if}
 </div>
