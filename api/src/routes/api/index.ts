@@ -9,6 +9,7 @@ import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
+import aiSettingsRouter from './ai-settings';
 
 export const apiRouter = new Hono();
 
@@ -22,3 +23,4 @@ apiRouter.route('/analytics', analyticsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/prompts', promptsRouter);
 apiRouter.route('/queue', queueRouter);
+apiRouter.route('/ai-settings', aiSettingsRouter);

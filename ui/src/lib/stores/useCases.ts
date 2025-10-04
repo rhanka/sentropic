@@ -20,7 +20,7 @@ export type UseCase = {
   complexityScores: any[];
   totalValueScore: number;
   totalComplexityScore: number;
-  status?: 'draft' | 'detailing' | 'completed';
+  status?: 'draft' | 'pending' | 'generating' | 'detailing' | 'completed';
   createdAt: string;
 };
 

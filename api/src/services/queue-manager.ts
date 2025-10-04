@@ -6,6 +6,7 @@ import { generateUseCaseList, generateUseCaseDetail } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import { calculateScores } from '../utils/scoring';
 import { companies, folders, useCases } from '../db/schema';
+import { settingsService } from './settings';
 
 export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail';
 
@@ -42,7 +43,33 @@ export interface UseCaseDetailJobData {
 
 export class QueueManager {
   private isProcessing = false;
-  private maxConcurrentJobs = 2; // Limite de concurrence
+  private maxConcurrentJobs = 10; // Limite de concurrence par défaut
+  private processingInterval = 5000; // Intervalle par défaut
+
+  constructor() {
+    this.loadSettings();
+  }
+
+  /**
+   * Charger les paramètres de configuration
+   */
+  private async loadSettings(): Promise<void> {
+    try {
+      const settings = await settingsService.getAISettings();
+      this.maxConcurrentJobs = settings.concurrency;
+      this.processingInterval = settings.processingInterval;
+      console.log(`🔧 Queue settings loaded: concurrency=${this.maxConcurrentJobs}, interval=${this.processingInterval}ms`);
+    } catch (error) {
+      console.warn('⚠️ Failed to load queue settings, using defaults:', error);
+    }
+  }
+
+  /**
+   * Recharger les paramètres de configuration
+   */
+  async reloadSettings(): Promise<void> {
+    await this.loadSettings();
+  }
 
   /**
    * Ajouter un job à la queue
