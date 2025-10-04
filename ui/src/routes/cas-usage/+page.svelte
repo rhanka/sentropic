@@ -9,6 +9,11 @@
   let isLoading = false;
   let isGenerating = false;
 
+  // Réactivité pour recharger les cas d'usage quand le dossier change
+  $: if ($currentFolderId) {
+    loadUseCases();
+  }
+
   onMount(async () => {
     // Vérifier si on doit générer
     const urlParams = new URLSearchParams($page.url.search);
@@ -30,8 +35,8 @@
       goto('/cas-usage', { replaceState: true });
       // Lancer la génération
       await startGeneration(context, createNewFolder, companyId);
-    } else {
-      // Charger les cas existants
+    } else if ($currentFolderId) {
+      // Charger les cas existants seulement si un dossier est sélectionné
       await loadUseCases();
     }
   });

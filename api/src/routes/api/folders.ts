@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders } from '../../db/schema';
+import { folders, companies } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { eq } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
@@ -75,10 +75,26 @@ foldersRouter.get('/', async (c) => {
   const rows = companyId
     ? await db.select().from(folders).where(eq(folders.companyId, companyId))
     : await db.select().from(folders);
-  const items = rows.map((folder) => ({
-    ...folder,
-    matrixConfig: parseMatrix(folder.matrixConfig ?? null)
+  
+  // Récupérer les noms des entreprises pour chaque dossier
+  const items = await Promise.all(rows.map(async (folder) => {
+    let companyName = null;
+    if (folder.companyId) {
+      try {
+        const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, folder.companyId));
+        companyName = company?.name || null;
+      } catch (error) {
+        console.warn('Erreur lors de la récupération du nom de l\'entreprise:', error);
+      }
+    }
+    
+    return {
+      ...folder,
+      matrixConfig: parseMatrix(folder.matrixConfig ?? null),
+      companyName
+    };
   }));
+  
   return c.json({ items });
 });
 

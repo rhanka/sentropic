@@ -62,8 +62,8 @@ Réponds UNIQUEMENT avec un JSON valide:
 {
   "dossier": "titre court du dossier",
   "useCases": [
-    {"titre: "titre court 1", "description": "Description cas d'usage 1", "ref": "références 1 en liste markdown avec liens web vers des références "},
-    {"titre: "titre court 2", "description": "Description cas d'usage 2", "ref": "références 1 en liste markdown avec liens web vers des références "},
+    {"titre": "titre court 1", "description": "Description cas d'usage 1", "ref": "références 1 en liste markdown avec liens web vers des références "},
+    {"titre": "titre court 2", "description": "Description cas d'usage 2", "ref": "références 2 en liste markdown avec liens web vers des références "},
     ...
   ]
 }`,

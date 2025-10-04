@@ -224,9 +224,15 @@
                   Cliquez pour sélectionner
                 </span>
                 <div class="flex items-center gap-2">
-                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Dossier
-                  </span>
+                  {#if folder.companyName}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {folder.companyName}
+                    </span>
+                  {:else}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Dossier
+                    </span>
+                  {/if}
                 </div>
               </div>
             </article>

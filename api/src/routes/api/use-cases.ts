@@ -266,7 +266,8 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     }
     
     const generatedUseCases = await Promise.all(
-      useCaseList.useCases.map(async (title) => {
+      useCaseList.useCases.map(async (useCaseItem) => {
+        const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
         // Générer le détail du cas d'usage avec recherche web
         const useCaseDetailPrompt_filled = useCaseDetailPrompt
           .replace(/\{\{use_case\}\}/g, title)
