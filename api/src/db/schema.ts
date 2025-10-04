@@ -48,6 +48,7 @@ export const useCases = sqliteTable('use_cases', {
   complexityScores: text('complexity_scores'),
   totalValueScore: integer('total_value_score'),
   totalComplexityScore: integer('total_complexity_score'),
+  status: text('status').default('completed'), // 'draft', 'detailing', 'completed'
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`)
 });
 

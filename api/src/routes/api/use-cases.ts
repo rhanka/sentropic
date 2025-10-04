@@ -267,54 +267,36 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         .where(eq(folders.id, folderId));
     }
     
-    const generatedUseCases = await Promise.all(
-      useCaseList.useCases.map(async (useCaseItem) => {
-        const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
-        // Générer le détail du cas d'usage avec recherche web
-        const useCaseDetailPrompt_filled = useCaseDetailPrompt
-          .replace(/\{\{use_case\}\}/g, title)
-          .replace('{{user_input}}', input)
-          .replace('{{matrix}}', JSON.stringify(matrixConfig));
-        const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, selectedModel);
-        
-        // Extraire le contenu de la réponse OpenAI et parser le JSON
-        const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;
-        if (!useCaseDetailContent) {
-          throw new Error(`Aucune réponse reçue pour le cas d'usage: ${title}`);
-        }
-        const useCaseDetail = JSON.parse(useCaseDetailContent);
-        const matrixString = JSON.stringify(matrixConfig);
-        
-        // Calculer les scores avec la matrice
-        const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
-        
-        return {
-          id: createId(),
-          folderId: folderId!,
-          companyId: company_id || null,
-          name: useCaseDetail.name,
-          description: useCaseDetail.description,
-          process: useCaseDetail.process,
-          technology: useCaseDetail.technology,
-          deadline: useCaseDetail.deadline,
-          contact: useCaseDetail.contact,
-          benefits: JSON.stringify(useCaseDetail.benefits),
-          metrics: JSON.stringify(useCaseDetail.metrics),
-          risks: JSON.stringify(useCaseDetail.risks),
-          nextSteps: JSON.stringify(useCaseDetail.nextSteps),
-          sources: JSON.stringify(useCaseDetail.sources),
-          relatedData: JSON.stringify(useCaseDetail.relatedData),
-          valueScores: JSON.stringify(useCaseDetail.valueScores),
-          complexityScores: JSON.stringify(useCaseDetail.complexityScores),
-          totalValueScore: computed.totalValueScore,
-          totalComplexityScore: computed.totalComplexityScore,
-          createdAt: new Date().toISOString()
-        };
-      })
-    );
+    // Créer d'abord des cas d'usage en mode "draft" avec juste le titre
+    const draftUseCases = useCaseList.useCases.map((useCaseItem) => {
+      const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
+      return {
+        id: createId(),
+        folderId: folderId!,
+        companyId: company_id || null,
+        name: title,
+        description: useCaseItem.description || '',
+        process: null,
+        technology: null,
+        deadline: null,
+        contact: null,
+        benefits: null,
+        metrics: null,
+        risks: null,
+        nextSteps: null,
+        sources: null,
+        relatedData: null,
+        valueScores: null,
+        complexityScores: null,
+        totalValueScore: null,
+        totalComplexityScore: null,
+        status: 'draft',
+        createdAt: new Date().toISOString()
+      };
+    });
     
     // Insérer les cas d'usage en base
-    await db.insert(useCases).values(generatedUseCases);
+    await db.insert(useCases).values(draftUseCases);
     
     // Marquer le dossier comme "completed" après l'insertion des cas d'usage
     if (folderId) {
@@ -323,7 +305,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         .where(eq(folders.id, folderId));
     }
     
-    const createdUseCaseIds = generatedUseCases.map(uc => uc.id);
+    const createdUseCaseIds = draftUseCases.map(uc => uc.id);
     
     return c.json({
       created_folder_id: folderId,
@@ -342,3 +324,115 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     );
   }
 });
+
+// Endpoint pour détailler un cas d'usage
+const detailInput = z.object({
+  model: z.string().optional()
+});
+
+useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { model } = c.req.valid('json');
+    const selectedModel = model || 'gpt-5';
+    
+    // Récupérer le cas d'usage
+    const [useCase] = await db.select().from(useCases).where(eq(useCases.id, id));
+    if (!useCase) {
+      return c.json({ message: 'Cas d\'usage non trouvé' }, 404);
+    }
+    
+    // Récupérer la configuration de la matrice du dossier
+    const [folder] = await db.select().from(folders).where(eq(folders.id, useCase.folderId));
+    if (!folder) {
+      return c.json({ message: 'Dossier non trouvé' }, 404);
+    }
+    
+    const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
+    
+    // Mettre à jour le statut à "detailing"
+    await db.update(useCases)
+      .set({ status: 'detailing' })
+      .where(eq(useCases.id, id));
+    
+    // Lancer le détail en arrière-plan
+    detailUseCaseAsync(id, useCase.name, useCase.folderId, matrixConfig, selectedModel);
+    
+    return c.json({
+      success: true,
+      message: 'Détail du cas d\'usage démarré',
+      status: 'detailing'
+    });
+    
+  } catch (error) {
+    console.error('Error starting use case detail:', error);
+    return c.json({
+      success: false,
+      message: 'Erreur lors du démarrage du détail'
+    }, 500);
+  }
+});
+
+// Fonction pour détailler un cas d'usage de manière asynchrone
+async function detailUseCaseAsync(useCaseId: string, useCaseName: string, folderId: string, matrixConfig: any, model: string) {
+  try {
+    console.log(`Starting async detail for use case ${useCaseId}: ${useCaseName}`);
+    
+    // Récupérer les informations du dossier pour le contexte
+    const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
+    const context = folder?.description || '';
+    
+    // Générer le détail du cas d'usage avec recherche web
+    const useCaseDetailPrompt_filled = useCaseDetailPrompt
+      .replace(/\{\{use_case\}\}/g, useCaseName)
+      .replace('{{user_input}}', context)
+      .replace('{{matrix}}', JSON.stringify(matrixConfig));
+    
+    const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, model);
+    
+    // Extraire le contenu de la réponse OpenAI et parser le JSON
+    const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;
+    if (!useCaseDetailContent) {
+      throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCaseName}`);
+    }
+    
+    const useCaseDetail = JSON.parse(useCaseDetailContent);
+    
+    // Calculer les scores avec la matrice
+    const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+    
+    // Mettre à jour le cas d'usage avec les détails
+    await db.update(useCases)
+      .set({
+        name: useCaseDetail.name,
+        description: useCaseDetail.description,
+        process: useCaseDetail.process,
+        technology: useCaseDetail.technology,
+        deadline: useCaseDetail.deadline,
+        contact: useCaseDetail.contact,
+        benefits: JSON.stringify(useCaseDetail.benefits),
+        metrics: JSON.stringify(useCaseDetail.metrics),
+        risks: JSON.stringify(useCaseDetail.risks),
+        nextSteps: JSON.stringify(useCaseDetail.nextSteps),
+        sources: JSON.stringify(useCaseDetail.sources),
+        relatedData: JSON.stringify(useCaseDetail.relatedData),
+        valueScores: JSON.stringify(useCaseDetail.valueScores),
+        complexityScores: JSON.stringify(useCaseDetail.complexityScores),
+        totalValueScore: computed.totalValueScore,
+        totalComplexityScore: computed.totalComplexityScore,
+        status: 'completed'
+      })
+      .where(eq(useCases.id, useCaseId));
+    
+    console.log(`✅ Use case ${useCaseId} detailed successfully`);
+  } catch (error) {
+    console.error(`❌ Error detailing use case ${useCaseId}:`, error);
+    
+    // Remettre le statut à "draft" en cas d'erreur
+    await db.update(useCases)
+      .set({ status: 'draft' })
+      .where(eq(useCases.id, useCaseId));
+  }
+}
+
+export default useCasesRouter;

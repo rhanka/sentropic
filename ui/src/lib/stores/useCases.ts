@@ -20,6 +20,7 @@ export type UseCase = {
   complexityScores: any[];
   totalValueScore: number;
   totalComplexityScore: number;
+  status?: 'draft' | 'detailing' | 'completed';
   createdAt: string;
 };
 
@@ -94,5 +95,19 @@ export const deleteUseCase = async (id: string): Promise<void> => {
   });
   if (!response.ok) {
     throw new Error('Failed to delete use case');
+  }
+};
+
+export const detailUseCase = async (id: string, model?: string): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/use-cases/${id}/detail`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to detail use case');
   }
 };
