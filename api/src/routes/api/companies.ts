@@ -5,57 +5,20 @@ import { db } from '../../db/client';
 import { companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
-import { executeWithTools } from '../../services/tools';
-import { defaultPrompts } from '../../config/default-prompts';
-
-// Configuration métier par défaut
-const industries = {
-  industries: [
-    { name: 'Technologie' },
-    { name: 'Santé' },
-    { name: 'Finance' },
-    { name: 'Éducation' },
-    { name: 'Retail' },
-    { name: 'Manufacturing' },
-    { name: 'Services' },
-    { name: 'Immobilier' },
-    { name: 'Transport' },
-    { name: 'Énergie' },
-    { name: 'Agroalimentaire' },
-    { name: 'Média' },
-    { name: 'Télécommunications' },
-    { name: 'Automobile' },
-    { name: 'Aéronautique' }
-  ]
-};
-
-const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
+import { enrichCompany } from '../../services/context-company';
 
 // Fonction d'enrichissement asynchrone
 async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-5') {
   try {
     console.log(`Starting async enrichment for company ${companyId}: ${companyName}`);
     
-    // Utiliser le prompt company_info avec recherche web
-    const industriesList = industries.industries.map(i => i.name).join(', ');
-    const prompt = companyInfoPrompt
-      .replace('{{company_name}}', companyName)
-      .replace('{{industries}}', industriesList);
-    
-    const enrichedData = await executeWithTools(prompt, { model, useWebSearch: true });
-    
-    // Extraire le contenu de la réponse OpenAI et parser le JSON
-    const content = enrichedData.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Aucune réponse reçue de l\'IA');
-    }
-    
-    const parsedData = JSON.parse(content);
+    // Utiliser le service de contexte
+    const enrichedData = await enrichCompany(companyName, model);
     
     // Mettre à jour l'entreprise avec les données enrichies
     await db.update(companies)
       .set({
-        ...parsedData,
+        ...enrichedData,
         status: 'completed',
         updatedAt: new Date().toISOString()
       })
@@ -191,35 +154,17 @@ companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) 
     const { name, model } = c.req.valid('json');
     const selectedModel = model || 'gpt-5';
     
-    // Utiliser le prompt company_info avec recherche web
-    const industriesList = industries.industries.map(i => i.name).join(', ');
-    const prompt = companyInfoPrompt
-      .replace('{{company_name}}', name)
-      .replace('{{industries}}', industriesList);
+    // Utiliser le service de contexte
+    const enrichedData = await enrichCompany(name, selectedModel);
     
-    const enrichedData = await executeWithTools(prompt, { model: selectedModel, useWebSearch: true });
-    
-    // Extraire le contenu de la réponse OpenAI et parser le JSON
-    const content = enrichedData.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Aucune réponse reçue de l\'IA');
-    }
-    
-    try {
-      const parsedData = JSON.parse(content);
-      return c.json(parsedData);
-    } catch (parseError) {
-      console.error('Erreur de parsing JSON:', parseError);
-      console.error('Contenu reçu:', content);
-      throw new Error('Erreur lors du parsing de la réponse de l\'IA');
-    }
+    return c.json(enrichedData);
   } catch (error) {
     console.error('Error in ai-enrich endpoint:', error);
     return c.json(
-      { 
-        message: 'Failed to enrich company data', 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      }, 
+      {
+        message: 'Failed to enrich company data',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
       500
     );
   }

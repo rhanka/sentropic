@@ -10,13 +10,11 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { executeWithTools } from '../../services/tools';
+import { generateUseCaseList, generateUseCaseDetail } from '../../services/context-usecase';
 import { defaultPrompts } from '../../config/default-prompts';
 
 // Récupération des prompts depuis la configuration centralisée
 const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
-const useCaseListPrompt = defaultPrompts.find(p => p.id === 'use_case_list')?.content || '';
-const useCaseDetailPrompt = defaultPrompts.find(p => p.id === 'use_case_detail')?.content || '';
 
 const scoreEntry = z.object({
   axisId: z.string(),
@@ -242,19 +240,8 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       }
     }
     
-    // Générer les cas d'usage via OpenAI avec recherche web
-    // Générer la liste de cas d'usage avec recherche web
-    const useCaseListPrompt_filled = useCaseListPrompt
-      .replace('{{user_input}}', input)
-      .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible');
-    const useCaseListResponse = await executeWithTools(useCaseListPrompt_filled, { model: selectedModel, useWebSearch: true });
-    
-    // Extraire le contenu de la réponse OpenAI et parser le JSON
-    const useCaseListContent = useCaseListResponse.choices[0]?.message?.content;
-    if (!useCaseListContent) {
-      throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
-    }
-    const useCaseList = JSON.parse(useCaseListContent);
+    // Générer la liste de cas d'usage avec le service de contexte
+    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel);
     const matrixConfig = defaultMatrixConfig;
     
     // Mettre à jour le nom du dossier avec le nom généré par l'IA
@@ -382,21 +369,8 @@ async function detailUseCaseAsync(useCaseId: string, useCaseName: string, folder
     const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
     const context = folder?.description || '';
     
-    // Générer le détail du cas d'usage avec recherche web
-    const useCaseDetailPrompt_filled = useCaseDetailPrompt
-      .replace(/\{\{use_case\}\}/g, useCaseName)
-      .replace('{{user_input}}', context)
-      .replace('{{matrix}}', JSON.stringify(matrixConfig));
-    
-    const useCaseDetailResponse = await executeWithTools(useCaseDetailPrompt_filled, { model, useWebSearch: true });
-    
-    // Extraire le contenu de la réponse OpenAI et parser le JSON
-    const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;
-    if (!useCaseDetailContent) {
-      throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCaseName}`);
-    }
-    
-    const useCaseDetail = JSON.parse(useCaseDetailContent);
+    // Générer le détail du cas d'usage avec le service de contexte
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, model);
     
     // Calculer les scores avec la matrice
     const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
