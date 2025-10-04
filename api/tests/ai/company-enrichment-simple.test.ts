@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { apiRequest, createTestId } from '../utils/test-helpers';
+import { apiRequest, createTestId, getTestModel } from '../utils/test-helpers';
 
 describe('Company Enrichment AI - Simple', () => {
   let createdCompanyId: string | null = null;
@@ -43,7 +43,7 @@ describe('Company Enrichment AI - Simple', () => {
     // Start AI enrichment
     const enrichResponse = await apiRequest(`/companies/${createdCompanyId}/enrich`, {
       method: 'POST',
-      body: JSON.stringify({ model: 'gpt-4o' }),
+      body: JSON.stringify({ model: getTestModel() }),
     });
 
     expect(enrichResponse.ok).toBe(true);
@@ -70,7 +70,7 @@ describe('Company Enrichment AI - Simple', () => {
     createdCompanyId = draftResponse.data.id;
 
     // Test with different models
-    const models = ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'];
+    const models = [getTestModel(), 'gpt-4o', 'gpt-4o-mini'];
     
     for (const model of models) {
       const enrichResponse = await apiRequest(`/companies/${createdCompanyId}/enrich`, {
@@ -89,7 +89,7 @@ describe('Company Enrichment AI - Simple', () => {
 
     const enrichResponse = await apiRequest(`/companies/${invalidId}/enrich`, {
       method: 'POST',
-      body: JSON.stringify({ model: 'gpt-4o' }),
+      body: JSON.stringify({ model: getTestModel() }),
     });
 
     expect(enrichResponse.ok).toBe(false);

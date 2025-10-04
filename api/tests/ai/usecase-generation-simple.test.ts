@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { apiRequest, createTestId } from '../utils/test-helpers';
+import { apiRequest, createTestId, getTestModel } from '../utils/test-helpers';
 import { testUseCases } from '../utils/test-data';
 
 describe('Use Case Generation - Simple', () => {
@@ -37,7 +37,7 @@ describe('Use Case Generation - Simple', () => {
     const generateData = {
       input: testUseCases.forGeneration.input,
       create_new_folder: true,
-      model: 'gpt-4o',
+      model: getTestModel(),
     };
 
     const response = await apiRequest('/use-cases/generate', {
@@ -82,7 +82,7 @@ describe('Use Case Generation - Simple', () => {
       input: `Générer des cas d'usage d'IA pour ${companyName}`,
       create_new_folder: true,
       company_id: createdCompanyId,
-      model: 'gpt-4o',
+      model: getTestModel(),
     };
 
     const generateResponse = await apiRequest('/use-cases/generate', {
@@ -122,7 +122,7 @@ describe('Use Case Generation - Simple', () => {
     const generateData = {
       input: testUseCases.valid.input,
       create_new_folder: false,
-      model: 'gpt-4o',
+      model: getTestModel(),
     };
 
     const generateResponse = await apiRequest('/use-cases/generate', {
@@ -138,7 +138,7 @@ describe('Use Case Generation - Simple', () => {
     const generateData = {
       input: '', // Invalid input
       create_new_folder: true,
-      model: 'gpt-4o',
+      model: getTestModel(),
     };
 
     const response = await apiRequest('/use-cases/generate', {
@@ -155,7 +155,7 @@ describe('Use Case Generation - Simple', () => {
       input: testUseCases.forGeneration.input,
       create_new_folder: true,
       company_id: 'invalid-company-id',
-      model: 'gpt-4o',
+      model: getTestModel(),
     };
 
     const response = await apiRequest('/use-cases/generate', {
