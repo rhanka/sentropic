@@ -10,7 +10,7 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { executePrompt, askWithWebSearch } from '../../services/openai';
+import { executeWithTools } from '../../services/tools';
 import { defaultPrompts } from '../../config/default-prompts';
 
 // Récupération des prompts depuis la configuration centralisée
@@ -247,7 +247,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     const useCaseListPrompt_filled = useCaseListPrompt
       .replace('{{user_input}}', input)
       .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible');
-    const useCaseListResponse = await askWithWebSearch(useCaseListPrompt_filled, selectedModel);
+    const useCaseListResponse = await executeWithTools(useCaseListPrompt_filled, { model: selectedModel, useWebSearch: true });
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const useCaseListContent = useCaseListResponse.choices[0]?.message?.content;
@@ -268,7 +268,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     }
     
     // Créer d'abord des cas d'usage en mode "draft" avec juste le titre
-    const draftUseCases = useCaseList.useCases.map((useCaseItem) => {
+    const draftUseCases = useCaseList.useCases.map((useCaseItem: any) => {
       const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
       return {
         id: createId(),
@@ -305,7 +305,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         .where(eq(folders.id, folderId));
     }
     
-    const createdUseCaseIds = draftUseCases.map(uc => uc.id);
+    const createdUseCaseIds = draftUseCases.map((uc: any) => uc.id);
     
     return c.json({
       created_folder_id: folderId,
@@ -388,7 +388,7 @@ async function detailUseCaseAsync(useCaseId: string, useCaseName: string, folder
       .replace('{{user_input}}', context)
       .replace('{{matrix}}', JSON.stringify(matrixConfig));
     
-    const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, model);
+    const useCaseDetailResponse = await executeWithTools(useCaseDetailPrompt_filled, { model, useWebSearch: true });
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;

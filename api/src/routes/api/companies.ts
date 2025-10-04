@@ -5,7 +5,7 @@ import { db } from '../../db/client';
 import { companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
-import { askWithWebSearch } from '../../services/openai';
+import { executeWithTools } from '../../services/tools';
 import { defaultPrompts } from '../../config/default-prompts';
 
 // Configuration métier par défaut
@@ -42,7 +42,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string, model:
       .replace('{{company_name}}', companyName)
       .replace('{{industries}}', industriesList);
     
-    const enrichedData = await askWithWebSearch(prompt, model);
+    const enrichedData = await executeWithTools(prompt, { model, useWebSearch: true });
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const content = enrichedData.choices[0]?.message?.content;
@@ -197,7 +197,7 @@ companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) 
       .replace('{{company_name}}', name)
       .replace('{{industries}}', industriesList);
     
-    const enrichedData = await askWithWebSearch(prompt, selectedModel);
+    const enrichedData = await executeWithTools(prompt, { model: selectedModel, useWebSearch: true });
     
     // Extraire le contenu de la réponse OpenAI et parser le JSON
     const content = enrichedData.choices[0]?.message?.content;

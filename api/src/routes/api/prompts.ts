@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { askWithWebSearch } from '../../services/openai';
+import { executeWithTools } from '../../services/tools';
 import { defaultPrompts } from '../../config/default-prompts';
 
 const promptsRouter = new Hono();
@@ -59,7 +59,7 @@ promptsRouter.post('/test-tavily', async (c) => {
       }, 400);
     }
 
-    const result = await askWithWebSearch(question);
+    const result = await executeWithTools(question, { useWebSearch: true });
     
     return c.json({ 
       success: true, 
