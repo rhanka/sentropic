@@ -24,12 +24,12 @@
       const useCases = await fetchUseCases();
       useCasesStore.set(useCases);
       
-      // Sélectionner automatiquement le premier dossier s'il n'y en a pas de sélectionné
+      // Sélectionner  le premier dossier s'il n'y en a pas de sélectionné
       if (folders.length > 0 && !$currentFolderId) {
         currentFolderId.set(folders[0].id);
         addToast({
           type: 'info',
-          message: `Dossier "${folders[0].name}" sélectionné automatiquement`
+          message: `Dossier "${folders[0].name}" sélectionné`
         });
       }
     } catch (error) {

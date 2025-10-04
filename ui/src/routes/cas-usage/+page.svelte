@@ -111,10 +111,12 @@
       // Mettre à jour le currentFolderId si un dossier a été créé
       if (result.created_folder_id) {
         currentFolderId.set(result.created_folder_id);
+        // Rediriger vers la page dossiers pour voir le statut de génération
+        goto('/dossiers');
+      } else {
+        // Recharger les cas d'usage si aucun nouveau dossier n'a été créé
+        await loadUseCases();
       }
-
-      // Recharger les cas d'usage
-      await loadUseCases();
 
     } catch (error) {
       console.error('Failed to generate use cases:', error);

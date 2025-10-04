@@ -155,19 +155,6 @@
 <section class="space-y-6">
   <h1 class="text-3xl font-semibold">Paramètres</h1>
   
-  <!-- Section Paramètres -->
-  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Configuration</h2>
-    <label class="block space-y-2">
-      <span class="text-sm font-medium text-slate-700">Modèles OpenAI</span>
-      <textarea
-        class="h-32 w-full rounded border border-slate-300 p-2 font-mono text-sm"
-        bind:value={openaiModelsText}
-      ></textarea>
-    </label>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={save}>Enregistrer</button>
-  </div>
-
   <!-- Section Gestion des Prompts -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
     <h2 class="text-lg font-semibold text-slate-800 mb-4">Gestion des Prompts IA</h2>
