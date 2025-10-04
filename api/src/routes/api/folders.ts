@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, companies } from '../../db/schema';
+import { folders } from '../../db/schema';
 import { createId } from '../../utils/id';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 
 const matrixSchema = z.object({
@@ -73,28 +73,12 @@ const parseMatrix = (value: string | null) => {
 foldersRouter.get('/', async (c) => {
   const companyId = c.req.query('company_id');
   const rows = companyId
-    ? await db.select().from(folders).where(eq(folders.companyId, companyId))
-    : await db.select().from(folders);
-  
-  // Récupérer les noms des entreprises pour chaque dossier
-  const items = await Promise.all(rows.map(async (folder) => {
-    let companyName = null;
-    if (folder.companyId) {
-      try {
-        const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, folder.companyId));
-        companyName = company?.name || null;
-      } catch (error) {
-        console.warn('Erreur lors de la récupération du nom de l\'entreprise:', error);
-      }
-    }
-    
-    return {
-      ...folder,
-      matrixConfig: parseMatrix(folder.matrixConfig ?? null),
-      companyName
-    };
+    ? await db.select().from(folders).where(eq(folders.companyId, companyId)).orderBy(desc(folders.createdAt))
+    : await db.select().from(folders).orderBy(desc(folders.createdAt));
+  const items = rows.map((folder) => ({
+    ...folder,
+    matrixConfig: parseMatrix(folder.matrixConfig ?? null)
   }));
-  
   return c.json({ items });
 });
 
