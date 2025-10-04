@@ -7,6 +7,7 @@ import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
+import promptsRouter from './prompts';
 
 export const apiRouter = new Hono();
 
@@ -18,3 +19,4 @@ apiRouter.route('/settings', settingsRouter);
 apiRouter.route('/business-config', businessConfigRouter);
 apiRouter.route('/analytics', analyticsRouter);
 apiRouter.route('/admin', adminRouter);
+apiRouter.route('/prompts', promptsRouter);

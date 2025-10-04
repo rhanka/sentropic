@@ -698,7 +698,7 @@
             class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
           >
             Fermer
-          </button>
+        </button>
         </div>
       </div>
     </div>

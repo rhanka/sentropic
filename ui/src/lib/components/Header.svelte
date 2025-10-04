@@ -13,10 +13,8 @@
     { href: '/cas-usage', label: 'nav.useCases' },
     { href: '/matrice', label: 'nav.matrix' },
     { href: '/dashboard', label: 'nav.dashboard' },
-    { href: '/design', label: 'nav.design' },
     { href: '/donnees', label: 'nav.data' },
-    { href: '/parametres', label: 'nav.settings' },
-    { href: '/admin', label: 'Administration' }
+    { href: '/parametres', label: 'nav.settings' }
   ];
 
   const currentPath = derived(page, ($page) => $page.url.pathname);
@@ -38,7 +36,7 @@
 </script>
 
 <header class="border-b border-slate-200 bg-white">
-  <div class="mx-auto flex max-w-8xl items-center justify-between px-4 py-3">
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
     <nav class="flex flex-1 flex-wrap items-center gap-4 text-sm font-medium">
       {#each navItems as item}
         <a
