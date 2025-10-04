@@ -3,6 +3,7 @@
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
 
   let showCreate = false;
   let name = '';
@@ -40,6 +41,23 @@
     } finally {
       isLoading = false;
     }
+  };
+
+  const handleFolderClick = (folderId: string, folderStatus: string) => {
+    // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
+    if (folderStatus === 'generating') {
+      const folderUseCases = $useCasesStore.filter(uc => uc.folderId === folderId);
+      if (folderUseCases.length === 0) {
+        addToast({
+          type: 'info',
+          message: 'Génération en cours, veuillez patienter...'
+        });
+        return;
+      }
+    }
+    
+    // Naviguer vers la vue des cas d'usage
+    goto(`/cas-usage?folder=${folderId}`);
   };
 
   const getUseCaseCount = (folderId: string) => {
@@ -139,11 +157,14 @@
       {:else}
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {#each $foldersStore as folder}
-            <article class="rounded border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" 
-                     on:click={() => selectFolder(folder.id)}>
+            {@const isGenerating = folder.status === 'generating'}
+            {@const useCaseCount = getUseCaseCount(folder.id)}
+            {@const canClick = !isGenerating || useCaseCount > 0}
+            <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
+                     on:click={() => canClick ? handleFolderClick(folder.id, folder.status || 'completed') : null}>
               <div class="flex justify-between items-start">
                 <div class="flex-1">
-                  <h2 class="text-xl font-medium group-hover:text-blue-600 transition-colors">{folder.name}</h2>
+                  <h2 class="text-xl font-medium {canClick ? 'group-hover:text-blue-600 transition-colors' : 'text-slate-400'}">{folder.name}</h2>
                   {#if folder.description}
                     <p class="mt-1 text-sm text-slate-600 line-clamp-2">{folder.description}</p>
                   {/if}
@@ -152,9 +173,16 @@
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
-                      {getUseCaseCount(folder.id)} cas d'usage
+                      {useCaseCount} cas d'usage
                     </span>
-                    {#if $currentFolderId === folder.id}
+                    {#if isGenerating && useCaseCount === 0}
+                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Génération...
+                      </span>
+                    {:else if $currentFolderId === folder.id}
                       <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         Sélectionné
                       </span>

@@ -6,6 +6,7 @@ export type Folder = {
   description: string;
   companyId?: string;
   matrixConfig?: any;
+  status?: 'generating' | 'completed';
   createdAt: string;
 };
 
