@@ -171,11 +171,13 @@
   
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {#each $useCasesStore as useCase}
-      <article class="rounded border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" 
-               on:click={() => window.location.href = `/cas-usage/${useCase.id}`}>
+      {@const isDetailing = useCase.status === 'detailing'}
+      {@const isDraft = useCase.status === 'draft'}
+      <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {isDetailing ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
+               on:click={() => !isDetailing && (window.location.href = `/cas-usage/${useCase.id}`)}>
         <div class="flex justify-between items-start">
           <div class="flex-1">
-            <h2 class="text-xl font-medium group-hover:text-blue-600 transition-colors">{useCase.name}</h2>
+            <h2 class="text-xl font-medium {isDetailing ? 'text-slate-400' : 'group-hover:text-blue-600 transition-colors'}">{useCase.name}</h2>
             {#if useCase.description}
               <p class="mt-1 text-sm text-slate-600 line-clamp-2">{useCase.description}</p>
             {/if}
@@ -217,12 +219,31 @@
         </div>
         <div class="mt-3 flex items-center justify-between">
           <span class="text-xs text-slate-400">
-            Cliquez pour voir les détails
+            {#if isDetailing}
+              Détail en cours...
+            {:else if isDraft}
+              Brouillon
+            {:else}
+              Cliquez pour voir les détails
+            {/if}
           </span>
           <div class="flex items-center gap-2">
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Actif
-            </span>
+            {#if isDetailing}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Détail en cours
+              </span>
+            {:else if isDraft}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                Brouillon
+              </span>
+            {:else}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Actif
+              </span>
+            {/if}
           </div>
         </div>
       </article>
