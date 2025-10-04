@@ -10,7 +10,13 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { generateFolderName, generateUseCaseList, generateUseCaseDetail } from '../../services/openai';
+import { executePrompt, askWithWebSearch } from '../../services/openai';
+import { defaultPrompts } from '../../config/default-prompts';
+
+// Récupération des prompts depuis la configuration centralisée
+const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
+const useCaseListPrompt = defaultPrompts.find(p => p.id === 'use_case_list')?.content || '';
+const useCaseDetailPrompt = defaultPrompts.find(p => p.id === 'use_case_detail')?.content || '';
 
 const scoreEntry = z.object({
   axisId: z.string(),
@@ -207,49 +213,78 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         description: folderDescription,
         companyId: company_id || null,
         matrixConfig: JSON.stringify(defaultMatrixConfig),
+        status: 'generating',
         createdAt: new Date().toISOString()
       });
     }
     
-    // TODO: Générer les cas d'usage via OpenAI
-    // Pour l'instant, générer 5 cas par défaut (selon le prompt)
-    const numberOfCases = 5;
-    const generatedUseCases = Array.from({ length: numberOfCases }, (_, i) => {
-      const caseNumber = i + 1;
-      const caseNames = [
-        'Optimisation du support client',
-        'Automatisation des processus',
-        'Analyse prédictive',
-        'Chatbot intelligent',
-        'Recommandations personnalisées'
-      ];
-      
-      return {
-        id: createId(),
-        folderId: folderId!,
-        companyId: company_id || null,
-        name: caseNames[i] || `Cas d'usage ${caseNumber}`,
-        description: `Basé sur le contexte : ${input}`,
-        process: 'Processus métier',
-        technology: 'IA',
-        deadline: `${caseNumber * 3} mois`,
-        contact: 'Équipe projet',
-        benefits: JSON.stringify(['Amélioration de l\'efficacité', 'Réduction des coûts']),
-        metrics: JSON.stringify(['ROI', 'Satisfaction']),
-        risks: JSON.stringify(['Complexité', 'Adoption']),
-        nextSteps: JSON.stringify(['Analyse', 'Développement']),
-        sources: JSON.stringify(['Données internes', 'Benchmarks']),
-        relatedData: JSON.stringify(['Métriques', 'Processus']),
-        valueScores: JSON.stringify([]),
-        complexityScores: JSON.stringify([]),
-        totalValueScore: 70 + Math.floor(Math.random() * 20),
-        totalComplexityScore: 60 + Math.floor(Math.random() * 20),
-        createdAt: new Date().toISOString()
-      };
-    });
+    // Générer les cas d'usage via OpenAI avec recherche web
+    // Générer la liste de cas d'usage avec recherche web
+    const useCaseListPrompt_filled = useCaseListPrompt.replace('{{user_input}}', input);
+    const useCaseListResponse = await askWithWebSearch(useCaseListPrompt_filled, 'gpt-5');
+    
+    // Extraire le contenu de la réponse OpenAI et parser le JSON
+    const useCaseListContent = useCaseListResponse.choices[0]?.message?.content;
+    if (!useCaseListContent) {
+      throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
+    }
+    const useCaseList = JSON.parse(useCaseListContent);
+    const matrixConfig = defaultMatrixConfig;
+    
+    const generatedUseCases = await Promise.all(
+      useCaseList.useCases.map(async (title) => {
+        // Générer le détail du cas d'usage avec recherche web
+        const useCaseDetailPrompt_filled = useCaseDetailPrompt
+          .replace(/\{\{use_case\}\}/g, title)
+          .replace('{{user_input}}', input)
+          .replace('{{matrix}}', JSON.stringify(matrixConfig));
+        const useCaseDetailResponse = await askWithWebSearch(useCaseDetailPrompt_filled, 'gpt-5');
+        
+        // Extraire le contenu de la réponse OpenAI et parser le JSON
+        const useCaseDetailContent = useCaseDetailResponse.choices[0]?.message?.content;
+        if (!useCaseDetailContent) {
+          throw new Error(`Aucune réponse reçue pour le cas d'usage: ${title}`);
+        }
+        const useCaseDetail = JSON.parse(useCaseDetailContent);
+        const matrixString = JSON.stringify(matrixConfig);
+        
+        // Calculer les scores avec la matrice
+        const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+        
+        return {
+          id: createId(),
+          folderId: folderId!,
+          companyId: company_id || null,
+          name: useCaseDetail.name,
+          description: useCaseDetail.description,
+          process: useCaseDetail.process,
+          technology: useCaseDetail.technology,
+          deadline: useCaseDetail.deadline,
+          contact: useCaseDetail.contact,
+          benefits: JSON.stringify(useCaseDetail.benefits),
+          metrics: JSON.stringify(useCaseDetail.metrics),
+          risks: JSON.stringify(useCaseDetail.risks),
+          nextSteps: JSON.stringify(useCaseDetail.nextSteps),
+          sources: JSON.stringify(useCaseDetail.sources),
+          relatedData: JSON.stringify(useCaseDetail.relatedData),
+          valueScores: JSON.stringify(useCaseDetail.valueScores),
+          complexityScores: JSON.stringify(useCaseDetail.complexityScores),
+          totalValueScore: computed.totalValueScore,
+          totalComplexityScore: computed.totalComplexityScore,
+          createdAt: new Date().toISOString()
+        };
+      })
+    );
     
     // Insérer les cas d'usage en base
     await db.insert(useCases).values(generatedUseCases);
+    
+    // Marquer le dossier comme "completed" après l'insertion des cas d'usage
+    if (folderId) {
+      await db.update(folders)
+        .set({ status: 'completed' })
+        .where(eq(folders.id, folderId));
+    }
     
     const createdUseCaseIds = generatedUseCases.map(uc => uc.id);
     
