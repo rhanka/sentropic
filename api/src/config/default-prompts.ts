@@ -134,19 +134,19 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Donnée associée 3"
   ],
   "references": [
-    { "title": "description du lien 1", "url": "url du lien 1" },
-    { "title": "description du lien 2", "url": "url du lien 2" },
+    { "title": "description du lien 1", "url": "url web_search du lien 1" },
+    { "title": "description du lien 2", "url": "url web_search du lien 2" },
     ...
   ]
   "valueScores": [
     {
       "axisId": "Nom du 1er axe de valeur",
-      "rating": 5 (ex de score Fibonnacci),
+      "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
       "description": "Justification du score"
     },
     {
       "axisId": "Nom du 2ème axe de valeur",
-      "rating": 8 (ex de score Fibonnacci),
+      "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
       "description": "Justification du score"
     }
     // Complète pour les autres axes de valeur présents dans la matrice

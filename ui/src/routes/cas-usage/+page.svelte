@@ -5,9 +5,12 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
+  import type { MatrixConfig } from '$lib/types/matrix';
 
   let isLoading = false;
   let isGenerating = false;
+  let matrix: MatrixConfig | null = null;
 
   // Réactivité pour recharger les cas d'usage quand le dossier change
   $: if ($currentFolderId) {
@@ -48,6 +51,19 @@
       // Si un dossier est sélectionné, filtrer par ce dossier
       const useCases = await fetchUseCases($currentFolderId || undefined);
       useCasesStore.set(useCases);
+      
+      // Charger la matrice si on a un dossier sélectionné
+      if ($currentFolderId) {
+        try {
+          const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`);
+          if (response.ok) {
+            const folder = await response.json();
+            matrix = folder.matrixConfig;
+          }
+        } catch (err) {
+          console.error('Failed to load matrix:', err);
+        }
+      }
       
       // Si aucun dossier n'est sélectionné, afficher un message
       if (!$currentFolderId) {
@@ -183,9 +199,47 @@
             {#if useCase.description}
               <p class="mt-1 text-sm text-slate-600 line-clamp-2">{useCase.description}</p>
             {/if}
-            <div class="mt-2 flex gap-4 text-sm text-slate-500">
-              <span>Valeur: {useCase.totalValueScore ?? 'N/A'}</span>
-              <span>Complexité: {useCase.totalComplexityScore ?? 'N/A'}</span>
+            <div class="mt-2 flex gap-4 text-sm text-slate-500 items-center">
+              <div class="flex items-center gap-1">
+                <span>Valeur:</span>
+                {#if useCase.totalValueScore && matrix && useCase.valueScores && useCase.complexityScores}
+                  {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
+                  {@const valueStars = calculatedScores.valueStars}
+                  {#each Array(5) as _, i}
+                    {#if i < valueStars}
+                      <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    {:else}
+                      <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    {/if}
+                  {/each}
+                {:else}
+                  <span class="text-gray-400">N/A</span>
+                {/if}
+              </div>
+              <div class="flex items-center gap-1">
+                <span>Complexité:</span>
+                {#if useCase.totalComplexityScore && matrix && useCase.valueScores && useCase.complexityScores}
+                  {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
+                  {@const complexityStars = calculatedScores.complexityStars}
+                  {#each Array(5) as _, i}
+                    {#if i < complexityStars}
+                      <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    {:else}
+                      <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                      </svg>
+                    {/if}
+                  {/each}
+                {:else}
+                  <span class="text-gray-400">N/A</span>
+                {/if}
+              </div>
             </div>
           </div>
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

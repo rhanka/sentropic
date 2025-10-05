@@ -20,14 +20,24 @@ export function getFibonacciPoints(level: number): number {
  * Convertit un score Fibonacci en nombre d'étoiles (1-5)
  */
 export function scoreToStars(score: number): number {
-  // Mapping direct des scores Fibonacci aux étoiles
-  if (score <= 0) return 0;
-  if (score <= 1) return 1;
-  if (score <= 3) return 2;
-  if (score <= 8) return 3;
-  if (score <= 21) return 4;
-  if (score <= 55) return 5;
-  return 5; // Max 5 étoiles
+  // Mapping des scores Fibonacci aux étoiles (échelle 1-5) avec arrondi au plus proche
+  // Échelle Fibonacci : 0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100
+  const fibonacciScores = [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100];
+  const starLevels = [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5]; // Mapping des scores Fibonacci aux étoiles
+  
+  // Trouver l'index du score Fibonacci le plus proche
+  let closestIndex = 0;
+  let minDistance = Math.abs(score - fibonacciScores[0]);
+  
+  for (let i = 1; i < fibonacciScores.length; i++) {
+    const distance = Math.abs(score - fibonacciScores[i]);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestIndex = i;
+    }
+  }
+  
+  return starLevels[closestIndex];
 }
 
 /**

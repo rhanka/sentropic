@@ -7,7 +7,7 @@
   import ScoreCard from '$lib/components/ScoreCard.svelte';
   import References from '$lib/components/References.svelte';
   import MatrixDetails from '$lib/components/MatrixDetails.svelte';
-  import { calculateUseCaseScores } from '$lib/utils/scoring';
+  import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
 
   let useCase: any = undefined;
@@ -546,7 +546,7 @@
               {#each matrix.valueAxes as axis}
                 {@const score = useCase.valueScores.find(s => s.axisId === axis.id)}
                 {#if score}
-                  {@const stars = Math.min(5, Math.max(1, Math.round(score.rating / 20)))}
+                  {@const stars = scoreToStars(Number(score.rating))}
                   <div class="rounded border border-slate-200 bg-white p-3">
                     <div class="flex items-center justify-between mb-2">
                       <h5 class="font-medium text-slate-900">{axis.name}</h5>
@@ -582,7 +582,7 @@
               {#each matrix.complexityAxes as axis}
                 {@const score = useCase.complexityScores.find(s => s.axisId === axis.id)}
                 {#if score}
-                  {@const stars = Math.min(5, Math.max(1, Math.round(score.rating / 20)))}
+                  {@const stars = scoreToStars(Number(score.rating))}
                   <div class="rounded border border-slate-200 bg-white p-3">
                     <div class="flex items-center justify-between mb-2">
                       <h5 class="font-medium text-slate-900">{axis.name}</h5>

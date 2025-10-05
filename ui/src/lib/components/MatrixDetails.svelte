@@ -28,7 +28,7 @@
       {#each matrix.valueAxes as axis}
         {@const score = getAxisScore(axis.id, valueScores)}
         {#if score}
-          {@const stars = scoreToStars(score.rating)}
+          {@const stars = scoreToStars(Number(score.rating))}
           {@const description = getAxisDescription(axis, score.rating)}
           
           <div class="rounded border border-slate-200 bg-white p-4">
@@ -51,7 +51,7 @@
       {#each matrix.complexityAxes as axis}
         {@const score = getAxisScore(axis.id, complexityScores)}
         {#if score}
-          {@const stars = scoreToStars(score.rating)}
+          {@const stars = scoreToStars(Number(score.rating))}
           {@const description = getAxisDescription(axis, score.rating)}
           
           <div class="rounded border border-slate-200 bg-white p-4">
