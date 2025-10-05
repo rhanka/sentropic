@@ -82,6 +82,7 @@ const hydrateUseCase = (row: SerializedUseCase) => ({
   nextSteps: parseJson<string[]>(row.nextSteps) ?? [],
   sources: parseJson<string[]>(row.sources) ?? [],
   relatedData: parseJson<string[]>(row.relatedData) ?? [],
+  references: parseJson<Array<{title: string; url: string}>>(row.references) ?? [],
   valueScores: parseJson<ScoreEntry[]>(row.valueScores) ?? [],
   complexityScores: parseJson<ScoreEntry[]>(row.complexityScores) ?? []
 });

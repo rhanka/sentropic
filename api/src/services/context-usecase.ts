@@ -26,6 +26,10 @@ export interface UseCaseDetail {
   nextSteps: string[];
   sources: string[];
   relatedData: string[];
+  references: Array<{
+    title: string;
+    url: string;
+  }>;
   valueScores: Array<{
     axisId: string;
     rating: number;

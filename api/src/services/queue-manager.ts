@@ -5,6 +5,7 @@ import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import { calculateScores } from '../utils/scoring';
+import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases } from '../db/schema';
 import { settingsService } from './settings';
 
@@ -317,6 +318,30 @@ export class QueueManager {
     // Générer le détail
     const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, model);
     
+    // Valider les scores générés
+    const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+    
+    if (!validation.isValid) {
+      console.warn(`⚠️ Scores invalides pour ${useCaseName}:`, validation.errors);
+      console.log(`🔧 Correction automatique des scores...`);
+      
+      // Corriger les scores
+      const fixedScores = fixScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+      useCaseDetail.valueScores = fixedScores.valueScores;
+      useCaseDetail.complexityScores = fixedScores.complexityScores;
+      
+      console.log(`✅ Scores corrigés:`, {
+        valueAxes: useCaseDetail.valueScores.length,
+        complexityAxes: useCaseDetail.complexityScores.length
+      });
+    } else {
+      console.log(`✅ Scores valides pour ${useCaseName}`);
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.warn(`⚠️ Avertissements pour ${useCaseName}:`, validation.warnings);
+    }
+    
     // Calculer les scores
     const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
     
@@ -335,6 +360,7 @@ export class QueueManager {
         nextSteps: JSON.stringify(useCaseDetail.nextSteps),
         sources: JSON.stringify(useCaseDetail.sources),
         relatedData: JSON.stringify(useCaseDetail.relatedData),
+        references: JSON.stringify(useCaseDetail.references || []),
         valueScores: JSON.stringify(useCaseDetail.valueScores),
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
         totalValueScore: computed.totalValueScore,

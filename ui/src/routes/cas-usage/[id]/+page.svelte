@@ -4,11 +4,18 @@
   import { useCasesStore } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
+  import ScoreCard from '$lib/components/ScoreCard.svelte';
+  import References from '$lib/components/References.svelte';
+  import MatrixDetails from '$lib/components/MatrixDetails.svelte';
+  import { calculateUseCaseScores } from '$lib/utils/scoring';
+  import type { MatrixConfig } from '$lib/types/matrix';
 
   let useCase: any = undefined;
   let isEditing = false;
   let draft: any = {};
   let error = '';
+  let matrix: MatrixConfig | null = null;
+  let calculatedScores: any = null;
 
   $: useCaseId = $page.params.id;
 
@@ -36,6 +43,7 @@
       
       if (useCase) {
         draft = { ...useCase };
+        await loadMatrixAndCalculateScores();
       }
     } catch (err) {
       console.error('Failed to fetch use case:', err);
@@ -77,6 +85,29 @@
     }
     isEditing = false;
     error = '';
+  };
+
+  const loadMatrixAndCalculateScores = async () => {
+    if (!useCase?.folderId) return;
+    
+    try {
+      // Charger la matrice depuis le dossier
+      const response = await fetch(`http://localhost:8787/api/v1/folders/${useCase.folderId}`);
+      if (response.ok) {
+        const folder = await response.json();
+        matrix = folder.matrixConfig;
+        
+        if (matrix && useCase.valueScores && useCase.complexityScores) {
+          calculatedScores = calculateUseCaseScores(
+            matrix,
+            useCase.valueScores,
+            useCase.complexityScores
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load matrix:', err);
+    }
   };
 </script>
 
@@ -153,17 +184,34 @@
         </div>
       </div>
 
-      <!-- Scores -->
-      <div class="grid gap-6 md:grid-cols-2">
-        <div class="rounded border border-slate-200 bg-white p-4">
-          <h3 class="font-semibold text-slate-900 mb-2">Score de Valeur</h3>
-          <p class="text-2xl font-bold text-green-600">{useCase.totalValueScore ?? 'N/A'}</p>
+      <!-- Scores calculés -->
+      {#if calculatedScores}
+        <div class="grid gap-6 md:grid-cols-2">
+          <ScoreCard 
+            title="Valeur calculée" 
+            score={calculatedScores.finalValueScore} 
+            stars={calculatedScores.valueStars}
+            type="value"
+          />
+          <ScoreCard 
+            title="Complexité calculée" 
+            score={calculatedScores.finalComplexityScore} 
+            stars={calculatedScores.complexityStars}
+            type="complexity"
+          />
         </div>
-        <div class="rounded border border-slate-200 bg-white p-4">
-          <h3 class="font-semibold text-slate-900 mb-2">Score de Complexité</h3>
-          <p class="text-2xl font-bold text-orange-600">{useCase.totalComplexityScore ?? 'N/A'}</p>
+      {:else}
+        <div class="grid gap-6 md:grid-cols-2">
+          <div class="rounded border border-slate-200 bg-white p-4">
+            <h3 class="font-semibold text-slate-900 mb-2">Score de Valeur</h3>
+            <p class="text-2xl font-bold text-green-600">{useCase.totalValueScore ?? 'N/A'}</p>
+          </div>
+          <div class="rounded border border-slate-200 bg-white p-4">
+            <h3 class="font-semibold text-slate-900 mb-2">Score de Complexité</h3>
+            <p class="text-2xl font-bold text-orange-600">{useCase.totalComplexityScore ?? 'N/A'}</p>
+          </div>
         </div>
-      </div>
+      {/if}
 
       <!-- Bénéfices -->
       <div class="rounded border border-slate-200 bg-white p-4">
@@ -253,27 +301,23 @@
         {/if}
       </div>
 
-      <!-- Sources -->
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <h3 class="font-semibold text-slate-900 mb-2">Sources</h3>
-        {#if isEditing}
+      <!-- Références -->
+      {#if isEditing}
+        <div class="rounded border border-slate-200 bg-white p-4">
+          <h3 class="font-semibold text-slate-900 mb-2">Références</h3>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Sources (une par ligne)</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Références (une par ligne, format: [Titre](URL))</label>
             <textarea 
               class="w-full rounded border border-slate-300 p-2 text-sm"
-              placeholder="Source 1&#10;Source 2&#10;..."
+              placeholder="[Titre du lien](https://example.com)&#10;[Autre référence](https://example2.com)&#10;..."
               bind:value={draft.sourcesText}
               rows="3"
             ></textarea>
           </div>
-        {:else}
-          <ul class="list-disc list-inside text-slate-600">
-            {#each useCase.sources || [] as source}
-              <li>{source}</li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+        </div>
+      {:else}
+        <References sources={useCase.sources || []} />
+      {/if}
 
       <!-- Données liées -->
       <div class="rounded border border-slate-200 bg-white p-4">
@@ -296,6 +340,17 @@
           </ul>
         {/if}
       </div>
+
+      <!-- Matrice détaillée -->
+      {#if matrix && useCase.valueScores && useCase.complexityScores && !isEditing}
+        <div class="rounded border border-slate-200 bg-white p-6">
+          <MatrixDetails 
+            {matrix} 
+            valueScores={useCase.valueScores} 
+            complexityScores={useCase.complexityScores} 
+          />
+        </div>
+      {/if}
     </div>
   {/if}
 </section>

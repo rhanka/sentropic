@@ -7,6 +7,11 @@
   let refreshInterval: ReturnType<typeof setInterval>;
   let isVisible = false;
 
+  $: activeJobs = getActiveJobs($queueStore.jobs);
+  $: hasJobs = $queueStore.jobs.length > 0;
+  $: allJobsCompleted = hasJobs && $queueStore.jobs.every(job => job.status === 'completed');
+  $: hasFailedJobs = hasJobs && $queueStore.jobs.some(job => job.status === 'failed');
+
   // Charger les jobs au montage et toutes les 5 secondes
   onMount(async () => {
     await loadJobs();
@@ -103,11 +108,45 @@
     }
   };
 
+  const handleDeleteAllJobs = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS les jobs ? Cette action est irréversible.')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'all' })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        addToast({
+          type: 'success',
+          message: result.message
+        });
+        await loadJobs();
+      } else {
+        throw new Error('Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error('Failed to delete all jobs:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la suppression de tous les jobs'
+      });
+    }
+  };
+
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleString('fr-FR');
   };
 </script>
 
+{#if hasJobs}
 <div class="fixed bottom-4 right-4 z-50">
   <!-- Bouton pour ouvrir/fermer le monitoring -->
   <button
@@ -117,11 +156,19 @@
   >
     {#if $queueStore.isLoading}
       <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+      </svg>
+    {:else if allJobsCompleted}
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M5 13l4 4L19 7"></path>
+      </svg>
+    {:else if hasFailedJobs}
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M6 18L18 6M6 6l12 12"></path>
       </svg>
     {:else}
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
       </svg>
     {/if}
   </button>
@@ -131,15 +178,26 @@
     <div class="absolute bottom-16 right-0 w-96 bg-white rounded-lg shadow-xl border border-gray-200 max-h-96 overflow-hidden">
       <div class="p-4 border-b border-gray-200">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-gray-900">Jobs IA en cours</h3>
-          <button
-            class="text-gray-400 hover:text-gray-600"
-            on:click={() => isVisible = false}
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
+          <h3 class="text-lg font-semibold text-gray-900">Jobs IA ({$queueStore.jobs.length})</h3>
+          <div class="flex items-center gap-2">
+            <button
+              class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+              on:click={handleDeleteAllJobs}
+              title="Supprimer tous les jobs"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+            <button
+              class="text-gray-400 hover:text-gray-600"
+              on:click={() => isVisible = false}
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
         </div>
         {#if $queueStore.lastUpdate}
           <p class="text-xs text-gray-500 mt-1">
@@ -238,3 +296,4 @@
     </div>
   {/if}
 </div>
+{/if}

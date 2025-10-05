@@ -83,33 +83,77 @@ IMPORTANT:
 
 SYSTÈME DE SCORING FIBONACCI:
 Pour chaque axe, tu DOIS utiliser UNIQUEMENT une de ces valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
-Ces scores sont ensuite mappés aux étoiles (1-5) pour l'affichage.
 
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
   "name": "{{use_case}}",
   "description": "Description détaillée du cas d'usage sur 5-10 lignes",
-  "businessContext": "Contexte métier et enjeux",
-  "technicalApproach": "Approche technique proposée",
-  "expectedBenefits": "Bénéfices attendus",
-  "implementationSteps": ["Étape 1", "Étape 2", "Étape 3"],
-  "requiredResources": "Ressources nécessaires",
-  "timeline": "Délai de mise en œuvre",
-  "risks": ["Risque 1", "Risque 2"],
-  "successMetrics": ["Métrique 1", "Métrique 2"],
+  "domain": "Le domaine d'application principal (industrie ou processus)",
+  "technology": "Technologies d'IA à utiliser (NLP, Computer Vision, etc.)",
+  "deadline": "Estimation du délai de mise en œuvre (ex: Q3 2025)",
+  "contact": "Nom du responsable suggéré",
+  "benefits": [
+    "Bénéfice 1",
+    "Bénéfice 2",
+    "Bénéfice 3",
+    "Bénéfice 4",
+    "Bénéfice 5"
+  ],
+  "metrics": [
+    "KPI ou mesure de succès 1",
+    "KPI ou mesure de succès 2",
+    "KPI ou mesure de succès 3"
+  ],
+  "risks": [
+    "Risque 1",
+    "Risque 2",
+    "Risque 3"
+  ],
+  "nextSteps": [
+    "Étape 1",
+    "Étape 2",
+    "Étape 3",
+    "Étape 4"
+  ],
+  "sources": [
+    "Source de données 1 (ex ERP ou MES)",
+    "Source de données 2"
+  ],
+  "relatedData": [
+    "Donnée associée 1 ex Ordre de production",
+    "Donnée associée 2",
+    "Donnée associée 3"
+  ],
+  "references": [
+    { "title": "description du lien 1", "url": "url du lien 1" },
+    { "title": "description du lien 2", "url": "url du lien 2" },
+    ...
+  ]
   "valueScores": [
     {
       "axisId": "Nom du 1er axe de valeur",
-      "rating": 21,
-      "description": "Justification du score Fibonacci choisi"
+      "rating": 5 (ex de score Fibonnacci),
+      "description": "Justification du score"
+    },
+    {
+      "axisId": "Nom du 2ème axe de valeur",
+      "rating": 8 (ex de score Fibonnacci),
+      "description": "Justification du score"
     }
+    // Complète pour les autres axes de valeur présents dans la matrice
   ],
   "complexityScores": [
     {
-      "axisId": "Nom du 1er axe de complexité", 
-      "rating": 8,
-      "description": "Justification du score Fibonacci choisi"
+      "axisId": "Nom du 1er axe de complexité",
+      "rating": 5 (ex de score Fibonnacci),
+      "description": "Justification du score"
+    },
+    {
+      "axisId": "Nom du 2ème axe de complexité",
+      "rating": 13 (ex de score Fibonnacci),
+      "description": "Justification du score"
     }
+    // Complète pour les autres axes de complexité présents dans la matrice
   ]
 }
 IMPORTANT: 

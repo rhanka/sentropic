@@ -44,6 +44,7 @@ export const useCases = sqliteTable('use_cases', {
   nextSteps: text('next_steps'),
   sources: text('sources'),
   relatedData: text('related_data'),
+  references: text('references'),
   valueScores: text('value_scores'),
   complexityScores: text('complexity_scores'),
   totalValueScore: integer('total_value_score'),
