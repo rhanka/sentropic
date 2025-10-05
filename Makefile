@@ -129,6 +129,14 @@ clean-all: clean ## Clean everything including images
 
 .PHONY: clean-db
 clean-db: ## Clean database files and restart services
+	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
+	@echo "This action is IRREVERSIBLE and will remove:"
+	@echo "  - All companies"
+	@echo "  - All folders"
+	@echo "  - All use cases"
+	@echo "  - All job queue data"
+	@echo ""
+	@read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1)
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
 	rm -f data/app.db*
@@ -211,8 +219,51 @@ db-migrate:
 	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
-db-reset:
+db-reset: ## Reset database (WARNING: destroys all data)
+	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
+	@echo "This action is IRREVERSIBLE and will remove:"
+	@echo "  - All companies"
+	@echo "  - All folders" 
+	@echo "  - All use cases"
+	@echo "  - All job queue data"
+	@echo ""
+	@read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1)
+	@echo "🗑️  Resetting database..."
 	$(COMPOSE_RUN_API) npm run db:reset
+
+.PHONY: db-init
+db-init: ## Initialize database with all migrations
+	@echo "🗄️  Initializing database..."
+	$(COMPOSE_RUN_API) npm run db:init
+
+.PHONY: db-status
+db-status: ## Check database status and tables
+	@echo "📊 Database status:"
+	$(COMPOSE_RUN_API) npm run db:status
+
+.PHONY: db-backup
+db-backup: ## Backup database to file
+	@echo "💾 Backing up database..."
+	$(COMPOSE_RUN_API) npm run db:backup
+
+.PHONY: db-restore
+db-restore: ## Restore database from backup [BACKUP_FILE=filename]
+	@echo "🔄 Restoring database from $(BACKUP_FILE)..."
+	$(COMPOSE_RUN_API) npm run db:restore $(BACKUP_FILE)
+
+.PHONY: db-fresh
+db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database
+	@echo "✅ Fresh database setup completed!"
+
+.PHONY: restart-api
+restart-api: ## Restart API service
+	@echo "🔄 Restarting API service..."
+	$(DOCKER_COMPOSE) restart api
+
+.PHONY: restart-db
+restart-db: ## Restart database service
+	@echo "🔄 Restarting database service..."
+	$(DOCKER_COMPOSE) restart sqlite
 
 .PHONY: db-seed
 db-seed:
