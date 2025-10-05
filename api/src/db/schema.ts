@@ -35,7 +35,9 @@ export const useCases = sqliteTable('use_cases', {
   name: text('name').notNull(),
   description: text('description'),
   process: text('process'),
-  technology: text('technology'),
+  domain: text('domain'),
+  technologies: text('technologies'),
+  prerequisites: text('prerequisites'),
   deadline: text('deadline'),
   contact: text('contact'),
   benefits: text('benefits'),
@@ -54,10 +56,10 @@ export const useCases = sqliteTable('use_cases', {
 });
 
 export const settings = sqliteTable('settings', {
-  id: text('id').primaryKey(),
-  openaiModels: text('openai_models'),
-  prompts: text('prompts'),
-  generationLimits: text('generation_limits')
+  key: text('key').primaryKey(),
+  value: text('value'),
+  description: text('description'),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`)
 });
 
 export const businessConfig = sqliteTable('business_config', {
@@ -75,8 +77,21 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: text('expires_at')
 });
 
+export const jobQueue = sqliteTable('job_queue', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(), // 'use_case_list' | 'use_case_detail'
+  status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'completed' | 'failed'
+  data: text('data').notNull(), // JSON string
+  result: text('result'), // JSON string
+  error: text('error'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  startedAt: text('started_at'),
+  completedAt: text('completed_at')
+});
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
+export type JobQueueRow = typeof jobQueue.$inferSelect;
