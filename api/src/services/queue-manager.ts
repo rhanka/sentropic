@@ -221,10 +221,15 @@ export class QueueManager {
             objectives: company.objectives,
             technologies: company.technologies
           }, null, 2);
+          console.log(`📊 Informations entreprise récupérées pour ${company.name}:`, companyInfo);
+        } else {
+          console.warn(`⚠️ Entreprise non trouvée avec l'ID: ${companyId}`);
         }
       } catch (error) {
         console.warn('Erreur lors de la récupération des informations de l\'entreprise:', error);
       }
+    } else {
+      console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
     }
 
     // Générer la liste de cas d'usage
@@ -238,6 +243,7 @@ export class QueueManager {
           description: `Dossier généré automatiquement pour: ${input}`
         })
         .where(eq(folders.id, folderId));
+      console.log(`📁 Dossier mis à jour: ${useCaseList.dossier} (ID: ${folderId}, Company: ${companyId || 'Aucune'})`);
     }
 
     // Créer les cas d'usage en mode draft
