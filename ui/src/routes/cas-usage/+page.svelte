@@ -104,7 +104,7 @@
       removeToast(progressToastId);
       progressToastId = addToast({
         type: 'success',
-        message: `✅ ${result.summary}`,
+        message: `✅ ${result.message || 'Génération démarrée avec succès'}`,
         duration: 5000
       });
 

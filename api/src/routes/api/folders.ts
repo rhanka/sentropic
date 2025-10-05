@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders } from '../../db/schema';
+import { folders, companies } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { eq, desc } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
@@ -72,9 +72,37 @@ const parseMatrix = (value: string | null) => {
 
 foldersRouter.get('/', async (c) => {
   const companyId = c.req.query('company_id');
+  
+  // Faire un LEFT JOIN avec la table companies pour récupérer le nom de l'entreprise
   const rows = companyId
-    ? await db.select().from(folders).where(eq(folders.companyId, companyId)).orderBy(desc(folders.createdAt))
-    : await db.select().from(folders).orderBy(desc(folders.createdAt));
+    ? await db.select({
+        id: folders.id,
+        name: folders.name,
+        description: folders.description,
+        companyId: folders.companyId,
+        companyName: companies.name,
+        matrixConfig: folders.matrixConfig,
+        status: folders.status,
+        createdAt: folders.createdAt
+      })
+      .from(folders)
+      .leftJoin(companies, eq(folders.companyId, companies.id))
+      .where(eq(folders.companyId, companyId))
+      .orderBy(desc(folders.createdAt))
+    : await db.select({
+        id: folders.id,
+        name: folders.name,
+        description: folders.description,
+        companyId: folders.companyId,
+        companyName: companies.name,
+        matrixConfig: folders.matrixConfig,
+        status: folders.status,
+        createdAt: folders.createdAt
+      })
+      .from(folders)
+      .leftJoin(companies, eq(folders.companyId, companies.id))
+      .orderBy(desc(folders.createdAt));
+      
   const items = rows.map((folder) => ({
     ...folder,
     matrixConfig: parseMatrix(folder.matrixConfig ?? null)
@@ -105,7 +133,20 @@ foldersRouter.post('/', zValidator('json', folderInput), async (c) => {
 
 foldersRouter.get('/:id', async (c) => {
   const id = c.req.param('id');
-  const [folder] = await db.select().from(folders).where(eq(folders.id, id));
+  const [folder] = await db.select({
+    id: folders.id,
+    name: folders.name,
+    description: folders.description,
+    companyId: folders.companyId,
+    companyName: companies.name,
+    matrixConfig: folders.matrixConfig,
+    status: folders.status,
+    createdAt: folders.createdAt
+  })
+  .from(folders)
+  .leftJoin(companies, eq(folders.companyId, companies.id))
+  .where(eq(folders.id, id));
+  
   if (!folder) {
     return c.json({ message: 'Not found' }, 404);
   }
