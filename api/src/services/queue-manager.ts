@@ -257,7 +257,7 @@ export class QueueManager {
         name: title,
         description: useCaseItem.description || '',
         process: '',
-        technology: '',
+        technologies: JSON.stringify([]),
         deadline: '',
         contact: '',
         benefits: JSON.stringify([]),
@@ -350,9 +350,10 @@ export class QueueManager {
       .set({
         name: useCaseDetail.name,
         description: useCaseDetail.description,
-        process: useCaseDetail.process,
-        technology: useCaseDetail.technology,
-        deadline: useCaseDetail.deadline,
+        domain: useCaseDetail.domain,
+        technologies: JSON.stringify(useCaseDetail.technologies),
+        prerequisites: useCaseDetail.prerequisites,
+        deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
         contact: useCaseDetail.contact,
         benefits: JSON.stringify(useCaseDetail.benefits),
         metrics: JSON.stringify(useCaseDetail.metrics),

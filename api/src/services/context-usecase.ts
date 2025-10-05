@@ -16,9 +16,10 @@ export interface UseCaseList {
 export interface UseCaseDetail {
   name: string;
   description: string;
-  process: string;
-  technology: string;
-  deadline: string;
+  domain: string;
+  technologies: string[];
+  leadtime: string;
+  prerequisites: string;
   contact: string;
   benefits: string[];
   metrics: string[];

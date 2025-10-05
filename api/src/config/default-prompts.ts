@@ -78,8 +78,11 @@ Utilise la matrice valeur/complexité fournie: {{matrix}} pour évaluer chaque a
 
 IMPORTANT: 
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage
-- Base-toi sur des exemples concrets, des technologies actuelles et des retours d'expérience réels
-- Inclus des données chiffrées et des tendances du marché quand c'est pertinent
+- Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
+- Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références
+- bénéfices mesures de succès doivent être basé sur un véritable rationnel et citation vers références
+- les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
+- ne mets pas les "sources" (systèmes ERP et MES fournissant les données) dans les références
 
 SYSTÈME DE SCORING FIBONACCI:
 Pour chaque axe, tu DOIS utiliser UNIQUEMENT une de ces valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
@@ -87,11 +90,17 @@ Pour chaque axe, tu DOIS utiliser UNIQUEMENT une de ces valeurs Fibonacci: [0, 1
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
   "name": "{{use_case}}",
-  "description": "Description détaillée du cas d'usage sur 5-10 lignes",
+  "description": "Description détaillée en markdown du cas d'usage sur 5-10 lignes",
   "domain": "Le domaine d'application principal (industrie ou processus)",
-  "technology": "Technologies d'IA à utiliser (NLP, Computer Vision, etc.)",
-  "deadline": "Estimation du délai de mise en œuvre (ex: Q3 2025)",
-  "contact": "Nom du responsable suggéré",
+  "technologies": [
+    "technologie 1 (e.g IA / NLP, computer vision, etc.)",
+    "technologie 2 (e.g IA / NLP, computer vision, etc.)",
+    "technologie 3 (e.g IA / NLP, computer vision, etc.)",
+    ...
+  ],
+  "leadtime": "Estimation du délai de mise en œuvre relativement à la complexité du cas d'usage (ex: 3 mois, 6 mois, 36 mois...)",
+  "prerequisites": "Prérequis pour la mise en œuvre du cas d'usage (ex: Datalake, Historien IoT, Senseurs, etc.)",
+  "contact": "Nom du responsable suggéré (rôle ex responsable opérations)",
   "benefits": [
     "Bénéfice 1",
     "Bénéfice 2",
