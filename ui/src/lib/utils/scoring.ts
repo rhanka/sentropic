@@ -17,21 +17,17 @@ export function getFibonacciPoints(level: number): number {
 }
 
 /**
- * Convertit un score en nombre d'étoiles (1-5)
+ * Convertit un score Fibonacci en nombre d'étoiles (1-5)
  */
 export function scoreToStars(score: number): number {
-  let closestLevel = 1;
-  let minDiff = Math.abs(score - FIBONACCI_POINTS[0]);
-  
-  for (let i = 1; i < FIBONACCI_POINTS.length; i++) {
-    const diff = Math.abs(score - FIBONACCI_POINTS[i]);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closestLevel = i + 1;
-    }
-  }
-  
-  return closestLevel;
+  // Mapping direct des scores Fibonacci aux étoiles
+  if (score <= 0) return 0;
+  if (score <= 1) return 1;
+  if (score <= 3) return 2;
+  if (score <= 8) return 3;
+  if (score <= 21) return 4;
+  if (score <= 55) return 5;
+  return 5; // Max 5 étoiles
 }
 
 /**
@@ -48,13 +44,13 @@ export function calculateFinalScore(
   for (const axis of axes) {
     const score = scores.find(s => s.axisId === axis.id);
     if (score) {
-      const points = getFibonacciPoints(score.rating);
-      totalWeightedScore += points * axis.weight;
+      // Utiliser directement le score Fibonacci (rating)
+      totalWeightedScore += score.rating * axis.weight;
       totalWeight += axis.weight;
     }
   }
   
-  return totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+  return totalWeight > 0 ? Math.round(totalWeightedScore / totalWeight) : 0;
 }
 
 /**

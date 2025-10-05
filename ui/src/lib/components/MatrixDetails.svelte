@@ -2,7 +2,7 @@
   import StarRating from './StarRating.svelte';
   import type { MatrixConfig } from '../../types/matrix';
   import type { ScoreEntry } from '../utils/scoring';
-  import { getFibonacciPoints, scoreToStars } from '../utils/scoring';
+  import { scoreToStars } from '../utils/scoring';
   
   export let matrix: MatrixConfig;
   export let valueScores: ScoreEntry[];
@@ -28,8 +28,7 @@
       {#each matrix.valueAxes as axis}
         {@const score = getAxisScore(axis.id, valueScores)}
         {#if score}
-          {@const points = getFibonacciPoints(score.rating)}
-          {@const stars = scoreToStars(points)}
+          {@const stars = scoreToStars(score.rating)}
           {@const description = getAxisDescription(axis, score.rating)}
           
           <div class="rounded border border-slate-200 bg-white p-4">
@@ -37,7 +36,7 @@
               <h5 class="font-medium text-slate-900">{axis.name}</h5>
               <div class="flex items-center gap-2">
                 <StarRating filled={stars} empty={5 - stars} type="stars" size="sm" />
-                <span class="text-sm text-slate-600">({points} pts)</span>
+                <span class="text-sm text-slate-600">({score.rating} pts)</span>
               </div>
             </div>
             <p class="text-sm text-slate-600">{description}</p>
@@ -52,8 +51,7 @@
       {#each matrix.complexityAxes as axis}
         {@const score = getAxisScore(axis.id, complexityScores)}
         {#if score}
-          {@const points = getFibonacciPoints(score.rating)}
-          {@const stars = scoreToStars(points)}
+          {@const stars = scoreToStars(score.rating)}
           {@const description = getAxisDescription(axis, score.rating)}
           
           <div class="rounded border border-slate-200 bg-white p-4">
@@ -61,7 +59,7 @@
               <h5 class="font-medium text-slate-900">{axis.name}</h5>
               <div class="flex items-center gap-2">
                 <StarRating filled={stars} empty={5 - stars} type="x" size="sm" />
-                <span class="text-sm text-slate-600">({points} pts)</span>
+                <span class="text-sm text-slate-600">({score.rating} pts)</span>
               </div>
             </div>
             <p class="text-sm text-slate-600">{description}</p>
