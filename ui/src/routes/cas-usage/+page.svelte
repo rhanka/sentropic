@@ -176,7 +176,7 @@
       {@const isPending = useCase.status === 'pending'}
       {@const isGenerating = useCase.status === 'generating'}
       <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {(isDetailing || isPending || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
-               on:click={() => !(isDetailing || isPending || isGenerating) && (window.location.href = `/cas-usage/${useCase.id}`)}>
+               on:click={() => !(isDetailing || isPending || isGenerating) && goto(`/cas-usage/${useCase.id}`)}>
         <div class="flex justify-between items-start">
           <div class="flex-1">
             <h2 class="text-xl font-medium {(isDetailing || isPending || isGenerating) ? 'text-slate-400' : 'group-hover:text-blue-600 transition-colors'}">{useCase.name}</h2>
@@ -191,7 +191,7 @@
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button 
               class="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
-              on:click|stopPropagation={() => window.location.href = `/cas-usage/${useCase.id}`}
+              on:click|stopPropagation={() => goto(`/cas-usage/${useCase.id}`)}
               title="Voir les détails"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -201,7 +201,7 @@
             </button>
             <button 
               class="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded"
-              on:click|stopPropagation={() => window.location.href = `/cas-usage/${useCase.id}`}
+              on:click|stopPropagation={() => goto(`/cas-usage/${useCase.id}`)}
               title="Modifier"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

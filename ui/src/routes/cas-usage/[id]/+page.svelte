@@ -18,13 +18,24 @@
 
   const loadUseCase = async () => {
     try {
+      // D'abord essayer de trouver dans le store local
       const useCases = $useCasesStore;
       useCase = useCases.find(uc => uc.id === useCaseId);
+      
+      // Si pas trouvé dans le store, charger depuis l'API
+      if (!useCase) {
+        const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
+        if (response.ok) {
+          useCase = await response.json();
+        } else {
+          addToast({ type: 'error', message: 'Cas d\'usage non trouvé' });
+          error = 'Cas d\'usage non trouvé';
+          return;
+        }
+      }
+      
       if (useCase) {
         draft = { ...useCase };
-      } else {
-        addToast({ type: 'error', message: 'Cas d\'usage non trouvé' });
-        error = 'Cas d\'usage non trouvé';
       }
     } catch (err) {
       console.error('Failed to fetch use case:', err);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { queueStore, loadJobs, getActiveJobs, getJobProgress, getJobDuration, cancelJob, retryJob } from '$lib/stores/queue';
+  import { queueStore, loadJobs, getActiveJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
   import type { Job, JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
 
@@ -82,6 +82,27 @@
     }
   };
 
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce job ? Cette action est irréversible.')) {
+      return;
+    }
+    
+    try {
+      await deleteJob(jobId);
+      addToast({
+        type: 'success',
+        message: 'Job supprimé avec succès'
+      });
+      await loadJobs();
+    } catch (error) {
+      console.error('Failed to delete job:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la suppression du job'
+      });
+    }
+  };
+
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleString('fr-FR');
   };
@@ -100,7 +121,7 @@
       </svg>
     {:else}
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
       </svg>
     {/if}
   </button>
@@ -196,6 +217,15 @@
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                    </button>
+                    <button
+                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      on:click={() => handleDeleteJob(job.id)}
+                      title="Supprimer le job"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                       </svg>
                     </button>
                   {/if}

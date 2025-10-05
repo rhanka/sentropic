@@ -82,6 +82,25 @@ queueRouter.post('/jobs/:id/retry', async (c) => {
   }
 });
 
+// DELETE /queue/jobs/:id - Supprimer un job
+queueRouter.delete('/jobs/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const job = await queueManager.getJobStatus(id);
+    if (!job) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+    // Supprimer le job de la base de données
+    await db.run(sql`
+      DELETE FROM job_queue WHERE id = ${id}
+    `);
+    return c.json({ success: true, message: 'Job deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting job:', error);
+    return c.json({ message: 'Failed to delete job' }, 500);
+  }
+});
+
 // GET /queue/stats - Statistiques de la queue
 queueRouter.get('/stats', async (c) => {
   try {
@@ -107,37 +126,64 @@ queueRouter.get('/stats', async (c) => {
   }
 });
 
-// POST /queue/purge - Purger les jobs en attente
+// POST /queue/purge - Purger les jobs
 queueRouter.post('/purge', async (c) => {
   try {
     const { status } = await c.req.json().catch(() => ({ status: 'pending' }));
     
-    // Récupérer les jobs à purger
     const jobs = await queueManager.getAllJobs();
-    const jobsToPurge = jobs.filter(job => job.status === status);
+    let jobsToPurge = [];
+    
+    if (status === 'all') {
+      jobsToPurge = jobs;
+    } else if (status === 'processing') {
+      // Purger les jobs en cours depuis plus de 2h (probablement bloqués)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      jobsToPurge = jobs.filter(job => 
+        job.status === 'processing' && 
+        job.startedAt && 
+        job.startedAt < twoHoursAgo
+      );
+    } else {
+      jobsToPurge = jobs.filter(job => job.status === status);
+    }
     
     if (jobsToPurge.length === 0) {
+      let message = '';
+      if (status === 'all') {
+        message = 'Aucun job à purger';
+      } else if (status === 'processing') {
+        message = 'Aucun job en cours bloqué depuis plus de 2h à purger';
+      } else {
+        message = `Aucun job avec le statut '${status}' à purger`;
+      }
       return c.json({ 
         success: true, 
-        message: `Aucun job avec le statut '${status}' à purger`,
+        message,
         purgedCount: 0
       });
     }
     
-    // Marquer les jobs comme failed
     for (const job of jobsToPurge) {
       await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'failed', error = 'Purgé par l''utilisateur', completed_at = CURRENT_TIMESTAMP 
-        WHERE id = ${job.id}
+        DELETE FROM job_queue WHERE id = ${job.id}
       `);
     }
     
-    console.log(`🧹 Purged ${jobsToPurge.length} jobs with status '${status}'`);
+    let message = '';
+    if (status === 'all') {
+      message = `${jobsToPurge.length} jobs purgés avec succès (toute la queue)`;
+    } else if (status === 'processing') {
+      message = `${jobsToPurge.length} jobs en cours bloqués purgés avec succès`;
+    } else {
+      message = `${jobsToPurge.length} jobs avec le statut '${status}' purgés avec succès`;
+    }
+    
+    console.log(`🧹 Purged ${jobsToPurge.length} jobs (status: ${status})`);
     
     return c.json({ 
       success: true, 
-      message: `${jobsToPurge.length} jobs purgés avec succès`,
+      message,
       purgedCount: jobsToPurge.length
     });
   } catch (error) {

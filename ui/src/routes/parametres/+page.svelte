@@ -199,42 +199,88 @@
     }
   };
 
-  const purgeQueue = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir purger tous les jobs en attente ? Cette action est irréversible.')) {
-      return;
-    }
+          const purgeQueue = async (status = 'pending') => {
+            let confirmMessage = '';
+            if (status === 'pending') {
+              confirmMessage = 'Êtes-vous sûr de vouloir purger tous les jobs en attente ? Cette action est irréversible.';
+            } else if (status === 'processing') {
+              confirmMessage = 'Êtes-vous sûr de vouloir purger tous les jobs en cours (probablement bloqués) ? Cette action est irréversible.';
+            } else {
+              confirmMessage = 'Êtes-vous sûr de vouloir purger TOUS les jobs de la queue ? Cette action est irréversible.';
+            }
 
-    isPurgingQueue = true;
-    try {
-      const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'pending' })
-      });
+            if (!confirm(confirmMessage)) {
+              return;
+            }
 
-      if (response.ok) {
-        const result = await response.json();
-        addToast({
-          type: 'success',
-          message: result.message
-        });
-        
-        await loadQueueStats();
-      } else {
-        throw new Error('Erreur lors de la purge');
-      }
-    } catch (error) {
-      console.error('Erreur lors de la purge de la queue:', error);
-      addToast({
-        type: 'error',
-        message: 'Erreur lors de la purge de la queue'
-      });
-    } finally {
-      isPurgingQueue = false;
-    }
-  };
+            isPurgingQueue = true;
+            try {
+              const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status })
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                addToast({
+                  type: 'success',
+                  message: result.message
+                });
+                
+                await loadQueueStats();
+              } else {
+                throw new Error('Erreur lors de la purge');
+              }
+            } catch (error) {
+              console.error('Erreur lors de la purge de la queue:', error);
+              addToast({
+                type: 'error',
+                message: 'Erreur lors de la purge de la queue'
+              });
+            } finally {
+              isPurgingQueue = false;
+            }
+          };
+
+          const purgeAllQueue = async () => {
+            if (!confirm('Êtes-vous sûr de vouloir purger TOUTE la queue (tous les jobs) ? Cette action est irréversible.')) {
+              return;
+            }
+
+            isPurgingQueue = true;
+            try {
+              const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: 'all' })
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                addToast({
+                  type: 'success',
+                  message: result.message
+                });
+                
+                await loadQueueStats();
+              } else {
+                throw new Error('Erreur lors de la purge');
+              }
+            } catch (error) {
+              console.error('Erreur lors de la purge de la queue:', error);
+              addToast({
+                type: 'error',
+                message: 'Erreur lors de la purge de la queue'
+              });
+            } finally {
+              isPurgingQueue = false;
+            }
+          };
 
   const resetAllData = async () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.')) {
@@ -324,17 +370,16 @@
         <!-- Modèle par défaut -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-2">Modèle OpenAI par défaut</label>
-          <select 
-            bind:value={aiSettings.defaultModel}
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="gpt-5">GPT-5</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
-            <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-          </select>
+                  <select 
+                    bind:value={aiSettings.defaultModel}
+                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="gpt-5">GPT-5</option>
+                    <option value="gpt-5-mini">GPT-5 Mini</option>
+                    <option value="gpt-5-nano">GPT-5 Nano</option>
+                    <option value="gpt-4.1">GPT-4.1</option>
+                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                  </select>
           <p class="text-xs text-slate-500 mt-1">Modèle utilisé par défaut pour toutes les opérations IA</p>
         </div>
 
@@ -411,19 +456,33 @@
     </div>
 
     <!-- Actions -->
-    <div class="flex gap-3">
+    <div class="flex gap-2 flex-wrap">
       <button 
         on:click={loadQueueStats}
-        class="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700"
+        class="px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
       >
         Actualiser
       </button>
       <button 
-        on:click={purgeQueue}
+        on:click={() => purgeQueue('pending')}
         disabled={isPurgingQueue || queueStats.pending === 0}
-        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {isPurgingQueue ? 'Purge en cours...' : `Purger les jobs en attente (${queueStats.pending})`}
+        {isPurgingQueue ? 'Purge...' : `Purger en attente (${queueStats.pending})`}
+      </button>
+      <button 
+        on:click={() => purgeQueue('processing')}
+        disabled={isPurgingQueue || queueStats.processing === 0}
+        class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {isPurgingQueue ? 'Purge...' : `Purger en cours (${queueStats.processing})`}
+      </button>
+      <button 
+        on:click={purgeAllQueue}
+        disabled={isPurgingQueue || queueStats.total === 0}
+        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {isPurgingQueue ? 'Purge...' : `Tout purger (${queueStats.total})`}
       </button>
     </div>
   </div>
