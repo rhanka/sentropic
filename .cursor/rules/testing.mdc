@@ -1,0 +1,207 @@
+# Testing Strategy
+
+## Overview
+This document defines the testing strategy for the assistant project, ensuring all testing goes through the Makefile (Docker-first approach) with optimized CI workflows.
+
+## Testing Principles
+- **Test behavior, not implementation** - Focus on what users see/do
+- **Use descriptive test names** - "should [behavior] when [condition]"
+- **Query by user-visible elements** - text, roles, labels over test IDs
+- **Keep tests isolated** - Independent and repeatable
+- **70% unit, 20% integration, 10% E2E** - Test pyramid
+
+### Quality Gates
+- All tests must pass before merge
+- Security tests must pass before merge
+- i18n coverage must be 100% (EN/FR parity) (to be)
+- Unit test coverage: minimum 70%
+- No critical security vulnerabilities without documented context
+- Vulnerability assessment required for all components
+
+## Testing commands for Developement workflow (MANDATORY, following workflow)
+
+- `make test.unit.<service>` - Unit tests (REQUIRED before commit)
+- `make test.integration.<service-A>-<service-B>` - Integration tests
+- `make test.e2e` - E2E tests (Playwright)
+- `make test.security.sast.<service>` - Semgrep SAST code scanning
+- `make test.security.sca.<service>` - Trivy SCA scanning (dependencies)
+- `make test.security.iac.infra` - Trivy IAC scanning (docker compose & k8s conf)
+- `make test.security.container.<service>` - Trivy container scanning
+To be:
+- `make test.i18n` - i18n validation
+- `make test.i18n.coverage` - Full i18n coverage
+
+## Testing Levels
+
+### 1. Unit Tests
+- **Scope**: Individual functions, classes, components, and mock tests
+- **Environment**: Isolated, no external dependencies, includes mock data/behavior
+- **Includes**: Mock tests (tests bouchons) that simulate external dependencies
+- **Execution**: Via `make test.unit.<package>`
+
+### 2. Integration Tests (Peer-to-Peer)
+- **Scope**: Service-to-service communication and data flow
+- **What they test**:
+  - HTTP API calls between services
+  - Message passing (Redis, queues)
+  - Data consistency across services
+  - Error handling in distributed scenarios
+- **Environment**: Multiple real services running simultaneously
+- **Service deployment**: Use `make up.<service>` to start required services
+- **File structure**: One file per service pair in `/tests/integration/<service>.spec.ts`
+- **Naming convention**: `packages/<service1>/tests/integration/<service2>.spec.ts` for Service1 ↔ Service2
+- **Execution**: Via `make test.integration.<component1>-<component2>`
+
+### 3. End-to-End Tests
+- **Scope**: Full user workflows across multiple components
+- **Environment**: Complete stack with real services
+- **Execution**: Via `make test.e2e.<scenario>`
+
+### Service Deployment Strategy
+**For P2P Integration Tests**:
+- **Pre-test setup**: Start required services with `make up.<service>`
+- **Service coordination**: Ensure services are healthy before testing
+- **Post-test cleanup**: Stop services with `make down.<service>`
+
+**Service health checks**:
+- API: HTTP endpoint `/health`
+- Workers: Queue status check
+- Scheduler: Task queue status
+- UI: Static file serving
+- AI: Model loading status
+
+## CI/CD Testing Strategy
+
+### Updated CI Pipeline (High-Level)
+1) Build images (block on Critical/High dependency vulns inside Dockerfiles)
+- Node: run `npm audit --audit-level=high` in base and production stages
+- Python: consider `pip-audit --strict` (or defer to Snyk in CI)
+- Tag and push images to GHCR (e.g., `ghcr.io/<org>/<repo>/<service>:<sha>`) for reuse
+
+2) In parallel (no build dependency)
+- Unit tests per service (`make test.unit.*`), unchanged
+- Code-based security scans (can run immediately)
+  - SAST: `make test.security.sast.*` (Semgrep on source code)
+  - SCA: `make test.security.sca.*` (Trivy on manifests)
+  - IaC: `make test.security.iac-infra` (Trivy on compose/k8s) - included in each service job
+
+3) After build (depends on images)
+- Container security scans: `make test.security.container.*` (Trivy on built images)
+
+4) After unit tests of involved services
+- Run P2P integration tests (`make test.integration.*`)
+
+5) E2E tests (to be)
+- Run after integration, if applicable
+
+### High-Level DAG (dependencies)
+- 1.a: Build images (with dependency audits) → Store/push images (GHCR)
+- 1.b: Run Unit Tests per service (parallel, except ai, after 1.a)
+- 1.c: Run Code-based Security Scans (SAST + SCA) (parallel, no build dependency, except ai)
+- 1.d: Run Global IaC Security Scan (parallel, no build dependency)
+- 1.a → 2.a: Run Container Security Scans (depends on built images, except ai)
+- 1.a → 2.b: Run Unified Security Scans for AI (SAST + SCA + Container, depends on build)
+- 1.b → 2.c: Run P2P Integration Tests for service pairs that passed unit tests
+- 1.a+b → 3.a: E2E (if applicable)
+
+### Path-Based Triggers and Dependencies
+- Build job runs when any service or global config changes
+- Unit job for ai (python) only depends on build (images available)
+- Security jobs for container scan depend on build (except ai)
+- Security job for ai depends on build (unified approach)
+- Integration jobs depend on unit jobs for involved services
+
+## Make Commands (Documentation)
+
+### Package-Specific Tests (unchanged)
+```makefile
+# Unit tests
+test.unit.api: docker compose run --rm api npm run test:unit
+test.unit.ui: docker compose run --rm ui npm run test:unit
+test.unit.scheduler: docker compose run --rm scheduler npm run test:unit
+test.unit.workers: docker compose run --rm workers npm run test:unit
+test.unit.ai: docker compose run --rm ai pytest tests/
+
+# Integration tests
+test.integration.api: docker compose run --rm api npm run test:integration
+test.integration.workers-api: docker compose run --rm workers npm run test:integration
+
+# E2E tests
+test.e2e.ui: docker compose run --rm ui npm run test:e2e
+test.e2e.ui-api: docker compose run --rm ui npm run test:e2e:integration
+```
+
+### Security Tests (naming only — implemented in Makefile)
+```makefile
+# Unified security testing - Single wildcard with intelligent parsing
+# Usage: make test.security.sast-api, make test.security.sca-ui, make test.security.container-workers, etc.
+test.security.%: # Executes scan, parsing, and compliance check in one target
+
+# Aggregates
+test.security.sast: test.security.sast-api test.security.sast-scheduler test.security.sast-workers test.security.sast-ui test.security.sast-ai
+test.security.sca: test.security.sca-api test.security.sca-scheduler test.security.sca-workers test.security.sca-ui test.security.sca-ai
+test.security.container: test.security.container-api test.security.container-scheduler test.security.container-workers test.security.container-ui
+test.security.iac: test.security.iac-infra
+test.security: test.security.sast test.security.sca test.security.container test.security.iac
+
+# Service-specific security (AI has unified approach)
+test.security.ai: # Unified SAST + SCA + Container (depends on build)
+```
+
+## Testing Frameworks
+
+### Framework Selection
+- **UI (SvelteKit)**: Use **Vitest** for unit tests (modern, Vite-native)
+- **API (NestJS)**: Use **Vitest** for unit tests (TypeScript-first, ESM support)
+- **Scheduler/Workers**: Use **Vitest** for unit tests (consistency with other packages)
+- **AI (Python)**: Use **pytest** for unit tests (Python standard)
+- **E2E**: Use **Playwright** for browser automation
+
+### Framework Rationale
+- **Vitest**: Better TypeScript/ESM support, faster than Jest, Vite-native
+- **pytest**: Python standard, extensive ecosystem
+- **Playwright**: Modern browser automation, better than Selenium
+
+## Testing Rules
+
+### 1. No Test Duplication
+- **Unit tests**: Always executed for changed components
+- **Integration tests**: Only in component-specific workflows
+- **E2E tests**: Only in integration workflows, replacing component integration tests
+
+### 2. Dependency Awareness
+- **Independent components**: Test in isolation
+- **Dependent components**: Include dependency tests
+- **P2P workflows**: Focus on integration/E2E, assume dependencies are already tested
+- **Configuration changes**: Trigger all relevant workflows
+
+### 3. Performance Optimization
+- **Path-based triggers**: Only test what changes
+- **Parallel execution**: Independent workflows run simultaneously
+- **Caching**: Leverage Docker layer caching and test result caching
+
+### 4. Quality Gates
+- **All unit tests must pass** before integration tests
+- **Integration tests must pass** before E2E tests
+- **P2P workflows focus on integration**: Unit tests handled by component workflows
+- **Global validation** required for configuration changes
+
+## Implementation Notes
+
+### GitHub Actions Best Practices
+- Use `pull_request` trigger for path-based filtering
+- Include all necessary configuration files in path filters
+- Separate workflows by functional domain
+- Use matrix strategies for parallel testing where possible
+
+### Docker-First Approach
+- All tests run in Docker containers
+- Use `docker compose run --rm` for test execution
+- Leverage Docker layer caching for faster builds
+- Ensure consistent test environment across CI and local
+
+### Make-First Architecture
+- All test commands go through Makefile
+- No direct `npm`, `pytest`, or `docker` commands in CI
+- Centralized test configuration and execution
+- Consistent interface for local and CI testing

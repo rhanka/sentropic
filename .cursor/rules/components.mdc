@@ -1,0 +1,226 @@
+# COMPONENTS
+
+## Process
+1. **OS & Stack Audit**: Check base images and runtime versions first
+2. **Security Audit**: `make test.security.sca` (existing - vulnerabilities only)
+3. **Service Audit**: Use `make audit.components.<service>` for each service
+4. **Version Audit**: Manual review using version check commands
+5. **Prioritize**: Critical/High → 1d, Medium → 1w, Low → 1m, Deprecated → 1y
+6. **Update**: Create `feat/update-<component>-<version>` branch
+7. **Validate**: Follow existing workflow (see `workflow.mdc`)
+8. **Document**: Update `.components/tech-debt-<service>.md` and `TODO.md`
+
+## Version Check Commands
+
+**Never** do direct `npm` or `pip`, use `make` targets or `docker` for non recurring commands.
+
+### OS & Stack Audit (Priority 1)
+```bash
+# Check base images and runtime versions
+make audit.docker.os
+make audit.docker.runtimes
+make audit.docker.base-images
+make audit.docker.db-os
+```
+
+### Service-Specific Auditing (Priority 2)
+```bash
+# Audit components for specific services
+make audit.components.api
+make audit.components.ui
+make audit.components.scheduler
+make audit.components.workers
+make audit.components.ai
+make audit.components.infra
+```
+
+### Package Version Checks (Priority 3)
+```bash
+# Check latest version of specific package
+make audit.npm.latest PACKAGE=<package-name>
+
+# Check current vs latest for all packages
+make audit.npm.outdated
+
+# Check specific package info
+make audit.npm.info PACKAGE=<package-name>
+```
+
+### Python Packages (Docker-based)
+```bash
+# Check latest version of specific package
+make audit.pip.latest <package-name>
+
+# Check current vs latest for all packages
+make audit.pip.outdated
+
+# Check specific package info
+make audit.pip.info <package-name>
+```
+
+### Docker Images & OS Components
+```bash
+# Check latest available tags for base images
+make audit.docker.latest <image-name>
+
+# Check current OS versions in images
+make audit.docker.os
+
+# Check Node.js/Python runtime versions
+make audit.docker.runtimes
+
+# Check specific base image versions
+make audit.docker.base-images
+```
+
+## Docker Base Image Monitoring
+
+### Current Base Images (from Dockerfiles)
+- **Node.js**: `node:24-alpine3.22` (used in api, scheduler, workers, ui)
+- **Python**: `python:3.11-slim` (used in ai)
+- **Nginx**: `nginx:alpine` (used in ui production)
+- **Alpine**: `alpine3.22` (OS base for Node.js images)
+
+### Version Check Methods
+- **Docker Hub API**: Query latest available tags
+- **Runtime version check**: Execute commands in containers
+- **OS version check**: Read system files in containers
+- **Security scanning**: Use existing Trivy integration
+
+## Core Components to Monitor
+
+### Frontend Stack (packages/ui)
+- **Svelte**: Core framework - check breaking changes in major versions
+- **SvelteKit**: Meta-framework - check compatibility with Svelte updates
+- **Vite**: Build tool - check performance improvements and breaking changes
+- **TypeScript**: Language - check new features and breaking changes
+- **Playwright**: Testing - check new browser support and API changes
+
+### Backend Stack (packages/api, scheduler, workers)
+- **Node.js**: Runtime - check LTS status and EOL dates
+- **NestJS**: Framework - check breaking changes and new features
+- **Prisma**: ORM - check database support and performance improvements
+- **BullMQ**: Queue system - check Redis compatibility and new features
+- **Jest**: Testing - check Node.js compatibility and new matchers
+
+### AI Stack (packages/ai)
+- **Python**: Runtime - check EOL dates and new features
+- **FastAPI**: Framework - check performance improvements and breaking changes
+- **pytest**: Testing - check Python compatibility and new features
+
+### Infrastructure
+- **Docker**: Container runtime - check security updates and new features
+- **PostgreSQL**: Database - check new features and performance improvements
+- **Redis**: Cache/Queue - check new data structures and performance
+
+### OS & Base Images
+- **Alpine Linux**: Base OS for containers - check security updates and EOL
+- **Node.js base images**: Runtime versions and security patches (managed in services)
+- **Python base images**: Runtime versions and security patches (managed in services)
+- **PostgreSQL images**: Database versions and security patches (managed in infra)
+- **Redis images**: Cache versions and security patches (managed in infra)
+
+## Component Priority Assessment
+
+### Critical (1d)
+- Security vulnerabilities (handled by `make test.security.sca`)
+- EOL versions (no more security updates)
+- Breaking changes that affect core functionality
+
+### High (1w)
+- Major version updates with new features
+- Performance improvements
+- Security enhancements
+
+### Medium (1m)
+- Minor version updates
+- Bug fixes
+- Dependency updates
+
+### Low (1y)
+- Patch updates
+- Documentation updates
+- Deprecated features (plan migration)
+
+## Version Check Workflow
+
+### Initial Assessment
+1. **Identify core components** from package.json/pyproject.toml files
+2. **Check current versions** against latest available
+3. **Assess breaking changes** by reading changelogs
+4. **Evaluate update effort** and risk
+5. **Document in tech-debt backlog**
+
+### Regular Monitoring
+1. **Weekly**: Run `make test.security.sca` for security
+2. **Monthly**: Manual version check for core components
+3. **Quarterly**: Full audit of all components
+4. **As-needed**: Before major releases or migrations
+
+## Architecture "To Be" - Service-Specific Debt Tracking
+
+### Current Structure
+- **Monolithic approach**: Single tech-debt file for all components
+- **Generic auditing**: Same process for all services
+
+### Target Structure (To Be Implemented)
+```
+.components/
+├── tech-debt-api.md      # API service debt (NestJS, GraphQL, Prisma)
+├── tech-debt-ui.md       # UI service debt (Svelte, Vite, TypeScript)
+├── tech-debt-scheduler.md # Scheduler service debt (BullMQ, Node.js)
+├── tech-debt-workers.md   # Workers service debt (BullMQ, Playwright)
+├── tech-debt-ai.md       # AI service debt (FastAPI, Python)
+└── tech-debt-infra.md    # Infrastructure debt (Docker, K8s, Scaleway services)
+```
+
+### Benefits of Service-Specific Approach
+- **Independent lifecycles**: Each service can have different update schedules
+- **Focused priorities**: Service-specific breaking change assessment
+- **Team ownership**: Clear responsibility for each service's debt
+- **Granular updates**: Update one service without affecting others
+- **Infrastructure separation**: Runtime stacks (Node.js, Python) vs infrastructure (Docker, K8s, Cloud)
+- **Security focus**: Infrastructure uses `test.security.iac-infra` and `test.security.container-infra`
+
+### Migration Path
+1. **Phase 1**: Create service-specific debt files (✅ Completed)
+2. **Phase 2**: Implement service-specific audit commands (✅ Completed)
+3. **Phase 3**: Add service-specific CI/CD integration
+4. **Phase 4**: Implement automated debt tracking per service
+
+## Integration
+- **Security**: See `security.mdc` for vulnerability management
+- **Testing**: See `testing.mdc` for validation workflow
+- **Workflow**: See `workflow.mdc` for PR and CI process
+
+## Development Workflow Integration
+
+### Component Upgrade Process
+1. **Create feature branch**: `feat/update-<component>-<version>`
+2. **Audit current state**: `make audit.components.<service>` to get baseline
+3. **Update component**: Modify package.json/pyproject.toml/Dockerfile
+4. **Update tech-debt**: Modify `.components/tech-debt-<service>.md` with new version
+5. **Test thoroughly**: Run all service tests to validate upgrade
+6. **Update breaking changes**: Assess and document any breaking changes
+7. **Commit changes**: Include tech-debt updates in same commit as component upgrade
+8. **Validate**: Ensure all tests pass and tech-debt reflects current state
+
+### Tech-Debt Update Requirements
+- **MANDATORY**: Tech-debt files must be updated when components are upgraded
+- **Same commit**: Component upgrade and tech-debt update must be atomic
+- **Version sync**: Tech-debt current version must match actual component version
+- **Breaking change assessment**: Must be updated for major version upgrades
+- **Test validation**: All tests must pass after upgrade and tech-debt update
+
+### Quality Gates for Component Upgrades
+- **Before upgrade**: Tech-debt must reflect current component state
+- **During upgrade**: Tech-debt must be updated with new version information
+- **After upgrade**: Tech-debt must be validated against actual component versions
+- **Before commit**: All tests must pass and tech-debt must be current
+- **Before merge**: Tech-debt must be consistent across all services
+
+### Automated Validation
+- **CI integration**: GitHub Actions must validate tech-debt consistency
+- **Version check**: Automated verification that tech-debt matches actual versions
+- **Test coverage**: Ensure all upgraded components have test coverage
+- **Breaking change detection**: Automated flagging of major version upgrades

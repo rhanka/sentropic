@@ -1,0 +1,132 @@
+# SECURITY
+
+## Core Security Principles
+- Forbidden actions: destructive operations in production; secrets in plain text.
+- Require "⚠ approval" for: DB migrations in prod, merges, release publishing.
+- Always produce a preview (diff/plan) before acting.
+
+## Security Testing Strategy
+
+### Coverage Requirements
+- Critical/High vulnerabilities are not allowed unless contextual usage is documented and mitigation is planned (Now/Next in `TODO.md`).
+- Security checks must run in CI on every PR for changed components.
+
+### Categories (Complete Scope)
+1) Dependency Vulnerabilities (manifests/packages)
+- Objective: detect vulnerable dependencies early and block builds on Critical/High.
+- Tooling: npm audit (Dockerfile, blocking), Trivy SCA (CI), optional fallback: safety/pip-audit for Python.
+
+2) Authentication & Authorization (functional)
+- Objective: verify access controls and session/token handling.
+- Tooling: future functional tests (API/UI) once flows exist.
+
+3) Input Validation & Sanitization (functional)
+- Objective: protect against XSS, CSRF, injections.
+- Tooling: future functional tests (API payloads/UI forms); Semgrep for static analysis patterns.
+
+4) Data Protection (functional)
+- Objective: protect secrets, encryption, PII access boundaries.
+- Tooling: future functional tests + Semgrep static checks.
+
+5) API Security (functional)
+- Objective: rate limiting, schema validation, injection resilience.
+- Tooling: future functional tests; Semgrep for static analysis.
+
+6) Infrastructure & Container Security
+- Objective: secure images and IaC configs.
+- Tooling: Trivy (container images + IaC + SCA), Semgrep (SAST code). Falco is production-only.
+
+#### Dockerfile Hardening
+- **Non-root execution**: All services run as non-root users (nodejs:1001, nginx, python)
+- **File permissions**: Proper ownership and permissions (755 for dirs, 644 for files)
+- **Security layers**: Isolation between build stages with appropriate permissions
+- **Benefits**: Container escape protection, privilege escalation prevention, file system isolation
+- **Compliance**: OWASP Docker Security standards, CIS Docker Benchmark best practices
+
+### CI Integration (summary)
+- See `testing.mdc` for the high-level DAG and orchestration order.
+- Build images first (dependency audits in Dockerfiles). Dependency scans in CI should reuse built images or rely on manifests.
+- Run code/deps/IaC/Container scans (Semgrep SAST + Trivy SCA/IaC/Container) and container scans (Trivy) after build, in parallel with unit tests.
+- P2P/E2E remain governed by testing order in `testing.mdc`.
+
+### Security Test Exit Criteria
+**All security tests MUST fail (exit with error code) if vulnerabilities are detected:**
+
+#### SAST (Semgrep) - `test.security.sast.<service>`
+- **Exit Code**: 1 (error) if ANY findings are detected
+- **Severity**: All levels (INFO, WARNING, ERROR) trigger failure
+- **Rationale**: Code quality and security issues must be addressed before merge
+
+#### SCA (Trivy) - `test.security.sca.<service>`
+- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
+- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+- **Rationale**: Critical/High dependency vulnerabilities block production deployment
+
+#### IaC (Trivy) - `test.security.iac.<service>`
+- **Exit Code**: 1 (error) if HIGH or CRITICAL misconfigurations are detected
+- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+- **Rationale**: Infrastructure misconfigurations can create security gaps
+
+#### Container (Trivy) - `test.security.container.<service>`
+- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
+- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+- **Rationale**: Container vulnerabilities can be exploited in production
+
+#### Dockerfile Dependency Gating
+- **Build Failure**: Docker builds fail if dependency audits detect HIGH/CRITICAL vulnerabilities
+  - **Node.js services**: `npm audit --audit-level=high` in `make build.<service>` (api, scheduler, workers, ui)
+  - **Python services**: `pip-audit --strict` in `make build.<service>` (ai)
+- **Rationale**: Prevents vulnerable images from being created and stored as artifacts
+
+### Make Targets (Naming — documentation)
+- **Docker dependency gating**: `build.<service>` (api, scheduler, workers, ui, ai) - blocks on HIGH/CRITICAL vulns
+- **Unified security testing**: `test.security.<type>-<service>` where:
+  - **type**: `sast`, `sca`, `container`, `iac`
+  - **service**: `api`, `ui`, `workers`, `scheduler`, `ai`, `infra`
+- **Examples**: `test.security.sast-api`, `test.security.sca-ui`, `test.security.container-workers`, `test.security.iac-infra`
+- **Aggregates**: `test.security.sast`, `test.security.sca`, `test.security.container`, `test.security.iac`
+- **Main aggregate**: `test.security` (runs all security tests)
+- **Future functional categories** (pentest umbrella): `test.security.pentest`, with possible `auth/input/data/api/infra` sub-targets
+
+### Vulnerability Management
+- Identify → Assess → Mitigate → Track (`TODO.md`) → Approvals for exceptions (⚠).
+- CI must fail on unapproved Critical/High dependency vulnerabilities.
+
+### Vulnerability Register Management
+- **Mandatory documentation**: All HIGH/CRITICAL/ERROR findings must be documented in `.security/vulnerability-register.yaml`
+- **Compliance checking**: Security scans check findings against register before allowing CI to pass
+- **Categories required**: Each vulnerability must be categorized (false_positive, accepted_risk, planned_mitigation, technical_debt)
+- **Justification mandatory**: Every vulnerability must include clear justification for acceptance or deferral
+- **Timeline required**: Fix goals must be specified (1d, 1w, 1m, 1y) for planned mitigations
+
+### Vulnerability Register Lifecycle
+1. **Discovery**: Security scan detects vulnerability
+2. **Assessment**: Categorized and risk-assessed by security team
+3. **Documentation**: Added to register with justification and timeline
+4. **Acceptance**: CI passes if vulnerability is properly documented
+5. **Mitigation**: Fixed according to planned timeline
+6. **Verification**: Re-scanned to confirm resolution
+7. **Cleanup**: Removed from register after successful mitigation
+
+### Register Maintenance Rules
+- **Monthly review**: Review register for outdated entries and timeline validation
+- **Risk reassessment**: Periodically reassess risk levels of accepted vulnerabilities
+- **Documentation updates**: Keep justifications and timelines current
+- **Post-mitigation cleanup**: Remove resolved vulnerabilities and update metadata
+
+### Final Validation Workflow (MASTER REFERENCE)
+**This section is the authoritative source for final validation procedures. Other .mdc files reference this section.**
+
+- **Comprehensive security scanning**: Execute all security scans (SAST, SCA, Container, IaC) before branch completion
+- **Vulnerability register synchronization**: 
+  - Add newly discovered findings to register with proper categorization
+  - Remove resolved vulnerabilities that were fixed during branch development
+  - Update register metadata (last_updated timestamp, resolution details)
+- **Compliance verification**: Ensure all security scans pass and no new HIGH/CRITICAL/ERROR findings exist
+- **Documentation synchronization**: Update relevant .mdc files to reflect any new security procedures or findings
+- **CI validation**: Verify GitHub Actions pipeline passes with all security checks and compliance validation
+
+### Production Notes
+- Falco (runtime security) is out-of-scope for CI; include in Kubernetes production hardening.
+
+

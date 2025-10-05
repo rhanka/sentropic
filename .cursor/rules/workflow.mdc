@@ -1,0 +1,277 @@
+
+# WORKFLOW
+
+## Principles
+- **FIRST**: Read `.cursor/rules/MASTER.mdc` for consolidated rules overview
+- **SECOND**: Read `README.md` for project overview and setup
+- **THIRD**: Read `TODO.md` for current priorities and items
+- **FOURTH**: Read `RELEASE.md` for target version and scope
+- Propose a short action plan before coding. Request human approval when "⚠ approval".
+- apply `workflow.mdc` for coding practice and `testing.mdc` for testing practice and `security.mdc`for security
+- be conform to `architecture.mdc` architecture directives
+
+
+## FEATURE
+1. Read the target `TODO.md` item (**Next** or **Now**).
+2. **Create feature branch** with `BRANCH.md` documenting plan and tasks, asking relevant question before to start
+3. Post a 3–6 step plan as the first PR comment.
+4. Implement with guardrails (preview, dry-run, logs).
+5. **Test before commit** - ensure all changes work as expected.
+6. Update `TODO.md` (check item, reference PR) and `RELEASE.md` (scope).
+
+## MAINTENANCE
+- Small chores/refactors/docs. Same flow as FEATURE.
+
+## RELEASE
+1. Collect merged PRs since last tag (Conventional Commits).
+2. Update `RELEASE.md` (notes, risks, rollback).
+3. Open `release/x.y.z` PR with release checklist.
+4. Tag + publish after human approval.
+
+## Guardrails
+- Never perform destructive DB/system actions without "⚠ approval".
+- For Playwright/Cursor, always **simulate** before executing a critical action.
+- **Always test before commit** - no exceptions to this rule.
+- **Use Make for testing** - always run `make test.unit` before commit (see `testing.mdc`)
+
+## Development Conventions
+- **Commits**: Conventional Commits (feat:, fix:, chore:, refactor:, docs:, test:)
+- **Branches**: `feat/<slug>`, `fix/<slug>`, `boot/<slug>`, `release/x.y.z`. Open only one at once
+- **PR**: one capability per PR; checklist; clear description (objective + short plan)
+- **Never proceed more than one item of `TODO.md`**
+- **Be minimalist in changes** (don't refacto the whole to avoid regressions)
+- **Commit messages and PR descriptions MUST be in English**
+
+## Commit Guidelines
+- **Atomic commits** : One logical change per commit
+- **File count limit** : Maximum 10-15 files per commit
+- **Commit frequency** : Commit every 2-3 logical changes
+- **Before major work** : Commit current progress
+- **Commit message format** : `type: concise description`
+
+### Commit Workflow (MANDATORY)
+1. **Check status first** : Always run `git status` before committing
+2. **Selective staging** : Use `git add <specific-files>` for files you know you modified
+3. **Remove deleted files** : Use `git rm <deleted-files>` for files you know you deleted
+4. **Verify staging** : Run `git status` again to confirm what's staged
+5. **ABSOLUTELY NO `git add .`** : Never use `git add .` - first check with `git status` and `git add <files> && git rm <removed-files>` for explicit staging
+6. **Commit with context** : Include clear description of what changed and why
+7. **ONE task per commit** : Complete ONE logical task, then commit. Do NOT chain multiple tasks without committing.
+8. **File count limit** : Maximum 10-15 files per commit - split large changes into multiple commits
+9. **Update current work**: update BRANCH.md and commit it to be sure of remaining work at every step
+10. **Consolidate CI debug commits (MANDATORY)**: When experimenting with CI workflows (e.g., tweaking `.github/workflows/*.yml`), avoid piling multiple temporary `fix:`/`test:` commits.
+   - Small last-commit adjustments: prefer `git commit --amend --no-edit` (or edit message as needed).
+   - Multiple debug commits: use `git commit --amend --no-edit`, stage intentionally with `git add <files> && git rm <removed-files>`, and create ONE clean commit.
+   - After amending or soft reset (history rewrite), you MUST push with `git push --force-with-lease` to update the remote safely.
+   This keeps the history readable and compliant with atomic commit rules.
+
+### Next Step Proposal (MANDATORY)
+After completing any task, **ALWAYS propose the next step** by following the workflow:
+1. **Check current status** : What was just completed
+2. **Identify next priority** : What comes next according to TODO.md or current context
+3. **Propose specific action** : Clear, actionable next step
+4. **Wait for approval** : Do not proceed without user confirmation
+
+### Feature Completion Workflow (MANDATORY)
+After implementing all commits for a feature:
+1. **Push to GitHub** : `git push origin <branch-name>`
+2. **Tech Debt**: if any component was updated, please ensure `components.mdc` was applied and update tech debt files.
+2. **Final security validation** : Execute comprehensive security validation (see `security.mdc` for detailed workflow)
+3. **Verify CI** : Push and Monitor GitHub Actions(using `curl` or `gh` for detailed logs) 
+4. **Plan remaining actions** : If commits need additional substantial work, document in BRANCH.md - else commit --amend and git push --force <branch> until CI success
+5. **Final cleanup** : When everything works:
+   - Remove BRANCH.md
+   - Check off feature in TODO.md
+   - Update RELEASE.md
+   - Create final commit with BRANCH.md content in commit message
+   - Push final state
+   - Create a PR if not existing and update PR message with last BRANCH.md content
+
+### CI Monitoring (MANDATORY)
+- After any push to a feature branch or PR update, automatically verify GitHub Actions runs.
+- **Primary method**: use GitHub API via curl for basic status checks. Minimal, non-interactive checks:
+  - Latest run for current branch:
+    - `curl -s "https://api.github.com/repos/<ORG>/<REPO>/actions/runs?branch=$BRANCH&per_page=1" | grep -E '"event"|"status"|"conclusion"'`
+  - Job list for a specific run id:
+    - `curl -s "https://api.github.com/repos/<ORG>/<REPO>/actions/runs/<RUN_ID>/jobs" | grep -E '"name"|"conclusion"'`
+- **Secondary method**: When curl is insufficient (e.g., accessing detailed logs, artifacts, or when API rate limits are hit), use `gh` CLI:
+  - Install: `sudo apt install gh` or `sudo snap install gh`
+  - Authenticate: `gh auth login` (requires GitHub token with `repo` and `workflow` scopes)
+  - Access logs: `gh run view <RUN_ID> --log-failed` or `gh run view <RUN_ID> --log`
+  - Download artifacts: `gh run download <RUN_ID>`
+- If status is "skipped" unexpectedly, inspect workflow conditions/filters; for path-based workflows, ensure common files (Makefile, docker-compose.yml, packages/config, packages/schemas, CI files) are included in filters.
+- If quick tweaks are needed, prefer `git commit --amend --no-edit` and push with `git push --force-with-lease`.
+- If multiple debug commits were created, consolidate with `git reset --soft HEAD~N`, commit once, then `git push --force-with-lease`.
+- **Push command**: Always use `git push origin <branch-name>` explicitly, never `git push --set-upstream`.
+
+## Quality Gates
+- **Before commit**: Run `make test.unit` (enforced by testing.mdc)
+- **Before PR**: Run `make check` to validate consistency
+- **CI/CD**: All tests must pass, guides must be consistent
+- **Architecture**: Verify `make` commands work before any changes
+
+## Dependency Management
+- **Package-lock updates**: Always use `make update.<package>.lock` to update package-lock.json files
+- **Docker-only**: Never run `npm install` directly - all dependency management must go through Docker
+- **Available commands**: 
+  - `make update.api.lock` - Update API package-lock.json
+  - `make update.ui.lock` - Update UI package-lock.json
+- **Clean environment**: Remove local `node_modules` if they exist outside Docker containers
+
+## Tech-Debt Management
+
+### Component Lifecycle Integration
+- **MANDATORY**: Avoid updating componants not directly related to current developpement (e.g don't change os and langage version unless upgrade required but propose it before acting)
+- **MANDATORY**: Update tech-debt files when updating components during development
+- **Scope**: All component upgrades (npm, pip, Docker images, OS versions)
+- **Location**: `.components/tech-debt-<service>.md` files
+- **Integration**: Tech-debt updates must be part of component upgrade workflow
+
+### Tech-Debt Update Workflow
+1. **Before upgrade**: Check current tech-debt status with `make audit.components.<service>`
+2. **During upgrade**: Update component version in package.json/pyproject.toml
+3. **After upgrade**: Update tech-debt file with new current version and re-audit
+4. **Validation**: Run tests to ensure upgrade doesn't break functionality
+5. **Documentation**: Update tech-debt file with new breaking change assessment
+
+### Tech-Debt Update Commands
+- **Audit current state**: `make audit.components.<service>`
+- **Check latest versions**: `make audit.npm.latest PACKAGE=<name>` or `make audit.pip.latest PACKAGE=<name>`
+- **Update tech-debt**: Manually update `.components/tech-debt-<service>.md` files
+- **Verify upgrade**: Run service tests after component upgrade
+
+### Breaking Change Assessment
+- **Major version upgrades**: Always assess for breaking changes before upgrading
+- **Documentation required**: Update breaking change section in tech-debt files
+- **Testing mandatory**: Run full test suite after major version upgrades
+- **Rollback plan**: Document rollback strategy for major upgrades
+
+### Quality Gates for Tech-Debt Updates
+- **Before commit**: Tech-debt files must reflect current component versions
+- **After upgrade**: Breaking change assessment must be updated
+- **Test validation**: All tests must pass after component upgrade
+- **Documentation sync**: Tech-debt files must match actual component versions
+
+## Vulnerability Management Lifecycle
+
+### Vulnerability Register Maintenance
+- **Documentation mandatory**: All HIGH/CRITICAL/ERROR findings must be documented in `.security/vulnerability-register.yaml`
+- **Categories required**: Each vulnerability must have a valid category (false_positive, accepted_risk, planned_mitigation, technical_debt)
+- **Justification mandatory**: Every vulnerability must include justification for acceptance or deferral
+- **Timeline required**: Fix goals must be specified (1d, 1w, 1m, 1y)
+
+### Vulnerability Lifecycle Stages
+1. **Discovery**: Found by security scans (SAST, SCA, Container, IaC)
+2. **Assessment**: Categorized and risk-assessed
+3. **Documentation**: Added to vulnerability register with justification
+4. **Mitigation**: Fixed or accepted with timeline
+5. **Verification**: Re-scanned to confirm resolution
+6. **Cleanup**: Removed from register after successful mitigation
+
+### Post-Mitigation Cleanup
+- **Remove resolved vulnerabilities**: After successful fix, remove entry from vulnerability register
+- **Update metadata**: Update `last_updated` timestamp in register metadata
+- **Document resolution**: Add resolution details to commit message or documentation
+- **Verify compliance**: Ensure all security scans pass after cleanup
+
+### Register Maintenance Rules
+- **Regular review**: Review vulnerability register monthly for outdated entries
+- **Timeline validation**: Check if fix goals are realistic and achievable
+- **Risk reassessment**: Periodically reassess risk levels of accepted vulnerabilities
+- **Documentation updates**: Keep justifications and timelines current
+
+## Feature Branch Management
+
+### Branch Documentation
+- **REQUIRED**: Create `BRANCH.md` for each feature branch (final two steps should be always test strategy completion from `testing.mdc` and Github CI execution check)
+- **LOCATION**: Root of feature branch (not committed to main)
+- **PURPOSE**: Track progress, plan, and commit mapping
+
+### BRANCH.md Structure
+```markdown
+# Feature: [Name]
+
+## Objective
+Brief description of what this feature accomplishes
+
+## Plan / Todo
+- [ ] Task 1: Description
+- [ ] Task 2: Description  
+- [ ] Task 3: Description
+
+## Commits & Progress
+- [x] **Commit 1** (hash): Task 1 completed
+- [x] **Commit 2** (hash): Task 2 completed
+- [ ] **Commit 3**: Task 3 in progress
+
+## Status
+- **Progress**: X/Y tasks completed
+- **Current**: Working on Task 3
+- **Next**: Complete Task 3, then Task 4
+```
+
+### Branch Workflow
+1. **Create branch** → Create `BRANCH.md` with plan
+2. **Before commit** → Update `BRANCH.md` with new task
+3. **After commit** → Link commit hash to completed task
+4. **Before merge** → Ensure all tasks are completed and documented
+5. **After merge** → Archive `BRANCH.md` or move to docs/
+
+### Quality Gates
+- **Branch creation**: `BRANCH.md` must exist before first commit
+- **Commit mapping**: Every commit must be linked to a task
+- **Progress tracking**: Status must be updated after each commit
+- **Merge readiness**: All tasks must be completed and documented
+
+### Branch Documentation in Commits
+- **Intermediate commits**: Include and update `BRANCH.md` in each commit
+- **Final commit**: Copy `BRANCH.md` content to commit message, then remove file
+- **Commit message format**: Include complete development history and commit mapping
+- **New branch**: Start with fresh `BRANCH.md` for next feature
+
+### Final Commit Workflow
+1. **Copy BRANCH.md content** to commit message
+2. **Remove BRANCH.md** from working directory (not before CI github test check)
+3. **Commit** with complete development history
+4. **Create pull request** and document it with BRANCH.md content
+
+## Guide Maintenance
+**IMPORTANT**: When updating documentation, follow this hierarchy:
+
+### Update Order (MANDATORY)
+1. **`.mdc` files FIRST** - Update rules when constraints change
+2. **Documentation SECOND** - Update `.md` files to match rules
+3. **Implementation THIRD** - Update code to follow rules
+
+### Consistency Validation
+- **Before commit**: Run `make check` to validate consistency
+- **CI/CD**: GitHub Actions validates guide consistency automatically
+- **Manual check**: Use `make scripts.validate-guides` for specific validation
+
+### File Responsibilities
+- **`.mdc` files**: Define rules and constraints (AI source of truth)
+- **`.md` files**: Explain how to follow rules (user guides)
+- **Both must be consistent** - no contradictions allowed
+
+## Maintenance Workflow
+
+### When Rules Change
+1. **Update `.mdc` file FIRST** - Update rules when constraints change
+2. **Update documentation SECOND** - Update `.md` files to match rules
+3. **Verify consistency** - Run `make check` to validate
+
+### When Documentation Improves
+1. **Check if it's a rule change**
+   - If YES → Update `.mdc` file FIRST, then documentation
+   - If NO → Update documentation only
+2. **Verify rule compliance** - All documentation must reflect current `.mdc` rules
+
+### Validation Commands
+- **Automatic**: `make check` (i18n + guide validation)
+- **Individual**: `make scripts.i18n`, `make scripts.validate-guides`
+- **Manual**: `./scripts/validate_guides.sh`
+
+### Validation Commands
+- **Automatic**: `make check` (i18n + guide validation)
+- **Individual**: `make scripts.i18n`, `make scripts.validate-guides`
+- **Manual**: `./scripts/validate_guides.sh`
