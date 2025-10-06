@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - navigation [ref=e6]:
+        - link "Accueil" [ref=e7] [cursor=pointer]:
+          - /url: /
+        - link "Dossiers" [ref=e8] [cursor=pointer]:
+          - /url: /dossiers
+        - link "Entreprises" [ref=e9] [cursor=pointer]:
+          - /url: /entreprises
+        - link "Configuration métier" [ref=e10] [cursor=pointer]:
+          - /url: /configuration-metier
+        - link "Cas d'usage" [ref=e11] [cursor=pointer]:
+          - /url: /cas-usage
+        - link "Matrice" [ref=e12] [cursor=pointer]:
+          - /url: /matrice
+        - link "Dashboard" [ref=e13] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Design" [ref=e14] [cursor=pointer]:
+          - /url: /design
+        - link "Données" [ref=e15] [cursor=pointer]:
+          - /url: /donnees
+        - link "Paramètres" [ref=e16] [cursor=pointer]:
+          - /url: /parametres
+      - generic [ref=e17]:
+        - combobox [ref=e18]:
+          - option "FR" [selected]
+          - option "EN"
+        - button "Connexion" [ref=e19] [cursor=pointer]
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - heading "Dossiers" [level=1] [ref=e23]
+        - button "Nouveau dossier" [active] [ref=e24] [cursor=pointer]
+      - generic [ref=e25]:
+        - article [ref=e26]:
+          - heading "Expérience client" [level=2] [ref=e27]
+          - paragraph [ref=e28]: Optimisation support
+          - paragraph [ref=e29]: "ID: f1"
+        - article [ref=e30]:
+          - heading "Industrie 4.0" [level=2] [ref=e31]
+          - paragraph [ref=e32]: Maintenance prédictive
+          - paragraph [ref=e33]: "ID: f2"
+      - generic [ref=e35]:
+        - heading "Créer un dossier" [level=2] [ref=e36]
+        - generic [ref=e37]:
+          - textbox "Nom du dossier" [ref=e38]
+          - textbox "Description" [ref=e39]
+        - generic [ref=e40]:
+          - button "Annuler" [ref=e41] [cursor=pointer]
+          - button "Créer" [ref=e42] [cursor=pointer]
+```

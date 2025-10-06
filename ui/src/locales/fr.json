@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "folders": "Dossiers",
+    "companies": "Entreprises",
+    "business": "Configuration métier",
+    "useCases": "Cas d'usage",
+    "matrix": "Évaluation",
+    "dashboard": "Dashboard",
+    "data": "Données",
+    "settings": "Paramètres"
+  }
+}

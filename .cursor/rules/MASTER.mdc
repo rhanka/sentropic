@@ -1,0 +1,80 @@
+# MASTER RULES - Consolidated AI Development Rules
+
+## Overview
+This file consolidates all development rules into a single source of truth for AI assistants. All other `.mdc` files provide detailed specifications for specific domains.
+
+## Discuss with developper
+When starting a discussion the focus should be to start a TODO if no specific instruction.
+
+## Core Architecture Principles
+
+## Make Responsibilities (MANDATORY commands)
+- **Build & Quality**: `make build`, `make typecheck`, `make lint`, `make format`
+- **Testing**: `make test`, `make test-e2e`, `make test-smoke`, `make test-vitest-*`
+- **Database Management**: `make db-init`, `make db-migrate`, `make db-backup`, `make db-restore`, `make db-seed`
+- **Development**: `make dev`, `make up`, `make down`, `make logs`
+- **Documentation**: `make openapi-json`, `make openapi-html`
+- **Deployment**: `make docker-build`, `make deploy-ui`, `make deploy-api`
+
+### Docker-First Architecture (MANDATORY)
+- **NO native npm/python on developer machine** - Docker containers only
+- **ALL development commands MUST go through Make** - no exceptions
+- **Make commands execute in Docker** - consistent environment across all developers
+- **Dependencies managed in containers** - never install npm/python globally
+- **Clean workspace** - no node_modules, no .venv, no global packages
+- **Same commands work locally and in CI** - no drift allowed
+- **NO git add .** - commits are atomic and controlled
+
+## Development Workflow (MANDATORY)
+
+1. Read this file (MASTER.mdc) for rules overview
+2. Read `README.md` for project context and high level specifications
+3. Read `TODO.md` for **Now** items
+4. Follow `workflow.mdc` process, including `testing.mdc` and `security.mdc`
+
+## Guide Maintenance
+
+### Update Workflow (MANDATORY)
+1. **Rules change** → Update `.mdc` file FIRST (source of truth)
+2. **Documentation** → Update `.md` file SECOND
+3. **Verify consistency** → Run `make check`
+
+## Security & Compliance
+
+### Human Approval Required (⚠ approval)
+- Destructive DB/system actions
+- Production deployments
+- Security-sensitive changes
+
+### Default Behaviors
+- **Dry-run by default** for critical operations
+- **Full journaling** of all actions
+- **Least privilege** access model
+
+## Language Policy
+- All code, comments, commit messages, PR titles/descriptions, API schemas and server errors MUST be in **English**
+- All Markdown and MDC files MUST be in **English**
+
+### Code & Rules
+- **ALL code, comments, rules in English**
+- **API schemas in English**
+- **Error messages in English**
+- **Discuss with user in French (or English if he requires)**
+
+### UI Localization
+- **UI supports FR (to be EN)**
+- **i18n coverage enforced** by CI (to be)
+- **Keys must be stable** across locales
+
+## File Structure
+
+### `.mdc` Files (AI Rules)
+- `architecture.mdc` - Core architecture principles + UI framework + Language policy
+- `workflow.mdc` - Development process + conventions + maintenance workflow
+- `testing.mdc` - Testing strategy + E2E testing + implementation guide
+- `security.mdc` - Security practices
+- `data.mdc` - Data model and migration directives
+
+### Documentation Files (User Guides)
+- `README.md` - Project overview and setup
+- `TODO.md` - Current priorities and items

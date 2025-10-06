@@ -1,0 +1,159 @@
+---
+description: Database management and migration directives
+alwaysApply: true
+tags: [database, migrations, drizzle]
+---
+
+# DATABASE MANAGEMENT
+
+## Architecture Overview
+- **Database**: SQLite (single file: `data/app.db`)
+- **ORM**: Drizzle ORM with TypeScript
+- **Migration Tool**: Drizzle Kit
+- **Backup**: Litestream (continuous replication to S3)
+- **Schema Location**: `api/src/db/schema.ts`
+- **Migration Files**: `api/drizzle/` directory
+
+## Database Schema Structure
+
+### Core Tables
+- `companies` - Company profiles and metadata
+- `folders` - Project folders with matrix configuration
+- `use_cases` - AI use cases with scoring data
+- `settings` - Application configuration and prompts
+- `business_config` - Business sectors and processes
+- `sessions` - User authentication sessions
+- `job_queue` - Async job processing queue
+
+### Schema Conventions
+- **Primary Keys**: UUID strings (text type)
+- **Timestamps**: ISO strings with `CURRENT_TIMESTAMP` default
+- **JSON Fields**: Stored as text, parsed in application layer
+- **Foreign Keys**: Proper references with cascade deletes
+- **Naming**: snake_case for columns, camelCase for TypeScript
+
+## Migration Workflow
+
+### Development Workflow
+1. **Modify Schema**: Update `api/src/db/schema.ts`
+2. **Generate Migration**: `make db-generate`
+3. **Review Migration**: Check generated SQL in `api/drizzle/`
+4. **Apply Migration**: `make db-migrate`
+5. **Test Changes**: Run tests to ensure compatibility
+
+### Migration Commands (via Make)
+- `make db-generate` - Generate new migration files from schema changes
+- `make db-migrate` - Apply pending migrations to database
+- `make db-reset` - Reset database (drop + recreate + migrate)
+- `make db-init` - Initialize database with all migrations
+- `make db-status` - Check database status and table structure
+- `make db-seed` - Populate database with sample data
+
+### Production Migration Strategy
+1. **Backup First**: `make db-backup` before any migration
+2. **Test Migration**: Apply to staging environment first
+3. **Rollback Plan**: Keep backup for quick restoration
+4. **Monitor**: Check application health after migration
+5. **Verify**: `make db-status` to confirm schema changes
+
+## Schema Evolution Rules
+
+### Safe Changes (No Migration Required)
+- Adding new nullable columns
+- Adding new tables
+- Adding new indexes
+- Adding new constraints on new data
+
+### Breaking Changes (Require Migration)
+- Renaming columns or tables
+- Changing column types
+- Dropping columns or tables
+- Adding NOT NULL constraints to existing columns
+- Changing primary keys
+
+### Migration Best Practices
+- **Atomic Changes**: One logical change per migration
+- **Backward Compatibility**: Maintain compatibility during transitions
+- **Data Migration**: Include data transformation in migration scripts
+- **Validation**: Add checks to ensure data integrity
+- **Documentation**: Document breaking changes in migration files
+
+## Backup and Recovery
+
+### Litestream Configuration
+- **Config File**: `api/litestream.yml`
+- **Target**: Scaleway Object Storage (S3-compatible)
+- **Frequency**: Continuous replication
+- **Retention**: Configurable backup retention
+
+### Backup Commands
+- `make db-backup` - Create manual backup file
+- `make db-restore [BACKUP_FILE=filename]` - Restore from backup
+- **Automatic**: Litestream handles continuous backup to S3
+
+### Recovery Procedures
+1. **Stop Application**: Prevent data corruption
+2. **Restore Backup**: `make db-restore BACKUP_FILE=backup.db`
+3. **Verify Schema**: `make db-status`
+4. **Run Tests**: Ensure application functionality
+5. **Restart Application**: Resume normal operations
+
+## Data Integrity and Validation
+
+### Schema Validation
+- **Type Safety**: Drizzle provides TypeScript types
+- **Runtime Validation**: Zod schemas for API endpoints
+- **Migration Checks**: Drizzle validates migration compatibility
+
+### Data Quality Rules
+- **Required Fields**: Enforce NOT NULL constraints
+- **Foreign Keys**: Maintain referential integrity
+- **JSON Validation**: Validate JSON structure in application layer
+- **Business Rules**: Implement in application logic, not database
+
+## Development Guidelines
+
+### Local Development
+- **Database Location**: `data/app.db` (gitignored)
+- **Reset Often**: Use `make db-reset` for clean state
+- **Seed Data**: Use `make db-seed` for test data
+- **Volume Mount**: Docker mounts `./data` to `/data`
+
+### Testing Strategy
+- **Test Database**: Separate database for tests
+- **Migration Tests**: Test migrations in isolation
+- **Data Validation**: Test schema changes with sample data
+- **Rollback Tests**: Verify rollback procedures
+
+### Performance Considerations
+- **Indexes**: Add indexes for frequently queried columns
+- **JSON Fields**: Consider performance impact of JSON queries
+- **File Size**: Monitor SQLite file size growth
+- **Connection Pooling**: Single connection for SQLite (file-based)
+
+## Troubleshooting
+
+### Common Issues
+- **Migration Conflicts**: Resolve by regenerating migrations
+- **Schema Drift**: Use `make db-status` to check consistency
+- **Backup Failures**: Check Litestream configuration and S3 access
+- **Lock Issues**: SQLite handles concurrent access automatically
+
+### Debug Commands
+- `make db-status` - Check database structure and migrations
+- `make logs-db` - View database container logs
+- `make sh-api` - Access API container for manual inspection
+
+## Integration with Workflow
+
+### Feature Development
+1. **Schema Changes**: Document in BRANCH.md
+2. **Migration Testing**: Test migrations before committing
+3. **Backup Strategy**: Backup before major schema changes
+4. **Validation**: Ensure tests pass with new schema
+
+### CI/CD Integration
+- **Migration Validation**: CI runs migrations on test database
+- **Schema Consistency**: Verify schema matches migrations
+- **Backup Verification**: Ensure backup/restore procedures work
+- **Test Data**: Populate test database with seed data

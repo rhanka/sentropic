@@ -1,0 +1,76 @@
+---
+description: Architecture directives
+alwaysApply: true
+tags: [architecture, boundaries]
+---
+
+# ARCHITECTURE
+- UI : SvelteKit 5 (`ui/`) — bilingual FR/EN (FR-first, EN To-be) with i18n, static build, Tailwind CSS.
+- API : Hono + TypeScript (`api/`) with REST/OpenAPI, Drizzle ORM.
+- Database : SQLite + Make targets for Drizzle ROM (db management) + Litestream (S3 backup) - single file persistence.
+- Queue : Custom SQLite-based job queue with QueueManager (no external libs).
+- AI : OpenAI integration via Node.js (no separate Python service).
+- Tests : Make targets + Vitest (unit/integration) + Playwright (E2E).
+- Security : OIDC sessions (Google/LinkedIn), human approval on ⚠ actions.
+- CI/CD: Make for local dev, GitHub Actions (based on make targets) for automation.
+- Dev environment: Docker Compose with volume mounts.
+- Prod environment: Scaleway Container Serverless (to be)
+
+## Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph "Browser"
+        User[User]
+    end
+    
+    subgraph "Frontend"
+        UI["SvelteKit 5 UI<br/>Tailwind CSS<br/>i18n EN/FR"]
+    end
+    
+    subgraph "Backend Services"
+        API["Hono API<br/>TypeScript<br/>REST/OpenAPI"]
+        AI["OpenAI Integration<br/>Node.js SDK"]
+    end
+    
+    subgraph "Data Layer"
+        DB[("SQLite Database<br/>app.db")]
+        Queue["Custom SQLite Queue<br/>QueueManager service"]
+        Backup["Litestream<br/>S3 Backup"]
+    end
+    
+    subgraph "External Services"
+        OpenAI["OpenAI API<br/>GPT Models"]
+        S3["Scaleway Object Storage<br/>Database Backups"]
+        OIDC["OIDC Providers<br/>Google/LinkedIn"]
+    end
+    
+    subgraph "DevOps & Testing"
+        Docker["Docker Compose<br/>Development Environment"]
+        Make["Makefile<br/>Build/Test/DB/Deploy"]
+        Tests["Vitest + Playwright<br/>Unit/Integration/E2E"]
+    end
+    
+    User --> UI
+    UI -->|REST/JSON| API
+    API --> AI
+    AI --> OpenAI
+    API --> DB
+    API --> Queue
+    Queue --> AI
+    DB --> Backup
+    Backup --> S3
+    API -->|OIDC Auth| OIDC
+    
+    Make --> Docker
+    Make --> Tests
+    Make -->|DB Operations| DB
+    Make -->|Queue Management| Queue
+    Make -->|Build/Deploy| UI
+    Make -->|Build/Deploy| API
+    
+    style UI fill:#e1f5fe
+    style API fill:#f3e5f5
+    style DB fill:#e8f5e8
+    style Make fill:#fff3e0
+```

@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      target: dev
+    command: sh -c "npm install && npm run db:init && npm run db:migrate && npm run dev"
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+      - ./data:/data
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=sqlite:///data/app.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+    ports:
+      - "8787:8787"
+    depends_on:
+      - sqlite
+    tty: true
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      target: dev
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ./ui:/app
+      - ui_node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8787/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    tty: true
+
+  sqlite:
+    image: keinos/sqlite3:latest
+    command: tail -f /dev/null
+    volumes:
+      - ./data:/data
+
+  litestream:
+    image: litestream/litestream:0.3
+    volumes:
+      - ./data:/data
+      - ./api/litestream.yml:/etc/litestream.yml:ro
+    command: replicate
+    depends_on:
+      - sqlite
+
+
+volumes:
+  api_node_modules:
+  ui_node_modules:
