@@ -2,16 +2,50 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
+  import { refreshManager } from '$lib/stores/refresh';
 
   let showCreate = false;
   let name = '';
   let description = '';
   let isLoading = false;
 
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: {
+    const hasGeneratingFolders = $foldersStore.some(folder => folder.status === 'generating');
+    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
+      useCase.status === 'generating' || useCase.status === 'detailing'
+    );
+    
+    if (hasGeneratingFolders || hasGeneratingUseCases) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive('folders')) {
+        refreshManager.startFoldersRefresh(async () => {
+          await refreshFolderStatus();
+        });
+      }
+      if (!refreshManager.isRefreshActive('useCases')) {
+        refreshManager.startUseCasesRefresh(async () => {
+          await refreshUseCasesStatus();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si aucune génération n'est en cours
+      refreshManager.stopRefresh('folders');
+      refreshManager.stopRefresh('useCases');
+    }
+  }
+
   onMount(async () => {
     await loadFolders();
+    // Démarrer l'actualisation automatique si nécessaire
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
   });
 
   const loadFolders = async () => {
@@ -40,6 +74,69 @@
       });
     } finally {
       isLoading = false;
+    }
+  };
+
+  // Refresh léger - met à jour seulement les statuts sans clignotement
+  const refreshFolderStatus = async () => {
+    try {
+      const folders = await fetchFolders();
+      
+      // Mettre à jour seulement les champs qui changent (status)
+      foldersStore.update(items => 
+        items.map(item => {
+          const updated = folders.find(f => f.id === item.id);
+          return updated ? { ...item, status: updated.status } : item;
+        })
+      );
+    } catch (error) {
+      console.error('Failed to refresh folder status:', error);
+    }
+  };
+
+  const startAutoRefresh = () => {
+    // Vérifier s'il y a des dossiers en génération
+    const hasGeneratingFolders = $foldersStore.some(folder => folder.status === 'generating');
+    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
+      useCase.status === 'generating' || useCase.status === 'detailing'
+    );
+
+    if (hasGeneratingFolders || hasGeneratingUseCases) {
+      // Démarrer l'actualisation légère des dossiers (pas de clignotement)
+      refreshManager.startFoldersRefresh(async () => {
+        await refreshFolderStatus();
+      });
+      
+      // Démarrer l'actualisation légère des cas d'usage
+      refreshManager.startUseCasesRefresh(async () => {
+        await refreshUseCasesStatus();
+      });
+    }
+  };
+
+  const loadUseCases = async () => {
+    try {
+      const useCases = await fetchUseCases();
+      useCasesStore.set(useCases);
+    } catch (error) {
+      console.error('Failed to refresh use cases:', error);
+    }
+  };
+
+  // Refresh léger des cas d'usage - met à jour seulement les statuts
+  const refreshUseCasesStatus = async () => {
+    try {
+      const useCases = await fetchUseCases();
+      
+      // Mettre à jour seulement les champs qui changent (status)
+      useCasesStore.update(items => 
+        items.map(item => {
+          const updated = useCases.find(uc => uc.id === item.id);
+          return updated ? { ...item, status: updated.status } : item;
+        })
+      );
+    } catch (error) {
+      console.error('Failed to refresh use cases status:', error);
     }
   };
 
@@ -227,10 +324,6 @@
                   {#if folder.companyName}
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       {folder.companyName}
-                    </span>
-                  {:else}
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Dossier
                     </span>
                   {/if}
                 </div>

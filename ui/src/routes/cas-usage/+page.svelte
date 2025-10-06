@@ -4,13 +4,33 @@
   import { addToast, removeToast } from '$lib/stores/toast';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
+  import { refreshManager } from '$lib/stores/refresh';
 
   let isLoading = false;
   let isGenerating = false;
   let matrix: MatrixConfig | null = null;
+
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: {
+    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
+      useCase.status === 'generating' || useCase.status === 'detailing'
+    );
+    
+    if (hasGeneratingUseCases) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive('useCases')) {
+        refreshManager.startUseCasesRefresh(async () => {
+          await refreshUseCasesStatus();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si aucune génération n'est en cours
+      refreshManager.stopRefresh('useCases');
+    }
+  }
 
   // Réactivité pour recharger les cas d'usage quand le dossier change
   $: if ($currentFolderId) {
@@ -42,6 +62,14 @@
       // Charger les cas existants seulement si un dossier est sélectionné
       await loadUseCases();
     }
+
+    // Démarrer l'actualisation automatique si nécessaire
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
   });
 
   const loadUseCases = async () => {
@@ -80,6 +108,45 @@
       });
     } finally {
       isLoading = false;
+    }
+  };
+
+  // Refresh léger des cas d'usage - met à jour les données complètes
+  const refreshUseCasesStatus = async () => {
+    try {
+      const useCases = await fetchUseCases($currentFolderId || undefined);
+      
+      // Mettre à jour complètement les cas d'usage pour avoir les données les plus récentes
+      useCasesStore.set(useCases);
+      
+      // Recharger la matrice si nécessaire
+      if ($currentFolderId && !matrix) {
+        try {
+          const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`);
+          if (response.ok) {
+            const folder = await response.json();
+            matrix = folder.matrixConfig;
+          }
+        } catch (err) {
+          console.error('Failed to load matrix during refresh:', err);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh use cases status:', error);
+    }
+  };
+
+  const startAutoRefresh = () => {
+    // Vérifier s'il y a des cas d'usage en génération
+    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
+      useCase.status === 'generating' || useCase.status === 'detailing'
+    );
+
+    if (hasGeneratingUseCases) {
+      // Démarrer l'actualisation légère des cas d'usage
+      refreshManager.startUseCasesRefresh(async () => {
+        await refreshUseCasesStatus();
+      });
     }
   };
 
@@ -189,20 +256,19 @@
     {#each $useCasesStore as useCase}
       {@const isDetailing = useCase.status === 'detailing'}
       {@const isDraft = useCase.status === 'draft'}
-      {@const isPending = useCase.status === 'pending'}
       {@const isGenerating = useCase.status === 'generating'}
-      <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {(isDetailing || isPending || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
-               on:click={() => !(isDetailing || isPending || isGenerating) && goto(`/cas-usage/${useCase.id}`)}>
+      <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
+               on:click={() => !(isDetailing || isGenerating) && goto(`/cas-usage/${useCase.id}`)}>
         <div class="flex justify-between items-start">
           <div class="flex-1">
-            <h2 class="text-xl font-medium {(isDetailing || isPending || isGenerating) ? 'text-slate-400' : 'group-hover:text-blue-600 transition-colors'}">{useCase.name}</h2>
+            <h2 class="text-xl font-medium {(isDetailing || isGenerating) ? 'text-slate-400' : 'group-hover:text-blue-600 transition-colors'}">{useCase.name}</h2>
             {#if useCase.description}
               <p class="mt-1 text-sm text-slate-600 line-clamp-2">{useCase.description}</p>
             {/if}
             <div class="mt-2 flex gap-4 text-sm text-slate-500 items-center">
               <div class="flex items-center gap-1">
                 <span>Valeur:</span>
-                {#if useCase.totalValueScore && matrix && useCase.valueScores && useCase.complexityScores}
+                {#if matrix && useCase.valueScores && useCase.complexityScores}
                   {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
                   {@const valueStars = calculatedScores.valueStars}
                   {#each Array(5) as _, i}
@@ -222,7 +288,7 @@
               </div>
               <div class="flex items-center gap-1">
                 <span>Complexité:</span>
-                {#if useCase.totalComplexityScore && matrix && useCase.valueScores && useCase.complexityScores}
+                {#if matrix && useCase.valueScores && useCase.complexityScores}
                   {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
                   {@const complexityStars = calculatedScores.complexityStars}
                   {#each Array(5) as _, i}
@@ -279,8 +345,6 @@
               Détail en cours...
             {:else if isGenerating}
               Génération en cours...
-            {:else if isPending}
-              Génération en attente...
             {:else if isDraft}
               Brouillon
             {:else}
@@ -296,18 +360,11 @@
                 Détail en cours
               </span>
             {:else if isGenerating}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                 <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
-                Génération en cours
-              </span>
-            {:else if isPending}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                Génération en attente
+                Génération...
               </span>
             {:else if isDraft}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">

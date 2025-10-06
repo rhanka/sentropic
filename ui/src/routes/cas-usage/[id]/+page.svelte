@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
@@ -9,6 +9,7 @@
   import MatrixDetails from '$lib/components/MatrixDetails.svelte';
   import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
+  import { refreshManager } from '$lib/stores/refresh';
 
   let useCase: any = undefined;
   let isEditing = false;
@@ -19,36 +20,101 @@
 
   $: useCaseId = $page.params.id;
 
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: if (useCase) {
+    const isGenerating = useCase.status === 'generating' || useCase.status === 'detailing';
+    
+    if (isGenerating) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive(`useCase-${useCase.id}`)) {
+        refreshManager.startUseCaseDetailRefresh(useCase.id, async () => {
+          await refreshUseCaseStatus();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si la génération est terminée
+      refreshManager.stopRefresh(`useCase-${useCase.id}`);
+    }
+  }
+
   onMount(async () => {
     await loadUseCase();
+    // Démarrer l'actualisation automatique si le cas d'usage est en génération
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
   });
 
   const loadUseCase = async () => {
     try {
-      // D'abord essayer de trouver dans le store local
-      const useCases = $useCasesStore;
-      useCase = useCases.find(uc => uc.id === useCaseId);
-      
-      // Si pas trouvé dans le store, charger depuis l'API
-      if (!useCase) {
-        const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
-        if (response.ok) {
-          useCase = await response.json();
-        } else {
+      // Charger depuis l'API pour avoir les données les plus récentes
+      const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
+      if (response.ok) {
+        useCase = await response.json();
+        
+        // Mettre à jour le store avec les données fraîches
+        useCasesStore.update(items => 
+          items.map(uc => uc.id === useCaseId ? useCase : uc)
+        );
+        
+        if (useCase) {
+          draft = { ...useCase };
+          await loadMatrixAndCalculateScores();
+        }
+      } else {
+        // Fallback sur le store local si l'API échoue
+        const useCases = $useCasesStore;
+        useCase = useCases.find(uc => uc.id === useCaseId);
+        
+        if (!useCase) {
           addToast({ type: 'error', message: 'Cas d\'usage non trouvé' });
           error = 'Cas d\'usage non trouvé';
           return;
         }
-      }
-      
-      if (useCase) {
+        
         draft = { ...useCase };
         await loadMatrixAndCalculateScores();
       }
     } catch (err) {
       console.error('Failed to fetch use case:', err);
-      addToast({ type: 'error', message: 'Erreur lors du chargement du cas d\'usage' });
-      error = 'Erreur lors du chargement du cas d\'usage';
+      // Fallback sur le store local en cas d'erreur
+      const useCases = $useCasesStore;
+      useCase = useCases.find(uc => uc.id === useCaseId);
+      
+      if (!useCase) {
+        addToast({ type: 'error', message: 'Erreur lors du chargement du cas d\'usage' });
+        error = 'Erreur lors du chargement du cas d\'usage';
+        return;
+      }
+      
+      draft = { ...useCase };
+      await loadMatrixAndCalculateScores();
+    }
+  };
+
+  // Refresh léger du cas d'usage - met à jour seulement les champs qui changent
+  const refreshUseCaseStatus = async () => {
+    try {
+      const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
+      if (response.ok) {
+        const updatedUseCase = await response.json();
+        
+        // Mettre à jour seulement les champs qui changent (status, etc.)
+        if (useCase) {
+          useCase = { ...useCase, ...updatedUseCase };
+          draft = { ...useCase };
+          
+          // Mettre à jour le store
+          useCasesStore.update(items => 
+            items.map(uc => uc.id === useCaseId ? useCase : uc)
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh use case status:', error);
     }
   };
 
@@ -109,6 +175,16 @@
       console.error('Failed to load matrix:', err);
     }
   };
+
+  const startAutoRefresh = () => {
+    // Vérifier si le cas d'usage est en génération
+    if (useCase && (useCase.status === 'generating' || useCase.status === 'detailing' || useCase.status === 'pending')) {
+      // Démarrer l'actualisation légère pour ce cas d'usage spécifique
+      refreshManager.startUseCaseDetailRefresh(useCase.id, async () => {
+        await refreshUseCaseStatus();
+      });
+    }
+  };
 </script>
 
 <section class="space-y-6">
@@ -120,6 +196,24 @@
 
   {#if useCase}
     <div class="space-y-6">
+      <!-- Status Banner pour génération en cours -->
+      {#if useCase.status === 'generating' || useCase.status === 'detailing' || useCase.status === 'pending'}
+        <div class="rounded border border-blue-200 bg-blue-50 p-4">
+          <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            <p class="text-sm text-blue-700 font-medium">
+              {#if useCase.status === 'detailing'}
+                Détail en cours de génération...
+              {:else if useCase.status === 'generating'}
+                Cas d'usage en cours de génération...
+              {:else if useCase.status === 'pending'}
+                Génération en attente...
+              {/if}
+            </p>
+          </div>
+        </div>
+      {/if}
+
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>
@@ -265,26 +359,10 @@
               </h3>
             </div>
             <div class="space-y-3 text-sm">
-              <div>
-                <span class="font-medium text-slate-700">Identifiant:</span>
-                <span class="text-slate-600 ml-2">{useCase.id.slice(0, 8)}...</span>
-              </div>
-              {#if useCase.process}
+              {#if useCase.contact}
                 <div>
-                  <span class="font-medium text-slate-700">Domaine:</span>
-                  <span class="text-slate-600 ml-2">{useCase.process}</span>
-                </div>
-              {/if}
-              {#if useCase.technologies && useCase.technologies.length > 0}
-                <div>
-                  <span class="font-medium text-slate-700">Technologies:</span>
-                  <div class="text-slate-600 ml-2">
-                    {#each useCase.technologies as tech, i}
-                      <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">
-                        {tech}
-                      </span>
-                    {/each}
-                  </div>
+                  <span class="font-medium text-slate-700">Contact:</span>
+                  <span class="text-slate-600 ml-2">{useCase.contact}</span>
                 </div>
               {/if}
               {#if useCase.deadline}
@@ -293,10 +371,20 @@
                   <span class="text-slate-600 ml-2">{useCase.deadline}</span>
                 </div>
               {/if}
-              {#if useCase.contact}
+              {#if useCase.technologies && useCase.technologies.length > 0}
                 <div>
-                  <span class="font-medium text-slate-700">Contact:</span>
-                  <span class="text-slate-600 ml-2">{useCase.contact}</span>
+                  <span class="font-medium text-slate-700">Technologies:</span>
+                  <ul class="text-slate-600 ml-4 mt-1 list-disc">
+                    {#each useCase.technologies as tech}
+                      <li class="text-sm">{tech}</li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+              {#if useCase.process}
+                <div>
+                  <span class="font-medium text-slate-700">Domaine:</span>
+                  <span class="text-slate-600 ml-2">{useCase.process}</span>
                 </div>
               {/if}
             </div>
