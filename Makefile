@@ -366,31 +366,6 @@ version-bump:
 	@echo "Version bump placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
-# Vitest Tests (New)
-# -----------------------------------------------------------------------------
-.PHONY: test-vitest-smoke test-vitest-api test-vitest-ai test-vitest-queue test-vitest-all
-
-test-vitest-smoke: ## Run smoke tests with Vitest
-	@echo "🧪 Running smoke tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 npm run test:smoke
-
-test-vitest-api: ## Run API tests with Vitest
-	@echo "🧪 Running API tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 npm run test:api
-
-test-vitest-ai: ## Run AI tests with Vitest
-	@echo "🧪 Running AI tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 npm run test:ai
-
-test-vitest-queue: ## Run queue tests with Vitest
-	@echo "🧪 Running queue tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 npm run test:queue
-
-test-vitest-all: ## Run all Vitest tests
-	@echo "🧪 Running all Vitest tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 npm run test:all
-
-# -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
 # -----------------------------------------------------------------------------
 .PHONY: test-api-smoke test-api-endpoints test-api-ai test-api-queue test-api-all

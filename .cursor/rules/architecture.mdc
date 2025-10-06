@@ -5,7 +5,7 @@ tags: [architecture, boundaries]
 ---
 
 # ARCHITECTURE
-- UI : SvelteKit 5 (`ui/`) — bilingual EN/FR with i18n, static build, Tailwind CSS.
+- UI : SvelteKit 5 (`ui/`) — bilingual FR/EN (FR-first, EN To-be) with i18n, static build, Tailwind CSS.
 - API : Hono + TypeScript (`api/`) with REST/OpenAPI, Drizzle ORM.
 - Database : SQLite + Make targets for Drizzle ROM (db management) + Litestream (S3 backup) - single file persistence.
 - Queue : Custom SQLite-based job queue with QueueManager (no external libs).
@@ -15,15 +15,6 @@ tags: [architecture, boundaries]
 - CI/CD: Make for local dev, GitHub Actions (based on make targets) for automation.
 - Dev environment: Docker Compose with volume mounts.
 - Prod environment: Scaleway Container Serverless (to be)
-
-## Make & Docker-First (MANDATORY)
-- **NO native npm on developer machine** - Docker containers only
-- **ALL development commands (test, db migrations ...) MUST go through Docker** - no exceptions
-- **Dependencies managed in containers** - never install npm/python globally
-- **A make target for every dev, test and db action** - all actions a concieved and repetible
-- **Clean workspace** - no node_modules, no .venv, no global packages
-
-## Configuration Management
 
 ## Architecture Diagram
 
@@ -83,35 +74,3 @@ flowchart TB
     style DB fill:#e8f5e8
     style Make fill:#fff3e0
 ```
-
-## Configuration Management
-- **Build/Compilation configs** → **Root** (Docker-first approach)
-  - TypeScript compilation settings (tsconfig.json per package)
-  - Build tool configurations (vite.config.ts, drizzle.config.ts)
-  - Docker configurations (Dockerfile per service)
-- **Editor/IDE configs** → **Root** (for VSCode/Cursor AI)
-  - .editorconfig, .eslintrc.js, .prettierrc
-  - .vscode/settings.json, .cursorrules
-- **Separation of concerns**: Build configs per package, editor configs in root
-
-## UI Framework (SvelteKit)
-- Static build with adapter-static (no SSR)
-- Use `svelte-i18n`; no hard-coded UI strings
-- Routing: standard SvelteKit file-based routing
-- State management: Svelte stores with API synchronization
-- Styling: Tailwind CSS with custom components
-- Tests: basic smoke via Playwright on main routes
-
-## Language Policy
-- All code, comments, commit messages, PR titles/descriptions, API schemas and server errors MUST be in **English**
-- All Markdown and MDC files MUST be in **English**
-- The UI MUST support **English and French** locales (`/en`, `/fr`) with `en` as fallback
-- Any UI copy change MUST update both `en/*.json` and `fr/*.json` and keep keys stable
-
-## Make Responsibilities
-- **Build & Quality**: `make build`, `make typecheck`, `make lint`, `make format`
-- **Testing**: `make test`, `make test-e2e`, `make test-smoke`, `make test-vitest-*`
-- **Database Management**: `make db-init`, `make db-migrate`, `make db-backup`, `make db-restore`, `make db-seed`
-- **Development**: `make dev`, `make up`, `make down`, `make logs`
-- **Documentation**: `make openapi-json`, `make openapi-html`
-- **Deployment**: `make docker-build`, `make deploy-ui`, `make deploy-api`

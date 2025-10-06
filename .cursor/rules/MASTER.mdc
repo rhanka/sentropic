@@ -8,6 +8,14 @@ When starting a discussion the focus should be to start a TODO if no specific in
 
 ## Core Architecture Principles
 
+## Make Responsibilities (MANDATORY commands)
+- **Build & Quality**: `make build`, `make typecheck`, `make lint`, `make format`
+- **Testing**: `make test`, `make test-e2e`, `make test-smoke`, `make test-vitest-*`
+- **Database Management**: `make db-init`, `make db-migrate`, `make db-backup`, `make db-restore`, `make db-seed`
+- **Development**: `make dev`, `make up`, `make down`, `make logs`
+- **Documentation**: `make openapi-json`, `make openapi-html`
+- **Deployment**: `make docker-build`, `make deploy-ui`, `make deploy-api`
+
 ### Docker-First Architecture (MANDATORY)
 - **NO native npm/python on developer machine** - Docker containers only
 - **ALL development commands MUST go through Make** - no exceptions
@@ -17,33 +25,19 @@ When starting a discussion the focus should be to start a TODO if no specific in
 - **Same commands work locally and in CI** - no drift allowed
 - **NO git add .** - commits are atomic and controlled
 
-### Rule Hierarchy
-1. **`.mdc` files** = Source of truth (AI rules)
-2. **Documentation** = User guides (derived from rules)
-3. **Implementation** = Code (follows rules)
-
 ## Development Workflow (MANDATORY)
 
 1. Read this file (MASTER.mdc) for rules overview
 2. Read `README.md` for project context and high level specifications
 3. Read `TODO.md` for **Now** items
 4. Follow `workflow.mdc` process, including `testing.mdc` and `security.mdc`
+
 ## Guide Maintenance
 
 ### Update Workflow (MANDATORY)
-1. **Rules change** → Update `.mdc` file FIRST
+1. **Rules change** → Update `.mdc` file FIRST (source of truth)
 2. **Documentation** → Update `.md` file SECOND
 3. **Verify consistency** → Run `make check`
-
-### Consistency Rules
-- Commands must match exactly between `.mdc` and `.md`
-- Terminology must convey same meaning
-- Structure must be logically equivalent
-
-### Validation Commands
-- `make check` - Full consistency validation
-- `make scripts.validate-guides` - Guide consistency check
-- `make scripts.i18n.coverage` - i18n coverage validation
 
 ## Security & Compliance
 
@@ -58,15 +52,18 @@ When starting a discussion the focus should be to start a TODO if no specific in
 - **Least privilege** access model
 
 ## Language Policy
+- All code, comments, commit messages, PR titles/descriptions, API schemas and server errors MUST be in **English**
+- All Markdown and MDC files MUST be in **English**
 
 ### Code & Rules
 - **ALL code, comments, rules in English**
 - **API schemas in English**
 - **Error messages in English**
+- **Discuss with user in French (or English if he requires)**
 
 ### UI Localization
-- **UI supports EN/FR** with `/en` and `/fr` routes
-- **i18n coverage enforced** by CI
+- **UI supports FR (to be EN)**
+- **i18n coverage enforced** by CI (to be)
 - **Keys must be stable** across locales
 
 ## File Structure
@@ -80,48 +77,4 @@ When starting a discussion the focus should be to start a TODO if no specific in
 
 ### Documentation Files (User Guides)
 - `README.md` - Project overview and setup
-- `RELEASE.md` - Release process (derived from workflow.mdc)
 - `TODO.md` - Current priorities and items
-
-## Quick Reference
-
-### Essential Commands (Docker-First)
-```bash
-make up              # Start infrastructure (PostgreSQL, Redis)
-make dev             # Start all services in Docker
-make test.unit       # Run unit tests in Docker (REQUIRED before commit)
-make test.all        # Run all tests in Docker
-make check           # Validate consistency
-make dev.clean       # Clean workspace (remove any local traces)
-make logs.api        # Show API logs (one-time)
-make logs.api.follow # Follow API logs in real-time (Ctrl+C to stop)
-```
-
-### Before Any Commit
-1. ✅ Run `make test.unit` (executes in Docker)
-2. ✅ Verify `make` commands work (Docker-based)
-3. ✅ Check i18n coverage if UI changed
-4. ✅ Ensure no local node_modules/.venv exist
-
-### Before Any PR
-1. ✅ All tests pass (`make test.all` - Docker-based)
-2. ✅ Consistency validated (`make check`)
-3. ✅ Architecture compliance verified
-4. ✅ Workspace clean (`make dev.clean` if needed)
-
-## Summary
-
-**This file consolidates all rules. For detailed specifications, see individual `.mdc` files:**
-
-- **architecture.mdc** → Core principles and boundaries
-- **workflow.mdc** → Development process and maintenance
-- **testing.mdc** → Testing strategy and enforcement
-- **security.mdc** → Security condiderations
-
-**Remember**: When in doubt, use `make` - it's the law of the land! 🚀
-
-**Docker-First Rule**: Never run npm/python directly - always use `make` commands that execute in Docker containers!
-description:
-globs:
-alwaysApply: false
----

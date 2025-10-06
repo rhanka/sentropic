@@ -52,41 +52,31 @@
 ### Security Test Exit Criteria
 **All security tests MUST fail (exit with error code) if vulnerabilities are detected:**
 
-#### SAST (Semgrep) - `test.security.sast.<service>`
+#### SAST (Semgrep) - `test-<service>-security-sast`
 - **Exit Code**: 1 (error) if ANY findings are detected
 - **Severity**: All levels (INFO, WARNING, ERROR) trigger failure
 - **Rationale**: Code quality and security issues must be addressed before merge
 
-#### SCA (Trivy) - `test.security.sca.<service>`
+#### SCA (Trivy) - ``test-<service>-security-sca`
 - **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
 - **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
 - **Rationale**: Critical/High dependency vulnerabilities block production deployment
 
-#### IaC (Trivy) - `test.security.iac.<service>`
+#### IaC (Trivy) - `test-<service>-security-iac`
 - **Exit Code**: 1 (error) if HIGH or CRITICAL misconfigurations are detected
 - **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
 - **Rationale**: Infrastructure misconfigurations can create security gaps
 
-#### Container (Trivy) - `test.security.container.<service>`
+#### Container (Trivy) - `test-<service>-security-container`
 - **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
 - **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
 - **Rationale**: Container vulnerabilities can be exploited in production
 
 #### Dockerfile Dependency Gating
 - **Build Failure**: Docker builds fail if dependency audits detect HIGH/CRITICAL vulnerabilities
-  - **Node.js services**: `npm audit --audit-level=high` in `make build.<service>` (api, scheduler, workers, ui)
-  - **Python services**: `pip-audit --strict` in `make build.<service>` (ai)
+  - **Node.js services**: `npm audit --audit-level=high` in `make build-<service>` (api, scheduler, workers, ui)
+  - **Python services**: `pip-audit --strict` in `make build-<service>` (ai)
 - **Rationale**: Prevents vulnerable images from being created and stored as artifacts
-
-### Make Targets (Naming — documentation)
-- **Docker dependency gating**: `build.<service>` (api, scheduler, workers, ui, ai) - blocks on HIGH/CRITICAL vulns
-- **Unified security testing**: `test.security.<type>-<service>` where:
-  - **type**: `sast`, `sca`, `container`, `iac`
-  - **service**: `api`, `ui`, `workers`, `scheduler`, `ai`, `infra`
-- **Examples**: `test.security.sast-api`, `test.security.sca-ui`, `test.security.container-workers`, `test.security.iac-infra`
-- **Aggregates**: `test.security.sast`, `test.security.sca`, `test.security.container`, `test.security.iac`
-- **Main aggregate**: `test.security` (runs all security tests)
-- **Future functional categories** (pentest umbrella): `test.security.pentest`, with possible `auth/input/data/api/infra` sub-targets
 
 ### Vulnerability Management
 - Identify → Assess → Mitigate → Track (`TODO.md`) → Approvals for exceptions (⚠).
