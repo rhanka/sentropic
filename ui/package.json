@@ -39,6 +39,8 @@
     "@tiptap/core": "^3.6.5",
     "@tiptap/pm": "^3.6.5",
     "@tiptap/starter-kit": "^3.6.5",
-    "tiptap-markdown": "^0.9.0"
+    "tiptap-markdown": "^0.9.0",
+    "chart.js": "^4.4.0",
+    "marked": "^12.0.0"
   }
 }

@@ -73,7 +73,12 @@ Réponds UNIQUEMENT avec un JSON valide:
     id: 'use_case_detail',
     name: 'Détail de cas d\'usage',
     description: 'Prompt pour générer un cas d\'usage détaillé avec scoring',
-    content: `Génère un cas d'usage détaillé pour "{{use_case}}" dans le contexte suivant: {{user_input}}. 
+    content: `Génère un cas d'usage détaillé pour le cas d'usage suivant: {{use_case}}"
+
+    Le contexte initial du cas d'usage était le suivant: {{user_input}}.
+
+Les informations de l'entreprise sont les suivantes: {{company_info}}
+
 Utilise la matrice valeur/complexité fournie pour évaluer chaque axe de valeur et complexité : {{matrix}}
 
 
@@ -161,6 +166,7 @@ OBLIGATOIRE:
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage
 - Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
 - Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références
+- La description doit être formattée en markdown
 - Bénéfices mesures de succès doivent être basé sur un véritable rationnel et citation vers références
 - Les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
 - Ne mets pas les "sources" (systèmes ERP et MES fournissant les données) dans les "références"
@@ -168,6 +174,6 @@ OBLIGATOIRE:
 - Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
 - Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 - Justifie chaque score Fibonacci choisi dans la description`,
-    variables: ['use_case', 'user_input', 'matrix']
+    variables: ['use_case', 'user_input', 'matrix', 'company_info']
   }
 ];

@@ -10,6 +10,7 @@
   import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { refreshManager } from '$lib/stores/refresh';
+  import { marked } from 'marked';
 
   let useCase: any = undefined;
   let isEditing = false;
@@ -342,7 +343,9 @@
                 ></textarea>
               </div>
             {:else}
-              <p class="text-slate-600 text-sm leading-relaxed">{useCase.description}</p>
+              <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+                {@html useCase.description && marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">') || ''}
+              </div>
             {/if}
           </div>
         </div>
@@ -374,7 +377,7 @@
               {#if useCase.technologies && useCase.technologies.length > 0}
                 <div>
                   <span class="font-medium text-slate-700">Technologies:</span>
-                  <ul class="text-slate-600 ml-4 mt-1 list-disc">
+                  <ul class="text-slate-600 ml-4 mt-1 space-y-2 list-disc">
                     {#each useCase.technologies as tech}
                       <li class="text-sm">{tech}</li>
                     {/each}
