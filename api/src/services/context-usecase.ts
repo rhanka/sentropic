@@ -86,6 +86,7 @@ export const generateUseCaseList = async (
  */
 export const generateUseCaseDetail = async (
   useCase: string,
+  companyInfo?: string,
   context: string,
   matrix: MatrixConfig,
   model?: string
@@ -99,6 +100,7 @@ export const generateUseCaseDetail = async (
   const prompt = useCaseDetailPrompt
     .replace(/\{\{use_case\}\}/g, useCase)
     .replace('{{user_input}}', context)
+    .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
 
   const response = await executeWithTools(prompt, { 

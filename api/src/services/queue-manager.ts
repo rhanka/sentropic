@@ -313,10 +313,33 @@ export class QueueManager {
       throw new Error('Configuration de matrice non trouvée');
     }
     
+    // Récupérer les informations de l'entreprise si nécessaire
+    let companyInfo = '';
+    if (folder.companyId) {
+      try {
+        const [company] = await db.select().from(companies).where(eq(companies.id, folder.companyId));
+        if (company) {
+          companyInfo = JSON.stringify({
+            name: company.name,
+            industry: company.industry,
+            size: company.size,
+            description: company.description,
+            objectives: company.objectives,
+            technologies: company.technologies
+          }, null, 2);
+          console.log(`📊 Informations entreprise récupérées pour ${company.name}:`, companyInfo);
+        } else {
+          console.warn(`⚠️ Entreprise non trouvée avec l'ID: ${folder.companyId}`);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'entreprise:', error);
+      }
+    }
+    
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, model);
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, companyInfo, context, matrixConfig, model);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
