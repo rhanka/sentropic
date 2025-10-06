@@ -156,39 +156,5 @@
         <UseCaseScatterPlot useCases={filteredUseCases} {matrix} />
     </div>
 
-    <!-- Liste des cas d'usage récents -->
-    <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200">
-      <h2 class="text-xl font-semibold text-slate-900 mb-4">Cas d'usage récents</h2>
-      {#if filteredUseCases.length === 0}
-        <div class="text-center py-8 text-slate-500">
-          <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
-          <p>Aucun cas d'usage dans ce dossier</p>
-        </div>
-      {:else}
-        <div class="space-y-3">
-          {#each filteredUseCases.slice(0, 5) as useCase}
-            <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-slate-50">
-              <div class="flex-1">
-                <h3 class="font-medium text-slate-900">{useCase.name}</h3>
-                <p class="text-sm text-slate-500">{useCase.description?.slice(0, 100)}...</p>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
-                  {useCase.status === 'completed' ? 'bg-green-100 text-green-800' : ''}
-                  {useCase.status === 'generating' ? 'bg-yellow-100 text-yellow-800' : ''}
-                  {useCase.status === 'detailing' ? 'bg-blue-100 text-blue-800' : ''}
-                ">
-                  {useCase.status === 'completed' ? 'Terminé' : ''}
-                  {useCase.status === 'generating' ? 'Génération...' : ''}
-                  {useCase.status === 'detailing' ? 'Détail...' : ''}
-                </span>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
   {/if}
 </section>

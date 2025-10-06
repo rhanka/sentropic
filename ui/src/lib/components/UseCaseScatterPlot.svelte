@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
@@ -13,24 +14,66 @@
   // Enregistrer tous les composants Chart.js
   Chart.register(...registerables);
 
+  // Fonction pour décaler les points superposés
+  function offsetOverlappingPoints(data: any[]): any[] {
+    const offsetData = [...data];
+    const positionMap = new Map<string, number[]>();
+    
+    // Grouper les points par position (avec une tolérance de 0.1)
+    offsetData.forEach((point, index) => {
+      const roundedX = Math.round(point.x * 10) / 10;
+      const roundedY = Math.round(point.y * 10) / 10;
+      const key = `${roundedX},${roundedY}`;
+      if (!positionMap.has(key)) {
+        positionMap.set(key, []);
+      }
+      positionMap.get(key)!.push(index);
+    });
+    
+    // Décaler les points superposés
+    positionMap.forEach((indices) => {
+      if (indices.length > 1) {
+        indices.forEach((index, offsetIndex) => {
+          const point = offsetData[index];
+          const offset = (offsetIndex + 1) * 0.3; // Décalage plus petit pour éviter de sortir des limites
+          
+          if (offsetIndex % 2 === 0) {
+            // Décaler sur l'axe X (complexité) - vers la droite
+            point.x = Math.min(point.x + offset, 100);
+          } else {
+            // Décaler sur l'axe Y (valeur) - vers le haut
+            point.y = Math.min(point.y + offset, 100);
+          }
+          
+          // Marquer le point comme décalé pour un style différent si nécessaire
+          point.isOffset = true;
+        });
+      }
+    });
+    
+    return offsetData;
+  }
+
   // Calculer les scores pour chaque cas d'usage
+  $: rawData = useCases
+    .filter(uc => uc.valueScores && uc.complexityScores && matrix)
+    .map(uc => {
+      const scores = calculateUseCaseScores(matrix!, uc.valueScores, uc.complexityScores);
+      return {
+        x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
+        y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
+        label: uc.name,
+        status: uc.status,
+        id: uc.id,
+        valueStars: scores.valueStars,      // Valeur normalisée (1-5)
+        complexityStars: scores.complexityStars // Complexité normalisée (1-5)
+      };
+    });
+
   $: chartData = {
     datasets: [{
       label: 'Cas d\'usage',
-      data: useCases
-        .filter(uc => uc.valueScores && uc.complexityScores && matrix)
-        .map(uc => {
-          const scores = calculateUseCaseScores(matrix!, uc.valueScores, uc.complexityScores);
-          return {
-            x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
-            y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
-            label: uc.name,
-            status: uc.status,
-            id: uc.id,
-            valueStars: scores.valueStars,      // Valeur normalisée (1-5)
-            complexityStars: scores.complexityStars // Complexité normalisée (1-5)
-          };
-        }),
+      data: offsetOverlappingPoints(rawData),
       backgroundColor: (context: any) => {
         const status = context.parsed.status;
         switch (status) {
@@ -49,9 +92,22 @@
           default: return 'rgba(107, 114, 128, 1)';
         }
       },
-      pointRadius: 8,
-      pointHoverRadius: 12,
-      pointBorderWidth: 2
+               pointRadius: (context: any) => {
+                 return context.raw.isOffset ? 6 : 8; // Points décalés légèrement plus petits
+               },
+               pointHoverRadius: 12,
+               pointBorderWidth: (context: any) => {
+                 return context.raw.isOffset ? 3 : 2; // Bordure plus épaisse pour les points décalés
+               },
+               pointHoverBackgroundColor: (context: any) => {
+                 const status = context.parsed.status;
+                 switch (status) {
+                   case 'completed': return 'rgba(34, 197, 94, 0.8)';
+                   case 'generating': return 'rgba(251, 191, 36, 0.8)';
+                   case 'detailing': return 'rgba(59, 130, 246, 0.8)';
+                   default: return 'rgba(107, 114, 128, 0.8)';
+                 }
+               }
     }]
   };
 
@@ -148,9 +204,11 @@
       if (elements.length > 0) {
         const dataIndex = elements[0].index;
         const useCase = chartData.datasets[0].data[dataIndex];
-        // Émettre un événement pour naviguer vers le cas d'usage
-        // ou afficher des détails
-        console.log('Clicked use case:', useCase);
+        
+        // Rediriger vers le cas d'usage
+        if (useCase.id) {
+          goto(`/cas-usage/${useCase.id}`);
+        }
       }
     }
   };
@@ -218,23 +276,17 @@
         <p class="text-sm">Chargement de la matrice...</p>
       </div>
     </div>
-  {:else}
-    <canvas bind:this={chartContainer} class="w-full h-full"></canvas>
-  {/if}
+           {:else}
+             <canvas bind:this={chartContainer} class="w-full h-full cursor-pointer"></canvas>
+           {/if}
 </div>
 
-<!-- Légende des statuts -->
-<div class="mt-4 flex flex-wrap gap-4 text-sm">
-  <div class="flex items-center gap-2">
-    <div class="w-3 h-3 rounded-full bg-green-500"></div>
-    <span>Terminé</span>
-  </div>
-  <div class="flex items-center gap-2">
-    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-    <span>Génération...</span>
-  </div>
-  <div class="flex items-center gap-2">
-    <div class="w-3 h-3 rounded-full bg-blue-500"></div>
-    <span>Détail en cours...</span>
+<!-- Indication de clic -->
+<div class="mt-4 flex justify-center">
+  <div class="flex items-center gap-2 text-slate-500 text-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+    </svg>
+    <span>Cliquez sur un point pour voir le détail</span>
   </div>
 </div>
