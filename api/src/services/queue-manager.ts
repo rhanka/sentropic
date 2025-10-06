@@ -323,7 +323,9 @@ export class QueueManager {
             name: company.name,
             industry: company.industry,
             size: company.size,
-            description: company.description,
+            products: company.products,
+            processes: company.processes,
+            challenges: company.challenges,
             objectives: company.objectives,
             technologies: company.technologies
           }, null, 2);
@@ -339,7 +341,7 @@ export class QueueManager {
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, companyInfo, context, matrixConfig, model);
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, model);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);

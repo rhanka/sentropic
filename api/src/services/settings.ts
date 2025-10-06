@@ -94,7 +94,7 @@ export class SettingsService {
   }> {
     const [concurrency, defaultModel, processingInterval] = await Promise.all([
       this.getNumber('ai_concurrency', 10),
-      this.get('default_model') || 'gpt-5',
+      this.get('default_model').then(value => value || 'gpt-5'),
       this.getNumber('queue_processing_interval', 1000)
     ]);
 

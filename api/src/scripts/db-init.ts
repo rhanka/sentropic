@@ -18,7 +18,7 @@ async function initializeDatabase() {
   
   try {
     // Vérifier les tables existantes
-    const tables = await db.all(sql`SELECT name FROM sqlite_master WHERE type='table'`);
+    const tables = await db.all(sql`SELECT name FROM sqlite_master WHERE type='table'`) as { name: string }[];
     const existingTableNames = tables.map(t => t.name);
     
     console.log('📋 Existing tables:', existingTableNames);
@@ -137,7 +137,7 @@ async function initializeDatabase() {
     `);
 
     // Vérifier les tables créées
-    const finalTables = await db.all(sql`SELECT name FROM sqlite_master WHERE type='table'`);
+    const finalTables = await db.all(sql`SELECT name FROM sqlite_master WHERE type='table'`) as { name: string }[];
     console.log('✅ Database initialized successfully!');
     console.log('📊 Tables created:', finalTables.map(t => t.name));
     console.log('ℹ️  Run "make db-migrate" to apply any pending migrations');

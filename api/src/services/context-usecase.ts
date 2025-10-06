@@ -86,9 +86,9 @@ export const generateUseCaseList = async (
  */
 export const generateUseCaseDetail = async (
   useCase: string,
-  companyInfo?: string,
   context: string,
   matrix: MatrixConfig,
+  companyInfo?: string,
   model?: string
 ): Promise<UseCaseDetail> => {
   const useCaseDetailPrompt = defaultPrompts.find(p => p.id === 'use_case_detail')?.content || '';

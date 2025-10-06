@@ -7,6 +7,7 @@ This file consolidates all development rules into a single source of truth for A
 When starting a discussion the focus should be to start a TODO if no specific instruction.
 
 ## Core Architecture Principles
+As a very first thing, when you work on features, you must aknowledge you have understood you will only work through `make` and that all excecution is contenrized
 
 ## Make Responsibilities (MANDATORY commands)
 - **Build & Quality**: `make build`, `make typecheck`, `make lint`, `make format`

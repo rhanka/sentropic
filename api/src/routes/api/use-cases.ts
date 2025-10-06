@@ -20,7 +20,7 @@ const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.conte
 const scoreEntry = z.object({
   axisId: z.string(),
   rating: z.number().min(1).max(5),
-  description: z.string().optional()
+  description: z.string()
 });
 
 const useCaseInput = z.object({
