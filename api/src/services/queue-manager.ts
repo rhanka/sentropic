@@ -45,7 +45,7 @@ export interface UseCaseDetailJobData {
 export class QueueManager {
   private isProcessing = false;
   private maxConcurrentJobs = 10; // Limite de concurrence par défaut
-  private processingInterval = 5000; // Intervalle par défaut
+  private processingInterval = 1000; // Intervalle par défaut
 
   constructor() {
     this.loadSettings();
@@ -247,7 +247,7 @@ export class QueueManager {
       console.log(`📁 Dossier mis à jour: ${useCaseList.dossier} (ID: ${folderId}, Company: ${companyId || 'Aucune'})`);
     }
 
-    // Créer les cas d'usage en mode draft
+    // Créer les cas d'usage en mode generating
     const draftUseCases = useCaseList.useCases.map((useCaseItem: any) => {
       const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
       return {
@@ -270,7 +270,7 @@ export class QueueManager {
         complexityScores: JSON.stringify([]),
         totalValueScore: 0,
         totalComplexityScore: 0,
-        status: 'draft',
+        status: 'generating',
         createdAt: new Date().toISOString()
       };
     });
