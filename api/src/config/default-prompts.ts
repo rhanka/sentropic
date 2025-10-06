@@ -74,18 +74,8 @@ Réponds UNIQUEMENT avec un JSON valide:
     name: 'Détail de cas d\'usage',
     description: 'Prompt pour générer un cas d\'usage détaillé avec scoring',
     content: `Génère un cas d'usage détaillé pour "{{use_case}}" dans le contexte suivant: {{user_input}}. 
-Utilise la matrice valeur/complexité fournie: {{matrix}} pour évaluer chaque axe de valeur et complexité.
+Utilise la matrice valeur/complexité fournie pour évaluer chaque axe de valeur et complexité : {{matrix}}
 
-IMPORTANT: 
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage
-- Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
-- Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références
-- bénéfices mesures de succès doivent être basé sur un véritable rationnel et citation vers références
-- les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
-- ne mets pas les "sources" (systèmes ERP et MES fournissant les données) dans les références
-
-SYSTÈME DE SCORING FIBONACCI:
-Pour chaque axe, tu DOIS utiliser UNIQUEMENT une de ces valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
@@ -140,12 +130,12 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   ]
   "valueScores": [
     {
-      "axisId": "Nom du 1er axe de valeur",
+      "axisId": "id de l'axe de valeur (selon la matrice, eg business_value)",
       "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
       "description": "Justification du score"
     },
     {
-      "axisId": "Nom du 2ème axe de valeur",
+      "axisId": "id de l'axe de valeur (selon la matrice, eg time_criticality)",
       "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
       "description": "Justification du score"
     }
@@ -153,22 +143,30 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   ],
   "complexityScores": [
     {
-      "axisId": "Nom du 1er axe de complexité",
+      "axisId": "id de l'axe de valeur (selon la matrice, eg ai_maturity)",
       "rating": 5 (ex de score Fibonnacci),
       "description": "Justification du score"
     },
     {
-      "axisId": "Nom du 2ème axe de complexité",
+      "axisId": "id de l'axe de valeur (selon la matrice, eg implementation_effort)",
       "rating": 13 (ex de score Fibonnacci),
       "description": "Justification du score"
     }
     // Complète pour les autres axes de complexité présents dans la matrice
   ]
 }
-IMPORTANT: 
+
+OBLIGATOIRE:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
-- Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage
+- Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
+- Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références
+- Bénéfices mesures de succès doivent être basé sur un véritable rationnel et citation vers références
+- Les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
+- Ne mets pas les "sources" (systèmes ERP et MES fournissant les données) dans les "références"
+- Les axes de valeur et complexité doivent être selon la matrice fournie (id exact), et non improvisés
 - Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
+- Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 - Justifie chaque score Fibonacci choisi dans la description`,
     variables: ['use_case', 'user_input', 'matrix']
   }
