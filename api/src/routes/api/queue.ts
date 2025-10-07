@@ -130,13 +130,15 @@ queueRouter.get('/stats', async (c) => {
 queueRouter.post('/purge', async (c) => {
   try {
     const { status } = await c.req.json().catch(() => ({ status: 'pending' }));
+    // Mettre en pause pour empêcher de nouveaux départs
+    queueManager.pause();
+    // Avant toute purge, annuler les jobs en cours et drainer
+    await queueManager.cancelAllProcessing('purge');
     
     const jobs = await queueManager.getAllJobs();
     let jobsToPurge = [];
     
-    if (status === 'all') {
-      jobsToPurge = jobs;
-    } else if (status === 'processing') {
+    if (status === 'processing') {
       // Purger les jobs en cours depuis plus de 2h (probablement bloqués)
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
       jobsToPurge = jobs.filter(job => 
@@ -144,6 +146,18 @@ queueRouter.post('/purge', async (c) => {
         job.startedAt && 
         job.startedAt < twoHoursAgo
       );
+    } else if (status === 'force' || status === 'all') {
+      // Purge forcée: marquer en failed puis supprimer en une seule requête
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = 'Job cancelled by purge'
+        WHERE status IN ('pending','processing')
+      `);
+      const del = await db.run(sql`DELETE FROM job_queue`);
+      const purgedCount = del.changes ?? 0;
+      console.log(`🧹 Purged ALL jobs: ${purgedCount}`);
+      queueManager.resume();
+      return c.json({ success: true, message: `${purgedCount} jobs purgés avec succès (toute la queue)`, purgedCount });
     } else {
       jobsToPurge = jobs.filter(job => job.status === status);
     }
@@ -189,6 +203,39 @@ queueRouter.post('/purge', async (c) => {
   } catch (error) {
     console.error('Error purging queue:', error);
     return c.json({ message: 'Failed to purge queue' }, 500);
+  }
+});
+
+// POST /queue/pause - Mettre en pause le traitement
+queueRouter.post('/pause', async (c) => {
+  try {
+    queueManager.pause();
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Error pausing queue:', error);
+    return c.json({ message: 'Failed to pause queue' }, 500);
+  }
+});
+
+// POST /queue/resume - Reprendre le traitement
+queueRouter.post('/resume', async (c) => {
+  try {
+    queueManager.resume();
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Error resuming queue:', error);
+    return c.json({ message: 'Failed to resume queue' }, 500);
+  }
+});
+
+// POST /queue/cancel-all - Annuler tous les jobs en cours
+queueRouter.post('/cancel-all', async (c) => {
+  try {
+    await queueManager.cancelAllProcessing('manual-cancel');
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Error cancelling jobs:', error);
+    return c.json({ message: 'Failed to cancel jobs' }, 500);
   }
 });
 
