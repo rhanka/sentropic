@@ -394,7 +394,7 @@ test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 sh -c "npm run test:unit"
 
-test-api-all: test-api-unit smoke test-api-endpoints test-api-ai 
+test-api-all: test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai 
 
 # -----------------------------------------------------------------------------
 # Queue Management

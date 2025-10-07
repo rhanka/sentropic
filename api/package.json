@@ -10,7 +10,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
+    "test": "vitest run",
     "test:smoke": "vitest run tests/smoke",
     "test:api": "vitest run tests/api",
     "test:ai": "vitest run tests/ai/*-sync.test.ts && vitest run tests/ai/*-async.test.ts",
