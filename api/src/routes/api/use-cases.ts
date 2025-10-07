@@ -10,7 +10,6 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { generateUseCaseList, generateUseCaseDetail } from '../../services/context-usecase';
 import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
 

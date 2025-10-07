@@ -49,7 +49,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     content: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
     - les informations de l'entreprise: {{company_info}},
-    - le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
+    - le nombre de cas d'usage demandés par l'utilisateur, sinon génère {{use_case_count}} cas d'usages
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
 
@@ -67,7 +67,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     ...
   ]
 }`,
-    variables: ['user_input', 'company_info']
+    variables: ['user_input', 'company_info', 'use_case_count']
   },
   {
     id: 'use_case_detail',
