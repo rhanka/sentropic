@@ -95,8 +95,10 @@ export function calculateUseCaseScores(
  * Génère les étoiles visuelles (dorées + grises)
  */
 export function generateStars(count: number, max: number = 5): { filled: number; empty: number } {
+  // Clamp count entre 0 et max pour éviter les valeurs négatives
+  const clampedCount = Math.max(0, Math.min(count, max));
   return {
-    filled: Math.min(count, max),
-    empty: Math.max(0, max - count)
+    filled: clampedCount,
+    empty: max - clampedCount
   };
 }
