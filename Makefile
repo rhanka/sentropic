@@ -69,14 +69,14 @@ audit:
 # Testing
 # -----------------------------------------------------------------------------
 .PHONY: test
-test: test-ui test-api test-e2e ## Run all tests
+test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
 test-ui:
 	$(COMPOSE_RUN_UI) npm run test
 
 .PHONY: test-api
-test-api:
+test-api: test-api-all
 	$(COMPOSE_RUN_API) npm run test
 
 .PHONY: test-int
@@ -88,7 +88,7 @@ test-contract:
 	@echo "Contract tests placeholder" && exit 0
 
 .PHONY: test-e2e
-test-e2e: up ## Run E2E tests with Playwright
+test-e2e: db-seed-test ## Run E2E tests with Playwright
 	@echo "⏳ Waiting for services to be ready..."
 	@sleep 10
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
@@ -271,7 +271,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(COMPOSE_RUN_API) npx tsx src/scripts/seed-test-data.ts
+	$(COMPOSE_RUN_API) npx tsx tests/utils/seed-test-data.ts
 
 .PHONY: db-lint
 db-lint:
@@ -394,9 +394,7 @@ test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 sh -c "npm run test:unit"
 
-test-api-all: ## Run all API tests [SUITE=*]
-	@echo "🧪 Running all API tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_SUITE=$(SUITE) npm run test:all"
+test-api-all: test-api-unit smoke test-api-endpoints test-api-ai 
 
 # -----------------------------------------------------------------------------
 # Queue Management

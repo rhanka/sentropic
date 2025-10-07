@@ -8,7 +8,7 @@ describe('AI Workflow - Complete Integration Test', () => {
   beforeAll(async () => {
     // Clear queue before starting tests
     try {
-      await apiRequest('/queue/purge', {
+      await apiRequest('/api/v1/queue/purge', {
         method: 'POST',
         body: JSON.stringify({ status: 'force' })
       });
@@ -19,13 +19,13 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Cleanup created resources
     if (createdFolderId) {
       try {
-        await apiRequest(`/folders/${createdFolderId}`, { method: 'DELETE' });
+        await apiRequest(`/api/v1/folders/${createdFolderId}`, { method: 'DELETE' });
       } catch {}
       createdFolderId = null;
     }
     if (createdCompanyId) {
       try {
-        await apiRequest(`/companies/${createdCompanyId}`, { method: 'DELETE' });
+        await apiRequest(`/api/v1/companies/${createdCompanyId}`, { method: 'DELETE' });
       } catch {}
       createdCompanyId = null;
     }
@@ -34,7 +34,7 @@ describe('AI Workflow - Complete Integration Test', () => {
   afterAll(async () => {
     // Final cleanup - purge all remaining jobs
     try {
-      await apiRequest('/queue/purge', {
+      await apiRequest('/api/v1/queue/purge', {
         method: 'POST',
         body: JSON.stringify({ status: 'force' })
       });
@@ -156,7 +156,11 @@ describe('AI Workflow - Complete Integration Test', () => {
     }
     
     console.log(`Final result: ${completedUseCases.length} completed use cases out of ${useCases.length} total`);
-    expect(completedUseCases.length).toBeGreaterThan(0);
+    // Success criterion: at least 80% of use cases completed
+    const totalCount = useCases.length;
+    const completedCount = completedUseCases.length;
+    const threshold = Math.ceil(0.8 * totalCount);
+    expect(completedCount).toBeGreaterThanOrEqual(threshold);
     
     // Verify the first completed use case
     const firstCompleted = completedUseCases[0];

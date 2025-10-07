@@ -16,7 +16,6 @@
     "test:ai": "vitest run tests/ai/*-sync.test.ts && vitest run tests/ai/*-async.test.ts",
     "test:queue": "vitest run tests/queue",
     "test:unit": "vitest run tests/unit",
-    "test:all": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/scripts/db-migrate.ts",
     "db:push": "drizzle-kit push",
