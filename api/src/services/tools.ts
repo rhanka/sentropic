@@ -13,7 +13,10 @@ export interface SearchResult {
   score: number;
 }
 
-export const searchWeb = async (query: string): Promise<SearchResult[]> => {
+export const searchWeb = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
+  if (signal?.aborted) {
+    throw new Error('AbortError');
+  }
   const resp = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -23,8 +26,9 @@ export const searchWeb = async (query: string): Promise<SearchResult[]> => {
     body: JSON.stringify({
       query,
       max_results: 5
-    })
-  });
+    }),
+    signal
+  } as any);
   
   const data = await resp.json() as any;
   return data.results || [];
@@ -33,6 +37,8 @@ export const searchWeb = async (query: string): Promise<SearchResult[]> => {
 export interface ExecuteWithToolsOptions {
   model?: string;
   useWebSearch?: boolean;
+  responseFormat?: 'json_object';
+  signal?: AbortSignal;
 }
 
 /**
@@ -42,7 +48,7 @@ export const executeWithTools = async (
   prompt: string, 
   options: ExecuteWithToolsOptions = {}
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const { model = 'gpt-5', useWebSearch = false } = options;
+  const { model = 'gpt-5', useWebSearch = false, responseFormat, signal } = options;
 
   if (!useWebSearch) {
     // Appel simple sans outils
@@ -53,7 +59,9 @@ export const executeWithTools = async (
           content: prompt
         }
       ],
-      model
+      model,
+      responseFormat,
+      signal
     });
   }
 
@@ -90,7 +98,9 @@ export const executeWithTools = async (
     ],
     model,
     tools: [webSearchTool],
-    toolChoice: "required"
+    toolChoice: "required",
+    responseFormat,
+    signal
   });
 
   const message = response.choices[0]?.message;
@@ -100,9 +110,12 @@ export const executeWithTools = async (
 
     // Exécuter toutes les recherches demandées
     for (const toolCall of message.tool_calls) {
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
       if (toolCall.type === 'function' && toolCall.function.name === 'web_search') {
         const args = JSON.parse(toolCall.function.arguments);
-        const searchResults = await searchWeb(args.query);
+        const searchResults = await searchWeb(args.query, signal);
         allSearchResults.push({
           query: args.query,
           results: searchResults
@@ -130,7 +143,9 @@ export const executeWithTools = async (
           content: `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\nRéponds à la question originale en utilisant ces informations récentes.`
         }
       ],
-      model
+      model,
+      responseFormat,
+      signal
     });
 
     return followUpResponse;

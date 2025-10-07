@@ -43,13 +43,16 @@ export interface UseCaseDetail {
   }>;
 }
 
+const defaultUseCaseCount = 6;
+
 /**
  * Générer une liste de cas d'usage
  */
 export const generateUseCaseList = async (
   input: string, 
   companyInfo?: string, 
-  model?: string
+  model?: string,
+  signal?: AbortSignal
 ): Promise<UseCaseList> => {
   const useCaseListPrompt = defaultPrompts.find(p => p.id === 'use_case_list')?.content || '';
   
@@ -59,11 +62,14 @@ export const generateUseCaseList = async (
 
   const prompt = useCaseListPrompt
     .replace('{{user_input}}', input)
-    .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible');
+    .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
+    .replace('{{company_info}}', String(defaultUseCaseCount));
 
   const response = await executeWithTools(prompt, { 
     model: model || 'gpt-5', 
-    useWebSearch: true 
+    useWebSearch: true,
+    responseFormat: 'json_object',
+    signal
   });
 
   const content = response.choices[0]?.message?.content;
@@ -89,7 +95,8 @@ export const generateUseCaseDetail = async (
   context: string,
   matrix: MatrixConfig,
   companyInfo?: string,
-  model?: string
+  model?: string,
+  signal?: AbortSignal
 ): Promise<UseCaseDetail> => {
   const useCaseDetailPrompt = defaultPrompts.find(p => p.id === 'use_case_detail')?.content || '';
   
@@ -105,7 +112,9 @@ export const generateUseCaseDetail = async (
 
   const response = await executeWithTools(prompt, { 
     model: model || 'gpt-5', 
-    useWebSearch: true 
+    useWebSearch: true,
+    responseFormat: 'json_object',
+    signal
   });
 
   const content = response.choices[0]?.message?.content;
@@ -118,7 +127,10 @@ export const generateUseCaseDetail = async (
     return parsedData;
   } catch (parseError) {
     console.error('Erreur de parsing JSON pour le détail:', parseError);
-    console.error('Contenu reçu:', content);
+    console.error('Contenu reçu (premiers 500 chars):', content.substring(0, 500));
+    console.error('Contenu reçu (derniers 500 chars):', content.substring(Math.max(0, content.length - 500)));
+    console.error('Longueur du contenu:', content.length);
+    console.error('Type de contenu:', typeof content);
     throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${useCase}`);
   }
 };
