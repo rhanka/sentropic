@@ -5,23 +5,23 @@ export const testCompanies = {
     size: '50-200 employés',
   },
   forEnrichment: {
-    name: 'OpenAI',
+    name: 'RioTinto',
     expectedIndustry: 'Technologie',
   },
   forEnrichment2: {
-    name: 'Microsoft',
+    name: 'Airbus',
     expectedIndustry: 'Technologie',
   },
 };
 
 export const testUseCases = {
   valid: {
-    input: 'Automatisation des processus RH avec IA',
-    expectedCount: 10,
+    input: 'Optimisation des opérations de production manufacturière',
+    expectedCount: 6,
   },
   forGeneration: {
-    input: 'Optimisation des ventes avec machine learning',
-    expectedCount: 10,
+    input: '3 cas d\'usage pour Optimisation des plannings de production',
+    expectedCount: 3,
   },
 };
 
