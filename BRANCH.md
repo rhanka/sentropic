@@ -7,7 +7,7 @@ Finaliser la couverture de tests unitaires pour l'application
 - [x] Task 1: Fix TypeScript build errors
 - [x] Task 2: Audit test coverage
 - [x] Task 3: Complete API unit tests
-- [ ] Task 4: Complete UI unit tests
+- [x] Task 4: Complete UI unit tests
 - [ ] Task 5: Final validation
 
 ## Commits & Progress
@@ -25,21 +25,27 @@ Finaliser la couverture de tests unitaires pour l'application
 - [x] **Commit 12** (bd197e0): Task 3 completed - Improved test infrastructure and helpers
 - [x] **Commit 13** (8323e92): Task 3 completed - Updated dependencies and build configuration
 - [x] **Commit 14** (e314f53): Task 3 completed - Removed duplicated AI test files
+- [x] **Commit 15** (0302205): Task 4 completed - Complete UI unit tests (58/58 tests passing)
 
 ## Status
-- **Progress**: 3/5 tasks completed (60%)
-- **Current**: Task 3 completed - API unit tests achieved 100% coverage (41/41 tests passing)
-- **Next**: Task 4 - Complete UI unit tests (SvelteKit components)
+- **Progress**: 4/5 tasks completed (80%)
+- **Current**: Task 4 completed - UI unit tests achieved 100% coverage (58/58 tests passing)
+- **Next**: Task 5 - Final validation and cleanup
 
 ## Achievements
 - ✅ **API Unit Tests**: 100% coverage (41/41 tests passing)
   - Utils functions: 7 test files
-  - Core endpoints: 3 test files  
+  - Core endpoints: 3 test files
   - Configuration endpoints: 3 test files
   - Data management endpoints: 3 test files
   - Analytics endpoints: 1 test file
   - Queue management: 1 test file
   - AI integration: 3 test files (refactored)
+- ✅ **UI Unit Tests**: 100% coverage (58/58 tests passing)
+  - Stores: 4 test files (companies, folders, useCases, toast)
+  - Utils: 1 test file (scoring)
+  - Fixed generateStars function to handle negative values
 - ✅ **Queue Management**: Cooperative cancellation implemented
 - ✅ **AI Services**: JSON output and cancellation support
 - ✅ **Test Infrastructure**: Docker-compatible test helpers
+- ✅ **Company Deletion**: Proper 409 Conflict handling with dependency details
