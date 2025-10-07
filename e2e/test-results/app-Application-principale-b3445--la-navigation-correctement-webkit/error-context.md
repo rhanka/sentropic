@@ -11,29 +11,23 @@
           - /url: /dossiers
         - link "Entreprises" [ref=e9]:
           - /url: /entreprises
-        - link "Configuration métier" [ref=e10]:
-          - /url: /configuration-metier
-        - link "Cas d'usage" [ref=e11]:
-          - /url: /cas-usage
-        - link "Matrice" [ref=e12]:
+        - link "Cas d'usage" [ref=e10]:
+          - /url: "#"
+        - link "Évaluation" [ref=e11]:
           - /url: /matrice
-        - link "Dashboard" [ref=e13]:
-          - /url: /dashboard
-        - link "Design" [ref=e14]:
-          - /url: /design
-        - link "Données" [ref=e15]:
-          - /url: /donnees
-        - link "Paramètres" [ref=e16]:
+        - link "Dashboard" [ref=e12]:
+          - /url: "#"
+        - link "Paramètres" [ref=e13]:
           - /url: /parametres
-      - generic [ref=e17]:
-        - combobox [ref=e18]:
+      - generic [ref=e14]:
+        - combobox [ref=e15]:
           - option "FR" [selected]
           - option "EN"
-        - button "Connexion" [ref=e19] [cursor=pointer]
-  - main [ref=e20]:
-    - generic [ref=e21]:
-      - heading "Bienvenue sur Top AI Ideas" [level=1] [ref=e22]
-      - paragraph [ref=e23]: Décrivez votre contexte métier et découvrez des cas d'usage d'intelligence artificielle priorisés par valeur et complexité.
-      - link "Commencer" [ref=e24]:
+        - button "Connexion" [ref=e16] [cursor=pointer]
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - heading "Bienvenue sur Top AI Ideas" [level=1] [ref=e19]
+      - paragraph [ref=e20]: Décrivez votre contexte métier et découvrez des cas d'usage d'intelligence artificielle priorisés par valeur et complexité.
+      - link "Commencer" [ref=e21]:
         - /url: /home
 ```

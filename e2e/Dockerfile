@@ -1,18 +1,17 @@
 # syntax=docker/dockerfile:1.4
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+FROM node:24-slim AS base
 
 WORKDIR /app
 
-# Copier les fichiers de test
 COPY package.json ./
 COPY playwright.config.ts ./
-COPY tests/ ./tests/
 
 # Installer les dépendances
-RUN npm install
+RUN npm install --legacy-peer-deps && \
+    npx playwright install --with-deps chromium
 
-# Installer les navigateurs Playwright
-RUN npx playwright install --with-deps
+# Copier les fichiers de test
+COPY tests/ ./tests/
 
 # Commande par défaut
-CMD ["npm", "test"]
+CMD ["npm", "run", "test"]

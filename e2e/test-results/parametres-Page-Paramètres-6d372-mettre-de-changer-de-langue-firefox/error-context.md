@@ -1,0 +1,105 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - navigation [ref=e6]:
+        - link "Accueil" [ref=e7] [cursor=pointer]:
+          - /url: /
+        - link "Dossiers" [ref=e8] [cursor=pointer]:
+          - /url: /dossiers
+        - link "Entreprises" [ref=e9] [cursor=pointer]:
+          - /url: /entreprises
+        - link "Cas d'usage" [ref=e10]:
+          - /url: "#"
+        - link "Évaluation" [ref=e11] [cursor=pointer]:
+          - /url: /matrice
+        - link "Dashboard" [ref=e12]:
+          - /url: "#"
+        - link "Paramètres" [ref=e13] [cursor=pointer]:
+          - /url: /parametres
+      - generic [ref=e14]:
+        - combobox [ref=e15]:
+          - option "FR" [selected]
+          - option "EN"
+        - button "Connexion" [ref=e16] [cursor=pointer]
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - heading "Paramètres" [level=1] [ref=e19]
+      - generic [ref=e20]:
+        - heading "Gestion des Prompts IA" [level=2] [ref=e21]
+        - paragraph [ref=e22]: Configurez les prompts utilisés par l'IA pour générer du contenu. Cliquez sur un prompt pour le modifier.
+      - generic [ref=e23]:
+        - heading "Configuration IA" [level=2] [ref=e24]
+        - paragraph [ref=e25]: Configurez les paramètres de l'intelligence artificielle et de la queue de traitement.
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - generic [ref=e28]: Modèle OpenAI par défaut
+            - combobox [ref=e29]:
+              - option "GPT-5" [selected]
+              - option "GPT-5 Mini"
+              - option "GPT-5 Nano"
+              - option "GPT-4.1"
+              - option "GPT-4.1 Nano"
+            - paragraph [ref=e30]: Modèle utilisé par défaut pour toutes les opérations IA
+          - generic [ref=e31]:
+            - generic [ref=e32]: Jobs simultanés
+            - spinbutton [ref=e33]: "10"
+            - paragraph [ref=e34]: Nombre de jobs IA traités en parallèle (1-50)
+          - generic [ref=e35]:
+            - generic [ref=e36]: Intervalle de traitement (ms)
+            - spinbutton [ref=e37]: "5000"
+            - paragraph [ref=e38]: Délai entre les cycles de traitement de la queue (1000-60000ms)
+          - button "Sauvegarder les paramètres" [ref=e40] [cursor=pointer]
+      - generic [ref=e41]:
+        - heading "Gestion de la Queue IA" [level=2] [ref=e42]
+        - paragraph [ref=e43]: Surveillez et gérez la queue de traitement des jobs IA.
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - generic [ref=e46]: "0"
+            - generic [ref=e47]: Total
+          - generic [ref=e48]:
+            - generic [ref=e49]: "0"
+            - generic [ref=e50]: En attente
+          - generic [ref=e51]:
+            - generic [ref=e52]: "0"
+            - generic [ref=e53]: En cours
+          - generic [ref=e54]:
+            - generic [ref=e55]: "0"
+            - generic [ref=e56]: Terminés
+          - generic [ref=e57]:
+            - generic [ref=e58]: "0"
+            - generic [ref=e59]: Échoués
+        - generic [ref=e60]:
+          - button "Actualiser" [ref=e61] [cursor=pointer]
+          - button "Purger en attente (0)" [disabled] [ref=e62]
+          - button "Purger en cours (0)" [disabled] [ref=e63]
+          - button "Tout purger (0)" [disabled] [ref=e64]
+      - generic [ref=e65]:
+        - heading "Zone de danger" [level=2] [ref=e66]
+        - paragraph [ref=e67]: Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.
+        - button "Supprimer toutes les données" [ref=e68] [cursor=pointer]
+      - generic [ref=e69]:
+        - heading "Informations système" [level=2] [ref=e70]
+        - generic [ref=e71]:
+          - paragraph [ref=e72]:
+            - strong [ref=e73]: "Version:"
+            - text: 1.0.0
+          - paragraph [ref=e74]:
+            - strong [ref=e75]: "Base de données:"
+            - text: SQLite
+          - paragraph [ref=e76]:
+            - strong [ref=e77]: "API:"
+            - text: Hono + Drizzle ORM
+          - paragraph [ref=e78]:
+            - strong [ref=e79]: "Frontend:"
+            - text: SvelteKit + Tailwind CSS
+  - alert [ref=e81]:
+    - generic [ref=e82]:
+      - generic [ref=e84]: ✕
+      - paragraph [ref=e86]: Erreur lors du chargement des paramètres IA
+      - button "Fermer" [ref=e88] [cursor=pointer]:
+        - generic [ref=e89] [cursor=pointer]: Fermer
+        - img [ref=e90] [cursor=pointer]
+```

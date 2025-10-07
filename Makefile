@@ -269,6 +269,10 @@ restart-db: ## Restart database service
 db-seed:
 	$(COMPOSE_RUN_API) npm run db:seed
 
+.PHONY: db-seed-test
+db-seed-test: ## Seed database with test data for E2E tests
+	$(COMPOSE_RUN_API) npx tsx src/scripts/seed-test-data.ts
+
 .PHONY: db-lint
 db-lint:
 	@echo "Database lint placeholder" && exit 0

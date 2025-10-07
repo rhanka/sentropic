@@ -15,6 +15,9 @@
 **⏳ À faire :**
 - [x] Compléter les tests unitaires ✅ (PR #feat/complete-unit-tests)
 - [ ] Compléter les tests E2E
+- [ ] Ré-activer et corriger les 2 tests E2E entreprises (création + bouton IA)
+  - Raison du skip: `EditableInput` avec auto-save (5s) et enrichissement IA parfois >30s
+  - Action: adapter le test pour attendre la fin d'auto-save et stabiliser l'enrichissement
 - [ ] CI GitHub Actions (build/test)
 - [ ] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [ ] Backups et reprise d'activité

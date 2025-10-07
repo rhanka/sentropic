@@ -5,10 +5,10 @@ services:
       context: ./e2e
       dockerfile: Dockerfile
     volumes:
-      - ./e2e:/app
+      - ./e2e/tests:/app/tests
     environment:
       - CI=true
-    command: sh -c "npm install && npx playwright install --with-deps && npx playwright test"
+    command: npx playwright test
     networks:
       - top-ai-ideas-fullstack_default
 

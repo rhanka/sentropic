@@ -7,6 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  globalSetup: require.resolve('./global-setup'),
   use: {
     baseURL: 'http://ui:5173',
     trace: 'on-first-retry',
