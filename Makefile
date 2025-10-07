@@ -87,13 +87,19 @@ test-int:
 test-contract:
 	@echo "Contract tests placeholder" && exit 0
 
+.PHONY: wait-ready
+wait-ready:
+    @echo "⏳ Checking API/UI readiness..."
+    @bash -c 'for i in {1..30}; do \
+      curl -sf http://localhost:8787/api/v1/health >/dev/null && curl -sf http://localhost:5173 >/dev/null && exit 0; \
+      echo "Waiting for services... ($$i/30)"; sleep 2; \
+    done; echo "Services not ready"; exit 1'
+
 .PHONY: test-e2e
-test-e2e: db-seed-test ## Run E2E tests with Playwright
-	@echo "⏳ Waiting for services to be ready..."
-	@sleep 10
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
-	@echo "🛑 Stopping services..."
-	@$(DOCKER_COMPOSE) down
+test-e2e: up wait-ready db-seed-test ## Run E2E tests with Playwright
+    $(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+    @echo "🛑 Stopping services..."
+    @$(DOCKER_COMPOSE) down
 
 .PHONY: test-smoke
 test-smoke: up ## Run smoke tests (quick E2E subset)
