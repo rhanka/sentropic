@@ -46,6 +46,9 @@ export class QueueManager {
   private isProcessing = false;
   private maxConcurrentJobs = 10; // Limite de concurrence par défaut
   private processingInterval = 1000; // Intervalle par défaut
+  private paused = false;
+  private cancelAllInProgress = false;
+  private jobControllers: Map<string, AbortController> = new Map();
 
   constructor() {
     this.loadSettings();
@@ -72,10 +75,43 @@ export class QueueManager {
     await this.loadSettings();
   }
 
+  pause(): void {
+    this.paused = true;
+  }
+
+  resume(): void {
+    this.paused = false;
+    if (!this.isProcessing) {
+      this.processJobs().catch(console.error);
+    }
+  }
+
+  async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
+    this.cancelAllInProgress = true;
+    for (const [_, controller] of this.jobControllers.entries()) {
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {}
+    }
+    await this.drain();
+    this.cancelAllInProgress = false;
+  }
+
+  async drain(timeoutMs: number = 10000): Promise<void> {
+    const start = Date.now();
+    while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
   /**
    * Ajouter un job à la queue
    */
   async addJob(type: JobType, data: any): Promise<string> {
+    if (this.cancelAllInProgress || this.paused) {
+      console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
+      throw new Error('Queue is paused or cancelling; job not accepted');
+    }
     const jobId = createId();
     
     await db.run(sql`
@@ -101,11 +137,17 @@ export class QueueManager {
       return;
     }
 
+    if (this.paused) {
+      console.log('⏸️ Queue is paused; aborting processJobs start');
+      return;
+    }
+
     this.isProcessing = true;
     console.log('🚀 Starting job processing...');
 
     try {
-      while (true) {
+      while (!this.paused) {
+        if (this.cancelAllInProgress) break;
         // Récupérer les jobs en attente
         const pendingJobs = await db.all(sql`
           SELECT * FROM job_queue 
@@ -146,16 +188,19 @@ export class QueueManager {
         WHERE id = ${jobId}
       `);
 
+      const controller = new AbortController();
+      this.jobControllers.set(jobId, controller);
+
       // Traiter selon le type
       switch (jobType) {
         case 'company_enrich':
-          await this.processCompanyEnrich(jobData as CompanyEnrichJobData);
+          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, controller.signal);
           break;
         case 'usecase_list':
-          await this.processUseCaseList(jobData as UseCaseListJobData);
+          await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
           break;
         case 'usecase_detail':
-          await this.processUseCaseDetail(jobData as UseCaseDetailJobData);
+          await this.processUseCaseDetail(jobData as UseCaseDetailJobData, controller.signal);
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
@@ -178,17 +223,19 @@ export class QueueManager {
         SET status = 'failed', error = ${error instanceof Error ? error.message : 'Unknown error'}
         WHERE id = ${jobId}
       `);
+    } finally {
+      this.jobControllers.delete(jobId);
     }
   }
 
   /**
    * Worker pour l'enrichissement d'entreprise
    */
-  private async processCompanyEnrich(data: CompanyEnrichJobData): Promise<void> {
+  private async processCompanyEnrich(data: CompanyEnrichJobData, signal?: AbortSignal): Promise<void> {
     const { companyId, companyName, model } = data;
     
     // Enrichir l'entreprise
-    const enrichedData = await enrichCompany(companyName, model);
+    const enrichedData = await enrichCompany(companyName, model, signal);
     
     // Mettre à jour en base
     await db.update(companies)
@@ -203,7 +250,7 @@ export class QueueManager {
   /**
    * Worker pour la génération de liste de cas d'usage
    */
-  private async processUseCaseList(data: UseCaseListJobData): Promise<void> {
+  private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, input, companyId, model } = data;
     
     // Récupérer les informations de l'entreprise si nécessaire
@@ -234,7 +281,7 @@ export class QueueManager {
     }
 
     // Générer la liste de cas d'usage
-    const useCaseList = await generateUseCaseList(input, companyInfo, model);
+    const useCaseList = await generateUseCaseList(input, companyInfo, model, signal);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -283,14 +330,22 @@ export class QueueManager {
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
 
-    // Auto-déclencher le détail de tous les cas d'usage
-    for (const useCase of draftUseCases) {
-      await this.addJob('usecase_detail', {
-        useCaseId: useCase.id,
-        useCaseName: useCase.name,
-        folderId: folderId,
-        model: model
-      });
+    // Auto-déclencher le détail de tous les cas d'usage (sauf si pause/cancel en cours)
+    if (this.cancelAllInProgress || this.paused) {
+      console.warn('⏸️ Skipping auto-enqueue of usecase_detail due to pause/cancel');
+    } else {
+      for (const useCase of draftUseCases) {
+        try {
+          await this.addJob('usecase_detail', {
+            useCaseId: useCase.id,
+            useCaseName: useCase.name,
+            folderId: folderId,
+            model: model
+          });
+        } catch (e) {
+          console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
+        }
+      }
     }
 
     console.log(`📋 Generated ${draftUseCases.length} use cases and queued for detailing`);
@@ -299,7 +354,7 @@ export class QueueManager {
   /**
    * Worker pour le détail d'un cas d'usage
    */
-  private async processUseCaseDetail(data: UseCaseDetailJobData): Promise<void> {
+  private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
     const { useCaseId, useCaseName, folderId, model } = data;
     
     // Récupérer la configuration de la matrice
@@ -323,7 +378,9 @@ export class QueueManager {
             name: company.name,
             industry: company.industry,
             size: company.size,
-            description: company.description,
+            products: company.products,
+            processes: company.processes,
+            challenges: company.challenges,
             objectives: company.objectives,
             technologies: company.technologies
           }, null, 2);
@@ -339,7 +396,7 @@ export class QueueManager {
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, companyInfo, context, matrixConfig, model);
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, model, signal);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);

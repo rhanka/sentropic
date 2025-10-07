@@ -19,7 +19,7 @@ async function checkDatabaseStatus() {
       FROM sqlite_master 
       WHERE type='table' 
       ORDER BY name
-    `);
+    `) as { name: string; sql: string }[];
     
     console.log(`\n📋 Tables (${tables.length}):`);
     for (const table of tables) {
@@ -30,7 +30,7 @@ async function checkDatabaseStatus() {
     console.log('\n📈 Record counts:');
     for (const table of tables) {
       try {
-        const count = await db.get(sql.raw(`SELECT COUNT(*) as count FROM ${table.name}`));
+        const count = await db.get(sql.raw(`SELECT COUNT(*) as count FROM ${table.name}`)) as { count: number } | undefined;
         console.log(`  - ${table.name}: ${count?.count || 0} records`);
       } catch (error) {
         console.log(`  - ${table.name}: Error counting records`);
@@ -48,7 +48,7 @@ async function checkDatabaseStatus() {
     
     // Vérifier l'intégrité
     console.log('\n🔍 Database integrity:');
-    const integrity = await db.get(sql`PRAGMA integrity_check`);
+    const integrity = await db.get(sql`PRAGMA integrity_check`) as { integrity_check: string } | undefined;
     console.log(`  - Integrity: ${integrity?.integrity_check === 'ok' ? '✅ OK' : '❌ Issues found'}`);
     
   } catch (error) {

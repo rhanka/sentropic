@@ -72,7 +72,21 @@ export const deleteCompany = async (id: string): Promise<void> => {
     method: 'DELETE',
   });
   if (!response.ok) {
-    throw new Error('Failed to delete company');
+    // Gérer spécifiquement l'erreur 409 (Conflict - dependencies exist)
+    if (response.status === 409) {
+      const errorData = await response.json();
+      const details = errorData.details || {};
+      const parts = [];
+      if (details.folders > 0) parts.push(`${details.folders} dossier(s)`);
+      if (details.useCases > 0) parts.push(`${details.useCases} cas d'usage`);
+      
+      const detailsMessage = parts.length > 0 ? ` (${parts.join(' et ')})` : '';
+      throw new Error(`${errorData.message || 'Impossible de supprimer l\'entreprise'}${detailsMessage}`);
+    }
+    
+    // Autres erreurs
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to delete company');
   }
 };
 

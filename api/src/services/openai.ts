@@ -9,6 +9,8 @@ export interface CallOpenAIOptions {
   model?: string;
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   toolChoice?: 'auto' | 'required' | 'none';
+  responseFormat?: 'json_object';
+  signal?: AbortSignal;
 }
 
 /**
@@ -19,15 +21,19 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     messages,
     model = 'gpt-5',
     tools,
-    toolChoice = 'auto'
+    toolChoice = 'auto',
+    responseFormat,
+    signal
   } = options;
 
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model,
     messages,
     ...(tools && { tools }),
-    ...(toolChoice !== 'auto' && { tool_choice: toolChoice })
+    ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
+    ...(responseFormat && { response_format: { type: responseFormat } })
   };
 
-  return await client.chat.completions.create(requestOptions);
+  // Pass AbortSignal through request options to enable cooperative cancellation
+  return await client.chat.completions.create(requestOptions, { signal });
 };

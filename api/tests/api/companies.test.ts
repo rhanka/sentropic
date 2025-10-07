@@ -3,13 +3,15 @@ import { apiRequest, createTestId } from '../utils/test-helpers';
 import { testCompanies } from '../utils/test-data';
 
 describe('Companies API', () => {
-  let createdCompanyId: string | null = null;
-
   afterEach(async () => {
-    // Cleanup
-    if (createdCompanyId) {
-      await apiRequest(`/companies/${createdCompanyId}`, { method: 'DELETE' });
-      createdCompanyId = null;
+    // Cleanup - get all companies and delete test ones
+    const response = await apiRequest('/api/v1/companies');
+    if (response.ok && response.data.items) {
+      for (const company of response.data.items) {
+        if (company.name.includes('Test Company')) {
+          await apiRequest(`/api/v1/companies/${company.id}`, { method: 'DELETE' });
+        }
+      }
     }
   });
 
@@ -19,20 +21,21 @@ describe('Companies API', () => {
       industry: testCompanies.valid.industry,
     };
 
-    const response = await apiRequest('/companies', {
+    const response = await apiRequest('/api/v1/companies', {
       method: 'POST',
       body: JSON.stringify(companyData),
     });
 
+    if (!response.ok) {
+      console.error('Company creation failed:', response.status, response.error);
+    }
     expect(response.ok).toBe(true);
     expect(response.data.name).toBe(companyData.name);
     expect(response.data.industry).toBe(companyData.industry);
-    
-    createdCompanyId = response.data.id;
   });
 
   it('should get all companies', async () => {
-    const response = await apiRequest('/companies');
+    const response = await apiRequest('/api/v1/companies');
     
     expect(response.ok).toBe(true);
     expect(Array.isArray(response.data.items)).toBe(true);
@@ -45,19 +48,19 @@ describe('Companies API', () => {
       industry: testCompanies.valid.industry,
     };
 
-    const createResponse = await apiRequest('/companies', {
+    const createResponse = await apiRequest('/api/v1/companies', {
       method: 'POST',
       body: JSON.stringify(companyData),
     });
 
     expect(createResponse.ok).toBe(true);
-    createdCompanyId = createResponse.data.id;
+    const companyId = createResponse.data.id;
 
     // Then get it
-    const getResponse = await apiRequest(`/companies/${createdCompanyId}`);
+    const getResponse = await apiRequest(`/api/v1/companies/${companyId}`);
     
     expect(getResponse.ok).toBe(true);
-    expect(getResponse.data.id).toBe(createdCompanyId);
+    expect(getResponse.data.id).toBe(companyId);
     expect(getResponse.data.name).toBe(companyData.name);
   });
 
@@ -68,13 +71,13 @@ describe('Companies API', () => {
       industry: testCompanies.valid.industry,
     };
 
-    const createResponse = await apiRequest('/companies', {
+    const createResponse = await apiRequest('/api/v1/companies', {
       method: 'POST',
       body: JSON.stringify(companyData),
     });
 
     expect(createResponse.ok).toBe(true);
-    createdCompanyId = createResponse.data.id;
+    const companyId = createResponse.data.id;
 
     // Then update it
     const updateData = {
@@ -82,7 +85,7 @@ describe('Companies API', () => {
       industry: 'Updated Industry',
     };
 
-    const updateResponse = await apiRequest(`/companies/${createdCompanyId}`, {
+    const updateResponse = await apiRequest(`/api/v1/companies/${companyId}`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
     });
@@ -99,7 +102,7 @@ describe('Companies API', () => {
       industry: testCompanies.valid.industry,
     };
 
-    const createResponse = await apiRequest('/companies', {
+    const createResponse = await apiRequest('/api/v1/companies', {
       method: 'POST',
       body: JSON.stringify(companyData),
     });
@@ -108,7 +111,7 @@ describe('Companies API', () => {
     const companyId = createResponse.data.id;
 
     // Then delete it
-    const deleteResponse = await apiRequest(`/companies/${companyId}`, {
+    const deleteResponse = await apiRequest(`/api/v1/companies/${companyId}`, {
       method: 'DELETE',
     });
 
@@ -116,7 +119,7 @@ describe('Companies API', () => {
     expect(deleteResponse.status).toBe(204);
 
     // Verify it's deleted
-    const getResponse = await apiRequest(`/companies/${companyId}`);
+    const getResponse = await apiRequest(`/api/v1/companies/${companyId}`);
     expect(getResponse.ok).toBe(false);
     expect(getResponse.status).toBe(404);
   });

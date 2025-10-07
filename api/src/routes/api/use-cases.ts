@@ -10,7 +10,6 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateScores, type ScoreEntry } from '../../utils/scoring';
 import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { generateUseCaseList, generateUseCaseDetail } from '../../services/context-usecase';
 import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
 
@@ -20,7 +19,7 @@ const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.conte
 const scoreEntry = z.object({
   axisId: z.string(),
   rating: z.number().min(1).max(5),
-  description: z.string().optional()
+  description: z.string()
 });
 
 const useCaseInput = z.object({

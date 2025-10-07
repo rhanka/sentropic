@@ -17,7 +17,7 @@ async function runMigrations() {
     const migrationTableExists = await db.all(sql`
       SELECT name FROM sqlite_master 
       WHERE type='table' AND name='_migrations'
-    `);
+    `) as { name: string }[];
     
     if (migrationTableExists.length === 0) {
       // Créer la table de suivi des migrations
@@ -34,7 +34,7 @@ async function runMigrations() {
     // Récupérer les migrations déjà appliquées
     const appliedMigrations = await db.all(sql`
       SELECT filename FROM _migrations ORDER BY applied_at
-    `);
+    `) as { filename: string }[];
     const appliedFilenames = appliedMigrations.map(m => m.filename);
     
     // Lire les fichiers de migration (ignorer les fichiers générés par drizzle-kit avec des noms débiles)

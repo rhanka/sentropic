@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { companies } from '../../db/schema';
+import { companies, folders, useCases } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichCompany } from '../../services/context-company';
@@ -143,12 +143,6 @@ companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c
   return c.json(company);
 });
 
-companiesRouter.delete('/:id', async (c) => {
-  const id = c.req.param('id');
-  await db.delete(companies).where(eq(companies.id, id));
-  return c.body(null, 204);
-});
-
 // Endpoint pour l'enrichissement automatique des entreprises
 const aiEnrichInput = z.object({
   name: z.string().min(1),
@@ -169,6 +163,61 @@ companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) 
     return c.json(
       {
         message: 'Failed to enrich company data',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      500
+    );
+  }
+});
+
+// DELETE /api/v1/companies/:id - Supprimer une entreprise
+companiesRouter.delete('/:id', async (c) => {
+  const id = c.req.param('id');
+  
+  try {
+    // Vérifier que l'entreprise existe
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    if (!company) {
+      return c.json({ message: 'Entreprise non trouvée' }, 404);
+    }
+    
+    // Vérifier s'il y a des dépendances
+    const relatedFolders = await db.select().from(folders).where(eq(folders.companyId, id));
+    const relatedUseCases = await db.select().from(useCases).where(eq(useCases.companyId, id));
+    
+    // Si des dépendances existent, retourner une erreur 409 (Conflict)
+    if (relatedFolders.length > 0 || relatedUseCases.length > 0) {
+      return c.json({
+        message: 'Impossible de supprimer l\'entreprise car elle est utilisée',
+        details: {
+          folders: relatedFolders.length,
+          useCases: relatedUseCases.length
+        },
+        suggestion: 'Supprimez d\'abord les dossiers et cas d\'usage associés, ou utilisez une suppression en cascade.'
+      }, 409);
+    }
+    
+    // Supprimer l'entreprise
+    await db.delete(companies).where(eq(companies.id, id));
+    
+    return c.body(null, 204);
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    
+    // Détecter les erreurs de contrainte de clé étrangère
+    if (error instanceof Error && error.message.includes('FOREIGN KEY constraint')) {
+      return c.json(
+        {
+          message: 'Impossible de supprimer l\'entreprise car elle est utilisée par d\'autres entités',
+          error: 'FOREIGN_KEY_CONSTRAINT'
+        },
+        409
+      );
+    }
+    
+    return c.json(
+      {
+        message: 'Erreur lors de la suppression de l\'entreprise',
         error: error instanceof Error ? error.message : 'Unknown error'
       },
       500

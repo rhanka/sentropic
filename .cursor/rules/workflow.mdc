@@ -19,8 +19,7 @@
 5. **Test before commit** - ensure all changes work as expected.
 6. Update `TODO.md` (check item, reference PR) and `RELEASE.md` (scope).
 
-## MAINTENANCE
-- Small chores/refactors/docs. Same flow as FEATURE.
+As a very first thing, you acknowledge the next TODO and the way you will work on it following above workflow feature. If a BRANCH is in progress you also acknowledge where you are and check the state of the code to go on.
 
 ## Guardrails
 - Never perform destructive DB/system actions without "⚠ approval".

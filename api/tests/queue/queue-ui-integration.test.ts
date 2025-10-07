@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { apiRequest, createTestId, sleep } from '../utils/test-helpers';
+import { apiRequest, createTestId, sleep, getTestModel } from '../utils/test-helpers';
 
 describe('Queue UI Integration', () => {
   let testCompanyId: string;
@@ -29,7 +29,7 @@ describe('Queue UI Integration', () => {
     // Démarrer l'enrichissement
     const enrichResponse = await apiRequest(`/companies/${testCompanyId}/enrich`, {
       method: 'POST',
-      body: JSON.stringify({ model: 'gpt-5' })
+      body: JSON.stringify({ model: getTestModel() })
     });
 
     expect(enrichResponse.ok).toBe(true);

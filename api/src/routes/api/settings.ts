@@ -16,9 +16,9 @@ export const settingsRouter = new Hono();
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
-  const openaiModelsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'openai_models'`);
-  const promptsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'prompts'`);
-  const generationLimitsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'generation_limits'`);
+  const openaiModelsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'openai_models'`) as { value: string } | undefined;
+  const promptsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'prompts'`) as { value: string } | undefined;
+  const generationLimitsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'generation_limits'`) as { value: string } | undefined;
 
   return c.json({
     openaiModels: openaiModelsRecord?.value ? JSON.parse(openaiModelsRecord.value) : {},

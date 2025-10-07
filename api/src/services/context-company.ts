@@ -35,7 +35,7 @@ const industries = {
 /**
  * Enrichir une entreprise avec l'IA
  */
-export const enrichCompany = async (companyName: string, model?: string): Promise<CompanyData> => {
+export const enrichCompany = async (companyName: string, model?: string, signal?: AbortSignal): Promise<CompanyData> => {
   const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
   
   if (!companyInfoPrompt) {
@@ -49,7 +49,9 @@ export const enrichCompany = async (companyName: string, model?: string): Promis
 
   const response = await executeWithTools(prompt, { 
     model: model || 'gpt-5', 
-    useWebSearch: true 
+    useWebSearch: true,
+    responseFormat: 'json_object',
+    signal
   });
 
   const content = response.choices[0]?.message?.content;
