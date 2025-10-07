@@ -48,7 +48,7 @@ export const enrichCompany = async (companyName: string, model?: string, signal?
     .replace('{{industries}}', industriesList);
 
   const response = await executeWithTools(prompt, { 
-    model: model || 'gpt-5', 
+    model: model || 'gpt-4.1-nano', 
     useWebSearch: true,
     responseFormat: 'json_object',
     signal
