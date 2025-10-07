@@ -11,7 +11,7 @@ Finaliser la couverture de tests unitaires pour l'application
 - [ ] Task 5: Final validation
 
 ## Commits & Progress
-- [x] **Commit 1** (hash): Task 1 completed - Fixed all 9 TypeScript build errors
+- [x] **Commit 1** (492e226): Task 1 completed - Fixed all 9 TypeScript build errors
 
 ## Status
 - **Progress**: 1/5 tasks completed

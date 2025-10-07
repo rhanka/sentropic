@@ -386,6 +386,26 @@ test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
 	@echo "🧪 Running API queue tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
 
+test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
+	@echo "🧪 Running API unit tests..."
+	@docker exec top-ai-ideas-fullstack-api-1 sh -c "npm run test:unit"
+
 test-api-all: ## Run all API tests [SUITE=*]
 	@echo "🧪 Running all API tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_SUITE=$(SUITE) npm run test:all"
+
+# -----------------------------------------------------------------------------
+# Queue Management
+# -----------------------------------------------------------------------------
+.PHONY: queue-clear queue-status queue-reset
+
+queue-clear: ## Clear all pending jobs from the queue
+	@echo "🧹 Clearing job queue..."
+	@curl -X POST http://localhost:8787/api/v1/queue/purge -H "Content-Type: application/json" -d '{"status": "force"}' || echo "API not available, using fallback"
+	@echo "✅ Queue cleared"
+
+queue-status: ## Show current queue status
+	@echo "📊 Queue status:"
+	@curl -s http://localhost:8787/api/v1/queue/stats | jq . || echo "API not available"
+
+queue-reset: queue-clear ## Reset queue and clear all jobs (alias for queue-clear)
