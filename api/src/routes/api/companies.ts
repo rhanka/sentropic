@@ -143,12 +143,6 @@ companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c
   return c.json(company);
 });
 
-companiesRouter.delete('/:id', async (c) => {
-  const id = c.req.param('id');
-  await db.delete(companies).where(eq(companies.id, id));
-  return c.body(null, 204);
-});
-
 // Endpoint pour l'enrichissement automatique des entreprises
 const aiEnrichInput = z.object({
   name: z.string().min(1),
