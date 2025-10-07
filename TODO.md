@@ -13,7 +13,7 @@
 - [x] Système de queue SQLite avec QueueManager
 
 **⏳ À faire :**
-- [ ] Compléter les tests unitaires
+- [x] Compléter les tests unitaires ✅ (PR #feat/complete-unit-tests)
 - [ ] Compléter les tests E2E
 - [ ] CI GitHub Actions (build/test)
 - [ ] Déploiements: UI (GitHub Pages), API (Scaleway Container)
