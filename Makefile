@@ -115,6 +115,14 @@ wait-ready:
 	  echo "Waiting for services... ($$i/30)"; sleep 2; \
 	done; echo "Services not ready"; exit 1'
 
+.PHONY: wait-ready-api
+wait-ready-api:
+	@echo "⏳ Checking API readiness..."
+	@bash -c 'for i in {1..30}; do \
+	  curl -sf http://localhost:8787/api/v1/health >/dev/null && exit 0; \
+	  echo "Waiting for API... ($$i/30)"; sleep 2; \
+	done; echo "API not ready"; exit 1'
+
 .PHONY: test-e2e
 test-e2e: up wait-ready db-seed-test ## Run E2E tests with Playwright
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e

@@ -97,7 +97,7 @@ jobs:
       - name: Load API image from artifact
         run: make load-api
       - name: Test API AI services
-        run: make up-api wait-ready test-api-ai
+        run: make up-api wait-ready-api test-api-ai
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
@@ -128,4 +128,4 @@ jobs:
         run: make test-e2e
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}:q
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
