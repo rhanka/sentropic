@@ -45,7 +45,7 @@ jobs:
       - name: Build API image
         run: make build-api
       - name: Unit Test API
-        run: make up wait-ready db-seed-test test-api-smoke test-api-unit test-api-endpoints test-api-queue
+        run: make up wait-ready test-api-smoke test-api-unit test-api-endpoints test-api-queue
       - name: Save API image as artifact
         run: make save-api
       - name: Upload API image artifact
@@ -128,4 +128,4 @@ jobs:
         run: make test-e2e
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}:q
