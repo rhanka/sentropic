@@ -123,6 +123,22 @@ wait-ready-api:
 	  echo "Waiting for API... ($$i/30)"; sleep 2; \
 	done; echo "API not ready"; exit 1'
 
+.PHONY: build-e2e
+build-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml build e2e
+
+.PHONY: save-e2e
+save-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml save e2e -o e2e-image.tar
+
+.PHONY: load-e2e
+load-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml load -i e2e-image.tar
+
+.PHONY: run-e2e
+run-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+
 .PHONY: test-e2e
 test-e2e: up wait-ready db-seed-test ## Run E2E tests with Playwright
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
@@ -223,18 +239,6 @@ logs-ui: ## Show logs for UI service
 logs-db: ## Show logs for database service
 	$(DOCKER_COMPOSE) logs -f sqlite
 
-.PHONY: logs-tail
-logs-tail: ## Show last 50 lines of all services
-	$(DOCKER_COMPOSE) logs --tail=50
-
-.PHONY: logs-api-tail
-logs-api-tail: ## Show last 50 lines of API logs
-	$(DOCKER_COMPOSE) logs --tail=50 api
-
-.PHONY: logs-ui-tail
-logs-ui-tail: ## Show last 50 lines of UI logs
-	$(DOCKER_COMPOSE) logs --tail=50 ui
-
 .PHONY: sh-ui
 sh-ui:
 	$(COMPOSE_RUN_UI) sh
@@ -314,44 +318,6 @@ db-lint:
 	@echo "Database lint placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
-# API documentation & client generation
-# -----------------------------------------------------------------------------
-.PHONY: openapi-json
-openapi-json:
-	$(COMPOSE_RUN_API) npm run openapi:json
-
-.PHONY: openapi-html
-openapi-html:
-	$(COMPOSE_RUN_API) npm run openapi:html
-
-.PHONY: client-gen
-client-gen:
-	$(COMPOSE_RUN_UI) npm run client:generate
-
-# -----------------------------------------------------------------------------
-# Prompts workflow
-# -----------------------------------------------------------------------------
-.PHONY: prompts-lint
-prompts-lint:
-	@echo "Prompts lint placeholder" && exit 0
-
-.PHONY: prompts-test
-prompts-test:
-	@echo "Prompts test placeholder" && exit 0
-
-.PHONY: prompts-freeze
-prompts-freeze:
-	@echo "Prompts freeze placeholder" && exit 0
-
-.PHONY: prompts-diff
-prompts-diff:
-	@echo "Prompts diff placeholder" && exit 0
-
-.PHONY: prompts-doc
-prompts-doc:
-	@echo "Prompts documentation placeholder" && exit 0
-
-# -----------------------------------------------------------------------------
 # Security & compliance
 # -----------------------------------------------------------------------------
 .PHONY: sast
@@ -362,48 +328,9 @@ sast:
 secrets-scan:
 	@echo "Secrets scan placeholder" && exit 0
 
-.PHONY: sbom
-sbom:
-	@echo "SBOM placeholder" && exit 0
-
-.PHONY: license-check
-license-check:
-	@echo "License check placeholder" && exit 0
-
 .PHONY: dast
 dast:
 	@echo "DAST placeholder" && exit 0
-
-# -----------------------------------------------------------------------------
-# Docker & deployment
-# -----------------------------------------------------------------------------
-.PHONY: docker-build
-docker-build:
-	$(DOCKER_COMPOSE) build
-
-.PHONY: docker-push
-docker-push:
-	@echo "Docker push placeholder" && exit 0
-
-.PHONY: deploy-ui
-deploy-ui:
-	@echo "Deploy UI placeholder" && exit 0
-
-.PHONY: deploy-api
-deploy-api:
-	@echo "Deploy API placeholder" && exit 0
-
-.PHONY: release
-release:
-	@echo "Release process placeholder" && exit 0
-
-.PHONY: tag
-tag:
-	@echo "Tagging placeholder" && exit 0
-
-.PHONY: version-bump
-version-bump:
-	@echo "Version bump placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
