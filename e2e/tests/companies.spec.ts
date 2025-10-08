@@ -14,7 +14,7 @@ test.describe('Gestion des entreprises', () => {
     await expect(page.locator('button:has-text("Ajouter")')).toBeVisible();
   });
 
-  test.skip('devrait permettre de créer une entreprise', async ({ page }) => {
+  test('devrait permettre de créer une entreprise', async ({ page }) => {
     await page.goto('/entreprises');
     await page.waitForLoadState('networkidle');
     
@@ -37,7 +37,7 @@ test.describe('Gestion des entreprises', () => {
     await expect(page.locator('text=Test Company')).toBeVisible();
   });
 
-  test.skip('devrait afficher le bouton d\'enrichissement IA', async ({ page }) => {
+  test('devrait afficher le bouton d\'enrichissement IA', async ({ page }) => {
     await page.goto('/entreprises');
     await page.waitForLoadState('networkidle');
     
