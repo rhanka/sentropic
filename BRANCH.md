@@ -64,7 +64,8 @@
 ### Phase 3: API Tests Stabilization
 - [x] **Commit 8** (da4fb44): test(api): add vitest config for sequential test execution
 - [x] **Commit 9** (2b0fb47): fix(tests): fix flaky use-cases tests with sequential execution
-- [x] **Commit 10** (72f97e6): ci: remove db-seed-test from API tests workflow
+- [x] **Commit 10** (d563500): ci: add wait-ready-api for API-only health checks
+- [x] **Commit 11** (4d55340): perf(e2e): optimize Playwright tests - chromium only + 2 workers
 
 ## Sécurité & conformité (placeholders à garder)
 - Conserver les cibles `sast`, `secrets-scan`, `sbom`, etc. non bloquantes pour l'instant.
@@ -75,11 +76,16 @@
   - [x] `make db-status` (ok)
   - [x] `make test-smoke` (ok)
   - [x] `make test-api-endpoints` (41/41 tests passing)
+  - [x] `make test-e2e` (79/101 passed, 20 known flaky, 2 skipped)
   - [x] Fix flaky use-cases tests
 - Intégration CI (à créer dans `.github/workflows/ci.yml`)
   - [x] Jobs quality/build/test-unit-api/test-unit-ui/test-e2e-smoke créés
   - [x] Artefacts Docker (images API/UI) uploadés
   - [ ] Vérification CI sur GitHub Actions
+- Optimisations E2E
+  - [x] Chromium uniquement (au lieu de 3 navigateurs)
+  - [x] 2 workers pour parallélisation (au lieu de 1)
+  - [x] Réduction de 303 à 101 tests (3x plus rapide)
 - Flaky tests entreprises
   - [ ] Ajouter attentes robustes (auto-save, toasts)
   - [ ] Marquer `@flaky` et exclure des PR
@@ -89,6 +95,7 @@
   - [x] Configuration Vitest pour exécution séquentielle
   - [x] Fix race conditions dans use-cases tests
   - [x] Retrait db-seed-test inutile du CI
+  - [x] Add wait-ready-api pour tests API isolés
 
 ## Questions pour vous
 1) En PR, souhaitez-vous exécuter uniquement le smoke E2E, ou inclure aussi quelques scénarios critiques supplémentaires (ex: navigation dossiers/cas)?

@@ -6,8 +6,6 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./e2e/tests:/app/tests
-    environment:
-      - CI=true
     command: npx playwright test
     networks:
       - top-ai-ideas-fullstack_default
