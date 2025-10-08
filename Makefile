@@ -25,9 +25,29 @@ build: build-ui build-api ## Build UI and API artifacts
 build-ui: ## Build the SvelteKit UI (static)
 	$(COMPOSE_RUN_UI) npm run build
 
+.PHONY: save-ui
+save-ui: ## Save API Docker image as tar artifact
+	@echo "💾 Saving API image as artifact..."
+	@docker save top-ai-ideas-fullstack-ui:latest -o ui-image.tar
+
+.PHONY: load-ui
+load-ui:
+	@echo "📥 Loading UI image from artifact..."
+	@docker load -i ui-image.tar
+
 .PHONY: build-api
 build-api: ## Compile the TypeScript API
 	$(COMPOSE_RUN_API) npm run build
+
+.PHONY: save-api
+save-api: ## Save API Docker image as tar artifact
+	@echo "💾 Saving API image as artifact..."
+	@docker save top-ai-ideas-fullstack-api:latest -o api-image.tar
+
+.PHONY: load-api
+load-api:
+	@echo "📥 Loading API image from artifact..."
+	@docker load -i api-image.tar
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
@@ -167,6 +187,10 @@ dev-api:
 .PHONY: up
 up: ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) up -d
+
+.PHONY: up-api
+up-api: ## Start the api stack in detached mode
+	$(DOCKER_COMPOSE) up -d api
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
