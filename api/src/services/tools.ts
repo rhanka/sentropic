@@ -48,7 +48,7 @@ export const executeWithTools = async (
   prompt: string, 
   options: ExecuteWithToolsOptions = {}
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const { model = 'gpt-5', useWebSearch = false, responseFormat, signal } = options;
+  const { model = 'gpt-4.1-nano', useWebSearch = false, responseFormat, signal } = options;
 
   if (!useWebSearch) {
     // Appel simple sans outils

@@ -1,5 +1,7 @@
 # Top AI Ideas
 
+MANDATORY: va lire .cursor/rules/MASTER.mdc et suis les instructions avant tout
+
 **Un assistant à génération et évaluation de cas d'usage d'intelligence artificielle**
 
 Top AI Ideas est une application web qui aide les entreprises à identifier, générer et évaluer des cas d'usage d'IA pertinents pour leur activité. L'application utilise l'intelligence artificielle (OpenAI) pour générer automatiquement des propositions de cas d'usage détaillés, puis les évalue selon des critères de valeur métier et de complexité d'implémentation.

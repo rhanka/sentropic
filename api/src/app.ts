@@ -7,7 +7,7 @@ export const app = new Hono();
 
 // Configuration CORS
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://ui:5173'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));

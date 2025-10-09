@@ -9,7 +9,7 @@ import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
 
 // Fonction d'enrichissement asynchrone
-async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-5') {
+async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
   try {
     console.log(`Starting async enrichment for company ${companyId}: ${companyName}`);
     
@@ -87,7 +87,7 @@ companiesRouter.post('/draft', zValidator('json', z.object({
 companiesRouter.post('/:id/enrich', async (c) => {
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
-  const selectedModel = model || 'gpt-5';
+  const selectedModel = model || 'gpt-4.1-nano';
   
   try {
     // Récupérer l'entreprise
@@ -151,8 +151,8 @@ const aiEnrichInput = z.object({
 
 companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
   try {
-    const { name, model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-5';
+  const { name, model } = c.req.valid('json');
+  const selectedModel = model || 'gpt-4.1-nano';
     
     // Utiliser le service de contexte
     const enrichedData = await enrichCompany(name, selectedModel);

@@ -30,7 +30,17 @@ export class SettingsService {
       SELECT value FROM settings WHERE key = ${key}
     `) as { value: string } | undefined;
 
-    const value = result?.value || null;
+    let value = result?.value || null;
+    
+    // Valeurs par défaut si pas trouvé en base
+    if (!value) {
+      const defaults: Record<string, string> = {
+        'ai_concurrency': '10',
+        'default_model': 'gpt-4.1-nano',
+        'queue_processing_interval': '1000'
+      };
+      value = defaults[key] || null;
+    }
     
     // Mettre en cache
     if (value) {
@@ -94,7 +104,7 @@ export class SettingsService {
   }> {
     const [concurrency, defaultModel, processingInterval] = await Promise.all([
       this.getNumber('ai_concurrency', 10),
-      this.get('default_model').then(value => value || 'gpt-5'),
+      this.get('default_model').then(value => value || 'gpt-4.1-nano'),
       this.getNumber('queue_processing_interval', 1000)
     ]);
 

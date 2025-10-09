@@ -66,7 +66,7 @@ export const generateUseCaseList = async (
     .replace('{{company_info}}', String(defaultUseCaseCount));
 
   const response = await executeWithTools(prompt, { 
-    model: model || 'gpt-5', 
+    model: model || 'gpt-4.1-nano', 
     useWebSearch: true,
     responseFormat: 'json_object',
     signal
@@ -111,7 +111,7 @@ export const generateUseCaseDetail = async (
     .replace('{{matrix}}', JSON.stringify(matrix));
 
   const response = await executeWithTools(prompt, { 
-    model: model || 'gpt-5', 
+    model: model || 'gpt-4.1-nano', 
     useWebSearch: true,
     responseFormat: 'json_object',
     signal

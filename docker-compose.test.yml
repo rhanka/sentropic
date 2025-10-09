@@ -1,14 +1,17 @@
-version: "3.9"
 services:
   e2e:
     build:
       context: ./e2e
       dockerfile: Dockerfile
     volumes:
-      - ./e2e:/app
+      - ./e2e/tests:/app/tests
+    command: npx playwright test
+    networks:
+      - top-ai-ideas-fullstack_default
+
+  ui:
     environment:
-      - CI=true
-    command: sh -c "npm install && npx playwright install --with-deps && npx playwright test"
+      - VITE_API_BASE_URL=http://api:8787/api/v1
     networks:
       - top-ai-ideas-fullstack_default
 

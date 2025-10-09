@@ -1,10 +1,10 @@
 # MASTER RULES - Consolidated AI Development Rules
 
+## Discuss with developper
+When starting a discussion the focus should be to start a TODO if no specific instruction, after having read all instruction. Create a branch and create BRANCH.md for the plan of work (cf instruction below).
+
 ## Overview
 This file consolidates all development rules into a single source of truth for AI assistants. All other `.mdc` files provide detailed specifications for specific domains.
-
-## Discuss with developper
-When starting a discussion the focus should be to start a TODO if no specific instruction.
 
 ## Core Architecture Principles
 As a very first thing, when you work on features, you must aknowledge you have understood you will only work through `make` and that all excecution is contenrized

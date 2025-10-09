@@ -25,9 +25,29 @@ build: build-ui build-api ## Build UI and API artifacts
 build-ui: ## Build the SvelteKit UI (static)
 	$(COMPOSE_RUN_UI) npm run build
 
+.PHONY: save-ui
+save-ui: ## Save API Docker image as tar artifact
+	@echo "💾 Saving API image as artifact..."
+	@docker save top-ai-ideas-fullstack-ui:latest -o ui-image.tar
+
+.PHONY: load-ui
+load-ui:
+	@echo "📥 Loading UI image from artifact..."
+	@docker load -i ui-image.tar
+
 .PHONY: build-api
 build-api: ## Compile the TypeScript API
 	$(COMPOSE_RUN_API) npm run build
+
+.PHONY: save-api
+save-api: ## Save API Docker image as tar artifact
+	@echo "💾 Saving API image as artifact..."
+	@docker save top-ai-ideas-fullstack-api:latest -o api-image.tar
+
+.PHONY: load-api
+load-api:
+	@echo "📥 Loading API image from artifact..."
+	@docker load -i api-image.tar
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
@@ -69,14 +89,14 @@ audit:
 # Testing
 # -----------------------------------------------------------------------------
 .PHONY: test
-test: test-ui test-api test-e2e ## Run all tests
+test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
 test-ui:
 	$(COMPOSE_RUN_UI) npm run test
 
 .PHONY: test-api
-test-api:
+test-api: test-api-all
 	$(COMPOSE_RUN_API) npm run test
 
 .PHONY: test-int
@@ -87,18 +107,55 @@ test-int:
 test-contract:
 	@echo "Contract tests placeholder" && exit 0
 
+.PHONY: wait-ready
+wait-ready:
+	@echo "⏳ Checking API/UI readiness..."
+	@bash -c 'for i in {1..30}; do \
+	  curl -sf http://localhost:8787/api/v1/health >/dev/null && curl -sf http://localhost:5173 >/dev/null && exit 0; \
+	  echo "Waiting for services... ($$i/30)"; sleep 2; \
+	done; echo "Services not ready"; exit 1'
+
+.PHONY: wait-ready-api
+wait-ready-api:
+	@echo "⏳ Checking API readiness..."
+	@bash -c 'for i in {1..30}; do \
+	  curl -sf http://localhost:8787/api/v1/health >/dev/null && exit 0; \
+	  echo "Waiting for API... ($$i/30)"; sleep 2; \
+	done; echo "API not ready"; exit 1'
+
+.PHONY: build-e2e
+build-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml build e2e
+
+.PHONY: save-e2e
+save-e2e:
+	@echo "💾 Saving E2E image as artifact..."
+	@docker save top-ai-ideas-fullstack-e2e:latest -o e2e-image.tar
+
+.PHONY: load-e2e
+load-e2e:
+	@echo "📦 Loading E2E image from artifact..."
+	@docker load -i e2e-image.tar
+
+.PHONY: run-e2e
+run-e2e:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm e2e
+
 .PHONY: test-e2e
-test-e2e: up ## Run E2E tests with Playwright
-	@echo "⏳ Waiting for services to be ready..."
-	@sleep 10
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
+	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	  if [ -n "$$E2E_SPEC" ]; then \
+	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
+	    npx playwright test "$$E2E_SPEC"; \
+	  else \
+	    npx playwright test; \
+	  fi'
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
 .PHONY: test-smoke
-test-smoke: up ## Run smoke tests (quick E2E subset)
-	@echo "⏳ Waiting for services to be ready..."
-	@sleep 10
+test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx playwright test --grep "devrait charger"
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
@@ -164,6 +221,14 @@ dev-api:
 up: ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) up -d
 
+.PHONY: up-e2e
+up-e2e: ## Start stack with test overrides (UI env for API URL)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+
+.PHONY: up-api
+up-api: ## Start the api stack in detached mode
+	$(DOCKER_COMPOSE) up -d api
+
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
 	$(DOCKER_COMPOSE) down -v
@@ -186,18 +251,6 @@ logs-ui: ## Show logs for UI service
 .PHONY: logs-db
 logs-db: ## Show logs for database service
 	$(DOCKER_COMPOSE) logs -f sqlite
-
-.PHONY: logs-tail
-logs-tail: ## Show last 50 lines of all services
-	$(DOCKER_COMPOSE) logs --tail=50
-
-.PHONY: logs-api-tail
-logs-api-tail: ## Show last 50 lines of API logs
-	$(DOCKER_COMPOSE) logs --tail=50 api
-
-.PHONY: logs-ui-tail
-logs-ui-tail: ## Show last 50 lines of UI logs
-	$(DOCKER_COMPOSE) logs --tail=50 ui
 
 .PHONY: sh-ui
 sh-ui:
@@ -269,47 +322,13 @@ restart-db: ## Restart database service
 db-seed:
 	$(COMPOSE_RUN_API) npm run db:seed
 
+.PHONY: db-seed-test
+db-seed-test: ## Seed database with test data for E2E tests
+	$(COMPOSE_RUN_API) npx tsx tests/utils/seed-test-data.ts
+
 .PHONY: db-lint
 db-lint:
 	@echo "Database lint placeholder" && exit 0
-
-# -----------------------------------------------------------------------------
-# API documentation & client generation
-# -----------------------------------------------------------------------------
-.PHONY: openapi-json
-openapi-json:
-	$(COMPOSE_RUN_API) npm run openapi:json
-
-.PHONY: openapi-html
-openapi-html:
-	$(COMPOSE_RUN_API) npm run openapi:html
-
-.PHONY: client-gen
-client-gen:
-	$(COMPOSE_RUN_UI) npm run client:generate
-
-# -----------------------------------------------------------------------------
-# Prompts workflow
-# -----------------------------------------------------------------------------
-.PHONY: prompts-lint
-prompts-lint:
-	@echo "Prompts lint placeholder" && exit 0
-
-.PHONY: prompts-test
-prompts-test:
-	@echo "Prompts test placeholder" && exit 0
-
-.PHONY: prompts-freeze
-prompts-freeze:
-	@echo "Prompts freeze placeholder" && exit 0
-
-.PHONY: prompts-diff
-prompts-diff:
-	@echo "Prompts diff placeholder" && exit 0
-
-.PHONY: prompts-doc
-prompts-doc:
-	@echo "Prompts documentation placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
 # Security & compliance
@@ -322,48 +341,9 @@ sast:
 secrets-scan:
 	@echo "Secrets scan placeholder" && exit 0
 
-.PHONY: sbom
-sbom:
-	@echo "SBOM placeholder" && exit 0
-
-.PHONY: license-check
-license-check:
-	@echo "License check placeholder" && exit 0
-
 .PHONY: dast
 dast:
 	@echo "DAST placeholder" && exit 0
-
-# -----------------------------------------------------------------------------
-# Docker & deployment
-# -----------------------------------------------------------------------------
-.PHONY: docker-build
-docker-build:
-	$(DOCKER_COMPOSE) build
-
-.PHONY: docker-push
-docker-push:
-	@echo "Docker push placeholder" && exit 0
-
-.PHONY: deploy-ui
-deploy-ui:
-	@echo "Deploy UI placeholder" && exit 0
-
-.PHONY: deploy-api
-deploy-api:
-	@echo "Deploy API placeholder" && exit 0
-
-.PHONY: release
-release:
-	@echo "Release process placeholder" && exit 0
-
-.PHONY: tag
-tag:
-	@echo "Tagging placeholder" && exit 0
-
-.PHONY: version-bump
-version-bump:
-	@echo "Version bump placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
@@ -390,9 +370,7 @@ test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
 	@docker exec top-ai-ideas-fullstack-api-1 sh -c "npm run test:unit"
 
-test-api-all: ## Run all API tests [SUITE=*]
-	@echo "🧪 Running all API tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_SUITE=$(SUITE) npm run test:all"
+test-api-all: test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai 
 
 # -----------------------------------------------------------------------------
 # Queue Management

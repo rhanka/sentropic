@@ -19,7 +19,7 @@ export interface CallOpenAIOptions {
 export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
   const {
     messages,
-    model = 'gpt-5',
+    model = 'gpt-4.1-nano',
     tools,
     toolChoice = 'auto',
     responseFormat,

@@ -14,14 +14,18 @@
 
 **⏳ À faire :**
 - [x] Compléter les tests unitaires ✅ (PR #feat/complete-unit-tests)
-- [ ] Compléter les tests E2E
-- [ ] CI GitHub Actions (build/test)
+- [x] Compléter les tests E2E
+- [x] CI GitHub Actions (build/test, no Security)
 - [ ] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [ ] Backups et reprise d'activité
+- [ ] Implement security tests and add it in CI
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients
 - [ ] Mise en place poker planning
 - [ ] Mise en place de paiements
 - [ ] Implémentation de l'authentification OIDC
+- [ ] Ré-activer et corriger les 2 tests E2E entreprises (création + bouton IA)
+  - Raison du skip: `EditableInput` avec auto-save (5s) et enrichissement IA parfois >30s
+  - Action: adapter le test pour attendre la fin d'auto-save et stabiliser l'enrichissement
 - [ ] Pages `/configuration-metier` et `/donnees` complètes
 

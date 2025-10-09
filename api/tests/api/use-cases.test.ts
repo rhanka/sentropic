@@ -1,8 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { apiRequest, createTestId } from '../utils/test-helpers';
+import { describe, it, expect } from 'vitest';
+import { apiRequest, createTestId, sleep } from '../utils/test-helpers';
 import { testCompanies, testUseCases } from '../utils/test-data';
 
-describe('Use Cases API', () => {
+describe.sequential('Use Cases API', () => {
+
   // Helper function to create a test company
   async function createTestCompany() {
     const companyData = {
@@ -72,27 +73,6 @@ describe('Use Cases API', () => {
     return response.data;
   }
 
-  afterEach(async () => {
-    // Cleanup - get all use cases and delete test ones
-    const useCasesResponse = await apiRequest('/api/v1/use-cases');
-    if (useCasesResponse.ok && useCasesResponse.data.items) {
-      for (const useCase of useCasesResponse.data.items) {
-        if (useCase.name.includes('Test Use Case')) {
-          await apiRequest(`/api/v1/use-cases/${useCase.id}`, { method: 'DELETE' });
-        }
-      }
-    }
-    
-    // Cleanup - get all companies and delete test ones
-    const companiesResponse = await apiRequest('/api/v1/companies');
-    if (companiesResponse.ok && companiesResponse.data.items) {
-      for (const company of companiesResponse.data.items) {
-        if (company.name.includes('Test Company')) {
-          await apiRequest(`/api/v1/companies/${company.id}`, { method: 'DELETE' });
-        }
-      }
-    }
-  });
 
   describe('GET /use-cases', () => {
     it('should get all use cases', async () => {
@@ -253,12 +233,22 @@ describe('Use Cases API', () => {
       const useCase = await createTestUseCase();
       const useCaseId = useCase.id;
 
+      // Small delay to ensure database sync
+      await sleep(100);
+
       // Then get it
       const getResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`);
       
       expect(getResponse.ok).toBe(true);
       expect(getResponse.data.id).toBe(useCaseId);
       expect(getResponse.data.name).toBe(useCase.name);
+
+      // Cleanup
+      try {
+        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     });
 
     it('should return 404 for non-existent use case', async () => {
@@ -274,6 +264,9 @@ describe('Use Cases API', () => {
       // Create a use case using helper
       const useCase = await createTestUseCase();
       const useCaseId = useCase.id;
+
+      // Small delay to ensure database sync
+      await sleep(100);
 
       // Then update it
       const updateData = {
@@ -292,12 +285,22 @@ describe('Use Cases API', () => {
       expect(updateResponse.ok).toBe(true);
       expect(updateResponse.data.name).toBe(updateData.name);
       expect(updateResponse.data.description).toBe(updateData.description);
+
+      // Cleanup
+      try {
+        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     });
 
     it('should partially update a use case', async () => {
       // Create a use case using helper
       const useCase = await createTestUseCase();
       const useCaseId = useCase.id;
+
+      // Small delay to ensure database sync
+      await sleep(100);
 
       // Then partially update it
       const updateData = {
@@ -316,6 +319,13 @@ describe('Use Cases API', () => {
       expect(updateResponse.ok).toBe(true);
       expect(updateResponse.data.name).toBe(updateData.name);
       expect(updateResponse.data.description).toBe(useCase.description); // Should remain unchanged
+
+      // Cleanup
+      try {
+        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     });
   });
 
@@ -325,6 +335,9 @@ describe('Use Cases API', () => {
       const useCase = await createTestUseCase();
       const useCaseId = useCase.id;
 
+      // Small delay to ensure database sync
+      await sleep(100);
+
       // Then delete it
       const deleteResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`, {
         method: 'DELETE',
@@ -332,6 +345,9 @@ describe('Use Cases API', () => {
 
       expect(deleteResponse.ok).toBe(true);
       expect(deleteResponse.status).toBe(204);
+
+      // Small delay after delete operation
+      await sleep(100);
 
       // Verify it's deleted
       const getResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`);

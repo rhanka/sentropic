@@ -199,7 +199,7 @@ const generateInput = z.object({
 useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
   try {
     const { input, create_new_folder, company_id, model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-5';
+    const selectedModel = model || 'gpt-4.1-nano';
     
     let folderId: string | undefined;
     
@@ -257,7 +257,7 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
   try {
     const id = c.req.param('id');
     const { model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-5';
+    const selectedModel = model || 'gpt-4.1-nano';
     
     // Récupérer le cas d'usage
     const [useCase] = await db.select().from(useCases).where(eq(useCases.id, id));

@@ -8,7 +8,7 @@ describe('AI Workflow - Complete Integration Test', () => {
   beforeAll(async () => {
     // Clear queue before starting tests
     try {
-      await apiRequest('/queue/purge', {
+      await apiRequest('/api/v1/queue/purge', {
         method: 'POST',
         body: JSON.stringify({ status: 'force' })
       });
@@ -19,13 +19,13 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Cleanup created resources
     if (createdFolderId) {
       try {
-        await apiRequest(`/folders/${createdFolderId}`, { method: 'DELETE' });
+        await apiRequest(`/api/v1/folders/${createdFolderId}`, { method: 'DELETE' });
       } catch {}
       createdFolderId = null;
     }
     if (createdCompanyId) {
       try {
-        await apiRequest(`/companies/${createdCompanyId}`, { method: 'DELETE' });
+        await apiRequest(`/api/v1/companies/${createdCompanyId}`, { method: 'DELETE' });
       } catch {}
       createdCompanyId = null;
     }
@@ -34,7 +34,7 @@ describe('AI Workflow - Complete Integration Test', () => {
   afterAll(async () => {
     // Final cleanup - purge all remaining jobs
     try {
-      await apiRequest('/queue/purge', {
+      await apiRequest('/api/v1/queue/purge', {
         method: 'POST',
         body: JSON.stringify({ status: 'force' })
       });
@@ -138,12 +138,14 @@ describe('AI Workflow - Complete Integration Test', () => {
     console.log('Use cases found:', useCases.length);
     console.log('Use case statuses:', useCases.map((uc: any) => uc.status));
     
-    // Wait for at least one use case to complete
+    // Wait until at least 80% of use cases are completed (polling)
+    const totalCount = useCases.length;
+    const threshold = Math.ceil(0.8 * totalCount);
     let completedUseCases = useCases.filter((uc: any) => uc.status === 'completed');
     let attempts5 = 0;
-    const maxAttempts5 = 20; // 20 * 5s = 100s max
-    
-    while (completedUseCases.length === 0 && attempts5 < maxAttempts5) {
+    const maxAttempts5 = 24; // 24 * 5s = 120s max
+
+    while (completedUseCases.length < threshold && attempts5 < maxAttempts5) {
       await sleep(5000);
       const updatedResponse = await apiRequest(`/api/v1/use-cases?folder_id=${createdFolderId}`);
       if (updatedResponse.ok) {
@@ -154,9 +156,9 @@ describe('AI Workflow - Complete Integration Test', () => {
       }
       attempts5++;
     }
-    
-    console.log(`Final result: ${completedUseCases.length} completed use cases out of ${useCases.length} total`);
-    expect(completedUseCases.length).toBeGreaterThan(0);
+
+    console.log(`Final result: ${completedUseCases.length} completed use cases out of ${totalCount} total`);
+    expect(completedUseCases.length).toBeGreaterThanOrEqual(threshold);
     
     // Verify the first completed use case
     const firstCompleted = completedUseCases[0];
