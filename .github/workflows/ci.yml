@@ -143,6 +143,11 @@ jobs:
           path: .
       - name: Load UI image from artifact
         run: make load-ui
+      - name: Download e2e image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-image
+          path: .
       - name: Load e2e image from artifact
         run: make load-e2e
       - name: Test e2e API & UI

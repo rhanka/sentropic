@@ -125,19 +125,21 @@ wait-ready-api:
 
 .PHONY: build-e2e
 build-e2e:
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml build e2e
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml build e2e
 
 .PHONY: save-e2e
 save-e2e:
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml save e2e -o e2e-image.tar
+	@echo "💾 Saving E2E image as artifact..."
+	@docker save top-ai-ideas-fullstack-e2e:latest -o e2e-image.tar
 
 .PHONY: load-e2e
 load-e2e:
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml load -i e2e-image.tar
+	@echo "📦 Loading E2E image from artifact..."
+	@docker load -i e2e-image.tar
 
 .PHONY: run-e2e
 run-e2e:
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm e2e
 
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)

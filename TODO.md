@@ -15,9 +15,10 @@
 **⏳ À faire :**
 - [x] Compléter les tests unitaires ✅ (PR #feat/complete-unit-tests)
 - [x] Compléter les tests E2E
-- [ ] CI GitHub Actions (build/test)
+- [x] CI GitHub Actions (build/test, no Security)
 - [ ] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [ ] Backups et reprise d'activité
+- [ ] Implement security tests and add it in CI
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients
 - [ ] Mise en place poker planning
