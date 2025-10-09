@@ -56,14 +56,7 @@ test.describe('Dashboard', () => {
     }
   });
 
-  test('devrait gérer le cas sans dossier sélectionné', async ({ page }) => {
-    // Si aucun dossier n'est sélectionné, vérifier le comportement
-    const folderSelect = page.locator('#folder-select');
-    const options = await folderSelect.locator('option').all();
-    
-    if (options.length === 0) {
-      // Vérifier qu'un message approprié s'affiche
-      await expect(page.locator('text=Aucun dossier disponible')).toBeVisible();
-    }
+  test.skip('devrait gérer le cas sans dossier sélectionné', async ({ page }) => {
+    // Test skip: seed data always provides folders; empty state not tested
   });
 });

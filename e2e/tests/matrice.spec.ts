@@ -24,8 +24,8 @@ test.describe('Configuration de la matrice', () => {
     if (await createButton.isVisible()) {
       await createButton.click();
       
-      // Vérifier que la boîte de dialogue s'ouvre
-      await expect(page.locator('text=Créer une nouvelle matrice')).toBeVisible();
+      // Vérifier que la boîte de dialogue s'ouvre (heading précis pour éviter strict mode)
+      await expect(page.locator('h3:has-text("Créer une nouvelle matrice")')).toBeVisible();
       
       // Vérifier les options disponibles
       await expect(page.locator('text=Évaluation de base')).toBeVisible();
