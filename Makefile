@@ -140,8 +140,15 @@ run-e2e:
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
 
 .PHONY: test-e2e
-test-e2e: up wait-ready db-seed-test ## Run E2E tests with Playwright
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e
+test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
+	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	  if [ -n "$$E2E_SPEC" ]; then \
+	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
+	    npx playwright test "$$E2E_SPEC"; \
+	  else \
+	    npx playwright test; \
+	  fi'
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
@@ -211,6 +218,10 @@ dev-api:
 .PHONY: up
 up: ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) up -d
+
+.PHONY: up-e2e
+up-e2e: ## Start stack with test overrides (UI env for API URL)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode

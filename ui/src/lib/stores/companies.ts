@@ -27,7 +27,8 @@ export type CompanyEnrichmentData = {
 export const companiesStore = writable<Company[]>([]);
 export const currentCompanyId = writable<string | null>(null);
 
-const API_BASE_URL = 'http://localhost:8787/api/v1';
+// Utilise l'URL API injectée par l'env Vite en priorité (docker: http://api:8787)
+const API_BASE_URL = (import.meta as any)?.env?.VITE_API_BASE_URL || 'http://localhost:8787/api/v1';
 
 // Fonctions API
 export const fetchCompanies = async (): Promise<Company[]> => {

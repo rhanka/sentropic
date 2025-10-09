@@ -133,6 +133,7 @@
       <div class="flex gap-2">
         <button 
           class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
+          data-testid="enrich-company"
           on:click={handleEnrichCompany}
           disabled={isEnriching || !company.name?.trim()}
           title="Enrichir automatiquement avec l'IA"
