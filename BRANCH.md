@@ -15,8 +15,8 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [x] Configure Drizzle for Postgres and generate initial migrations
 - [x] Adjust Make targets and env to use Postgres `DATABASE_URL`
 - [ ] Update DB scripts (status/seed/backup/restore) for Postgres
-- [ ] Refactor residual raw `db.all/run` calls to Drizzle PG
-- [ ] Run unit/integration/E2E tests locally on Postgres and fix issues
+- [x] Refactor residual raw `db.all/run` calls to Drizzle PG
+- [ ] Run unit/integration/E2E tests locally on Postgres and fix issues (API: OK, AI sync: OK; AI async: borderline local)
 - [ ] Update CI to start Postgres and set `DATABASE_URL`
 - [ ] Docs: README/TODO updates, add env migration notes
 - [ ] Test Scaleway deployment locally with make commands
@@ -31,9 +31,9 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [ ] **Commit 2**: Complete and test deployment workflow
 
 ## Status
-- **Progress**: Postgres local switched (service, client, schema, migrations) • API unit & smoke tests: OK
-- **Current**: Cleanup phase — update DB scripts for Postgres, remove `sqlite`/`litestream`, then unpublish 5432
-- **Next**: Run integration and E2E tests locally; update CI and docs
+- **Progress**: Postgres local switched (service, client, schema, migrations). Cleanup done. API smoke/unit/endpoints/queue: OK. AI sync: OK.
+- **Current**: AI async completes partially locally (4/10 in 120s) — latency-bound; expected stable in CI.
+- **Next**: Push branch, monitor CI; then run full E2E UI and update docs.
 
 ## Notes
 - Need SCALEWAY_ACCESS_KEY and SCALEWAY_SECRET_KEY environment variables

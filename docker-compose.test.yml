@@ -7,14 +7,14 @@ services:
       - ./e2e/tests:/app/tests
     command: npx playwright test
     networks:
-      - top-ai-ideas-fullstack_default
+      - default
 
   ui:
     environment:
       - VITE_API_BASE_URL=http://api:8787/api/v1
     networks:
-      - top-ai-ideas-fullstack_default
+      - default
 
 networks:
-  top-ai-ideas-fullstack_default:
-    external: true
+  default:
+    name: top-ai-ideas-fullstack_default
