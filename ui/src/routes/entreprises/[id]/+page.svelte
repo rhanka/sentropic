@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { fetchCompanies, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import { refreshManager } from '$lib/stores/refresh';
 
   let company: Company | null = null;
   let error = '';
@@ -21,7 +22,35 @@
     objectives: company.objectives
   } : {};
 
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: if (company) {
+    const isEnriching = company.status === 'enriching';
+    
+    if (isEnriching) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive(`company-${company.id}`)) {
+        refreshManager.startCompanyDetailRefresh(company.id, async () => {
+          await refreshCompanyStatus();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si l'enrichissement est terminé
+      refreshManager.stopRefresh(`company-${company.id}`);
+    }
+  }
+
   onMount(async () => {
+    await loadCompany();
+    // Démarrer l'actualisation automatique si nécessaire
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
+  });
+
+  const loadCompany = async () => {
     const companyId = $page.params.id;
     if (!companyId) return;
 
@@ -36,7 +65,25 @@
       console.error('Failed to fetch company:', err);
       error = 'Erreur lors du chargement de l\'entreprise';
     }
-  });
+  };
+
+  const refreshCompanyStatus = async () => {
+    if (!company) return;
+    
+    try {
+      const companies = await fetchCompanies();
+      const updatedCompany = companies.find(c => c.id === company.id);
+      if (updatedCompany) {
+        company = updatedCompany;
+      }
+    } catch (err) {
+      console.error('Failed to refresh company status:', err);
+    }
+  };
+
+  const startAutoRefresh = () => {
+    // L'auto-refresh est géré par la réactivité ci-dessus
+  };
 
   const handleFieldUpdate = (field: string, value: string) => {
     if (!company) return;

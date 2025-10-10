@@ -27,9 +27,10 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
   - Détail: scores décimaux écrits dans des colonnes entières
   - Hypothèse: arrondir ou caster proprement avant write (totalValueScore/totalComplexityScore)
   - Fix: `Math.round()` dans `queue-manager.ts:processUseCaseDetail` avant UPDATE
-- [ ] Vues non rafraîchies automatiquement après traitement des jobs IA
-  - Détail: après génération/enrichissement, l’UI ne se met pas à jour automatiquement
+- [x] Vues non rafraîchies automatiquement après traitement des jobs IA
+  - Détail: après génération/enrichissement, l'UI ne se met pas à jour automatiquement
   - Hypothèse: événements/polling ou endpoints de statut à vérifier; comportement pré‑migration à rétablir
+  - Fix: ajout RefreshManager aux pages entreprises (liste + détail) pour détecter `company.status === 'enriching'`
 - [ ] Run unit/integration/E2E tests locally on Postgres and fix issues (API: OK, AI sync: OK; AI async: borderline local)
 - [ ] Update CI to start Postgres and set `DATABASE_URL`
 - [ ] Docs: README/TODO updates, add env migration notes
