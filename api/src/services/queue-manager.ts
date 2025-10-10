@@ -116,7 +116,7 @@ export class QueueManager {
     
     await db.run(sql`
       INSERT INTO job_queue (id, type, data, status, created_at)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date().toISOString()})
+      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
     `);
     
     console.log(`📝 Job ${jobId} (${type}) added to queue`);
@@ -184,7 +184,7 @@ export class QueueManager {
       // Marquer comme en cours
       await db.run(sql`
         UPDATE job_queue 
-        SET status = 'processing', started_at = ${new Date().toISOString()}
+        SET status = 'processing', started_at = ${new Date()}
         WHERE id = ${jobId}
       `);
 
@@ -209,7 +209,7 @@ export class QueueManager {
       // Marquer comme terminé
       await db.run(sql`
         UPDATE job_queue 
-        SET status = 'completed', completed_at = ${new Date().toISOString()}
+        SET status = 'completed', completed_at = ${new Date()}
         WHERE id = ${jobId}
       `);
 

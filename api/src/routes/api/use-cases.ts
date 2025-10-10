@@ -215,8 +215,8 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         description: folderDescription,
         companyId: company_id || null,
         matrixConfig: JSON.stringify(defaultMatrixConfig),
-        status: 'generating',
-        createdAt: new Date().toISOString()
+        status: 'generating'
+        // createdAt omitted to use defaultNow() in Postgres
       });
     }
     
