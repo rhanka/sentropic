@@ -39,20 +39,7 @@ services:
       - api
     tty: true
 
-  sqlite:
-    image: keinos/sqlite3:latest
-    command: tail -f /dev/null
-    volumes:
-      - ./data:/data
-
-  litestream:
-    image: litestream/litestream:0.3
-    volumes:
-      - ./data:/data
-      - ./api/litestream.yml:/etc/litestream.yml:ro
-    command: replicate
-    depends_on:
-      - sqlite
+  # sqlite/litestream removed after migration to Postgres
 
   postgres:
     image: postgres:16-alpine
@@ -60,8 +47,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-app}
       - POSTGRES_USER=${POSTGRES_USER:-app}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-app}
-    ports:
-      - "5432:5432"
+    # Internal only; no host port publish needed
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
       interval: 5s
