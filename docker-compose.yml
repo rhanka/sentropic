@@ -9,16 +9,15 @@ services:
     volumes:
       - ./api:/app
       - api_node_modules:/app/node_modules
-      - ./data:/data
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=sqlite:///data/app.db
+      - DATABASE_URL=postgres://app:app@postgres:5432/app
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
     ports:
       - "8787:8787"
     depends_on:
-      - sqlite
+      - postgres
     tty: true
 
   ui:
