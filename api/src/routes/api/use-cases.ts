@@ -35,8 +35,8 @@ const useCaseInput = z.object({
   metrics: z.array(z.string()).optional(),
   risks: z.array(z.string()).optional(),
   nextSteps: z.array(z.string()).optional(),
-  sources: z.array(z.string()).optional(),
-  relatedData: z.array(z.string()).optional(),
+  dataSources: z.array(z.string()).optional(),
+  dataObjects: z.array(z.string()).optional(),
   valueScores: z.array(scoreEntry).optional(),
   complexityScores: z.array(scoreEntry).optional()
 });
@@ -79,8 +79,8 @@ const hydrateUseCase = (row: SerializedUseCase) => ({
   metrics: parseJson<string[]>(row.metrics) ?? [],
   risks: parseJson<string[]>(row.risks) ?? [],
   nextSteps: parseJson<string[]>(row.nextSteps) ?? [],
-  sources: parseJson<string[]>(row.sources) ?? [],
-  relatedData: parseJson<string[]>(row.relatedData) ?? [],
+  dataSources: parseJson<string[]>(row.dataSources) ?? [],
+  dataObjects: parseJson<string[]>(row.dataObjects) ?? [],
   references: parseJson<Array<{title: string; url: string}>>(row.references) ?? [],
   technologies: parseJson<string[]>(row.technologies) ?? [],
   valueScores: parseJson<ScoreEntry[]>(row.valueScores) ?? [],
@@ -120,8 +120,8 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
     metrics: serializeArray(payload.metrics),
     risks: serializeArray(payload.risks),
     nextSteps: serializeArray(payload.nextSteps),
-    sources: serializeArray(payload.sources),
-    relatedData: serializeArray(payload.relatedData),
+    dataSources: serializeArray(payload.dataSources),
+    dataObjects: serializeArray(payload.dataObjects),
     valueScores: serializeScores(payload.valueScores),
     complexityScores: serializeScores(payload.complexityScores),
     totalValueScore: computed.totalValueScore ?? null,
@@ -169,8 +169,8 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
       metrics: payload.metrics ? serializeArray(payload.metrics) : record.metrics,
       risks: payload.risks ? serializeArray(payload.risks) : record.risks,
       nextSteps: payload.nextSteps ? serializeArray(payload.nextSteps) : record.nextSteps,
-      sources: payload.sources ? serializeArray(payload.sources) : record.sources,
-      relatedData: payload.relatedData ? serializeArray(payload.relatedData) : record.relatedData,
+      dataSources: payload.dataSources ? serializeArray(payload.dataSources) : record.dataSources,
+      dataObjects: payload.dataObjects ? serializeArray(payload.dataObjects) : record.dataObjects,
       valueScores: payload.valueScores ? serializeScores(payload.valueScores) : record.valueScores,
       complexityScores: payload.complexityScores
         ? serializeScores(payload.complexityScores)

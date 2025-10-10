@@ -25,8 +25,8 @@ export interface UseCaseDetail {
   metrics: string[];
   risks: string[];
   nextSteps: string[];
-  sources: string[];
-  relatedData: string[];
+  dataSources: string[];
+  dataObjects: string[];
   references: Array<{
     title: string;
     url: string;

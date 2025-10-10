@@ -119,11 +119,11 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Étape 3",
     "Étape 4"
   ],
-  "sources": [
+  "dataSources": [
     "Source de données 1 (ex ERP ou MES)",
     "Source de données 2"
   ],
-  "relatedData": [
+  "dataObjects": [
     "Donnée associée 1 ex Ordre de production",
     "Donnée associée 2",
     "Donnée associée 3"
