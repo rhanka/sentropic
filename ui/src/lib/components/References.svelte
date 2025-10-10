@@ -1,5 +1,5 @@
 <script lang="ts">
-  export let sources: string[] = [];
+  export let dataSources: string[] = [];
   export let references: Array<{title: string; url: string}> = [];
   
   function parseMarkdownLink(text: string): { title: string; url: string } | null {
@@ -14,10 +14,10 @@
   }
 </script>
 
-{#if (sources && sources.length > 0) || (references && references.length > 0)}
+{#if (dataSources && dataSources.length > 0)}
   <div class="space-y-2">
     <!-- Sources (format markdown) -->
-    {#each sources as source}
+    {#each dataSources as source}
       {@const link = parseMarkdownLink(source)}
       {#if link}
         <div class="flex items-start gap-2 text-sm">
