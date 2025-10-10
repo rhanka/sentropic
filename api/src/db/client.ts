@@ -14,9 +14,12 @@ const pgDb = drizzle(pool);
 // Map to drizzle execute() which returns rows array for raw SQL
 const compatDb: typeof pgDb & { all?: any; run?: any; get?: any } = pgDb as any;
 compatDb.all = async (query: any) => {
-  // drizzle sql`` returns a Query; execute returns rows
+  // drizzle sql`` returns a Query; execute returns { rows }
   // @ts-ignore
-  return await pgDb.execute(query);
+  const res: any = await pgDb.execute(query);
+  if (res && Array.isArray(res.rows)) return res.rows;
+  if (Array.isArray(res)) return res;
+  return [];
 };
 compatDb.run = async (query: any) => {
   // For non-select, still execute; caller usually ignores return structure
