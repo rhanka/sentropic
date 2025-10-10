@@ -237,10 +237,20 @@ export class QueueManager {
     // Enrichir l'entreprise
     const enrichedData = await enrichCompany(companyName, model, signal);
     
+    // Sérialiser les champs qui peuvent être des arrays en JSON strings
+    const serializedData = {
+      ...enrichedData,
+      products: Array.isArray(enrichedData.products) ? JSON.stringify(enrichedData.products) : enrichedData.products,
+      technologies: Array.isArray(enrichedData.technologies) ? JSON.stringify(enrichedData.technologies) : enrichedData.technologies,
+      processes: Array.isArray(enrichedData.processes) ? JSON.stringify(enrichedData.processes) : enrichedData.processes,
+      challenges: Array.isArray(enrichedData.challenges) ? JSON.stringify(enrichedData.challenges) : enrichedData.challenges,
+      objectives: Array.isArray(enrichedData.objectives) ? JSON.stringify(enrichedData.objectives) : enrichedData.objectives,
+    };
+    
     // Mettre à jour en base
     await db.update(companies)
       .set({
-        ...enrichedData,
+        ...serializedData,
         status: 'completed',
         updatedAt: new Date()
       })
@@ -444,8 +454,8 @@ export class QueueManager {
         references: JSON.stringify(useCaseDetail.references || []),
         valueScores: JSON.stringify(useCaseDetail.valueScores),
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
-        totalValueScore: computed.totalValueScore,
-        totalComplexityScore: computed.totalComplexityScore,
+        totalValueScore: Math.round(computed.totalValueScore),
+        totalComplexityScore: Math.round(computed.totalComplexityScore),
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));

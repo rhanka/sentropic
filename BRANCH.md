@@ -14,8 +14,22 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [x] Port schema from `sqliteTable` to `pgTable` (types kept simple: text/integer/timestamp)
 - [x] Configure Drizzle for Postgres and generate initial migrations
 - [x] Adjust Make targets and env to use Postgres `DATABASE_URL`
-- [ ] Update DB scripts (status/seed/backup/restore) for Postgres
+- [x] Update DB scripts (status/seed/backup/restore) for Postgres
 - [x] Refactor residual raw `db.all/run` calls to Drizzle PG
+- [x] 1) Update DB scripts for Postgres: `db-status`, `db-backup`, `db-restore`, `db-reset`
+- [x] 2) Remove `sqlite` and `litestream` services from `docker-compose.yml`
+- [x] 3) Remove host `ports: "5432:5432"` publish for Postgres (internal network only)
+- [x] Affichage des listes post génération d'Entreprise en format Postgres `{...}` au lieu d'array (ex: produits, technologies, etc.)
+  - Détail: depuis migration PG, les champs listes s'affichent sous forme de tableaux PG au lieu de JSON/tableaux
+  - Hypothèse: sérialisation JSON manquante à l'insert/update; parsing manquant au GET
+  - Fix: sérialisation JSON dans `queue-manager.ts:processCompanyEnrich` pour tous les champs array
+- [x] Erreurs de cast numérique dans le détail cas d'usage (ex: `invalid input syntax for type integer: "57.5"`)
+  - Détail: scores décimaux écrits dans des colonnes entières
+  - Hypothèse: arrondir ou caster proprement avant write (totalValueScore/totalComplexityScore)
+  - Fix: `Math.round()` dans `queue-manager.ts:processUseCaseDetail` avant UPDATE
+- [ ] Vues non rafraîchies automatiquement après traitement des jobs IA
+  - Détail: après génération/enrichissement, l’UI ne se met pas à jour automatiquement
+  - Hypothèse: événements/polling ou endpoints de statut à vérifier; comportement pré‑migration à rétablir
 - [ ] Run unit/integration/E2E tests locally on Postgres and fix issues (API: OK, AI sync: OK; AI async: borderline local)
 - [ ] Update CI to start Postgres and set `DATABASE_URL`
 - [ ] Docs: README/TODO updates, add env migration notes
@@ -35,37 +49,10 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - **Current**: AI async completes partially locally (4/10 in 120s) — latency-bound; expected stable in CI.
 - **Next**: Push branch, monitor CI; then run full E2E UI and update docs.
 
+
 ## Notes
 - Need SCALEWAY_ACCESS_KEY and SCALEWAY_SECRET_KEY environment variables
 - Need DOCKER_USERNAME, DOCKER_PASSWORD, and REGISTRY variables
 - API_IMAGE_NAME and API_VERSION are auto-calculated by Makefile
 
----
-
-## Migration PostgreSQL 16 (Local)
-
-### Objective
-Migrate local/dev stack from SQLite to PostgreSQL 16, keeping app logic unchanged first.
-
-### Plan / Todo
-- [x] Add Postgres 16 service in docker-compose (port 5432, volume, healthcheck)
-- [x] Switch DB client to `pg` and `drizzle-orm/node-postgres`
-- [x] Port schema from `sqliteTable` to `pgTable` (types kept simple: text/integer/timestamp)
-- [x] Configure Drizzle for Postgres and generate initial migrations
-- [x] Adjust Make targets and env to use Postgres `DATABASE_URL`
-- [ ] Update DB scripts (status/seed/backup/restore) for Postgres
-- [ ] Refactor residual raw `db.all/run` to Drizzle queries compatible with PG
-- [ ] Run unit/integration/E2E locally on Postgres and fix issues
-- [ ] Update CI to start Postgres and set `DATABASE_URL`
-- [ ] Docs: README/TODO updates, add env migration notes
-
-## Cleanup Plan (SQLite/Litestream ➜ Postgres)
-- [x] 1) Update DB scripts for Postgres: `db-status`, `db-backup`, `db-restore`, `db-reset`
-- [x] 2) Remove `sqlite` and `litestream` services from `docker-compose.yml`
-- [x] 3) Remove host `ports: "5432:5432"` publish for Postgres (internal network only)
-
-### Notes
-- Initial step keeps JSON as `text` for speed; can switch to `jsonb` later
-- Queue locking: keep single instance for now; add `FOR UPDATE SKIP LOCKED` later if needed
-- Remote (serverless PG) will require `PGSSLMODE=require` and connection retries on cold start
 
