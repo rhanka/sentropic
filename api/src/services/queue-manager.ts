@@ -242,7 +242,7 @@ export class QueueManager {
       .set({
         ...enrichedData,
         status: 'completed',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
   }
@@ -318,7 +318,7 @@ export class QueueManager {
         totalValueScore: 0,
         totalComplexityScore: 0,
         status: 'generating',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       };
     });
 
