@@ -163,11 +163,15 @@ foldersRouter.put('/:id', zValidator('json', folderInput.partial()), async (c) =
     ...payload,
     matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined
   };
-  const result = await db.update(folders).set(updatePayload).where(eq(folders.id, id)).run();
-  if (result.changes === 0) {
+  const updated = await db
+    .update(folders)
+    .set(updatePayload)
+    .where(eq(folders.id, id))
+    .returning();
+  if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
-  const [folder] = await db.select().from(folders).where(eq(folders.id, id));
+  const folder = updated[0];
   return c.json({
     ...folder,
     matrixConfig: parseMatrix(folder.matrixConfig ?? null)
@@ -212,12 +216,12 @@ foldersRouter.get('/list/with-matrices', async (c) => {
 foldersRouter.put('/:id/matrix', zValidator('json', matrixSchema), async (c) => {
   const id = c.req.param('id');
   const matrix = c.req.valid('json');
-  const result = await db
+  const updated = await db
     .update(folders)
     .set({ matrixConfig: JSON.stringify(matrix) })
     .where(eq(folders.id, id))
-    .run();
-  if (result.changes === 0) {
+    .returning({ matrixConfig: folders.matrixConfig });
+  if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
   return c.json(matrix);

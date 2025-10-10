@@ -135,12 +135,15 @@ companiesRouter.get('/:id', async (c) => {
 companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c) => {
   const id = c.req.param('id');
   const payload = c.req.valid('json');
-  const result = await db.update(companies).set(payload).where(eq(companies.id, id)).run();
-  if (result.changes === 0) {
+  const updated = await db
+    .update(companies)
+    .set(payload)
+    .where(eq(companies.id, id))
+    .returning();
+  if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
-  return c.json(company);
+  return c.json(updated[0]);
 });
 
 // Endpoint pour l'enrichissement automatique des entreprises
