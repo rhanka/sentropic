@@ -1,12 +1,15 @@
 SHELL := /bin/bash
+
+-include .env
+
 DOCKER_COMPOSE ?= docker compose
 COMPOSE_RUN_UI := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
 
-export API_VERSION     ?= $(shell echo "api/src api/package*.json .txt api/Dockerfile api/tsconfig*json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export UI_VERSION     ?= $(shell echo "ui/src api/package*.json .txt api/Dockerfile api/tsconfig*json api/vite*ts api/svelte*config*s api/postcss*config*s api/tailwind*config*s api/vite*config*s" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export API_IMAGE_NAME ?= $(API_IMAGE_NAME)
-export UI_IMAGE_NAME ?= $(UI_IMAGE_NAME)
+export API_VERSION     ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json api/litestream.yml" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_IMAGE_NAME ?= top-ai-ideas-api
+export UI_IMAGE_NAME ?= top-ai-ideas-ui
 
 .DEFAULT_GOAL := help
 
@@ -30,6 +33,11 @@ build: build-ui build-api ## Build UI and API artifacts
 build-ui: ## Build the SvelteKit UI (static)
 	$(COMPOSE_RUN_UI) npm run build
 
+.PHONY: lock-api
+lock-api: ## Update API package-lock.json using Node container (sync deps)
+	@echo "🔒 Updating API package-lock.json..."
+	docker run --rm -v $(PWD)/api:/app -w /app node:20 sh -lc "npm install --package-lock-only"
+
 .PHONY: save-ui
 save-ui: ## Save API Docker image as tar artifact
 	@echo "💾 Saving API image as artifact..."
@@ -41,8 +49,8 @@ load-ui:
 	@docker load -i ui-image.tar
 
 .PHONY: build-api
-build-api: ## Compile the TypeScript API
-	$(COMPOSE_RUN_API) npm run build
+build-api: ## Build the API Docker image for production
+	API_BUILD_TARGET=prod $(DOCKER_COMPOSE) build api
 
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
@@ -78,6 +86,27 @@ check-scw:
 		echo "ℹ️ scw (Scaleway CLI) not found. Attempting to install..."; \
 		curl -sL https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh && \
 		echo "✅ Scaleway CLI installed. You might need to start a new shell for it to be in your PATH."; \
+	fi
+
+deploy-api-container-init: check-scw
+	@echo "▶️ Creating container $(API_IMAGE_NAME) in namespace $(SCW_NAMESPACE_ID)..."
+	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	if [ -n "$${API_CONTAINER_ID}" ]; then \
+		echo "✅ Container $(API_IMAGE_NAME) already exists (ID: $${API_CONTAINER_ID})"; \
+	else \
+		scw container container create \
+			name=$(API_IMAGE_NAME) \
+			namespace-id=$(SCW_NAMESPACE_ID) \
+			registry-image=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) \
+			port=8787 \
+			min-scale=0 \
+			max-scale=1 \
+			memory-limit=2048 \
+			cpu-limit=1000 \
+			timeout=5m \
+			privacy=public \
+			protocol=http1 && \
+		echo "✅ Container $(API_IMAGE_NAME) created successfully"; \
 	fi
 
 deploy-api-container: check-scw
@@ -180,7 +209,7 @@ build-e2e:
 .PHONY: save-e2e
 save-e2e:
 	@echo "💾 Saving E2E image as artifact..."
-	@docker save top-ai-ideas-fullstack-e2e:latest -o e2e-image.tar
+	@docker save top-ai-ideas-e2e:latest -o e2e-image.tar
 
 .PHONY: load-e2e
 load-e2e:
@@ -402,23 +431,23 @@ dast:
 
 test-api-smoke: ## Run API smoke tests (basic health checks) [FILTER=*]
 	@echo "🧪 Running API smoke tests..."
-	@docker exec $(API_IMAGE_NAME)-1 sh -c "TEST_FILTER=$(FILTER) npm run test:smoke"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_FILTER=$(FILTER) npm run test:smoke"
 
 test-api-endpoints: ## Run API endpoint tests (CRUD functionality) [ENDPOINT=*] [METHOD=*]
 	@echo "🧪 Running API endpoint tests..."
-	@docker exec $(API_IMAGE_NAME)-1 sh -c "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
 
 test-api-ai: ## Run API AI tests (generation and enrichment) [TYPE=*] [MODEL=*]
 	@echo "🧪 Running API AI tests..."
-	@docker exec $(API_IMAGE_NAME)-1 sh -c "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
 
 test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
 	@echo "🧪 Running API queue tests..."
-	@docker exec $(API_IMAGE_NAME)-1 sh -c "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
 
 test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
-	@docker exec $(API_IMAGE_NAME)-1 sh -c "npm run test:unit"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "npm run test:unit"
 
 test-api-all: test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai 
 
