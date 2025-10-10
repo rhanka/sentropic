@@ -238,6 +238,10 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     
   } catch (error) {
     console.error('Error in use-cases generate:', error);
+    if (error instanceof Error) {
+      console.error('Generate error message:', error.message);
+      console.error('Generate error stack:', error.stack);
+    }
     return c.json(
       { 
         message: 'Failed to generate use cases', 
