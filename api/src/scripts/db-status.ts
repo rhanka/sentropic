@@ -1,59 +1,44 @@
 #!/usr/bin/env tsx
 
-import { db } from '../db/client';
-import { sql } from 'drizzle-orm';
-import { fileURLToPath } from 'url';
-import path from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { pool } from '../db/client';
 
 async function checkDatabaseStatus() {
-  console.log('📊 Database Status Report');
+  console.log('📊 Database Status Report (Postgres)');
   console.log('========================');
-  
+
+  const db = drizzle(pool);
   try {
-    // Vérifier les tables
-    const tables = await db.all(sql`
-      SELECT name, sql 
-      FROM sqlite_master 
-      WHERE type='table' 
-      ORDER BY name
-    `) as { name: string; sql: string }[];
-    
-    console.log(`\n📋 Tables (${tables.length}):`);
-    for (const table of tables) {
-      console.log(`  - ${table.name}`);
-    }
-    
+    // Lister les tables du schéma public
+    const tables = await db.execute(
+      // eslint-disable-next-line drizzle/enforce-query-usage
+      { 
+        // raw query compatible drizzle execute
+        sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`,
+        params: []
+      } as any
+    ) as unknown as { rows: { table_name: string }[] };
+
+    const tableNames = tables?.rows?.map(r => r.table_name) || [];
+    console.log(`\n📋 Tables (${tableNames.length}):`);
+    tableNames.forEach(name => console.log(`  - ${name}`));
+
     // Compter les enregistrements par table
     console.log('\n📈 Record counts:');
-    for (const table of tables) {
+    for (const name of tableNames) {
       try {
-        const count = await db.get(sql.raw(`SELECT COUNT(*) as count FROM ${table.name}`)) as { count: number } | undefined;
-        console.log(`  - ${table.name}: ${count?.count || 0} records`);
-      } catch (error) {
-        console.log(`  - ${table.name}: Error counting records`);
+        const res = await db.execute({ sql: `SELECT COUNT(*)::int AS count FROM "${name}"`, params: [] } as any) as unknown as { rows: { count: number }[] };
+        const count = res?.rows?.[0]?.count ?? 0;
+        console.log(`  - ${name}: ${count} records`);
+      } catch {
+        console.log(`  - ${name}: Error counting records`);
       }
     }
-    
-    // Vérifier les migrations appliquées
-    console.log('\n🔄 Migration status:');
-    const migrationFiles = ['0000_easy_steel_serpent.sql', '0001_safe_adam_warlock.sql'];
-    for (const file of migrationFiles) {
-      const tableName = file.replace('.sql', '').replace('_', '');
-      const exists = tables.some(t => t.name === tableName);
-      console.log(`  - ${file}: ${exists ? '✅ Applied' : '❌ Not applied'}`);
-    }
-    
-    // Vérifier l'intégrité
-    console.log('\n🔍 Database integrity:');
-    const integrity = await db.get(sql`PRAGMA integrity_check`) as { integrity_check: string } | undefined;
-    console.log(`  - Integrity: ${integrity?.integrity_check === 'ok' ? '✅ OK' : '❌ Issues found'}`);
-    
   } catch (error) {
     console.error('❌ Error checking database status:', error);
     process.exit(1);
+  } finally {
+    await pool.end();
   }
 }
 
