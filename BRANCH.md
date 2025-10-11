@@ -49,7 +49,10 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
   - db-migrate: applique les nouvelles migrations (évolution du schéma)
 - [x] Régénération migration Postgres initiale propre (data_sources, data_objects)
   - Suppression anciennes migrations (DB vierge, pas de commit des migrations)
-- [ ] Run unit/integration/E2E tests locally on Postgres and fix issues
+- [x] Run unit/integration/E2E tests locally on Postgres and fix issues
+  - ✅ API tests: 121 tests passed (smoke, unit, endpoints, queue, AI sync, AI async)
+  - ✅ E2E tests: 91/101 tests passed, 10 skipped (normaux)
+  - Migration Postgres 100% validée en local
 - [ ] Update CI to start Postgres and set `DATABASE_URL`
 - [ ] Docs: README/TODO updates, add env migration notes
 - [ ] Test Scaleway deployment locally with make commands
@@ -64,18 +67,19 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [ ] **Commit 2**: Complete and test deployment workflow
 
 ## Status
-- **Progress**: Migration Postgres 100% complète en local. Toutes les régressions corrigées. Settings IA fonctionnels. Logging amélioré.
+- **Progress**: Migration Postgres 100% complète et validée (212 tests passent). Prêt pour CI et déploiement.
 - **Fonctionnel**: 
   - ✅ API + DB Postgres (7 tables, migrations propres)
-  - ✅ Enrichissement entreprises avec Tavily
-  - ✅ Génération cas d'usage
-  - ✅ Paramètres IA configurables (modèle, concurrency)
+  - ✅ Enrichissement entreprises avec Tavily (10 résultats)
+  - ✅ Génération cas d'usage (10/10 complétés en 50s)
+  - ✅ Paramètres IA configurables (modèle respecté, settings sauvegardés)
   - ✅ UI refresh automatique (entreprises, dossiers, cas d'usage)
+  - ✅ Tests validés : 121 API + 91 E2E = 212 tests ✅
 - **Prochaines étapes**: 
-  1. Lancer les tests (unit/integration/E2E) pour valider
-  2. Mettre à jour CI pour Postgres
-  3. Tester déploiement Scaleway
-  4. Push et monitoring CI
+  1. Mettre à jour CI pour Postgres (service postgres + DATABASE_URL)
+  2. Tester déploiement Scaleway en local
+  3. Push et monitoring CI
+  4. Docs (README, notes migration)
 
 
 ## Notes

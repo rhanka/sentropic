@@ -1,31 +1,29 @@
 #!/usr/bin/env tsx
 
-import { db } from '../db/client';
-import { sql } from 'drizzle-orm';
+import { pool } from '../db/client';
 
 async function resetDatabase() {
   console.log('🗑️  Resetting Postgres database...');
   
+  const client = await pool.connect();
   try {
-    // Drop all tables
-    const tables = await db.all(sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`) as { tablename: string }[];
-    for (const table of tables) {
-      await db.run(sql.raw(`DROP TABLE IF EXISTS "${table.tablename}" CASCADE`));
-    }
-    await db.run(sql`DROP TABLE IF EXISTS "__drizzle_migrations"`);
-    console.log('✅ All tables dropped.');
-
-    // Re-initialize database (run migrations)
-    console.log('🔄 Re-initializing database...');
-    const { execa } = await import('execa');
-    await execa('npm', ['run', 'db:init'], { stdio: 'inherit' });
-    
-    console.log('✅ Database reset completed!');
+    // Drop all tables in public schema
+    console.log('🗑️  Dropping all tables...');
+    await client.query('DROP SCHEMA public CASCADE');
+    await client.query('CREATE SCHEMA public');
+    await client.query('GRANT ALL ON SCHEMA public TO public');
+    console.log('✅ All tables dropped, schema recreated.');
     
   } catch (error) {
     console.error('❌ Error resetting database:', error);
     process.exit(1);
+  } finally {
+    client.release();
+    await pool.end();
   }
+  
+  console.log('✅ Database reset completed!');
+  console.log('ℹ️  Run "make db-init" to reinitialize the database');
 }
 
 resetDatabase();
