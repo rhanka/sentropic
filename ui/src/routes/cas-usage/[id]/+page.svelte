@@ -635,7 +635,7 @@
               Références
             </h3>
           </div>
-          <References dataSources={useCase.dataSources || []} references={useCase.references || []} />
+          <References references={useCase.references || []} />
         </div>
       {/if}
 
