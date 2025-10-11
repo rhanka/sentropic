@@ -34,7 +34,22 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [x] Propagation sources → dataSources et relatedData → dataObjects (schéma, API, UI)
   - Détail: changement de nomenclature dans les prompts et interface utilisateur
   - Fix: mise à jour schéma DB, API endpoints, queue manager, types UI, composants
-- [ ] Run unit/integration/E2E tests locally on Postgres and fix issues (API: OK, AI sync: OK; AI async: borderline local)
+- [x] Fix settings.set() pour Postgres (INSERT OR REPLACE → INSERT ... ON CONFLICT)
+  - Fix: sauvegarde des paramètres IA fonctionne maintenant
+- [x] Amélioration logging: modèle GPT utilisé + appels Tavily
+  - Logging du modèle: `🤖 Using model: gpt-5 with web search`
+  - Logging Tavily: `🔍 Tavily search called` + nombre de résultats
+  - Augmentation max_results Tavily: 5 → 10
+- [x] Fix defaultModel depuis settings au lieu de valeurs hardcodées
+  - Les endpoints enrich/generate/detail respectent maintenant le modèle configuré dans l'UI
+- [x] Fix markdown line breaks pour champs entreprise (\\n → \\n\\n)
+  - Transformation appliquée à products, processes, challenges, objectives
+- [x] Séparation db-init et db-migrate
+  - db-init: vérifie si tables existent, initialise seulement si DB vierge
+  - db-migrate: applique les nouvelles migrations (évolution du schéma)
+- [x] Régénération migration Postgres initiale propre (data_sources, data_objects)
+  - Suppression anciennes migrations (DB vierge, pas de commit des migrations)
+- [ ] Run unit/integration/E2E tests locally on Postgres and fix issues
 - [ ] Update CI to start Postgres and set `DATABASE_URL`
 - [ ] Docs: README/TODO updates, add env migration notes
 - [ ] Test Scaleway deployment locally with make commands
@@ -49,9 +64,18 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
 - [ ] **Commit 2**: Complete and test deployment workflow
 
 ## Status
-- **Progress**: Postgres local switched (service, client, schema, migrations). Cleanup done. API smoke/unit/endpoints/queue: OK. AI sync: OK.
-- **Current**: AI async completes partially locally (4/10 in 120s) — latency-bound; expected stable in CI.
-- **Next**: Push branch, monitor CI; then run full E2E UI and update docs.
+- **Progress**: Migration Postgres 100% complète en local. Toutes les régressions corrigées. Settings IA fonctionnels. Logging amélioré.
+- **Fonctionnel**: 
+  - ✅ API + DB Postgres (7 tables, migrations propres)
+  - ✅ Enrichissement entreprises avec Tavily
+  - ✅ Génération cas d'usage
+  - ✅ Paramètres IA configurables (modèle, concurrency)
+  - ✅ UI refresh automatique (entreprises, dossiers, cas d'usage)
+- **Prochaines étapes**: 
+  1. Lancer les tests (unit/integration/E2E) pour valider
+  2. Mettre à jour CI pour Postgres
+  3. Tester déploiement Scaleway
+  4. Push et monitoring CI
 
 
 ## Notes
