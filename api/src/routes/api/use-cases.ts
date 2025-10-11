@@ -12,6 +12,7 @@ import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
+import { settingsService } from '../../services/settings';
 
 // Récupération des prompts depuis la configuration centralisée
 const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
@@ -199,7 +200,10 @@ const generateInput = z.object({
 useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
   try {
     const { input, create_new_folder, company_id, model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-4.1-nano';
+    
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
     
     let folderId: string | undefined;
     
@@ -261,7 +265,10 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
   try {
     const id = c.req.param('id');
     const { model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-4.1-nano';
+    
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer le cas d'usage
     const [useCase] = await db.select().from(useCases).where(eq(useCases.id, id));

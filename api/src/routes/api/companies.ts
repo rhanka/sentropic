@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
+import { settingsService } from '../../services/settings';
 
 // Fonction d'enrichissement asynchrone
 async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
@@ -87,7 +88,10 @@ companiesRouter.post('/draft', zValidator('json', z.object({
 companiesRouter.post('/:id/enrich', async (c) => {
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
-  const selectedModel = model || 'gpt-4.1-nano';
+  
+  // Récupérer le modèle par défaut depuis les settings si non fourni
+  const aiSettings = await settingsService.getAISettings();
+  const selectedModel = model || aiSettings.defaultModel;
   
   try {
     // Récupérer l'entreprise
