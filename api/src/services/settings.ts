@@ -72,8 +72,13 @@ export class SettingsService {
    */
   async set(key: string, value: string, description?: string): Promise<void> {
     await db.run(sql`
-      INSERT OR REPLACE INTO settings (key, value, description, updated_at)
-      VALUES (${key}, ${value}, ${description || null}, ${new Date().toISOString()})
+      INSERT INTO settings (key, value, description, updated_at)
+      VALUES (${key}, ${value}, ${description || null}, ${new Date()})
+      ON CONFLICT (key) 
+      DO UPDATE SET 
+        value = EXCLUDED.value,
+        description = COALESCE(EXCLUDED.description, settings.description),
+        updated_at = EXCLUDED.updated_at
     `);
 
     // Invalider le cache

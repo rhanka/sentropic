@@ -14,6 +14,7 @@ export interface SearchResult {
 }
 
 export const searchWeb = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
+  console.log(`🔍 Tavily search called with query: "${query}"`);
   if (signal?.aborted) {
     throw new Error('AbortError');
   }
@@ -25,12 +26,13 @@ export const searchWeb = async (query: string, signal?: AbortSignal): Promise<Se
     },
     body: JSON.stringify({
       query,
-      max_results: 5
+      max_results: 10
     }),
     signal
   } as any);
   
   const data = await resp.json() as any;
+  console.log(`✅ Tavily returned ${data.results?.length || 0} results`);
   return data.results || [];
 };
 
@@ -49,6 +51,8 @@ export const executeWithTools = async (
   options: ExecuteWithToolsOptions = {}
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
   const { model = 'gpt-4.1-nano', useWebSearch = false, responseFormat, signal } = options;
+
+  console.log(`🤖 Using model: ${model}${useWebSearch ? ' with web search' : ''}`);
 
   if (!useWebSearch) {
     // Appel simple sans outils
