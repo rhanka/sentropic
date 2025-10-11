@@ -2,14 +2,14 @@ SHELL := /bin/bash
 
 -include .env
 
-DOCKER_COMPOSE ?= docker compose
-COMPOSE_RUN_UI := $(DOCKER_COMPOSE) run --rm ui
+DOCKER_COMPOSE  ?= docker compose
+COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
 
-export API_VERSION     ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json api/litestream.yml" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= top-ai-ideas-api
-export UI_IMAGE_NAME ?= top-ai-ideas-ui
+export UI_IMAGE_NAME  ?= top-ai-ideas-ui
 
 .DEFAULT_GOAL := help
 
@@ -17,6 +17,10 @@ export UI_IMAGE_NAME ?= top-ai-ideas-ui
 help:
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z0-9_.-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32m%-25s\033[0m %s\n", $$1, $$2}'
+
+version:
+	@echo "API_VERSION: $(API_VERSION)"
+	@echo "UI_VERSION: $(UI_VERSION)"
 
 # -----------------------------------------------------------------------------
 # Installation & Build
@@ -72,11 +76,15 @@ docker-login:
 
 check-api-image: docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
-	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+	@docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+
+pull-api-image: docker-login
+	@echo "▶ Pulling image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
+	@docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) downloaded" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
 publish-api-image: docker-login
 	@echo "▶ Pushing image to registry"
-	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 
 # -----------------------------------------------------------------------------
 # Scaleway deployement helpers
@@ -111,13 +119,13 @@ deploy-api-container-init: check-scw
 
 deploy-api-container: check-scw
 	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
-	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
 	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
 	@echo "✅ New container deployment initiated."
 
 wait-for-container: check-scw
 	@printf "⌛ Waiting for container to become ready.."
-	API_CONTAINER_STATUS="pending"; \
+	@API_CONTAINER_STATUS="pending"; \
 	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
 		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
 		printf "."; \

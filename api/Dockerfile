@@ -22,5 +22,4 @@ COPY --from=base /app/package-lock.json* ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=base /app/drizzle ./drizzle
-COPY --from=base /app/litestream.yml ./litestream.yml
 CMD ["node", "dist/index.js"]
