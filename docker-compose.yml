@@ -11,7 +11,7 @@ services:
       - api_node_modules:/app/node_modules
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgres://app:app@postgres:5432/app
+      - DATABASE_URL=${DATABASE_URL:-postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
     ports:
