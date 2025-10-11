@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  REGISTRY: ${{ secrets.REGISTRY }}
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -116,10 +119,10 @@ jobs:
       - name: Load API image from artifact
         run: make load-api
       - name: Test API AI services
-        run: make up-api wait-ready-api test-api-ai
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: make up-api wait-ready-api test-api-ai
 
   test-e2e:
     runs-on: ubuntu-latest
@@ -151,15 +154,16 @@ jobs:
       - name: Load e2e image from artifact
         run: make load-e2e
       - name: Test e2e API & UI
-        run: make test-e2e
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: make test-e2e
 
   publish-api-image:
     runs-on: ubuntu-latest
     needs: [changes, test-e2e]
-    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    # if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Download API image artifact
@@ -176,7 +180,8 @@ jobs:
   deploy-ui:
     runs-on: ubuntu-latest
     needs: [changes, test-e2e]
-    if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
+    if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global )
+    # if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
@@ -192,7 +197,8 @@ jobs:
   deploy-api:
     runs-on: ubuntu-latest
     needs: [changes, publish-api-image]
-    if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
+    if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' )
+    # if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Deploy API

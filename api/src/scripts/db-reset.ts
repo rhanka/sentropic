@@ -23,7 +23,7 @@ async function resetDatabase() {
   }
   
   console.log('✅ Database reset completed!');
-  console.log('ℹ️  Run "make db-init" to reinitialize the database');
+  console.log('ℹ️  Restart API or run "make db-migrate" to recreate tables');
 }
 
 resetDatabase();

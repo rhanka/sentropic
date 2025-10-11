@@ -22,7 +22,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string, model:
       .set({
         ...enrichedData,
         status: 'completed',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
     
@@ -34,7 +34,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string, model:
     await db.update(companies)
       .set({ 
         status: 'draft',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
   }

@@ -48,12 +48,16 @@ Setup automated deployment for UI (GitHub Pages) and API (Scaleway Container Ser
   - db-init: vérifie si tables existent, initialise seulement si DB vierge
   - db-migrate: applique les nouvelles migrations (évolution du schéma)
 - [x] Régénération migration Postgres initiale propre (data_sources, data_objects)
-  - Suppression anciennes migrations (DB vierge, pas de commit des migrations)
+  - Migration initiale commitée (0000_luxuriant_natasha_romanoff.sql)
+  - Workflow simplifié : db-init supprimé (redondant avec db-migrate)
 - [x] Run unit/integration/E2E tests locally on Postgres and fix issues
   - ✅ API tests: 121 tests passed (smoke, unit, endpoints, queue, AI sync, AI async)
   - ✅ E2E tests: 91/101 tests passed, 10 skipped (normaux)
   - Migration Postgres 100% validée en local
-- [ ] Update CI to start Postgres and set `DATABASE_URL`
+- [x] Update CI to start Postgres and set `DATABASE_URL`
+  - ✅ Ajout REGISTRY secret pour build-api
+  - ✅ Ajout DATABASE_URL et env Postgres pour test-api-ai et test-e2e
+  - Postgres démarré automatiquement via 'make up' dans docker-compose.yml
 - [ ] Docs: README/TODO updates, add env migration notes
 - [ ] Test Scaleway deployment locally with make commands
 - [ ] Verify make publish-api-image works correctly

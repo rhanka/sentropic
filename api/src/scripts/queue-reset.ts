@@ -6,9 +6,9 @@ async function resetQueue() {
     console.log('🔄 Resetting job queue...');
     
     // Clear all jobs
-    const result = await db.delete(jobQueue);
+    const result = await db.delete(jobQueue).returning();
     
-    console.log(`✅ Cleared ${result.changes} jobs from queue`);
+    console.log(`✅ Cleared ${result.length} jobs from queue`);
     console.log('🎯 Queue reset complete');
     
   } catch (error) {

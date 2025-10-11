@@ -161,7 +161,7 @@ export class QueueManager {
         }
 
         // Traiter les jobs en parallèle
-        const promises = pendingJobs.map(job => this.processJob(job));
+        const promises = pendingJobs.map((job: any) => this.processJob(job));
         await Promise.all(promises);
       }
     } finally {

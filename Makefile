@@ -39,9 +39,9 @@ lock-api: ## Update API package-lock.json using Node container (sync deps)
 	docker run --rm -v $(PWD)/api:/app -w /app node:20 sh -lc "npm install --package-lock-only"
 
 .PHONY: save-ui
-save-ui: ## Save API Docker image as tar artifact
-	@echo "💾 Saving API image as artifact..."
-	@docker save $(UI_IMAGE_NAME):latest -o ui-image.tar
+save-ui: ## Save UI Docker image as tar artifact
+	@echo "💾 Saving UI image as artifact..."
+	@docker save $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) -o ui-image.tar
 
 .PHONY: load-ui
 load-ui:
@@ -55,7 +55,7 @@ build-api: ## Build the API Docker image for production
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
 	@echo "💾 Saving API image as artifact..."
-	@docker save $(API_IMAGE_NAME):latest -o api-image.tar
+	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
 
 .PHONY: load-api
 load-api:
@@ -209,7 +209,7 @@ build-e2e:
 .PHONY: save-e2e
 save-e2e:
 	@echo "💾 Saving E2E image as artifact..."
-	@docker save top-ai-ideas-e2e:latest -o e2e-image.tar
+	@docker save top-ai-ideas-fullstack-e2e:latest -o e2e-image.tar
 
 .PHONY: load-e2e
 load-e2e:
@@ -341,17 +341,19 @@ sh-api:
 
 # -----------------------------------------------------------------------------
 # Database helpers
+# Workflow: 1) Modify schema.ts → 2) make db-generate → 3) make db-migrate → 4) commit schema + migrations
+# db-migrate handles both initial creation (empty DB) and incremental updates
 # -----------------------------------------------------------------------------
 .PHONY: db-generate
-db-generate:
+db-generate: ## Generate migration files from schema.ts changes
 	$(COMPOSE_RUN_API) npm run db:generate
 
 .PHONY: db-migrate
-db-migrate:
+db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
-db-reset: ## Reset database (WARNING: destroys all data)
+db-reset: up ## Reset database (WARNING: destroys all data)
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All companies"
@@ -362,11 +364,6 @@ db-reset: ## Reset database (WARNING: destroys all data)
 	@read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1)
 	@echo "🗑️  Resetting database..."
 	$(COMPOSE_RUN_API) npm run db:reset
-
-.PHONY: db-init
-db-init: ## Initialize database with all migrations
-	@echo "🗄️  Initializing database..."
-	$(COMPOSE_RUN_API) npm run db:init
 
 .PHONY: db-status
 db-status: ## Check database status and tables
