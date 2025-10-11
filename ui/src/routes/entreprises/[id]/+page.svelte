@@ -10,16 +10,22 @@
   let company: Company | null = null;
   let error = '';
   
+  // Helper pour transformer les sauts de ligne simples en doubles (pour markdown)
+  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
+    if (!text) return '';
+    return text.replace(/\n/g, '\n\n');
+  };
+
   // Variables réactives pour les données des EditableInput
   $: companyData = company ? {
     name: company.name,
     industry: company.industry,
     size: company.size,
     technologies: company.technologies,
-    products: company.products,
-    processes: company.processes,
-    challenges: company.challenges,
-    objectives: company.objectives
+    products: fixMarkdownLineBreaks(company.products),
+    processes: fixMarkdownLineBreaks(company.processes),
+    challenges: fixMarkdownLineBreaks(company.challenges),
+    objectives: fixMarkdownLineBreaks(company.objectives)
   } : {};
 
   // Réactivité pour détecter les changements de statut et gérer l'actualisation
@@ -200,8 +206,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Produits et Services</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.products || 'Non renseigné'}
-          originalValue={company.products || ''}
+          value={fixMarkdownLineBreaks(company.products) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.products) || ''}
           changeId="company-products"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -217,8 +223,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Processus Métier</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.processes || 'Non renseigné'}
-          originalValue={company.processes || ''}
+          value={fixMarkdownLineBreaks(company.processes) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.processes) || ''}
           changeId="company-processes"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -234,8 +240,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Défis Principaux</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.challenges || 'Non renseigné'}
-          originalValue={company.challenges || ''}
+          value={fixMarkdownLineBreaks(company.challenges) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.challenges) || ''}
           changeId="company-challenges"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -251,8 +257,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Objectifs Stratégiques</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.objectives || 'Non renseigné'}
-          originalValue={company.objectives || ''}
+          value={fixMarkdownLineBreaks(company.objectives) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.objectives) || ''}
           changeId="company-objectives"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
