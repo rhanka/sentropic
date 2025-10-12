@@ -33,9 +33,13 @@ install: ## Install UI and API dependencies inside Docker containers
 .PHONY: build
 build: build-ui build-api ## Build UI and API artifacts
 
+.PHONY: build-ui-image
+build-ui-image: ## Build the UI Docker image for production
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache ui
+
 .PHONY: build-ui
 build-ui: ## Build the SvelteKit UI (static)
-	$(COMPOSE_RUN_UI) npm run build
+	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
 
 .PHONY: lock-api
 lock-api: ## Update API package-lock.json using Node container (sync deps)
@@ -52,9 +56,12 @@ load-ui:
 	@echo "📥 Loading UI image from artifact..."
 	@docker load -i ui-image.tar
 
+.PHONY: build-api-image
+build-api-image: ## Build the API Docker image for production
+	TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+
 .PHONY: build-api
-build-api: ## Build the API Docker image for production
-	API_BUILD_TARGET=prod $(DOCKER_COMPOSE) build api
+build-api: build-api-image
 
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
@@ -183,8 +190,7 @@ test-ui:
 	$(COMPOSE_RUN_UI) npm run test
 
 .PHONY: test-api
-test-api: test-api-all
-	$(COMPOSE_RUN_API) npm run test
+test-api: up-api wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai
 
 .PHONY: test-int
 test-int:
@@ -293,8 +299,7 @@ clean-db: ## Clean database files and restart services
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) build --no-cache
-	$(DOCKER_COMPOSE) up
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 .PHONY: dev-ui
 dev-ui:
@@ -306,19 +311,19 @@ dev-api:
 
 .PHONY: up
 up: ## Start the full stack in detached mode
-	$(DOCKER_COMPOSE) up -d
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) up -d api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-	$(DOCKER_COMPOSE) down -v
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down -v
 
 # -----------------------------------------------------------------------------
 # Logs
@@ -453,8 +458,6 @@ test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
 test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
 	@$(DOCKER_COMPOSE) exec -T api sh -lc "npm run test:unit"
-
-test-api-all: test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai 
 
 # -----------------------------------------------------------------------------
 # Queue Management

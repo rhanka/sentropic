@@ -8,13 +8,14 @@ RUN if [ -f package-lock.json ]; then npm ci; \
     else npm install; fi
 COPY . .
 
-FROM base AS dev
+FROM base AS development
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 FROM base AS build
 RUN npm run build
+CMD ["npm", "run", "build"]
 
-FROM nginx:1.25-alpine AS prod
+FROM nginx:1.25-alpine AS production
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

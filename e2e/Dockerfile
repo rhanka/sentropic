@@ -3,7 +3,7 @@ FROM node:24-slim AS base
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY playwright.config.ts ./
 
 # Installer les dépendances

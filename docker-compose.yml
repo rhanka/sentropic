@@ -4,20 +4,17 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-      target: ${API_BUILD_TARGET:-dev}
-    command: sh -c "npm install && npm run db:migrate && npm run dev"
-    volumes:
-      - ./api:/app
-      - api_node_modules:/app/node_modules
+      target: ${TARGET:-development}
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=${DATABASE_URL:-postgres://${PGUSER:-app}:${PGPASSWORD:-app}@${PGHOST:-postgres}:${PGPORT:-5432}/${PGDATABASE:-app}}
+      - NODE_ENV=${TARGET:-development}
+      - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
     ports:
       - "8787:8787"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     tty: true
 
   ui:
@@ -25,18 +22,12 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
-      target: dev
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
-    volumes:
-      - ./ui:/app
-      - ui_node_modules:/app/node_modules
+      target: ${TARGET:-development}
     environment:
       - NODE_ENV=development
-      - VITE_API_BASE_URL=http://localhost:8787/api/v1
+      - VITE_API_BASE_URL=http://api:8787/api/v1
     ports:
-      - "5173:5173"
-    depends_on:
-      - api
+      - "5173:80"
     tty: true
 
   # sqlite/litestream removed after migration to Postgres
@@ -56,8 +47,5 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
-
 volumes:
-  api_node_modules:
-  ui_node_modules:
   pg_data:

@@ -8,13 +8,13 @@ RUN if [ -f package-lock.json ]; then npm ci; \
     else npm install; fi
 COPY . .
 
-FROM base AS dev
+FROM base AS development
 CMD ["npm", "run", "dev"]
 
 FROM base AS build
 RUN npm run build
 
-FROM node:20-alpine AS prod
+FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=base /app/package.json ./

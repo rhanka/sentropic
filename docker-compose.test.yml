@@ -5,16 +5,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./e2e/tests:/app/tests
-    command: npx playwright test
-    networks:
-      - default
-
-  ui:
-    environment:
-      - VITE_API_BASE_URL=http://api:8787/api/v1
-    networks:
-      - default
-
-networks:
-  default:
-    name: top-ai-ideas-fullstack_default
+    depends_on:
+      - postgres
+      - api
+      - ui
+    command: sleep 1800
