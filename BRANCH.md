@@ -105,11 +105,11 @@ This prevents proper deployment as the UI tries to call localhost instead of the
 
 
 ## Commits & Progress
-- [ ] **Commit 1**: Create centralized config and documentation (Tasks 1-3)
-- [ ] **Commit 2**: Update all stores (Tasks 4-7)
-- [ ] **Commit 3**: Update entreprises, dossiers, cas-usage pages (Tasks 8-11)
-- [ ] **Commit 4**: Update parametres, matrice, dashboard pages (Tasks 12-14)
-- [ ] **Commit 5**: Update QueueMonitor component (Task 15)
+- [x] **Commit 1** (33db49f): Create centralized config and documentation (Tasks 1-3)
+- [x] **Commit 2** (21e2434): Update all stores (Tasks 4-7)
+- [x] **Commit 3** (dfc4fb7): Update entreprises, dossiers, cas-usage pages (Tasks 8-11)
+- [x] **Commit 4** (7e62db8): Update parametres, matrice, dashboard pages (Tasks 12-14)
+- [x] **Commit 5** (6ae063b): Update QueueMonitor component (Task 15)
 - [ ] **Commit 6**: Final testing and CI validation (Tasks 17-20)
 
 ## Status

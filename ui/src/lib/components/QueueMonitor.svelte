@@ -3,6 +3,7 @@
   import { queueStore, loadJobs, getActiveJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
   import type { Job, JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
 
   let refreshInterval: ReturnType<typeof setInterval>;
   let isVisible = false;
@@ -114,7 +115,7 @@
     }
     
     try {
-      const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+      const response = await fetch(`${API_BASE_URL}/queue/purge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
