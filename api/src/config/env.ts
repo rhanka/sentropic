@@ -19,7 +19,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
-  AUTH_CALLBACK_BASE_URL: z.string().optional()
+  AUTH_CALLBACK_BASE_URL: z.string().optional(),
+  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca')
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
