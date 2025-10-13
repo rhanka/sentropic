@@ -26,7 +26,7 @@ export type UseCase = {
 
 export const useCasesStore = writable<UseCase[]>([]);
 
-const API_BASE_URL = 'http://localhost:8787/api/v1';
+import { API_BASE_URL } from '$lib/config';
 
 // Fonctions API
 export const fetchUseCases = async (folderId?: string): Promise<UseCase[]> => {

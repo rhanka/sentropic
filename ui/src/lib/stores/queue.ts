@@ -28,7 +28,7 @@ const initialState: QueueState = {
 
 export const queueStore = writable<QueueState>(initialState);
 
-const API_BASE_URL = 'http://localhost:8787/api/v1';
+import { API_BASE_URL } from '$lib/config';
 
 // Fonctions API pour la queue
 export const fetchAllJobs = async (): Promise<Job[]> => {
