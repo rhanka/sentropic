@@ -21,20 +21,18 @@ This document defines the testing strategy for the assistant project, ensuring a
 ## Testing commands for Development workflow (MANDATORY, following workflow)
 
 ### Main Test Commands
-- `make test` - Run all tests (UI + API + E2E)
 - `make test-ui` - UI unit tests (Vitest)
-- `make test-api` - API unit tests (Vitest)
-- `make test-e2e` - E2E tests (Playwright)
-- `make test-smoke` - Quick smoke tests (E2E subset)
+- `make test-api` - API unit and minimal integration tests tests (Vitest)
+- `make test-e2e` - E2E tests (Playwright, on prod target, requires production image to be build first `make build-api build-ui-image` first)
 
 ### API Test Commands (with filters)
 - `make test-api-smoke [FILTER=*]` - API smoke tests
 - `make test-api-endpoints [ENDPOINT=*] [METHOD=*]` - API CRUD tests
 - `make test-api-ai [TYPE=*] [MODEL=*]` - AI generation tests
 - `make test-api-queue [JOB_TYPE=*]` - Queue job tests
-- `make test-api-all [SUITE=*]` - All API tests
+- `make test-api [SUITE=*]` - All API tests (without e2e)
 
-### UI Test Commands (TBC)
+### UI Test Commands (pending)
 
 ### Future Security Tests (to be implemented)
 - `make test-security-sast`: # SAST scanning

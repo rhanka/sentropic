@@ -34,6 +34,7 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 - **Never proceed more than one item of `TODO.md`**
 - **Be minimalist in changes** (don't refacto the whole to avoid regressions)
 - **Commit messages and PR descriptions MUST be in English**
+- **Use make targets** : `make up` for dev mode (and `make down`), `make logs` for logs. Don't reinvent 
 
 ## Commit Guidelines
 - **Atomic commits** : One logical change per commit
@@ -98,15 +99,15 @@ After implementing all commits for a feature:
 - **Push command**: Always use `git push origin <branch-name>` explicitly, never `git push --set-upstream`.
 
 ## Quality Gates
-- **Before commit**: Run `make test-<service>-unit` (enforced by testing.mdc)
-- **Before PR**: Run `make test` to validate consistency
+- **Before commit**: Run `make test-api` and/or `make test-ui` given you're changing api ou ui (enforced by testing.mdc)
+- **Before PR**: Run `make build-api build-ui-image test-e2e` to validate consistency
 - **CI/CD**: All tests must pass, guides must be consistent
 - **Architecture**: Verify `make` commands work before any changes
 
 ## Feature Branch Management
 
 ### Branch Documentation
-- **REQUIRED**: Create `BRANCH.md` for each feature branch (final two steps should be always test strategy completion from `testing.mdc` and Github CI execution check)
+- **REQUIRED**: Create `BRANCH.md` and a branch for each feature branch, defining scope (api, ui, ci) and limit work to avoid border effect (dont change Makefile or ci or tests if not required, or specify what should be minimally changed). The final two steps should be always test strategy completion from `testing.mdc` and Github CI execution check
 - **LOCATION**: Root of feature branch (not committed to main)
 - **PURPOSE**: Track progress, plan, and commit mapping
 
