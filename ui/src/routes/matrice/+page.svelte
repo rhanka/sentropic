@@ -246,7 +246,7 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const response = await fetch('http://localhost:8787/api/v1/folders/list/with-matrices');
+      const response = await fetch(`${API_BASE_URL}/folders/list/with-matrices`);
       if (response.ok) {
         const data = await response.json();
         availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
@@ -269,7 +269,7 @@
       if (createMatrixType === 'default') {
         // Utiliser la matrice de base par défaut
         console.log('Fetching default matrix...');
-        const response = await fetch('http://localhost:8787/api/v1/folders/matrix/default');
+        const response = await fetch(`${API_BASE_URL}/folders/matrix/default`);
         matrixToUse = await response.json();
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {

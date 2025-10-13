@@ -210,7 +210,7 @@
           value={fixMarkdownLineBreaks(company.products) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.products) || ''}
           changeId="company-products"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('products', e.detail.value)}
@@ -227,7 +227,7 @@
           value={fixMarkdownLineBreaks(company.processes) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.processes) || ''}
           changeId="company-processes"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('processes', e.detail.value)}
@@ -244,7 +244,7 @@
           value={fixMarkdownLineBreaks(company.challenges) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.challenges) || ''}
           changeId="company-challenges"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('challenges', e.detail.value)}
@@ -261,7 +261,7 @@
           value={fixMarkdownLineBreaks(company.objectives) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.objectives) || ''}
           changeId="company-objectives"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('objectives', e.detail.value)}
