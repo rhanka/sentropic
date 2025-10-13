@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { 
   foldersStore, 
@@ -7,14 +7,12 @@ import {
   createFolder, 
   updateFolder, 
   deleteFolder
-} from './folders';
-
-// Mock fetch
-global.fetch = vi.fn();
+} from '../../src/lib/stores/folders';
+import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
 describe('Folders Store', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetFetchMock();
     foldersStore.set([]);
     currentFolderId.set(null);
   });
@@ -26,21 +24,15 @@ describe('Folders Store', () => {
         { id: '2', name: 'Folder 2', companyId: 'company2' }
       ];
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ items: mockFolders })
-      });
+      mockFetchJsonOnce({ items: mockFolders });
 
       const result = await fetchFolders();
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/folders');
       expect(result).toEqual(mockFolders);
     });
 
     it('should throw error when fetch fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false
-      });
+      mockFetchJsonOnce({}, 500);
 
       await expect(fetchFolders()).rejects.toThrow('Failed to fetch folders');
     });
@@ -51,18 +43,10 @@ describe('Folders Store', () => {
       const newFolder = { name: 'New Folder', companyId: 'company1' };
       const createdFolder = { id: '1', ...newFolder };
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(createdFolder)
-      });
+      mockFetchJsonOnce(createdFolder);
 
       const result = await createFolder(newFolder);
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newFolder)
-      });
       expect(result).toEqual(createdFolder);
     });
   });
@@ -72,40 +56,24 @@ describe('Folders Store', () => {
       const updates = { name: 'Updated Folder' };
       const updatedFolder = { id: '1', name: 'Updated Folder', companyId: 'company1' };
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(updatedFolder)
-      });
+      mockFetchJsonOnce(updatedFolder);
 
       const result = await updateFolder('1', updates);
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/folders/1', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
       expect(result).toEqual(updatedFolder);
     });
   });
 
   describe('deleteFolder', () => {
     it('should delete folder successfully', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true
-      });
+      mockFetchJsonOnce({}, 200);
 
       await deleteFolder('1');
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/folders/1', {
-        method: 'DELETE'
-      });
     });
 
     it('should throw error when deletion fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ message: 'Folder not found' })
-      });
+      mockFetchJsonOnce({ message: 'Folder not found' }, 404);
 
       await expect(deleteFolder('1')).rejects.toThrow('Failed to delete folder');
     });

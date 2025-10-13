@@ -186,8 +186,8 @@ audit:
 test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
-test-ui:
-	$(COMPOSE_RUN_UI) npm run test
+test-ui: up-ui
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
 
 .PHONY: test-api
 test-api: up-api wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai
@@ -320,6 +320,10 @@ up-e2e: ## Start stack with test overrides (UI env for API URL)
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
+
+.PHONY: up-ui
+up-ui: ## Start the api stack in detached mode
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes

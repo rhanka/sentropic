@@ -6,8 +6,8 @@ import {
   calculateUseCaseScores,
   generateStars,
   type ScoreEntry
-} from './scoring';
-import type { MatrixConfig } from '../../types/matrix';
+} from '../../src/lib/utils/scoring';
+import type { MatrixConfig } from '../../src/types/matrix';
 
 describe('scoring utilities', () => {
   describe('getFibonacciPoints', () => {
