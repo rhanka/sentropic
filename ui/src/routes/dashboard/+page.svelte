@@ -3,6 +3,7 @@
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
 
@@ -44,7 +45,7 @@
 
   const loadMatrix = async (folderId: string) => {
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${folderId}`);
+      const response = await fetch(`${API_BASE_URL}/folders/${folderId}`);
       if (response.ok) {
         const folder = await response.json();
         matrix = folder.matrixConfig;

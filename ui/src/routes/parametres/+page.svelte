@@ -1,6 +1,7 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import { goto } from '$app/navigation';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
@@ -43,7 +44,7 @@
 
   const loadPrompts = async () => {
     try {
-      const response = await fetch('http://localhost:8787/api/v1/prompts');
+      const response = await fetch(`${API_BASE_URL}/prompts`);
       if (response.ok) {
         const data = await response.json();
         prompts = data.prompts;
@@ -105,7 +106,7 @@
         p.id === selectedPrompt.id ? updatedPrompt : p
       );
 
-      const response = await fetch('http://localhost:8787/api/v1/prompts', {
+      const response = await fetch(`${API_BASE_URL}/prompts`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -140,7 +141,7 @@
   const loadAISettings = async () => {
     isLoadingAISettings = true;
     try {
-      const response = await fetch('http://localhost:8787/api/v1/ai-settings');
+      const response = await fetch(`${API_BASE_URL}/ai-settings`);
       if (response.ok) {
         aiSettings = await response.json();
       }
@@ -158,7 +159,7 @@
   const saveAISettings = async () => {
     isSavingAISettings = true;
     try {
-      const response = await fetch('http://localhost:8787/api/v1/ai-settings', {
+      const response = await fetch(`${API_BASE_URL}/ai-settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -190,7 +191,7 @@
   // Fonctions pour la gestion de la queue
   const loadQueueStats = async () => {
     try {
-      const response = await fetch('http://localhost:8787/api/v1/queue/stats');
+      const response = await fetch(`${API_BASE_URL}/queue/stats`);
       if (response.ok) {
         queueStats = await response.json();
       }
@@ -215,7 +216,7 @@
 
             isPurgingQueue = true;
             try {
-              const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+              const response = await fetch(`${API_BASE_URL}/queue/purge`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -252,7 +253,7 @@
 
             isPurgingQueue = true;
             try {
-              const response = await fetch('http://localhost:8787/api/v1/queue/purge', {
+              const response = await fetch(`${API_BASE_URL}/queue/purge`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -289,7 +290,7 @@
 
     isResetting = true;
     try {
-      const response = await fetch('http://localhost:8787/api/v1/admin/reset', {
+      const response = await fetch(`${API_BASE_URL}/admin/reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
