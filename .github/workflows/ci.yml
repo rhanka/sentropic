@@ -68,11 +68,6 @@ jobs:
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
         run: make build-api
-      - name: Unit and integration Test API
-        run: make test-api
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       - name: Save API image as artifact
         run: make save-api
       - name: Upload API image artifact
@@ -80,6 +75,11 @@ jobs:
         with:
           name: api-image
           path: api-image.tar
+      - name: Unit and integration Test API
+        run: make test-api
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
 
   # Build & Unit Test UI
   build-ui:
@@ -91,16 +91,18 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v3
       - name: Build UI image
-        run: make build-ui
-      - name: Unit Test UI
-        run: make test-ui
+        run: make build-ui-image
       - name: Save UI image as artifact
         run: make save-ui
+      - name: Unit Test UI
+        run: make test-ui
       - name: Upload UI image artifact
         uses: actions/upload-artifact@v4
         with:
           name: ui-image
           path: ui-image.tar
+      - name: Build UI
+        run: make build-ui
       - name: Upload static files as artifact
         id: deployment
         uses: actions/upload-pages-artifact@v3
@@ -152,10 +154,6 @@ jobs:
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Debug API version in publish step
-        run: |
-          make version
-          make version-debug-api
       - name: Check if API image is up to date
         id: image-check
         run: make check-api-image
