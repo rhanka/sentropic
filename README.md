@@ -22,8 +22,7 @@ Top AI Ideas est une application web qui aide les entreprises à identifier, gé
 flowchart LR
   User((Browser)) -- UI --> SvelteKit
   SvelteKit -- REST/JSON --> API_TS
-  API_TS -- SQLite file --> app.db
-  API_TS -- Litestream --> S3(Scaleway Object Storage)
+  API_TS -- PostgreSQL --> Postgres[(Postgres DB)]
   API_TS -- HTTPS --> OpenAI
   OIDC[Google/LinkedIn] -- OIDC --> API_TS
   CI(CI GitHub Actions) -- deploy --> GH_Pages & Scaleway
@@ -53,27 +52,30 @@ Pour les détails complets de la spécification technique, voir [SPEC.md](SPEC.m
 ### État d'avancement du projet
 
 **✅ Étape 0 – Scaffolding (TERMINÉE)**
-- Structure créée: `/ui` (SvelteKit 5 + adapter-static + svelte-i18n), `/api` (Hono + Drizzle + Zod), `Makefile`, `docker-compose.yml`, `Dockerfile.ui`, `Dockerfile.api`, `data/` (montage volume), config Litestream.
+- Structure créée: `/ui` (SvelteKit 5 + adapter-static + svelte-i18n), `/api` (Hono + Drizzle + Zod), `Makefile`, `docker-compose.yml`, `Dockerfile.ui`, `Dockerfile.api`, `data/` (montage volume).
 
 **✅ Étape 1 – Données & API (TERMINÉE)**
-- Schéma SQLite avec migrations Drizzle.
+- Schéma PostgreSQL 16 avec migrations Drizzle.
 - CRUD: companies, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
 - Génération OpenAI (list/detail/folder) + `/use-cases/generate` (validation Zod, recalcul des scores).
-- Queue SQLite avec QueueManager pour jobs asynchrones.
+- Queue basée sur Postgres avec QueueManager pour jobs asynchrones.
 - Agrégations Dashboard pré-normalisées.
 
 **✅ Étape 2 – UI SvelteKit (TERMINÉE)**
 - Pages implémentées: `Home`, `Folders`, `UseCaseList`, `UseCaseDetail`, `Matrix`, `Dashboard`, `Companies`, `Settings`, `NotFound`.
 - i18n FR/EN pour libellés UI.
 - Navigation et stores fonctionnels.
+- Refresh automatique des vues pendant traitement IA.
 
-**🔄 Étape 3 – Qualité/CI/CD (EN COURS)**
-- Tests unitaires API (Vitest), tests E2E (Playwright).
-- **À implémenter**: GitHub Actions pour CI/CD.
+**✅ Étape 3 – Qualité/CI/CD (TERMINÉE)**
+- Tests unitaires API (121 tests Vitest).
+- Tests E2E (91/101 tests Playwright, 10 skipped).
+- GitHub Actions pour CI/CD (build, test, deploy).
+- Déploiement automatisé: UI → GitHub Pages, API → Scaleway Container Serverless.
 
 **⏳ Étape 4 – Fonctionnalités manquantes**
 - **À implémenter**: Auth OIDC Google/LinkedIn.
 - **À implémenter**: Pages `/configuration-metier` et `/donnees`.
-- **À implémenter**: Déploiement production.
+- **À implémenter**: Backups automatisés Postgres.
 
 
