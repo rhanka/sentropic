@@ -4,6 +4,10 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
   kit: {
     adapter: adapter(),
+    // Force des URLs d'actifs absolues (/_app/...) au lieu de chemins relatifs
+    paths: {
+      relative: false
+    },
     prerender: {
       handleHttpError: 'warn',
       handleUnseenRoutes: 'ignore'

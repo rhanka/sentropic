@@ -10,3 +10,8 @@ services:
       - api
       - ui
     command: sleep 1800
+
+  ui:
+    depends_on:
+      api:
+        condition: service_healthy

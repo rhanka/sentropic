@@ -413,7 +413,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(COMPOSE_RUN_API) npx tsx tests/utils/seed-test-data.ts
+	$(DOCKER_COMPOSE) exec api sh -lc "node dist/tests/utils/seed-test-data.js"
 
 .PHONY: db-lint
 db-lint:
