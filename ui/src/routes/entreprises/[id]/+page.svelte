@@ -4,6 +4,7 @@
   import { fetchCompanies, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { refreshManager } from '$lib/stores/refresh';
 
@@ -131,7 +132,7 @@
             value={company.name}
             originalValue={company.name}
             changeId="company-name"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
             fullData={companyData}
             on:change={(e) => handleFieldUpdate('name', e.detail.value)}
             on:saved={() => {}}
@@ -144,7 +145,7 @@
               value={company.industry}
               originalValue={company.industry}
               changeId="company-industry"
-              apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+              apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
               fullData={companyData}
               on:change={(e) => handleFieldUpdate('industry', e.detail.value)}
               on:saved={() => {}}
@@ -174,7 +175,7 @@
             value={company.size || 'Non renseigné'}
             originalValue={company.size || ''}
             changeId="company-size"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
             fullData={companyData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('size', e.detail.value)}
@@ -191,7 +192,7 @@
             value={company.technologies || 'Non renseigné'}
             originalValue={company.technologies || ''}
             changeId="company-technologies"
-            apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+            apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
             fullData={companyData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('technologies', e.detail.value)}
@@ -209,7 +210,7 @@
           value={fixMarkdownLineBreaks(company.products) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.products) || ''}
           changeId="company-products"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('products', e.detail.value)}
@@ -226,7 +227,7 @@
           value={fixMarkdownLineBreaks(company.processes) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.processes) || ''}
           changeId="company-processes"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('processes', e.detail.value)}
@@ -243,7 +244,7 @@
           value={fixMarkdownLineBreaks(company.challenges) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.challenges) || ''}
           changeId="company-challenges"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('challenges', e.detail.value)}
@@ -260,7 +261,7 @@
           value={fixMarkdownLineBreaks(company.objectives) || 'Non renseigné'}
           originalValue={fixMarkdownLineBreaks(company.objectives) || ''}
           changeId="company-objectives"
-          apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
+          apiEndpoint={`${API_BASE_URL}/companies/${company.id}`}
           fullData={companyData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('objectives', e.detail.value)}

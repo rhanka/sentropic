@@ -29,6 +29,51 @@ flowchart LR
 ```
 
 
+## Configuration
+
+### Environment Variables
+
+The UI uses environment variables for configuration. These are set via Vite's `VITE_*` prefix:
+
+#### `VITE_API_BASE_URL`
+
+API backend base URL. The UI will make all API calls to this URL.
+
+**Values by environment:**
+- **Local development**: `http://localhost:8787/api/v1` (default fallback)
+- **Docker Compose**: `http://api:8787/api/v1` (set in `docker-compose.yml`)
+- **Production**: `https://top-ai-ideas-api.sent-tech.ca/api/v1` (set in GitHub Actions CI)
+
+**Usage:**
+```typescript
+import { API_BASE_URL } from '$lib/config';
+const response = await fetch(`${API_BASE_URL}/companies`);
+```
+
+### Local Development
+
+1. **Start with Docker Compose** (recommended):
+   ```bash
+   make dev
+   ```
+   The `VITE_API_BASE_URL` is automatically configured in `docker-compose.yml`.
+
+2. **Native development** (without Docker):
+   ```bash
+   # Terminal 1 - Start API
+   cd api && npm run dev
+   
+   # Terminal 2 - Start UI  
+   cd ui && npm run dev
+   ```
+   The UI will use the default fallback: `http://localhost:8787/api/v1`.
+
+3. **Custom API URL**:
+   Create `ui/.env.local` (gitignored):
+   ```bash
+   VITE_API_BASE_URL=http://custom-api:8787/api/v1
+   ```
+
 ## Spécification technique
 
 Pour les détails complets de la spécification technique, voir [SPEC.md](SPEC.md).

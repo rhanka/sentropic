@@ -14,7 +14,7 @@ export type Folder = {
 export const foldersStore = writable<Folder[]>([]);
 export const currentFolderId = writable<string | null>(null);
 
-const API_BASE_URL = 'http://localhost:8787/api/v1';
+import { API_BASE_URL } from '$lib/config';
 
 // Fonctions API
 export const fetchFolders = async (): Promise<Folder[]> => {

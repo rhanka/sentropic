@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import { goto } from '$app/navigation';
   import ScoreCard from '$lib/components/ScoreCard.svelte';
   import References from '$lib/components/References.svelte';
@@ -52,7 +53,7 @@
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
+      const response = await fetch(`${API_BASE_URL}/use-cases/${useCaseId}`);
       if (response.ok) {
         useCase = await response.json();
         
@@ -111,7 +112,7 @@
   // Refresh léger du cas d'usage - met à jour seulement les champs qui changent
   const refreshUseCaseStatus = async () => {
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/use-cases/${useCaseId}`);
+      const response = await fetch(`${API_BASE_URL}/use-cases/${useCaseId}`);
       if (response.ok) {
         const updatedUseCase = await response.json();
         
@@ -178,7 +179,7 @@
     
     try {
       // Charger la matrice depuis le dossier
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${useCase.folderId}`);
+      const response = await fetch(`${API_BASE_URL}/folders/${useCase.folderId}`);
       if (response.ok) {
         const folder = await response.json();
         matrix = folder.matrixConfig;

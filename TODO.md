@@ -13,13 +13,12 @@
 - [x] Compléter les tests unitaires (121 tests API)
 - [x] Compléter les tests E2E (91/101 tests Playwright)
 - [x] CI GitHub Actions (build/test/deploy)
-- [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [x] Migration SQLite → PostgreSQL 16
-- [x] Support SSL/TLS dynamique pour Postgres (local + Scaleway Serverless)
-- [x] Refresh automatique UI pendant traitement IA
-- [x] Tests UI isolés (mocks fetch, pas d'appels API)
+- [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
+
 
 **⏳ À faire :**
+- [ ] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
 - [ ] Ajouter un tool de recherche de brevets (Lens API)
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients

@@ -2,6 +2,7 @@
   import { matrixStore } from '$lib/stores/matrix';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
@@ -33,7 +34,7 @@
 
     isLoading = true;
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`);
+      const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch folder');
       }
@@ -107,7 +108,7 @@
     if (!$currentFolderId) return;
     
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`, {
+      const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}/matrix`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +246,7 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const response = await fetch('http://localhost:8787/api/v1/folders/list/with-matrices');
+      const response = await fetch(`${API_BASE_URL}/folders/list/with-matrices`);
       if (response.ok) {
         const data = await response.json();
         availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
@@ -268,12 +269,12 @@
       if (createMatrixType === 'default') {
         // Utiliser la matrice de base par défaut
         console.log('Fetching default matrix...');
-        const response = await fetch('http://localhost:8787/api/v1/folders/matrix/default');
+        const response = await fetch(`${API_BASE_URL}/folders/matrix/default`);
         matrixToUse = await response.json();
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
-        const response = await fetch(`http://localhost:8787/api/v1/folders/${selectedFolderToCopy}/matrix`);
+        const response = await fetch(`${API_BASE_URL}/folders/${selectedFolderToCopy}/matrix`);
         matrixToUse = await response.json();
       } else if (createMatrixType === 'blank') {
         // Évaluation vierge
@@ -287,7 +288,7 @@
       
       if (matrixToUse) {
         console.log('Saving matrix to folder:', $currentFolderId);
-        const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`, {
+        const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}/matrix`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(matrixToUse)
@@ -392,7 +393,7 @@
                         value={axis.name}
                         originalValue={originalConfig.valueAxes[index]?.name || ""}
                         changeId={`value-axis-${index}-name`}
-                        apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                        apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
                         on:change={(e) => updateAxisName(true, index, e.detail.value)}
                         on:saved={() => {
@@ -463,7 +464,7 @@
                         value={axis.name}
                         originalValue={originalConfig.complexityAxes[index]?.name || ""}
                         changeId={`complexity-axis-${index}-name`}
-                        apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                        apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
                         on:change={(e) => updateAxisName(false, index, e.detail.value)}
                         on:saved={() => {
@@ -679,7 +680,7 @@
                     value={getLevelDescription(selectedAxis, levelNum)}
                     originalValue={getLevelDescription(selectedAxis, levelNum)}
                     changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis ? selectedAxis.name : 'unknown'}-level-${levelNum}`}
-                    apiEndpoint={`http://localhost:8787/api/v1/folders/${$currentFolderId}/matrix`}
+                    apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
                     on:change={(e) => updateLevelDescription(levelNum, e.detail.value)}
                     on:saved={() => {
