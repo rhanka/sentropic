@@ -62,7 +62,11 @@
         );
         
         if (useCase) {
-          draft = { ...useCase };
+          draft = { 
+            ...useCase,
+            dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
+            dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
+          };
           await loadMatrixAndCalculateScores();
         }
       } else {
@@ -76,7 +80,11 @@
           return;
         }
         
-        draft = { ...useCase };
+        draft = { 
+          ...useCase,
+          dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
+          dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
+        };
         await loadMatrixAndCalculateScores();
       }
     } catch (err) {
@@ -91,7 +99,11 @@
         return;
       }
       
-      draft = { ...useCase };
+      draft = { 
+        ...useCase,
+        dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
+        dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
+      };
       await loadMatrixAndCalculateScores();
     }
   };
@@ -123,8 +135,15 @@
     if (!useCase || !draft.name?.trim()) return;
 
     try {
-      useCasesStore.update(items => items.map(uc => uc.id === useCase.id ? { ...uc, ...draft } : uc));
-      useCase = { ...useCase, ...draft };
+      // Convertir les textes en arrays
+      const updatedDraft = {
+        ...draft,
+        dataSources: draft.dataSourcesText ? draft.dataSourcesText.split('\n').filter(line => line.trim()) : draft.dataSources || [],
+        dataObjects: draft.dataObjectsText ? draft.dataObjectsText.split('\n').filter(line => line.trim()) : draft.dataObjects || []
+      };
+      
+      useCasesStore.update(items => items.map(uc => uc.id === useCase.id ? { ...uc, ...updatedDraft } : uc));
+      useCase = { ...useCase, ...updatedDraft };
       isEditing = false;
       addToast({ type: 'success', message: 'Cas d\'usage mis à jour avec succès !' });
     } catch (err) {
@@ -541,7 +560,7 @@
                 <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                 </svg>
-                Sources
+                Sources des données
               </h3>
             </div>
             {#if isEditing}
@@ -550,13 +569,13 @@
                 <textarea 
                   class="w-full rounded border border-slate-300 p-2 text-sm"
                   placeholder="Source 1&#10;Source 2&#10;..."
-                  bind:value={draft.sourcesText}
+                  bind:value={draft.dataSourcesText}
                   rows="3"
                 ></textarea>
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.sources || [] as source}
+                {#each useCase.dataSources || [] as source}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <svg class="w-4 h-4 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -575,7 +594,7 @@
                 <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
                 </svg>
-                Données associées
+                Données
               </h3>
             </div>
             {#if isEditing}
@@ -584,13 +603,13 @@
                 <textarea 
                   class="w-full rounded border border-slate-300 p-2 text-sm"
                   placeholder="Donnée 1&#10;Donnée 2&#10;..."
-                  bind:value={draft.relatedDataText}
+                  bind:value={draft.dataObjectsText}
                   rows="3"
                 ></textarea>
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.relatedData || [] as data}
+                {#each useCase.dataObjects || [] as data}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <svg class="w-4 h-4 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
@@ -606,7 +625,7 @@
       </div>
 
       <!-- Références sur 3/3 colonnes -->
-      {#if !isEditing && ((useCase.sources && useCase.sources.length > 0) || (useCase.references && useCase.references.length > 0))}
+      {#if !isEditing && (useCase.references && useCase.references.length > 0)}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
             <h3 class="font-semibold flex items-center gap-2">

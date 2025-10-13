@@ -1,13 +1,24 @@
-import { serve } from '@hono/node-server';
-import { app } from './app';
 import { env } from './config/env';
 import { logger } from './logger';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { db } from './db/client';
 
 const port = env.PORT;
 
-serve({
-  fetch: app.fetch,
-  port
-});
+// Run database migrations at boot (idempotent)
+try {
+  logger.info('Running database migrations at startup...');
+  await migrate(db, { migrationsFolder: './drizzle' });
+  logger.info('Database migrations completed.');
+} catch (error) {
+  logger.error({ err: error }, 'Database migration failed at startup');
+  process.exit(1);
+}
 
+const [{ serve }, { app }] = await Promise.all([
+  import('@hono/node-server'),
+  import('./app')
+]);
+
+serve({ fetch: app.fetch, port });
 logger.info(`API server listening on http://0.0.0.0:${port}`);

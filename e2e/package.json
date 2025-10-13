@@ -1,6 +1,6 @@
 {
-  "name": "top-ai-ideas-e2e",
-  "version": "1.0.0",
+  "name": "playwright",
+  "version": "1.55.1",
   "type": "module",
   "scripts": {
     "test": "playwright test",

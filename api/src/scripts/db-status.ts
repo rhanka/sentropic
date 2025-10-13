@@ -1,59 +1,59 @@
 #!/usr/bin/env tsx
 
-import { db } from '../db/client';
+import { db, pool } from '../db/client';
 import { sql } from 'drizzle-orm';
-import { fileURLToPath } from 'url';
-import path from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function checkDatabaseStatus() {
-  console.log('📊 Database Status Report');
+  console.log('📊 Database Status Report (Postgres)');
   console.log('========================');
-  
+
   try {
-    // Vérifier les tables
-    const tables = await db.all(sql`
-      SELECT name, sql 
-      FROM sqlite_master 
-      WHERE type='table' 
-      ORDER BY name
-    `) as { name: string; sql: string }[];
-    
+    // Lister les tables du schéma public
+    const tables = await db.all(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`) as { table_name: string }[];
+
     console.log(`\n📋 Tables (${tables.length}):`);
-    for (const table of tables) {
-      console.log(`  - ${table.name}`);
-    }
-    
+    tables.forEach(t => console.log(`  - ${t.table_name}`));
+
     // Compter les enregistrements par table
     console.log('\n📈 Record counts:');
     for (const table of tables) {
       try {
-        const count = await db.get(sql.raw(`SELECT COUNT(*) as count FROM ${table.name}`)) as { count: number } | undefined;
-        console.log(`  - ${table.name}: ${count?.count || 0} records`);
-      } catch (error) {
-        console.log(`  - ${table.name}: Error counting records`);
+        const res = await db.get(sql.raw(`SELECT COUNT(*)::int AS count FROM "${table.table_name}"`)) as { count: number } | undefined;
+        const count = res?.count ?? 0;
+        console.log(`  - ${table.table_name}: ${count} records`);
+      } catch {
+        console.log(`  - ${table.table_name}: Error counting records`);
       }
     }
-    
-    // Vérifier les migrations appliquées
-    console.log('\n🔄 Migration status:');
-    const migrationFiles = ['0000_easy_steel_serpent.sql', '0001_safe_adam_warlock.sql'];
-    for (const file of migrationFiles) {
-      const tableName = file.replace('.sql', '').replace('_', '');
-      const exists = tables.some(t => t.name === tableName);
-      console.log(`  - ${file}: ${exists ? '✅ Applied' : '❌ Not applied'}`);
+
+    // Vérifier les migrations Drizzle
+    console.log('\n🔄 Drizzle Migration status:');
+    try {
+      const migrations = await db.all(sql`SELECT * FROM "__drizzle_migrations" ORDER BY created_at DESC`) as { id: number; hash: string; created_at: number }[];
+      if (migrations.length > 0) {
+        console.log(`  ✅ ${migrations.length} migration(s) applied (latest: ${migrations[0].hash})`);
+      } else {
+        console.log('  ❌ No Drizzle migrations applied');
+      }
+    } catch {
+      console.log('  ℹ️  Migration table not found (first run)');
     }
-    
-    // Vérifier l'intégrité
-    console.log('\n🔍 Database integrity:');
-    const integrity = await db.get(sql`PRAGMA integrity_check`) as { integrity_check: string } | undefined;
-    console.log(`  - Integrity: ${integrity?.integrity_check === 'ok' ? '✅ OK' : '❌ Issues found'}`);
-    
+
+    // Version de la base de données
+    console.log('\n🔍 Database version:');
+    const version = await db.get(sql`SELECT version()`) as { version: string } | undefined;
+    console.log(`  - ${version?.version || 'Unknown'}`);
+
+    // Taille de la base de données
+    console.log('\n💾 Database size:');
+    const dbSize = await db.get(sql`SELECT pg_size_pretty(pg_database_size(current_database())) as size`) as { size: string } | undefined;
+    console.log(`  - ${dbSize?.size || 'Unknown'}`);
+
   } catch (error) {
     console.error('❌ Error checking database status:', error);
     process.exit(1);
+  } finally {
+    await pool.end();
   }
 }
 

@@ -19,8 +19,8 @@ export async function seedTestData() {
         objectives: 'Carbon-neutral aluminum production, Digital transformation',
         technologies: 'AI/ML, IoT, Digital twins, Process optimization',
         status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date(),
+        updatedAt: new Date()
       },
       {
         id: 'test-delpharm',
@@ -33,8 +33,8 @@ export async function seedTestData() {
         objectives: 'Expand manufacturing capacity, Improve efficiency',
         technologies: 'Process automation, Quality management systems',
         status: 'draft',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     ];
 
@@ -51,8 +51,8 @@ export async function seedTestData() {
       description: 'Dossier de test pour les tests E2E',
       status: 'in_progress',
       companyId: 'test-rio-tinto',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     await db.insert(folders).values(testFolderData).onConflictDoNothing();
@@ -84,7 +84,7 @@ export async function seedTestData() {
         totalValueScore: 5,
         totalComplexityScore: 2,
         status: 'active',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       },
       {
         id: 'test-uc-2',
@@ -110,7 +110,7 @@ export async function seedTestData() {
         totalValueScore: 4,
         totalComplexityScore: 3,
         status: 'active',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       },
       {
         id: 'test-uc-3',
@@ -136,7 +136,7 @@ export async function seedTestData() {
         totalValueScore: 3,
         totalComplexityScore: 5,
         status: 'generating',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       },
       {
         id: 'test-uc-4',
@@ -162,7 +162,7 @@ export async function seedTestData() {
         totalValueScore: 2,
         totalComplexityScore: 4,
         status: 'draft',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       },
       {
         id: 'test-uc-5',
@@ -188,7 +188,7 @@ export async function seedTestData() {
         totalValueScore: 5,
         totalComplexityScore: 5,
         status: 'generating_detail',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       }
     ];
 
@@ -222,7 +222,7 @@ export async function seedTestData() {
         ]
       }),
       description: 'Configuration de matrice pour les tests E2E',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date()
     };
 
     await db.insert(settings).values(defaultMatrix).onConflictDoNothing();
@@ -240,3 +240,14 @@ export async function seedTestData() {
     throw error;
   }
 }
+
+// Execute when run directly
+seedTestData()
+  .then(() => {
+    console.log('✅ Seed completed.');
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error('❌ Seed failed:', err);
+    process.exit(1);
+  });

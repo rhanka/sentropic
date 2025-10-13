@@ -9,9 +9,9 @@ async function clearQueue() {
     // Clear all pending and processing jobs
     const result = await db.delete(jobQueue).where(
       sql`status IN ('pending', 'processing', 'enriching', 'generating')`
-    );
+    ).returning();
     
-    console.log(`✅ Cleared ${result.changes} jobs from queue`);
+    console.log(`✅ Cleared ${result.length} jobs from queue`);
     
     // Show remaining jobs
     const remainingJobs = await db.select().from(jobQueue);

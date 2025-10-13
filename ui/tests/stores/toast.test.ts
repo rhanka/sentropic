@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { toasts, addToast, removeToast, clearToasts, type Toast } from './toast';
+import { toasts, addToast, removeToast, clearToasts, type Toast } from '../../src/lib/stores/toast';
 
 describe('toast store', () => {
   beforeEach(() => {

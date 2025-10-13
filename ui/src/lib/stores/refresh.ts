@@ -3,12 +3,14 @@ import { writable } from 'svelte/store';
 export interface RefreshState {
   folders: boolean;
   useCases: boolean;
+  companies: boolean;
   currentUseCase: string | null;
 }
 
 export const refreshState = writable<RefreshState>({
   folders: false,
   useCases: false,
+  companies: false,
   currentUseCase: null
 });
 
@@ -77,6 +79,27 @@ export class RefreshManager {
     console.log('🔄 Started use cases refresh interval');
   }
 
+  // Actualiser les entreprises toutes les 2 secondes s'il y en a en enrichissement
+  startCompaniesRefresh(callback: () => Promise<void>) {
+    const key = 'companies';
+    
+    // Arrêter l'intervalle existant s'il y en a un
+    this.stopRefresh(key);
+    
+    const interval = setInterval(async () => {
+      if (!this.isActive) return;
+      
+      try {
+        await callback();
+      } catch (error) {
+        console.error('Error during companies refresh:', error);
+      }
+    }, 2000);
+    
+    this.intervals.set(key, interval);
+    console.log('🔄 Started companies refresh interval');
+  }
+
   // Actualiser un cas d'usage spécifique toutes les 2 secondes s'il est en génération
   startUseCaseDetailRefresh(useCaseId: string, callback: () => Promise<void>) {
     const key = `useCase-${useCaseId}`;
@@ -99,6 +122,27 @@ export class RefreshManager {
     console.log(`🔄 Started use case detail refresh for ${useCaseId}`);
   }
 
+  // Actualiser une entreprise spécifique toutes les 2 secondes si elle est en enrichissement
+  startCompanyDetailRefresh(companyId: string, callback: () => Promise<void>) {
+    const key = `company-${companyId}`;
+    
+    // Arrêter l'intervalle existant s'il y en a un
+    this.stopRefresh(key);
+    
+    const interval = setInterval(async () => {
+      if (!this.isActive) return;
+      
+      try {
+        await callback();
+      } catch (error) {
+        console.error(`Error during company ${companyId} refresh:`, error);
+      }
+    }, 2000);
+    
+    this.intervals.set(key, interval);
+    console.log(`🔄 Started company detail refresh for ${companyId}`);
+  }
+
   // Arrêter un refresh spécifique
   stopRefresh(key: string) {
     const interval = this.intervals.get(key);
@@ -116,7 +160,7 @@ export class RefreshManager {
       console.log(`⏹️ Stopped refresh for ${key}`);
     });
     this.intervals.clear();
-    refreshState.set({ folders: false, useCases: false, currentUseCase: null });
+    refreshState.set({ folders: false, useCases: false, companies: false, currentUseCase: null });
   }
 
   // Vérifier si un refresh est actif

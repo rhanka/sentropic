@@ -4,23 +4,27 @@
 
 **✅ Terminé :**
 - [x] Structure repo `/ui`, `/api`, Makefile, Dockerfiles, docker-compose
-- [x] Schéma SQLite + migrations (Drizzle) appliqués
+- [x] Schéma PostgreSQL 16 + migrations (Drizzle) appliqués
 - [x] API TypeScript (Hono) avec schémas Zod, OpenAPI généré
 - [x] Service OpenAI (Node) et endpoint `/use-cases/generate`
 - [x] Calculs serveur et endpoints d'agrégation Dashboard
 - [x] UI SvelteKit pages et stores, i18n FR/EN
-- [x] Litestream config S3 (Scaleway) validée (backup/restore)
-- [x] Système de queue SQLite avec QueueManager
+- [x] Système de queue PostgreSQL avec QueueManager
+- [x] Compléter les tests unitaires (121 tests API)
+- [x] Compléter les tests E2E (91/101 tests Playwright)
+- [x] CI GitHub Actions (build/test/deploy)
+- [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
+- [x] Migration SQLite → PostgreSQL 16
+- [x] Support SSL/TLS dynamique pour Postgres (local + Scaleway Serverless)
+- [x] Refresh automatique UI pendant traitement IA
+- [x] Tests UI isolés (mocks fetch, pas d'appels API)
 
 **⏳ À faire :**
-- [x] Compléter les tests unitaires ✅ (PR #feat/complete-unit-tests)
-- [x] Compléter les tests E2E
-- [x] CI GitHub Actions (build/test, no Security)
-- [ ] Déploiements: UI (GitHub Pages), API (Scaleway Container)
-- [ ] Backups et reprise d'activité
-- [ ] Implement security tests and add it in CI
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
+- [ ] Ajouter un tool de recherche de brevets (Lens API)
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients
+- [ ] Implement security tests and add it in CI
+- [ ] Backups automatisés PostgreSQL (remplacer Litestream)
 - [ ] Mise en place poker planning
 - [ ] Mise en place de paiements
 - [ ] Implémentation de l'authentification OIDC

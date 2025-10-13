@@ -1,9 +1,38 @@
 <script lang="ts">
   import { companiesStore, fetchCompanies, deleteCompany, type Company } from '$lib/stores/companies';
   import { addToast } from '$lib/stores/toast';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { refreshManager } from '$lib/stores/refresh';
+
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: {
+    const hasEnrichingCompanies = $companiesStore.some(company => company.status === 'enriching');
+    
+    if (hasEnrichingCompanies) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive('companies')) {
+        refreshManager.startCompaniesRefresh(async () => {
+          await loadCompanies();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si aucun enrichissement n'est en cours
+      refreshManager.stopRefresh('companies');
+    }
+  }
 
   onMount(async () => {
+    await loadCompanies();
+    // Démarrer l'actualisation automatique si nécessaire
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
+  });
+
+  const loadCompanies = async () => {
     try {
       const companies = await fetchCompanies();
       companiesStore.set(companies);
@@ -14,7 +43,11 @@
         message: 'Erreur lors du chargement des entreprises'
       });
     }
-  });
+  };
+
+  const startAutoRefresh = () => {
+    // L'auto-refresh est géré par la réactivité ci-dessus
+  };
 
   const handleDeleteCompany = async (id: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ?')) return;

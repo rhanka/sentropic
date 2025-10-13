@@ -3,7 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(8787),
-  DATABASE_URL: z.string().default('sqlite:///data/app.db'),
+  DATABASE_URL: z.string().default('postgres://app:app@postgres:5432/app'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),

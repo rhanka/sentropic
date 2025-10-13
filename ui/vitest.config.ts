@@ -2,9 +2,12 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.{test,spec}.{js,ts}'],
+    include: ['tests/**/*.{test,spec}.{js,ts}'],
+    exclude: ['src/**'],
     environment: 'jsdom',
-    setupFiles: ['src/test-setup.ts'],
-    globals: true
+    setupFiles: ['tests/test-setup.ts'],
+    globals: true,
+    clearMocks: true,
+    restoreMocks: true
   }
 });

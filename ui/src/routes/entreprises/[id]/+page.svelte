@@ -1,27 +1,62 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { fetchCompanies, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import { refreshManager } from '$lib/stores/refresh';
 
   let company: Company | null = null;
   let error = '';
   
+  // Helper pour transformer les sauts de ligne simples en doubles (pour markdown)
+  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
+    if (!text) return '';
+    return text.replace(/\n/g, '\n\n');
+  };
+
   // Variables réactives pour les données des EditableInput
   $: companyData = company ? {
     name: company.name,
     industry: company.industry,
     size: company.size,
     technologies: company.technologies,
-    products: company.products,
-    processes: company.processes,
-    challenges: company.challenges,
-    objectives: company.objectives
+    products: fixMarkdownLineBreaks(company.products),
+    processes: fixMarkdownLineBreaks(company.processes),
+    challenges: fixMarkdownLineBreaks(company.challenges),
+    objectives: fixMarkdownLineBreaks(company.objectives)
   } : {};
 
+  // Réactivité pour détecter les changements de statut et gérer l'actualisation
+  $: if (company) {
+    const isEnriching = company.status === 'enriching';
+    
+    if (isEnriching) {
+      // Démarrer l'actualisation légère si ce n'est pas déjà fait
+      if (!refreshManager.isRefreshActive(`company-${company.id}`)) {
+        refreshManager.startCompanyDetailRefresh(company.id, async () => {
+          await refreshCompanyStatus();
+        });
+      }
+    } else {
+      // Arrêter l'actualisation si l'enrichissement est terminé
+      refreshManager.stopRefresh(`company-${company.id}`);
+    }
+  }
+
   onMount(async () => {
+    await loadCompany();
+    // Démarrer l'actualisation automatique si nécessaire
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    // Arrêter tous les refreshes quand on quitte la page
+    refreshManager.stopAllRefreshes();
+  });
+
+  const loadCompany = async () => {
     const companyId = $page.params.id;
     if (!companyId) return;
 
@@ -36,7 +71,25 @@
       console.error('Failed to fetch company:', err);
       error = 'Erreur lors du chargement de l\'entreprise';
     }
-  });
+  };
+
+  const refreshCompanyStatus = async () => {
+    if (!company) return;
+    
+    try {
+      const companies = await fetchCompanies();
+      const updatedCompany = companies.find(c => c.id === company.id);
+      if (updatedCompany) {
+        company = updatedCompany;
+      }
+    } catch (err) {
+      console.error('Failed to refresh company status:', err);
+    }
+  };
+
+  const startAutoRefresh = () => {
+    // L'auto-refresh est géré par la réactivité ci-dessus
+  };
 
   const handleFieldUpdate = (field: string, value: string) => {
     if (!company) return;
@@ -153,8 +206,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Produits et Services</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.products || 'Non renseigné'}
-          originalValue={company.products || ''}
+          value={fixMarkdownLineBreaks(company.products) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.products) || ''}
           changeId="company-products"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -170,8 +223,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Processus Métier</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.processes || 'Non renseigné'}
-          originalValue={company.processes || ''}
+          value={fixMarkdownLineBreaks(company.processes) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.processes) || ''}
           changeId="company-processes"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -187,8 +240,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Défis Principaux</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.challenges || 'Non renseigné'}
-          originalValue={company.challenges || ''}
+          value={fixMarkdownLineBreaks(company.challenges) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.challenges) || ''}
           changeId="company-challenges"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}
@@ -204,8 +257,8 @@
       <h3 class="font-semibold text-slate-900 mb-2">Objectifs Stratégiques</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.objectives || 'Non renseigné'}
-          originalValue={company.objectives || ''}
+          value={fixMarkdownLineBreaks(company.objectives) || 'Non renseigné'}
+          originalValue={fixMarkdownLineBreaks(company.objectives) || ''}
           changeId="company-objectives"
           apiEndpoint={`http://localhost:8787/api/v1/companies/${company.id}`}
           fullData={companyData}

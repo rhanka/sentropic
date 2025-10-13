@@ -1,7 +1,15 @@
 SHELL := /bin/bash
-DOCKER_COMPOSE ?= docker compose
-COMPOSE_RUN_UI := $(DOCKER_COMPOSE) run --rm ui
+
+-include .env
+
+DOCKER_COMPOSE  ?= docker compose
+COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
+
+export API_VERSION    ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_IMAGE_NAME ?= top-ai-ideas-api
+export UI_IMAGE_NAME  ?= top-ai-ideas-ui
 
 .DEFAULT_GOAL := help
 
@@ -9,6 +17,10 @@ COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
 help:
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z0-9_.-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32m%-25s\033[0m %s\n", $$1, $$2}'
+
+version:
+	@echo "API_VERSION: $(API_VERSION)"
+	@echo "UI_VERSION: $(UI_VERSION)"
 
 # -----------------------------------------------------------------------------
 # Installation & Build
@@ -21,33 +33,115 @@ install: ## Install UI and API dependencies inside Docker containers
 .PHONY: build
 build: build-ui build-api ## Build UI and API artifacts
 
+.PHONY: build-ui-image
+build-ui-image: ## Build the UI Docker image for production
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache ui
+
 .PHONY: build-ui
 build-ui: ## Build the SvelteKit UI (static)
-	$(COMPOSE_RUN_UI) npm run build
+	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
+
+.PHONY: lock-api
+lock-api: ## Update API package-lock.json using Node container (sync deps)
+	@echo "🔒 Updating API package-lock.json..."
+	docker run --rm -v $(PWD)/api:/app -w /app node:20 sh -lc "npm install --package-lock-only"
 
 .PHONY: save-ui
-save-ui: ## Save API Docker image as tar artifact
-	@echo "💾 Saving API image as artifact..."
-	@docker save top-ai-ideas-fullstack-ui:latest -o ui-image.tar
+save-ui: ## Save UI Docker image as tar artifact
+	@echo "💾 Saving UI image as artifact..."
+	@docker save $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) -o ui-image.tar
 
 .PHONY: load-ui
 load-ui:
 	@echo "📥 Loading UI image from artifact..."
 	@docker load -i ui-image.tar
 
+.PHONY: build-api-image
+build-api-image: ## Build the API Docker image for production
+	TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+
 .PHONY: build-api
-build-api: ## Compile the TypeScript API
-	$(COMPOSE_RUN_API) npm run build
+build-api: build-api-image
 
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
 	@echo "💾 Saving API image as artifact..."
-	@docker save top-ai-ideas-fullstack-api:latest -o api-image.tar
+	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
 
 .PHONY: load-api
 load-api:
 	@echo "📥 Loading API image from artifact..."
 	@docker load -i api-image.tar
+
+# -----------------------------------------------------------------------------
+# Docker helpers
+# -----------------------------------------------------------------------------
+
+docker-login:
+	@echo "▶ Logging in to registry"
+	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
+
+check-api-image: docker-login
+	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
+	@docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+
+pull-api-image: docker-login
+	@echo "▶ Pulling image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
+	@docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) downloaded" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+
+publish-api-image: docker-login
+	@echo "▶ Pushing image to registry"
+	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+
+# -----------------------------------------------------------------------------
+# Scaleway deployement helpers
+# -----------------------------------------------------------------------------
+check-scw:
+	@if ! command -v scw >/dev/null 2>&1; then \
+		echo "ℹ️ scw (Scaleway CLI) not found. Attempting to install..."; \
+		curl -sL https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh && \
+		echo "✅ Scaleway CLI installed. You might need to start a new shell for it to be in your PATH."; \
+	fi
+
+deploy-api-container-init: check-scw
+	@echo "▶️ Creating container $(API_IMAGE_NAME) in namespace $(SCW_NAMESPACE_ID)..."
+	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	if [ -n "$${API_CONTAINER_ID}" ]; then \
+		echo "✅ Container $(API_IMAGE_NAME) already exists (ID: $${API_CONTAINER_ID})"; \
+	else \
+		scw container container create \
+			name=$(API_IMAGE_NAME) \
+			namespace-id=$(SCW_NAMESPACE_ID) \
+			registry-image=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) \
+			port=8787 \
+			min-scale=0 \
+			max-scale=1 \
+			memory-limit=2048 \
+			cpu-limit=1000 \
+			timeout=5m \
+			privacy=public \
+			protocol=http1 && \
+		echo "✅ Container $(API_IMAGE_NAME) created successfully"; \
+	fi
+
+deploy-api-container: check-scw
+	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
+	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
+	@echo "✅ New container deployment initiated."
+
+wait-for-container: check-scw
+	@printf "⌛ Waiting for container to become ready.."
+	@API_CONTAINER_STATUS="pending"; \
+	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
+		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
+		printf "."; \
+		sleep 1; \
+	done; \
+	printf "\n✅ New container is ready.\n"
+
+deploy-api: deploy-api-container wait-for-container
+
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
@@ -92,12 +186,11 @@ audit:
 test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
-test-ui:
-	$(COMPOSE_RUN_UI) npm run test
+test-ui: up-ui
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
 
 .PHONY: test-api
-test-api: test-api-all
-	$(COMPOSE_RUN_API) npm run test
+test-api: up-api wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai
 
 .PHONY: test-int
 test-int:
@@ -206,8 +299,7 @@ clean-db: ## Clean database files and restart services
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) build --no-cache
-	$(DOCKER_COMPOSE) up
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 .PHONY: dev-ui
 dev-ui:
@@ -219,19 +311,23 @@ dev-api:
 
 .PHONY: up
 up: ## Start the full stack in detached mode
-	$(DOCKER_COMPOSE) up -d
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) up -d api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
+
+.PHONY: up-ui
+up-ui: ## Start the api stack in detached mode
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-	$(DOCKER_COMPOSE) down -v
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down -v
 
 # -----------------------------------------------------------------------------
 # Logs
@@ -262,17 +358,19 @@ sh-api:
 
 # -----------------------------------------------------------------------------
 # Database helpers
+# Workflow: 1) Modify schema.ts → 2) make db-generate → 3) make db-migrate → 4) commit schema + migrations
+# db-migrate handles both initial creation (empty DB) and incremental updates
 # -----------------------------------------------------------------------------
 .PHONY: db-generate
-db-generate:
+db-generate: ## Generate migration files from schema.ts changes
 	$(COMPOSE_RUN_API) npm run db:generate
 
 .PHONY: db-migrate
-db-migrate:
+db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
-db-reset: ## Reset database (WARNING: destroys all data)
+db-reset: up ## Reset database (WARNING: destroys all data)
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All companies"
@@ -283,11 +381,6 @@ db-reset: ## Reset database (WARNING: destroys all data)
 	@read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1)
 	@echo "🗑️  Resetting database..."
 	$(COMPOSE_RUN_API) npm run db:reset
-
-.PHONY: db-init
-db-init: ## Initialize database with all migrations
-	@echo "🗄️  Initializing database..."
-	$(COMPOSE_RUN_API) npm run db:init
 
 .PHONY: db-status
 db-status: ## Check database status and tables
@@ -324,7 +417,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(COMPOSE_RUN_API) npx tsx tests/utils/seed-test-data.ts
+	$(DOCKER_COMPOSE) exec api sh -lc "node dist/tests/utils/seed-test-data.js"
 
 .PHONY: db-lint
 db-lint:
@@ -352,25 +445,23 @@ dast:
 
 test-api-smoke: ## Run API smoke tests (basic health checks) [FILTER=*]
 	@echo "🧪 Running API smoke tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_FILTER=$(FILTER) npm run test:smoke"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_FILTER=$(FILTER) npm run test:smoke"
 
 test-api-endpoints: ## Run API endpoint tests (CRUD functionality) [ENDPOINT=*] [METHOD=*]
 	@echo "🧪 Running API endpoint tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
 
 test-api-ai: ## Run API AI tests (generation and enrichment) [TYPE=*] [MODEL=*]
 	@echo "🧪 Running API AI tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
 
 test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
 	@echo "🧪 Running API queue tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
 
 test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
 	@echo "🧪 Running API unit tests..."
-	@docker exec top-ai-ideas-fullstack-api-1 sh -c "npm run test:unit"
-
-test-api-all: test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai 
+	@$(DOCKER_COMPOSE) exec -T api sh -lc "npm run test:unit"
 
 # -----------------------------------------------------------------------------
 # Queue Management

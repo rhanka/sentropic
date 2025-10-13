@@ -116,7 +116,7 @@ export class QueueManager {
     
     await db.run(sql`
       INSERT INTO job_queue (id, type, data, status, created_at)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date().toISOString()})
+      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
     `);
     
     console.log(`📝 Job ${jobId} (${type}) added to queue`);
@@ -161,7 +161,7 @@ export class QueueManager {
         }
 
         // Traiter les jobs en parallèle
-        const promises = pendingJobs.map(job => this.processJob(job));
+        const promises = pendingJobs.map((job: any) => this.processJob(job));
         await Promise.all(promises);
       }
     } finally {
@@ -184,7 +184,7 @@ export class QueueManager {
       // Marquer comme en cours
       await db.run(sql`
         UPDATE job_queue 
-        SET status = 'processing', started_at = ${new Date().toISOString()}
+        SET status = 'processing', started_at = ${new Date()}
         WHERE id = ${jobId}
       `);
 
@@ -209,7 +209,7 @@ export class QueueManager {
       // Marquer comme terminé
       await db.run(sql`
         UPDATE job_queue 
-        SET status = 'completed', completed_at = ${new Date().toISOString()}
+        SET status = 'completed', completed_at = ${new Date()}
         WHERE id = ${jobId}
       `);
 
@@ -237,12 +237,22 @@ export class QueueManager {
     // Enrichir l'entreprise
     const enrichedData = await enrichCompany(companyName, model, signal);
     
+    // Sérialiser les champs qui peuvent être des arrays en JSON strings
+    const serializedData = {
+      ...enrichedData,
+      products: Array.isArray(enrichedData.products) ? JSON.stringify(enrichedData.products) : enrichedData.products,
+      technologies: Array.isArray(enrichedData.technologies) ? JSON.stringify(enrichedData.technologies) : enrichedData.technologies,
+      processes: Array.isArray(enrichedData.processes) ? JSON.stringify(enrichedData.processes) : enrichedData.processes,
+      challenges: Array.isArray(enrichedData.challenges) ? JSON.stringify(enrichedData.challenges) : enrichedData.challenges,
+      objectives: Array.isArray(enrichedData.objectives) ? JSON.stringify(enrichedData.objectives) : enrichedData.objectives,
+    };
+    
     // Mettre à jour en base
     await db.update(companies)
       .set({
-        ...enrichedData,
+        ...serializedData,
         status: 'completed',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
   }
@@ -311,14 +321,14 @@ export class QueueManager {
         metrics: JSON.stringify([]),
         risks: JSON.stringify([]),
         nextSteps: JSON.stringify([]),
-        sources: JSON.stringify([]),
-        relatedData: JSON.stringify([]),
+        dataSources: JSON.stringify([]),
+        dataObjects: JSON.stringify([]),
         valueScores: JSON.stringify([]),
         complexityScores: JSON.stringify([]),
         totalValueScore: 0,
         totalComplexityScore: 0,
         status: 'generating',
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       };
     });
 
@@ -439,13 +449,13 @@ export class QueueManager {
         metrics: JSON.stringify(useCaseDetail.metrics),
         risks: JSON.stringify(useCaseDetail.risks),
         nextSteps: JSON.stringify(useCaseDetail.nextSteps),
-        sources: JSON.stringify(useCaseDetail.sources),
-        relatedData: JSON.stringify(useCaseDetail.relatedData),
+        dataSources: JSON.stringify(useCaseDetail.dataSources),
+        dataObjects: JSON.stringify(useCaseDetail.dataObjects),
         references: JSON.stringify(useCaseDetail.references || []),
         valueScores: JSON.stringify(useCaseDetail.valueScores),
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
-        totalValueScore: computed.totalValueScore,
-        totalComplexityScore: computed.totalComplexityScore,
+        totalValueScore: Math.round(computed.totalValueScore),
+        totalComplexityScore: Math.round(computed.totalComplexityScore),
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));

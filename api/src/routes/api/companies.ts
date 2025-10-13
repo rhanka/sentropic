@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
+import { settingsService } from '../../services/settings';
 
 // Fonction d'enrichissement asynchrone
 async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
@@ -21,7 +22,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string, model:
       .set({
         ...enrichedData,
         status: 'completed',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
     
@@ -33,7 +34,7 @@ async function enrichCompanyAsync(companyId: string, companyName: string, model:
     await db.update(companies)
       .set({ 
         status: 'draft',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
   }
@@ -87,7 +88,10 @@ companiesRouter.post('/draft', zValidator('json', z.object({
 companiesRouter.post('/:id/enrich', async (c) => {
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
-  const selectedModel = model || 'gpt-4.1-nano';
+  
+  // Récupérer le modèle par défaut depuis les settings si non fourni
+  const aiSettings = await settingsService.getAISettings();
+  const selectedModel = model || aiSettings.defaultModel;
   
   try {
     // Récupérer l'entreprise
@@ -135,12 +139,15 @@ companiesRouter.get('/:id', async (c) => {
 companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c) => {
   const id = c.req.param('id');
   const payload = c.req.valid('json');
-  const result = await db.update(companies).set(payload).where(eq(companies.id, id)).run();
-  if (result.changes === 0) {
+  const updated = await db
+    .update(companies)
+    .set(payload)
+    .where(eq(companies.id, id))
+    .returning();
+  if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
-  return c.json(company);
+  return c.json(updated[0]);
 });
 
 // Endpoint pour l'enrichissement automatique des entreprises

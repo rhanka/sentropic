@@ -14,8 +14,8 @@ export type UseCase = {
   metrics: string[];
   risks: string[];
   nextSteps: string[];
-  sources: string[];
-  relatedData: string[];
+  dataSources: string[];
+  dataObjects: string[];
   valueScores: any[];
   complexityScores: any[];
   totalValueScore: number;

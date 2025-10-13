@@ -1,0 +1,15 @@
+services:
+  api:
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run db:migrate && npm run dev"
+
+  ui:
+    volumes:
+      - ./ui:/app
+      - ui_node_modules:/app/node_modules
+
+volumes:
+  api_node_modules:
+  ui_node_modules:

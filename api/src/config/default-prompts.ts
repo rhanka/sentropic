@@ -23,7 +23,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant:
 IMPORTANT: 
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
-- Fais une recherche avec le tool web_search pour trouver des informations sur l'entreprise
+- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'entreprise
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
     variables: ['company_name', 'industries']
   },
@@ -119,11 +119,11 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Étape 3",
     "Étape 4"
   ],
-  "sources": [
+  "dataSources": [
     "Source de données 1 (ex ERP ou MES)",
     "Source de données 2"
   ],
-  "relatedData": [
+  "dataObjects": [
     "Donnée associée 1 ex Ordre de production",
     "Donnée associée 2",
     "Donnée associée 3"

@@ -9,8 +9,8 @@ export default defineConfig({
         singleFork: true
       }
     },
-    // Increase timeout for database operations
-    testTimeout: 10000,
+    // Increase timeout for database operations and AI API calls
+    testTimeout: 60000,
     // Setup files
     setupFiles: [],
   },

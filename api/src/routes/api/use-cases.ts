@@ -12,6 +12,7 @@ import type { MatrixConfig } from '../../types/matrix';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
+import { settingsService } from '../../services/settings';
 
 // Récupération des prompts depuis la configuration centralisée
 const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
@@ -35,8 +36,8 @@ const useCaseInput = z.object({
   metrics: z.array(z.string()).optional(),
   risks: z.array(z.string()).optional(),
   nextSteps: z.array(z.string()).optional(),
-  sources: z.array(z.string()).optional(),
-  relatedData: z.array(z.string()).optional(),
+  dataSources: z.array(z.string()).optional(),
+  dataObjects: z.array(z.string()).optional(),
   valueScores: z.array(scoreEntry).optional(),
   complexityScores: z.array(scoreEntry).optional()
 });
@@ -79,8 +80,8 @@ const hydrateUseCase = (row: SerializedUseCase) => ({
   metrics: parseJson<string[]>(row.metrics) ?? [],
   risks: parseJson<string[]>(row.risks) ?? [],
   nextSteps: parseJson<string[]>(row.nextSteps) ?? [],
-  sources: parseJson<string[]>(row.sources) ?? [],
-  relatedData: parseJson<string[]>(row.relatedData) ?? [],
+  dataSources: parseJson<string[]>(row.dataSources) ?? [],
+  dataObjects: parseJson<string[]>(row.dataObjects) ?? [],
   references: parseJson<Array<{title: string; url: string}>>(row.references) ?? [],
   technologies: parseJson<string[]>(row.technologies) ?? [],
   valueScores: parseJson<ScoreEntry[]>(row.valueScores) ?? [],
@@ -120,8 +121,8 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
     metrics: serializeArray(payload.metrics),
     risks: serializeArray(payload.risks),
     nextSteps: serializeArray(payload.nextSteps),
-    sources: serializeArray(payload.sources),
-    relatedData: serializeArray(payload.relatedData),
+    dataSources: serializeArray(payload.dataSources),
+    dataObjects: serializeArray(payload.dataObjects),
     valueScores: serializeScores(payload.valueScores),
     complexityScores: serializeScores(payload.complexityScores),
     totalValueScore: computed.totalValueScore ?? null,
@@ -169,8 +170,8 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
       metrics: payload.metrics ? serializeArray(payload.metrics) : record.metrics,
       risks: payload.risks ? serializeArray(payload.risks) : record.risks,
       nextSteps: payload.nextSteps ? serializeArray(payload.nextSteps) : record.nextSteps,
-      sources: payload.sources ? serializeArray(payload.sources) : record.sources,
-      relatedData: payload.relatedData ? serializeArray(payload.relatedData) : record.relatedData,
+      dataSources: payload.dataSources ? serializeArray(payload.dataSources) : record.dataSources,
+      dataObjects: payload.dataObjects ? serializeArray(payload.dataObjects) : record.dataObjects,
       valueScores: payload.valueScores ? serializeScores(payload.valueScores) : record.valueScores,
       complexityScores: payload.complexityScores
         ? serializeScores(payload.complexityScores)
@@ -199,7 +200,10 @@ const generateInput = z.object({
 useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
   try {
     const { input, create_new_folder, company_id, model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-4.1-nano';
+    
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
     
     let folderId: string | undefined;
     
@@ -215,8 +219,8 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         description: folderDescription,
         companyId: company_id || null,
         matrixConfig: JSON.stringify(defaultMatrixConfig),
-        status: 'generating',
-        createdAt: new Date().toISOString()
+        status: 'generating'
+        // createdAt omitted to use defaultNow() in Postgres
       });
     }
     
@@ -238,6 +242,10 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
     
   } catch (error) {
     console.error('Error in use-cases generate:', error);
+    if (error instanceof Error) {
+      console.error('Generate error message:', error.message);
+      console.error('Generate error stack:', error.stack);
+    }
     return c.json(
       { 
         message: 'Failed to generate use cases', 
@@ -257,7 +265,10 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
   try {
     const id = c.req.param('id');
     const { model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-4.1-nano';
+    
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer le cas d'usage
     const [useCase] = await db.select().from(useCases).where(eq(useCases.id, id));

@@ -8,13 +8,13 @@ RUN if [ -f package-lock.json ]; then npm ci; \
     else npm install; fi
 COPY . .
 
-FROM base AS dev
+FROM base AS development
 CMD ["npm", "run", "dev"]
 
 FROM base AS build
 RUN npm run build
 
-FROM node:20-alpine AS prod
+FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=base /app/package.json ./
@@ -22,5 +22,4 @@ COPY --from=base /app/package-lock.json* ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=base /app/drizzle ./drizzle
-COPY --from=base /app/litestream.yml ./litestream.yml
 CMD ["node", "dist/index.js"]

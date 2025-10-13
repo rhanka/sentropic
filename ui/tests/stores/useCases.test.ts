@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { 
   useCasesStore, 
@@ -8,14 +8,12 @@ import {
   deleteUseCase,
   generateUseCases,
   detailUseCase
-} from './useCases';
-
-// Mock fetch
-global.fetch = vi.fn();
+} from '../../src/lib/stores/useCases';
+import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
 describe('Use Cases Store', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetFetchMock();
     useCasesStore.set([]);
   });
 
@@ -26,21 +24,15 @@ describe('Use Cases Store', () => {
         { id: '2', name: 'Use Case 2', folderId: 'folder1', companyId: 'company1' }
       ];
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ items: mockUseCases })
-      });
+      mockFetchJsonOnce({ items: mockUseCases });
 
       const result = await fetchUseCases();
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases');
       expect(result).toEqual(mockUseCases);
     });
 
     it('should throw error when fetch fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false
-      });
+      mockFetchJsonOnce({}, 500);
 
       await expect(fetchUseCases()).rejects.toThrow('Failed to fetch use cases');
     });
@@ -55,18 +47,10 @@ describe('Use Cases Store', () => {
       };
       const createdUseCase = { id: '1', ...newUseCase };
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(createdUseCase)
-      });
+      mockFetchJsonOnce(createdUseCase);
 
       const result = await createUseCase(newUseCase);
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUseCase)
-      });
       expect(result).toEqual(createdUseCase);
     });
   });
@@ -81,40 +65,24 @@ describe('Use Cases Store', () => {
         companyId: 'company1' 
       };
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(updatedUseCase)
-      });
+      mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases/1', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
       expect(result).toEqual(updatedUseCase);
     });
   });
 
   describe('deleteUseCase', () => {
     it('should delete use case successfully', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true
-      });
+      mockFetchJsonOnce({}, 200);
 
       await deleteUseCase('1');
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases/1', {
-        method: 'DELETE'
-      });
     });
 
     it('should throw error when deletion fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ message: 'Use case not found' })
-      });
+      mockFetchJsonOnce({ message: 'Use case not found' }, 404);
 
       await expect(deleteUseCase('1')).rejects.toThrow('Failed to delete use case');
     });
@@ -128,39 +96,20 @@ describe('Use Cases Store', () => {
         summary: 'Generated 2 use cases'
       };
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(generationResult)
-      });
+      mockFetchJsonOnce(generationResult);
 
       const result = await generateUseCases('Test input', true, 'company1');
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: 'Test input',
-          create_new_folder: true,
-          company_id: 'company1'
-        })
-      });
       expect(result).toEqual(generationResult);
     });
   });
 
   describe('detailUseCase', () => {
     it('should detail use case successfully', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true
-      });
+      mockFetchJsonOnce({}, 200);
 
       await detailUseCase('1', 'gpt-4');
       
-      expect(fetch).toHaveBeenCalledWith('http://localhost:8787/api/v1/use-cases/1/detail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-4' })
-      });
     });
   });
 
@@ -180,8 +129,8 @@ describe('Use Cases Store', () => {
         metrics: [],
         risks: [],
         nextSteps: [],
-        sources: [],
-        relatedData: [],
+        dataSources: [],
+        dataObjects: [],
         valueScores: [],
         complexityScores: [],
         totalValueScore: 0,

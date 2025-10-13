@@ -77,16 +77,21 @@
     }
   };
 
-  // Refresh léger - met à jour seulement les statuts sans clignotement
+  // Refresh léger - met à jour les statuts et les champs modifiés par l'IA (nom, description)
   const refreshFolderStatus = async () => {
     try {
       const folders = await fetchFolders();
       
-      // Mettre à jour seulement les champs qui changent (status)
+      // Mettre à jour les champs qui peuvent changer (status, name, description)
       foldersStore.update(items => 
         items.map(item => {
           const updated = folders.find(f => f.id === item.id);
-          return updated ? { ...item, status: updated.status } : item;
+          return updated ? { 
+            ...item, 
+            status: updated.status,
+            name: updated.name,
+            description: updated.description
+          } : item;
         })
       );
     } catch (error) {
@@ -123,18 +128,14 @@
     }
   };
 
-  // Refresh léger des cas d'usage - met à jour seulement les statuts
+  // Refresh léger des cas d'usage - met à jour les statuts et les champs modifiés par l'IA
   const refreshUseCasesStatus = async () => {
     try {
       const useCases = await fetchUseCases();
       
-      // Mettre à jour seulement les champs qui changent (status)
-      useCasesStore.update(items => 
-        items.map(item => {
-          const updated = useCases.find(uc => uc.id === item.id);
-          return updated ? { ...item, status: updated.status } : item;
-        })
-      );
+      // Mettre à jour complètement les cas d'usage pour avoir les données les plus récentes
+      // (inclut les nouveaux cas d'usage générés)
+      useCasesStore.set(useCases);
     } catch (error) {
       console.error('Failed to refresh use cases status:', error);
     }
