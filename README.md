@@ -33,9 +33,11 @@ flowchart LR
 
 ### Environment Variables
 
+#### UI Configuration
+
 The UI uses environment variables for configuration. These are set via Vite's `VITE_*` prefix:
 
-#### `VITE_API_BASE_URL`
+##### `VITE_API_BASE_URL`
 
 API backend base URL. The UI will make all API calls to this URL.
 
@@ -48,6 +50,27 @@ API backend base URL. The UI will make all API calls to this URL.
 ```typescript
 import { API_BASE_URL } from '$lib/config';
 const response = await fetch(`${API_BASE_URL}/companies`);
+```
+
+#### API Configuration
+
+##### `CORS_ALLOWED_ORIGINS`
+
+Comma-separated list of allowed origins for CORS. Supports wildcard subdomain patterns using `*`.
+
+**Default value:**
+```
+http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca
+```
+
+**Examples:**
+- Exact match: `http://localhost:5173`
+- Wildcard subdomain: `https://*.sent-tech.ca` (matches `https://app.sent-tech.ca`, `https://api.sent-tech.ca`, etc.)
+
+**Production override:**
+Set this environment variable in your deployment environment (e.g., Scaleway Container) to restrict CORS to production domains only:
+```bash
+CORS_ALLOWED_ORIGINS=https://*.sent-tech.ca,https://top-ai-ideas.sent-tech.ca
 ```
 
 ### Local Development

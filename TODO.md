@@ -15,10 +15,10 @@
 - [x] CI GitHub Actions (build/test/deploy)
 - [x] Migration SQLite → PostgreSQL 16
 - [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
-
+- [x] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
+- [x] Fix CORS - enable front from *.sent-tech.ca and localhost
 
 **⏳ À faire :**
-- [ ] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
 - [ ] Ajouter un tool de recherche de brevets (Lens API)
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients
