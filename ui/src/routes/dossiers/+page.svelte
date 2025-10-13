@@ -2,6 +2,7 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { refreshManager } from '$lib/stores/refresh';
@@ -180,7 +181,7 @@
     }
     
     try {
-      const response = await fetch('http://localhost:8787/api/v1/folders', {
+      const response = await fetch(`${API_BASE_URL}/folders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -218,7 +219,7 @@
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
     
     try {
-      const response = await fetch(`http://localhost:8787/api/v1/folders/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/folders/${id}`, {
         method: 'DELETE',
       });
 

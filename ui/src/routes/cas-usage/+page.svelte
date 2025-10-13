@@ -2,6 +2,7 @@
   import { useCasesStore, fetchUseCases, deleteUseCase, detailUseCase } from '$lib/stores/useCases';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
+  import { API_BASE_URL } from '$lib/config';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
@@ -83,7 +84,7 @@
       // Charger la matrice si on a un dossier sélectionné
       if ($currentFolderId) {
         try {
-          const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`);
+          const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
           if (response.ok) {
             const folder = await response.json();
             matrix = folder.matrixConfig;
@@ -122,7 +123,7 @@
       // Recharger la matrice si nécessaire
       if ($currentFolderId && !matrix) {
         try {
-          const response = await fetch(`http://localhost:8787/api/v1/folders/${$currentFolderId}`);
+          const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
           if (response.ok) {
             const folder = await response.json();
             matrix = folder.matrixConfig;
@@ -163,7 +164,6 @@
       });
 
       // Appeler l'API de génération
-      const API_BASE_URL = 'http://localhost:8787/api/v1';
       const response = await fetch(`${API_BASE_URL}/use-cases/generate`, {
         method: 'POST',
         headers: {
