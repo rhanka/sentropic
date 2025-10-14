@@ -20,9 +20,20 @@
 - [x] Fix 404 enterprises/[id] path in production
 
 **⏳ À faire :**
-- [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
-- [ ] Implémentation de l'authentification OIDC
-- [ ] Mise en place de rôles Admin général, Admin client, Guests clients
+- [ ] Auth:
+    - [ ] avec @simplewebauthn/{server,browser} cookie HttpOnly
+    - [ ] RP Config
+    - [ ] Schéma DB “webauthn_credentials” (Drizzle) pour lier clés → user : credentialId (base64url, unique), publicKey (PEM/COSE b64), counter, userId, deviceName, transports, uvFlag, timestamps (à confirmer)
+    - [ ] table pour stocker les refresh tokens / device sessions pour révocation, liste d’appareils, et état MFA.
+    - [ ] stockage des challenges (posgres + expiresAt + used + purge au démarrage cold start) avec TTL (60–300 s)
+    - [ ] Flow : routes d’init + de vérif (register & auth) côté server + appels @simplewebauthn/browser côté client.
+    - [ ] JWT/session après vérif (jose/cookies)
+    - [ ] RBAC (admin app, admin org, editor, guest)
+    - [ ] secureHeaders (équiv de Helmet pour Hono) (CSP/HSTS/COOP/COEP) et CORS strict
+    - [ ] Rate-limit sur /webauthn/*
+    - [ ] User Verification : required pour admins, preferred pour éditeurs.
+    - [ ] Attestation policy : la plupart du temps none; sinon gère la vérification des certs.
+    - [ ] secours lien magique
 - [ ] Traçabilité des modèles (GPT5, GPT4.1nano) utilisés pour chaque enrichissement
 - [ ] Approfondissement d'un enrichissement (passer de GPT4.1.nano à GPT5 pour un enrichissement)
 - [ ] Interaction ciblée autour d'un cas d'usage ou entreprise
