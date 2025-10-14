@@ -193,7 +193,7 @@ jobs:
           path: .
       - name: Load UI image from artifact
         if: steps.image-check.outcome == 'failure'
-        run: make load-UI
+        run: make load-ui
       - name: Publish UI image
         if: steps.image-check.outcome == 'failure'
         run: make publish-ui-image
