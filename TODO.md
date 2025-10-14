@@ -17,19 +17,22 @@
 - [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [x] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
+- [x] Fix 404 enterprises/[id] path in production
 
 **⏳ À faire :**
-- [x] Fix 404 enterprises/[id] path in production
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
-- [ ] Ajouter un tool de recherche de brevets (Lens API)
-- [ ] Mise en place de rôles Admin général, Admin client, Guests clients
-- [ ] Implement security tests and add it in CI
-- [ ] Backups automatisés PostgreSQL (remplacer Litestream)
-- [ ] Mise en place poker planning
-- [ ] Mise en place de paiements
 - [ ] Implémentation de l'authentification OIDC
+- [ ] Mise en place de rôles Admin général, Admin client, Guests clients
+- [ ] Traçabilité des modèles (GPT5, GPT4.1nano) utilisés pour chaque enrichissement
+- [ ] Approfondissement d'un enrichissement (passer de GPT4.1.nano à GPT5 pour un enrichissement)
+- [ ] Interaction ciblée autour d'un cas d'usage ou entreprise
+- [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
+- [ ] Mise en place poker planning
+- [ ] Ajouter un tool de recherche de brevets (Lens API)
+- [ ] Implement security tests and add it in CI
+- [ ] Backups automatisés PostgreSQL (externalisation sur S3)
+- [ ] Mise en place de paiements
 - [ ] Ré-activer et corriger les 2 tests E2E entreprises (création + bouton IA)
   - Raison du skip: `EditableInput` avec auto-save (5s) et enrichissement IA parfois >30s
   - Action: adapter le test pour attendre la fin d'auto-save et stabiliser l'enrichissement
-- [ ] Pages `/configuration-metier` et `/donnees` complètes
 
