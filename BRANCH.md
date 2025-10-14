@@ -12,63 +12,60 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 ## Plan / Todo
 
 ### Phase 1: Database Schema & Migrations
-- [ ] 1.1: Create `webauthn_credentials` table with fields:
-  - `id` (uuid, pk)
-  - `credential_id` (text, unique, base64url-encoded)
-  - `public_key` (text, PEM or COSE base64-encoded)
-  - `counter` (integer, for replay protection)
-  - `user_id` (uuid, fk → users.id)
-  - `device_name` (text, user-friendly name)
-  - `transports` (json, array of authenticator transports)
-  - `backup_eligible` (boolean)
-  - `backup_state` (boolean)
-  - `uv_initialized` (boolean, user verification flag)
-  - `created_at` (timestamptz)
-  - `last_used_at` (timestamptz)
-
-- [ ] 1.2: Create `users` table (if not exists) with fields:
-  - `id` (uuid, pk)
-  - `email` (text, unique, nullable for anonymous WebAuthn)
-  - `display_name` (text)
-  - `role` (text, enum: 'admin_app', 'admin_org', 'editor', 'guest')
-  - `current_challenge` (text, nullable, temporary storage)
-  - `challenge_expires_at` (timestamptz, nullable)
-  - `created_at` (timestamptz)
-  - `updated_at` (timestamptz)
-
-- [ ] 1.3: Create `user_sessions` table for device session management:
-  - `id` (uuid, pk)
-  - `user_id` (uuid, fk → users.id)
-  - `session_token` (text, unique, hashed)
-  - `refresh_token` (text, unique, hashed, nullable)
+- [ ] 1.1: Create `webauthn_credentials` table (SQLite + Drizzle conventions):
+  - `id` (text, uuid pk)
+  - `credential_id` (text, unique, base64url)
+  - `public_key_cose` (text, base64url COSE publicKey)
+  - `counter` (integer)
+  - `user_id` (text, uuid fk → users.id)
   - `device_name` (text)
-  - `ip_address` (text)
-  - `user_agent` (text)
-  - `mfa_verified` (boolean)
-  - `expires_at` (timestamptz)
-  - `created_at` (timestamptz)
-  - `last_activity_at` (timestamptz)
+  - `transports_json` (text, JSON-encoded array)
+  - `uv` (boolean)  // user verification observed at registration
+  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
+  - `last_used_at` (text, ISO string, nullable)
 
-- [ ] 1.4: Create `webauthn_challenges` table for challenge storage:
-  - `id` (uuid, pk)
-  - `challenge` (text, unique, base64url-encoded)
-  - `user_id` (uuid, fk → users.id, nullable for registration)
-  - `type` (text, enum: 'registration', 'authentication')
-  - `expires_at` (timestamptz, TTL 60-300s)
+- [ ] 1.2: Create `users` table (minimal, no inline challenge storage):
+  - `id` (text, uuid pk)
+  - `email` (text, unique, nullable)
+  - `display_name` (text, nullable)
+  - `role` (text, enum: 'admin_app' | 'admin_org' | 'editor' | 'guest', default 'guest')
+  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
+  - `updated_at` (text, ISO string, default CURRENT_TIMESTAMP)
+
+- [ ] 1.3: Create `user_sessions` table (revocation/device sessions):
+  - `id` (text, uuid pk)
+  - `user_id` (text, uuid fk → users.id)
+  - `session_token_hash` (text, unique)
+  - `refresh_token_hash` (text, unique, nullable)
+  - `device_name` (text, nullable)
+  - `ip_address` (text, nullable)
+  - `user_agent` (text, nullable)
+  - `mfa_verified` (boolean, default false)
+  - `expires_at` (text, ISO string)
+  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
+  - `last_activity_at` (text, ISO string, default CURRENT_TIMESTAMP)
+
+- [ ] 1.4: Create `webauthn_challenges` table (separate TTL store):
+  - `id` (text, uuid pk)
+  - `challenge` (text, unique, base64url)
+  - `user_id` (text, uuid fk → users.id, nullable)
+  - `type` (text, 'registration' | 'authentication')
+  - `expires_at` (text, ISO string)
   - `used` (boolean, default false)
-  - `created_at` (timestamptz)
+  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
 
-- [ ] 1.5: Create `magic_links` table for fallback authentication:
-  - `id` (uuid, pk)
-  - `token` (text, unique, hashed)
+- [ ] 1.5: Create `magic_links` table (fallback auth):
+  - `id` (text, uuid pk)
+  - `token_hash` (text, unique)
   - `email` (text)
-  - `user_id` (uuid, fk → users.id, nullable)
-  - `expires_at` (timestamptz, TTL 15min)
+  - `user_id` (text, uuid fk → users.id, nullable)
+  - `expires_at` (text, ISO string)
   - `used` (boolean, default false)
-  - `created_at` (timestamptz)
+  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
 
 - [ ] 1.6: Generate and apply migrations with `make db-generate` and `make db-migrate`
-- [ ] 1.7: Add database indexes for performance (credential_id, user_id, session_token, challenge)
+- [ ] 1.7: Add indexes (credential_id, user_id, session_token_hash, refresh_token_hash, challenge)
+- [ ] 1.8: Cold-start purge job: delete expired challenges on API boot
 
 ### Phase 2: WebAuthn Relying Party Configuration
 - [ ] 2.1: Install dependencies: `@simplewebauthn/server`, `@simplewebauthn/browser`
