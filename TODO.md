@@ -19,6 +19,7 @@
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
 
 **⏳ À faire :**
+- [x] Fix 404 enterprises/[id] path in production
 - [ ] Auth Google/LinkedIn, sessions cookies HttpOnly
 - [ ] Ajouter un tool de recherche de brevets (Lens API)
 - [ ] Mise en place de rôles Admin général, Admin client, Guests clients
