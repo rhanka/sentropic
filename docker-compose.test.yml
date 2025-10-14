@@ -1,5 +1,6 @@
 services:
   e2e:
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
     build:
       context: ./e2e
       dockerfile: Dockerfile
