@@ -50,41 +50,12 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 3.4: WebAuthn authentication service (webauthn-authentication.ts) ✅
 - [x] 3.5: Magic link fallback service (magic-link.ts) ✅
 
-### Phase 4: API Routes Implementation
-- [ ] 4.1: Create registration routes (`api/src/routes/auth/register.ts`):
-  - `POST /api/v1/auth/register/options`: Generate registration options
-    - Request: `{ userName: string, userDisplayName: string, email?: string }`
-    - Response: `{ options: PublicKeyCredentialCreationOptions }`
-  - `POST /api/v1/auth/register/verify`: Verify registration response
-    - Request: `{ userName: string, credential: RegistrationResponseJSON }`
-    - Response: `{ user: User, session: Session }`
-
-- [ ] 4.2: Create authentication routes (`api/src/routes/auth/login.ts`):
-  - `POST /api/v1/auth/login/options`: Generate authentication options
-    - Request: `{ userName?: string }` (optional for discoverable credentials)
-    - Response: `{ options: PublicKeyCredentialRequestOptions }`
-  - `POST /api/v1/auth/login/verify`: Verify authentication response
-    - Request: `{ credential: AuthenticationResponseJSON }`
-    - Response: `{ user: User, session: Session }`
-
-- [ ] 4.3: Create session routes (`api/src/routes/auth/session.ts`):
-  - `GET /api/v1/auth/session`: Get current session info (authenticated)
-  - `POST /api/v1/auth/session/refresh`: Refresh session token
-  - `DELETE /api/v1/auth/session`: Logout current session
-  - `DELETE /api/v1/auth/session/all`: Logout all sessions
-
-- [ ] 4.4: Create credential management routes (`api/src/routes/auth/credentials.ts`):
-  - `GET /api/v1/auth/credentials`: List user's registered devices (authenticated)
-  - `PUT /api/v1/auth/credentials/:id`: Update device name (authenticated)
-  - `DELETE /api/v1/auth/credentials/:id`: Revoke credential (authenticated)
-
-- [ ] 4.5: Create magic link routes (`api/src/routes/auth/magic-link.ts`):
-  - `POST /api/v1/auth/magic-link/request`: Request magic link
-    - Request: `{ email: string }`
-    - Response: `{ message: "Magic link sent" }`
-  - `POST /api/v1/auth/magic-link/verify`: Verify magic link token
-    - Request: `{ token: string }`
-    - Response: `{ user: User, session: Session }`
+### Phase 4: API Routes Implementation ✅ COMPLETE
+- [x] 4.1: Registration routes (register.ts) ✅
+- [x] 4.2: Authentication routes (login.ts) ✅
+- [x] 4.3: Session management routes (session.ts) ✅
+- [x] 4.4: Credential management routes (credentials.ts) ✅
+- [x] 4.5: Magic link routes (magic-link.ts) ✅
 
 ### Phase 5: RBAC & Middleware
 - [ ] 5.1: Create authentication middleware (`api/src/middleware/auth.ts`):
@@ -257,30 +228,16 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Monitor logs for any auth errors
 
 ## Commits & Progress
-- [x] **17db73c**: feat(auth): add users table for WebAuthn authentication
-- [x] **a127c71**: feat(auth): add webauthn_credentials table
-- [x] **54b130c**: feat(auth): add user_sessions table for session management
-- [x] **41b8218**: feat(auth): add webauthn_challenges and magic_links tables
-- [x] **654c003**: fix(auth): use boolean type instead of integer for PostgreSQL
-- [x] **97a1553**: feat(auth): add final database migrations with correct boolean types
-- [x] **19f7649**: docs(auth): mark Phase 1 as completed in BRANCH.md
-- [x] **0a87f4e**: feat(auth): install @simplewebauthn/server dependency
-- [x] **e0b9781**: feat(auth): add WebAuthn RP configuration service
-- [x] **b5602af**: docs(auth): mark Phase 2 as completed in BRANCH.md
-- [x] **54bd38f**: feat(auth): add database indexes for auth tables performance
-- [x] **3c9af3a**: feat(auth): add cold-start purge job for expired auth data
-- [x] **4ae4daa**: docs(auth): mark Phase 1 & 2 as 100% complete
-- [x] **b3b5fca**: feat(auth): install @simplewebauthn/browser and fix Makefile install targets
-- [x] **7d4d093**: docs(auth): Phase 2 is now 100% complete with all 4 tasks done
-- [x] **43533e4**: feat(auth): create challenge management service
-- [x] **6b18d8d**: feat(auth): create session management service with JWT
-- [x] **4869556**: feat(auth): create WebAuthn registration and authentication services
-- [x] **698eca1**: feat(auth): create magic link fallback authentication service
+- [x] **17db73c-698eca1**: Phase 1, 2 & 3 complete (DB, RP config, backend services)
+- [x] **0a1c696**: docs(auth): mark Phase 3 as 100% complete
+- [x] **48b7a1f**: feat(auth): create registration and login API routes
+- [x] **b070354**: feat(auth): complete API routes implementation
 
 ## Status
-- **Progress**: 3/12 phases completed (21/94 tasks) - Phase 1, 2 & 3 100% DONE ✅
-- **Current**: Ready for Phase 4 - API Routes Implementation
-- **Next**: Create REST API endpoints for registration, login, session, credentials, magic links
+- **Progress**: 4/12 phases completed (26/94 tasks - 28%) ✅
+- **Phases complete**: 1 (DB), 2 (RP Config), 3 (Services), 4 (API Routes)
+- **Current**: Ready for Phase 5 - RBAC & Middleware
+- **Next**: Authentication middleware, RBAC, apply to protected routes
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
