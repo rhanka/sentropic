@@ -57,27 +57,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 4.4: Credential management routes (credentials.ts) ✅
 - [x] 4.5: Magic link routes (magic-link.ts) ✅
 
-### Phase 5: RBAC & Middleware
-- [ ] 5.1: Create authentication middleware (`api/src/middleware/auth.ts`):
-  - Extract and validate session token from cookie
-  - Attach `user` object to request context
-  - Return 401 if invalid/expired
-
-- [ ] 5.2: Create RBAC middleware (`api/src/middleware/rbac.ts`):
-  - `requireRole(role)`: Check user role matches required role
-  - `requireAnyRole(roles)`: Check user has any of specified roles
-  - Return 403 if unauthorized
-
-- [ ] 5.3: Define role hierarchy:
-  - `admin_app`: Full system access, user management
-  - `admin_org`: Organization-level admin, manage folders/users in org
-  - `editor`: Edit use cases, folders, companies
-  - `guest`: Read-only access
-
-- [ ] 5.4: Apply middleware to existing protected routes:
-  - Companies, Folders, UseCases: require `editor` or higher
-  - Settings, BusinessConfig: require `admin_org` or higher
-  - Admin endpoints: require `admin_app`
+### Phase 5: RBAC & Middleware ✅ COMPLETE
+- [x] 5.1: Authentication middleware (auth.ts) ✅
+- [x] 5.2: RBAC middleware (rbac.ts) ✅
+- [x] 5.3: Role hierarchy defined (admin_app > admin_org > editor > guest) ✅
+- [x] 5.4: Middleware applied to all protected routes ✅
 
 ### Phase 6: Security Headers & Rate Limiting
 - [ ] 6.1: Install and configure secure headers middleware:
@@ -232,12 +216,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **0a1c696**: docs(auth): mark Phase 3 as 100% complete
 - [x] **48b7a1f**: feat(auth): create registration and login API routes
 - [x] **b070354**: feat(auth): complete API routes implementation
+- [x] **ccb5e69**: docs(auth): mark Phase 4 as 100% complete
+- [x] **ffb82f4**: feat(auth): create authentication and RBAC middleware
+- [x] **0050ae2**: feat(auth): apply RBAC middleware to protected API routes
 
 ## Status
-- **Progress**: 4/12 phases completed (26/94 tasks - 28%) ✅
-- **Phases complete**: 1 (DB), 2 (RP Config), 3 (Services), 4 (API Routes)
-- **Current**: Ready for Phase 5 - RBAC & Middleware
-- **Next**: Authentication middleware, RBAC, apply to protected routes
+- **Progress**: 5/12 phases completed (30/94 tasks - 32%) ✅
+- **Phases complete**: 1 (DB), 2 (RP Config), 3 (Services), 4 (Routes), 5 (RBAC)
+- **Current**: Ready for Phase 6 - Security Headers & Rate Limiting
+- **Next**: Secure headers, rate limiting, CORS strict mode
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
