@@ -63,24 +63,10 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 5.3: Role hierarchy defined (admin_app > admin_org > editor > guest) ✅
 - [x] 5.4: Middleware applied to all protected routes ✅
 
-### Phase 6: Security Headers & Rate Limiting
-- [ ] 6.1: Install and configure secure headers middleware:
-  - Use Hono's `secureHeaders()` middleware (equivalent to Helmet)
-  - Configure CSP: `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.sent-tech.ca`
-  - HSTS: `max-age=31536000; includeSubDomains; preload`
-  - COOP: `same-origin`
-  - COEP: `require-corp`
-
-- [ ] 6.2: Implement rate limiting for WebAuthn routes:
-  - Install rate limiting library (e.g., `hono-rate-limiter`)
-  - Apply to `/api/v1/auth/*`: 10 requests per 15 minutes per IP
-  - Apply to `/api/v1/auth/register/*`: 3 requests per hour per IP
-  - Apply to `/api/v1/auth/magic-link/*`: 3 requests per 15 minutes per email
-
-- [ ] 6.3: Configure CORS for authentication routes:
-  - Update existing CORS config to allow credentials: `credentials: true`
-  - Ensure `Access-Control-Allow-Credentials: true` header
-  - Strict origin validation (no wildcards when credentials enabled)
+### Phase 6: Security Headers & Rate Limiting ✅ COMPLETE
+- [x] 6.1: Secure headers configured (CSP, HSTS, COOP, COEP) ✅
+- [x] 6.2: Rate limiting implemented for auth routes ✅
+- [x] 6.3: CORS strict mode with credentials ✅
 
 ### Phase 7: UI Registration Flow
 - [ ] 7.1: Create registration page (`ui/src/routes/auth/register/+page.svelte`):
@@ -219,12 +205,14 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **ccb5e69**: docs(auth): mark Phase 4 as 100% complete
 - [x] **ffb82f4**: feat(auth): create authentication and RBAC middleware
 - [x] **0050ae2**: feat(auth): apply RBAC middleware to protected API routes
+- [x] **57efb0c**: docs(auth): mark Phase 5 as 100% complete
+- [x] **20e7d36**: feat(auth): add security headers and rate limiting
 
 ## Status
-- **Progress**: 5/12 phases completed (30/94 tasks - 32%) ✅
-- **Phases complete**: 1 (DB), 2 (RP Config), 3 (Services), 4 (Routes), 5 (RBAC)
-- **Current**: Ready for Phase 6 - Security Headers & Rate Limiting
-- **Next**: Secure headers, rate limiting, CORS strict mode
+- **Progress**: 6/12 phases completed (33/94 tasks - 35%) ✅
+- **Phases complete**: 1 (DB), 2 (RP), 3 (Services), 4 (Routes), 5 (RBAC), 6 (Security)
+- **Current**: Backend auth complete! Ready for Phase 7 - UI Registration Flow
+- **Next**: Create UI pages and client-side WebAuthn integration
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
