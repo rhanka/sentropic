@@ -11,6 +11,7 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 
 ## Dev and test instruction
 - Use docker through make
+- make install-<ui/api>-?dev ${NPM_LIB} to install npm lib on ui/api
 - make up for dev mode
 - make test-api
 - make test-ui for unit and basic integration tests
@@ -37,7 +38,7 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [ ] 1.8: Cold-start purge job: delete expired challenges on API boot
 
 ### Phase 2: WebAuthn Relying Party Configuration
-- [ ] 2.1: Install dependencies: `@simplewebauthn/server`, `@simplewebauthn/browser`
+- [ ] 2.1: Install dependencies: `@simplewebauthn/server`, `@simplewebauthn/browser` (make install)
 - [ ] 2.2: Create RP configuration service (`api/src/services/webauthn-config.ts`):
   - Define RP ID (domain without protocol/port)
   - Define RP name (e.g., "Top AI Ideas")
