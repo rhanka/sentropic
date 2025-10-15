@@ -68,44 +68,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 6.2: Rate limiting implemented for auth routes ✅
 - [x] 6.3: CORS strict mode with credentials ✅
 
-### Phase 7: UI Registration Flow
-- [ ] 7.1: Create registration page (`ui/src/routes/auth/register/+page.svelte`):
-  - Form with username, display name, optional email
-  - Trigger WebAuthn registration on submit
-  - Show device name input after successful registration
+### Phase 7: UI Registration Flow ✅ COMPLETE
+- [x] 7.1: Registration page (auth/register) ✅
+- [x] 7.2: WebAuthn client service (webauthn-client.ts) ✅
+- [x] 7.3: Registration flow with session cookies ✅
 
-- [ ] 7.2: Create WebAuthn client service (`ui/src/lib/services/webauthn-client.ts`):
-  - `startRegistration()`: Call `@simplewebauthn/browser` startRegistration
-  - `startAuthentication()`: Call `@simplewebauthn/browser` startAuthentication
-  - Handle browser compatibility checks
-  - Handle user cancellation and errors
-
-- [ ] 7.3: Implement registration flow:
-  - Call `POST /api/v1/auth/register/options` to get options
-  - Call `startRegistration(options)` from browser library
-  - Send credential to `POST /api/v1/auth/register/verify`
-  - Store session token in HTTP-only cookie (server-set)
-  - Redirect to dashboard on success
-
-### Phase 8: UI Login Flow
-- [ ] 8.1: Create login page (`ui/src/routes/auth/login/+page.svelte`):
-  - Button to trigger WebAuthn authentication
-  - Optional username input (if no discoverable credentials)
-  - Link to magic link fallback
-
-- [ ] 8.2: Implement authentication flow:
-  - Call `POST /api/v1/auth/login/options` to get options
-  - Call `startAuthentication(options)` from browser library
-  - Send credential to `POST /api/v1/auth/login/verify`
-  - Store session token in HTTP-only cookie (server-set)
-  - Redirect to previous page or dashboard
-
-- [ ] 8.3: Create magic link fallback UI:
-  - Email input form on login page
-  - Request magic link via `POST /api/v1/auth/magic-link/request`
-  - Show "Check your email" message
-  - Magic link handler page (`/auth/magic-link/verify?token=...`)
-  - Verify token and redirect to dashboard
+### Phase 8: UI Login Flow ✅ COMPLETE
+- [x] 8.1: Login page (auth/login) ✅
+- [x] 8.2: Authentication flow with passkeys support ✅
+- [x] 8.3: Magic link fallback UI (auth/magic-link/verify) ✅
 
 ### Phase 9: UI Session Management
 - [ ] 9.1: Create session store (`ui/src/lib/stores/session.ts`):
@@ -207,12 +178,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **0050ae2**: feat(auth): apply RBAC middleware to protected API routes
 - [x] **57efb0c**: docs(auth): mark Phase 5 as 100% complete
 - [x] **20e7d36**: feat(auth): add security headers and rate limiting
+- [x] **c003d9f**: docs(auth): mark Phase 6 as 100% complete
+- [x] **2d003c2**: feat(auth): create WebAuthn client service and registration UI
+- [x] **597c166**: feat(auth): create login UI with WebAuthn and magic link fallback
 
 ## Status
-- **Progress**: 6/12 phases completed (33/94 tasks - 35%) ✅
-- **Phases complete**: 1 (DB), 2 (RP), 3 (Services), 4 (Routes), 5 (RBAC), 6 (Security)
-- **Current**: Backend auth complete! Ready for Phase 7 - UI Registration Flow
-- **Next**: Create UI pages and client-side WebAuthn integration
+- **Progress**: 8/12 phases completed (39/94 tasks - 41%) ✅
+- **Phases complete**: 1-6 (Backend), 7-8 (UI Auth)
+- **Current**: Ready for Phase 9 - UI Session Management
+- **Next**: Session store, Header component, device management, route guards
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
