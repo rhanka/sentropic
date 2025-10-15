@@ -2,6 +2,7 @@ import { env } from './config/env';
 import { logger } from './logger';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { db } from './db/client';
+import { purgeExpiredAuthData } from './services/challenge-purge';
 
 const port = env.PORT;
 
@@ -14,6 +15,9 @@ try {
   logger.error({ err: error }, 'Database migration failed at startup');
   process.exit(1);
 }
+
+// Purge expired authentication data (challenges, magic links)
+await purgeExpiredAuthData();
 
 const [{ serve }, { app }] = await Promise.all([
   import('@hono/node-server'),
