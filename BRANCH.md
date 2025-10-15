@@ -27,15 +27,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 
 ## Plan / Todo
 
-### Phase 1: Database Schema & Migrations ✅
+### Phase 1: Database Schema & Migrations ✅ COMPLETE
 - [x] 1.1: Create `webauthn_credentials` table (PostgreSQL + Drizzle)
 - [x] 1.2: Create `users` table (minimal, no inline challenge storage)
 - [x] 1.3: Create `user_sessions` table (revocation/device sessions)
 - [x] 1.4: Create `webauthn_challenges` table (separate TTL store)
 - [x] 1.5: Create `magic_links` table (fallback auth)
 - [x] 1.6: Generate and apply migrations (0001_jazzy_microbe.sql applied ✅)
-- [ ] 1.7: Add indexes (credential_id, user_id, session_token_hash, refresh_token_hash, challenge)
-- [ ] 1.8: Cold-start purge job: delete expired challenges on API boot
+- [x] 1.7: Add indexes for performance (0002_ordinary_beast.sql applied ✅)
+- [x] 1.8: Cold-start purge job implemented and running ✅
 
 ### Phase 2: WebAuthn Relying Party Configuration ✅
 - [x] 2.1: Install dependencies: `@simplewebauthn/server` ✅
@@ -287,11 +287,14 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **19f7649**: docs(auth): mark Phase 1 as completed in BRANCH.md
 - [x] **0a87f4e**: feat(auth): install @simplewebauthn/server dependency
 - [x] **e0b9781**: feat(auth): add WebAuthn RP configuration service
+- [x] **b5602af**: docs(auth): mark Phase 2 as completed in BRANCH.md
+- [x] **54bd38f**: feat(auth): add database indexes for auth tables performance
+- [x] **3c9af3a**: feat(auth): add cold-start purge job for expired auth data
 
 ## Status
-- **Progress**: 2/12 phases completed (11/94 tasks)
-- **Current**: Phase 2 - WebAuthn Relying Party Configuration ✅ COMPLETED
-- **Next**: Phase 3 - Backend Authentication Services
+- **Progress**: 2/12 phases completed (15/94 tasks) - Phase 1 & 2 100% DONE
+- **Current**: Ready for Phase 3 - Backend Authentication Services
+- **Next**: Create challenge management, session management, and WebAuthn services
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
