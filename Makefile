@@ -32,6 +32,18 @@ install: ## Install UI and API dependencies inside Docker containers
 	$(COMPOSE_RUN_API) npm install
 	$(COMPOSE_RUN_UI) npm install
 
+install-ui:
+	$(COMPOSE_RUN_UI) npm install ${NPM_LIB}
+
+install-ui-dev:
+	$(COMPOSE_RUN_UI) npm install ${NPM_LIB} --save-dev
+
+install-api:
+	$(COMPOSE_RUN_API) npm install ${NPM_LIB}
+
+install-api-dev:
+	$(COMPOSE_RUN_API) npm install ${NPM_LIB} --save-dev
+
 .PHONY: build
 build: build-ui build-api ## Build UI and API artifacts
 
