@@ -130,6 +130,26 @@ export const userSessions = pgTable('user_sessions', {
   lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
 });
 
+export const webauthnChallenges = pgTable('webauthn_challenges', {
+  id: text('id').primaryKey(),
+  challenge: text('challenge').notNull().unique(), // base64url-encoded
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for registration
+  type: text('type').notNull(), // 'registration' | 'authentication'
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+});
+
+export const magicLinks = pgTable('magic_links', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  email: text('email').notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for new users
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+});
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
@@ -139,3 +159,5 @@ export type JobQueueRow = typeof jobQueue.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type UserSessionRow = typeof userSessions.$inferSelect;
+export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
+export type MagicLinkRow = typeof magicLinks.$inferSelect;
