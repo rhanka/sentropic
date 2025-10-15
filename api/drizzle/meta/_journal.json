@@ -15,6 +15,13 @@
       "when": 1760488313092,
       "tag": "0001_jazzy_microbe",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1760489904946,
+      "tag": "0002_ordinary_beast",
+      "breakpoints": true
     }
   ]
 }

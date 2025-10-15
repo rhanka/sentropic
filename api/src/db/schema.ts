@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const companies = pgTable('companies', {
@@ -112,7 +112,9 @@ export const webauthnCredentials = pgTable('webauthn_credentials', {
   uv: boolean('uv').notNull().default(false), // user verification
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: false })
-});
+}, (table) => ({
+  userIdIdx: index('webauthn_credentials_user_id_idx').on(table.userId),
+}));
 
 export const userSessions = pgTable('user_sessions', {
   id: text('id').primaryKey(),
@@ -128,7 +130,10 @@ export const userSessions = pgTable('user_sessions', {
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  userIdIdx: index('user_sessions_user_id_idx').on(table.userId),
+  expiresAtIdx: index('user_sessions_expires_at_idx').on(table.expiresAt),
+}));
 
 export const webauthnChallenges = pgTable('webauthn_challenges', {
   id: text('id').primaryKey(),
@@ -138,7 +143,10 @@ export const webauthnChallenges = pgTable('webauthn_challenges', {
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   used: boolean('used').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  expiresAtIdx: index('webauthn_challenges_expires_at_idx').on(table.expiresAt),
+  userIdIdx: index('webauthn_challenges_user_id_idx').on(table.userId),
+}));
 
 export const magicLinks = pgTable('magic_links', {
   id: text('id').primaryKey(),
@@ -148,7 +156,10 @@ export const magicLinks = pgTable('magic_links', {
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   used: boolean('used').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  expiresAtIdx: index('magic_links_expires_at_idx').on(table.expiresAt),
+  emailIdx: index('magic_links_email_idx').on(table.email),
+}));
 
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
