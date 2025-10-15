@@ -37,22 +37,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [ ] 1.7: Add indexes (credential_id, user_id, session_token_hash, refresh_token_hash, challenge)
 - [ ] 1.8: Cold-start purge job: delete expired challenges on API boot
 
-### Phase 2: WebAuthn Relying Party Configuration
-- [ ] 2.1: Install dependencies: `@simplewebauthn/server`, `@simplewebauthn/browser` (make install)
-- [ ] 2.2: Create RP configuration service (`api/src/services/webauthn-config.ts`):
-  - Define RP ID (domain without protocol/port)
-  - Define RP name (e.g., "Top AI Ideas")
-  - Configure origin(s) for validation
-  - Set timeout (60s for registration, 300s for authentication)
-  - Configure attestation preference (default: 'none')
-  - Configure user verification requirements (required for admin, preferred for others)
-
-- [ ] 2.3: Create environment variables in `.env`:
-  - `WEBAUTHN_RP_ID` (e.g., "top-ai-ideas.sent-tech.ca")
-  - `WEBAUTHN_RP_NAME` (e.g., "Top AI Ideas")
-  - `WEBAUTHN_ORIGIN` (e.g., "https://top-ai-ideas.sent-tech.ca")
-  - `WEBAUTHN_TIMEOUT_REGISTRATION` (default: 60000)
-  - `WEBAUTHN_TIMEOUT_AUTHENTICATION` (default: 300000)
+### Phase 2: WebAuthn Relying Party Configuration ✅
+- [x] 2.1: Install dependencies: `@simplewebauthn/server` ✅
+- [x] 2.2: Create RP configuration service (`api/src/services/webauthn-config.ts`) ✅
+- [x] 2.3: Add environment variables to env.ts (WEBAUTHN_*) ✅
+- [ ] 2.4: Install `@simplewebauthn/browser` for UI (deferred to Phase 7)
 
 ### Phase 3: Backend Authentication Services
 - [ ] 3.1: Create challenge management service (`api/src/services/challenge-manager.ts`):
@@ -295,11 +284,14 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **41b8218**: feat(auth): add webauthn_challenges and magic_links tables
 - [x] **654c003**: fix(auth): use boolean type instead of integer for PostgreSQL
 - [x] **97a1553**: feat(auth): add final database migrations with correct boolean types
+- [x] **19f7649**: docs(auth): mark Phase 1 as completed in BRANCH.md
+- [x] **0a87f4e**: feat(auth): install @simplewebauthn/server dependency
+- [x] **e0b9781**: feat(auth): add WebAuthn RP configuration service
 
 ## Status
-- **Progress**: 1/12 phases completed (8/94 tasks)
-- **Current**: Phase 1 - Database Schema & Migrations ✅ COMPLETED
-- **Next**: Phase 2 - WebAuthn Relying Party Configuration
+- **Progress**: 2/12 phases completed (11/94 tasks)
+- **Current**: Phase 2 - WebAuthn Relying Party Configuration ✅ COMPLETED
+- **Next**: Phase 3 - Backend Authentication Services
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
