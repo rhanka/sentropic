@@ -114,6 +114,22 @@ export const webauthnCredentials = pgTable('webauthn_credentials', {
   lastUsedAt: timestamp('last_used_at', { withTimezone: false })
 });
 
+export const userSessions = pgTable('user_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  sessionTokenHash: text('session_token_hash').notNull().unique(),
+  refreshTokenHash: text('refresh_token_hash').unique(),
+  deviceName: text('device_name'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  mfaVerified: integer('mfa_verified', { mode: 'boolean' }).notNull().default(false),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
+});
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
@@ -122,3 +138,4 @@ export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
+export type UserSessionRow = typeof userSessions.$inferSelect;
