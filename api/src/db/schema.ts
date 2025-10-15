@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const companies = pgTable('companies', {
@@ -109,7 +109,7 @@ export const webauthnCredentials = pgTable('webauthn_credentials', {
     .references(() => users.id, { onDelete: 'cascade' }),
   deviceName: text('device_name').notNull(),
   transportsJson: text('transports_json'), // JSON-encoded array
-  uv: integer('uv', { mode: 'boolean' }).notNull().default(false), // user verification
+  uv: boolean('uv').notNull().default(false), // user verification
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: false })
 });
@@ -124,7 +124,7 @@ export const userSessions = pgTable('user_sessions', {
   deviceName: text('device_name'),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  mfaVerified: integer('mfa_verified', { mode: 'boolean' }).notNull().default(false),
+  mfaVerified: boolean('mfa_verified').notNull().default(false),
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
@@ -136,7 +136,7 @@ export const webauthnChallenges = pgTable('webauthn_challenges', {
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for registration
   type: text('type').notNull(), // 'registration' | 'authentication'
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  used: boolean('used').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
 });
 
@@ -146,7 +146,7 @@ export const magicLinks = pgTable('magic_links', {
   email: text('email').notNull(),
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for new users
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  used: boolean('used').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
 });
 
