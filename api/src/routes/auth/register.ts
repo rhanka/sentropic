@@ -7,6 +7,10 @@ import {
 } from '../../services/webauthn-registration';
 import { createSession } from '../../services/session-manager';
 import { verifyChallenge } from '../../services/challenge-manager';
+import { db } from '../../db/client';
+import { users } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+import { env } from '../../config/env';
 import type { RegistrationResponseJSON } from '@simplewebauthn/types';
 
 /**
@@ -40,9 +44,35 @@ registerRouter.post('/options', async (c) => {
     const body = await c.req.json();
     const { userName, userDisplayName, email } = registerOptionsSchema.parse(body);
     
-    // Create user record (or get existing)
-    // For now, generate temporary user ID
+    // Determine user role based on ADMIN_EMAIL configuration
+    let userRole: 'admin_app' | 'guest' = 'guest';
+    
+    if (email && env.ADMIN_EMAIL && email === env.ADMIN_EMAIL) {
+      // Check if there's already an admin
+      const existingAdmins = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.role, 'admin_app'))
+        .limit(1);
+      
+      if (existingAdmins.length === 0) {
+        userRole = 'admin_app';
+        logger.info({ email, userName }, 'Admin user registration detected');
+      } else {
+        logger.info({ email }, 'Admin email used but admin already exists, creating guest');
+      }
+    }
+    
+    // Create user record
     const userId = crypto.randomUUID();
+    await db.insert(users).values({
+      id: userId,
+      email: email || null,
+      displayName: userDisplayName,
+      role: userRole,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     
     // Generate registration options
     const options = await generateWebAuthnRegistrationOptions({
@@ -51,10 +81,12 @@ registerRouter.post('/options', async (c) => {
       userDisplayName,
     });
     
-    // Store user info in temporary storage (could use Redis/DB)
-    // For now, return userId with options for client to send back
-    
-    logger.info({ userName, userId }, 'Registration options generated');
+    logger.info({ 
+      userName, 
+      userId, 
+      role: userRole,
+      email 
+    }, 'Registration options generated');
     
     return c.json({
       options,
@@ -115,10 +147,22 @@ registerRouter.post('/verify', async (c) => {
       return c.json({ error: 'Registration verification failed' }, 400);
     }
     
+    // Get user role from database
+    const [user] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    if (!user) {
+      logger.error({ userId }, 'User not found during registration verification');
+      return c.json({ error: 'User not found' }, 500);
+    }
+    
     // Create session for user
     const { sessionToken, refreshToken, expiresAt } = await createSession(
       userId,
-      'guest', // Default role for new users
+      user.role,
       {
         name: deviceName,
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
@@ -131,13 +175,18 @@ registerRouter.post('/verify', async (c) => {
       `session=${sessionToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`
     );
     
-    logger.info({ userId, credentialId: result.credentialId }, 'Registration successful');
+    logger.info({ 
+      userId, 
+      credentialId: result.credentialId,
+      role: user.role 
+    }, 'Registration successful');
     
     return c.json({
       success: true,
       user: {
         id: userId,
         userName,
+        role: user.role,
       },
       sessionToken,
       refreshToken,
