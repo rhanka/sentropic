@@ -43,33 +43,12 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 2.3: Add environment variables to env.ts (WEBAUTHN_*) ✅
 - [x] 2.4: Install `@simplewebauthn/browser` for UI + fix Makefile install targets ✅
 
-### Phase 3: Backend Authentication Services
-- [ ] 3.1: Create challenge management service (`api/src/services/challenge-manager.ts`):
-  - `generateChallenge(userId?, type)`: Create and store challenge with expiration
-  - `verifyChallenge(challenge, userId?, type)`: Validate challenge not expired/used
-  - `markChallengeUsed(challenge)`: Mark challenge as consumed
-  - `purgeExpiredChallenges()`: Cleanup expired challenges (cold start job)
-
-- [ ] 3.2: Create session management service (`api/src/services/session-manager.ts`):
-  - `createSession(userId, deviceInfo)`: Generate session + refresh tokens (JWT via jose)
-  - `validateSession(sessionToken)`: Verify session validity and expiration
-  - `refreshSession(refreshToken)`: Issue new session token
-  - `revokeSession(sessionId)`: Invalidate specific session
-  - `listUserSessions(userId)`: Get all active sessions for user
-  - `revokeAllSessions(userId)`: Invalidate all user sessions
-
-- [ ] 3.3: Create WebAuthn registration service (`api/src/services/webauthn-registration.ts`):
-  - `generateRegistrationOptions(userId, userName, userDisplayName)`: Generate options with challenge
-  - `verifyRegistrationResponse(userId, credential, expectedChallenge)`: Validate credential and store
-
-- [ ] 3.4: Create WebAuthn authentication service (`api/src/services/webauthn-authentication.ts`):
-  - `generateAuthenticationOptions(userId?)`: Generate options with challenge (allow credential discovery)
-  - `verifyAuthenticationResponse(credential, expectedChallenge)`: Validate credential and counter
-
-- [ ] 3.5: Create magic link service (`api/src/services/magic-link.ts`):
-  - `generateMagicLink(email)`: Create token, send email, store hashed token
-  - `verifyMagicLink(token)`: Validate token not expired/used, create or find user
-  - `sendMagicLinkEmail(email, link)`: Integration with email service (future: SendGrid/Resend)
+### Phase 3: Backend Authentication Services ✅ COMPLETE
+- [x] 3.1: Challenge management service (challenge-manager.ts) ✅
+- [x] 3.2: Session management service with JWT (session-manager.ts) ✅
+- [x] 3.3: WebAuthn registration service (webauthn-registration.ts) ✅
+- [x] 3.4: WebAuthn authentication service (webauthn-authentication.ts) ✅
+- [x] 3.5: Magic link fallback service (magic-link.ts) ✅
 
 ### Phase 4: API Routes Implementation
 - [ ] 4.1: Create registration routes (`api/src/routes/auth/register.ts`):
@@ -292,11 +271,16 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **3c9af3a**: feat(auth): add cold-start purge job for expired auth data
 - [x] **4ae4daa**: docs(auth): mark Phase 1 & 2 as 100% complete
 - [x] **b3b5fca**: feat(auth): install @simplewebauthn/browser and fix Makefile install targets
+- [x] **7d4d093**: docs(auth): Phase 2 is now 100% complete with all 4 tasks done
+- [x] **43533e4**: feat(auth): create challenge management service
+- [x] **6b18d8d**: feat(auth): create session management service with JWT
+- [x] **4869556**: feat(auth): create WebAuthn registration and authentication services
+- [x] **698eca1**: feat(auth): create magic link fallback authentication service
 
 ## Status
-- **Progress**: 2/12 phases completed (16/94 tasks) - Phase 1 & 2 100% DONE ✅
-- **Current**: Ready for Phase 3 - Backend Authentication Services
-- **Next**: Create challenge management, session management, and WebAuthn services
+- **Progress**: 3/12 phases completed (21/94 tasks) - Phase 1, 2 & 3 100% DONE ✅
+- **Current**: Ready for Phase 4 - API Routes Implementation
+- **Next**: Create REST API endpoints for registration, login, session, credentials, magic links
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
