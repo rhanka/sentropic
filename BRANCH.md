@@ -9,6 +9,21 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - **Database**: New tables for credentials, sessions, challenges
 - **Security**: Rate limiting, secure headers, user verification policies
 
+## Dev and test instruction
+- Use docker through make
+- make up for dev mode
+- make test-api
+- make test-ui for unit and basic integration tests
+- make db-migrate to test migrations
+- make db-reset if required (in dev mode no risk)
+- make logs for debug
+- make build-api to test api build
+- make build-ui-image to test ui build
+- make test-e2e to test production mode
+- never use native npm, avoid non make managed instruction, assess make targets before inventing wheels, propose new make targets if very usefull
+- respect minimal changes and study zone of change before changing all without no conscience
+
+
 ## Plan / Todo
 
 ### Phase 1: Database Schema & Migrations
