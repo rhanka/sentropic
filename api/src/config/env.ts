@@ -20,7 +20,14 @@ const envSchema = z.object({
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   AUTH_CALLBACK_BASE_URL: z.string().optional(),
-  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca')
+  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca'),
+  // WebAuthn Configuration
+  WEBAUTHN_RP_ID: z.string().optional(),
+  WEBAUTHN_RP_NAME: z.string().optional(),
+  WEBAUTHN_ORIGIN: z.string().optional(),
+  WEBAUTHN_TIMEOUT_REGISTRATION: z.string().optional(),
+  WEBAUTHN_TIMEOUT_AUTHENTICATION: z.string().optional(),
+  WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
