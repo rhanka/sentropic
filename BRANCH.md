@@ -26,59 +26,13 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 
 ## Plan / Todo
 
-### Phase 1: Database Schema & Migrations
-- [ ] 1.1: Create `webauthn_credentials` table (SQLite + Drizzle conventions):
-  - `id` (text, uuid pk)
-  - `credential_id` (text, unique, base64url)
-  - `public_key_cose` (text, base64url COSE publicKey)
-  - `counter` (integer)
-  - `user_id` (text, uuid fk → users.id)
-  - `device_name` (text)
-  - `transports_json` (text, JSON-encoded array)
-  - `uv` (boolean)  // user verification observed at registration
-  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
-  - `last_used_at` (text, ISO string, nullable)
-
-- [ ] 1.2: Create `users` table (minimal, no inline challenge storage):
-  - `id` (text, uuid pk)
-  - `email` (text, unique, nullable)
-  - `display_name` (text, nullable)
-  - `role` (text, enum: 'admin_app' | 'admin_org' | 'editor' | 'guest', default 'guest')
-  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
-  - `updated_at` (text, ISO string, default CURRENT_TIMESTAMP)
-
-- [ ] 1.3: Create `user_sessions` table (revocation/device sessions):
-  - `id` (text, uuid pk)
-  - `user_id` (text, uuid fk → users.id)
-  - `session_token_hash` (text, unique)
-  - `refresh_token_hash` (text, unique, nullable)
-  - `device_name` (text, nullable)
-  - `ip_address` (text, nullable)
-  - `user_agent` (text, nullable)
-  - `mfa_verified` (boolean, default false)
-  - `expires_at` (text, ISO string)
-  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
-  - `last_activity_at` (text, ISO string, default CURRENT_TIMESTAMP)
-
-- [ ] 1.4: Create `webauthn_challenges` table (separate TTL store):
-  - `id` (text, uuid pk)
-  - `challenge` (text, unique, base64url)
-  - `user_id` (text, uuid fk → users.id, nullable)
-  - `type` (text, 'registration' | 'authentication')
-  - `expires_at` (text, ISO string)
-  - `used` (boolean, default false)
-  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
-
-- [ ] 1.5: Create `magic_links` table (fallback auth):
-  - `id` (text, uuid pk)
-  - `token_hash` (text, unique)
-  - `email` (text)
-  - `user_id` (text, uuid fk → users.id, nullable)
-  - `expires_at` (text, ISO string)
-  - `used` (boolean, default false)
-  - `created_at` (text, ISO string, default CURRENT_TIMESTAMP)
-
-- [ ] 1.6: Generate and apply migrations with `make db-generate` and `make db-migrate`
+### Phase 1: Database Schema & Migrations ✅
+- [x] 1.1: Create `webauthn_credentials` table (PostgreSQL + Drizzle)
+- [x] 1.2: Create `users` table (minimal, no inline challenge storage)
+- [x] 1.3: Create `user_sessions` table (revocation/device sessions)
+- [x] 1.4: Create `webauthn_challenges` table (separate TTL store)
+- [x] 1.5: Create `magic_links` table (fallback auth)
+- [x] 1.6: Generate and apply migrations (0001_jazzy_microbe.sql applied ✅)
 - [ ] 1.7: Add indexes (credential_id, user_id, session_token_hash, refresh_token_hash, challenge)
 - [ ] 1.8: Cold-start purge job: delete expired challenges on API boot
 
@@ -334,12 +288,17 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Monitor logs for any auth errors
 
 ## Commits & Progress
-(To be filled as commits are made)
+- [x] **17db73c**: feat(auth): add users table for WebAuthn authentication
+- [x] **a127c71**: feat(auth): add webauthn_credentials table
+- [x] **54b130c**: feat(auth): add user_sessions table for session management
+- [x] **41b8218**: feat(auth): add webauthn_challenges and magic_links tables
+- [x] **654c003**: fix(auth): use boolean type instead of integer for PostgreSQL
+- [x] **97a1553**: feat(auth): add final database migrations with correct boolean types
 
 ## Status
-- **Progress**: 0/12 phases completed (0/94 tasks)
-- **Current**: Phase 1 - Database Schema & Migrations
-- **Next**: Create database tables and generate migrations
+- **Progress**: 1/12 phases completed (8/94 tasks)
+- **Current**: Phase 1 - Database Schema & Migrations ✅ COMPLETED
+- **Next**: Phase 2 - WebAuthn Relying Party Configuration
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
