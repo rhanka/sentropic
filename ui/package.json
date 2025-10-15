@@ -17,10 +17,10 @@
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.43.5",
-    "@tsconfig/svelte": "^5.0.0",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/svelte": "^4.0.2",
     "@testing-library/user-event": "^14.5.2",
+    "@tsconfig/svelte": "^5.0.0",
     "@types/d3": "^7.4.3",
     "@types/node": "^20.14.2",
     "autoprefixer": "^10.4.17",
@@ -40,11 +40,12 @@
     "vitest": "^1.5.0"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
     "@tiptap/core": "^3.6.5",
     "@tiptap/pm": "^3.6.5",
     "@tiptap/starter-kit": "^3.6.5",
-    "tiptap-markdown": "^0.9.0",
     "chart.js": "^4.4.0",
-    "marked": "^12.0.0"
+    "marked": "^12.0.0",
+    "tiptap-markdown": "^0.9.0"
   }
 }
