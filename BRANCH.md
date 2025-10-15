@@ -84,18 +84,16 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 9.3: Device management page (auth/devices) ✅
 - [x] 9.4: Server-side route guards (hooks.server.ts) ✅
 
-### Phase 10: User Verification & Attestation Policies
-- [ ] 10.1: Implement user verification policy:
-  - For `admin_app` and `admin_org`: require UV (`userVerification: 'required'`)
-  - For `editor` and `guest`: prefer UV (`userVerification: 'preferred'`)
-  - Store UV state in `webauthn_credentials.uv_initialized`
-  - Validate UV during authentication for admin roles
-
-- [ ] 10.2: Implement attestation policy (optional for now):
-  - Default: `attestation: 'none'` (no attestation verification)
-  - If needed: implement certificate chain validation
-  - Document attestation types supported (packed, fido-u2f, apple, android-safetynet)
-  - Add configuration flag to enable/disable attestation validation
+### Phase 10: User Verification & Attestation Policies ✅ COMPLETE
+- [x] 10.1: User verification policy implemented ✅
+  - Admin roles (admin_app, admin_org): UV required
+  - Editor/guest roles: UV preferred
+  - UV state stored in webauthn_credentials.uv field
+  - Policy enforced in webauthn-config.ts and applied in services
+- [x] 10.2: Attestation policy configured ✅
+  - Default: 'none' (no attestation verification)
+  - Configurable via WEBAUTHN_ATTESTATION environment variable
+  - Ready for cert validation if needed in future
 
 ### Phase 11: Testing Strategy
 - [ ] 11.1: Unit tests for services:
