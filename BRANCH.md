@@ -78,31 +78,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 8.2: Authentication flow with passkeys support ✅
 - [x] 8.3: Magic link fallback UI (auth/magic-link/verify) ✅
 
-### Phase 9: UI Session Management
-- [ ] 9.1: Create session store (`ui/src/lib/stores/session.ts`):
-  - `currentUser`: writable store with user info
-  - `isAuthenticated`: derived store
-  - `hasRole(role)`: helper function
-  - `logout()`: call logout endpoint and clear store
-
-- [ ] 9.2: Update Header component:
-  - Show user display name and avatar when authenticated
-  - Add dropdown menu with:
-    - "My Devices" (link to credential management)
-    - "Settings" (link to user settings)
-    - "Logout" (trigger logout)
-  - Show "Login" button when not authenticated
-
-- [ ] 9.3: Create credential management page (`ui/src/routes/auth/devices/+page.svelte`):
-  - List all registered devices with last used timestamp
-  - Option to rename devices
-  - Option to revoke devices (with confirmation)
-  - Show current device indicator
-
-- [ ] 9.4: Add route guards (`ui/src/hooks.server.ts`):
-  - Check session validity on protected routes
-  - Redirect to login if not authenticated
-  - Redirect to error page if insufficient permissions
+### Phase 9: UI Session Management ✅ COMPLETE
+- [x] 9.1: Session store (stores/session.ts) ✅
+- [x] 9.2: Header component with user menu ✅
+- [x] 9.3: Device management page (auth/devices) ✅
+- [x] 9.4: Server-side route guards (hooks.server.ts) ✅
 
 ### Phase 10: User Verification & Attestation Policies
 - [ ] 10.1: Implement user verification policy:
@@ -181,12 +161,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **c003d9f**: docs(auth): mark Phase 6 as 100% complete
 - [x] **2d003c2**: feat(auth): create WebAuthn client service and registration UI
 - [x] **597c166**: feat(auth): create login UI with WebAuthn and magic link fallback
+- [x] **37a4fed**: docs(auth): mark Phase 7 & 8 as 100% complete
+- [x] **6966bcb**: feat(auth): create UI session management and device management
+- [x] **8779ca4**: feat(auth): add server-side route guards with hooks
 
 ## Status
-- **Progress**: 8/12 phases completed (39/94 tasks - 41%) ✅
-- **Phases complete**: 1-6 (Backend), 7-8 (UI Auth)
-- **Current**: Ready for Phase 9 - UI Session Management
-- **Next**: Session store, Header component, device management, route guards
+- **Progress**: 9/12 phases completed (43/94 tasks - 46%) ✅
+- **Phases complete**: 1-9 (Backend + UI complete!)
+- **Current**: Ready for Phase 10 - User Verification & Attestation Policies
+- **Next**: UV policies, attestation (optional)
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)
