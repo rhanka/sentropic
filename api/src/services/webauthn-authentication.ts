@@ -136,6 +136,16 @@ export async function verifyWebAuthnAuthentication(
     // Convert base64url back to Uint8Array
     const credentialPublicKey = Buffer.from(storedCredential.publicKeyCose, 'base64url');
     
+    // Get user role to determine UV requirement
+    const [user] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, storedCredential.userId))
+      .limit(1);
+    
+    const userRole = user?.role as 'admin_app' | 'admin_org' | 'editor' | 'guest' || 'guest';
+    const requireUV = userRole === 'admin_app' || userRole === 'admin_org';
+    
     // Verify authentication response
     const verification: VerifiedAuthenticationResponse = await verifyAuthenticationResponse({
       response: credential,
@@ -147,11 +157,20 @@ export async function verifyWebAuthnAuthentication(
         credentialPublicKey,
         counter: storedCredential.counter,
       },
-      requireUserVerification: false, // Will check per-role if needed
+      requireUserVerification: requireUV, // Required for admins, optional for others
     });
     
     if (!verification.verified) {
       logger.warn({ userId: storedCredential.userId }, 'WebAuthn authentication verification failed');
+      return { verified: false };
+    }
+    
+    // Additional check: for admin roles, verify UV was actually performed
+    if (requireUV && !verification.authenticationInfo.userVerified) {
+      logger.warn({ 
+        userId: storedCredential.userId, 
+        role: userRole 
+      }, 'User verification required for admin role but not performed');
       return { verified: false };
     }
     
