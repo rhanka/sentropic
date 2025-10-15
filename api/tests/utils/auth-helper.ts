@@ -36,7 +36,11 @@ export async function createTestUser(
   });
   
   // Create session
-  const { sessionToken, refreshToken } = await createSession(userId, role);
+  const { sessionToken, refreshToken } = await createSession(userId, role, {
+    name: `Test Device ${role}`,
+    ipAddress: '127.0.0.1',
+    userAgent: 'test-agent'
+  });
   
   return {
     id: userId,

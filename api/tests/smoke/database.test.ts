@@ -23,12 +23,19 @@ describe('Database Connectivity', () => {
     };
 
     // Create company
+    const requestBody = JSON.stringify(testCompany);
+    console.log('Sending request body:', requestBody);
     const createResponse = await apiRequest('/api/v1/companies', {
       method: 'POST',
-      body: JSON.stringify(testCompany),
+      body: requestBody,
       headers: authHeaders,
     });
 
+    if (!createResponse.ok) {
+      console.error('Create company failed:', createResponse.status, JSON.stringify(createResponse.data, null, 2));
+      console.error('Request headers:', authHeaders);
+      console.error('Request body:', testCompany);
+    }
     expect(createResponse.ok).toBe(true);
     expect(createResponse.data.name).toBe(testCompany.name);
 
@@ -61,6 +68,11 @@ describe('Database Connectivity', () => {
       headers: authHeaders,
     });
 
+    if (!createResponse.ok) {
+      console.error('Create folder failed:', createResponse.status, JSON.stringify(createResponse.data, null, 2));
+      console.error('Request headers:', authHeaders);
+      console.error('Request body:', testFolder);
+    }
     expect(createResponse.ok).toBe(true);
     expect(createResponse.data.name).toBe(testFolder.name);
 

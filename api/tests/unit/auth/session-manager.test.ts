@@ -12,13 +12,14 @@ import { userSessions, users } from '../../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Session Manager Service', () => {
-  const testUserId = crypto.randomUUID();
+  let testUserId: string;
   
   // Create test user
   beforeEach(async () => {
+    testUserId = crypto.randomUUID();
     await db.insert(users).values({
       id: testUserId,
-      email: 'test@example.com',
+      email: `test-${testUserId}@example.com`,
       displayName: 'Test User',
       role: 'editor',
       createdAt: new Date(),

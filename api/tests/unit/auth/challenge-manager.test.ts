@@ -6,7 +6,7 @@ import {
   purgeExpiredChallenges,
 } from '../../../src/services/challenge-manager';
 import { db } from '../../../src/db/client';
-import { webauthnChallenges } from '../../../src/db/schema';
+import { webauthnChallenges, users } from '../../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Challenge Manager Service', () => {
@@ -37,6 +37,14 @@ describe('Challenge Manager Service', () => {
 
     it('should generate authentication challenge with userId', async () => {
       const userId = crypto.randomUUID();
+      await db.insert(users).values({
+        id: userId,
+        email: `test-${userId}@example.com`,
+        displayName: 'Test User',
+        role: 'editor',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       const challenge = await generateChallenge({
         userId,
         type: 'authentication',
@@ -133,6 +141,14 @@ describe('Challenge Manager Service', () => {
 
     it('should reject challenge with wrong userId', async () => {
       const userId = crypto.randomUUID();
+      await db.insert(users).values({
+        id: userId,
+        email: `test-${userId}@example.com`,
+        displayName: 'Test User',
+        role: 'editor',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       const challenge = await generateChallenge({
         userId,
         type: 'authentication',

@@ -5,6 +5,7 @@ import {
 } from '../../../src/services/magic-link';
 import { db } from '../../../src/db/client';
 import { magicLinks, users } from '../../../src/db/schema';
+import { eq } from 'drizzle-orm';
 
 describe('Magic Link Service', () => {
   afterEach(async () => {
