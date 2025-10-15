@@ -2,10 +2,12 @@
   import { derived } from 'svelte/store';
   import { page } from '$app/stores';
   import { _, locale } from 'svelte-i18n';
-  import { userStore } from '../stores/auth';
+  import { session, isAuthenticated, logout } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';
   import { useCasesStore } from '../stores/useCases';
+
+  let showUserMenu = false;
 
   const navItems = [
     { href: '/', label: 'nav.home' },
@@ -70,23 +72,64 @@
         <option value="fr">FR</option>
         <option value="en">EN</option>
       </select>
-      {#if $userStore}
-        <div class="flex items-center gap-2">
-          {#if $userStore.avatarUrl}
-            <img
-              src={$userStore.avatarUrl}
-              alt="avatar"
-              class="h-8 w-8 rounded-full border border-slate-200"
-            />
+      {#if $isAuthenticated && $session.user}
+        <div class="relative">
+          <button
+            on:click={() => showUserMenu = !showUserMenu}
+            class="flex items-center gap-2 rounded px-3 py-1 text-sm hover:bg-slate-100 transition"
+          >
+            <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
+              {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
+            </div>
+            <span class="text-slate-700">{$session.user.displayName || $session.user.email || 'User'}</span>
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {#if showUserMenu}
+            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-slate-200 z-50">
+              <a
+                href="/auth/devices"
+                class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                on:click={() => showUserMenu = false}
+              >
+                Mes appareils
+              </a>
+              <a
+                href="/parametres"
+                class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                on:click={() => showUserMenu = false}
+              >
+                Paramètres
+              </a>
+              <div class="border-t border-slate-200 my-1"></div>
+              <button
+                on:click={() => { showUserMenu = false; logout(); }}
+                class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+              >
+                Déconnexion
+              </button>
+            </div>
           {/if}
-          <span class="text-sm text-slate-600">{$userStore.name}</span>
         </div>
       {:else}
-        <button class="rounded bg-primary px-3 py-1 text-sm text-white">Connexion</button>
+        <a href="/auth/login" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700 transition">
+          Connexion
+        </a>
       {/if}
     </div>
   </div>
 </header>
+
+<!-- Click outside to close user menu -->
+{#if showUserMenu}
+  <button
+    class="fixed inset-0 z-40"
+    on:click={() => showUserMenu = false}
+    aria-label="Close menu"
+  ></button>
+{/if}
 
 <style>
   :global(.active-link) {

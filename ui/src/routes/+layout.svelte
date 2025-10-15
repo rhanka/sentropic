@@ -1,10 +1,17 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import '../app.css';
   import Header from '$lib/components/Header.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import '$lib/i18n';
+  import { initializeSession } from '$lib/stores/session';
+
+  // Initialize session on app mount
+  onMount(() => {
+    initializeSession();
+  });
 </script>
 
 <svelte:head>
