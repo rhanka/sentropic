@@ -99,6 +99,21 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
 });
 
+export const webauthnCredentials = pgTable('webauthn_credentials', {
+  id: text('id').primaryKey(),
+  credentialId: text('credential_id').notNull().unique(), // base64url-encoded
+  publicKeyCose: text('public_key_cose').notNull(), // base64url-encoded COSE public key
+  counter: integer('counter').notNull().default(0),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  deviceName: text('device_name').notNull(),
+  transportsJson: text('transports_json'), // JSON-encoded array
+  uv: integer('uv', { mode: 'boolean' }).notNull().default(false), // user verification
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: false })
+});
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
@@ -106,3 +121,4 @@ export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
+export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
