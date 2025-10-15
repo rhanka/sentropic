@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS "magic_links" (
 	"email" text NOT NULL,
 	"user_id" text,
 	"expires_at" timestamp NOT NULL,
-	"used" integer DEFAULT false NOT NULL,
+	"used" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	CONSTRAINT "magic_links_token_hash_unique" UNIQUE("token_hash")
 );
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
 	"device_name" text,
 	"ip_address" text,
 	"user_agent" text,
-	"mfa_verified" integer DEFAULT false NOT NULL,
+	"mfa_verified" boolean DEFAULT false NOT NULL,
 	"expires_at" timestamp NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	"last_activity_at" timestamp DEFAULT now(),
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS "webauthn_challenges" (
 	"user_id" text,
 	"type" text NOT NULL,
 	"expires_at" timestamp NOT NULL,
-	"used" integer DEFAULT false NOT NULL,
+	"used" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	CONSTRAINT "webauthn_challenges_challenge_unique" UNIQUE("challenge")
 );
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS "webauthn_credentials" (
 	"user_id" text NOT NULL,
 	"device_name" text NOT NULL,
 	"transports_json" text,
-	"uv" integer DEFAULT false NOT NULL,
+	"uv" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	"last_used_at" timestamp,
 	CONSTRAINT "webauthn_credentials_credential_id_unique" UNIQUE("credential_id")

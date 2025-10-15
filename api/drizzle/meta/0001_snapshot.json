@@ -1,5 +1,5 @@
 {
-  "id": "fdd47757-49dd-404b-82ea-41a57317a70c",
+  "id": "ad5e8bb2-05b4-42b2-a95b-e3404ad3cb0e",
   "prevId": "58739443-ca5f-4daa-a2c3-ae64272300f1",
   "version": "7",
   "dialect": "postgresql",
@@ -299,7 +299,7 @@
         },
         "used": {
           "name": "used",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
@@ -664,7 +664,7 @@
         },
         "mfa_verified": {
           "name": "mfa_verified",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
@@ -823,7 +823,7 @@
         },
         "used": {
           "name": "used",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
@@ -915,7 +915,7 @@
         },
         "uv": {
           "name": "uv",
-          "type": "integer",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
