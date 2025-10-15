@@ -89,9 +89,20 @@ export const jobQueue = pgTable('job_queue', {
   completedAt: text('completed_at')
 });
 
+// WebAuthn Authentication Tables
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').unique(),
+  displayName: text('display_name'),
+  role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
+});
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
+export type UserRow = typeof users.$inferSelect;
