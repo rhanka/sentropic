@@ -37,11 +37,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] 1.7: Add indexes for performance (0002_ordinary_beast.sql applied ✅)
 - [x] 1.8: Cold-start purge job implemented and running ✅
 
-### Phase 2: WebAuthn Relying Party Configuration ✅
+### Phase 2: WebAuthn Relying Party Configuration ✅ COMPLETE
 - [x] 2.1: Install dependencies: `@simplewebauthn/server` ✅
 - [x] 2.2: Create RP configuration service (`api/src/services/webauthn-config.ts`) ✅
 - [x] 2.3: Add environment variables to env.ts (WEBAUTHN_*) ✅
-- [ ] 2.4: Install `@simplewebauthn/browser` for UI (deferred to Phase 7)
+- [x] 2.4: Install `@simplewebauthn/browser` for UI + fix Makefile install targets ✅
 
 ### Phase 3: Backend Authentication Services
 - [ ] 3.1: Create challenge management service (`api/src/services/challenge-manager.ts`):
@@ -290,9 +290,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **b5602af**: docs(auth): mark Phase 2 as completed in BRANCH.md
 - [x] **54bd38f**: feat(auth): add database indexes for auth tables performance
 - [x] **3c9af3a**: feat(auth): add cold-start purge job for expired auth data
+- [x] **4ae4daa**: docs(auth): mark Phase 1 & 2 as 100% complete
+- [x] **b3b5fca**: feat(auth): install @simplewebauthn/browser and fix Makefile install targets
 
 ## Status
-- **Progress**: 2/12 phases completed (15/94 tasks) - Phase 1 & 2 100% DONE
+- **Progress**: 2/12 phases completed (16/94 tasks) - Phase 1 & 2 100% DONE ✅
 - **Current**: Ready for Phase 3 - Backend Authentication Services
 - **Next**: Create challenge management, session management, and WebAuthn services
 
