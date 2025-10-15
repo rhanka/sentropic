@@ -27,7 +27,9 @@ const envSchema = z.object({
   WEBAUTHN_ORIGIN: z.string().optional(),
   WEBAUTHN_TIMEOUT_REGISTRATION: z.string().optional(),
   WEBAUTHN_TIMEOUT_AUTHENTICATION: z.string().optional(),
-  WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional()
+  WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional(),
+  // JWT Configuration
+  JWT_SECRET: z.string().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
