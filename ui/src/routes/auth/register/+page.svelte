@@ -48,12 +48,13 @@
         }),
       });
 
+      const responseData = await optionsRes.json();
+      
       if (!optionsRes.ok) {
-        const errData = await optionsRes.json();
-        throw new Error(errData.error || 'Failed to get registration options');
+        throw new Error(responseData.error || 'Failed to get registration options');
       }
 
-      const { options, userId: tempUserId } = await optionsRes.json();
+      const { options, userId: tempUserId } = responseData;
       userId = tempUserId;
 
       // Step 2: Start WebAuthn registration with authenticator

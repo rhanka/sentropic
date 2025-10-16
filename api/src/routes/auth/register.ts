@@ -44,35 +44,56 @@ registerRouter.post('/options', async (c) => {
     const body = await c.req.json();
     const { userName, userDisplayName, email } = registerOptionsSchema.parse(body);
     
-    // Determine user role based on ADMIN_EMAIL configuration
-    let userRole: 'admin_app' | 'guest' = 'guest';
-    
-    if (email && env.ADMIN_EMAIL && email === env.ADMIN_EMAIL) {
-      // Check if there's already an admin
-      const existingAdmins = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, 'admin_app'))
-        .limit(1);
-      
-      if (existingAdmins.length === 0) {
-        userRole = 'admin_app';
-        logger.info({ email, userName }, 'Admin user registration detected');
-      } else {
-        logger.info({ email }, 'Admin email used but admin already exists, creating guest');
-      }
+    // Check if user already exists
+    let existingUser;
+    if (email) {
+      const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      existingUser = user;
     }
     
-    // Create user record
-    const userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      email: email || null,
-      displayName: userDisplayName,
-      role: userRole,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // If user doesn't exist by email, check by userName (for backward compatibility)
+    if (!existingUser) {
+      const [user] = await db.select().from(users).where(eq(users.displayName, userName)).limit(1);
+      existingUser = user;
+    }
+    
+    let userId: string;
+    let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest';
+    
+    if (existingUser) {
+      // Use existing user
+      userId = existingUser.id;
+      userRole = existingUser.role as 'admin_app' | 'admin_org' | 'editor' | 'guest';
+      logger.info({ userId, email: existingUser.email }, 'Using existing user for registration');
+    } else {
+      // Determine user role for new user
+      userRole = 'guest';
+      if (email && env.ADMIN_EMAIL && email === env.ADMIN_EMAIL) {
+        const existingAdmins = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.role, 'admin_app'))
+          .limit(1);
+        
+        if (existingAdmins.length === 0) {
+          userRole = 'admin_app';
+          logger.info({ email, userName }, 'Admin user registration detected');
+        } else {
+          logger.info({ email }, 'Admin email used but admin already exists, creating guest');
+        }
+      }
+      
+      // Create new user record
+      userId = crypto.randomUUID();
+      await db.insert(users).values({
+        id: userId,
+        email: email || null,
+        displayName: userDisplayName,
+        role: userRole,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
     
     // Generate registration options
     const options = await generateWebAuthnRegistrationOptions({
