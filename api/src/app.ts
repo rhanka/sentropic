@@ -96,13 +96,16 @@ const magicLinkRateLimiter = rateLimiter({
 });
 
 // Apply rate limiters to auth routes (order matters!)
-// 1. Most specific routes first
-app.use('/api/v1/auth/session*', authSessionRateLimiter);
-app.use('/api/v1/auth/login/*', authLoginRateLimiter);
-app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
-app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
-// 2. General auth routes last (excludes already matched routes)
-app.use('/api/v1/auth/*', authRateLimiter);
+// Skip rate limiting in test environment
+if (!env.DISABLE_RATE_LIMIT) {
+  // 1. Most specific routes first
+  app.use('/api/v1/auth/session*', authSessionRateLimiter);
+  app.use('/api/v1/auth/login/*', authLoginRateLimiter);
+  app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
+  app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
+  // 2. General auth routes last (excludes already matched routes)
+  app.use('/api/v1/auth/*', authRateLimiter);
+}
 
 app.route('/api/v1', apiRouter);
 app.route('/api/v1/auth', authRouter);

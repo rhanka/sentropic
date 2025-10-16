@@ -31,7 +31,9 @@ const envSchema = z.object({
   // JWT Configuration
   JWT_SECRET: z.string().optional(),
   // Admin Configuration
-  ADMIN_EMAIL: z.string().email().optional()
+  ADMIN_EMAIL: z.string().email().optional(),
+  // Test Configuration
+  DISABLE_RATE_LIMIT: z.string().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

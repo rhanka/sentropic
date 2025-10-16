@@ -489,6 +489,16 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	    npm run test:$$TEST_TYPE; \
 	  fi'
 
+test-api-endpoints: ## Run API endpoint integration tests (disables rate limiting)
+	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e DISABLE_RATE_LIMIT="true" api sh -lc ' \
+	  if [ -n "$$SCOPE" ]; then \
+	    echo "▶ Running scoped endpoints tests: $$SCOPE"; \
+	    npm run test:endpoints -- "$$SCOPE"; \
+	  else \
+	    echo "▶ Running all endpoints tests"; \
+	    npm run test:endpoints; \
+	  fi'
+
 # -----------------------------------------------------------------------------
 # Queue Management
 # -----------------------------------------------------------------------------
