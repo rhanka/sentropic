@@ -142,7 +142,7 @@ export const webauthnChallenges = pgTable('webauthn_challenges', {
   type: text('type').notNull(), // 'registration' | 'authentication'
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
 }, (table) => ({
   expiresAtIdx: index('webauthn_challenges_expires_at_idx').on(table.expiresAt),
   userIdIdx: index('webauthn_challenges_user_id_idx').on(table.userId),

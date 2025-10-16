@@ -1,7 +1,7 @@
 <script lang="ts">
   import { settingsStore } from '$lib/stores/settings';
   import { addToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
   import { goto } from '$app/navigation';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
@@ -44,11 +44,8 @@
 
   const loadPrompts = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/prompts`);
-      if (response.ok) {
-        const data = await response.json();
-        prompts = data.prompts;
-      }
+      const data = await apiGet<{ prompts: any[] }>('/prompts');
+      prompts = data.prompts;
     } catch (error) {
       console.error('Erreur lors du chargement des prompts:', error);
     }
@@ -106,24 +103,13 @@
         p.id === selectedPrompt.id ? updatedPrompt : p
       );
 
-      const response = await fetch(`${API_BASE_URL}/prompts`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompts: updatedPrompts })
+      await apiPut('/prompts', { prompts: updatedPrompts });
+      prompts = updatedPrompts;
+      showPromptEditor = false;
+      addToast({
+        type: 'success',
+        message: 'Prompt mis à jour avec succès !'
       });
-
-      if (response.ok) {
-        prompts = updatedPrompts;
-        showPromptEditor = false;
-        addToast({
-          type: 'success',
-          message: 'Prompt mis à jour avec succès !'
-        });
-      } else {
-        throw new Error('Erreur lors de la sauvegarde');
-      }
     } catch (error) {
       addToast({
         type: 'error',
@@ -141,10 +127,7 @@
   const loadAISettings = async () => {
     isLoadingAISettings = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/ai-settings`);
-      if (response.ok) {
-        aiSettings = await response.json();
-      }
+      aiSettings = await apiGet('/ai-settings');
     } catch (error) {
       console.error('Erreur lors du chargement des paramètres IA:', error);
       addToast({
@@ -159,24 +142,12 @@
   const saveAISettings = async () => {
     isSavingAISettings = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/ai-settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiSettings)
+      const result = await apiPut('/ai-settings', aiSettings);
+      aiSettings = result.settings;
+      addToast({
+        type: 'success',
+        message: 'Paramètres IA mis à jour avec succès !'
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        aiSettings = result.settings;
-        addToast({
-          type: 'success',
-          message: 'Paramètres IA mis à jour avec succès !'
-        });
-      } else {
-        throw new Error('Erreur lors de la sauvegarde');
-      }
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des paramètres IA:', error);
       addToast({
@@ -191,10 +162,7 @@
   // Fonctions pour la gestion de la queue
   const loadQueueStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/queue/stats`);
-      if (response.ok) {
-        queueStats = await response.json();
-      }
+      queueStats = await apiGet('/queue/stats');
     } catch (error) {
       console.error('Erreur lors du chargement des statistiques de queue:', error);
     }
@@ -216,25 +184,13 @@
 
             isPurgingQueue = true;
             try {
-              const response = await fetch(`${API_BASE_URL}/queue/purge`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ status })
+              const result = await apiPost('/queue/purge', { status });
+              addToast({
+                type: 'success',
+                message: result.message
               });
-
-              if (response.ok) {
-                const result = await response.json();
-                addToast({
-                  type: 'success',
-                  message: result.message
-                });
-                
-                await loadQueueStats();
-              } else {
-                throw new Error('Erreur lors de la purge');
-              }
+              
+              await loadQueueStats();
             } catch (error) {
               console.error('Erreur lors de la purge de la queue:', error);
               addToast({
@@ -253,25 +209,13 @@
 
             isPurgingQueue = true;
             try {
-              const response = await fetch(`${API_BASE_URL}/queue/purge`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ status: 'all' })
+              const result = await apiPost('/queue/purge', { status: 'all' });
+              addToast({
+                type: 'success',
+                message: result.message
               });
-
-              if (response.ok) {
-                const result = await response.json();
-                addToast({
-                  type: 'success',
-                  message: result.message
-                });
-                
-                await loadQueueStats();
-              } else {
-                throw new Error('Erreur lors de la purge');
-              }
+              
+              await loadQueueStats();
             } catch (error) {
               console.error('Erreur lors de la purge de la queue:', error);
               addToast({
@@ -290,16 +234,7 @@
 
     isResetting = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reset data');
-      }
+      await apiPost('/admin/reset');
 
       addToast({
         type: 'success',

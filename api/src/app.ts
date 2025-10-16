@@ -52,6 +52,20 @@ app.use('*', cors({
 }));
 
 // Rate limiting for auth routes
+const authSessionRateLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 20, // 20 requests per minute (very permissive for session checks)
+  standardHeaders: 'draft-7',
+  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
+});
+
+const authLoginRateLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 5, // 5 login attempts per minute (reasonable for login attempts)
+  standardHeaders: 'draft-7',
+  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
+});
+
 const authRateLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10, // 10 requests per window
@@ -81,12 +95,16 @@ const magicLinkRateLimiter = rateLimiter({
   },
 });
 
-// Apply rate limiters to auth routes
-app.use('/auth/*', authRateLimiter);
-app.use('/auth/register/*', authRegisterRateLimiter);
-app.use('/auth/magic-link/*', magicLinkRateLimiter);
+// Apply rate limiters to auth routes (order matters!)
+// 1. Most specific routes first
+app.use('/api/v1/auth/session*', authSessionRateLimiter);
+app.use('/api/v1/auth/login/*', authLoginRateLimiter);
+app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
+app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
+// 2. General auth routes last (excludes already matched routes)
+app.use('/api/v1/auth/*', authRateLimiter);
 
 app.route('/api/v1', apiRouter);
-app.route('/auth', authRouter);
+app.route('/api/v1/auth', authRouter);
 
 app.get('/', (c) => c.json({ name: 'Top AI Ideas API', version: '0.1.0' }));

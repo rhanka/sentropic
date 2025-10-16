@@ -138,10 +138,33 @@ loginRouter.post('/verify', async (c) => {
       }
     );
     
-    // Set session cookie
-    c.header('Set-Cookie',
-      `session=${sessionToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`
-    );
+    // Set session cookie (Secure only in production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const origin = c.req.header('origin');
+    
+    // Build cookie options
+    const cookieOptions = [
+      `session=${sessionToken}`,
+      'HttpOnly',
+      isProduction ? 'Secure' : '',
+      'SameSite=Lax',
+      'Path=/',
+      `Max-Age=${7 * 24 * 60 * 60}`
+    ];
+    
+    // In development, allow cookie sharing between localhost ports
+    if (!isProduction && origin && origin.includes('localhost')) {
+      cookieOptions.push('Domain=localhost');
+    }
+    
+    const cookieString = cookieOptions.join('; ');
+    logger.debug({ 
+      origin, 
+      isProduction, 
+      cookieString: cookieString.substring(0, 50) + '...' 
+    }, 'Setting session cookie');
+    
+    c.header('Set-Cookie', cookieString);
     
     logger.info({ 
       userId: user.id,

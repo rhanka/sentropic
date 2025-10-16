@@ -29,6 +29,13 @@ declare module 'hono' {
  */
 export async function requireAuth(c: Context, next: Next) {
   try {
+    // Debug: log all cookies received
+    const cookieHeader = c.req.header('cookie');
+    logger.debug({ 
+      path: c.req.path,
+      cookieHeader: cookieHeader || 'no cookies'
+    }, 'Auth middleware debug');
+    
     // Extract session token from cookie or Authorization header
     const sessionToken = 
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||

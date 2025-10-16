@@ -18,6 +18,7 @@ export type ChallengeType = 'registration' | 'authentication';
 interface GenerateChallengeOptions {
   userId?: string;
   type: ChallengeType;
+  challenge?: string; // Optional specific challenge to store (if not provided, will generate one)
   ttlSeconds?: number; // Time-to-live in seconds (default: 60s for registration, 300s for auth)
 }
 
@@ -42,14 +43,13 @@ interface Challenge {
 export async function generateChallenge(
   options: GenerateChallengeOptions
 ): Promise<Challenge> {
-  const { userId, type, ttlSeconds } = options;
+  const { userId, type, challenge: providedChallenge, ttlSeconds } = options;
   
-  // Generate random challenge (32 bytes = 256 bits)
-  const challengeBuffer = randomBytes(32);
-  const challenge = challengeBuffer.toString('base64url');
+  // Use provided challenge or generate a new one
+  const challenge = providedChallenge || randomBytes(32).toString('base64url');
   
   // Set TTL based on type if not specified
-  const defaultTTL = type === 'registration' ? 60 : 300;
+  const defaultTTL = type === 'registration' ? 300 : 300; // 5 minutes for both registration and authentication
   const ttl = ttlSeconds || defaultTTL;
   
   // Calculate expiration time
@@ -110,7 +110,23 @@ export async function verifyChallenge(
       .limit(1);
     
     if (!record) {
-      logger.warn({ challenge: challenge.substring(0, 10) + '...', type }, 'Challenge not found');
+      // Let's see what challenges exist for debugging
+      const allChallenges = await db
+        .select({ id: webauthnChallenges.id, challenge: webauthnChallenges.challenge, type: webauthnChallenges.type, used: webauthnChallenges.used, expiresAt: webauthnChallenges.expiresAt })
+        .from(webauthnChallenges)
+        .where(eq(webauthnChallenges.type, type))
+        .limit(5);
+      
+      logger.warn({ 
+        challenge: challenge.substring(0, 10) + '...', 
+        type,
+        existingChallenges: allChallenges.map(c => ({
+          id: c.id.substring(0, 8) + '...',
+          challenge: c.challenge.substring(0, 10) + '...',
+          used: c.used,
+          expired: c.expiresAt < now
+        }))
+      }, 'Challenge not found');
       return false;
     }
     

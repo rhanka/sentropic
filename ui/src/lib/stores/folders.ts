@@ -14,51 +14,22 @@ export type Folder = {
 export const foldersStore = writable<Folder[]>([]);
 export const currentFolderId = writable<string | null>(null);
 
-import { API_BASE_URL } from '$lib/config';
+import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 
 // Fonctions API
 export const fetchFolders = async (): Promise<Folder[]> => {
-  const response = await fetch(`${API_BASE_URL}/folders`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch folders');
-  }
-  const data = await response.json();
+  const data = await apiGet<{ items: Folder[] }>('/folders');
   return data.items;
 };
 
 export const createFolder = async (folder: Omit<Folder, 'id' | 'createdAt'>): Promise<Folder> => {
-  const response = await fetch(`${API_BASE_URL}/folders`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(folder),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to create folder');
-  }
-  return response.json();
+  return apiPost<Folder>('/folders', folder);
 };
 
 export const updateFolder = async (id: string, folder: Partial<Folder>): Promise<Folder> => {
-  const response = await fetch(`${API_BASE_URL}/folders/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(folder),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to update folder');
-  }
-  return response.json();
+  return apiPut<Folder>(`/folders/${id}`, folder);
 };
 
 export const deleteFolder = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/folders/${id}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to delete folder');
-  }
+  await apiDelete(`/folders/${id}`);
 };

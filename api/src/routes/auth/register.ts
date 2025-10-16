@@ -148,6 +148,11 @@ registerRouter.post('/verify', async (c) => {
     );
     const challenge = clientData.challenge;
     
+    logger.debug({ 
+      receivedChallenge: challenge.substring(0, 10) + '...',
+      userId 
+    }, 'Extracted challenge from clientDataJSON');
+    
     // Verify challenge is valid
     const challengeValid = await verifyChallenge(challenge, userId, 'registration');
     if (!challengeValid) {
@@ -191,10 +196,19 @@ registerRouter.post('/verify', async (c) => {
       }
     );
     
-    // Set session cookie
-    c.header('Set-Cookie', 
-      `session=${sessionToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`
-    );
+    // Set session cookie (Secure only in production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = [
+      `session=${sessionToken}`,
+      'HttpOnly',
+      isProduction ? 'Secure' : '',
+      'SameSite=Lax',
+      'Path=/',
+      'Domain=localhost', // Allow sharing between localhost ports
+      `Max-Age=${7 * 24 * 60 * 60}`
+    ].filter(Boolean).join('; ');
+    
+    c.header('Set-Cookie', cookieOptions);
     
     logger.info({ 
       userId, 

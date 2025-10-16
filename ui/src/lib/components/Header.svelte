@@ -2,7 +2,7 @@
   import { derived } from 'svelte/store';
   import { page } from '$app/stores';
   import { _, locale } from 'svelte-i18n';
-  import { session, isAuthenticated, logout } from '../stores/session';
+  import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';
   import { useCasesStore } from '../stores/useCases';
@@ -89,6 +89,15 @@
 
           {#if showUserMenu}
             <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-slate-200 z-50">
+              {#if $session.user?.id === 'unknown'}
+                <button
+                  on:click={() => { showUserMenu = false; retrySessionInit(); }}
+                  class="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                >
+                  🔄 Actualiser les informations
+                </button>
+                <div class="border-t border-slate-200 my-1"></div>
+              {/if}
               <a
                 href="/auth/devices"
                 class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"

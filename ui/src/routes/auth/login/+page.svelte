@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiPost } from '$lib/utils/api';
+  import { setUser } from '$lib/stores/session';
   import {
     isWebAuthnSupported,
     startWebAuthnAuthentication,
@@ -30,40 +31,25 @@
 
     try {
       // Step 1: Get authentication options from server
-      const optionsRes = await fetch(`${API_BASE_URL}/auth/login/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userName: userName || undefined,
-        }),
+      const { options } = await apiPost('/auth/login/options', {
+        userName: userName || undefined,
       });
-
-      if (!optionsRes.ok) {
-        const errData = await optionsRes.json();
-        throw new Error(errData.error || 'Failed to get authentication options');
-      }
-
-      const { options } = await optionsRes.json();
 
       // Step 2: Start WebAuthn authentication with authenticator
       const credential = await startWebAuthnAuthentication(options);
 
       // Step 3: Verify authentication with server
-      const verifyRes = await fetch(`${API_BASE_URL}/auth/login/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Important for cookies
-        body: JSON.stringify({
-          credential,
-        }),
+      const data = await apiPost('/auth/login/verify', {
+        credential,
       });
 
-      if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        throw new Error(errData.error || 'Authentication failed');
-      }
-
-      const data = await verifyRes.json();
+      // Update session store with user info
+      setUser({
+        id: data.user.id,
+        email: data.user.email,
+        displayName: data.user.displayName,
+        role: data.user.role,
+      });
 
       // Store session info (optional, cookies are set by server)
       if (data.sessionToken) {
@@ -90,17 +76,7 @@
     error = '';
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/magic-link/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: magicLinkEmail }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to send magic link');
-      }
-
+      await apiPost('/auth/magic-link/request', { email: magicLinkEmail });
       magicLinkSent = true;
     } catch (err: any) {
       error = err.message || 'Erreur lors de l\'envoi du lien magique';

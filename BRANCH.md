@@ -95,56 +95,93 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Configurable via WEBAUTHN_ATTESTATION environment variable
   - Ready for cert validation if needed in future
 
-### Phase 11: Testing Strategy
-- [ ] 11.1: Unit tests for services:
+### Phase 11: Admin Bootstrap & Bug Fixes ✅ COMPLETE
+- [x] 11.1: Admin email configuration ✅
+  - Added ADMIN_EMAIL environment variable
+  - First user with ADMIN_EMAIL becomes admin_app
+  - Only if no other admin_app exists
+- [x] 11.2: WebAuthn API compatibility fixes ✅
+  - Fixed @simplewebauthn/server v13.2.2 API changes
+  - Challenge synchronization (let server generate challenges)
+  - Credential structure updates (id/publicKey vs credentialID/credentialPublicKey)
+  - Authentication API change (authenticator → credential)
+- [x] 11.3: Database schema improvements ✅
+  - Fixed createdAt nullable issue in webauthn_challenges
+  - Applied migration 0003_fluffy_starjammers.sql
+- [x] 11.4: Makefile test unification ✅
+  - Unified test-api-% targets with SCOPE filtering
+  - Removed redundant test-runner.ts script
+  - Improved npm install persistence in containers
+
+### Phase 12: Testing Strategy
+- [ ] 12.1: Unit tests for services:
   - Test challenge generation, validation, expiration
   - Test session creation, validation, refresh
   - Test credential storage and retrieval
   - Test magic link generation and verification
 
-- [ ] 11.2: Integration tests for API routes:
+- [ ] 12.2: Integration tests for API routes:
   - Test full registration flow with mock WebAuthn responses
   - Test authentication flow with valid/invalid credentials
   - Test session management (refresh, revoke)
   - Test RBAC enforcement on protected routes
   - Test rate limiting on auth endpoints
 
-- [ ] 11.3: E2E tests with Playwright:
+- [ ] 12.3: E2E tests with Playwright:
   - Test registration flow with WebAuthn simulation (if supported)
   - Test login flow with WebAuthn simulation
   - Test magic link fallback flow
   - Test device management UI
   - Test logout and session expiration
 
-- [ ] 11.4: Security tests:
+- [ ] 12.4: Security tests:
   - Test CORS headers with credentials
   - Test CSP and security headers
   - Test rate limiting enforcement
   - Test challenge replay protection
   - Test counter increment validation
 
-### Phase 12: CI/CD Integration & Documentation
-- [ ] 12.1: Update GitHub Actions workflow:
+### Phase 13: CI/CD Integration & Documentation
+- [ ] 13.1: Update GitHub Actions workflow:
   - Ensure new database migrations run in CI
   - Run unit and integration tests for auth module
   - Run E2E tests with auth flows
 
-- [ ] 12.2: Update documentation:
+- [ ] 13.2: Update documentation:
   - Add WebAuthn architecture section to SPEC.md
   - Document authentication flows with mermaid diagrams
   - Add security considerations to README.md
   - Update API documentation with new auth endpoints
 
-- [ ] 12.3: Security validation:
+- [ ] 13.3: Security validation:
   - Run security scans (SAST, SCA, Container, IaC) per `security.mdc`
   - Update vulnerability register if needed
   - Verify all security tests pass
 
-- [ ] 12.4: Final validation:
+- [ ] 13.4: Final validation:
   - Verify all CI checks pass
   - Test deployment on Scaleway Container
   - Verify session persistence across deployments
   - Monitor logs for any auth errors
+
+## Status: WebAuthn Authentication COMPLETE ✅
+
+**Core functionality operational:**
+- ✅ User registration with WebAuthn (passkeys/biometrics)
+- ✅ User authentication with WebAuthn credentials
+- ✅ Admin bootstrap via ADMIN_EMAIL environment variable
+- ✅ Session management with JWT tokens
+- ✅ RBAC with role hierarchy (admin_app > admin_org > editor > guest)
+- ✅ Security headers, rate limiting, CORS configuration
+- ✅ Magic link fallback authentication
+- ✅ Device management UI
+
+**Key fixes implemented:**
+- Fixed @simplewebauthn/server v13.2.2 API compatibility issues
+- Resolved challenge synchronization problems
+- Corrected credential structure mapping
+- Fixed database schema nullable issues
+- Unified Makefile test targets with SCOPE filtering
 
 ## Commits & Progress
 - [x] **17db73c-698eca1**: Phase 1, 2 & 3 complete (DB, RP config, backend services)

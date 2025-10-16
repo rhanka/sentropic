@@ -2,7 +2,7 @@
   import { useCasesStore, fetchUseCases, deleteUseCase, detailUseCase } from '$lib/stores/useCases';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiGet, apiPost } from '$lib/utils/api';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
@@ -84,11 +84,8 @@
       // Charger la matrice si on a un dossier sélectionné
       if ($currentFolderId) {
         try {
-          const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
-          if (response.ok) {
-            const folder = await response.json();
-            matrix = folder.matrixConfig;
-          }
+          const folder = await apiGet(`/folders/${$currentFolderId}`);
+          matrix = folder.matrixConfig;
         } catch (err) {
           console.error('Failed to load matrix:', err);
         }
@@ -123,11 +120,8 @@
       // Recharger la matrice si nécessaire
       if ($currentFolderId && !matrix) {
         try {
-          const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
-          if (response.ok) {
-            const folder = await response.json();
-            matrix = folder.matrixConfig;
-          }
+          const folder = await apiGet(`/folders/${$currentFolderId}`);
+          matrix = folder.matrixConfig;
         } catch (err) {
           console.error('Failed to load matrix during refresh:', err);
         }
@@ -164,24 +158,11 @@
       });
 
       // Appeler l'API de génération
-      const response = await fetch(`${API_BASE_URL}/use-cases/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          input: context,
-          create_new_folder: createNewFolder,
-          company_id: companyId
-        }),
+      const result = await apiPost('/use-cases/generate', {
+        input: context,
+        create_new_folder: createNewFolder,
+        company_id: companyId
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to generate use cases');
-      }
-
-      const result = await response.json();
 
       // Mettre à jour le toaster de progression
       removeToast(progressToastId);

@@ -2,7 +2,7 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiPost, apiPut, apiDelete } from '$lib/utils/api';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { refreshManager } from '$lib/stores/refresh';
@@ -181,19 +181,7 @@
     }
     
     try {
-      const response = await fetch(`${API_BASE_URL}/folders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, description }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create folder');
-      }
-
-      const newFolder = await response.json();
+      const newFolder = await apiPost('/folders', { name, description });
       foldersStore.update((items) => [...items, newFolder]);
       
       // Sélectionner automatiquement le nouveau dossier
@@ -219,14 +207,7 @@
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
     
     try {
-      const response = await fetch(`${API_BASE_URL}/folders/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete folder');
-      }
-
+      await apiDelete(`/folders/${id}`);
       foldersStore.update((items) => items.filter(f => f.id !== id));
       addToast({
         type: 'success',

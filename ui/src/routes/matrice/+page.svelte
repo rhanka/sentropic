@@ -2,7 +2,7 @@
   import { matrixStore } from '$lib/stores/matrix';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
@@ -34,11 +34,7 @@
 
     isLoading = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch folder');
-      }
-      const folder = await response.json();
+      const folder = await apiGet(`/folders/${$currentFolderId}`);
       
       if (folder.matrixConfig) {
         const matrix = typeof folder.matrixConfig === 'string' 
@@ -108,18 +104,7 @@
     if (!$currentFolderId) return;
     
     try {
-      const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}/matrix`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editedConfig)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save matrix');
-      }
-
+      await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
       matrixStore.set(editedConfig);
       addToast({
         type: 'success',
@@ -246,11 +231,8 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/folders/list/with-matrices`);
-      if (response.ok) {
-        const data = await response.json();
-        availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
-      }
+      const data = await apiGet('/folders/list/with-matrices');
+      availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
     } catch (error) {
       console.error('Failed to load folders:', error);
     }
@@ -269,13 +251,11 @@
       if (createMatrixType === 'default') {
         // Utiliser la matrice de base par défaut
         console.log('Fetching default matrix...');
-        const response = await fetch(`${API_BASE_URL}/folders/matrix/default`);
-        matrixToUse = await response.json();
+        matrixToUse = await apiGet('/folders/matrix/default');
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
-        const response = await fetch(`${API_BASE_URL}/folders/${selectedFolderToCopy}/matrix`);
-        matrixToUse = await response.json();
+        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix`);
       } else if (createMatrixType === 'blank') {
         // Évaluation vierge
         matrixToUse = {
@@ -288,22 +268,14 @@
       
       if (matrixToUse) {
         console.log('Saving matrix to folder:', $currentFolderId);
-        const response = await fetch(`${API_BASE_URL}/folders/${$currentFolderId}/matrix`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matrixToUse)
+        await apiPut(`/folders/${$currentFolderId}/matrix`, matrixToUse);
+        matrixStore.set(matrixToUse);
+        editedConfig = { ...matrixToUse };
+        showCreateMatrixDialog = false;
+        addToast({
+          type: 'success',
+          message: 'Nouvelle matrice créée avec succès'
         });
-        
-        console.log('Response status:', response.status);
-        if (response.ok) {
-          matrixStore.set(matrixToUse);
-          editedConfig = { ...matrixToUse };
-          showCreateMatrixDialog = false;
-          addToast({
-            type: 'success',
-            message: 'Nouvelle matrice créée avec succès'
-          });
-        }
       }
     } catch (error) {
       console.error('Failed to create matrix:', error);

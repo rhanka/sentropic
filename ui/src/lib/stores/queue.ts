@@ -28,51 +28,45 @@ const initialState: QueueState = {
 
 export const queueStore = writable<QueueState>(initialState);
 
-import { API_BASE_URL } from '$lib/config';
+import { apiGet, apiGetAuth, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 
 // Fonctions API pour la queue
 export const fetchAllJobs = async (): Promise<Job[]> => {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch jobs');
+  const result = await apiGetAuth<Job[]>('/queue/jobs');
+  
+  if (result.status === 'success') {
+    return result.data;
+  } else {
+    // Return empty array if not authenticated or rate limited
+    return [];
   }
-  return response.json();
 };
 
 export const fetchJobStatus = async (jobId: string): Promise<Job | null> => {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}`);
-  if (!response.ok) {
-    if (response.status === 404) return null;
-    throw new Error('Failed to fetch job status');
+  try {
+    const result = await apiGetAuth<Job>(`/queue/jobs/${jobId}`);
+    
+    if (result.status === 'success') {
+      return result.data;
+    } else {
+      return null;
+    }
+  } catch (error: any) {
+    if (error.message?.includes('404')) return null;
+    throw error;
   }
-  return response.json();
 };
 
 export const cancelJob = async (jobId: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}/cancel`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to cancel job');
-  }
+  await apiPost(`/queue/jobs/${jobId}/cancel`);
 };
 
 export const retryJob = async (jobId: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}/retry`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to retry job');
-  }
+  await apiPost(`/queue/jobs/${jobId}/retry`);
 };
 
 export const deleteJob = async (jobId: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}/delete`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to delete job');
-  }
+  await apiDelete(`/queue/jobs/${jobId}/delete`);
 };
 
 // Actions du store

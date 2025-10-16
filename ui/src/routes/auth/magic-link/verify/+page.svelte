@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiPost } from '$lib/utils/api';
 
   let loading = true;
   let error = '';
@@ -19,19 +19,7 @@
 
     try {
       // Verify magic link token
-      const res = await fetch(`${API_BASE_URL}/auth/magic-link/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Important for cookies
-        body: JSON.stringify({ token }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Token invalide ou expiré');
-      }
-
-      const data = await res.json();
+      const data = await apiPost('/auth/magic-link/verify', { token });
 
       // Store session info (optional, cookies are set by server)
       if (data.sessionToken) {

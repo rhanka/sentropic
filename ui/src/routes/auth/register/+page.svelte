@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiPost } from '$lib/utils/api';
+  import { setUser } from '$lib/stores/session';
   import { 
     isWebAuthnSupported, 
     startWebAuthnRegistration,
@@ -38,22 +39,12 @@
 
     try {
       // Step 1: Get registration options from server
-      const optionsRes = await fetch(`${API_BASE_URL}/auth/register/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userName,
-          userDisplayName,
-          email: email || undefined,
-        }),
+      const responseData = await apiPost('/auth/register/options', {
+        userName,
+        userDisplayName,
+        email: email || undefined,
       });
-
-      const responseData = await optionsRes.json();
       
-      if (!optionsRes.ok) {
-        throw new Error(responseData.error || 'Failed to get registration options');
-      }
-
       const { options, userId: tempUserId } = responseData;
       userId = tempUserId;
 
@@ -75,24 +66,20 @@
   async function verifyRegistration(credential: any) {
     try {
       // Step 3: Verify registration with server
-      const verifyRes = await fetch(`${API_BASE_URL}/auth/register/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Important for cookies
-        body: JSON.stringify({
-          userName,
-          userId,
-          credential,
-          deviceName: deviceName || undefined,
-        }),
+      const data = await apiPost('/auth/register/verify', {
+        userName,
+        userId,
+        credential,
+        deviceName: deviceName || undefined,
       });
 
-      if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        throw new Error(errData.error || 'Registration verification failed');
-      }
-
-      const data = await verifyRes.json();
+      // Update session store with user info
+      setUser({
+        id: data.user.id,
+        email: null, // Register API doesn't return email
+        displayName: data.user.userName,
+        role: data.user.role,
+      });
 
       // Store session info (optional, cookies are set by server)
       if (data.sessionToken) {

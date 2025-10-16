@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiGet, apiPut, apiDelete } from '$lib/utils/api';
   import { isAuthenticated, session } from '$lib/stores/session';
   import { goto } from '$app/navigation';
 
@@ -33,15 +33,7 @@
     error = '';
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/credentials`, {
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to load credentials');
-      }
-
-      const data = await res.json();
+      const data = await apiGet('/auth/credentials');
       credentials = data.credentials;
     } catch (err: any) {
       error = err.message || 'Erreur lors du chargement des appareils';
@@ -62,17 +54,7 @@
 
   async function saveDeviceName(credentialId: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/credentials/${credentialId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ deviceName: editingName }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to update device name');
-      }
-
+      await apiPut(`/auth/credentials/${credentialId}`, { deviceName: editingName });
       await loadCredentials();
       editingId = null;
       editingName = '';
@@ -87,15 +69,7 @@
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/credentials/${credentialId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to revoke credential');
-      }
-
+      await apiDelete(`/auth/credentials/${credentialId}`);
       await loadCredentials();
     } catch (err: any) {
       error = err.message || 'Erreur lors de la révocation';
