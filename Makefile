@@ -476,27 +476,18 @@ dast:
 # -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
 # -----------------------------------------------------------------------------
-.PHONY: test-api-smoke test-api-endpoints test-api-ai test-api-queue test-api-all
+.PHONY: test-api-%
 
-test-api-smoke: ## Run API smoke tests (basic health checks) [FILTER=*]
-	@echo "🧪 Running API smoke tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_FILTER=$(FILTER) npm run test:smoke"
-
-test-api-endpoints: ## Run API endpoint tests (CRUD functionality) [ENDPOINT=*] [METHOD=*]
-	@echo "🧪 Running API endpoint tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
-
-test-api-ai: ## Run API AI tests (generation and enrichment) [TYPE=*] [MODEL=*]
-	@echo "🧪 Running API AI tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
-
-test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
-	@echo "🧪 Running API queue tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
-
-test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
-	@echo "🧪 Running API unit tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "npm run test:unit"
+test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
+	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" api sh -lc ' \
+	  TEST_TYPE="$*"; \
+	  if [ -n "$$SCOPE" ]; then \
+	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE"; \
+	    npm run test:$$TEST_TYPE -- "$$SCOPE"; \
+	  else \
+	    echo "▶ Running all $$TEST_TYPE tests"; \
+	    npm run test:$$TEST_TYPE; \
+	  fi'
 
 # -----------------------------------------------------------------------------
 # Queue Management
