@@ -56,9 +56,9 @@ describe('CORS Security Tests', () => {
 
     it('should reject requests from disallowed origins', async () => {
       // Test request from disallowed origin
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', null, {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken, null, {
         'Origin': 'https://malicious.com'
-      }, user);
+      });
 
       expect(response.status).toBe(200); // Request succeeds but CORS headers should be missing
       
@@ -86,9 +86,9 @@ describe('CORS Security Tests', () => {
 
     it('should reject requests from non-matching wildcard patterns', async () => {
       // Test request from non-matching wildcard pattern
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', null, {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken, null, {
         'Origin': 'https://malicious-sent-tech.ca'
-      }, user);
+      });
 
       expect(response.status).toBe(200); // Request succeeds but CORS headers should be missing
       
@@ -98,7 +98,7 @@ describe('CORS Security Tests', () => {
 
     it('should handle requests without Origin header', async () => {
       // Test request without Origin header (e.g., from server-to-server)
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', null, {}, user);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
 
       expect(response.status).toBe(200);
       
