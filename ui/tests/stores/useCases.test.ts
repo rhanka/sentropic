@@ -89,7 +89,7 @@ describe('Use Cases Store', () => {
   });
 
   describe('generateUseCases', () => {
-    it('should generate use cases successfully', async () => {
+    it('hould generate use cases successfully', async () => {
       const generationResult = {
         created_folder_id: 'folder1',
         created_use_case_ids: ['1', '2'],
