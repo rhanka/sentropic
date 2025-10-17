@@ -52,9 +52,13 @@ describe('Security Headers Tests', () => {
 
   describe('HTTP Strict Transport Security (HSTS)', () => {
     it('should include HSTS header on HTTPS responses', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', null, {
-        'X-Forwarded-Proto': 'https' // Simulate HTTPS
-      }, user);
+      const response = await app.request('/api/v1/companies', {
+        method: 'GET',
+        headers: {
+          'x-forwarded-proto': 'https', // Simulate HTTPS
+          'Cookie': `session=${user.sessionToken}`
+        }
+      });
 
       expect(response.status).toBe(200);
       

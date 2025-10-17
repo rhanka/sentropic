@@ -45,8 +45,13 @@ export async function generateChallenge(
 ): Promise<Challenge> {
   const { userId, type, challenge: providedChallenge, ttlSeconds } = options;
   
-  // Use provided challenge or generate a new one
-  const challenge = providedChallenge || randomBytes(32).toString('base64url');
+  // Use provided challenge or generate a unique one
+  const challenge = providedChallenge || (() => {
+    const timestamp = Date.now().toString(36);
+    const random = randomBytes(16).toString('base64url');
+    const uuid = crypto.randomUUID().replace(/-/g, '');
+    return `${timestamp}-${random}-${uuid}`;
+  })();
   
   // Set TTL based on type if not specified
   const defaultTTL = type === 'registration' ? 300 : 300; // 5 minutes for both registration and authentication
@@ -118,11 +123,11 @@ export async function verifyChallenge(
         .limit(5);
       
       logger.warn({ 
-        challenge: challenge.substring(0, 10) + '...', 
+        challenge: challenge ? challenge.substring(0, 10) + '...' : 'undefined', 
         type,
         existingChallenges: allChallenges.map(c => ({
           id: c.id.substring(0, 8) + '...',
-          challenge: c.challenge.substring(0, 10) + '...',
+          challenge: c.challenge ? c.challenge.substring(0, 10) + '...' : 'undefined',
           used: c.used,
           expired: c.expiresAt < now
         }))
@@ -152,7 +157,7 @@ export async function verifyChallenge(
     
     return true;
   } catch (error) {
-    logger.error({ err: error, challenge: challenge.substring(0, 10) + '...' }, 'Error verifying challenge');
+    logger.error({ err: error, challenge: challenge ? challenge.substring(0, 10) + '...' : 'undefined' }, 'Error verifying challenge');
     return false;
   }
 }
