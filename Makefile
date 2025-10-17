@@ -225,7 +225,7 @@ test-ui: up-ui
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
 
 .PHONY: test-api
-test-api: up-api-test wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai down up-api test-api-limit
+test-api: up-api-test wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-queue test-api-security test-api-ai down up-api test-api-limit
 
 .PHONY: test-int
 test-int:
@@ -491,37 +491,6 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	  else \
 	    echo "▶ Running all $$TEST_TYPE tests"; \
 	    npm run test:$$TEST_TYPE; \
-	  fi'
-
-# Special case for queue tests - they need authentication
-test-api-queue: ## Run API queue tests with authentication
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" api sh -lc ' \
-	  if [ -n "$$SCOPE" ]; then \
-	    echo "▶ Running scoped queue tests: $$SCOPE"; \
-	    npm run test:queue -- "$$SCOPE"; \
-	  else \
-	    echo "▶ Running all queue tests"; \
-	    npm run test:queue; \
-	  fi'
-
-test-api-endpoints: ## Run API endpoint integration tests (disables rate limiting)
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e DISABLE_RATE_LIMIT="true" api sh -lc ' \
-	  if [ -n "$$SCOPE" ]; then \
-	    echo "▶ Running scoped endpoints tests: $$SCOPE"; \
-	    npm run test:endpoints -- "$$SCOPE"; \
-	  else \
-	    echo "▶ Running all endpoints tests"; \
-	    npm run test:endpoints; \
-	  fi'
-
-test-api-limit: ## Run API rate limiting tests (rate limiting enabled)
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" api sh -lc ' \
-	  if [ -n "$$SCOPE" ]; then \
-	    echo "▶ Running scoped rate limit tests: $$SCOPE"; \
-	    npm run test:limit -- "$$SCOPE"; \
-	  else \
-	    echo "▶ Running all rate limit tests"; \
-	    npm run test:limit; \
 	  fi'
 
 # -----------------------------------------------------------------------------

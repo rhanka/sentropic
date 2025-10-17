@@ -153,10 +153,16 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Test counter increment validation
 
 - [ ] 12.5: User Acceptance Testing (UAT) - Bug Fixes & Final Validation
-  - [ ] Fix Enterprise Deletion (API returns 409 Conflict due to dependencies)
+  - [ ] Fix Enterprise Creation (creating is a succes with toaster "entreprise cree avec succès" but an additionnal toaster in ui says "Cannot read property of undefined") when clicking "Créer").
+  - [ ] Fix Deletion (Delete is succesfull toaster pops and "Unexpected end of JSON input")
   - [ ] Fix remaining E2E test failures (1/151 tests failing)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment
+
+- [ ] 12.6: Preprod migration
+  - [ ] Create a backup method for SCW production to local in make
+  - [ ] Create targets to restore prod data to dev environement
+  - [ ] Apply relevant test (to be discussed)
 
 ### Phase 13: CI/CD Integration & Documentation
 - [ ] 13.1: Update GitHub Actions workflow:

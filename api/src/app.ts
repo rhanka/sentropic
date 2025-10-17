@@ -37,19 +37,31 @@ app.use('*', secureHeaders({
   referrerPolicy: 'strict-origin-when-cross-origin',
 }));
 
-// Configuration CORS (strict mode with credentials)
-app.use('*', cors({
-  origin: (origin) => {
-    // Allow requests with no origin (e.g., mobile apps, curl)
-    if (!origin) return null;
-    
-    return isOriginAllowed(origin, allowedOrigins) ? origin : null;
-  },
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  maxAge: 86400, // 24 hours preflight cache
-}));
+// Custom CORS middleware (strict mode with credentials)
+app.use('*', async (c, next) => {
+  const origin = c.req.header('Origin');
+  const method = c.req.method;
+  
+  // Handle preflight OPTIONS requests
+  if (method === 'OPTIONS') {
+    if (origin && isOriginAllowed(origin, allowedOrigins)) {
+      c.header('Access-Control-Allow-Origin', origin);
+      c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+      c.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      c.header('Access-Control-Allow-Credentials', 'true');
+      c.header('Access-Control-Max-Age', '86400');
+    }
+    return c.body(null, 204);
+  }
+  
+  // Handle actual requests
+  if (origin && isOriginAllowed(origin, allowedOrigins)) {
+    c.header('Access-Control-Allow-Origin', origin);
+    c.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  await next();
+});
 
 // Rate limiting for auth routes
 const authSessionRateLimiter = rateLimiter({

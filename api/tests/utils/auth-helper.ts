@@ -211,12 +211,33 @@ export async function authenticatedRequest(
   app: any,
   method: string,
   path: string,
-  sessionToken: string,
-  body?: any
+  bodyOrSessionToken?: any,
+  userOrBody?: any,
+  user?: any
 ) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+
+  // Handle different call signatures:
+  // 1. authenticatedRequest(app, method, path, sessionToken)
+  // 2. authenticatedRequest(app, method, path, body, user)
+  // 3. authenticatedRequest(app, method, path, body, headers, user)
+  let sessionToken: string | undefined;
+  let body: any = undefined;
+
+  if (typeof bodyOrSessionToken === 'string') {
+    // Case 1: sessionToken as 4th parameter
+    sessionToken = bodyOrSessionToken;
+  } else if (userOrBody && typeof userOrBody === 'object' && userOrBody.sessionToken) {
+    // Case 2: body as 4th parameter, user as 5th parameter
+    body = bodyOrSessionToken;
+    sessionToken = userOrBody.sessionToken;
+  } else if (user && user.sessionToken) {
+    // Case 3: body as 4th parameter, headers as 5th parameter, user as 6th parameter
+    body = bodyOrSessionToken;
+    sessionToken = user.sessionToken;
+  }
 
   if (sessionToken) {
     headers['Cookie'] = `session=${sessionToken}`;
@@ -227,7 +248,7 @@ export async function authenticatedRequest(
     headers,
   };
 
-  if (body) {
+  if (body && method !== 'GET' && method !== 'HEAD') {
     requestOptions.body = JSON.stringify(body);
   }
 
@@ -241,18 +262,20 @@ export async function unauthenticatedRequest(
   app: any,
   method: string,
   path: string,
-  body?: any
+  body?: any,
+  headers?: Record<string, string>
 ) {
-  const headers: Record<string, string> = {
+  const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...headers, // Merge custom headers
   };
 
   const requestOptions: RequestInit = {
     method,
-    headers,
+    headers: requestHeaders,
   };
 
-  if (body) {
+  if (body && method !== 'GET' && method !== 'HEAD') {
     requestOptions.body = JSON.stringify(body);
   }
 
