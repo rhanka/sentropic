@@ -14,6 +14,7 @@
     "test:smoke": "vitest run tests/smoke",
     "test:api": "vitest run tests/api",
     "test:endpoints": "vitest run tests/api",
+    "test:limit": "vitest run tests/limit",
     "test:ai": "vitest run tests/ai/*-sync.test.ts && vitest run tests/ai/*-async.test.ts",
     "test:queue": "vitest run tests/queue",
     "test:unit": "vitest run tests/unit",

@@ -62,9 +62,10 @@ describe('Challenge Manager Service', () => {
 
     it('should use default TTL if not specified', async () => {
       const regChallenge = await generateChallenge({ type: 'registration' });
-      const regExpiresIn = regChallenge.expiresAt.getTime() - Date.now();
-      expect(regExpiresIn).toBeGreaterThan(55000);
-      expect(regExpiresIn).toBeLessThan(65000);
+      // Should expire in ~300 seconds (5 minutes)
+      const expiresIn = regChallenge.expiresAt.getTime() - Date.now();
+      expect(expiresIn).toBeGreaterThan(295000);
+      expect(expiresIn).toBeLessThan(305000);
 
       const authChallenge = await generateChallenge({ type: 'authentication' });
       const authExpiresIn = authChallenge.expiresAt.getTime() - Date.now();

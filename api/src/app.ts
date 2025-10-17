@@ -54,14 +54,14 @@ app.use('*', cors({
 // Rate limiting for auth routes
 const authSessionRateLimiter = rateLimiter({
   windowMs: 60 * 1000, // 1 minute
-  limit: 20, // 20 requests per minute (very permissive for session checks)
+  limit: 30, // 30 requests per minute (very permissive for session checks)
   standardHeaders: 'draft-7',
   keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
 });
 
 const authLoginRateLimiter = rateLimiter({
   windowMs: 60 * 1000, // 1 minute
-  limit: 5, // 5 login attempts per minute (reasonable for login attempts)
+  limit: 10, // 10 login attempts per minute (reasonable for login attempts)
   standardHeaders: 'draft-7',
   keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
 });

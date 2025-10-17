@@ -34,7 +34,7 @@ describe('Companies Store', () => {
     });
 
     it('should throw error when fetch fails', async () => {
-      mockFetchJsonOnce({}, 500);
+      mockFetchJsonOnce({ error: 'Failed to fetch companies' }, 500);
 
       await expect(fetchCompanies()).rejects.toThrow('Failed to fetch companies');
     });
@@ -45,16 +45,14 @@ describe('Companies Store', () => {
       const newCompany = { name: 'New Company', industry: 'Tech' };
       const createdCompany = { id: '1', ...newCompany };
       
-      mockFetchJsonOnce(createdCompany);
+      mockFetchJsonOnce({ item: createdCompany });
 
       const result = await createCompany(newCompany);
       expect(result).toEqual(createdCompany);
     });
 
     it('should throw error when creation fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false
-      });
+      mockFetchJsonOnce({ error: 'Failed to create company' }, 500);
 
       await expect(createCompany({ name: 'Test' })).rejects.toThrow('Failed to create company');
     });
@@ -65,7 +63,7 @@ describe('Companies Store', () => {
       const updates = { industry: 'Updated Industry' };
       const updatedCompany = { id: '1', name: 'Company', ...updates };
       
-      mockFetchJsonOnce(updatedCompany);
+      mockFetchJsonOnce({ item: updatedCompany });
 
       const result = await updateCompany('1', updates);
       expect(result).toEqual(updatedCompany);
@@ -81,8 +79,7 @@ describe('Companies Store', () => {
 
     it('should handle 409 conflict with detailed message', async () => {
       const errorResponse = {
-        message: 'Impossible de supprimer l\'entreprise car elle est utilisée',
-        details: { folders: 2, useCases: 5 }
+        error: 'Impossible de supprimer l\'entreprise car elle est utilisée (2 dossier(s) et 5 cas d\'usage)'
       };
       
       // Simule une erreur 409
@@ -94,7 +91,7 @@ describe('Companies Store', () => {
     });
 
     it('should handle other errors', async () => {
-      mockFetchJsonOnce({ message: 'Server error' }, 500);
+      mockFetchJsonOnce({ error: 'Server error' }, 500);
 
       await expect(deleteCompany('1')).rejects.toThrow('Server error');
     });

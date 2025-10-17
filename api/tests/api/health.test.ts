@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { apiRequest } from '../utils/test-helpers';
+import { app } from '../../src/app';
 
 describe('Health API', () => {
   describe('GET /health', () => {
     it('should return health status', async () => {
-      const response = await apiRequest('/api/v1/health');
+      const response = await app.request('/api/v1/health');
       
-      expect(response.ok).toBe(true);
-      expect(response.data.status).toBe('ok');
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.status).toBe('ok');
     });
   });
 });

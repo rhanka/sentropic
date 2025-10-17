@@ -1,51 +1,45 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { apiRequest } from '../utils/test-helpers';
-import { createTestUser, cleanupTestUser, getAuthHeaders } from '../utils/auth-helper';
+import { app } from '../../src/app';
+import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('API Health', () => {
-  let authHeaders: Record<string, string>;
-  let userId: string;
-
-  beforeEach(async () => {
-    const testUser = await createTestUser('editor');
-    authHeaders = getAuthHeaders(testUser.sessionToken);
-    userId = testUser.id;
-  });
-
-  afterEach(async () => {
-    await cleanupTestUser(userId);
-  });
-
   it('should respond to health check', async () => {
-    const response = await apiRequest('/api/v1/health');
-    expect(response.ok).toBe(true);
+    const response = await app.request('/api/v1/health');
     expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.status).toBe('ok');
   });
 
-  it('should have companies endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/companies', {
-      headers: authHeaders,
-    });
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
-  });
+  describe('Authenticated endpoints', () => {
+    let user: any;
 
-  it('should have folders endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/folders', {
-      headers: authHeaders,
+    beforeEach(async () => {
+      user = await createAuthenticatedUser('editor');
     });
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
-  });
 
-  it('should have use-cases endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/use-cases', {
-      headers: authHeaders,
+    afterEach(async () => {
+      await cleanupAuthData();
     });
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
+
+    it('should have companies endpoint accessible', async () => {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
+
+    it('should have folders endpoint accessible', async () => {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/folders', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
+
+    it('should have use-cases endpoint accessible', async () => {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/use-cases', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
   });
 });

@@ -86,6 +86,11 @@ loginRouter.post('/verify', async (c) => {
     
     const credentialResponse = credential as AuthenticationResponseJSON;
     
+    // Validate credential structure
+    if (!credentialResponse || !credentialResponse.response || !credentialResponse.response.clientDataJSON) {
+      return c.json({ error: 'Invalid credential response' }, 400);
+    }
+    
     // Extract challenge from clientDataJSON
     const clientData = JSON.parse(
       Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()

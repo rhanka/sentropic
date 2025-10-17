@@ -92,7 +92,23 @@ credentialsRouter.put('/:id', async (c) => {
     const body = await c.req.json();
     const { deviceName } = updateCredentialSchema.parse(body);
     
-    // Update credential (only if belongs to user)
+    // Check if credential exists first
+    const existingCredential = await db
+      .select()
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.id, credentialId))
+      .limit(1);
+    
+    if (!existingCredential.length) {
+      return c.json({ error: 'Credential not found' }, 404);
+    }
+    
+    // Check if credential belongs to user
+    if (existingCredential[0].userId !== session.userId) {
+      return c.json({ error: 'Access denied' }, 403);
+    }
+    
+    // Update credential
     const [updated] = await db
       .update(webauthnCredentials)
       .set({ deviceName })
@@ -103,10 +119,6 @@ credentialsRouter.put('/:id', async (c) => {
         )
       )
       .returning();
-    
-    if (!updated) {
-      return c.json({ error: 'Credential not found' }, 404);
-    }
     
     logger.info({ credentialId, userId: session.userId }, 'Credential updated');
     
@@ -143,7 +155,23 @@ credentialsRouter.delete('/:id', async (c) => {
       return c.json({ error: 'Invalid session' }, 401);
     }
     
-    // Delete credential (only if belongs to user)
+    // Check if credential exists first
+    const existingCredential = await db
+      .select()
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.id, credentialId))
+      .limit(1);
+    
+    if (!existingCredential.length) {
+      return c.json({ error: 'Credential not found' }, 404);
+    }
+    
+    // Check if credential belongs to user
+    if (existingCredential[0].userId !== session.userId) {
+      return c.json({ error: 'Access denied' }, 403);
+    }
+    
+    // Delete credential
     const [deleted] = await db
       .delete(webauthnCredentials)
       .where(
@@ -153,10 +181,6 @@ credentialsRouter.delete('/:id', async (c) => {
         )
       )
       .returning({ id: webauthnCredentials.id });
-    
-    if (!deleted) {
-      return c.json({ error: 'Credential not found' }, 404);
-    }
     
     logger.info({ credentialId, userId: session.userId }, 'Credential revoked');
     

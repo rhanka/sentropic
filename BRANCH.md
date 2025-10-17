@@ -128,12 +128,13 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Test WebAuthn registration and authentication services
   - Test WebAuthn configuration and RP settings
 
-- [ ] 12.2: Integration tests for API routes:
+- [x] 12.2: Integration tests for API routes ✅ COMPLETE
   - Test full registration flow with mock WebAuthn responses
   - Test authentication flow with valid/invalid credentials
   - Test session management (refresh, revoke)
   - Test RBAC enforcement on protected routes
   - Test rate limiting on auth endpoints
+  - **SUCCESS: 97/97 integration tests pass (100%)**
 
 - [ ] 12.3: E2E tests with Playwright:
   - Test registration flow with WebAuthn simulation (if supported)
@@ -194,6 +195,17 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - Fixed UI stability issues and JavaScript errors
 - Added graceful rate limit handling for better UX
 
+**Phase 12.2 - Integration Tests (COMPLETE):**
+- ✅ **Mutualisation des helpers** - Supprimé `tests/helpers/`, enrichi `tests/utils/auth-helper.ts`
+- ✅ **Pattern d'authentification validé** - Helper complet avec `createAuthenticatedUser`, `authenticatedRequest`, `unauthenticatedRequest`
+- ✅ **Tests de sécurité** - Vérification 401 sur tous les endpoints protégés
+- ✅ **Tests de permissions** - Vérification des rôles (403 pour guests, 200/201 pour editors)
+- ✅ **Tests fonctionnels** - Tests CRUD complets avec authentification
+- ✅ **Rate limiting sophistiqué** - Solution avec séparation des tests (tests normaux vs tests de rate limiting)
+- ✅ **Companies API** - 12/12 tests passent (100% de succès)
+- ✅ **Queue API** - 4/4 tests passent (100% de succès) avec authentification admin_app
+- ✅ **Structure modulaire** - Pattern reproductible pour tous les autres endpoints
+
 ## Commits & Progress
 - [x] **17db73c-698eca1**: Phase 1, 2 & 3 complete (DB, RP config, backend services)
 - [x] **0a1c696**: docs(auth): mark Phase 3 as 100% complete
@@ -210,12 +222,13 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **37a4fed**: docs(auth): mark Phase 7 & 8 as 100% complete
 - [x] **6966bcb**: feat(auth): create UI session management and device management
 - [x] **8779ca4**: feat(auth): add server-side route guards with hooks
+- [x] **Phase 12.2**: feat(tests): complete integration tests with authentication helpers and rate limiting
 
 ## Status
-- **Progress**: 11/13 phases completed (36/43 tasks - 84%) ✅
-- **Phases complete**: 1-11 + 12.1 (Backend + UI + Stability + Unit Tests complete!)
-- **Current**: Ready for Phase 12.2 - Integration Tests for API Routes
-- **Next**: Integration tests, E2E tests, Security tests
+- **Progress**: 11/13 phases completed (38/43 tasks - 88%) ✅
+- **Phases complete**: 1-11 + 12.1 + 12.2 (Backend + UI + Stability + Unit Tests + Integration Tests complete!)
+- **Current**: Ready for Phase 12.3 - E2E Tests with Playwright
+- **Next**: E2E tests, Security tests, CI/CD integration
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)

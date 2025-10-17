@@ -1,17 +1,29 @@
-import { describe, it, expect } from 'vitest';
-import { apiRequest } from '../utils/test-helpers';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { app } from '../../src/app';
+import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('Settings API', () => {
+  let user: any;
+
+  beforeEach(async () => {
+    user = await createAuthenticatedUser('admin_app');
+  });
+
+  afterEach(async () => {
+    await cleanupAuthData();
+  });
+
   describe('GET /settings', () => {
     it('should get all settings', async () => {
-      const response = await apiRequest('/api/v1/settings');
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/settings', user.sessionToken!);
       
-      expect(response.ok).toBe(true);
-      expect(response.data).toBeDefined();
-      expect(typeof response.data).toBe('object');
-      expect(response.data).toHaveProperty('openaiModels');
-      expect(response.data).toHaveProperty('prompts');
-      expect(response.data).toHaveProperty('generationLimits');
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data).toBeDefined();
+      expect(typeof data).toBe('object');
+      expect(data).toHaveProperty('openaiModels');
+      expect(data).toHaveProperty('prompts');
+      expect(data).toHaveProperty('generationLimits');
     });
   });
 });

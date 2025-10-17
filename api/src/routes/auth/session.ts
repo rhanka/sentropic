@@ -87,6 +87,9 @@ sessionRouter.post('/refresh', async (c) => {
       expiresAt: newSession.expiresAt.toISOString(),
     });
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return c.json({ error: 'Invalid JSON' }, 400);
+    }
     if (error instanceof z.ZodError) {
       return c.json({ error: 'Invalid request data', details: error.errors }, 400);
     }

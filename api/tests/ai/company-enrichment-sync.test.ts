@@ -1,30 +1,42 @@
-import { describe, it, expect } from 'vitest';
-import { apiRequest, getTestModel } from '../utils/test-helpers';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { getTestModel } from '../utils/test-helpers';
+import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
+import { app } from '../../src/app';
 import { testCompanies } from '../utils/test-data';
 
 describe('Company Enrichment - Sync', () => {
+  let user: any;
+
+  beforeEach(async () => {
+    user = await createAuthenticatedUser('editor');
+  });
+
+  afterEach(async () => {
+    await cleanupAuthData();
+  });
+
   it('should enrich a company directly via /companies/ai-enrich', async () => {
     const enrichData = {
       name: testCompanies.forEnrichment.name,
       model: getTestModel(),
     };
 
-    const response = await apiRequest('/api/v1/companies/ai-enrich', {
-      method: 'POST',
-      body: JSON.stringify(enrichData),
-    });
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/companies/ai-enrich',
+      user.sessionToken!,
+      enrichData
+    );
 
-    expect(response.ok).toBe(true);
-    if (!response.ok) {
-      console.error('API Error:', response.error);
-      console.error('Response:', response.data);
-    }
-    expect(response.data.industry).toBeDefined();
-    expect(response.data.products).toBeDefined();
-    expect(response.data.processes).toBeDefined();
-    expect(response.data.challenges).toBeDefined();
-    expect(response.data.objectives).toBeDefined();
-    expect(response.data.technologies).toBeDefined();
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.industry).toBeDefined();
+    expect(data.products).toBeDefined();
+    expect(data.processes).toBeDefined();
+    expect(data.challenges).toBeDefined();
+    expect(data.objectives).toBeDefined();
+    expect(data.technologies).toBeDefined();
   });
 
   it('should handle enrichment errors gracefully', async () => {
@@ -33,12 +45,14 @@ describe('Company Enrichment - Sync', () => {
       model: getTestModel(),
     };
 
-    const response = await apiRequest('/api/v1/companies/ai-enrich', {
-      method: 'POST',
-      body: JSON.stringify(enrichData),
-    });
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/companies/ai-enrich',
+      user.sessionToken!,
+      enrichData
+    );
 
-    expect(response.ok).toBe(false);
     expect(response.status).toBe(400);
   });
 
@@ -48,12 +62,16 @@ describe('Company Enrichment - Sync', () => {
       model: getTestModel(),
     };
 
-    const response = await apiRequest('/api/v1/companies/ai-enrich', {
-      method: 'POST',
-      body: JSON.stringify(enrichData),
-    });
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/companies/ai-enrich',
+      user.sessionToken!,
+      enrichData
+    );
 
-    expect(response.ok).toBe(true);
-    expect(response.data.industry).toBeDefined();
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.industry).toBeDefined();
   });
 });
