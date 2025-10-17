@@ -225,7 +225,7 @@ test-ui: up-ui
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
 
 .PHONY: test-api
-test-api: up-api-test wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-queue test-api-security test-api-ai down up-api test-api-limit
+test-api: up-api-test wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-queue test-api-security test-api-ai down up-api wait-ready-api test-api-limit
 
 .PHONY: test-int
 test-int:

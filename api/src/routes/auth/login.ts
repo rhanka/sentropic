@@ -63,7 +63,10 @@ loginRouter.post('/options', async (c) => {
       userId: userId || 'discoverable',
     }, 'Authentication options generated');
     
-    return c.json({ options });
+    return c.json({ 
+      options,
+      challengeId: options.challengeId, // Include challengeId for testing
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       logger.warn({ error: error.errors }, 'Invalid login options request');
@@ -88,7 +91,7 @@ loginRouter.post('/verify', async (c) => {
     
     // Validate credential structure
     if (!credentialResponse || !credentialResponse.response || !credentialResponse.response.clientDataJSON) {
-      return c.json({ error: 'Invalid credential response' }, 400);
+      return c.json({ message: 'Invalid credential response' }, 400);
     }
     
     // Extract challenge from clientDataJSON
@@ -101,7 +104,7 @@ loginRouter.post('/verify', async (c) => {
     const challengeValid = await verifyChallenge(challenge, undefined, 'authentication');
     if (!challengeValid) {
       logger.warn('Invalid or expired authentication challenge');
-      return c.json({ error: 'Invalid or expired challenge' }, 400);
+      return c.json({ message: 'Invalid or expired challenge' }, 400);
     }
     
     // Verify authentication
@@ -112,7 +115,7 @@ loginRouter.post('/verify', async (c) => {
     
     if (!result.verified || !result.userId) {
       logger.warn('Authentication verification failed');
-      return c.json({ error: 'Authentication verification failed' }, 401);
+      return c.json({ message: 'Authentication verification failed' }, 401);
     }
     
     // Get user info

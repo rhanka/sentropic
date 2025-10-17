@@ -13,29 +13,36 @@ export const app = new Hono();
 const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 
 // Security Headers (CSP, HSTS, COOP, COEP)
-app.use('*', secureHeaders({
-  contentSecurityPolicy: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'"],
-    connectSrc: ["'self'", "https://*.sent-tech.ca"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
-    imgSrc: ["'self'", "data:", "https:"],
-    fontSrc: ["'self'"],
-    objectSrc: ["'none'"],
-    baseUri: ["'self'"],
-    formAction: ["'self'"],
-    frameAncestors: ["'none'"],
-    upgradeInsecureRequests: [],
-  },
-  strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
-  crossOriginOpenerPolicy: 'same-origin',
-  crossOriginEmbedderPolicy: 'require-corp',
-  crossOriginResourcePolicy: 'same-origin',
-  xContentTypeOptions: 'nosniff',
-  xFrameOptions: 'DENY',
-  xXssProtection: '1; mode=block',
-  referrerPolicy: 'strict-origin-when-cross-origin',
-}));
+app.use('*', async (c, next) => {
+  // Apply security headers
+  await secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://*.sent-tech.ca"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+    // Only add HSTS header for HTTPS requests
+    strictTransportSecurity: c.req.header('x-forwarded-proto') === 'https' || 
+                            c.req.header('x-forwarded-ssl') === 'on' ||
+                            c.req.url.startsWith('https://') ? 
+                            'max-age=31536000; includeSubDomains; preload' : undefined,
+    crossOriginOpenerPolicy: 'same-origin',
+    crossOriginEmbedderPolicy: 'require-corp',
+    crossOriginResourcePolicy: 'same-origin',
+    xContentTypeOptions: 'nosniff',
+    xFrameOptions: 'DENY',
+    xXssProtection: '1; mode=block',
+    referrerPolicy: 'strict-origin-when-cross-origin',
+  })(c, next);
+});
 
 // Custom CORS middleware (strict mode with credentials)
 app.use('*', async (c, next) => {
