@@ -145,7 +145,7 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - **SUCCESS: 50/50 authentication tests pass (100%)**
   - **BILAN GLOBAL: 140/151 E2E tests pass (92.7%)**
 
-- [ ] 12.4: Security tests:
+- [x] 12.4: Security tests:
   - Test CORS headers with credentials
   - Test CSP and security headers
   - Test rate limiting enforcement
@@ -162,7 +162,7 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [ ] 12.6: Preprod migration
   - [ ] Create a backup method for SCW production to local in make
   - [ ] Create targets to restore prod data to dev environement
-  - [ ] Apply relevant test (to be discussed)
+  - [ ] Apply relevant test (to be discussed, i suppose make test-api would be sufficient, or even test-smoke)
 
 ### Phase 13: CI/CD Integration & Documentation
 - [ ] 13.1: Update GitHub Actions workflow:

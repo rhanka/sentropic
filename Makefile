@@ -225,11 +225,7 @@ test-ui: up-ui
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
 
 .PHONY: test-api
-test-api: up-api-test wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-queue test-api-security test-api-ai down up-api wait-ready-api test-api-limit
-
-.PHONY: test-int
-test-int:
-	@echo "Integration tests placeholder" && exit 0
+test-api: up-api-test test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai up-api test-api-limit
 
 .PHONY: test-contract
 test-contract:
@@ -346,7 +342,7 @@ dev-api:
 
 .PHONY: up
 up: ## Start the full stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
@@ -354,11 +350,11 @@ up-e2e: ## Start stack with test overrides (UI env for API URL)
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
 up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-ui
 up-ui: ## Start the api stack in detached mode
@@ -456,7 +452,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(DOCKER_COMPOSE) exec api sh -lc "npx tsx tests/utils/seed-test-data.ts"
+	$(DOCKER_COMPOSE) exec api sh -lc "node dist/tests/utils/seed-test-data.js"
 
 .PHONY: db-lint
 db-lint:
