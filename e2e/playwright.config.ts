@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: true,
   retries: 2,
-  workers: 2,
+  workers: 4,
   reporter: 'list',
   // globalSetup removed; seed handled via Makefile (db-seed-test)
   use: {
