@@ -6,6 +6,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
+  import { API_BASE_URL } from '$lib/config';
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
