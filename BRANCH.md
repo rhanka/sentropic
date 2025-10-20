@@ -153,9 +153,25 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - Test counter increment validation
 
 - [ ] 12.5: User Acceptance Testing (UAT) - Bug Fixes & Final Validation
-  - [ ] Fix Enterprise Creation (creating is a succes with toaster "entreprise cree avec succès" but an additionnal toaster in ui says "Cannot read property of undefined") when clicking "Créer").
-  - [ ] Fix Deletion (Delete is succesfull toaster pops and "Unexpected end of JSON input")
-  - [ ] Fix remaining E2E test failures (1/151 tests failing)
+  - [x] Fix Enterprise Creation: redirection fiable et suppression de l'erreur "Cannot read properties of undefined (reading 'id')"
+    - UI store `companies.ts`: `createCompany`/`updateCompany` renvoient l'objet plat (aligné API)
+    - Page "new" (`/entreprises/new`): garde `newCompany?.id` avant `goto`
+    - Page détail (`/entreprises/[id]`): chargement direct par id via store (`fetchCompanyById`) + petit retry; réactivité sur changement d'`id`; suppression du `+page.ts` qui provoquait des appels répétés
+  - [x] Fix Deletion: messages d'erreur précis et scénario E2E stable
+    - UI store `deleteCompany`: parse 409 et affiche les comptages dossiers/cas d'usage
+    - E2E `companies.spec.ts`: réaligné sur `main` (création dédiée → suppression via `page.request.delete` → vérification disparition)
+  - [x] Fix cookies E2E Docker: `Domain=localhost` seulement pour origin localhost/127.0.0.1
+    - API `auth/register.ts`: `Set-Cookie` avec `Domain` conditionnel pour visibilité cookie sur host `ui`
+  - [x] Auth E2E unique + CDP WebAuthn
+    - Playwright: `globalSetup` avec virtual authenticator (CDP) + `storageState`
+    - `playwright.config.ts`: `workers=4`, `use.baseURL` via `UI_BASE_URL`, args Chromium insecure-origin as secure
+    - e2e Dockerfile: `COPY global.setup.ts` après npm install
+  - [x] Navigation SvelteKit
+    - `ui/routes/entreprises/+page.svelte`: `goto` au lieu de `window.location.href`
+    - `ui/lib/components/NavigationGuard.svelte`: utilisation de `goto`, `pushState`, `replaceState` de `$app/navigation`
+  - [x] Vue Évaluation (matrice): erreur `API_BASE_URL is not defined`
+    - `ui/routes/matrice/+page.svelte`: import de `API_BASE_URL` et usage dans `EditableInput.apiEndpoint`
+  - [ ] Fix remaining E2E test failures (si restants)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment
 
