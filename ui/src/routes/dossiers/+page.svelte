@@ -272,7 +272,7 @@
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     class="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
-                    on:click|stopPropagation={() => window.location.href = `/cas-usage?folder=${folder.id}`}
+                    on:click|stopPropagation={() => goto(`/cas-usage?folder=${folder.id}`)}
                     title="Voir les cas d'usage"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,7 +281,7 @@
                   </button>
                   <button 
                     class="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded"
-                    on:click|stopPropagation={() => window.location.href = `/matrice`}
+                    on:click|stopPropagation={() => goto(`/matrice`)}
                     title="Voir la matrice"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
