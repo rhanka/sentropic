@@ -26,12 +26,52 @@ test.describe('Gestion des entreprises', () => {
     const nameInput = page.locator('h1 input.editable-input');
     await expect(nameInput).toBeVisible();
     await nameInput.fill('Test Company');
+    // Laisser la réactivité Svelte stabiliser l'état local
+    await page.waitForTimeout(500);
     
     // Créer l'entreprise puis attendre la redirection vers la page détail
-    const createBtn = page.locator('button:has-text("Créer")');
+    const createBtn = page.locator('button[title="Créer"], button:has-text("Créer")');
+    // Debug réseau: tracer le POST /companies
+    const disposeNet1 = page.on('request', (r) => {
+      if (r.url().includes('/api/v1/companies') && r.method() === 'POST') console.log('[DEBUG] POST /companies started');
+    });
+    const disposeNet2 = page.on('requestfailed', (r) => {
+      if (r.url().includes('/api/v1/companies')) console.log(`[DEBUG] REQUEST FAILED ${r.method()} ${r.url()} ${r.failure()?.errorText}`);
+    });
+    const disposeNet3 = page.on('response', async (res) => {
+      const req = res.request();
+      if (req.url().includes('/api/v1/companies') && req.method() === 'POST') console.log(`[DEBUG] POST /companies status=${res.status()}`);
+    });
+
+    // Debug DOM: état du bouton avant clic
+    const btnState = await createBtn.evaluate((el) => {
+      const b = el as HTMLButtonElement;
+      const rect = b.getBoundingClientRect();
+      const cs = window.getComputedStyle(b);
+      return {
+        disabled: b.disabled,
+        text: (b.textContent || '').trim(),
+        title: b.getAttribute('title'),
+        visible: rect.width > 0 && rect.height > 0,
+        cursor: cs.cursor,
+        opacity: cs.opacity,
+      };
+    });
+    console.log('[DEBUG] createBtn state before click:', btnState);
+
+    await expect(createBtn).toBeVisible();
     await expect(createBtn).toBeEnabled();
+    await createBtn.scrollIntoViewIfNeeded();
+    await createBtn.hover();
     await createBtn.click();
-    await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/);
+
+    // Preuve d'impact: soit navigation, soit POST observé
+    await Promise.race([
+      page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
+      page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 5000 })
+    ]).catch(() => {});
+
+    await expect(page).toHaveURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 3000 });
     
     // Vérifier directement sur la page de détail que le nom est bien celui saisi
     const detailNameInput = page.locator('h1 input.editable-input');
@@ -59,24 +99,33 @@ test.describe('Gestion des entreprises', () => {
   test('devrait permettre de supprimer une entreprise', async ({ page }) => {
     await page.goto('/entreprises');
     await page.waitForLoadState('networkidle');
-    
-    // Créer une entreprise d'abord
+
+    // Créer une entreprise d'abord (comme sur main)
     await page.click('button:has-text("Ajouter")');
     await expect(page).toHaveURL(/\/entreprises\/new$/);
     const nameInput = page.locator('h1 input.editable-input');
     await nameInput.fill('Company to Delete');
-    await page.click('button:has-text("Créer")');
+    await page.waitForTimeout(75);
+    const createBtn2 = page.locator('button[title="Créer"], button:has-text("Créer")');
+    await expect(createBtn2).toBeVisible();
+    await createBtn2.scrollIntoViewIfNeeded();
+    await createBtn2.hover();
+    await createBtn2.click({ force: true });
+    await createBtn2.press('Enter');
+    await Promise.race([
+      page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+$/, { timeout: 2000 }),
+      page.locator('button:has-text("Création...")').first().waitFor({ state: 'visible', timeout: 2000 })
+    ]);
     await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/);
-    
-    // Récupérer l'ID depuis l'URL et attendre quelques ms pour la persistance
-    const currentUrl = page.url();
-    const detailId = currentUrl.split('/').pop() || '';
-    await page.waitForTimeout(500);
-    
-    // Supprimer via l'API directement (plus fiable que l'UI)
-    const delResp = await page.request.delete(`http://api:8787/api/v1/companies/${detailId}`);
-    expect(delResp.ok() || delResp.status() === 404).toBeTruthy();
-    
+
+    // Supprimer via l'UI: cliquer sur le bouton Supprimer et confirmer
+    page.on('dialog', dialog => dialog.accept());
+    const deleteBtn = page.locator('button:has-text("Supprimer")').first();
+    await expect(deleteBtn).toBeVisible();
+    await deleteBtn.click();
+    // Attendre la redirection
+    await page.waitForURL(/\/entreprises$/);
+
     // Vérifier que l'entreprise a disparu de la liste UI
     await page.goto('/entreprises');
     await page.waitForLoadState('networkidle');

@@ -30,6 +30,11 @@ export async function apiRequest<T = any>(
     throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
   }
 
+  // Handle 204 No Content responses (common for DELETE)
+  if (response.status === 204) {
+    return {} as T;
+  }
+
   return response.json();
 }
 

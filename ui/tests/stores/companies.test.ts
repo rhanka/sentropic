@@ -45,7 +45,7 @@ describe('Companies Store', () => {
       const newCompany = { name: 'New Company', industry: 'Tech' };
       const createdCompany = { id: '1', ...newCompany };
       
-      mockFetchJsonOnce({ item: createdCompany });
+      mockFetchJsonOnce(createdCompany);
 
       const result = await createCompany(newCompany);
       expect(result).toEqual(createdCompany);
@@ -63,7 +63,7 @@ describe('Companies Store', () => {
       const updates = { industry: 'Updated Industry' };
       const updatedCompany = { id: '1', name: 'Company', ...updates };
       
-      mockFetchJsonOnce({ item: updatedCompany });
+      mockFetchJsonOnce(updatedCompany);
 
       const result = await updateCompany('1', updates);
       expect(result).toEqual(updatedCompany);
@@ -79,19 +79,20 @@ describe('Companies Store', () => {
 
     it('should handle 409 conflict with detailed message', async () => {
       const errorResponse = {
-        error: 'Impossible de supprimer l\'entreprise car elle est utilisée (2 dossier(s) et 5 cas d\'usage)'
+        message: "Impossible de supprimer l'entreprise",
+        details: { folders: 2, useCases: 5 }
       };
       
       // Simule une erreur 409
       mockFetchJsonOnce(errorResponse, 409);
 
       await expect(deleteCompany('1')).rejects.toThrow(
-        'Impossible de supprimer l\'entreprise car elle est utilisée (2 dossier(s) et 5 cas d\'usage)'
+        "Impossible de supprimer l'entreprise (2 dossier(s) et 5 cas d'usage)"
       );
     });
 
     it('should handle other errors', async () => {
-      mockFetchJsonOnce({ error: 'Server error' }, 500);
+      mockFetchJsonOnce({ message: 'Server error' }, 500);
 
       await expect(deleteCompany('1')).rejects.toThrow('Server error');
     });

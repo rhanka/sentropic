@@ -3,6 +3,7 @@
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
   import { refreshManager } from '$lib/stores/refresh';
+  import { goto } from '$app/navigation';
 
   // Réactivité pour détecter les changements de statut et gérer l'actualisation
   $: {
@@ -73,7 +74,7 @@
 <section class="space-y-6">
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Entreprises</h1>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => window.location.href = '/entreprises/new'}>
+    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => goto('/entreprises/new')}>
       Ajouter
     </button>
   </div>
@@ -83,7 +84,7 @@
       {@const isEnriching = company.status === 'enriching'}
       {@const isDraft = company.status === 'draft'}
       <article class="rounded border border-slate-200 bg-white p-4 shadow-sm transition-shadow group {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
-               on:click={() => !isEnriching && (window.location.href = `/entreprises/${company.id}`)}>
+               on:click={() => { if (!isEnriching) goto(`/entreprises/${company.id}`); }}>
         {#if isEnriching}
           <!-- Vue pour l'enrichissement avec nom et bouton de suppression -->
           <div class="flex justify-between items-start mb-3">
@@ -126,7 +127,7 @@
             <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button 
                 class="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
-                on:click|stopPropagation={() => window.location.href = `/entreprises/${company.id}`}
+                on:click|stopPropagation={() => goto(`/entreprises/${company.id}`)}
                 title="Voir les détails"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

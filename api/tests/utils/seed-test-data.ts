@@ -1,11 +1,18 @@
 import { db } from '../../src/db/client.js';
-import { companies, folders, useCases, settings } from '../../src/db/schema.js';
+import { companies, folders, useCases, settings, users, webauthnCredentials, sessions } from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
 
 export async function seedTestData() {
   console.log('🌱 Seeding test data for E2E tests...\n');
 
   try {
+    // Clean up all users, credentials, and sessions before seeding
+    // This ensures a clean state for E2E tests
+    console.log('🗑️  Cleaning up existing auth data...');
+    await db.delete(sessions);
+    await db.delete(webauthnCredentials);
+    await db.delete(users);
+    console.log('✅ Auth data cleaned');
     // 1. Entreprises de test
     const testCompaniesData = [
       {

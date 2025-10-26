@@ -35,9 +35,12 @@ export const fetchCompanies = async (): Promise<Company[]> => {
   return data.items;
 };
 
+export const fetchCompanyById = async (id: string): Promise<Company> => {
+  return await apiGet<Company>(`/companies/${id}`);
+};
+
 export const createCompany = async (company: Omit<Company, 'id'>): Promise<Company> => {
-  const data = await apiPost<{ item: Company }>('/companies', company);
-  return data.item;
+  return await apiPost<Company>('/companies', company);
 };
 
 export const updateCompany = async (id: string, company: Partial<Company>): Promise<Company> => {

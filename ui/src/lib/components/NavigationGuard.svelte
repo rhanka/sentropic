@@ -2,6 +2,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
+  import { goto, pushState, replaceState } from '$app/navigation';
   
   let showWarning = false;
   let pendingNavigation = null;
@@ -16,35 +17,35 @@
         event.preventDefault();
         showWarning = true;
         pendingNavigation = () => {
-          window.location.href = link.href;
+          goto(link.getAttribute('href'));
         };
       }
     };
     
     // Intercepter les changements d'URL programmatiques
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+    const originalPushState = pushState;
+    const originalReplaceState = replaceState;
     
-    history.pushState = function(...args) {
+    const interceptPush = (...args) => {
       if ($unsavedChangesStore.changes.length > 0) {
         showWarning = true;
         pendingNavigation = () => {
-          originalPushState.apply(history, args);
+          originalPushState(...args);
         };
         return;
       }
-      originalPushState.apply(history, args);
+      originalPushState(...args);
     };
     
-    history.replaceState = function(...args) {
+    const interceptReplace = (...args) => {
       if ($unsavedChangesStore.changes.length > 0) {
         showWarning = true;
         pendingNavigation = () => {
-          originalReplaceState.apply(history, args);
+          originalReplaceState(...args);
         };
         return;
       }
-      originalReplaceState.apply(history, args);
+      originalReplaceState(...args);
     };
     
     // Intercepter les clics sur les boutons de navigation
@@ -64,8 +65,6 @@
     return () => {
       document.removeEventListener('click', handleLinkClick);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
     };
   });
   

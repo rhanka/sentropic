@@ -171,7 +171,15 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - `ui/lib/components/NavigationGuard.svelte`: utilisation de `goto`, `pushState`, `replaceState` de `$app/navigation`
   - [x] Vue Évaluation (matrice): erreur `API_BASE_URL is not defined`
     - `ui/routes/matrice/+page.svelte`: import de `API_BASE_URL` et usage dans `EditableInput.apiEndpoint`
-  - [ ] Fix remaining E2E test failures (si restants)
+  - [x] Gestion unsaved changes après création d'entreprise
+    - Page détail (`/entreprises/[id]`): reset `unsavedChangesStore` après chargement pour éviter les faux positifs
+    - API response: gestion des réponses 204 No Content (DELETE) pour éviter `Failed to execute 'json' on 'Response'`
+  - [x] Seed E2E nettoie les utilisateurs avant insertion
+    - `api/tests/utils/seed-test-data.ts`: supprime sessions, credentials et users avant de seed pour garantir un état propre
+    - Permet à `e2e-admin@example.com` de devenir admin lors de l'inscription WebAuthn
+  - [x] Gestion réponse HTTP 204 No Content pour DELETE
+    - `ui/src/lib/utils/api.ts`: détection de réponse 204 et retour d'objet vide au lieu d'appeler `response.json()`
+  - [ ] Fix remaining E2E test failures: navigation vers page détail (1 test échoue)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment
 
