@@ -21,7 +21,7 @@
   let userId = '';
 
   onMount(() => {
-    webauthnSupported = isWebAuthnSupported();
+    webauthnSupported = isWebAuthnSupported()
     if (!webauthnSupported) {
       error = 'Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).';
     }

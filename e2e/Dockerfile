@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY playwright.config.ts ./
+COPY global.setup.ts ./
 
 # Installer les dépendances
 RUN npm install --legacy-peer-deps && \

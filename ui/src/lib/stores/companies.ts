@@ -44,8 +44,7 @@ export const createCompany = async (company: Omit<Company, 'id'>): Promise<Compa
 };
 
 export const updateCompany = async (id: string, company: Partial<Company>): Promise<Company> => {
-  const data = await apiPut<{ item: Company }>(`/companies/${id}`, company);
-  return data.item;
+  return await apiPut<Company>(`/companies/${id}`, company);
 };
 
 export const deleteCompany = async (id: string): Promise<void> => {

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
@@ -12,6 +12,9 @@ FROM base AS development
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 FROM base AS build
+ARG VITE_API_BASE_URL=/api/v1
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+RUN echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
 RUN npm run build
 CMD ["npm", "run", "build"]
 

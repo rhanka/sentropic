@@ -187,6 +187,7 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - `global.setup.ts`: inscription WebAuthn via UI réelle (pas de mocks), sauvegarde de session dans `.auth/state.json`
     - `docker-compose.test.yml`: `network_mode: host` pour l'accès à `localhost`, configuration `WEBAUTHN_RP_ID=localhost` et `WEBAUTHN_ORIGIN=http://localhost:5173`
     - Résultat: inscription WebAuthn fonctionne dans E2E, session valide pour tous les tests
+  - [ ] Fix UI - update company is not authenticated (401)
   - [ ] Fix remaining E2E test failures: navigation vers page détail (1 test échoue)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment

@@ -197,19 +197,28 @@ registerRouter.post('/verify', async (c) => {
       }
     );
     
-    // Set session cookie (Secure only in production)
+    // Set session cookie. Use Domain=localhost ONLY when origin is localhost; otherwise omit Domain
+    const origin = c.req.header('origin') || '';
+    let domainAttr = '';
+    try {
+      const { hostname } = new URL(origin);
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        domainAttr = 'Domain=localhost';
+      }
+    } catch {}
+
     const isProduction = process.env.NODE_ENV === 'production';
-    const cookieOptions = [
+    const cookieParts = [
       `session=${sessionToken}`,
       'HttpOnly',
       isProduction ? 'Secure' : '',
       'SameSite=Lax',
       'Path=/',
-      'Domain=localhost', // Allow sharing between localhost ports
+      domainAttr,
       `Max-Age=${7 * 24 * 60 * 60}`
-    ].filter(Boolean).join('; ');
-    
-    c.header('Set-Cookie', cookieOptions);
+    ].filter(Boolean);
+
+    c.header('Set-Cookie', cookieParts.join('; '));
     
     logger.info({ 
       userId, 

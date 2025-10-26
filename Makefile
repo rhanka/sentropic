@@ -408,6 +408,7 @@ db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 db-reset: up ## Reset database (WARNING: destroys all data)
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
+	@echo "  - All users and session"
 	@echo "  - All companies"
 	@echo "  - All folders" 
 	@echo "  - All use cases"
