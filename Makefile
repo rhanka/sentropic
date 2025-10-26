@@ -346,7 +346,7 @@ up: ## Start the full stack in detached mode
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode

@@ -179,6 +179,14 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - Permet à `e2e-admin@example.com` de devenir admin lors de l'inscription WebAuthn
   - [x] Gestion réponse HTTP 204 No Content pour DELETE
     - `ui/src/lib/utils/api.ts`: détection de réponse 204 et retour d'objet vide au lieu d'appeler `response.json()`
+  - [x] Fix WebAuthn E2E: configuration localhost et authentificateur virtuel
+    - Problème initial: WebAuthn ne fonctionnait pas dans l'environnement Docker E2E (HTTP, pas HTTPS)
+    - Solution: utiliser `network_mode: host` + `localhost` comme base URL au lieu de `http://ui:5173`
+    - Configuration Chromium: `--unsafely-treat-insecure-origin-as-secure=http://localhost:5173,http://localhost:8787` pour traiter localhost comme sécurisé
+    - Authentificateur virtuel CDP: configuration avec `automaticPresenceSimulation: true`, `transport: 'internal'`, `hasResidentKey: true`
+    - `global.setup.ts`: inscription WebAuthn via UI réelle (pas de mocks), sauvegarde de session dans `.auth/state.json`
+    - `docker-compose.test.yml`: `network_mode: host` pour l'accès à `localhost`, configuration `WEBAUTHN_RP_ID=localhost` et `WEBAUTHN_ORIGIN=http://localhost:5173`
+    - Résultat: inscription WebAuthn fonctionne dans E2E, session valide pour tous les tests
   - [ ] Fix remaining E2E test failures: navigation vers page détail (1 test échoue)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment

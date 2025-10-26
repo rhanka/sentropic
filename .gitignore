@@ -10,6 +10,9 @@ api/dist/
 api/.tsbuildinfo
 *.tar
 
+#e2e tests results
+e2e/test-results
+
 # Logs
 *.log
 npm-debug.log*
