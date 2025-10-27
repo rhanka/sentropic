@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { ApiError } from '$lib/utils/api';
 
 export type Company = {
   id: string;
@@ -52,10 +53,10 @@ export const deleteCompany = async (id: string): Promise<void> => {
     await apiDelete(`/companies/${id}`);
   } catch (error: any) {
     // Gérer spécifiquement l'erreur 409 (Conflict - dependencies exist)
-    if (error.message?.includes('409')) {
-      const parts = [];
-      // Note: Would need to parse error details from response
-      throw new Error(`Impossible de supprimer l'entreprise (dépendances existantes)`);
+    if (error instanceof ApiError && error.status === 409 && error.data?.details) {
+      const folders = error.data.details.folders || 0;
+      const useCases = error.data.details.useCases || 0;
+      throw new Error(`Impossible de supprimer l'entreprise (${folders} dossier(s) et ${useCases} cas d'usage)`);
     }
     throw error;
   }

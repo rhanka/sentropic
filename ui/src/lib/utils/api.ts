@@ -7,6 +7,20 @@
 import { API_BASE_URL } from '$lib/config';
 
 /**
+ * Custom error class for API errors that preserves error details
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public data?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
  * Make an authenticated API request
  * Automatically includes credentials (cookies) for authentication
  */
@@ -26,8 +40,15 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({ 
+      error: 'Unknown error', 
+      message: 'Unknown error' 
+    }));
+    
+    // Use message field first (REST API standard), fallback to error field
+    const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+    
+    throw new ApiError(errorMessage, response.status, errorData);
   }
 
   // Handle 204 No Content responses (common for DELETE)

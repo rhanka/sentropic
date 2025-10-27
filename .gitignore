@@ -12,6 +12,7 @@ api/.tsbuildinfo
 
 #e2e tests results
 e2e/test-results
+e2e/.auth
 
 # Logs
 *.log

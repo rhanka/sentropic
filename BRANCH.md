@@ -189,6 +189,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - Résultat: inscription WebAuthn fonctionne dans E2E, session valide pour tous les tests
   - [x] Fix UI - update company is not authenticated (401)
     - `ui/src/lib/components/EditableInput.svelte`: remplacé `fetch` par `apiPut` pour inclure automatiquement `credentials: 'include'` dans les requêtes authentifiées
+  - [x] Fix UI tests regressions (deleteCompany error messages)
+    - `ui/src/lib/utils/api.ts`: créé classe `ApiError` pour préserver le body de réponse complet (status, data) dans les erreurs API
+    - `ui/src/lib/stores/companies.ts`: adapté `deleteCompany` pour parser le body 409 et construire le message avec comptage exact des dépendances (folders, useCases)
+    - Extraction correcte du champ `message` du body JSON (priorité sur `error`)
+    - **Résultat: 58/58 tests UI passent (100%)**
   - [ ] Fix remaining E2E test failures: navigation vers page détail (1 test échoue)
   - [ ] Test complete pipeline: `make down test-api test-ui down build-api build-ui-image test-e2e`
   - [ ] Verify all tests pass before production deployment
