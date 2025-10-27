@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from "svelte";
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
+  import { apiPut } from "$lib/utils/api";
   
   export let label = ""; // Le label affiché au-dessus
   export let value = ""; // La valeur de l'input
@@ -59,24 +60,18 @@
     
     isSaving = true;
     try {
-      const response = await fetch(apiEndpoint, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(fullData || { value })
-      });
+      // Extract endpoint path from full URL if needed
+      // apiEndpoint can be either "/companies/123" or "http://.../companies/123"
+      // apiPut handles both cases
+      await apiPut(apiEndpoint, fullData || { value });
       
-      if (response.ok) {
-        hasUnsavedChanges = false;
-        // Supprimer du store des modifications non sauvegardées
-        if (changeId) {
-          unsavedChangesStore.removeChange(changeId);
-        }
-        dispatch('saved', { value });
-      } else {
-        throw new Error(`Failed to save: ${response.status} ${response.statusText}`);
+      // Success - response is OK by default (apiPut throws on error)
+      hasUnsavedChanges = false;
+      // Supprimer du store des modifications non sauvegardées
+      if (changeId) {
+        unsavedChangesStore.removeChange(changeId);
       }
+      dispatch('saved', { value });
     } catch (error) {
       console.error('Failed to save:', error);
       dispatch('saveError', { error, value });
