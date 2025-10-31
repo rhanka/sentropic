@@ -19,13 +19,56 @@ Top AI Ideas est une application web qui aide les entreprises à identifier, gé
 ### Architecture globale (mermaid)
 
 ```mermaid
-flowchart LR
-  User((Browser)) -- UI --> SvelteKit
-  SvelteKit -- REST/JSON --> API_TS
-  API_TS -- PostgreSQL --> Postgres[(Postgres DB)]
-  API_TS -- HTTPS --> OpenAI
-  OIDC[Google/LinkedIn] -- OIDC --> API_TS
-  CI(CI GitHub Actions) -- deploy --> GH_Pages & Scaleway
+flowchart TB
+    subgraph "Browser"
+        User[User]
+    end
+    
+    subgraph "Frontend"
+        UI["SvelteKit 5 UI<br/>Tailwind CSS<br/>i18n EN/FR"]
+    end
+    
+    subgraph "Backend Services"
+        API["Hono API<br/>TypeScript<br/>REST/OpenAPI"]
+        AI["OpenAI Integration<br/>Node.js SDK"]
+    end
+    
+    subgraph "Data Layer"
+        DB[("PostgreSQL Database<br/>Postgres 16")]
+        Queue["Custom PostgreSQL Queue<br/>QueueManager service"]
+    end
+    
+    subgraph "External Services"
+        OpenAI["OpenAI API<br/>GPT Models"]
+        OIDC["OIDC Providers<br/>Google/LinkedIn"]
+    end
+    
+    subgraph "DevOps & Testing"
+        Docker["Docker Compose<br/>Development Environment"]
+        Make["Makefile<br/>Build/Test/DB/Deploy"]
+        Tests["Vitest + Playwright<br/>Unit/Integration/E2E"]
+    end
+    
+    User --> UI
+    UI -->|REST/JSON| API
+    API --> AI
+    AI --> OpenAI
+    API --> DB
+    API --> Queue
+    Queue --> AI
+    API -->|OIDC Auth| OIDC
+    
+    Make --> Docker
+    Make --> Tests
+    Make -->|DB Operations| DB
+    Make -->|Queue Management| Queue
+    Make -->|Build/Deploy| UI
+    Make -->|Build/Deploy| API
+    
+    style UI fill:#e1f5fe
+    style API fill:#f3e5f5
+    style DB fill:#e8f5e8
+    style Make fill:#fff3e0
 ```
 
 
@@ -126,7 +169,7 @@ Pour les détails complets de la spécification technique, voir [SPEC.md](SPEC.m
 - Schéma PostgreSQL 16 avec migrations Drizzle.
 - CRUD: companies, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
 - Génération OpenAI (list/detail/folder) + `/use-cases/generate` (validation Zod, recalcul des scores).
-- Queue basée sur Postgres avec QueueManager pour jobs asynchrones.
+- Queue basée sur PostgreSQL avec QueueManager pour jobs asynchrones.
 - Agrégations Dashboard pré-normalisées.
 
 **✅ Étape 2 – UI SvelteKit (TERMINÉE)**
@@ -144,6 +187,6 @@ Pour les détails complets de la spécification technique, voir [SPEC.md](SPEC.m
 **⏳ Étape 4 – Fonctionnalités manquantes**
 - **À implémenter**: Auth OIDC Google/LinkedIn.
 - **À implémenter**: Pages `/configuration-metier` et `/donnees`.
-- **À implémenter**: Backups automatisés Postgres.
+- **À implémenter**: Backups automatisés PostgreSQL.
 
 
