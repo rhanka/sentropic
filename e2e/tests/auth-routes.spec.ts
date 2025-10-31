@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Authentication Routes Access', () => {
+// Public (non authentifié)
+test.describe('Public · Authentication Routes Access', () => {
+  test.use({ storageState: undefined });
   test('devrait accéder à la page de connexion', async ({ page }) => {
     // Aller sur la page de connexion
     const response = await page.goto('/auth/login');

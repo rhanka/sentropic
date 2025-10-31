@@ -24,6 +24,9 @@ version:
 	@echo "API_VERSION: $(API_VERSION)"
 	@echo "UI_VERSION: $(UI_VERSION)"
 
+cloc:
+	@cloc --vcs=git --exclude-content=".*package.*json"
+
 # -----------------------------------------------------------------------------
 # Installation & Build
 # -----------------------------------------------------------------------------
@@ -320,10 +323,9 @@ clean-db: ## Clean database files and restart services
 	@read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1)
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
-	rm -f data/app.db*
+	@docker volume rm top-ai-ideas-fullstack_pg_data || true
 	@echo "✅ Database cleaned!"
 	@echo "🚀 Restarting services..."
-	$(MAKE) dev
 
 # -----------------------------------------------------------------------------
 # Development environment

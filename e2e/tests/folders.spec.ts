@@ -15,9 +15,11 @@ test.describe('Gestion des dossiers', () => {
     const createButton = page.locator('button:has-text("Nouveau dossier")');
     if (await createButton.isVisible()) {
       await createButton.click();
+      await page.waitForTimeout(300);
       
-      // Vérifier qu'un formulaire s'ouvre
-      await expect(page.locator('input[placeholder*="nom"]')).toBeVisible();
+      // Vérifier qu'un formulaire s'ouvre (input pour le nom)
+      const nameInput = page.locator('input[type="text"]').first();
+      await expect(nameInput).toBeVisible();
     }
   });
 
@@ -27,24 +29,30 @@ test.describe('Gestion des dossiers', () => {
     await expect(page.locator('h1')).toContainText('Dossiers');
   });
 
-  test('devrait permettre de cliquer sur un dossier', async ({ page }) => {
+  test('devrait permettre de cliquer sur un dossier et afficher les cas d\'usage', async ({ page }) => {
     await page.waitForLoadState('networkidle');
     
-    // Chercher un dossier cliquable
-    const folderItems = page.locator('article, .folder-item, [data-testid="folder-item"]');
+    // Chercher un dossier cliquable (pas en génération ou avec cas d'usage)
+    const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
     
-    if (await folderItems.count() > 0) {
+    const itemCount = await folderItems.count();
+    if (itemCount > 0) {
       const firstFolder = folderItems.first();
       
-      // Cliquer sur le dossier
-      await firstFolder.click();
+      // Cliquer sur le titre du dossier (évite les conflits avec les boutons)
+      const folderTitle = firstFolder.locator('h2').first();
+      await folderTitle.waitFor({ state: 'visible' });
+      await folderTitle.click();
       
-      // Attendre la redirection
-      await page.waitForLoadState('networkidle');
+      // Attendre la redirection vers /cas-usage avec timeout
+      await page.waitForURL(/\/cas-usage/, { timeout: 5000 });
       
-      // Vérifier qu'on est redirigé vers les cas d'usage ou une page de détail
-      const currentUrl = page.url();
-      expect(currentUrl).toMatch(/\/(cas-usage|dossiers\/[a-zA-Z0-9-]+)/);
+      // Vérifier le titre "Cas d'usage"
+      await expect(page.locator('h1')).toContainText('Cas d\'usage');
+      
+      // Vérifier la présence des cas d'usage (grille) ou message vide si aucun
+      const useCaseGrid = page.locator('.grid.gap-4');
+      await expect(useCaseGrid).toBeVisible();
     }
   });
 

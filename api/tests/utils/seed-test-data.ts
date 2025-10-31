@@ -1,18 +1,49 @@
 import { db } from '../../src/db/client.js';
-import { companies, folders, useCases, settings, users, webauthnCredentials, sessions } from '../../src/db/schema.js';
+import { 
+  companies, 
+  folders, 
+  useCases, 
+  settings, 
+  users, 
+  webauthnCredentials, 
+  sessions,
+  userSessions,
+  webauthnChallenges,
+  magicLinks,
+  jobQueue
+} from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
 
 export async function seedTestData() {
   console.log('🌱 Seeding test data for E2E tests...\n');
 
   try {
-    // Clean up all users, credentials, and sessions before seeding
-    // This ensures a clean state for E2E tests
-    console.log('🗑️  Cleaning up existing auth data...');
-    await db.delete(sessions);
-    await db.delete(webauthnCredentials);
-    await db.delete(users);
-    console.log('✅ Auth data cleaned');
+    // Clean up all data before seeding to ensure a clean state for E2E tests
+    // Order matters: delete tables with foreign keys first
+    console.log('🗑️  Cleaning up existing data...');
+    
+    // 1. Delete tables with foreign keys (in dependency order)
+    await db.delete(useCases); // Depends on folders and companies
+    await db.delete(folders); // Depends on companies
+    await db.delete(companies); // No dependencies
+    
+    // 2. Delete auth-related tables with foreign keys
+    await db.delete(userSessions); // Depends on users
+    await db.delete(webauthnCredentials); // Depends on users
+    await db.delete(webauthnChallenges); // Depends on users
+    await db.delete(magicLinks); // Depends on users
+    await db.delete(sessions); // Old sessions table (if exists)
+    await db.delete(users); // No dependencies
+    
+    // 3. Delete other tables
+    await db.delete(jobQueue); // Clean job queue to avoid interference
+    await db.delete(settings); // Clean settings to ensure clean state
+    
+    // Note: businessConfig is kept as it contains business configuration
+    // that might be needed. If you want to clean it too, uncomment:
+    // await db.delete(businessConfig);
+    
+    console.log('✅ All data cleaned (companies, folders, use cases, users, auth, jobs, settings)');
     // 1. Entreprises de test
     const testCompaniesData = [
       {

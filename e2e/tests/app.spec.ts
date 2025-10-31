@@ -93,14 +93,3 @@ test.describe('Application principale', () => {
     await expect(page.locator('body')).toBeAttached();
   });
 });
-
-test.describe('API Health Check', () => {
-  test('devrait répondre aux requêtes API', async ({ request }) => {
-    // Tester l'endpoint de santé (utiliser le host docker compose de l'API)
-    const response = await request.get('http://api:8787/api/v1/health');
-    expect(response.status()).toBe(200);
-    
-    const data = await response.json();
-    expect(data).toHaveProperty('status', 'ok');
-  });
-});

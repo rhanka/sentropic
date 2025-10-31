@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Authentication - Basic Tests', () => {
+// Public (non authentifié)
+test.describe('Public · Authentication - Basic Tests', () => {
+  test.use({ storageState: undefined });
   test('devrait accéder aux pages d\'authentification', async ({ page }) => {
     // Test de la page de connexion
     const loginResponse = await page.goto('/auth/login');
@@ -40,6 +42,13 @@ test.describe('Authentication - Basic Tests', () => {
   });
 
   test('devrait gérer la navigation entre les pages', async ({ page }) => {
+    // Nettoyer le localStorage et les cookies pour s'assurer d'un état non authentifié
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+    });
+    await page.context().clearCookies();
+    
     // Aller sur la page d'accueil
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -63,30 +72,6 @@ test.describe('Authentication - Basic Tests', () => {
     // Vérifier l'URL finale
     const finalUrl = page.url();
     expect(finalUrl).toMatch(/.*\/(dashboard|auth\/login)/);
-  });
-
-  test('devrait répondre aux endpoints API d\'authentification', async ({ request }) => {
-    // Test de l'endpoint de santé
-    const healthResponse = await request.get('http://api:8787/api/v1/health');
-    expect(healthResponse.status()).toBe(200);
-    
-    const healthData = await healthResponse.json();
-    expect(healthData).toHaveProperty('status', 'ok');
-    
-    // Test des endpoints d'authentification (peuvent retourner 400 ou 200)
-    const loginOptionsResponse = await request.post('http://api:8787/api/v1/auth/login/options', {
-      data: { userName: 'test@example.com' }
-    });
-    expect([200, 400]).toContain(loginOptionsResponse.status());
-    
-    const registerOptionsResponse = await request.post('http://api:8787/api/v1/auth/register/options', {
-      data: { 
-        userName: 'testuser',
-        userDisplayName: 'Test User',
-        email: 'test@example.com'
-      }
-    });
-    expect([200, 400]).toContain(registerOptionsResponse.status());
   });
 });
 

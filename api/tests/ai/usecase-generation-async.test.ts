@@ -93,7 +93,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     // 3) Wait for company enrichment completion with polling
     let enrichedCompany;
     let attempts = 0;
-    const maxAttempts = 12; // 12 * 5s = 60s max
+    const maxAttempts = 5; // 5 * 5s = 25s max
     
     do {
       await sleep(5000); // Wait 5 seconds between checks
@@ -115,7 +115,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichedData.technologies).toBeDefined();
 
     // 5) Start use case generation with the enriched company
-    const input = `Generate AI use cases for ${companyName} in the ${enrichedData.industry} industry`;
+    const input = `Generate 5 AI use cases for ${companyName} in the ${enrichedData.industry} industry`;
     const generateResponse = await authenticatedRequest(
       app,
       'POST',
@@ -138,7 +138,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     // 6) Wait for use case generation completion with polling
     let folderResponse;
     let attempts2 = 0;
-    const maxAttempts2 = 12; // 12 * 5s = 60s max
+    const maxAttempts2 = 5; // 5 * 5s = 15s max
     
     do {
       await sleep(5000); // Wait 5 seconds between checks
@@ -155,7 +155,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     // 8) Wait for use cases to complete with polling
     let useCasesResponse;
     let attempts4 = 0;
-    const maxAttempts4 = 12; // 12 * 5s = 60s max
+    const maxAttempts4 = 6; // 12 * 5s = 30s max
     
     do {
       await sleep(5000); // Wait 5 seconds between checks

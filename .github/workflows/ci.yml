@@ -8,6 +8,7 @@ on:
 
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
+  ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
 
 jobs:
   changes:
@@ -89,6 +90,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      - name: Show API logs on failure
+        if: failure() && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+        run: make logs-api
 
   # Build & Unit Test UI
   build-ui:

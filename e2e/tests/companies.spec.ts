@@ -136,17 +136,21 @@ test.describe('Gestion des entreprises', () => {
     await page.goto('/entreprises');
     await page.waitForLoadState('networkidle');
     
-    // Chercher une entreprise cliquable
-    const companyItems = page.locator('article, .company-item, [data-testid="company-item"]');
+    // Chercher une entreprise cliquable (pas en enrichissement)
+    const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
     
-    if (await companyItems.count() > 0) {
+    const itemCount = await companyItems.count();
+    if (itemCount > 0) {
       const firstCompany = companyItems.first();
       
       // Cliquer sur l'entreprise
       await firstCompany.click();
       
-      // Attendre la redirection
-      await page.waitForLoadState('networkidle');
+      // Preuve d'impact: soit navigation, soit POST observé
+      await Promise.race([
+        page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
+        page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 5000 })
+      ]).catch(() => {});
       
       // Vérifier qu'on est sur une page de détail
       const currentUrl = page.url();

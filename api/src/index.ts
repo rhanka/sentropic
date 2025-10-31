@@ -17,7 +17,12 @@ try {
 }
 
 // Purge expired authentication data (challenges, magic links)
-await purgeExpiredAuthData();
+try {
+  await purgeExpiredAuthData();
+} catch (error) {
+  logger.error({ err: error }, 'Failed to purge expired auth data at startup, continuing anyway');
+  // Non-critical: don't block startup if purge fails
+}
 
 const [{ serve }, { app }] = await Promise.all([
   import('@hono/node-server'),
