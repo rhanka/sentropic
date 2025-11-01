@@ -350,6 +350,11 @@ up: ## Start the full stack in detached mode
 up-e2e: ## Start stack with test overrides (UI env for API URL)
 	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
+.PHONY: up-test-restore
+up-test-restore: ## Start stack in production mode for restore testing
+	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	@$(MAKE) wait-ready-api
+
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
@@ -425,15 +430,120 @@ db-status: ## Check database status and tables
 	@echo "📊 Database status:"
 	$(COMPOSE_RUN_API) npm run db:status
 
+.PHONY: db-inspect
+db-inspect: up ## Inspect database directly via postgres container (query database state)
+	@echo "📊 Database Inspection:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		UNION ALL \
+		SELECT 'folders', COUNT(*) FROM folders \
+		UNION ALL \
+		SELECT 'companies', COUNT(*) FROM companies \
+		UNION ALL \
+		SELECT 'users', COUNT(*) FROM users \
+		UNION ALL \
+		SELECT 'user_sessions', COUNT(*) FROM user_sessions;"
+
+.PHONY: db-inspect-usecases
+db-inspect-usecases: up ## Inspect use cases and folders relationship
+	@echo "📊 Use Cases Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT uc.id, uc.name, uc.folder_id, f.name as folder_name, uc.company_id, c.name as company_name \
+		FROM use_cases uc \
+		LEFT JOIN folders f ON uc.folder_id = f.id \
+		LEFT JOIN companies c ON uc.company_id = c.id \
+		ORDER BY uc.created_at DESC \
+		LIMIT 20;"
+
+.PHONY: db-inspect-folders
+db-inspect-folders: up ## Inspect folders and their use cases count
+	@echo "📊 Folders Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT f.id, f.name, f.description, COUNT(uc.id) as use_cases_count \
+		FROM folders f \
+		LEFT JOIN use_cases uc ON f.id = uc.folder_id \
+		GROUP BY f.id, f.name, f.description \
+		ORDER BY f.created_at DESC;"
+
+.PHONY: db-inspect-users
+db-inspect-users: up ## Inspect users and their roles
+	@echo "📊 Users Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT id, email, display_name, role, created_at \
+		FROM users \
+		ORDER BY created_at DESC;"
+
+backup-dir:
+	@mkdir -p data/backup
+
 .PHONY: db-backup
-db-backup: ## Backup database to file
-	@echo "💾 Backing up database..."
-	$(COMPOSE_RUN_API) npm run db:backup
+db-backup: backup-dir up ## Backup local database to file
+	@echo "💾 Creating backup from local database..."
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/app-$${TIMESTAMP}.dump"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL="$$DATABASE_URL" postgres:16-alpine sh -c " \
+		pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump"; \
+	echo "✅ Backup created: $${BACKUP_FILE}"
+
+.PHONY: db-backup-prod
+db-backup-prod: backup-dir up ## Backup production database from Scaleway to local file (uses DATABASE_URL_PROD from .env)
+	@echo "💾 Creating backup from Scaleway production database..."
+	@if [ -z "$$DATABASE_URL_PROD" ]; then \
+		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
+		exit 1; \
+	fi
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:16-alpine sh -c " \
+		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
+	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-restore
-db-restore: ## Restore database from backup [BACKUP_FILE=filename]
-	@echo "🔄 Restoring database from $(BACKUP_FILE)..."
-	$(COMPOSE_RUN_API) npm run db:restore $(BACKUP_FILE)
+db-restore: down ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=app-2025-01-15T10-30-00.dump or BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No backups found"; \
+		exit 1; \
+	fi
+	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
+	@echo "This action is DESTRUCTIVE and will remove:"
+	@echo "  - All local companies, folders, use cases"
+	@echo "  - All local users and sessions"
+	@echo "  - All local settings and configuration"
+	@echo ""
+	@read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting PostgreSQL service..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
+	@echo "🔄 Restoring backup to local database..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml cp data/backup/$(BACKUP_FILE) postgres:/tmp/restore.dump
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
+		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
+	@echo "📊 Inspecting database after restore (before migrations)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		UNION ALL \
+		SELECT 'folders', COUNT(*) FROM folders \
+		UNION ALL \
+		SELECT 'companies', COUNT(*) FROM companies \
+		UNION ALL \
+		SELECT 'settings', COUNT(*) FROM settings \
+		UNION ALL \
+		SELECT 'business_config', COUNT(*) FROM business_config \
+		UNION ALL \
+		SELECT 'job_queue', COUNT(*) FROM job_queue;"
+	@echo "📋 Checking for WebAuthn tables (may not exist in old backups)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT table_name FROM information_schema.tables \
+		WHERE table_schema = 'public' \
+		AND table_name IN ('users', 'user_sessions', 'webauthn_credentials', 'webauthn_challenges', 'magic_links') \
+		ORDER BY table_name;" || echo "  (WebAuthn tables not found - will be created by migrations)"
 
 .PHONY: db-fresh
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database
@@ -491,6 +601,23 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	    echo "▶ Running all $$TEST_TYPE tests"; \
 	    npm run test:$$TEST_TYPE; \
 	  fi'
+
+.PHONY: test-api-smoke-restore
+test-api-smoke-restore: up-test-restore ## Run smoke tests in production mode (for restore validation)
+	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke'
+
+.PHONY: db-restore-prod-and-test
+db-restore-prod-and-test: ## Restore prod backup to local database and run smoke tests in production mode [BACKUP_FILE=prod-*.dump]
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
+		echo "Available production backups:"; \
+		ls -1 data/backup/prod-*.dump 2>/dev/null || echo "  No production backups found"; \
+		exit 1; \
+	fi
+	@$(MAKE) db-restore BACKUP_FILE=$(BACKUP_FILE)
+	@echo "🧪 Running smoke tests in production mode after restore..."
+	@$(MAKE) test-api-smoke-restore
+	@echo "✅ Restore and validation completed!"
 
 # -----------------------------------------------------------------------------
 # Queue Management

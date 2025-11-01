@@ -179,10 +179,45 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - [x] Complete all test pipeline in one pass without flaky: `make down test-api test-ui down build-api build-ui-image build-e2e test-e2e`
     - [x] All tests successfull in CI
 
-- [ ] 12.6: Preprod migration
-  - [ ] Create a backup method for SCW production to local in make
-  - [ ] Create targets to restore prod data to dev environement
-  - [ ] Apply relevant test (to be discussed, i suppose make test-api would be sufficient, or even test-smoke)
+- [ ] 12.6: Preprod migration - Restore production data to CI local environment
+  - [ ] 12.6.1: Improve Make target `db-backup` for local database backup
+    - Use `docker run postgres:16-alpine pg_dump` to backup local DATABASE_URL
+    - Save backup files to `api/backups/app-{timestamp}.dump` in custom format (-F c)
+  - [ ] 12.6.2: Create Make target `db-backup-prod` for production backup
+    - Use `DATABASE_URL_PROD` from .env file (already included via `-include .env`)
+    - Use `docker run postgres:16-alpine pg_dump` to backup from Scaleway production DB
+    - Save backup files to `api/backups/prod-{timestamp}.dump` in custom format (-F c)
+  - [ ] 12.6.3: Improve Make target `db-restore` for generic restoration to local
+    - Verify local services are running (`make up`)
+    - Require user confirmation "RESTORE" (⚠ approval, same pattern as `db-reset`)
+    - Clean local database using `make db-reset` (DROP SCHEMA public CASCADE)
+    - Use `docker run postgres:16-alpine pg_restore` to restore backup to local DATABASE_URL
+    - Accept both `app-*.dump` (local backups) and `prod-*.dump` (production backups)
+    - Apply migrations after restore (`make db-migrate`)
+    - Verify database status (`make db-status`)
+  - [ ] 12.6.4: Create Make target `up-test-restore` for production test environment
+    - Start stack in TARGET=production mode (similar to `up-e2e`)
+    - Ensure API is ready before tests
+  - [ ] 12.6.5: Create Make target `test-api-smoke-restore` for production smoke tests
+    - Run smoke tests in production mode (TARGET=production)
+    - Execute all tests in `api/tests/smoke/` directory
+  - [ ] 12.6.6: Create `restore-validation.test.ts` smoke test for post-restore validation
+    - Validate schema completeness (all 12 tables exist)
+    - Validate Drizzle migrations applied correctly
+    - Validate indexes and constraints are present
+    - Validate referential integrity (FK relationships) via API
+    - Validate JSONB fields via API
+    - Validate endpoints return data if backup non-empty
+    - Use existing helpers (httpRequest, authenticatedHttpRequest, createAuthenticatedUser, cleanupAuthData)
+  - [ ] 12.6.7: Create Make target `db-restore-prod-and-test` for CI workflow
+    - Chain: restore prod backup to local → verify schema → run smoke tests in production mode
+    - Complete workflow for CI validation after restore
+  - [ ] 12.6.8: Test complete workflow end-to-end
+    - Test backup from Scaleway production database (`make db-backup-prod`)
+    - Test restore to local dev environment (`make db-restore BACKUP_FILE=prod-*.dump`)
+    - Test local backup and restore (`make db-backup` then `make db-restore BACKUP_FILE=app-*.dump`)
+    - Verify all smoke tests pass in production mode after restore
+    - Document usage, limitations, and best practices
 
 ### Phase 13: CI/CD Integration & Documentation
 - [ ] 13.1: Update GitHub Actions workflow:

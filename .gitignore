@@ -31,6 +31,6 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 
-# SQLite data
-/data/*.db
+# data
+/data
 /data/*.db-* 
