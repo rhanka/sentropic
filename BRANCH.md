@@ -97,27 +97,10 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 
 ### Phase 11: Admin Bootstrap & Bug Fixes ✅ COMPLETE
 - [x] 11.1: Admin email configuration ✅
-  - Added ADMIN_EMAIL environment variable
-  - First user with ADMIN_EMAIL becomes admin_app
-  - Only if no other admin_app exists
 - [x] 11.2: WebAuthn API compatibility fixes ✅
-  - Fixed @simplewebauthn/server v13.2.2 API changes
-  - Challenge synchronization (let server generate challenges)
-  - Credential structure updates (id/publicKey vs credentialID/credentialPublicKey)
-  - Authentication API change (authenticator → credential)
 - [x] 11.3: Database schema improvements ✅
-  - Fixed createdAt nullable issue in webauthn_challenges
-  - Applied migration 0003_fluffy_starjammers.sql
 - [x] 11.4: Makefile test unification ✅
-  - Unified test-api-% targets with SCOPE filtering
-  - Removed redundant test-runner.ts script
-  - Improved npm install persistence in containers
 - [x] 11.5: Session persistence & UI stability fixes ✅
-  - Fixed localStorage persistence for user session data
-  - Implemented graceful rate limit handling in apiGetAuth
-  - Fixed JavaScript errors in QueueMonitor component
-  - Added background session validation with fallback
-  - Session survives page refreshes and rate limiting
 
 ### Phase 12: Testing Strategy
 - [x] 12.1: Unit tests for services ✅ COMPLETE
@@ -179,45 +162,21 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - [x] Complete all test pipeline in one pass without flaky: `make down test-api test-ui down build-api build-ui-image build-e2e test-e2e`
     - [x] All tests successfull in CI
 
-- [ ] 12.6: Preprod migration - Restore production data to CI local environment
-  - [ ] 12.6.1: Improve Make target `db-backup` for local database backup
-    - Use `docker run postgres:16-alpine pg_dump` to backup local DATABASE_URL
-    - Save backup files to `api/backups/app-{timestamp}.dump` in custom format (-F c)
-  - [ ] 12.6.2: Create Make target `db-backup-prod` for production backup
-    - Use `DATABASE_URL_PROD` from .env file (already included via `-include .env`)
-    - Use `docker run postgres:16-alpine pg_dump` to backup from Scaleway production DB
-    - Save backup files to `api/backups/prod-{timestamp}.dump` in custom format (-F c)
-  - [ ] 12.6.3: Improve Make target `db-restore` for generic restoration to local
-    - Verify local services are running (`make up`)
-    - Require user confirmation "RESTORE" (⚠ approval, same pattern as `db-reset`)
-    - Clean local database using `make db-reset` (DROP SCHEMA public CASCADE)
-    - Use `docker run postgres:16-alpine pg_restore` to restore backup to local DATABASE_URL
-    - Accept both `app-*.dump` (local backups) and `prod-*.dump` (production backups)
-    - Apply migrations after restore (`make db-migrate`)
-    - Verify database status (`make db-status`)
-  - [ ] 12.6.4: Create Make target `up-test-restore` for production test environment
-    - Start stack in TARGET=production mode (similar to `up-e2e`)
-    - Ensure API is ready before tests
-  - [ ] 12.6.5: Create Make target `test-api-smoke-restore` for production smoke tests
-    - Run smoke tests in production mode (TARGET=production)
-    - Execute all tests in `api/tests/smoke/` directory
-  - [ ] 12.6.6: Create `restore-validation.test.ts` smoke test for post-restore validation
-    - Validate schema completeness (all 12 tables exist)
-    - Validate Drizzle migrations applied correctly
-    - Validate indexes and constraints are present
-    - Validate referential integrity (FK relationships) via API
-    - Validate JSONB fields via API
-    - Validate endpoints return data if backup non-empty
-    - Use existing helpers (httpRequest, authenticatedHttpRequest, createAuthenticatedUser, cleanupAuthData)
-  - [ ] 12.6.7: Create Make target `db-restore-prod-and-test` for CI workflow
-    - Chain: restore prod backup to local → verify schema → run smoke tests in production mode
-    - Complete workflow for CI validation after restore
-  - [ ] 12.6.8: Test complete workflow end-to-end
-    - Test backup from Scaleway production database (`make db-backup-prod`)
-    - Test restore to local dev environment (`make db-restore BACKUP_FILE=prod-*.dump`)
-    - Test local backup and restore (`make db-backup` then `make db-restore BACKUP_FILE=app-*.dump`)
-    - Verify all smoke tests pass in production mode after restore
-    - Document usage, limitations, and best practices
+- [x] 12.6: Preprod migration - Restore production data to CI local environment ✅ COMPLETE
+  - [x] Improve Make target `db-backup` for local database backup ✅
+  - [x] Create Make target `db-backup-prod` for production backup ✅
+  - [x] Improve Make target `db-restore` for generic restoration to local ✅
+  - [x] Use `up-api-test` for development test environment ✅
+  - [x] Create Make target `test-api-smoke-restore` for restore validation tests ✅
+  - [x] Create `restore-validation.test.ts` smoke test for post-restore validation ✅
+  - [x] CI workflow integration ✅
+  - [x] Test complete workflow end-to-end ✅
+
+- [ ] 12.7 Minimal Viable Evolutions - pour rendre l'auth viable
+    - [ ] ne demander que le mail (pas d'identifiant alternative, pas de "nom d'affichage")
+    - [ ] ajouter en dev / test maildev/maildev pour le smtp
+    - [ ] implémenter la vérification magic-link ou code à usage unique (en dev/test, prod)
+    - [ ] rediriger vers l'authentification lorsqu'on est sur une route en 401 (tout sauf home), et ne pas afficher le header quand on est sur les routes d'auth (device, login, magic-link, register)
 
 ### Phase 13: CI/CD Integration & Documentation
 - [ ] 13.1: Update GitHub Actions workflow:
@@ -295,10 +254,10 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
 - [x] **Phase 12.3**: feat(tests): E2E tests with Playwright - 121/164 tests pass (73.8%), corrections Bug #5 (détails entreprises/dossiers)
 
 ## Status
-- **Progress**: 11/13 phases completed (39/44 tasks - 89%) ✅
-- **Phases complete**: 1-11 + 12.1 + 12.2 + 12.3 (Backend + UI + Stability + Unit Tests + Integration Tests + E2E Tests partiel!)
-- **Current**: Phase 12.5 - User Acceptance Testing (UAT) - Bug Fixes & Final Validation
-- **Next**: Fix remaining 9 failed tests, 7 flaky tests, Security tests, CI/CD integration
+- **Progress**: 11/13 phases completed (47/52 tasks - 90%) ✅
+- **Phases complete**: 1-11 + 12.1 + 12.2 + 12.3 + 12.6 (Backend + UI + Stability + Unit Tests + Integration Tests + E2E Tests partiel + Preprod Migration!)
+- **Current**: Phase 13 - CI/CD Integration & Documentation
+- **Next**: Security tests, CI/CD integration, Documentation updates
 
 ## Notes
 - WebAuthn requires HTTPS in production (localhost exempt for dev)

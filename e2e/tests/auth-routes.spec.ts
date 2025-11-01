@@ -21,7 +21,7 @@ test.describe('Public · Authentication Routes Access', () => {
     
     // Vérifier le contenu de la page
     const bodyText = await page.locator('body').textContent();
-    console.log('Login page content:', bodyText?.substring(0, 500));
+    // console.log('Login page content:', bodyText?.substring(0, 500));
   });
 
   test('devrait accéder à la page d\'inscription', async ({ page }) => {
@@ -42,7 +42,7 @@ test.describe('Public · Authentication Routes Access', () => {
     
     // Vérifier le contenu de la page
     const bodyText = await page.locator('body').textContent();
-    console.log('Register page content:', bodyText?.substring(0, 500));
+    // console.log('Register page content:', bodyText?.substring(0, 500));
   });
 
   test('devrait accéder à la page de gestion des appareils', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('Public · Authentication Routes Access', () => {
     
     // Vérifier le contenu de la page
     const bodyText = await page.locator('body').textContent();
-    console.log('Devices page content:', bodyText?.substring(0, 500));
+    // console.log('Devices page content:', bodyText?.substring(0, 500));
   });
 
   test('devrait gérer les routes inexistantes', async ({ page }) => {

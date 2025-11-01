@@ -312,7 +312,7 @@ clean-all: clean ## Clean everything including images
 	docker system prune -a -f
 
 .PHONY: clean-db
-clean-db: ## Clean database files and restart services
+clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to skip prompt]
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All companies"
@@ -320,7 +320,9 @@ clean-db: ## Clean database files and restart services
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
 	@echo ""
-	@read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
 	@docker volume rm top-ai-ideas-fullstack_pg_data || true
@@ -349,11 +351,6 @@ up: ## Start the full stack in detached mode
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
 	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
-
-.PHONY: up-test-restore
-up-test-restore: ## Start stack in production mode for restore testing
-	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
-	@$(MAKE) wait-ready-api
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
@@ -412,16 +409,18 @@ db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
-db-reset: up ## Reset database (WARNING: destroys all data)
+db-reset: up ## Reset database (WARNING: destroys all data) [SKIP_CONFIRM=true to skip prompt]
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All users and session"
 	@echo "  - All companies"
-	@echo "  - All folders" 
+	@echo "  - All folders"
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
 	@echo ""
-	@read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
 	@echo "🗑️  Resetting database..."
 	$(COMPOSE_RUN_API) npm run db:reset
 
@@ -501,7 +500,7 @@ db-backup-prod: backup-dir up ## Backup production database from Scaleway to loc
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-restore
-db-restore: down ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval
+db-restore: down ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
 	@if [ -z "$(BACKUP_FILE)" ]; then \
 		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=app-2025-01-15T10-30-00.dump or BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
 		echo "Available backups:"; \
@@ -514,7 +513,9 @@ db-restore: down ## Restore backup to local database [BACKUP_FILE=filename.dump]
 	@echo "  - All local users and sessions"
 	@echo "  - All local settings and configuration"
 	@echo ""
-	@read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
 	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
 		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
 		exit 1; \
@@ -603,21 +604,8 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	  fi'
 
 .PHONY: test-api-smoke-restore
-test-api-smoke-restore: up-test-restore ## Run smoke tests in production mode (for restore validation)
-	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke'
-
-.PHONY: db-restore-prod-and-test
-db-restore-prod-and-test: ## Restore prod backup to local database and run smoke tests in production mode [BACKUP_FILE=prod-*.dump]
-	@if [ -z "$(BACKUP_FILE)" ]; then \
-		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
-		echo "Available production backups:"; \
-		ls -1 data/backup/prod-*.dump 2>/dev/null || echo "  No production backups found"; \
-		exit 1; \
-	fi
-	@$(MAKE) db-restore BACKUP_FILE=$(BACKUP_FILE)
-	@echo "🧪 Running smoke tests in production mode after restore..."
-	@$(MAKE) test-api-smoke-restore
-	@echo "✅ Restore and validation completed!"
+test-api-smoke-restore: ## Run smoke tests in production mode (for restore validation)
+	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke:restore'
 
 # -----------------------------------------------------------------------------
 # Queue Management
