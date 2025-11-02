@@ -1,4 +1,35 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { debug, setupDebugBuffer } from '../helpers/debug';
+
+// Setup debug buffer to display on test failure
+setupDebugBuffer();
+
+async function ensureMagicLinkMode(page: Page) {
+  const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
+  const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
+  const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
+
+  const magicLinkAlreadyVisible = await magicLinkButton.isVisible({ timeout: 1000 }).catch(() => false);
+  if (magicLinkAlreadyVisible) {
+    return { magicLinkButton, webauthnButtonVisible: await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false) };
+  }
+
+  const canToggleToMagicLink = await useMagicLinkButton.isVisible({ timeout: 1000 }).catch(() => false);
+  if (canToggleToMagicLink) {
+    await useMagicLinkButton.click();
+    await page.waitForLoadState('networkidle');
+  } else {
+    const webauthnVisible = await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false);
+    if (!webauthnVisible) {
+      await page.waitForTimeout(500);
+    }
+  }
+
+  await page.waitForTimeout(200);
+  await expect(magicLinkButton).toBeVisible({ timeout: 3000 });
+
+  return { magicLinkButton, webauthnButtonVisible: await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false) };
+}
 
 // Public (non authentifié)
 test.describe('Public · WebAuthn Device Management', () => {
@@ -76,21 +107,14 @@ test.describe('WebAuthn Session Management', () => {
     
     // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    
-    // Basculer en mode magic link si nécessaire (si WebAuthn est supporté)
-    if (await useMagicLinkButton.isVisible()) {
-      await useMagicLinkButton.click();
-      // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
+    const webauthnVisible = await webauthnButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+    if (webauthnVisible) {
+      await expect(webauthnButton).toBeVisible();
+    } else {
+      const { magicLinkButton } = await ensureMagicLinkMode(page);
+      await expect(magicLinkButton).toBeVisible();
     }
-    
-    // Vérifier qu'au moins un bouton d'authentification est visible
-    const anyAuthButtonVisible = await magicLinkButton.isVisible() || 
-                                await webauthnButton.isVisible() ||
-                                await page.getByRole('button', { name: /connexion|magique/i }).first().isVisible();
-    expect(anyAuthButtonVisible).toBe(true);
     
     // Vérifier que les champs de session ne sont pas visibles avant connexion
     const sessionInfo = page.locator('[data-testid="session-info"]');
@@ -220,62 +244,105 @@ test.describe('WebAuthn Error Handling', () => {
 
 test.describe('WebAuthn Accessibility', () => {
   test('devrait être accessible au clavier', async ({ page }) => {
+    debug('Starting keyboard accessibility test');
     await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
+    debug('Page loaded');
     
-    // Détecter et basculer en mode magic link si nécessaire
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
-    if (await useMagicLinkButton.isVisible()) {
-      await useMagicLinkButton.click();
-      // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
-    }
-    
-    // Maintenant on est en mode magic link - vérifier les éléments
+    const { magicLinkButton: magicLinkSubmitButton, webauthnButtonVisible } = await ensureMagicLinkMode(page);
+    debug(`Magic link ready (initial WebAuthn visible: ${webauthnButtonVisible})`);
+
+    // Vérifier que les éléments sont focusables
     const emailField = page.getByLabel('Email');
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
     
+    debug('Checking elements visibility');
     // Vérifier que les éléments sont visibles
     await expect(emailField).toBeVisible();
-    await expect(magicLinkButton).toBeVisible();
+    await expect(magicLinkSubmitButton).toBeVisible();
+    debug('Elements are visible');
+    
+    // Vérifier l'ordre de tabulation dans le DOM
+    const tabOrder = await page.evaluate(() => {
+      const inputs = Array.from(document.querySelectorAll('input, button, a, [tabindex]:not([tabindex="-1"])'));
+      return inputs.map((el, idx) => ({
+        index: idx,
+        tag: el.tagName,
+        type: el.getAttribute('type') || '',
+        id: el.id || '',
+        name: el.getAttribute('name') || '',
+        text: el.textContent?.trim().slice(0, 50) || '',
+        tabIndex: (el as HTMLElement).tabIndex
+      }));
+    });
+    debug(`Tab order: ${JSON.stringify(tabOrder, null, 2)}`);
     
     // Tester la navigation au clavier - commencer par le champ email
+    debug('Focusing email field');
     await emailField.focus();
     await expect(emailField).toBeFocused();
+    debug('Email field focused');
+    
+    // Vérifier quel élément est focusé avant Tab
+    const beforeTab = await page.evaluate(() => ({
+      tag: document.activeElement?.tagName,
+      id: document.activeElement?.id || '',
+      type: (document.activeElement as HTMLElement)?.getAttribute('type') || ''
+    }));
+    debug(`Active element before Tab: ${JSON.stringify(beforeTab)}`);
     
     // Naviguer vers le bouton
+    debug('Pressing Tab key');
     await page.keyboard.press('Tab');
-    await expect(magicLinkButton).toBeFocused();
+    
+    // Vérifier quel élément est focusé après Tab
+    const afterTab = await page.evaluate(() => ({
+      tag: document.activeElement?.tagName,
+      id: document.activeElement?.id || '',
+      type: (document.activeElement as HTMLElement)?.getAttribute('type') || '',
+      text: document.activeElement?.textContent?.trim().slice(0, 50) || ''
+    }));
+    debug(`Active element after Tab: ${JSON.stringify(afterTab)}`);
+    
+    debug('Checking if magic link button is focused');
+    await expect(magicLinkSubmitButton).toBeFocused();
+    debug('Test completed successfully');
   });
 
   test('devrait avoir des labels appropriés', async ({ page }) => {
+    debug('Starting labels test');
     await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
+    debug('Page loaded');
     
     // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
+    const magicLinkSubmitButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
     
-    // Vérifier les labels selon le mode actif
-    if (await webauthnButton.isVisible()) {
-      // Mode WebAuthn - vérifier le label du champ userName
+    const webauthnVisible = await webauthnButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const magicLinkInitiallyVisible = await magicLinkSubmitButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+    debug(`Initial detection: webauthnVisible=${webauthnVisible}, magicLinkVisible=${magicLinkInitiallyVisible}`);
+
+    if (webauthnVisible) {
+      debug('WebAuthn mode detected');
       const userNameField = page.getByLabel(/Nom d'utilisateur|Email/i);
       await expect(userNameField).toBeVisible();
-      
-      // Vérifier que le bouton WebAuthn a un texte descriptif
+
       await expect(webauthnButton).toBeVisible();
       await expect(webauthnButton).toContainText('WebAuthn');
+      debug('WebAuthn labels verified');
     } else {
-      // Mode magic link - basculer si nécessaire et vérifier
-      if (await useMagicLinkButton.isVisible()) {
-        await useMagicLinkButton.click();
-        await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
-      }
-      
-      const emailField = page.getByLabel('Email');
-      await expect(emailField).toBeVisible();
-      
-      await expect(magicLinkButton).toBeVisible();
+      debug('WebAuthn button not visible initially');
     }
+
+    const { magicLinkButton: finalMagicLinkButton } = await ensureMagicLinkMode(page);
+
+    debug('Verifying magic link labels');
+    const emailField = page.getByLabel('Email');
+    await expect(emailField).toBeVisible();
+
+    await expect(finalMagicLinkButton).toBeVisible();
+    debug('Magic link labels verified');
   });
 
   test('devrait être responsive', async ({ page }) => {

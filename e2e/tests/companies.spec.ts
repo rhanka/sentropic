@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { debug, setupDebugBuffer } from '../helpers/debug';
+
+// Setup debug buffer to display on test failure
+setupDebugBuffer();
 
 test.describe('Gestion des entreprises', () => {
   test('devrait afficher la page des entreprises', async ({ page }) => {
@@ -33,14 +37,14 @@ test.describe('Gestion des entreprises', () => {
     const createBtn = page.locator('button[title="Créer"], button:has-text("Créer")');
     // Debug réseau: tracer le POST /companies
     const disposeNet1 = page.on('request', (r) => {
-      if (r.url().includes('/api/v1/companies') && r.method() === 'POST') console.log('[DEBUG] POST /companies started');
+      if (r.url().includes('/api/v1/companies') && r.method() === 'POST') debug('POST /companies started');
     });
     const disposeNet2 = page.on('requestfailed', (r) => {
-      if (r.url().includes('/api/v1/companies')) console.log(`[DEBUG] REQUEST FAILED ${r.method()} ${r.url()} ${r.failure()?.errorText}`);
+      if (r.url().includes('/api/v1/companies')) debug(`REQUEST FAILED ${r.method()} ${r.url()} ${r.failure()?.errorText}`);
     });
     const disposeNet3 = page.on('response', async (res) => {
       const req = res.request();
-      if (req.url().includes('/api/v1/companies') && req.method() === 'POST') console.log(`[DEBUG] POST /companies status=${res.status()}`);
+      if (req.url().includes('/api/v1/companies') && req.method() === 'POST') debug(`POST /companies status=${res.status()}`);
     });
 
     // Debug DOM: état du bouton avant clic
@@ -57,7 +61,7 @@ test.describe('Gestion des entreprises', () => {
         opacity: cs.opacity,
       };
     });
-    console.log('[DEBUG] createBtn state before click:', btnState);
+    debug(`createBtn state before click: ${JSON.stringify(btnState)}`);
 
     await expect(createBtn).toBeVisible();
     await expect(createBtn).toBeEnabled();
@@ -67,8 +71,8 @@ test.describe('Gestion des entreprises', () => {
 
     // Preuve d'impact: soit navigation, soit POST observé
     await Promise.race([
-      page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
-      page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 5000 })
+      page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
+      page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 2000 })
     ]).catch(() => {});
 
     await expect(page).toHaveURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 3000 });

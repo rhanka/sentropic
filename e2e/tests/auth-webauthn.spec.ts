@@ -22,7 +22,7 @@ test.describe('Public · WebAuthn Authentication', () => {
     if (await useMagicLinkButton.isVisible()) {
       await useMagicLinkButton.click();
       // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
+      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 2000 });
     }
     
     // Vérifier qu'au moins un bouton d'authentification est visible
@@ -42,7 +42,7 @@ test.describe('Public · WebAuthn Authentication', () => {
       // WebAuthn est supporté - cliquer pour basculer vers magic link
       await useMagicLinkButton.click();
       // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
+      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 2000 });
       
       // Vérifier que l'interface change
       await expect(page.getByRole('heading', { name: 'Connexion' })).toBeVisible();

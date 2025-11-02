@@ -1,4 +1,31 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function ensureMagicLinkMode(page: Page) {
+  const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
+  const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
+  const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
+
+  const magicLinkAlreadyVisible = await magicLinkButton.isVisible({ timeout: 1000 }).catch(() => false);
+  if (magicLinkAlreadyVisible) {
+    return { magicLinkButton, webauthnButtonVisible: await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false) };
+  }
+
+  const canToggleToMagicLink = await useMagicLinkButton.isVisible({ timeout: 1000 }).catch(() => false);
+  if (canToggleToMagicLink) {
+    await useMagicLinkButton.click();
+    await page.waitForLoadState('networkidle');
+  } else {
+    const webauthnVisible = await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false);
+    if (!webauthnVisible) {
+      await page.waitForTimeout(500);
+    }
+  }
+
+  await page.waitForTimeout(200);
+  await expect(magicLinkButton).toBeVisible({ timeout: 3000 });
+
+  return { magicLinkButton, webauthnButtonVisible: await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false) };
+}
 
 // Public (non authentifié)
 test.describe('Public · WebAuthn Complete Authentication Workflow', () => {
@@ -175,7 +202,7 @@ test.describe('WebAuthn Security Features', () => {
     if (await useMagicLinkButton.isVisible()) {
       await useMagicLinkButton.click();
       // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
+      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 2000 });
     }
     
     // Vérifier qu'au moins un bouton d'authentification est visible
@@ -187,31 +214,24 @@ test.describe('WebAuthn Security Features', () => {
 
   test('devrait gérer les tentatives de connexion multiples', async ({ page }) => {
     await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
     
     // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
-    
+
     let submitButton;
     let inputField;
     let isWebAuthnMode = false;
-    
-    if (await webauthnButton.isVisible()) {
-      // Mode WebAuthn - privilégier ce mode
+
+    const webauthnVisible = await webauthnButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+    if (webauthnVisible) {
       isWebAuthnMode = true;
       submitButton = webauthnButton;
       inputField = page.getByLabel(/Nom d'utilisateur|Email/i);
-      
-      // Remplir le champ userName (peut être un email)
       await inputField.fill('test@example.com');
     } else {
-      // Mode magic link - fallback si WebAuthn non disponible
-      if (await useMagicLinkButton.isVisible()) {
-        await useMagicLinkButton.click();
-        await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 });
-      }
-      
+      const { magicLinkButton } = await ensureMagicLinkMode(page);
       submitButton = magicLinkButton;
       inputField = page.getByLabel('Email');
       await inputField.fill('test@example.com');
@@ -286,26 +306,15 @@ test.describe('WebAuthn Security Features', () => {
 test.describe('WebAuthn Error Recovery', () => {
   test('devrait récupérer des erreurs de WebAuthn', async ({ page }) => {
     await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
     
-    // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
-    
-    // Basculer en mode magic link si nécessaire (si WebAuthn est supporté)
-    if (await useMagicLinkButton.isVisible()) {
-      await useMagicLinkButton.click();
-      // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    }
-    
-    // Vérifier qu'au moins un bouton d'authentification est visible (pattern Bug #2)
-    const anyAuthButtonVisible = await magicLinkButton.isVisible() || 
-                                await webauthnButton.isVisible() ||
+    const { magicLinkButton } = await ensureMagicLinkMode(page);
+    const webauthnStillVisible = await webauthnButton.isVisible().catch(() => false);
+    const anyAuthButtonVisible = webauthnStillVisible || await magicLinkButton.isVisible() ||
                                 await page.getByRole('button', { name: /connexion|magique/i }).first().isVisible();
     expect(anyAuthButtonVisible).toBe(true);
     
-    // Si on est en mode magic link, tester la récupération d'erreur
     if (await magicLinkButton.isVisible()) {
       // Simuler une erreur en interceptant les appels de lien magique
       await page.route('**/api/v1/auth/magic-link/send', route => {
@@ -334,26 +343,15 @@ test.describe('WebAuthn Error Recovery', () => {
 
   test('devrait permettre la récupération après une erreur', async ({ page }) => {
     await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
     
-    // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
-    
-    // Basculer en mode magic link si nécessaire (si WebAuthn est supporté)
-    if (await useMagicLinkButton.isVisible()) {
-      await useMagicLinkButton.click();
-      // Attendre que le bouton magic link soit visible (plus fiable que le champ email)
-      await page.getByRole('button', { name: 'Envoyer le lien magique' }).waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    }
-    
-    // Vérifier qu'au moins un bouton d'authentification est visible (pattern Bug #2)
-    const anyAuthButtonVisible = await magicLinkButton.isVisible() || 
-                                await webauthnButton.isVisible() ||
+    const { magicLinkButton } = await ensureMagicLinkMode(page);
+    const webauthnStillVisible = await webauthnButton.isVisible().catch(() => false);
+    const anyAuthButtonVisible = webauthnStillVisible || await magicLinkButton.isVisible() ||
                                 await page.getByRole('button', { name: /connexion|magique/i }).first().isVisible();
     expect(anyAuthButtonVisible).toBe(true);
     
-    // Si on est en mode magic link, tester la récupération après erreur
     if (await magicLinkButton.isVisible()) {
       // Simuler une erreur temporaire
       await page.route('**/api/v1/auth/magic-link/send', route => {

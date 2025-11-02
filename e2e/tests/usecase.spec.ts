@@ -17,7 +17,7 @@ test.describe('Gestion des cas d\'usage', () => {
     await page.waitForLoadState('networkidle');
     
     // Attendre que la page se charge complètement
-    await page.waitForSelector('h1:has-text("Cas d\'usage")', { timeout: 5000 });
+    await page.waitForSelector('h1:has-text("Cas d\'usage")', { timeout: 2000 });
     
     // Vérifier qu'on est sur la bonne page
     await expect(page.locator('h1')).toContainText('Cas d\'usage');

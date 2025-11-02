@@ -19,8 +19,8 @@ test.describe('Détail des entreprises', () => {
 
       // Preuve d'impact: soit navigation, soit POST observé
       await Promise.race([
-        page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
-        page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 5000 })
+        page.waitForURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
+        page.waitForRequest((r) => r.url().includes('/api/v1/companies') && r.method() === 'POST', { timeout: 2000 })
       ]).catch(() => {});
 
       // Vérifier qu'on est sur une page de détail

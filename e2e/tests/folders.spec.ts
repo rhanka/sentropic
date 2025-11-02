@@ -45,7 +45,7 @@ test.describe('Gestion des dossiers', () => {
       await folderTitle.click();
       
       // Attendre la redirection vers /cas-usage avec timeout
-      await page.waitForURL(/\/cas-usage/, { timeout: 5000 });
+      await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
       
       // Vérifier le titre "Cas d'usage"
       await expect(page.locator('h1')).toContainText('Cas d\'usage');

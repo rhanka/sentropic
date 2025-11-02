@@ -271,7 +271,7 @@ run-e2e:
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
 	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
 	  if [ -n "$$E2E_SPEC" ]; then \
 	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
 	    npx playwright test "$$E2E_SPEC"; \
