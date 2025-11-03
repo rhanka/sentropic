@@ -224,8 +224,15 @@ audit:
 test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
-test-ui: up-ui
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
+test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e SCOPE="$(SCOPE)" ui sh -lc ' \
+	  if [ -n "$$SCOPE" ]; then \
+	    echo "▶ Running scoped UI tests: $$SCOPE"; \
+	    npm run test -- "$$SCOPE"; \
+	  else \
+	    echo "▶ Running all UI tests"; \
+	    npm run test; \
+	  fi'
 
 .PHONY: test-api
 test-api: up-api-test test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai up-api test-api-limit
