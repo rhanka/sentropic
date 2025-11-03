@@ -334,7 +334,7 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: dev-ui
 dev-ui:
@@ -387,6 +387,10 @@ logs-ui: ## Show logs for UI service
 logs-db: ## Show logs for database service
 	$(DOCKER_COMPOSE) logs -f sqlite
 
+.PHONY: logs-maildev
+logs-maildev: ## Show logs for MailDev service
+	$(DOCKER_COMPOSE) logs --tail=50 maildev
+
 .PHONY: sh-ui
 sh-ui:
 	$(COMPOSE_RUN_UI) sh
@@ -401,8 +405,12 @@ sh-api:
 # db-migrate handles both initial creation (empty DB) and incremental updates
 # -----------------------------------------------------------------------------
 .PHONY: db-generate
-db-generate: ## Generate migration files from schema.ts changes
-	$(COMPOSE_RUN_API) npm run db:generate
+db-generate: ## Generate migration files from schema.ts changes (uses exec if container running, otherwise run)
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api npm run db:generate; \
+	fi
 
 .PHONY: db-migrate
 db-migrate: ## Apply pending migrations (creates tables if DB is empty)
@@ -553,12 +561,12 @@ db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initiali
 .PHONY: restart-api
 restart-api: ## Restart API service
 	@echo "🔄 Restarting API service..."
-	$(DOCKER_COMPOSE) restart api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml restart api
 
 .PHONY: restart-db
 restart-db: ## Restart database service
 	@echo "🔄 Restarting database service..."
-	$(DOCKER_COMPOSE) restart sqlite
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml restart sqlite
 
 .PHONY: db-seed
 db-seed:
@@ -622,3 +630,11 @@ queue-status: ## Show current queue status
 	@curl -s http://localhost:8787/api/v1/queue/stats | jq . || echo "API not available"
 
 queue-reset: queue-clear ## Reset queue and clear all jobs (alias for queue-clear)
+
+.PHONY: up-maildev
+up-maildev: ## Start MailDev service in detached mode
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d maildev
+
+.PHONY: down-maildev
+down-maildev: ## Stop MailDev service
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml stop maildev

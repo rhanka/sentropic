@@ -173,10 +173,13 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
   - [x] Test complete workflow end-to-end ✅
 
 - [ ] 12.7 Minimal Viable Evolutions - pour rendre l'auth viable
-    - [ ] ne demander que le mail (pas d'identifiant alternative, pas de "nom d'affichage")
-    - [ ] ajouter en dev / test maildev/maildev pour le smtp
-    - [ ] implémenter la vérification magic-link ou code à usage unique (en dev/test, prod)
-    - [ ] rediriger vers l'authentification lorsqu'on est sur une route en 401 (tout sauf home), et ne pas afficher le header quand on est sur les routes d'auth (device, login, magic-link, register)
+    - [x] Authentification email-only côté API & UI (suppression userName/displayName, deriveDisplayName, session enrichie)
+    - [x] MailDev intégré (service docker-compose, cibles make up/down/logs) — reste à vérifier le démarrage healthy
+    - [x] Magic link sécurisé (TTL 10 min, usage unique, envoi via nodemailer, normalisation email)
+    - [x] Redirections 401 + masquage du header sur les routes d’auth, fetch helper mis à jour
+    - [ ] Workflow secure: register = mail + device webauthn validé obligatoire. Connexion: mail doit être validé, et même device webauthn. fall back nécessite nouvelle validation de mail et aussi device webauthn
+    - [ ] Tests & CI : adapter les tests, relancer `make test-api test-ui test-e2e`, adapter workflows CI (MailDev, smoke restore), vérifier stabilité
+    - [ ] Documentation finale & suivi (compléter BRANCH.md quand tests/CI verts, noter le statut de MailDev)
 
 ### Phase 13: CI/CD Integration & Documentation
 - [ ] 13.1: Update GitHub Actions workflow:
