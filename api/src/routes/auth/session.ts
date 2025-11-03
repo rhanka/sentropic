@@ -8,6 +8,9 @@ import {
   revokeAllSessions,
   listUserSessions,
 } from '../../services/session-manager';
+import { db } from '../../db/client';
+import { users } from '../../db/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * Session Management Routes
@@ -32,7 +35,6 @@ const refreshSessionSchema = z.object({
  */
 sessionRouter.get('/', async (c) => {
   try {
-    // Get session token from cookie or Authorization header
     const sessionToken = 
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
       c.req.header('authorization')?.replace('Bearer ', '');
@@ -41,17 +43,24 @@ sessionRouter.get('/', async (c) => {
       return c.json({ error: 'No session token provided' }, 401);
     }
     
-    // Validate session
     const session = await validateSession(sessionToken);
     
     if (!session) {
       return c.json({ error: 'Invalid or expired session' }, 401);
     }
+
+    const [userRecord] = await db
+      .select({ email: users.email, displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
     
     return c.json({
       userId: session.userId,
       sessionId: session.sessionId,
       role: session.role,
+      email: userRecord?.email ?? null,
+      displayName: userRecord?.displayName ?? null,
     });
   } catch (error) {
     logger.error({ err: error }, 'Error getting session info');

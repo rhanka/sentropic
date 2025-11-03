@@ -23,7 +23,7 @@ export const loginRouter = new Hono();
 
 // Request schemas
 const loginOptionsSchema = z.object({
-  userName: z.string().min(1).max(100).optional(), // Optional for discoverable credentials
+  email: z.string().email().optional(), // Optional for discoverable credentials
 });
 
 const loginVerifySchema = z.object({
@@ -38,18 +38,20 @@ const loginVerifySchema = z.object({
 loginRouter.post('/options', async (c) => {
   try {
     const body = await c.req.json();
-    const { userName } = loginOptionsSchema.parse(body);
-    
+    const { email } = loginOptionsSchema.parse(body);
+
     let userId: string | undefined;
-    
-    // If userName provided, look up user ID
-    if (userName) {
+
+    let normalizedEmail: string | undefined;
+
+    if (email) {
+      normalizedEmail = email.trim().toLowerCase();
       const [user] = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.email, userName)) // Assuming userName is email
+        .where(eq(users.email, normalizedEmail))
         .limit(1);
-      
+
       if (user) {
         userId = user.id;
       }
@@ -59,7 +61,7 @@ loginRouter.post('/options', async (c) => {
     const options = await generateWebAuthnAuthenticationOptions({ userId });
     
     logger.info({ 
-      userName: userName || 'discoverable',
+      email: normalizedEmail || email || 'discoverable',
       userId: userId || 'discoverable',
     }, 'Authentication options generated');
     
@@ -118,13 +120,14 @@ loginRouter.post('/verify', async (c) => {
       return c.json({ message: 'Authentication verification failed' }, 401);
     }
     
-    // Get user info
+    // Get user info and verify email is verified
     const [user] = await db
       .select({
         id: users.id,
         email: users.email,
         displayName: users.displayName,
         role: users.role,
+        emailVerified: users.emailVerified,
       })
       .from(users)
       .where(eq(users.id, result.userId))
@@ -133,6 +136,15 @@ loginRouter.post('/verify', async (c) => {
     if (!user) {
       logger.error({ userId: result.userId }, 'User not found after authentication');
       return c.json({ error: 'User not found' }, 404);
+    }
+    
+    // Security: Block login if email is not verified
+    if (!user.emailVerified) {
+      logger.warn({ userId: result.userId }, 'Login blocked - email not verified');
+      return c.json({ 
+        error: 'Email verification required',
+        message: 'Your email must be verified before you can log in. Please check your email for the verification link.'
+      }, 403);
     }
     
     // Create session for user

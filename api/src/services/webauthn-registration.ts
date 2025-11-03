@@ -24,7 +24,7 @@ import { generateChallenge, markChallengeUsed } from './challenge-manager';
  */
 
 interface GenerateRegistrationOptionsParams {
-  userId: string;
+  userId?: string; // Optional for new user registration (user doesn't exist yet)
   userName: string;
   userDisplayName: string;
 }
@@ -49,28 +49,32 @@ export async function generateWebAuthnRegistrationOptions(
   const config = getWebAuthnConfig();
   
   // Check if user already has credentials (for excludeCredentials)
-  const existingCredentials = await db
+  // Only check if userId is provided (existing user)
+  const existingCredentials = userId ? await db
     .select({
       id: webauthnCredentials.credentialId,
       transports: webauthnCredentials.transportsJson,
     })
     .from(webauthnCredentials)
-    .where(eq(webauthnCredentials.userId, userId));
+    .where(eq(webauthnCredentials.userId, userId)) : [];
   
   // Get user role to determine user verification requirement
-  const [user] = await db
+  // Only check if userId is provided (existing user)
+  const user = userId ? await db
     .select({ role: users.role })
     .from(users)
     .where(eq(users.id, userId))
-    .limit(1);
+    .limit(1)
+    .then(rows => rows[0]) : null;
   
   const userVerification = user
     ? getUserVerificationRequirement(user.role as any)
     : 'preferred';
   
   // Generate a unique challenge first
+  // Pass null userId for new users (user doesn't exist yet)
   const challengeRecord = await generateChallenge({
-    userId,
+    userId: userId || undefined, // undefined will become null in challenge-manager
     type: 'registration',
     ttlSeconds: config.timeout.registration / 1000,
   });

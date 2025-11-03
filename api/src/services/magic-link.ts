@@ -3,6 +3,9 @@ import { magicLinks, users } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import { logger } from '../logger';
+import nodemailer from 'nodemailer';
+import { env } from '../config/env';
+import { deriveDisplayNameFromEmail } from '../utils/display-name';
 
 /**
  * Magic Link Service
@@ -30,7 +33,40 @@ interface VerifyMagicLinkResult {
   email?: string;
 }
 
-const MAGIC_LINK_TTL = 15 * 60; // 15 minutes in seconds
+const MAGIC_LINK_TTL = 10 * 60; // 10 minutes in seconds
+
+let mailTransporter: nodemailer.Transporter | null = null;
+
+function getMailTransporter(): nodemailer.Transporter | null {
+  if (mailTransporter) {
+    return mailTransporter;
+  }
+
+  if (!env.MAIL_HOST) {
+    logger.warn('MAIL_HOST not configured. Emails will not be sent.');
+    return null;
+  }
+
+  try {
+    mailTransporter = nodemailer.createTransport({
+      host: env.MAIL_HOST,
+      port: env.MAIL_PORT,
+      secure: env.MAIL_SECURE,
+      auth:
+        env.MAIL_USERNAME && env.MAIL_PASSWORD
+          ? {
+              user: env.MAIL_USERNAME,
+              pass: env.MAIL_PASSWORD,
+            }
+          : undefined,
+    });
+
+    return mailTransporter;
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to initialize mail transporter.');
+    return null;
+  }
+}
 
 /**
  * Hash a token for storage (SHA-256)
@@ -50,6 +86,8 @@ export async function generateMagicLink(
 ): Promise<MagicLinkResult> {
   const { email, userId } = params;
   
+  const normalizedEmail = email.trim().toLowerCase();
+  
   // Generate secure random token (32 bytes)
   const tokenBuffer = randomBytes(32);
   const token = tokenBuffer.toString('base64url');
@@ -61,7 +99,7 @@ export async function generateMagicLink(
   await db.insert(magicLinks).values({
     id: crypto.randomUUID(),
     tokenHash,
-    email,
+    email: normalizedEmail,
     userId: userId || null,
     expiresAt,
     used: false,
@@ -69,7 +107,7 @@ export async function generateMagicLink(
   });
   
   logger.info({
-    email,
+    email: normalizedEmail,
     userId: userId || 'new_user',
     expiresAt,
   }, 'Magic link generated');
@@ -116,14 +154,12 @@ export async function verifyMagicLink(
       return { valid: false };
     }
     
-    // Mark as used
-    await db
-      .update(magicLinks)
-      .set({ used: true })
-      .where(eq(magicLinks.id, link.id));
-    
-    // If user ID exists, return it
+    // If user ID exists, mark as used and return it
     if (link.userId) {
+      await db
+        .update(magicLinks)
+        .set({ used: true })
+        .where(eq(magicLinks.id, link.id));
       logger.info({
         userId: link.userId,
         email: link.email,
@@ -132,7 +168,7 @@ export async function verifyMagicLink(
       return {
         valid: true,
         userId: link.userId,
-        email: link.email,
+        email: link.email.toLowerCase(),
       };
     }
     
@@ -144,40 +180,72 @@ export async function verifyMagicLink(
       .limit(1);
     
     if (existingUser) {
+      const normalizedLinkEmail = link.email.toLowerCase();
+      const updates: Record<string, unknown> = {};
+
+      if (!existingUser.displayName) {
+        updates.displayName = deriveDisplayNameFromEmail(normalizedLinkEmail);
+      }
+
+      if (!existingUser.email) {
+        updates.email = normalizedLinkEmail;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        await db
+          .update(users)
+          .set(updates)
+          .where(eq(users.id, existingUser.id));
+      }
+
+      // Update magic link with userId and mark as used
+      await db
+        .update(magicLinks)
+        .set({ used: true, userId: existingUser.id })
+        .where(eq(magicLinks.id, link.id));
+
       logger.info({
         userId: existingUser.id,
-        email: link.email,
+        email: normalizedLinkEmail,
       }, 'Magic link verified, user found by email');
       
       return {
         valid: true,
         userId: existingUser.id,
-        email: link.email,
+        email: normalizedLinkEmail,
       };
     }
     
-    // Create new user
+    const normalizedLinkEmail = link.email.toLowerCase();
+    const displayName = deriveDisplayNameFromEmail(normalizedLinkEmail);
     const [newUser] = await db
       .insert(users)
       .values({
         id: crypto.randomUUID(),
-        email: link.email,
-        displayName: link.email.split('@')[0], // Use email prefix as display name
+        email: normalizedLinkEmail,
+        displayName,
         role: 'guest', // Default role
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning();
     
+    // Update magic link with userId and mark as used
+    await db
+      .update(magicLinks)
+      .set({ used: true, userId: newUser.id })
+      .where(eq(magicLinks.id, link.id));
+    
     logger.info({
       userId: newUser.id,
-      email: link.email,
+      email: normalizedLinkEmail,
     }, 'Magic link verified, new user created');
     
     return {
       valid: true,
       userId: newUser.id,
-      email: link.email,
+      email: normalizedLinkEmail,
     };
   } catch (error) {
     logger.error({ err: error }, 'Error verifying magic link');
@@ -195,22 +263,35 @@ export async function sendMagicLinkEmail(
   email: string,
   magicLink: string
 ): Promise<void> {
-  // TODO: Integrate with email service (SendGrid, Resend, etc.)
-  // For now, just log the magic link
-  logger.info({
-    email,
-    magicLink,
-  }, '[PLACEHOLDER] Magic link email would be sent');
-  
-  // In production, implement:
-  // - Email template with branding
-  // - Rate limiting per email
-  // - Email service integration
-  // Example:
-  // await emailService.send({
-  //   to: email,
-  //   subject: 'Your Top AI Ideas login link',
-  //   html: `<p>Click here to login: <a href="${magicLink}">${magicLink}</a></p>`,
-  // });
+  const transporter = getMailTransporter();
+
+  if (!transporter) {
+    logger.info({
+      email,
+      magicLink,
+    }, '[FALLBACK] Magic link email logged (no transporter available)');
+    return;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: env.MAIL_FROM,
+      to: email,
+      subject: 'Votre lien de connexion Top AI Ideas',
+      text: `Bonjour,\n\nVoici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.\n\n${magicLink}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL’équipe Top AI Ideas`,
+      html: `<p>Bonjour,</p>
+        <p>Voici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.</p>
+        <p><a href="${magicLink}" style="display:inline-block;padding:10px 16px;border-radius:6px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600;">Se connecter</a></p>
+        <p>Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :<br/><code>${magicLink}</code></p>
+        <p style="margin-top:24px;">L’équipe Top AI Ideas</p>`,
+    });
+
+    logger.info({ email }, 'Magic link email sent');
+  } catch (error) {
+    logger.error({ err: error, email }, 'Failed to send magic link email');
+    if (env.NODE_ENV === 'production') {
+      throw error;
+    }
+  }
 }
 

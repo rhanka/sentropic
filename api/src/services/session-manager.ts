@@ -1,5 +1,5 @@
 import { db } from '../db/client';
-import { userSessions } from '../db/schema';
+import { userSessions, users } from '../db/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { SignJWT, jwtVerify } from 'jose';
 import { createHash } from 'crypto';
@@ -143,6 +143,19 @@ export async function validateSession(
     // Check if session is expired
     if (session.expiresAt < new Date()) {
       logger.warn({ sessionId }, 'Session expired');
+      return null;
+    }
+    
+    // Security: Verify that user's email is verified
+    // This prevents using sessions created before email verification requirement
+    const [user] = await db
+      .select({ emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    if (!user || !user.emailVerified) {
+      logger.warn({ userId, sessionId }, 'Session validation failed - email not verified');
       return null;
     }
     

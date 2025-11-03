@@ -4,6 +4,7 @@ import { loginRouter } from './login';
 import { sessionRouter } from './session';
 import { credentialsRouter } from './credentials';
 import { magicLinkRouter } from './magic-link';
+import { emailRouter } from './email';
 
 /**
  * Authentication Routes
@@ -24,6 +25,7 @@ authRouter.route('/login', loginRouter);
 authRouter.route('/session', sessionRouter);
 authRouter.route('/credentials', credentialsRouter);
 authRouter.route('/magic-link', magicLinkRouter);
+authRouter.route('/email', emailRouter);
 
 // Health check
 authRouter.get('/health', (c) => {
