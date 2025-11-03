@@ -53,8 +53,9 @@ async function validateSession(cookies: string): Promise<{ valid: boolean; role?
 export const handle: Handle = async ({ event, resolve }) => {
   const path = event.url.pathname;
   
-  // Allow public routes: only '/' (exact match) and routes starting with '/auth'
-  const isPublicRoute = path === '/' || path.startsWith('/auth');
+  // Allow public routes: only '/' (exact match) and routes starting with '/auth' except '/auth/devices'
+  // /auth/devices requires authentication
+  const isPublicRoute = path === '/' || (path.startsWith('/auth') && path !== '/auth/devices' && !path.startsWith('/auth/devices/'));
   
   if (isPublicRoute) {
     return resolve(event);

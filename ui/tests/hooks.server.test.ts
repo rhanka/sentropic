@@ -70,6 +70,18 @@ describe('Server Hooks - Route Protection', () => {
       expect(resolve).toHaveBeenCalledWith(event);
       expect(mockFetch).not.toHaveBeenCalled();
     });
+
+    it('should require authentication for /auth/devices', async () => {
+      const event = createMockEvent('/auth/devices');
+      const resolve = vi.fn().mockResolvedValue(new Response());
+
+      // No session cookie, should redirect to login
+      const response = await handle({ event, resolve } as any);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/auth/login');
+      expect(resolve).not.toHaveBeenCalled();
+    });
   });
 
   describe('Protected routes', () => {
