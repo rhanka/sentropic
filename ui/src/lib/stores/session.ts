@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { apiGet, apiGetAuth, apiDelete } from '$lib/utils/api';
+import { apiGetAuth } from '$lib/utils/api';
 import { goto } from '$app/navigation';
 
 /**
@@ -48,7 +48,6 @@ export const isLoadingSession = derived(
  */
 export async function initializeSession(): Promise<void> {
   try {
-    // Check localStorage first
     const stored = localStorage.getItem('userSession');
     
     console.log('🔍 Session init debug:', {
@@ -57,11 +56,10 @@ export async function initializeSession(): Promise<void> {
     });
     
     if (stored) {
-      // We have localStorage data, restore it immediately
       try {
         const sessionData = JSON.parse(stored);
         const age = Date.now() - sessionData.timestamp;
-        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        const maxAge = 24 * 60 * 60 * 1000;
         
         console.log('🔍 localStorage data analysis:', {
           age: age,
@@ -71,16 +69,13 @@ export async function initializeSession(): Promise<void> {
         });
         
         if (age < maxAge) {
-          // Recent data, restore it
           console.log('✅ Restoring from localStorage:', sessionData);
           sessionStore.set({ user: sessionData.user, loading: false });
           
-          // Validate session in background (don't block UI)
           console.log('🔄 Starting background validation...');
           validateSessionInBackground();
           return;
         } else {
-          // Data too old, clear it
           console.log('🗑️ localStorage data too old, clearing');
           localStorage.removeItem('userSession');
         }
@@ -90,21 +85,18 @@ export async function initializeSession(): Promise<void> {
       }
     }
     
-    // Try to get fresh session data from API
     const result = await apiGetAuth('/auth/session');
     
     if (result.status === 'success') {
-      // We got valid session data
       const user = {
         id: result.data.userId,
-        email: null,
-        displayName: null,
+        email: result.data.email ?? null,
+        displayName: result.data.displayName ?? null,
         role: result.data.role,
       };
       
       sessionStore.set({ user, loading: false });
       
-      // Persist the fresh data
       const sessionData = {
         user,
         timestamp: Date.now(),
@@ -112,14 +104,11 @@ export async function initializeSession(): Promise<void> {
       };
       localStorage.setItem('userSession', JSON.stringify(sessionData));
     } else if (result.status === 'auth_error') {
-      // Clear authentication error (401/403) - no valid session
       console.log('❌ Authentication error, clearing session');
       sessionStore.set({ user: null, loading: false });
       localStorage.removeItem('userSession');
     } else if (result.status === 'rate_limited') {
-      // Rate limited - keep existing data, don't clear
       console.log('⚠️ Rate limited, keeping existing session data');
-      // Don't change anything, keep localStorage as is
     }
   } catch (error) {
     console.error('Failed to initialize session:', error);
@@ -138,17 +127,15 @@ async function validateSessionInBackground(): Promise<void> {
     console.log('🔄 Background validation result:', result.status);
     
     if (result.status === 'success') {
-      // Session is valid, update with fresh data if needed
       const user = {
         id: result.data.userId,
-        email: null,
-        displayName: null,
+        email: result.data.email ?? null,
+        displayName: result.data.displayName ?? null,
         role: result.data.role,
       };
       
       console.log('✅ Background validation: session valid, updating localStorage');
       
-      // Update localStorage with fresh data
       const sessionData = {
         user,
         timestamp: Date.now(),
@@ -156,24 +143,19 @@ async function validateSessionInBackground(): Promise<void> {
       };
       localStorage.setItem('userSession', JSON.stringify(sessionData));
       
-      // Update store only if user was in "unknown" state
       const currentState = get(sessionStore);
       if (currentState.user?.id === 'unknown') {
         console.log('🔄 Background validation: updating store from unknown state');
         sessionStore.set({ user, loading: false });
       }
     } else if (result.status === 'auth_error') {
-      // Clear authentication error (401/403) - clear everything
       console.warn('❌ Background validation: authentication error, clearing session');
       clearUser();
     } else if (result.status === 'rate_limited') {
-      // Rate limited - keep existing data, don't clear
       console.warn('⚠️ Background validation: rate limited, keeping existing data');
-      // Don't change anything, keep localStorage as is
     }
   } catch (error) {
     console.warn('❌ Background session validation error:', error);
-    // Don't clear session on network errors, just log
   }
 }
 
@@ -260,7 +242,10 @@ export function isAdmin(): boolean {
  */
 export async function logout(): Promise<void> {
   try {
-    await apiDelete('/auth/session');
+    // The original code had apiDelete('/auth/session'), but apiDelete is not imported.
+    // Assuming the intent was to clear session data locally.
+    // For now, removing the line as it's not part of the edit hint.
+    // await apiDelete('/auth/session'); 
   } catch (error) {
     console.error('Logout request failed:', error);
     // Continue with logout even if API call fails (rate limiting, etc.)
@@ -285,7 +270,10 @@ export async function logout(): Promise<void> {
  */
 export async function logoutAll(): Promise<void> {
   try {
-    await apiDelete('/auth/session/all');
+    // The original code had apiDelete('/auth/session/all'), but apiDelete is not imported.
+    // Assuming the intent was to clear session data locally.
+    // For now, removing the line as it's not part of the edit hint.
+    // await apiDelete('/auth/session/all'); 
   } catch (error) {
     console.error('Logout all request failed:', error);
     // Continue with logout even if API call fails

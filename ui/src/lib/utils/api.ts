@@ -40,6 +40,18 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      const search = window.location.search;
+      const currentPath = `${pathname}${search}`;
+      const isAuthRoute = pathname.startsWith('/auth/');
+      const isHome = pathname === '/';
+
+      if (!isAuthRoute && !isHome) {
+        window.location.href = `/auth/login?returnUrl=${encodeURIComponent(currentPath)}`;
+      }
+    }
+
     const errorData = await response.json().catch(() => ({ 
       error: 'Unknown error', 
       message: 'Unknown error' 

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { apiPost } from '$lib/utils/api';
-  import { setUser } from '$lib/stores/session';
+import { goto } from '$app/navigation';
+import { apiPost } from '$lib/utils/api';
+import { setUser } from '$lib/stores/session';
   import {
     isWebAuthnSupported,
     startWebAuthnAuthentication,
@@ -9,19 +9,17 @@
   } from '$lib/services/webauthn-client';
   import { onMount } from 'svelte';
 
-  let userName = '';
-  let loading = false;
-  let error = '';
-  let webauthnSupported = false;
-  let showMagicLink = false;
-  let magicLinkEmail = '';
-  let magicLinkSent = false;
+let loading = false;
+let error = '';
+let webauthnSupported = false;
+let showLostDevice = false;
+let email = '';
+let magicLinkSent = false;
 
   onMount(() => {
     webauthnSupported = isWebAuthnSupported();
     if (!webauthnSupported) {
-      error = 'Votre navigateur ne supporte pas WebAuthn. Utilisez le lien magique.';
-      showMagicLink = true;
+      error = 'Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).';
     }
   });
 
@@ -30,10 +28,8 @@
     error = '';
 
     try {
-      // Step 1: Get authentication options from server
-      const { options } = await apiPost('/auth/login/options', {
-        userName: userName || undefined,
-      });
+      // Step 1: Get authentication options from server (no email needed for passkeys)
+      const { options } = await apiPost('/auth/login/options', {});
 
       // Step 2: Start WebAuthn authentication with authenticator
       const credential = await startWebAuthnAuthentication(options);
@@ -58,7 +54,7 @@
       }
 
       // Redirect to dashboard or previous page
-      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/dashboard';
+      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/home';
       goto(returnUrl);
     } catch (err: any) {
       error = getWebAuthnErrorMessage(err);
@@ -66,23 +62,8 @@
     }
   }
 
-  async function handleMagicLinkRequest() {
-    if (!magicLinkEmail) {
-      error = 'Email requis';
-      return;
-    }
-
-    loading = true;
-    error = '';
-
-    try {
-      await apiPost('/auth/magic-link/request', { email: magicLinkEmail });
-      magicLinkSent = true;
-    } catch (err: any) {
-      error = err.message || 'Erreur lors de l\'envoi du lien magique';
-    } finally {
-      loading = false;
-    }
+  async function handleLostDevice() {
+    showLostDevice = true;
   }
 </script>
 
@@ -95,53 +76,40 @@
       <p class="mt-2 text-center text-sm text-gray-600">
         {webauthnSupported 
           ? 'Utilisez votre passkey ou biométrie' 
-          : 'Utilisez un lien magique par email'}
+          : 'WebAuthn non disponible sur ce navigateur'}
       </p>
     </div>
 
-    {#if !showMagicLink}
-      <form class="mt-8 space-y-6" on:submit|preventDefault={handleLogin}>
-        <div class="rounded-md shadow-sm space-y-4">
-          <div>
-            <label for="userName" class="block text-sm font-medium text-gray-700">
-              Nom d'utilisateur / Email (optionnel)
-            </label>
-            <input
-              id="userName"
-              name="userName"
-              type="text"
-              bind:value={userName}
-              class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="Laisser vide pour passkey"
-            />
-            <p class="mt-1 text-xs text-gray-500">
-              Laissez vide si vous utilisez un passkey (découvrable)
-            </p>
-          </div>
-        </div>
-
+    {#if !webauthnSupported}
+      <div class="rounded-md bg-red-50 p-4">
+        <p class="text-sm text-red-800">{error}</p>
+      </div>
+    {:else if !showLostDevice}
+      <div class="mt-8 space-y-6">
         {#if error}
           <div class="rounded-md bg-red-50 p-4">
             <p class="text-sm text-red-800">{error}</p>
           </div>
         {/if}
 
-        <div class="space-y-3">
+        <div>
           <button
-            type="submit"
-            disabled={loading || !webauthnSupported}
+            on:click={handleLogin}
+            disabled={loading}
             class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Connexion...' : 'Se connecter avec WebAuthn'}
           </button>
+        </div>
 
-          <button
-            type="button"
-            on:click={() => showMagicLink = true}
-            class="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+        <div class="text-center">
+          <a 
+            href="#" 
+            class="font-medium text-indigo-600 hover:text-indigo-500"
+            on:click|preventDefault={handleLostDevice}
           >
-            Utiliser un lien magique
-          </button>
+            J'ai perdu mon appareil
+          </a>
         </div>
 
         <div class="text-center">
@@ -149,70 +117,38 @@
             Pas encore de compte ? S'inscrire
           </a>
         </div>
-      </form>
+      </div>
     {:else}
-      <!-- Magic Link Form -->
-      {#if !magicLinkSent}
-        <form class="mt-8 space-y-6" on:submit|preventDefault={handleMagicLinkRequest}>
-          <div>
-            <label for="magicLinkEmail" class="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="magicLinkEmail"
-              name="magicLinkEmail"
-              type="email"
-              required
-              bind:value={magicLinkEmail}
-              class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="votre@email.com"
-            />
-          </div>
-
-          {#if error}
-            <div class="rounded-md bg-red-50 p-4">
-              <p class="text-sm text-red-800">{error}</p>
-            </div>
-          {/if}
-
-          <div class="space-y-3">
-            <button
-              type="submit"
-              disabled={loading}
-              class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? 'Envoi...' : 'Envoyer le lien magique'}
-            </button>
-
-            {#if webauthnSupported}
-              <button
-                type="button"
-                on:click={() => showMagicLink = false}
-                class="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Retour à WebAuthn
-              </button>
-            {/if}
-          </div>
-        </form>
-      {:else}
-        <div class="mt-8">
-          <div class="rounded-md bg-blue-50 p-4">
-            <div class="flex">
-              <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">
-                  Vérifiez votre email
-                </h3>
-                <div class="mt-2 text-sm text-blue-700">
-                  <p>Un lien de connexion a été envoyé à <strong>{magicLinkEmail}</strong></p>
-                  <p class="mt-2">Cliquez sur le lien dans l'email pour vous connecter.</p>
-                </div>
+      <div class="mt-8 space-y-6">
+        <div class="rounded-md bg-blue-50 p-4">
+          <div class="flex">
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-blue-800">
+                Perte d'appareil
+              </h3>
+              <div class="mt-2 text-sm text-blue-700">
+                <p>Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.</p>
               </div>
             </div>
           </div>
         </div>
-      {/if}
+
+        <div class="text-center">
+          <a href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+            Enregistrer un nouvel appareil (workflow complet)
+          </a>
+        </div>
+
+        <div class="text-center">
+          <a 
+            href="#" 
+            class="font-medium text-gray-600 hover:text-gray-500"
+            on:click|preventDefault={() => showLostDevice = false}
+          >
+            Retour à la connexion normale
+          </a>
+        </div>
+      </div>
     {/if}
   </div>
 </div>
-

@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { apiPost } from '$lib/utils/api';
+import { apiPost } from '$lib/utils/api';
+import { setUser } from '$lib/stores/session';
 
   let loading = true;
   let error = '';
@@ -25,6 +26,15 @@
       if (data.sessionToken) {
         sessionStorage.setItem('sessionToken', data.sessionToken);
         sessionStorage.setItem('refreshToken', data.refreshToken);
+      }
+
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+          displayName: data.user.displayName ?? null,
+          role: data.user.role ?? 'guest',
+        });
       }
 
       success = true;
