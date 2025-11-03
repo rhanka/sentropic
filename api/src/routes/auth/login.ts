@@ -97,9 +97,16 @@ loginRouter.post('/verify', async (c) => {
     }
     
     // Extract challenge from clientDataJSON
-    const clientData = JSON.parse(
-      Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
-    );
+    let clientData;
+    try {
+      clientData = JSON.parse(
+        Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
+      );
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to parse clientDataJSON');
+      return c.json({ message: 'Invalid credential data' }, 400);
+    }
+    
     const challenge = clientData.challenge;
     
     // Verify challenge is valid (userId is optional for authentication)

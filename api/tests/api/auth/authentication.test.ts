@@ -8,7 +8,7 @@ describe('Authentication API Routes', () => {
   });
 
   describe('POST /api/v1/auth/login/options', () => {
-    it('should generate authentication options without username (discoverable credentials)', async () => {
+    it('should generate authentication options without email (discoverable credentials)', async () => {
       const res = await app.request('/api/v1/auth/login/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -22,14 +22,12 @@ describe('Authentication API Routes', () => {
       expect(data.options.challenge).toBeDefined();
       expect(data.options.rpId).toBeDefined();
       expect(data.options.timeout).toBeDefined();
-      // allowCredentials can be undefined for discoverable credentials
       if (data.options.allowCredentials !== undefined) {
         expect(Array.isArray(data.options.allowCredentials)).toBe(true);
       }
     });
 
-    it('should generate authentication options with username', async () => {
-      // Create user with credential first
+    it('should generate authentication options with email', async () => {
       const user = await createTestUser({
         email: 'testuser@example.com',
         displayName: 'Test User',
@@ -40,7 +38,7 @@ describe('Authentication API Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userName: 'testuser@example.com',
+          email: 'testuser@example.com',
         }),
       });
 
@@ -53,12 +51,12 @@ describe('Authentication API Routes', () => {
       expect(data.options.allowCredentials.length).toBeGreaterThan(0);
     });
 
-    it('should generate authentication options for non-existent user', async () => {
+    it('should generate authentication options for non-existent user email', async () => {
       const res = await app.request('/api/v1/auth/login/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userName: 'nonexistent@example.com',
+          email: 'nonexistent@example.com',
         }),
       });
 
@@ -67,18 +65,17 @@ describe('Authentication API Routes', () => {
       
       expect(data.options).toBeDefined();
       expect(data.options.challenge).toBeDefined();
-      // Should still work but with empty allowCredentials
       if (data.options.allowCredentials !== undefined) {
         expect(Array.isArray(data.options.allowCredentials)).toBe(true);
       }
     });
 
-    it('should reject request with invalid userName format', async () => {
+    it('should reject request with invalid email format', async () => {
       const res = await app.request('/api/v1/auth/login/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userName: '', // Invalid: empty
+          email: '',
         }),
       });
 

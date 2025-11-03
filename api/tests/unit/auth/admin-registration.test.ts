@@ -51,6 +51,7 @@ describe('Admin Registration Logic', () => {
       email: 'existing@admin.com',
       displayName: 'Existing Admin',
       role: 'admin_app',
+      emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

@@ -42,6 +42,7 @@ describe('Challenge Manager Service', () => {
         email: `test-${userId}@example.com`,
         displayName: 'Test User',
         role: 'editor',
+        emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -147,6 +148,7 @@ describe('Challenge Manager Service', () => {
         email: `test-${userId}@example.com`,
         displayName: 'Test User',
         role: 'editor',
+        emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

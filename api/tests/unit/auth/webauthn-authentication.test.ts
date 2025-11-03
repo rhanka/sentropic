@@ -20,6 +20,7 @@ describe('WebAuthn Authentication Service', () => {
       email: `test-${testUserId}@example.com`,
       displayName: 'Test User',
       role: 'editor',
+      emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -117,6 +118,7 @@ describe('WebAuthn Authentication Service', () => {
         email: `test-${userIdNoCreds}@example.com`,
         displayName: 'No Creds User',
         role: 'guest',
+        emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -310,6 +312,7 @@ describe('WebAuthn Authentication Service', () => {
         email: `other-${otherUserId}@example.com`,
         displayName: 'Other User',
         role: 'guest',
+        emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

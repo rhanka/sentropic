@@ -22,6 +22,7 @@ describe('Session Manager Service', () => {
       email: `test-${testUserId}@example.com`,
       displayName: 'Test User',
       role: 'editor',
+      emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

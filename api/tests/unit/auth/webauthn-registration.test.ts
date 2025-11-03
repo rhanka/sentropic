@@ -7,6 +7,9 @@ import { db } from '../../../src/db/client';
 import { users, webauthnCredentials } from '../../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
+const testEmail = 'testuser@example.com';
+const testDisplayName = 'Test User';
+
 describe('WebAuthn Registration Service', () => {
   let testUserId: string;
   
@@ -17,6 +20,7 @@ describe('WebAuthn Registration Service', () => {
       email: `test-${testUserId}@example.com`,
       displayName: 'Test User',
       role: 'editor',
+      emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -31,8 +35,8 @@ describe('WebAuthn Registration Service', () => {
     it('should generate valid registration options', async () => {
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       expect(options).toBeDefined();
@@ -43,8 +47,8 @@ describe('WebAuthn Registration Service', () => {
       expect(options.rp.id).toBeDefined();
       expect(options.user).toBeDefined();
       expect(options.user.id).toBeDefined();
-      expect(options.user.name).toBe('testuser');
-      expect(options.user.displayName).toBe('Test User');
+      expect(options.user.name).toBe(testEmail);
+      expect(options.user.displayName).toBe(testDisplayName);
       expect(options.authenticatorSelection).toBeDefined();
       expect(options.timeout).toBeGreaterThan(0);
     });
@@ -64,8 +68,8 @@ describe('WebAuthn Registration Service', () => {
 
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       expect(options.excludeCredentials).toBeDefined();
@@ -77,16 +81,16 @@ describe('WebAuthn Registration Service', () => {
     it('should handle user verification policy', async () => {
       const optionsPreferred = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       expect(optionsPreferred.authenticatorSelection?.userVerification).toBe('preferred');
 
       const optionsRequired = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       // Note: Registration service doesn't enforce userVerification policy
@@ -97,8 +101,8 @@ describe('WebAuthn Registration Service', () => {
     it('should generate challenge and store it', async () => {
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       // Challenge should be stored in database
@@ -118,8 +122,8 @@ describe('WebAuthn Registration Service', () => {
       // First generate options to get challenge
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       // Mock WebAuthn registration response
@@ -140,10 +144,8 @@ describe('WebAuthn Registration Service', () => {
 
       const result = await verifyWebAuthnRegistration({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
-        response: mockResponse,
-        expectedOrigin: 'http://localhost:5173',
+        credential: mockResponse as any,
+        expectedChallenge: options.challenge,
       });
 
       // Note: This will fail with real WebAuthn verification due to mock data
@@ -169,10 +171,8 @@ describe('WebAuthn Registration Service', () => {
 
       const result = await verifyWebAuthnRegistration({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
-        response: mockResponse,
-        expectedOrigin: 'http://localhost:5173',
+        credential: mockResponse as any,
+        expectedChallenge: 'invalid-challenge',
       });
 
       expect(result.verified).toBe(false);
@@ -181,8 +181,8 @@ describe('WebAuthn Registration Service', () => {
     it('should reject invalid origin', async () => {
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       const mockResponse = {
@@ -202,10 +202,8 @@ describe('WebAuthn Registration Service', () => {
 
       const result = await verifyWebAuthnRegistration({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
-        response: mockResponse,
-        expectedOrigin: 'http://localhost:5173',
+        credential: mockResponse as any,
+        expectedChallenge: options.challenge,
       });
 
       expect(result.verified).toBe(false);
@@ -214,8 +212,8 @@ describe('WebAuthn Registration Service', () => {
     it('should reject wrong response type', async () => {
       const options = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
+        userName: testEmail,
+        userDisplayName: testDisplayName,
       });
 
       const mockResponse = {
@@ -235,10 +233,8 @@ describe('WebAuthn Registration Service', () => {
 
       const result = await verifyWebAuthnRegistration({
         userId: testUserId,
-        userName: 'testuser',
-        userDisplayName: 'Test User',
-        response: mockResponse,
-        expectedOrigin: 'http://localhost:5173',
+        credential: mockResponse as any,
+        expectedChallenge: options.challenge,
       });
 
       expect(result.verified).toBe(false);

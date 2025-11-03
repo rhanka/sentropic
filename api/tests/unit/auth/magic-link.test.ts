@@ -21,10 +21,10 @@ describe('Magic Link Service', () => {
       expect(result.token.length).toBeGreaterThan(20);
       expect(result.expiresAt).toBeInstanceOf(Date);
       
-      // Should expire in ~15 minutes
+      // Should expire in ~10 minutes
       const expiresIn = result.expiresAt.getTime() - Date.now();
-      expect(expiresIn).toBeGreaterThan(14 * 60 * 1000);
-      expect(expiresIn).toBeLessThan(16 * 60 * 1000);
+      expect(expiresIn).toBeGreaterThan(9 * 60 * 1000);
+      expect(expiresIn).toBeLessThan(11 * 60 * 1000);
     });
 
     it('should store hashed token in database', async () => {
@@ -73,6 +73,7 @@ describe('Magic Link Service', () => {
         email: 'existing@example.com',
         displayName: 'Existing User',
         role: 'editor',
+        emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

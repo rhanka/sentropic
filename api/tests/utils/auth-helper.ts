@@ -1,8 +1,9 @@
 import { db } from '../../src/db/client';
-import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes } from '../../src/db/schema';
+import { eq, desc } from 'drizzle-orm';
 import { createSession } from '../../src/services/session-manager';
 import type { UserRole } from '../../src/db/schema';
+import { generateEmailVerificationCode, verifyEmailCode } from '../../src/services/email-verification';
 
 /**
  * Test helpers for authentication integration tests
@@ -24,6 +25,7 @@ export async function cleanupAuthData() {
   await db.delete(webauthnCredentials);
   await db.delete(webauthnChallenges);
   await db.delete(magicLinks);
+  await db.delete(emailVerificationCodes);
   await db.delete(users);
 }
 
@@ -36,13 +38,15 @@ export async function createTestUser(options: {
   role?: UserRole;
   withSession?: boolean;
   deviceName?: string;
+  emailVerified?: boolean;
 }): Promise<TestUser> {
   const {
     email = 'test@example.com',
     displayName = 'Test User',
     role = 'guest',
     withSession = false,
-    deviceName = 'Test Device'
+    deviceName = 'Test Device',
+    emailVerified = true, // Default to verified for tests
   } = options;
 
   const userId = crypto.randomUUID();
@@ -53,6 +57,7 @@ export async function createTestUser(options: {
     email,
     displayName,
     role,
+    emailVerified,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
@@ -278,5 +283,59 @@ export function getAuthHeaders(sessionToken: string): Record<string, string> {
   return {
     Cookie: `session=${sessionToken}`,
   };
+}
+
+/**
+ * Generate a verification token for testing (simulates email verification flow)
+ * This creates a valid verification token that can be used in registration tests
+ */
+export async function generateTestVerificationToken(email: string): Promise<string> {
+  // Generate a verification code
+  await generateEmailVerificationCode({ email });
+  
+  // Manually retrieve the code from database (bypassing email sending)
+  // We'll use a simple approach: get the latest code for this email
+  const [codeRecord] = await db
+    .select()
+    .from(emailVerificationCodes)
+    .where(eq(emailVerificationCodes.email, email.trim().toLowerCase()))
+    .orderBy(desc(emailVerificationCodes.createdAt))
+    .limit(1);
+  
+  if (!codeRecord) {
+    throw new Error('Failed to generate verification code for test');
+  }
+  
+  // For testing, we'll bypass the code verification and create a token directly
+  // We need to use the service function to get a proper token
+  // Let's use a test code that we know will work - we'll need to read the actual code
+  // from the database or use a workaround
+  
+  // Actually, let's create a code record manually with a known code for testing
+  const testCode = '123456';
+  const { createHash } = await import('crypto');
+  const codeHash = createHash('sha256').update(testCode).digest('hex');
+  
+  // Delete the auto-generated code and create one with known code
+  await db.delete(emailVerificationCodes).where(eq(emailVerificationCodes.id, codeRecord.id));
+  
+  const codeId = crypto.randomUUID();
+  await db.insert(emailVerificationCodes).values({
+    id: codeId,
+    codeHash,
+    email: email.trim().toLowerCase(),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+    used: false,
+    createdAt: new Date(),
+  });
+  
+  // Now verify the code to get the token
+  const result = await verifyEmailCode({ email, code: testCode });
+  
+  if (!result.valid || !result.verificationToken) {
+    throw new Error('Failed to generate verification token for test');
+  }
+  
+  return result.verificationToken;
 }
 

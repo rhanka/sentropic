@@ -210,12 +210,39 @@ registerRouter.post('/verify', async (c) => {
       }, 403);
     }
     
+    // Validate credential structure
+    if (!credential || !credential.response) {
+      logger.warn({ email: normalizedEmail }, 'Invalid credential structure');
+      return c.json({ 
+        error: 'Invalid credential',
+        message: 'La structure de la credential est invalide'
+      }, 400);
+    }
+    
     const credentialResponse = credential as RegistrationResponseJSON;
     
     // Extract challenge and credential ID from clientDataJSON
-    const clientData = JSON.parse(
-      Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
-    );
+    if (!credentialResponse.response.clientDataJSON) {
+      logger.warn({ email: normalizedEmail }, 'Missing clientDataJSON in credential');
+      return c.json({ 
+        error: 'Invalid credential',
+        message: 'La credential ne contient pas les données nécessaires'
+      }, 400);
+    }
+    
+    let clientData;
+    try {
+      clientData = JSON.parse(
+        Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
+      );
+    } catch (error) {
+      logger.warn({ email: normalizedEmail, err: error }, 'Failed to parse clientDataJSON');
+      return c.json({ 
+        error: 'Invalid credential',
+        message: 'Les données de la credential sont invalides'
+      }, 400);
+    }
+    
     const challenge = clientData.challenge;
     
     // Extract credential ID before verification to check if it already exists
