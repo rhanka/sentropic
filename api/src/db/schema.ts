@@ -95,6 +95,7 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   displayName: text('display_name'),
   role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
+  emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
 });
@@ -161,6 +162,20 @@ export const magicLinks = pgTable('magic_links', {
   emailIdx: index('magic_links_email_idx').on(table.email),
 }));
 
+export const emailVerificationCodes = pgTable('email_verification_codes', {
+  id: text('id').primaryKey(),
+  codeHash: text('code_hash').notNull(), // SHA-256 hash of the 6-digit code
+  email: text('email').notNull(),
+  verificationToken: text('verification_token').unique(), // Token returned after code verification, used for registration
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  used: boolean('used').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+}, (table) => ({
+  expiresAtIdx: index('email_verification_codes_expires_at_idx').on(table.expiresAt),
+  emailIdx: index('email_verification_codes_email_idx').on(table.email),
+  verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
+}));
+
 export type CompanyRow = typeof companies.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
@@ -172,3 +187,4 @@ export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type UserSessionRow = typeof userSessions.$inferSelect;
 export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
 export type MagicLinkRow = typeof magicLinks.$inferSelect;
+export type EmailVerificationCodeRow = typeof emailVerificationCodes.$inferSelect;
