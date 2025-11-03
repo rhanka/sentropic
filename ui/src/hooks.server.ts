@@ -27,14 +27,6 @@ const ADMIN_ROUTES = [
   '/configuration-metier',
 ];
 
-// Public routes (no authentication required)
-const PUBLIC_ROUTES = [
-  '/',
-  '/auth/login',
-  '/auth/register',
-  '/auth/magic-link',
-];
-
 /**
  * Check if session is valid by calling API
  */
@@ -61,58 +53,59 @@ async function validateSession(cookies: string): Promise<{ valid: boolean; role?
 export const handle: Handle = async ({ event, resolve }) => {
   const path = event.url.pathname;
   
-  // Allow public routes
-  if (PUBLIC_ROUTES.some(route => path === route || path.startsWith(route))) {
+  // Allow public routes: only '/' (exact match) and routes starting with '/auth'
+  const isPublicRoute = path === '/' || path.startsWith('/auth');
+  
+  if (isPublicRoute) {
     return resolve(event);
   }
   
-  // Check if route is protected
+  // All other routes require authentication
+  // Get session cookie
+  const sessionCookie = event.cookies.get('session');
+  
+  if (!sessionCookie) {
+    // No session, redirect to login
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: `/auth/login?returnUrl=${encodeURIComponent(path)}`,
+      },
+    });
+  }
+  
+  // Validate session with API
+  const { valid, role } = await validateSession(event.request.headers.get('cookie') || '');
+  
+  if (!valid) {
+    // Invalid session, redirect to login
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: `/auth/login?returnUrl=${encodeURIComponent(path)}`,
+      },
+    });
+  }
+  
+  // Check if route is protected (for specific route handling)
   const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route));
   const isAdminRoute = ADMIN_ROUTES.some(route => path.startsWith(route));
   
-  if (isProtectedRoute) {
-    // Get session cookie
-    const sessionCookie = event.cookies.get('session');
-    
-    if (!sessionCookie) {
-      // No session, redirect to login
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: `/auth/login?returnUrl=${encodeURIComponent(path)}`,
-        },
-      });
-    }
-    
-    // Validate session with API
-    const { valid, role } = await validateSession(event.request.headers.get('cookie') || '');
-    
-    if (!valid) {
-      // Invalid session, redirect to login
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: `/auth/login?returnUrl=${encodeURIComponent(path)}`,
-        },
-      });
-    }
-    
-    // Check admin routes
-    if (isAdminRoute && role !== 'admin_app' && role !== 'admin_org') {
-      // Insufficient permissions, redirect to error or dashboard
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: '/dashboard?error=insufficient_permissions',
-        },
-      });
-    }
-    
-    // Attach user info to locals for use in pages
-    event.locals.user = {
-      role: role as any,
-    };
+  // Check admin routes
+  if (isAdminRoute && role !== 'admin_app' && role !== 'admin_org') {
+    // Insufficient permissions, redirect to error or dashboard
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: '/dashboard?error=insufficient_permissions',
+      },
+    });
   }
+  
+  // Attach user info to locals for use in pages
+  event.locals.user = {
+    role: role as any,
+  };
   
   return resolve(event);
 };

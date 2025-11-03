@@ -23,6 +23,11 @@
 
   // Logique pour déterminer si les menus doivent être grisés
   const isMenuDisabled = (href: string) => {
+    // Si l'utilisateur n'est pas authentifié, griser tous les menus sauf l'accueil (/)
+    if (!$isAuthenticated) {
+      return href !== '/';
+    }
+    
     // Si aucun dossier n'est sélectionné, griser cas-usage et dashboard
     if (!$currentFolderId) {
       return href === '/cas-usage' || href === '/dashboard';
