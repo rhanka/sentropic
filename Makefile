@@ -380,23 +380,15 @@ down: ## Stop and remove containers, networks, volumes
 # -----------------------------------------------------------------------------
 .PHONY: logs
 logs: ## Show logs for all services
-	$(DOCKER_COMPOSE) logs --tail=50
+	$(DOCKER_COMPOSE) logs
 
-.PHONY: logs-api
-logs-api: ## Show logs for API service
-	$(DOCKER_COMPOSE) logs --tail=50 api
-
-.PHONY: logs-ui
-logs-ui: ## Show logs for UI service
-	$(DOCKER_COMPOSE) logs --tail=50 ui
-
-.PHONY: logs-db
-logs-db: ## Show logs for database service
-	$(DOCKER_COMPOSE) logs -f sqlite
-
-.PHONY: logs-maildev
-logs-maildev: ## Show logs for MailDev service
-	$(DOCKER_COMPOSE) logs --tail=50 maildev
+.PHONY: logs-% # maildev postgres ui api
+logs-%: ## Show logs for MailDev service
+	@if [ -n "$$TAIL" ]; then \
+		$(DOCKER_COMPOSE) logs --tail=$$TAIL $*; \
+	else \
+		$(DOCKER_COMPOSE) logs $*; \
+	fi
 
 .PHONY: sh-ui
 sh-ui:
