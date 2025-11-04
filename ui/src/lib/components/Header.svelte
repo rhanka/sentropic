@@ -5,7 +5,6 @@
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';
-  import { useCasesStore } from '../stores/useCases';
 
   let showUserMenu = false;
 
@@ -28,17 +27,12 @@
       return href !== '/';
     }
     
-    // Si aucun dossier n'est sélectionné, griser cas-usage et dashboard
+    // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
     if (!$currentFolderId) {
-      return href === '/cas-usage' || href === '/dashboard';
+      return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';
     }
     
-    // Si un dossier est sélectionné mais n'a pas de cas d'usage, griser cas-usage et dashboard
-    const currentFolderUseCases = $useCasesStore.filter(uc => uc.folderId === $currentFolderId);
-    if (currentFolderUseCases.length === 0) {
-      return href === '/cas-usage' || href === '/dashboard';
-    }
-    
+    // Si un dossier est sélectionné, ne pas griser (même s'il n'y a pas encore de cas d'usage)
     return false;
   };
 

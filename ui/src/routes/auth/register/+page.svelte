@@ -43,7 +43,7 @@
       await apiPost('/auth/email/verify-request', {
         email: normalizedEmail,
       });
-      
+
       step = 'code';
       success = 'Code envoyé par email';
       // Auto-focus first code input
@@ -176,7 +176,7 @@
       const credential = await startWebAuthnRegistration(options);
       await verifyRegistration(credential);
     } catch (err: any) {
-      error = getWebAuthnErrorMessage(err);
+        error = getWebAuthnErrorMessage(err);
       loading = false;
     }
   }
@@ -387,7 +387,7 @@
             {loading ? 'Enregistrement...' : 'Enregistrer mon appareil WebAuthn'}
           </button>
         </div>
-      </div>
+        </div>
     {:else if step === 'success'}
       <div class="mt-8">
         <div class="rounded-md bg-green-50 p-4">

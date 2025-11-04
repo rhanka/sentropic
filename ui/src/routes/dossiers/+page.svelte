@@ -59,7 +59,16 @@
       const useCases = await fetchUseCases();
       useCasesStore.set(useCases);
       
-      // Sélectionner  le premier dossier s'il n'y en a pas de sélectionné
+      // Valider que le dossier sélectionné existe toujours
+      if ($currentFolderId) {
+        const folderExists = folders.some(f => f.id === $currentFolderId);
+        if (!folderExists) {
+          // Le dossier sauvegardé n'existe plus, réinitialiser
+          currentFolderId.set(null);
+        }
+      }
+      
+      // Sélectionner le premier dossier s'il n'y en a pas de sélectionné
       if (folders.length > 0 && !$currentFolderId) {
         currentFolderId.set(folders[0].id);
         addToast({
@@ -208,7 +217,23 @@
     
     try {
       await apiDelete(`/folders/${id}`);
+      
+      // Si le dossier supprimé était le dossier sélectionné, réinitialiser la sélection
+      const wasSelected = $currentFolderId === id;
+      const remainingFolders = $foldersStore.filter(f => f.id !== id);
+      
       foldersStore.update((items) => items.filter(f => f.id !== id));
+      
+      if (wasSelected) {
+        if (remainingFolders.length > 0) {
+          // Sélectionner le premier dossier restant
+          currentFolderId.set(remainingFolders[0].id);
+        } else {
+          // Aucun dossier restant, réinitialiser
+          currentFolderId.set(null);
+        }
+      }
+      
       addToast({
         type: 'success',
         message: 'Dossier supprimé avec succès !'

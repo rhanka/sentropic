@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import '../app.css';
   import Header from '$lib/components/Header.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import '$lib/i18n';
-  import { initializeSession } from '$lib/stores/session';
+  import { initializeSession, session, isAuthenticated } from '$lib/stores/session';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 
@@ -16,10 +17,35 @@
     return path === route || path.startsWith(`${route}/`);
   });
 
+  // Protected routes that require authentication
+  const PROTECTED_ROUTES = [
+    '/dashboard',
+    '/dossiers',
+    '/entreprises',
+    '/cas-usage',
+    '/matrice',
+    '/parametres',
+    '/configuration-metier',
+    '/donnees',
+    '/auth/devices',
+  ];
+
   // Initialize session on app mount
-  onMount(() => {
-    initializeSession();
+  onMount(async () => {
+    await initializeSession();
   });
+
+  // Reactive check: redirect to login if accessing protected route without authentication
+  $: if (!$session.loading) {
+    const path = $page.url.pathname;
+    const isPublicRoute = path === '/' || (path.startsWith('/auth') && path !== '/auth/devices' && !path.startsWith('/auth/devices/'));
+    const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route));
+    
+    // Redirect to login if accessing protected route without authentication
+    if (isProtectedRoute && !$session.user) {
+      goto(`/auth/login?returnUrl=${encodeURIComponent(path)}`);
+    }
+  }
 </script>
 
 <svelte:head>

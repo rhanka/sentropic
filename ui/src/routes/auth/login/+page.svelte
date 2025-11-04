@@ -83,7 +83,7 @@ let magicLinkSent = false;
     {#if !webauthnSupported}
       <div class="rounded-md bg-red-50 p-4">
         <p class="text-sm text-red-800">{error}</p>
-      </div>
+          </div>
     {:else if !showLostDevice}
       <div class="mt-8 space-y-6">
         {#if error}
@@ -120,13 +120,13 @@ let magicLinkSent = false;
       </div>
     {:else}
       <div class="mt-8 space-y-6">
-        <div class="rounded-md bg-blue-50 p-4">
-          <div class="flex">
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-blue-800">
+          <div class="rounded-md bg-blue-50 p-4">
+            <div class="flex">
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">
                 Perte d'appareil
-              </h3>
-              <div class="mt-2 text-sm text-blue-700">
+                </h3>
+                <div class="mt-2 text-sm text-blue-700">
                 <p>Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.</p>
               </div>
             </div>

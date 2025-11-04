@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { browser } from '$app/environment';
 
 export type Folder = {
   id: string;
@@ -12,7 +13,47 @@ export type Folder = {
 };
 
 export const foldersStore = writable<Folder[]>([]);
-export const currentFolderId = writable<string | null>(null);
+
+// Persistent store for currentFolderId
+const STORAGE_KEY = 'currentFolderId';
+
+function createPersistentFolderIdStore() {
+  // Initialize from localStorage if available
+  const initialValue = browser 
+    ? (localStorage.getItem(STORAGE_KEY) || null)
+    : null;
+
+  const { subscribe, set, update } = writable<string | null>(initialValue);
+
+  return {
+    subscribe,
+    set: (value: string | null) => {
+      if (browser) {
+        if (value) {
+          localStorage.setItem(STORAGE_KEY, value);
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+      set(value);
+    },
+    update: (updater: (value: string | null) => string | null) => {
+      update(current => {
+        const newValue = updater(current);
+        if (browser) {
+          if (newValue) {
+            localStorage.setItem(STORAGE_KEY, newValue);
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        }
+        return newValue;
+      });
+    }
+  };
+}
+
+export const currentFolderId = createPersistentFolderIdStore();
 
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 

@@ -233,8 +233,8 @@ registerRouter.post('/verify', async (c) => {
     let clientData;
     try {
       clientData = JSON.parse(
-        Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
-      );
+      Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
+    );
     } catch (error) {
       logger.warn({ email: normalizedEmail, err: error }, 'Failed to parse clientDataJSON');
       return c.json({ 
