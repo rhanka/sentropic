@@ -71,31 +71,22 @@ test.describe('Public · WebAuthn Complete Authentication Workflow', () => {
     
     // Détecter l'état actuel de l'UI (WebAuthn supporté ou non)
     const browserNotSupported = page.getByText('Navigateur non compatible');
-    const userNameField = page.getByLabel('Nom d\'utilisateur / Email');
-    const displayNameField = page.getByLabel('Nom d\'affichage');
-    const emailField = page.getByLabel('Email (optionnel)');
+    const emailField = page.getByLabel('Email');
     
-    const hasIncompatibleMessage = await browserNotSupported.isVisible();
-    const hasFormFields = await userNameField.isVisible();
+    const hasIncompatibleMessage = await browserNotSupported.isVisible().catch(() => false);
+    const hasEmailField = await emailField.isVisible().catch(() => false);
     
-    // L'UI peut être dans deux états :
-    // 1. Navigateur non compatible -> affiche message d'erreur (pas de formulaire)
-    // 2. Navigateur compatible -> affiche formulaire d'inscription
     if (hasIncompatibleMessage) {
-      // État 1 : Navigateur non compatible
       await expect(browserNotSupported).toBeVisible();
-      await expect(userNameField).not.toBeVisible();
-      await expect(displayNameField).not.toBeVisible();
       await expect(emailField).not.toBeVisible();
-      // Test s'arrête ici car WebAuthn n'est pas supporté
-    } else if (hasFormFields) {
-      // État 2 : Navigateur compatible -> affiche formulaire
-      await expect(userNameField).toBeVisible();
-      await expect(displayNameField).toBeVisible();
-      // Le test vérifie que le formulaire est présent (WebAuthn supporté)
+    } else if (hasEmailField) {
+      // Nouveau workflow : email → code → webauthn
+      await expect(emailField).toBeVisible();
+      // Vérifier qu'il y a un bouton pour demander le code
+      const requestCodeButton = page.getByRole('button', { name: /demander|envoyer|code/i });
+      await expect(requestCodeButton).toBeVisible();
     } else {
-      // État inattendu
-      throw new Error('La page d\'inscription n\'est ni en mode erreur ni en mode formulaire');
+      throw new Error("La page d'inscription n'est ni en mode erreur ni en mode formulaire");
     }
   });
 
@@ -152,12 +143,14 @@ test.describe('WebAuthn Integration with Application', () => {
     await expect(page.locator('body')).toBeAttached();
     
     // Vérifier que les éléments de navigation sont présents
+    // Note: les menus peuvent être grisés si non authentifié
     const navItems = ['Accueil', 'Dossiers', 'Entreprises', 'Cas d\'usage', 'Évaluation', 'Dashboard', 'Paramètres'];
     
     for (const item of navItems) {
       const navElement = page.getByRole('link', { name: item });
-      if (await navElement.isVisible()) {
-        // Vérifier que l'élément est visible et cliquable
+      const isVisible = await navElement.isVisible().catch(() => false);
+      if (isVisible) {
+        // Vérifier que l'élément est visible (peut être grisé si non authentifié)
         await expect(navElement).toBeVisible();
       }
     }
@@ -216,61 +209,49 @@ test.describe('WebAuthn Security Features', () => {
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
     
-    // Détecter l'état actuel de l'UI (WebAuthn ou magic link)
+    // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn (pas de champ email)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
 
-    let submitButton;
-    let inputField;
-    let isWebAuthnMode = false;
-
-    const webauthnVisible = await webauthnButton.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (webauthnVisible) {
-      isWebAuthnMode = true;
-      submitButton = webauthnButton;
-      inputField = page.getByLabel(/Nom d'utilisateur|Email/i);
-      await inputField.fill('test@example.com');
-    } else {
-      const { magicLinkButton } = await ensureMagicLinkMode(page);
-      submitButton = magicLinkButton;
-      inputField = page.getByLabel('Email');
-      await inputField.fill('test@example.com');
-    }
-    
-    await expect(submitButton).toBeVisible();
-    await expect(submitButton).toBeEnabled();
+    await expect(webauthnButton).toBeVisible();
+    await expect(webauthnButton).toBeEnabled();
     
     // Premier clic - doit déclencher la requête et désactiver le bouton
-    await submitButton.click();
+    await webauthnButton.click();
     
     // Vérifier que le bouton passe en mode chargement (texte change OU bouton désactivé)
     // La requête peut être très rapide, donc on vérifie soit le texte, soit le disabled
-    if (isWebAuthnMode) {
-      // Attendre que le texte change ou que le bouton soit désactivé (timeout court car peut échouer vite)
-      try {
-        await expect(submitButton).toContainText('Connexion...', { timeout: 2000 });
-      } catch {
-        // Si le texte ne change pas, vérifier que le bouton est désactivé au moins brièvement
-        await expect(submitButton).toBeDisabled({ timeout: 1000 }).catch(() => {});
-      }
+    try {
+      await expect(webauthnButton).toContainText('Connexion...', { timeout: 2000 });
+    } catch {
+      // Si le texte ne change pas, vérifier que le bouton est désactivé au moins brièvement
+      await expect(webauthnButton).toBeDisabled({ timeout: 1000 }).catch(() => {});
+    }
+    
+    // Attendre que le bouton redevienne disponible (ou erreur)
+    await page.waitForTimeout(2000);
+    
+    // Vérifier que le bouton peut être cliqué à nouveau (ou erreur affichée)
+    const isEnabled = await webauthnButton.isEnabled().catch(() => false);
+    if (isEnabled) {
+      // Le bouton est à nouveau disponible, peut être cliqué à nouveau
+      await expect(webauthnButton).toBeEnabled();
     } else {
-      try {
-        await expect(submitButton).toContainText('Envoi...', { timeout: 2000 });
-      } catch {
-        await expect(submitButton).toBeDisabled({ timeout: 1000 }).catch(() => {});
+      // Une erreur est peut-être affichée
+      const errorMessage = page.locator('.text-red-800');
+      if (await errorMessage.isVisible()) {
+        const errorText = await errorMessage.textContent();
+        expect(errorText).toBeTruthy();
       }
     }
     
-    // Essayer de cliquer à nouveau - si le bouton est disabled, ça ne fera rien
-    // Si la requête s'est terminée rapidement, on peut cliquer à nouveau (c'est ce qu'on teste)
-    try {
-      await submitButton.click({ timeout: 500 });
-    } catch {
-      // Le bouton est peut-être désactivé, c'est normal
-    }
+    // Test: essayer de cliquer plusieurs fois rapidement
+    // (le comportement exact dépend de l'implémentation)
+    await webauthnButton.click({ timeout: 5000 }).catch(() => {
+      // Si le bouton est désactivé, c'est normal
+    });
     
     // Attendre que la requête se termine (succès ou erreur) - timeout plus long pour WebAuthn
-    await expect(submitButton).toBeEnabled({ timeout: 15000 });
+    await expect(webauthnButton).toBeEnabled({ timeout: 15000 });
     
     // Vérifier qu'aucune erreur critique n'apparaît
     const criticalError = page.locator('.text-red-800');
@@ -308,36 +289,31 @@ test.describe('WebAuthn Error Recovery', () => {
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
     
+    // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const { magicLinkButton } = await ensureMagicLinkMode(page);
-    const webauthnStillVisible = await webauthnButton.isVisible().catch(() => false);
-    const anyAuthButtonVisible = webauthnStillVisible || await magicLinkButton.isVisible() ||
-                                await page.getByRole('button', { name: /connexion|magique/i }).first().isVisible();
-    expect(anyAuthButtonVisible).toBe(true);
+    await expect(webauthnButton).toBeVisible();
     
-    if (await magicLinkButton.isVisible()) {
-      // Simuler une erreur en interceptant les appels de lien magique
-      await page.route('**/api/v1/auth/magic-link/send', route => {
-        route.fulfill({
-          status: 500,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Magic link service unavailable' })
-        });
+    // Simuler une erreur en interceptant les appels WebAuthn
+    await page.route('**/api/v1/auth/login/options', route => {
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'WebAuthn service unavailable' })
       });
-      
-      // Essayer de cliquer sur le bouton
-      await magicLinkButton.click();
-      
-      // Attendre un peu pour voir l'erreur
-      await page.waitForTimeout(2000);
-      
-      // Vérifier qu'une erreur appropriée est affichée
-      const errorMessage = page.locator('.text-red-800');
-      if (await errorMessage.isVisible()) {
-        const errorText = await errorMessage.textContent();
-        // Accepter soit une erreur d'API soit le message de navigateur non compatible
-        expect(errorText).toMatch(/erreur|navigateur|WebAuthn/);
-      }
+    });
+    
+    // Essayer de cliquer sur le bouton
+    await webauthnButton.click();
+    
+    // Attendre un peu pour voir l'erreur
+    await page.waitForTimeout(2000);
+    
+    // Vérifier qu'une erreur appropriée est affichée
+    const errorMessage = page.locator('.text-red-800');
+    if (await errorMessage.isVisible()) {
+      const errorText = await errorMessage.textContent();
+      // Accepter soit une erreur d'API soit le message de navigateur non compatible
+      expect(errorText).toMatch(/erreur|navigateur|WebAuthn/);
     }
   });
 
@@ -345,35 +321,33 @@ test.describe('WebAuthn Error Recovery', () => {
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
     
+    // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const { magicLinkButton } = await ensureMagicLinkMode(page);
-    const webauthnStillVisible = await webauthnButton.isVisible().catch(() => false);
-    const anyAuthButtonVisible = webauthnStillVisible || await magicLinkButton.isVisible() ||
-                                await page.getByRole('button', { name: /connexion|magique/i }).first().isVisible();
-    expect(anyAuthButtonVisible).toBe(true);
+    await expect(webauthnButton).toBeVisible();
     
-    if (await magicLinkButton.isVisible()) {
-      // Simuler une erreur temporaire
-      await page.route('**/api/v1/auth/magic-link/send', route => {
-        route.fulfill({
-          status: 500,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Temporary error' })
-        });
+    // Simuler une erreur temporaire
+    await page.route('**/api/v1/auth/login/options', route => {
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Temporary error' })
       });
-      
-      // Essayer de cliquer sur le bouton
-      await magicLinkButton.click();
-      await page.waitForTimeout(1000);
-      
-      // Restaurer le service
-      await page.unroute('**/api/v1/auth/magic-link/send');
-      
-      // Essayer à nouveau
-      await magicLinkButton.click();
-      
-      // Vérifier que l'erreur précédente n'interfère pas
-      await page.waitForTimeout(1000);
-    }
+    });
+    
+    // Essayer de cliquer sur le bouton
+    await webauthnButton.click();
+    await page.waitForTimeout(1000);
+    
+    // Restaurer le service
+    await page.unroute('**/api/v1/auth/login/options');
+    
+    // Essayer à nouveau
+    await webauthnButton.click();
+    
+    // Vérifier que l'erreur précédente n'interfère pas
+    await page.waitForTimeout(1000);
+    
+    // Le bouton devrait être à nouveau disponible
+    await expect(webauthnButton).toBeEnabled();
   });
 });

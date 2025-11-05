@@ -177,8 +177,11 @@ Implement WebAuthn-based passwordless authentication with @simplewebauthn/{serve
     - [x] MailDev intégré (service docker-compose, cibles make up/down/logs) — reste à vérifier le démarrage healthy
     - [x] Magic link sécurisé (TTL 10 min, usage unique, envoi via nodemailer, normalisation email)
     - [x] Redirections 401 + masquage du header sur les routes d’auth, fetch helper mis à jour
-    - [ ] Workflow secure: register = mail + device webauthn validé obligatoire. Connexion: mail doit être validé, et même device webauthn. fall back nécessite nouvelle validation de mail et aussi device webauthn
-    - [ ] Tests & CI : adapter les tests, relancer `make test-api test-ui test-e2e`, adapter workflows CI (MailDev, smoke restore), vérifier stabilité
+    - [x] Workflow secure: register = mail + device webauthn validé obligatoire. Connexion: mail doit être validé, et même device webauthn. fall back nécessite nouvelle validation de mail et aussi device webauthn
+    - [ ] Tests & CI : 
+        - [x] adapter les tests unitaires, relancer `make test-ui test-api`, 
+        - [x] adapter les tests e2e, relancer `make test-e2e`, 
+        - [ ] adapter workflows CI (MailDev, smoke restore), vérifier stabilité
     - [ ] Documentation finale & suivi (compléter BRANCH.md quand tests/CI verts, noter le statut de MailDev)
 
 ### Phase 13: CI/CD Integration & Documentation

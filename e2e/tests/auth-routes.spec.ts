@@ -45,26 +45,6 @@ test.describe('Public · Authentication Routes Access', () => {
     // console.log('Register page content:', bodyText?.substring(0, 500));
   });
 
-  test('devrait accéder à la page de gestion des appareils', async ({ page }) => {
-    // Aller sur la page de gestion des appareils
-    const response = await page.goto('/auth/devices');
-    
-    // Vérifier que la page répond (peut être 200 ou redirigé)
-    expect([200, 302, 404]).toContain(response?.status());
-    
-    // Vérifier que la page se charge
-    await page.waitForLoadState('networkidle');
-    
-    // Vérifier que le body est présent
-    await expect(page.locator('body')).toBeAttached();
-    
-    // Prendre une capture d'écran pour debug
-    await page.screenshot({ path: 'debug-devices-page.png' });
-    
-    // Vérifier le contenu de la page
-    const bodyText = await page.locator('body').textContent();
-    // console.log('Devices page content:', bodyText?.substring(0, 500));
-  });
 
   test('devrait gérer les routes inexistantes', async ({ page }) => {
     // Aller sur une route inexistante

@@ -116,18 +116,21 @@ test.describe('WebAuthn Registration', () => {
     
     // Vérifier l'état du navigateur (compatible ou non)
     const incompatibleText = page.getByText('Navigateur non compatible');
-    const createAccountButton = page.getByRole('button', { name: 'Créer un compte' });
+    const emailField = page.getByLabel('Email');
     
-    const incompatibleVisible = await incompatibleText.isVisible();
-    const createButtonVisible = await createAccountButton.isVisible();
+    const incompatibleVisible = await incompatibleText.isVisible().catch(() => false);
+    const emailFieldVisible = await emailField.isVisible().catch(() => false);
     
     // Selon l'état, vérifier le comportement attendu
     if (incompatibleVisible) {
       // Navigateur non compatible - pas de formulaire
-      await expect(createAccountButton).not.toBeVisible();
-    } else if (createButtonVisible) {
-      // Navigateur compatible - formulaire présent
-      await expect(createAccountButton).toBeVisible();
+      await expect(emailField).not.toBeVisible();
+    } else if (emailFieldVisible) {
+      // Navigateur compatible - nouveau workflow email verification
+      await expect(emailField).toBeVisible();
+      // Vérifier qu'il y a un bouton pour demander le code
+      const requestCodeButton = page.getByRole('button', { name: /demander|envoyer|code/i });
+      await expect(requestCodeButton).toBeVisible();
     }
   });
 
@@ -137,23 +140,21 @@ test.describe('WebAuthn Registration', () => {
     
     // Vérifier l'état du navigateur (compatible ou non)
     const incompatibleText = page.getByText('Navigateur non compatible');
-    const createAccountButton = page.getByRole('button', { name: 'Créer un compte' });
+    const emailField = page.getByLabel('Email');
     
-    const incompatibleVisible = await incompatibleText.isVisible();
-    const createButtonVisible = await createAccountButton.isVisible();
+    const incompatibleVisible = await incompatibleText.isVisible().catch(() => false);
+    const emailFieldVisible = await emailField.isVisible().catch(() => false);
     
     // Selon l'état, vérifier les champs disponibles
-    if (createButtonVisible) {
-      // Navigateur compatible - vérifier les champs
-      const userNameField = page.getByLabel('Nom d\'utilisateur');
-      const displayNameField = page.getByLabel('Nom d\'affichage');
-      
-      await expect(userNameField).toBeVisible();
-      await expect(displayNameField).toBeVisible();
+    if (emailFieldVisible) {
+      // Navigateur compatible - nouveau workflow email verification
+      await expect(emailField).toBeVisible();
+      // Vérifier qu'il y a un bouton pour demander le code
+      const requestCodeButton = page.getByRole('button', { name: /demander|envoyer|code/i });
+      await expect(requestCodeButton).toBeVisible();
     } else if (incompatibleVisible) {
       // Navigateur non compatible - pas de champs
-      const userNameField = page.getByLabel('Nom d\'utilisateur');
-      await expect(userNameField).not.toBeVisible();
+      await expect(emailField).not.toBeVisible();
     }
   });
 
