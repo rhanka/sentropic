@@ -507,7 +507,7 @@ db-backup-prod: backup-dir up ## Backup production database from Scaleway to loc
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-restore
-db-restore: down ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
+db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
 	@if [ -z "$(BACKUP_FILE)" ]; then \
 		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=app-2025-01-15T10-30-00.dump or BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
 		echo "Available backups:"; \

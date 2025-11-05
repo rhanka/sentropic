@@ -1,23 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { resetFetchMock } from '../test-setup';
+import { ApiError } from '../../src/lib/utils/api';
 
 // Import mocked goto from $app/navigation
 import { goto as mockGoto } from '$app/navigation';
 
-// Mock apiGetAuth BEFORE importing session store
+// Mock apiGet BEFORE importing session store
 // Use factory function to avoid hoisting issues
 vi.mock('../../src/lib/utils/api', async () => {
   const actual = await vi.importActual('../../src/lib/utils/api');
-  const mockApiGetAuth = vi.fn();
+  const mockApiGet = vi.fn();
   return {
     ...actual,
-    apiGetAuth: mockApiGetAuth,
+    apiGet: mockApiGet,
   };
 });
 
-// Import the mocked apiGetAuth
-import { apiGetAuth as mockApiGetAuth } from '../../src/lib/utils/api';
+// Import the mocked apiGet
+import { apiGet as mockApiGet } from '../../src/lib/utils/api';
 
 // Now import the session store after mocks are set up
 import {
@@ -278,9 +279,10 @@ describe('Session Store', () => {
       };
       localStorage.setItem('userSession', JSON.stringify(sessionData));
 
-      vi.mocked(mockApiGetAuth).mockResolvedValue({
-        status: 'auth_error',
-      });
+      // Mock 401 error (will be caught and handled)
+      vi.mocked(mockApiGet).mockRejectedValue(
+        new ApiError('Unauthorized', 401)
+      );
 
       await initializeSession();
 
@@ -295,14 +297,12 @@ describe('Session Store', () => {
         role: 'guest',
       };
 
-      vi.mocked(mockApiGetAuth).mockResolvedValue({
-        status: 'success',
-        data: {
-          userId: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role,
-        },
+      // apiGet returns the data directly, not wrapped in { status, data }
+      vi.mocked(mockApiGet).mockResolvedValue({
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
       });
 
       await initializeSession();
@@ -315,9 +315,10 @@ describe('Session Store', () => {
     });
 
     it('should clear session on auth error', async () => {
-      vi.mocked(mockApiGetAuth).mockResolvedValue({
-        status: 'auth_error',
-      });
+      // Mock 401 error (will be caught and handled)
+      vi.mocked(mockApiGet).mockRejectedValue(
+        new ApiError('Unauthorized', 401)
+      );
 
       await initializeSession();
 
