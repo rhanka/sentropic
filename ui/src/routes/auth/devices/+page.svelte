@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiGet, apiPut, apiDelete } from '$lib/utils/api';
-  import { isAuthenticated, session } from '$lib/stores/session';
-  import { goto } from '$app/navigation';
 
   interface Credential {
     id: string;
@@ -20,11 +18,7 @@
   let editingName = '';
 
   onMount(async () => {
-    if (!$isAuthenticated) {
-      goto('/auth/login?returnUrl=/auth/devices');
-      return;
-    }
-
+    // Protection gérée par +layout.svelte
     await loadCredentials();
   });
 

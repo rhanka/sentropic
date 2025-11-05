@@ -40,18 +40,6 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined') {
-      const pathname = window.location.pathname;
-      const search = window.location.search;
-      const currentPath = `${pathname}${search}`;
-      const isAuthRoute = pathname.startsWith('/auth/');
-      const isHome = pathname === '/';
-
-      if (!isAuthRoute && !isHome) {
-        window.location.href = `/auth/login?returnUrl=${encodeURIComponent(currentPath)}`;
-      }
-    }
-
     const errorData = await response.json().catch(() => ({ 
       error: 'Unknown error', 
       message: 'Unknown error' 
@@ -72,53 +60,10 @@ export async function apiRequest<T = any>(
 }
 
 /**
- * Make an authenticated API request that handles auth errors gracefully
- * Used for session checks where 401/403 are expected when not authenticated
- */
-export async function apiRequestAuth<T = any>(
-  endpoint: string, 
-  options: RequestInit = {}
-): Promise<{ data: T; status: 'success' } | { data: null; status: 'auth_error' | 'rate_limited' }> {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-  
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include', // Always include cookies for authentication
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  // Handle auth errors gracefully
-  if (response.status === 401 || response.status === 403) {
-    return { data: null, status: 'auth_error' };
-  }
-  
-  if (response.status === 429) {
-    return { data: null, status: 'rate_limited' };
-  }
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-  }
-
-  return { data: await response.json(), status: 'success' };
-}
-
-/**
  * Make a GET request to an API endpoint
  */
 export async function apiGet<T = any>(endpoint: string): Promise<T> {
   return apiRequest<T>(endpoint, { method: 'GET' });
-}
-
-/**
- * Make a GET request to an API endpoint with graceful auth error handling
- */
-export async function apiGetAuth<T = any>(endpoint: string): Promise<{ data: T; status: 'success' } | { data: null; status: 'auth_error' | 'rate_limited' }> {
-  return apiRequestAuth<T>(endpoint, { method: 'GET' });
 }
 
 /**

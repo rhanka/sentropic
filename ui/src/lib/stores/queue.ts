@@ -28,31 +28,32 @@ const initialState: QueueState = {
 
 export const queueStore = writable<QueueState>(initialState);
 
-import { apiGet, apiGetAuth, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from '$lib/utils/api';
 
 // Fonctions API pour la queue
 export const fetchAllJobs = async (): Promise<Job[]> => {
-  const result = await apiGetAuth<Job[]>('/queue/jobs');
-  
-  if (result.status === 'success') {
-    return result.data;
-  } else {
-    // Return empty array if not authenticated or rate limited
-    return [];
+  try {
+    const data = await apiGet<Job[]>('/queue/jobs');
+    return data || [];
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 429)) {
+      // Return empty array if not authenticated or rate limited
+      return [];
+    }
+    throw error;
   }
 };
 
 export const fetchJobStatus = async (jobId: string): Promise<Job | null> => {
   try {
-    const result = await apiGetAuth<Job>(`/queue/jobs/${jobId}`);
-    
-    if (result.status === 'success') {
-      return result.data;
-    } else {
-      return null;
+    const data = await apiGet<Job>(`/queue/jobs/${jobId}`);
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 404 || error.status === 401 || error.status === 403 || error.status === 429) {
+        return null;
+      }
     }
-  } catch (error: any) {
-    if (error.message?.includes('404')) return null;
     throw error;
   }
 };

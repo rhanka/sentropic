@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { apiGetAuth } from '$lib/utils/api';
+import { apiGet, apiDelete, ApiError } from '$lib/utils/api';
 import { goto } from '$app/navigation';
 
 /**
@@ -85,14 +85,14 @@ export async function initializeSession(): Promise<void> {
       }
     }
     
-    const result = await apiGetAuth('/auth/session');
-    
-    if (result.status === 'success') {
+    try {
+      const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
+      
       const user = {
-        id: result.data.userId,
-        email: result.data.email ?? null,
-        displayName: result.data.displayName ?? null,
-        role: result.data.role,
+        id: data.userId,
+        email: data.email ?? null,
+        displayName: data.displayName ?? null,
+        role: data.role,
       };
       
       sessionStore.set({ user, loading: false });
@@ -103,12 +103,56 @@ export async function initializeSession(): Promise<void> {
         cookieExists: true
       };
       localStorage.setItem('userSession', JSON.stringify(sessionData));
-    } else if (result.status === 'auth_error') {
-      console.log('❌ Authentication error, clearing session');
-      sessionStore.set({ user: null, loading: false });
-      localStorage.removeItem('userSession');
-    } else if (result.status === 'rate_limited') {
-      console.log('⚠️ Rate limited, keeping existing session data');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 401 || error.status === 403) {
+          console.log('❌ Authentication error, clearing session');
+          sessionStore.set({ user: null, loading: false });
+          localStorage.removeItem('userSession');
+        } else if (error.status === 429) {
+          console.log('⚠️ Rate limited');
+          // Vérifier si on a une session valide en localStorage
+          const stored = localStorage.getItem('userSession');
+          if (stored) {
+            try {
+              const sessionData = JSON.parse(stored);
+              const age = Date.now() - sessionData.timestamp;
+              const maxAge = 24 * 60 * 60 * 1000;
+              
+              if (age < maxAge && sessionData.user) {
+                // Session valide en localStorage, garder l'état actuel mais marquer comme non-loading
+                const currentState = get(sessionStore);
+                if (currentState.loading) {
+                  sessionStore.set({ user: sessionData.user, loading: false });
+                }
+              } else {
+                // Session localStorage expirée ou invalide, traiter comme non authentifié
+                console.log('⚠️ Rate limited but localStorage session expired, clearing');
+                sessionStore.set({ user: null, loading: false });
+                localStorage.removeItem('userSession');
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse stored session data on rate limit:', parseError);
+              sessionStore.set({ user: null, loading: false });
+              localStorage.removeItem('userSession');
+            }
+          } else {
+            // Pas de session en localStorage, traiter comme non authentifié
+            console.log('⚠️ Rate limited and no localStorage session, clearing');
+            sessionStore.set({ user: null, loading: false });
+          }
+        } else {
+          // Autre erreur API, traiter comme non authentifié
+          console.error('Failed to initialize session:', error);
+          sessionStore.set({ user: null, loading: false });
+          localStorage.removeItem('userSession');
+        }
+      } else {
+        // Erreur non-ApiError, traiter comme non authentifié
+        console.error('Failed to initialize session:', error);
+        sessionStore.set({ user: null, loading: false });
+        localStorage.removeItem('userSession');
+      }
     }
   } catch (error) {
     console.error('Failed to initialize session:', error);
@@ -123,39 +167,65 @@ export async function initializeSession(): Promise<void> {
 async function validateSessionInBackground(): Promise<void> {
   console.log('🔄 Background validation started...');
   try {
-    const result = await apiGetAuth('/auth/session');
-    console.log('🔄 Background validation result:', result.status);
+    const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
     
-    if (result.status === 'success') {
-      const user = {
-        id: result.data.userId,
-        email: result.data.email ?? null,
-        displayName: result.data.displayName ?? null,
-        role: result.data.role,
-      };
-      
-      console.log('✅ Background validation: session valid, updating localStorage');
-      
-      const sessionData = {
-        user,
-        timestamp: Date.now(),
-        cookieExists: true
-      };
-      localStorage.setItem('userSession', JSON.stringify(sessionData));
-      
-      const currentState = get(sessionStore);
-      if (currentState.user?.id === 'unknown') {
-        console.log('🔄 Background validation: updating store from unknown state');
-        sessionStore.set({ user, loading: false });
-      }
-    } else if (result.status === 'auth_error') {
-      console.warn('❌ Background validation: authentication error, clearing session');
-      clearUser();
-    } else if (result.status === 'rate_limited') {
-      console.warn('⚠️ Background validation: rate limited, keeping existing data');
+    const user = {
+      id: data.userId,
+      email: data.email ?? null,
+      displayName: data.displayName ?? null,
+      role: data.role,
+    };
+    
+    console.log('✅ Background validation: session valid, updating localStorage');
+    
+    const sessionData = {
+      user,
+      timestamp: Date.now(),
+      cookieExists: true
+    };
+    localStorage.setItem('userSession', JSON.stringify(sessionData));
+    
+    const currentState = get(sessionStore);
+    if (currentState.user?.id === 'unknown') {
+      console.log('🔄 Background validation: updating store from unknown state');
+      sessionStore.set({ user, loading: false });
     }
   } catch (error) {
-    console.warn('❌ Background session validation error:', error);
+    if (error instanceof ApiError) {
+      if (error.status === 401 || error.status === 403) {
+        console.warn('❌ Background validation: authentication error, clearing session');
+        clearUser();
+      } else if (error.status === 429) {
+        console.warn('⚠️ Background validation: rate limited');
+        // Vérifier si la session localStorage est encore valide
+        const stored = localStorage.getItem('userSession');
+        if (!stored) {
+          // Pas de session en localStorage, effacer
+          console.warn('⚠️ Background validation: rate limited but no localStorage session, clearing');
+          clearUser();
+        } else {
+          try {
+            const sessionData = JSON.parse(stored);
+            const age = Date.now() - sessionData.timestamp;
+            const maxAge = 24 * 60 * 60 * 1000;
+            
+            if (age >= maxAge || !sessionData.user) {
+              // Session expirée ou invalide, effacer
+              console.warn('⚠️ Background validation: rate limited but localStorage session expired, clearing');
+              clearUser();
+            }
+            // Sinon, garder les données existantes (pas de modification nécessaire)
+          } catch (parseError) {
+            console.warn('Failed to parse stored session data on background rate limit:', parseError);
+            clearUser();
+          }
+        }
+      } else {
+        console.warn('❌ Background session validation error:', error);
+      }
+    } else {
+      console.warn('❌ Background session validation error:', error);
+    }
   }
 }
 
@@ -242,10 +312,8 @@ export function isAdmin(): boolean {
  */
 export async function logout(): Promise<void> {
   try {
-    // The original code had apiDelete('/auth/session'), but apiDelete is not imported.
-    // Assuming the intent was to clear session data locally.
-    // For now, removing the line as it's not part of the edit hint.
-    // await apiDelete('/auth/session'); 
+    // Call API to invalidate session on server
+    await apiDelete('/auth/session');
   } catch (error) {
     console.error('Logout request failed:', error);
     // Continue with logout even if API call fails (rate limiting, etc.)
@@ -259,7 +327,9 @@ export async function logout(): Promise<void> {
   sessionStorage.removeItem('refreshToken');
   
   // Clear session cookie by setting it to expire in the past
-  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  // Include all cookie attributes to ensure it's removed
+  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;';
+  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax; Secure;';
   
   // Redirect to login
   goto('/auth/login');
@@ -270,10 +340,8 @@ export async function logout(): Promise<void> {
  */
 export async function logoutAll(): Promise<void> {
   try {
-    // The original code had apiDelete('/auth/session/all'), but apiDelete is not imported.
-    // Assuming the intent was to clear session data locally.
-    // For now, removing the line as it's not part of the edit hint.
-    // await apiDelete('/auth/session/all'); 
+    // Call API to invalidate all sessions on server
+    await apiDelete('/auth/session/all');
   } catch (error) {
     console.error('Logout all request failed:', error);
     // Continue with logout even if API call fails
@@ -287,7 +355,9 @@ export async function logoutAll(): Promise<void> {
   sessionStorage.removeItem('refreshToken');
   
   // Clear session cookie by setting it to expire in the past
-  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  // Include all cookie attributes to ensure it's removed
+  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;';
+  document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax; Secure;';
   
   // Redirect to login
   goto('/auth/login');

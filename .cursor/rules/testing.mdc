@@ -21,16 +21,18 @@ This document defines the testing strategy for the assistant project, ensuring a
 ## Testing commands for Development workflow (MANDATORY, following workflow)
 
 ### Main Test Commands
-- `make test-ui` - UI unit tests (Vitest)
-- `make test-api` - API unit and minimal integration tests tests (Vitest)
-- `make test-e2e` - E2E tests (Playwright, on prod target, requires production image to be build first `make build-api build-ui-image` first)
+On TARGET=developement:
+- `make test-ui [SCOPE=tests/test.ts]` - UI unit tests (Vitest)
+- `make test-api` - API unit and minimal integration tests tests (Vitest) - optionnal scope : `make test-api- SCOPE=tests/test.ts`
+On TARGET=production (requires first `make build-api build-ui-image`) :
+- `make test-e2e [E2E_test=tests/test.ts]` - E2E tests (Playwright)
 
-### API Test Commands (with filters)
-- `make test-api-smoke [FILTER=*]` - API smoke tests
-- `make test-api-endpoints [ENDPOINT=*] [METHOD=*]` - API CRUD tests
-- `make test-api-ai [TYPE=*] [MODEL=*]` - AI generation tests
-- `make test-api-queue [JOB_TYPE=*]` - Queue job tests
-- `make test-api [SUITE=*]` - All API tests (without e2e)
+### API Test detailed Commands (with filters)
+- `make test-api-smoke [SCOPE=tests/test.ts]` - API smoke tests
+- `make test-api-endpoints [SCOPE=tests/test.ts]` - API CRUD tests
+- `make test-api-ai [SCOPE=tests/test.ts]` - AI generation tests
+- `make test-api-queue [[SCOPE=tests/test.ts]` - Queue job tests
+- `make test-api [SCOPE=tests/test.ts]` - All API tests (without e2e)
 
 ### UI Test Commands (pending)
 

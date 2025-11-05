@@ -312,7 +312,6 @@ coverage-report:
 .PHONY: clean
 clean: ## Clean all containers, volumes and images
 	$(DOCKER_COMPOSE) down -v --remove-orphans
-	docker system prune -f
 
 .PHONY: clean-all
 clean-all: clean ## Clean everything including images
@@ -357,7 +356,7 @@ up: ## Start the full stack in detached mode
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
@@ -373,7 +372,8 @@ up-ui: ## Start the api stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down -v
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+
 
 # -----------------------------------------------------------------------------
 # Logs

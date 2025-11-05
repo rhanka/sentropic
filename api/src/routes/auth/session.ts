@@ -38,7 +38,7 @@ sessionRouter.get('/', async (c) => {
     const sessionToken = 
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
       c.req.header('authorization')?.replace('Bearer ', '');
-    
+
     if (!sessionToken) {
       return c.json({ error: 'No session token provided' }, 401);
     }
