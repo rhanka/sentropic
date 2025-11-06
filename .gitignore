@@ -33,4 +33,10 @@ pnpm-debug.log*
 
 # data
 /data
-/data/*.db-* 
+/data/*.db-*
+
+# Security scan artifacts (keep vulnerability-register.yaml)
+.security/sast-*
+.security/sca-*
+.security/iac-*
+.security/container* 
