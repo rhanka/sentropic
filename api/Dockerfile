@@ -6,6 +6,8 @@ RUN if [ -f package-lock.json ]; then npm ci; \
     elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install --frozen-lockfile; \
     elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
     else npm install; fi
+# Security: Audit dependencies for HIGH/CRITICAL vulnerabilities
+RUN npm audit --audit-level=high
 COPY . .
 
 FROM base AS development
@@ -20,6 +22,8 @@ ENV NODE_ENV=production
 COPY --from=base /app/package.json ./
 COPY --from=base /app/package-lock.json* ./
 RUN npm install --omit=dev
+# Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
+RUN npm audit --audit-level=high --production
 COPY --from=build /app/dist ./dist
 COPY --from=base /app/drizzle ./drizzle
 CMD ["node", "dist/index.js"]
