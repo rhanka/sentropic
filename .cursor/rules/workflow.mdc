@@ -96,6 +96,82 @@ After implementing all commits for a feature:
 - **CI/CD**: All tests must pass, guides must be consistent
 - **Architecture**: Verify `make` commands work before any changes
 
+## Dependency Management
+- **Package-lock updates**: Always use `make update.<package>.lock` to update package-lock.json files (if implemented)
+- **Docker-only**: Never run `npm install` directly - all dependency management must go through Docker
+- **Available commands**: 
+  - `make update.api.lock` - Update API package-lock.json (if implemented)
+  - `make update.ui.lock` - Update UI package-lock.json (if implemented)
+- **Clean environment**: Remove local `node_modules` if they exist outside Docker containers
+
+## Tech-Debt Management
+
+### Component Lifecycle Integration
+- **MANDATORY**: Avoid updating components not directly related to current development (e.g don't change os and language version unless upgrade required but propose it before acting)
+- **MANDATORY**: Update tech-debt files when updating components during development
+- **Scope**: All component upgrades (npm, Docker images, OS versions)
+- **Location**: `.components/tech-debt-<service>.md` files
+- **Integration**: Tech-debt updates must be part of component upgrade workflow
+
+### Tech-Debt Update Workflow
+1. **Before upgrade**: Check current tech-debt status with `make audit-<service> COMPONENT=<component>` (e.g., `make audit-api COMPONENT=hono`) or `.components/tech-debt-<service>.md`
+2. **During upgrade**: Update component version in package.json/Dockerfile
+3. **After upgrade**: Update tech-debt file with new current version and re-audit
+4. **Validation**: Run tests to ensure upgrade doesn't break functionality
+5. **Documentation**: Update tech-debt file with new breaking change assessment
+
+### Tech-Debt Update Commands
+- **Audit current state**: Use `make audit-<service> COMPONENT=<component>` (e.g., `make audit-api COMPONENT=npm`) or check `.components/tech-debt-<service>.md` files
+- **Check latest versions**: Manual review or use npm/pip commands in Docker containers
+- **Update tech-debt**: Manually update `.components/tech-debt-<service>.md` files
+- **Verify upgrade**: Run service tests after component upgrade
+
+### Breaking Change Assessment
+- **Major version upgrades**: Always assess for breaking changes before upgrading
+- **Documentation required**: Update breaking change section in tech-debt files
+- **Testing mandatory**: Run full test suite after major version upgrades
+- **Rollback plan**: Document rollback strategy for major upgrades
+
+### Quality Gates for Tech-Debt Updates
+- **Before commit**: Tech-debt files must reflect current component versions
+- **After upgrade**: Breaking change assessment must be updated
+- **Test validation**: All tests must pass after component upgrade
+- **Documentation sync**: Tech-debt files must match actual component versions
+
+## Vulnerability Management Lifecycle
+
+### Vulnerability Register Maintenance
+- **Documentation mandatory**: All HIGH/CRITICAL/ERROR findings must be documented in `.security/vulnerability-register.yaml`
+- **Categories required**: Each vulnerability must have a valid category (false_positive, accepted_risk, planned_mitigation, technical_debt)
+- **Justification mandatory**: Every vulnerability must include justification for acceptance or deferral
+- **Timeline required**: Fix goals must be specified (1d, 1w, 1m, 1y)
+
+### Vulnerability Lifecycle Stages
+1. **Discovery**: Found by security scans (SAST, SCA, Container, IaC)
+2. **Assessment**: Categorized and risk-assessed
+3. **Documentation**: Added to vulnerability register with justification
+4. **Mitigation**: Fixed or accepted with timeline
+5. **Verification**: Re-scanned to confirm resolution
+6. **Cleanup**: Removed from register after successful mitigation
+
+### Post-Mitigation Cleanup
+- **Remove resolved vulnerabilities**: After successful fix, remove entry from vulnerability register
+- **Update metadata**: Update `last_updated` timestamp in register metadata
+- **Document resolution**: Add resolution details to commit message or documentation
+- **Verify compliance**: Ensure all security scans pass after cleanup
+
+### Register Maintenance Rules
+- **Regular review**: Review vulnerability register monthly for outdated entries
+- **Timeline validation**: Check if fix goals are realistic and achievable
+- **Risk reassessment**: Periodically reassess risk levels of accepted vulnerabilities
+- **Documentation updates**: Keep justifications and timelines current
+
+### Integration with Component Lifecycle
+- **Component upgrades**: When updating components, check if vulnerabilities are resolved
+- **Security scans**: Run security scans after component upgrades to verify fixes
+- **Tech-debt sync**: Update tech-debt files when vulnerabilities are resolved via component upgrades
+- **Documentation**: Link vulnerability fixes to component upgrade commits
+
 ## Feature Branch Management
 
 ### Branch Documentation

@@ -1,0 +1,195 @@
+# COMPONENTS
+
+## Process
+1. **OS & Stack Audit**: Check base images and runtime versions first (use `make audit-infra COMPONENT=<component>`)
+2. **Security Audit**: `make test-security-sca` (existing - vulnerabilities only)
+3. **Service Audit**: Use `make audit-<service> COMPONENT=<component>` for each service
+4. **Version Audit**: Manual review using version check commands or audit commands
+5. **Prioritize**: Critical/High → 1d, Medium → 1w, Low → 1m, Deprecated → 1y
+6. **Update**: Create `feat/update-<component>-<version>` branch
+7. **Validate**: Follow existing workflow (see `workflow.mdc`)
+8. **Document**: Update `.components/tech-debt-<service>.md` and `TODO.md`
+
+## Version Check Commands
+
+**Never** do direct `npm` or `pip`, use `make` targets or `docker` for non recurring commands.
+
+### OS & Stack Audit (Priority 1)
+```bash
+# Check base images and runtime versions
+make audit-infra COMPONENT=docker
+make audit-infra COMPONENT=postgres
+make audit-infra COMPONENT=nginx
+make audit-infra COMPONENT=node
+make audit-infra COMPONENT=alpine
+```
+
+### Service-Specific Auditing (Priority 2)
+```bash
+# Audit components for specific services
+# Usage: make audit-<service> COMPONENT=<component-type>
+# Examples:
+make audit-api COMPONENT=hono
+make audit-api COMPONENT=npm
+make audit-api COMPONENT=node
+make audit-ui COMPONENT=npm
+make audit-ui COMPONENT=svelte
+make audit-infra COMPONENT=docker
+```
+
+### Package Version Checks (Priority 3)
+```bash
+# Check latest version of specific package
+make audit-api COMPONENT=npm
+make audit-ui COMPONENT=npm
+# For specific packages:
+make audit-api COMPONENT=hono
+make audit-api COMPONENT=drizzle-orm
+make audit-ui COMPONENT=svelte
+make audit-ui COMPONENT=vite
+```
+
+### Docker Images & OS Components
+```bash
+# Check latest available tags for base images
+make audit-infra COMPONENT=docker
+make audit-infra COMPONENT=postgres
+make audit-infra COMPONENT=nginx
+make audit-infra COMPONENT=node
+make audit-infra COMPONENT=alpine
+```
+
+## Docker Base Image Monitoring
+
+### Current Base Images (from Dockerfiles)
+- **Node.js**: `node:24-alpine` (used in api, ui)
+- **Nginx**: `nginx:1.25-alpine` (used in ui production)
+- **PostgreSQL**: `postgres:16` (database)
+
+### Version Check Methods
+- **Docker Hub API**: Query latest available tags
+- **Runtime version check**: Execute commands in containers
+- **OS version check**: Read system files in containers
+- **Security scanning**: Use existing Trivy integration
+
+## Core Components to Monitor
+
+### Frontend Stack (ui/)
+- **Svelte**: Core framework - check breaking changes in major versions
+- **SvelteKit**: Meta-framework - check compatibility with Svelte updates
+- **Vite**: Build tool - check performance improvements and breaking changes
+- **TypeScript**: Language - check new features and breaking changes
+- **Playwright**: Testing - check new browser support and API changes
+
+### Backend Stack (api/)
+- **Node.js**: Runtime - check LTS status and EOL dates
+- **Hono**: Framework - check breaking changes and new features
+- **Drizzle ORM**: ORM - check database support and performance improvements
+- **Vitest**: Testing - check Node.js compatibility and new matchers
+
+### Infrastructure
+- **Docker**: Container runtime - check security updates and new features
+- **PostgreSQL**: Database - check new features and performance improvements
+- **Nginx**: Web server - check security updates and new features
+
+### OS & Base Images
+- **Alpine Linux**: Base OS for containers - check security updates and EOL
+- **Node.js base images**: Runtime versions and security patches (managed in services)
+- **PostgreSQL images**: Database versions and security patches (managed in infra)
+- **Nginx images**: Web server versions and security patches (managed in ui)
+
+## Component Priority Assessment
+
+### Critical (1d)
+- Security vulnerabilities (handled by `make test-security-sca`)
+- EOL versions (no more security updates)
+- Breaking changes that affect core functionality
+
+### High (1w)
+- Major version updates with new features
+- Performance improvements
+- Security enhancements
+
+### Medium (1m)
+- Minor version updates
+- Bug fixes
+- Dependency updates
+
+### Low (1y)
+- Patch updates
+- Documentation updates
+- Deprecated features (plan migration)
+
+## Version Check Workflow
+
+### Initial Assessment
+1. **Identify core components** from package.json files
+2. **Check current versions** against latest available
+3. **Assess breaking changes** by reading changelogs
+4. **Evaluate update effort** and risk
+5. **Document in tech-debt backlog**
+
+### Regular Monitoring
+1. **Weekly**: Run `make test-security-sca` for security
+2. **Monthly**: Run component audits using `make audit-<service> COMPONENT=<component>` for core components
+3. **Quarterly**: Full audit of all components
+4. **As-needed**: Before major releases or migrations
+
+## Architecture "To Be" - Service-Specific Debt Tracking
+
+### Current Structure
+- **Service-specific approach**: Separate tech-debt files for each service
+- **Focused auditing**: Service-specific process for api, ui, infra
+
+### Target Structure (Implemented)
+```
+.components/
+├── tech-debt-api.md      # API service debt (Hono, Drizzle ORM, Node.js)
+├── tech-debt-ui.md       # UI service debt (Svelte, Vite, TypeScript)
+└── tech-debt-infra.md    # Infrastructure debt (Docker, PostgreSQL, Nginx)
+```
+
+### Benefits of Service-Specific Approach
+- **Independent lifecycles**: Each service can have different update schedules
+- **Focused priorities**: Service-specific breaking change assessment
+- **Team ownership**: Clear responsibility for each service's debt
+- **Granular updates**: Update one service without affecting others
+- **Infrastructure separation**: Runtime stacks (Node.js) vs infrastructure (Docker, PostgreSQL, Nginx)
+- **Security focus**: Infrastructure uses `test-security-iac` and `test-*-security-container`
+
+## Integration
+- **Security**: See `security.mdc` for vulnerability management
+- **Testing**: See `testing.mdc` for validation workflow
+- **Workflow**: See `workflow.mdc` for PR and CI process
+
+## Development Workflow Integration
+
+### Component Upgrade Process
+1. **Create feature branch**: `feat/update-<component>-<version>`
+2. **Audit current state**: Use `make audit-<service> COMPONENT=<component>` (e.g., `make audit-api COMPONENT=hono`) or check `.components/tech-debt-<service>.md` to get baseline
+3. **Update component**: Modify package.json/Dockerfile
+4. **Update tech-debt**: Modify `.components/tech-debt-<service>.md` with new version
+5. **Test thoroughly**: Run all service tests to validate upgrade
+6. **Update breaking changes**: Assess and document any breaking changes
+7. **Commit changes**: Include tech-debt updates in same commit as component upgrade
+8. **Validate**: Ensure all tests pass and tech-debt reflects current state
+
+### Tech-Debt Update Requirements
+- **MANDATORY**: Tech-debt files must be updated when components are upgraded
+- **Same commit**: Component upgrade and tech-debt update must be atomic
+- **Version sync**: Tech-debt current version must match actual component version
+- **Breaking change assessment**: Must be updated for major version upgrades
+- **Test validation**: All tests must pass after upgrade and tech-debt update
+
+### Quality Gates for Component Upgrades
+- **Before upgrade**: Tech-debt must reflect current component state
+- **During upgrade**: Tech-debt must be updated with new version information
+- **After upgrade**: Tech-debt must be validated against actual component versions
+- **Before commit**: All tests must pass and tech-debt must be current
+- **Before merge**: Tech-debt must be consistent across all services
+
+### Automated Validation
+- **CI integration**: GitHub Actions must validate tech-debt consistency (future)
+- **Version check**: Automated verification that tech-debt matches actual versions (future)
+- **Test coverage**: Ensure all upgraded components have test coverage
+- **Breaking change detection**: Automated flagging of major version upgrades (future)

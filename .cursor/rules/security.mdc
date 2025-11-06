@@ -45,38 +45,62 @@
 
 ### CI Integration (summary)
 - See `testing.mdc` for the high-level DAG and orchestration order.
-- Build images first (dependency audits in Dockerfiles). Dependency scans in CI should reuse built images or rely on manifests.
-- Run code/deps/IaC/Container scans (Semgrep SAST + Trivy SCA/IaC/Container) and container scans (Trivy) after build, in parallel with unit tests.
+- Build images first (dependency audits in Dockerfiles via `npm audit --audit-level=high`). Dependency scans in CI should reuse built images or rely on manifests.
+- Run code/deps/IaC/Container scans (Semgrep SAST + Trivy SCA/IaC/Container) after build, in parallel with unit tests.
+- All security scans use compliance checking against `.security/vulnerability-register.yaml`.
 - P2P/E2E remain governed by testing order in `testing.mdc`.
+
+### Make Targets (Naming — documentation)
+- **Docker dependency gating**: Integrated in Dockerfiles (api, ui) - blocks on HIGH/CRITICAL vulns
+- **Unified security testing**: `test-<service>-security-<type>` where:
+  - **type**: `sast`, `sca`, `container`
+  - **service**: `api`, `ui`
+- **Infrastructure security**: `test-security-iac` (scans docker-compose.yml and Makefile)
+- **Examples**: `make test-api-security-sast`, `make test-ui-security-sca`, `make test-api-security-container`, `make test-security-iac`
+- **Aggregates**: `make test-security-sast`, `make test-security-sca`, `make test-security-container`, `make test-security` (all scans)
 
 ### Security Test Exit Criteria
 **All security tests MUST fail (exit with error code) if vulnerabilities are detected:**
 
 #### SAST (Semgrep) - `test-<service>-security-sast`
-- **Exit Code**: 1 (error) if ANY findings are detected
-- **Severity**: All levels (INFO, WARNING, ERROR) trigger failure
+- **Make Target**: `make test-api-security-sast`, `make test-ui-security-sast`
+- **Aggregate**: `make test-security-sast` (runs all SAST scans)
+- **Exit Code**: 1 (error) if ANY findings are detected and not documented in vulnerability register
+- **Severity**: All levels (INFO, WARNING, ERROR) trigger failure unless documented
 - **Rationale**: Code quality and security issues must be addressed before merge
+- **Compliance**: Findings checked against `.security/vulnerability-register.yaml`
 
-#### SCA (Trivy) - ``test-<service>-security-sca`
-- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
-- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+#### SCA (Trivy) - `test-<service>-security-sca`
+- **Make Target**: `make test-api-security-sca`, `make test-ui-security-sca`
+- **Aggregate**: `make test-security-sca` (runs all SCA scans)
+- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected and not documented
+- **Severity**: HIGH and CRITICAL trigger failure unless documented, MEDIUM and LOW are warnings
 - **Rationale**: Critical/High dependency vulnerabilities block production deployment
+- **Compliance**: Findings checked against `.security/vulnerability-register.yaml`
 
-#### IaC (Trivy) - `test-<service>-security-iac`
-- **Exit Code**: 1 (error) if HIGH or CRITICAL misconfigurations are detected
-- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+#### IaC (Trivy) - `test-security-iac`
+- **Make Target**: `make test-security-iac` (scans docker-compose.yml and Makefile)
+- **Exit Code**: 1 (error) if HIGH or CRITICAL misconfigurations are detected and not documented
+- **Severity**: HIGH and CRITICAL trigger failure unless documented, MEDIUM and LOW are warnings
 - **Rationale**: Infrastructure misconfigurations can create security gaps
+- **Compliance**: Findings checked against `.security/vulnerability-register.yaml`
 
 #### Container (Trivy) - `test-<service>-security-container`
-- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected
-- **Severity**: HIGH and CRITICAL trigger failure, MEDIUM and LOW are warnings
+- **Make Target**: `make test-api-security-container`, `make test-ui-security-container`
+- **Aggregate**: `make test-security-container` (runs all container scans)
+- **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected and not documented
+- **Severity**: HIGH and CRITICAL trigger failure unless documented, MEDIUM and LOW are warnings
 - **Rationale**: Container vulnerabilities can be exploited in production
+- **Fallback**: If built image not found, scans base image (node:24-alpine for API, nginx:1.25-alpine for UI)
+- **Compliance**: Findings checked against `.security/vulnerability-register.yaml`
 
 #### Dockerfile Dependency Gating
 - **Build Failure**: Docker builds fail if dependency audits detect HIGH/CRITICAL vulnerabilities
-  - **Node.js services**: `npm audit --audit-level=high` in `make build-<service>` (api, scheduler, workers, ui)
-  - **Python services**: `pip-audit --strict` in `make build-<service>` (ai)
-- **Rationale**: Prevents vulnerable images from being created and stored as artifacts
+  - **Node.js services**: `npm audit --audit-level=high` in Dockerfiles (api, ui)
+    - **API**: `npm audit --audit-level=high` after `npm ci` in base stage, `npm audit --audit-level=high --production` in production stage
+    - **UI**: `npm audit --audit-level=high` after `npm ci` in base stage
+  - **Rationale**: Prevents vulnerable images from being created and stored as artifacts
+  - **Implementation**: Integrated directly in Dockerfiles, blocks build on HIGH/CRITICAL vulnerabilities
 
 ### Vulnerability Management
 - Identify → Assess → Mitigate → Track (`TODO.md`) → Approvals for exceptions (⚠).
