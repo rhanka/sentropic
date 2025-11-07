@@ -20,7 +20,7 @@ RUN echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
 RUN npm run build
 CMD ["npm", "run", "build"]
 
-FROM nginx:1.25-alpine AS production
+FROM nginx:1.29-alpine AS production
 COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 5173

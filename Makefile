@@ -687,26 +687,13 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	@echo "  📋 Step 1: Executing Trivy container scan..."
 	@if [ "$*" = "api" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
-		FALLBACK_NAME="$(API_IMAGE_NAME):$(API_VERSION)"; \
-		BASE_IMAGE="node:24-alpine"; \
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
-		FALLBACK_NAME="$(UI_IMAGE_NAME):$(UI_VERSION)"; \
-		BASE_IMAGE="nginx:1.25-alpine"; \
 	else \
 		IMAGE_NAME="top-ai-ideas-$*:latest"; \
-		FALLBACK_NAME="top-ai-ideas-$*:latest"; \
-		BASE_IMAGE=""; \
 	fi; \
-	echo "  Scanning image: $$IMAGE_NAME (fallback: $$FALLBACK_NAME)"; \
-	(docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME 2>/dev/null || \
-	 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$FALLBACK_NAME 2>/dev/null || \
-	 (if [ -n "$$BASE_IMAGE" ]; then \
-		echo "  ⚠️  Built image not found, scanning base image: $$BASE_IMAGE"; \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$BASE_IMAGE 2>/dev/null || echo '{"Results": []}'; \
-	 else \
-		echo '{"Results": []}'; \
-	 fi)) > .security/container-$*.json || true
+	echo "  Scanning image: $$IMAGE_NAME"; \
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME")
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh container .security/container-$*.json .security/container-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."

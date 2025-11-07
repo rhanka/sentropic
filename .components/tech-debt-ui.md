@@ -14,7 +14,7 @@
 |-----------|---------|--------|-----|-----------------|----------|-------|
 | node | 24-alpine | (check) | no | (check) | (check) | To be audited |
 | alpine | (check) | (check) | no | (check) | (check) | To be audited |
-| nginx | 1.25-alpine | (check) | no | (check) | (check) | To be audited |
+| nginx | 1.29-alpine | 1.29-alpine | no | no | none | ✅ Security: Updated from 1.25-alpine to 1.29-alpine (vulnerability fixes) |
 
 ---
 

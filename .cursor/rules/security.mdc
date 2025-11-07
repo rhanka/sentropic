@@ -91,7 +91,7 @@
 - **Exit Code**: 1 (error) if HIGH or CRITICAL vulnerabilities are detected and not documented
 - **Severity**: HIGH and CRITICAL trigger failure unless documented, MEDIUM and LOW are warnings
 - **Rationale**: Container vulnerabilities can be exploited in production
-- **Fallback**: If built image not found, scans base image (node:24-alpine for API, nginx:1.25-alpine for UI)
+- **Image**: Scans only the actual built image (no fallback to base images)
 - **Compliance**: Findings checked against `.security/vulnerability-register.yaml`
 
 #### Dockerfile Dependency Gating
