@@ -20,7 +20,26 @@ const envSchema = z.object({
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   AUTH_CALLBACK_BASE_URL: z.string().optional(),
-  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca')
+  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca'),
+  MAIL_HOST: z.string().default('maildev'),
+  MAIL_PORT: z.coerce.number().default(1025),
+  MAIL_SECURE: z.string().transform((val) => val === 'true' || val === '1').default('false'),
+  MAIL_USERNAME: z.string().optional(),
+  MAIL_PASSWORD: z.string().optional(),
+  MAIL_FROM: z.string().default('no-reply@top-ai-ideas.local'),
+  // WebAuthn Configuration
+  WEBAUTHN_RP_ID: z.string().optional(),
+  WEBAUTHN_RP_NAME: z.string().optional(),
+  WEBAUTHN_ORIGIN: z.string().optional(),
+  WEBAUTHN_TIMEOUT_REGISTRATION: z.string().optional(),
+  WEBAUTHN_TIMEOUT_AUTHENTICATION: z.string().optional(),
+  WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional(),
+  // JWT Configuration
+  JWT_SECRET: z.string().optional(),
+  // Admin Configuration
+  ADMIN_EMAIL: z.string().email().optional(),
+  // Test Configuration
+  DISABLE_RATE_LIMIT: z.string().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

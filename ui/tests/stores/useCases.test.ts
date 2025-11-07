@@ -32,7 +32,7 @@ describe('Use Cases Store', () => {
     });
 
     it('should throw error when fetch fails', async () => {
-      mockFetchJsonOnce({}, 500);
+      mockFetchJsonOnce({ error: 'Failed to fetch use cases' }, 500);
 
       await expect(fetchUseCases()).rejects.toThrow('Failed to fetch use cases');
     });
@@ -82,14 +82,14 @@ describe('Use Cases Store', () => {
     });
 
     it('should throw error when deletion fails', async () => {
-      mockFetchJsonOnce({ message: 'Use case not found' }, 404);
+      mockFetchJsonOnce({ error: 'Failed to delete use case' }, 404);
 
       await expect(deleteUseCase('1')).rejects.toThrow('Failed to delete use case');
     });
   });
 
   describe('generateUseCases', () => {
-    it('should generate use cases successfully', async () => {
+    it('hould generate use cases successfully', async () => {
       const generationResult = {
         created_folder_id: 'folder1',
         created_use_case_ids: ['1', '2'],

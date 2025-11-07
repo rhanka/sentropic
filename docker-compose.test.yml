@@ -1,11 +1,19 @@
 services:
+  api:
+    environment:
+      - ADMIN_EMAIL=e2e-admin@example.com
+      - WEBAUTHN_RP_ID=localhost
+      - WEBAUTHN_ORIGIN=http://localhost:5173
   e2e:
+    network_mode: host
     image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
     build:
       context: ./e2e
       dockerfile: Dockerfile
     volumes:
       - ./e2e/tests:/app/tests
+      - ./e2e/.auth:/app/.auth
+      - ./e2e/test-results:/app/test-results
     depends_on:
       - postgres
       - api

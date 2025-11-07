@@ -32,7 +32,7 @@ describe('Folders Store', () => {
     });
 
     it('should throw error when fetch fails', async () => {
-      mockFetchJsonOnce({}, 500);
+      mockFetchJsonOnce({ error: 'Failed to fetch folders' }, 500);
 
       await expect(fetchFolders()).rejects.toThrow('Failed to fetch folders');
     });
@@ -73,7 +73,7 @@ describe('Folders Store', () => {
     });
 
     it('should throw error when deletion fails', async () => {
-      mockFetchJsonOnce({ message: 'Folder not found' }, 404);
+      mockFetchJsonOnce({ error: 'Failed to delete folder' }, 404);
 
       await expect(deleteFolder('1')).rejects.toThrow('Failed to delete folder');
     });

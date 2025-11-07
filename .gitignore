@@ -10,6 +10,10 @@ api/dist/
 api/.tsbuildinfo
 *.tar
 
+#e2e tests results
+e2e/test-results
+e2e/.auth
+
 # Logs
 *.log
 npm-debug.log*
@@ -27,6 +31,12 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 
-# SQLite data
-/data/*.db
-/data/*.db-* 
+# data
+/data
+/data/*.db-*
+
+# Security scan artifacts (keep vulnerability-register.yaml)
+.security/sast-*
+.security/sca-*
+.security/iac-*
+.security/container* 

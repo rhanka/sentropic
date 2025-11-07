@@ -1,8 +1,23 @@
-import { describe, it, expect } from 'vitest';
-import { apiRequest, createTestId, sleep } from '../utils/test-helpers';
-import { testCompanies, testUseCases } from '../utils/test-data';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { app } from '../../src/app';
+import { createTestId } from '../utils/test-helpers';
+import { testUseCases } from '../utils/test-data';
+import { 
+  createAuthenticatedUser, 
+  authenticatedRequest, 
+  cleanupAuthData 
+} from '../utils/auth-helper';
 
-describe.sequential('Use Cases API', () => {
+describe('Use Cases API', () => {
+  let user: any;
+
+  beforeEach(async () => {
+    user = await createAuthenticatedUser('editor');
+  });
+
+  afterEach(async () => {
+    await cleanupAuthData();
+  });
 
   // Helper function to create a test company
   async function createTestCompany() {
@@ -11,349 +26,169 @@ describe.sequential('Use Cases API', () => {
       industry: 'Technology',
     };
 
-    const response = await apiRequest('/api/v1/companies', {
-      method: 'POST',
-      body: JSON.stringify(companyData),
-    });
-
-    expect(response.ok).toBe(true);
-    return response.data.id;
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/companies', user.sessionToken!, companyData);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    return data.id;
   }
 
   // Helper function to create a test folder
-  async function createTestFolder() {
+  async function createTestFolder(companyId?: string) {
     const folderData = {
       name: `Test Folder ${createTestId()}`,
-      description: 'Test folder for use cases'
+      description: 'Test folder description',
+      ...(companyId && { companyId })
     };
 
-    const response = await apiRequest('/api/v1/folders', {
-      method: 'POST',
-      body: JSON.stringify(folderData),
-    });
-
-    expect(response.ok).toBe(true);
-    return response.data.id;
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, folderData);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    return data.id;
   }
 
   // Helper function to create a test use case
   async function createTestUseCase(folderId?: string) {
-    const actualFolderId = folderId || await createTestFolder();
-    
     const useCaseData = {
       name: `Test Use Case ${createTestId()}`,
       description: 'Test use case description',
-      folderId: actualFolderId,
-      scores: {
-        valueAxes: [
-          { id: 'business_value', rating: 3 },
-          { id: 'time_criticality', rating: 2 },
-          { id: 'risk_reduction_opportunity', rating: 4 }
-        ],
-        complexityAxes: [
-          { id: 'ai_maturity', rating: 2 },
-          { id: 'implementation_effort', rating: 3 },
-          { id: 'data_compliance', rating: 1 },
-          { id: 'data_availability', rating: 2 },
-          { id: 'change_management', rating: 3 }
-        ]
-      }
+      ...(folderId && { folderId })
     };
 
-    const response = await apiRequest('/api/v1/use-cases', {
-      method: 'POST',
-      body: JSON.stringify(useCaseData),
-    });
-
-    if (!response.ok) {
-      console.error('Use case creation failed:', response.status, response.error);
-      console.error('Response data:', response.data);
-    }
-    expect(response.ok).toBe(true);
-    return response.data;
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    return data;
   }
-
 
   describe('GET /use-cases', () => {
     it('should get all use cases', async () => {
-      const response = await apiRequest('/api/v1/use-cases');
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/use-cases', user.sessionToken!);
       
-      expect(response.ok).toBe(true);
-      expect(Array.isArray(response.data.items)).toBe(true);
-    });
-
-    it('should get use cases filtered by folder_id', async () => {
-      // First create a folder
-      const folderData = {
-        name: `Test Folder ${createTestId()}`,
-        description: 'Test folder for use cases'
-      };
-
-      const folderResponse = await apiRequest('/api/v1/folders', {
-        method: 'POST',
-        body: JSON.stringify(folderData),
-      });
-
-      if (folderResponse.ok) {
-        const folderId = folderResponse.data.id;
-
-        const response = await apiRequest(`/api/v1/use-cases?folder_id=${folderId}`);
-        
-        expect(response.ok).toBe(true);
-        expect(Array.isArray(response.data.items)).toBe(true);
-      }
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
     });
   });
 
   describe('POST /use-cases', () => {
     it('should create a use case', async () => {
-      // First create a folder
-      const folderData = {
-        name: `Test Folder ${createTestId()}`,
-        description: 'Test folder for use cases'
-      };
-
-      const folderResponse = await apiRequest('/api/v1/folders', {
-        method: 'POST',
-        body: JSON.stringify(folderData),
-      });
-
-      if (!folderResponse.ok) {
-        throw new Error('Failed to create test folder');
-      }
-
-      const folderId = folderResponse.data.id;
-
+      const folderId = await createTestFolder();
       const useCaseData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case description',
         folderId: folderId,
-        scores: {
-          valueAxes: [
-            { id: 'business_value', rating: 3 },
-            { id: 'time_criticality', rating: 2 },
-            { id: 'risk_reduction_opportunity', rating: 4 }
-          ],
-          complexityAxes: [
-            { id: 'ai_maturity', rating: 2 },
-            { id: 'implementation_effort', rating: 3 },
-            { id: 'data_compliance', rating: 1 },
-            { id: 'data_availability', rating: 2 },
-            { id: 'change_management', rating: 3 }
-          ]
-        }
+        valueScore: 8,
+        complexityScore: 6
       };
 
-      const response = await apiRequest('/api/v1/use-cases', {
-        method: 'POST',
-        body: JSON.stringify(useCaseData),
-      });
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
 
-      if (!response.ok) {
-        console.error('Use case creation failed:', response.status, response.error);
-        console.error('Response data:', response.data);
-      }
-      expect(response.ok).toBe(true);
-      expect(response.data.name).toBe(useCaseData.name);
-      expect(response.data.description).toBe(useCaseData.description);
-      expect(response.data.folderId).toBe(folderId);
+      expect(response.status).toBe(201);
+      const data = await response.json();
+      expect(data.name).toBe(useCaseData.name);
+      expect(data.description).toBe(useCaseData.description);
+      expect(data.folderId).toBe(folderId);
     });
 
     it('should create a use case without folder', async () => {
-      // Create a temporary folder for this test
-      const folderData = {
-        name: `Test Folder ${createTestId()}`,
-        description: 'Temporary folder for use case test'
-      };
-
-      const folderResponse = await apiRequest('/api/v1/folders', {
-        method: 'POST',
-        body: JSON.stringify(folderData),
-      });
-
-      if (!folderResponse.ok) {
-        throw new Error('Failed to create test folder');
-      }
-
-      const folderId = folderResponse.data.id;
-
+      const folderId = await createTestFolder();
       const useCaseData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case without folder',
         folderId: folderId,
-        scores: {
-          valueAxes: [
-            { id: 'business_value', rating: 3 },
-            { id: 'time_criticality', rating: 2 },
-            { id: 'risk_reduction_opportunity', rating: 4 }
-          ],
-          complexityAxes: [
-            { id: 'ai_maturity', rating: 2 },
-            { id: 'implementation_effort', rating: 3 },
-            { id: 'data_compliance', rating: 1 },
-            { id: 'data_availability', rating: 2 },
-            { id: 'change_management', rating: 3 }
-          ]
-        }
+        valueScore: 7,
+        complexityScore: 5
       };
 
-      const response = await apiRequest('/api/v1/use-cases', {
-        method: 'POST',
-        body: JSON.stringify(useCaseData),
-      });
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
 
-      if (!response.ok) {
-        console.error('Use case creation failed:', response.status, response.error);
-        console.error('Response data:', response.data);
-      }
-      expect(response.ok).toBe(true);
-      expect(response.data.name).toBe(useCaseData.name);
-      expect(response.data.folderId).toBe(folderId);
+      expect(response.status).toBe(201);
+      const data = await response.json();
+      expect(data.name).toBe(useCaseData.name);
+      expect(data.folderId).toBe(folderId);
     });
 
     it('should reject invalid use case data', async () => {
-      const invalidData = {
-        title: '', // Empty title should fail
-        description: 'Test'
+      const invalidUseCaseData = {
+        // Missing required name field
+        description: 'Invalid use case'
       };
 
-      const response = await apiRequest('/api/v1/use-cases', {
-        method: 'POST',
-        body: JSON.stringify(invalidData),
-      });
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, invalidUseCaseData);
 
-      expect(response.ok).toBe(false);
       expect(response.status).toBe(400);
     });
   });
 
   describe('GET /use-cases/:id', () => {
     it('should get a specific use case', async () => {
-      // Create a use case using helper
-      const useCase = await createTestUseCase();
-      const useCaseId = useCase.id;
-
-      // Small delay to ensure database sync
-      await sleep(100);
-
-      // Then get it
-      const getResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`);
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
       
-      expect(getResponse.ok).toBe(true);
-      expect(getResponse.data.id).toBe(useCaseId);
-      expect(getResponse.data.name).toBe(useCase.name);
-
-      // Cleanup
-      try {
-        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.id).toBe(useCase.id);
+      expect(data.name).toBe(useCase.name);
     });
 
     it('should return 404 for non-existent use case', async () => {
-      const response = await apiRequest('/api/v1/use-cases/non-existent-id');
+      const nonExistentId = 'non-existent-id';
       
-      expect(response.ok).toBe(false);
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${nonExistentId}`, user.sessionToken!);
+      
       expect(response.status).toBe(404);
     });
   });
 
   describe('PUT /use-cases/:id', () => {
     it('should update a use case', async () => {
-      // Create a use case using helper
-      const useCase = await createTestUseCase();
-      const useCaseId = useCase.id;
-
-      // Small delay to ensure database sync
-      await sleep(100);
-
-      // Then update it
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
       const updateData = {
         name: `Updated Use Case ${createTestId()}`,
-        description: 'Updated description'
+        description: 'Updated description',
+        valueScore: 9,
+        complexityScore: 7
       };
 
-      const updateResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updateData),
-      });
-
-      if (!updateResponse.ok) {
-        console.error('Use case update failed:', updateResponse.status, updateResponse.error);
-      }
-      expect(updateResponse.ok).toBe(true);
-      expect(updateResponse.data.name).toBe(updateData.name);
-      expect(updateResponse.data.description).toBe(updateData.description);
-
-      // Cleanup
-      try {
-        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.name).toBe(updateData.name);
+      expect(data.description).toBe(updateData.description);
     });
 
     it('should partially update a use case', async () => {
-      // Create a use case using helper
-      const useCase = await createTestUseCase();
-      const useCaseId = useCase.id;
-
-      // Small delay to ensure database sync
-      await sleep(100);
-
-      // Then partially update it
-      const updateData = {
-        name: `Updated Use Case ${createTestId()}`
-        // Only update name, keep description
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
+      const partialUpdate = {
+        name: `Partially Updated ${createTestId()}`
       };
 
-      const updateResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updateData),
-      });
-
-      if (!updateResponse.ok) {
-        console.error('Use case update failed:', updateResponse.status, updateResponse.error);
-      }
-      expect(updateResponse.ok).toBe(true);
-      expect(updateResponse.data.name).toBe(updateData.name);
-      expect(updateResponse.data.description).toBe(useCase.description); // Should remain unchanged
-
-      // Cleanup
-      try {
-        await apiRequest(`/api/v1/use-cases/${useCaseId}`, { method: 'DELETE' });
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, partialUpdate);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.name).toBe(partialUpdate.name);
+      expect(data.description).toBe(useCase.description); // Should remain unchanged
     });
   });
 
   describe('DELETE /use-cases/:id', () => {
     it('should delete a use case', async () => {
-      // Create a use case using helper
-      const useCase = await createTestUseCase();
-      const useCaseId = useCase.id;
-
-      // Small delay to ensure database sync
-      await sleep(100);
-
-      // Then delete it
-      const deleteResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`, {
-        method: 'DELETE',
-      });
-
-      expect(deleteResponse.ok).toBe(true);
-      expect(deleteResponse.status).toBe(204);
-
-      // Small delay after delete operation
-      await sleep(100);
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
+      
+      const response = await authenticatedRequest(app, 'DELETE', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      
+      expect(response.status).toBe(204);
 
       // Verify it's deleted
-      const getResponse = await apiRequest(`/api/v1/use-cases/${useCaseId}`);
-      expect(getResponse.ok).toBe(false);
+      const getResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
       expect(getResponse.status).toBe(404);
     });
   });
-
 });

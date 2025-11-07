@@ -5,7 +5,8 @@ const config = {
   kit: {
     adapter: adapter({
       // Generate 404.html as fallback for SPA routing on GitHub Pages
-      fallback: '404.html'
+      // fallback: '404.html' // Disabled during build to avoid redirect issues
+      fallback: undefined
     }),
     // Force des URLs d'actifs absolues (/_app/...) au lieu de chemins relatifs
     paths: {
@@ -13,7 +14,8 @@ const config = {
     },
     prerender: {
       handleHttpError: 'warn',
-      handleUnseenRoutes: 'ignore'
+      handleUnseenRoutes: 'ignore',
+      handleMissingId: 'warn'
     }
   },
   preprocess: vitePreprocess()

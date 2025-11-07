@@ -24,13 +24,24 @@ version:
 	@echo "API_VERSION: $(API_VERSION)"
 	@echo "UI_VERSION: $(UI_VERSION)"
 
+cloc:
+	@cloc --vcs=git --exclude-content=".*package.*json"
+
 # -----------------------------------------------------------------------------
 # Installation & Build
 # -----------------------------------------------------------------------------
-.PHONY: install
-install: ## Install UI and API dependencies inside Docker containers
-	$(COMPOSE_RUN_API) npm install
-	$(COMPOSE_RUN_UI) npm install
+
+install-ui:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm install ${NPM_LIB}
+
+install-ui-dev:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm install ${NPM_LIB} --save-dev
+
+install-api:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm install ${NPM_LIB}
+
+install-api-dev:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm install ${NPM_LIB} --save-dev
 
 .PHONY: build
 build: build-ui build-api ## Build UI and API artifacts
@@ -213,15 +224,18 @@ audit:
 test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-ui
-test-ui: up-ui
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run test
+test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e SCOPE="$(SCOPE)" ui sh -lc ' \
+	  if [ -n "$$SCOPE" ]; then \
+	    echo "▶ Running scoped UI tests: $$SCOPE"; \
+	    npm run test -- "$$SCOPE"; \
+	  else \
+	    echo "▶ Running all UI tests"; \
+	    npm run test; \
+	  fi'
 
 .PHONY: test-api
-test-api: up-api wait-ready-api test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-ai
-
-.PHONY: test-int
-test-int:
-	@echo "Integration tests placeholder" && exit 0
+test-api: up-api-test test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai up-api test-api-limit
 
 .PHONY: test-contract
 test-contract:
@@ -264,7 +278,7 @@ run-e2e:
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
 	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
 	  if [ -n "$$E2E_SPEC" ]; then \
 	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
 	    npx playwright test "$$E2E_SPEC"; \
@@ -298,14 +312,13 @@ coverage-report:
 .PHONY: clean
 clean: ## Clean all containers, volumes and images
 	$(DOCKER_COMPOSE) down -v --remove-orphans
-	docker system prune -f
 
 .PHONY: clean-all
 clean-all: clean ## Clean everything including images
 	docker system prune -a -f
 
 .PHONY: clean-db
-clean-db: ## Clean database files and restart services
+clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to skip prompt]
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All companies"
@@ -313,20 +326,21 @@ clean-db: ## Clean database files and restart services
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
 	@echo ""
-	@read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'DELETE' to confirm: " confirm && [ "$$confirm" = "DELETE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
-	rm -f data/app.db*
+	@docker volume rm top-ai-ideas-fullstack_pg_data || true
 	@echo "✅ Database cleaned!"
 	@echo "🚀 Restarting services..."
-	$(MAKE) dev
 
 # -----------------------------------------------------------------------------
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: dev
 dev: ## Start UI and API in watch mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: dev-ui
 dev-ui:
@@ -338,15 +352,19 @@ dev-api:
 
 .PHONY: up
 up: ## Start the full stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
+
+.PHONY: up-api-test
+up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-ui
 up-ui: ## Start the api stack in detached mode
@@ -354,26 +372,23 @@ up-ui: ## Start the api stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down -v
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+
 
 # -----------------------------------------------------------------------------
 # Logs
 # -----------------------------------------------------------------------------
 .PHONY: logs
 logs: ## Show logs for all services
-	$(DOCKER_COMPOSE) logs --tail=50
+	$(DOCKER_COMPOSE) logs
 
-.PHONY: logs-api
-logs-api: ## Show logs for API service
-	$(DOCKER_COMPOSE) logs --tail=50 api
-
-.PHONY: logs-ui
-logs-ui: ## Show logs for UI service
-	$(DOCKER_COMPOSE) logs --tail=50 ui
-
-.PHONY: logs-db
-logs-db: ## Show logs for database service
-	$(DOCKER_COMPOSE) logs -f sqlite
+.PHONY: logs-% # maildev postgres ui api
+logs-%: ## Show logs for MailDev service
+	@if [ -n "$$TAIL" ]; then \
+		$(DOCKER_COMPOSE) logs --tail=$$TAIL $*; \
+	else \
+		$(DOCKER_COMPOSE) logs $*; \
+	fi
 
 .PHONY: sh-ui
 sh-ui:
@@ -389,23 +404,30 @@ sh-api:
 # db-migrate handles both initial creation (empty DB) and incremental updates
 # -----------------------------------------------------------------------------
 .PHONY: db-generate
-db-generate: ## Generate migration files from schema.ts changes
-	$(COMPOSE_RUN_API) npm run db:generate
+db-generate: ## Generate migration files from schema.ts changes (uses exec if container running, otherwise run)
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api npm run db:generate; \
+	fi
 
 .PHONY: db-migrate
 db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 	$(COMPOSE_RUN_API) npm run db:migrate
 
 .PHONY: db-reset
-db-reset: up ## Reset database (WARNING: destroys all data)
+db-reset: up ## Reset database (WARNING: destroys all data) [SKIP_CONFIRM=true to skip prompt]
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
+	@echo "  - All users and session"
 	@echo "  - All companies"
-	@echo "  - All folders" 
+	@echo "  - All folders"
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
 	@echo ""
-	@read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1)
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'RESET' to confirm: " confirm && [ "$$confirm" = "RESET" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
 	@echo "🗑️  Resetting database..."
 	$(COMPOSE_RUN_API) npm run db:reset
 
@@ -414,15 +436,122 @@ db-status: ## Check database status and tables
 	@echo "📊 Database status:"
 	$(COMPOSE_RUN_API) npm run db:status
 
+.PHONY: db-inspect
+db-inspect: up ## Inspect database directly via postgres container (query database state)
+	@echo "📊 Database Inspection:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		UNION ALL \
+		SELECT 'folders', COUNT(*) FROM folders \
+		UNION ALL \
+		SELECT 'companies', COUNT(*) FROM companies \
+		UNION ALL \
+		SELECT 'users', COUNT(*) FROM users \
+		UNION ALL \
+		SELECT 'user_sessions', COUNT(*) FROM user_sessions;"
+
+.PHONY: db-inspect-usecases
+db-inspect-usecases: up ## Inspect use cases and folders relationship
+	@echo "📊 Use Cases Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT uc.id, uc.name, uc.folder_id, f.name as folder_name, uc.company_id, c.name as company_name \
+		FROM use_cases uc \
+		LEFT JOIN folders f ON uc.folder_id = f.id \
+		LEFT JOIN companies c ON uc.company_id = c.id \
+		ORDER BY uc.created_at DESC \
+		LIMIT 20;"
+
+.PHONY: db-inspect-folders
+db-inspect-folders: up ## Inspect folders and their use cases count
+	@echo "📊 Folders Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT f.id, f.name, f.description, COUNT(uc.id) as use_cases_count \
+		FROM folders f \
+		LEFT JOIN use_cases uc ON f.id = uc.folder_id \
+		GROUP BY f.id, f.name, f.description \
+		ORDER BY f.created_at DESC;"
+
+.PHONY: db-inspect-users
+db-inspect-users: up ## Inspect users and their roles
+	@echo "📊 Users Details:"
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT id, email, display_name, role, created_at \
+		FROM users \
+		ORDER BY created_at DESC;"
+
+backup-dir:
+	@mkdir -p data/backup
+
 .PHONY: db-backup
-db-backup: ## Backup database to file
-	@echo "💾 Backing up database..."
-	$(COMPOSE_RUN_API) npm run db:backup
+db-backup: backup-dir up ## Backup local database to file
+	@echo "💾 Creating backup from local database..."
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/app-$${TIMESTAMP}.dump"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL="$$DATABASE_URL" postgres:16-alpine sh -c " \
+		pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump"; \
+	echo "✅ Backup created: $${BACKUP_FILE}"
+
+.PHONY: db-backup-prod
+db-backup-prod: backup-dir up ## Backup production database from Scaleway to local file (uses DATABASE_URL_PROD from .env)
+	@echo "💾 Creating backup from Scaleway production database..."
+	@if [ -z "$$DATABASE_URL_PROD" ]; then \
+		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
+		exit 1; \
+	fi
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:16-alpine sh -c " \
+		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
+	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-restore
-db-restore: ## Restore database from backup [BACKUP_FILE=filename]
-	@echo "🔄 Restoring database from $(BACKUP_FILE)..."
-	$(COMPOSE_RUN_API) npm run db:restore $(BACKUP_FILE)
+db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=app-2025-01-15T10-30-00.dump or BACKUP_FILE=prod-2025-01-15T10-30-00.dump)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No backups found"; \
+		exit 1; \
+	fi
+	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
+	@echo "This action is DESTRUCTIVE and will remove:"
+	@echo "  - All local companies, folders, use cases"
+	@echo "  - All local users and sessions"
+	@echo "  - All local settings and configuration"
+	@echo ""
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
+	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting PostgreSQL service..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
+	@echo "🔄 Restoring backup to local database..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml cp data/backup/$(BACKUP_FILE) postgres:/tmp/restore.dump
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
+		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
+	@echo "📊 Inspecting database after restore (before migrations)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		UNION ALL \
+		SELECT 'folders', COUNT(*) FROM folders \
+		UNION ALL \
+		SELECT 'companies', COUNT(*) FROM companies \
+		UNION ALL \
+		SELECT 'settings', COUNT(*) FROM settings \
+		UNION ALL \
+		SELECT 'business_config', COUNT(*) FROM business_config \
+		UNION ALL \
+		SELECT 'job_queue', COUNT(*) FROM job_queue;"
+	@echo "📋 Checking for WebAuthn tables (may not exist in old backups)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
+		SELECT table_name FROM information_schema.tables \
+		WHERE table_schema = 'public' \
+		AND table_name IN ('users', 'user_sessions', 'webauthn_credentials', 'webauthn_challenges', 'magic_links') \
+		ORDER BY table_name;" || echo "  (WebAuthn tables not found - will be created by migrations)"
 
 .PHONY: db-fresh
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database
@@ -431,12 +560,12 @@ db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initiali
 .PHONY: restart-api
 restart-api: ## Restart API service
 	@echo "🔄 Restarting API service..."
-	$(DOCKER_COMPOSE) restart api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml restart api
 
 .PHONY: restart-db
 restart-db: ## Restart database service
 	@echo "🔄 Restarting database service..."
-	$(DOCKER_COMPOSE) restart sqlite
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml restart sqlite
 
 .PHONY: db-seed
 db-seed:
@@ -451,44 +580,176 @@ db-lint:
 	@echo "Database lint placeholder" && exit 0
 
 # -----------------------------------------------------------------------------
+# Component auditing
+# -----------------------------------------------------------------------------
+
+# Generic component audit pattern: audit-<service> COMPONENT=<component>
+# Usage examples:
+#   make audit-api COMPONENT=node          # Check Node.js version
+#   make audit-api COMPONENT=hono          # Check Hono library version
+#   make audit-api COMPONENT=drizzle-orm   # Check Drizzle ORM library version
+#   make audit-api COMPONENT=npm           # Check all outdated npm packages
+#   make audit-ui COMPONENT=node           # Check Node.js version
+#   make audit-ui COMPONENT=svelte         # Check Svelte library version
+#   make audit-ui COMPONENT=vite           # Check Vite library version
+#   make audit-ui COMPONENT=npm            # Check all outdated npm packages
+#   make audit-infra COMPONENT=node        # Check Node.js base image version
+#   make audit-infra COMPONENT=docker      # Check Docker version
+# Services: api, ui, infra
+# Component: node (for Node.js version) or any npm package name (for library version check)
+.PHONY: audit-%
+audit-%: ## Audit components for service (usage: make audit-<service> COMPONENT=<component>)
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "❌ Error: COMPONENT variable not set"; \
+		echo "Usage: make audit-$* COMPONENT=<component>"; \
+		echo "Examples:"; \
+		echo "  make audit-$* COMPONENT=node     # Check Node.js version"; \
+		echo "  make audit-$* COMPONENT=<lib>    # Check library version (e.g., hono, svelte, vite)"; \
+		echo "  make audit-$* COMPONENT=npm      # Check all outdated npm packages"; \
+		exit 1; \
+	fi; \
+	if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
+		if [ "$(COMPONENT)" = "node" ]; then \
+			echo "📦 Checking Node.js version for $*..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=development --entrypoint="" $* node --version; \
+		elif [ "$(COMPONENT)" = "npm" ]; then \
+			echo "📦 Auditing NPM packages for $*..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=development $* npm outdated || echo 'No outdated packages'; \
+		elif [ "$(COMPONENT)" = "nginx" ] && [ "$*" = "ui" ]; then \
+			echo "🌐 Checking Nginx version (ui production)..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=production ui nginx -v; \
+		else \
+			echo "📦 Checking $(COMPONENT) version for $*..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=development $* sh -c "grep '\"$(COMPONENT)\"' package.json && npm view $(COMPONENT) version"; \
+		fi; \
+	elif [ "$*" = "infra" ]; then \
+		if [ "$(COMPONENT)" = "docker" ]; then \
+			echo "🐳 Checking Docker version..."; \
+			docker --version; \
+			$(DOCKER_COMPOSE) --version; \
+		elif [ "$(COMPONENT)" = "postgres" ]; then \
+			echo "🐘 Checking PostgreSQL version..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps postgres postgres --version; \
+		elif [ "$(COMPONENT)" = "nginx" ]; then \
+			echo "🌐 Checking Nginx version..."; \
+			TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui nginx -v; \
+		elif [ "$(COMPONENT)" = "maildev" ]; then \
+			echo "📧 Checking MailDev version..."; \
+			$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps maildev --version 2>/dev/null || \
+			grep "image:" docker-compose.yml | grep maildev | sed 's/.*image: *\(.*\)/\1/' || echo "maildev/maildev:2.0.5"; \
+		else \
+			echo "❌ Unknown component for infra: $(COMPONENT)"; \
+			echo "Available components: docker, postgres, nginx, maildev"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Unknown service: $*"; \
+		echo "Available services: api, ui, infra"; \
+		exit 1; \
+	fi
+
+# -----------------------------------------------------------------------------
 # Security & compliance
 # -----------------------------------------------------------------------------
-.PHONY: sast
-sast:
-	@echo "SAST placeholder" && exit 0
 
-.PHONY: secrets-scan
-secrets-scan:
-	@echo "Secrets scan placeholder" && exit 0
+# Generic security test pattern: test-<service>-security-<type>
+# Usage: make test-api-security-sast, make test-ui-security-sca, etc.
+# Services: api, ui
+# Types: sast (Semgrep), sca (Trivy SCA), container (Trivy image)
+.PHONY: test-%-security-sast
+test-%-security-sast: ## Run SAST scan (Semgrep) on service (usage: make test-api-security-sast, make test-ui-security-sast)
+	@echo "🔒 Security: Running SAST scan on $*..."
+	@mkdir -p .security
+	@echo "  📋 Step 1: Executing Semgrep scan..."
+	@docker run --rm -v "${PWD}/$*/src:/src" semgrep/semgrep semgrep scan --config auto --severity ERROR --json > .security/sast-$*.json || true
+	@echo "  📋 Step 2: Parsing results to structured format..."
+	@bash scripts/security/security-parser.sh sast .security/sast-$*.json .security/sast-$*-parsed.yaml $* || exit 1
+	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
+	@bash scripts/security/security-compliance.sh sast $* || exit 1
+	@echo "✅ SAST scan completed for $*"
 
-.PHONY: dast
-dast:
-	@echo "DAST placeholder" && exit 0
+.PHONY: test-%-security-sca
+test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-security-sca, make test-ui-security-sca)
+	@echo "🔒 Security: Running SCA scan on $*..."
+	@mkdir -p .security
+	@echo "  📋 Step 1: Executing Trivy SCA scan..."
+	@docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true
+	@echo "  📋 Step 2: Parsing results to structured format..."
+	@bash scripts/security/security-parser.sh sca .security/sca-$*.json .security/sca-$*-parsed.yaml $* || exit 1
+	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
+	@bash scripts/security/security-compliance.sh sca $* || exit 1
+	@echo "✅ SCA scan completed for $*"
+
+.PHONY: test-%-security-container
+test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
+	@echo "🔒 Security: Running container scan on $*..."
+	@mkdir -p .security
+	@echo "  📋 Step 1: Executing Trivy container scan..."
+	@if [ "$*" = "api" ]; then \
+		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
+	elif [ "$*" = "ui" ]; then \
+		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
+	else \
+		IMAGE_NAME="top-ai-ideas-$*:latest"; \
+	fi; \
+	echo "  Scanning image: $$IMAGE_NAME"; \
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME")
+	@echo "  📋 Step 2: Parsing results to structured format..."
+	@bash scripts/security/security-parser.sh container .security/container-$*.json .security/container-$*-parsed.yaml $* || exit 1
+	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
+	@bash scripts/security/security-compliance.sh container $* || exit 1
+	@echo "✅ Container scan completed for $*"
+
+.PHONY: test-security-iac
+test-security-iac: ## Run IaC scan (Trivy) on infrastructure configs (docker-compose.yml, Makefile)
+	@echo "🔒 Security: Running IaC scan on infrastructure..."
+	@mkdir -p .security
+	@echo "  📋 Step 1: Executing Trivy IaC scan..."
+	@docker run --rm -v "${PWD}:/src" aquasec/trivy config --severity HIGH,CRITICAL --format json --quiet /src/docker-compose.yml > .security/iac-infra.json || true
+	@docker run --rm -v "${PWD}:/src" aquasec/trivy config --severity HIGH,CRITICAL --format json --quiet /src/Makefile >> .security/iac-infra.json || true
+	@echo "  📋 Step 2: Parsing results to structured format..."
+	@bash scripts/security/security-parser.sh iac .security/iac-infra.json .security/iac-infra-parsed.yaml infra || exit 1
+	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
+	@bash scripts/security/security-compliance.sh iac infra || exit 1
+	@echo "✅ IaC scan completed"
+
+# Aggregate security tests by type
+.PHONY: test-security-sast
+test-security-sast: test-api-security-sast test-ui-security-sast ## Run SAST scans on all services
+	@echo "✅ All SAST tests completed"
+
+.PHONY: test-security-sca
+test-security-sca: test-api-security-sca test-ui-security-sca ## Run SCA scans on all services
+	@echo "✅ All SCA tests completed"
+
+.PHONY: test-security-container
+test-security-container: test-api-security-container test-ui-security-container ## Run container scans on all service images
+	@echo "✅ All container tests completed"
+
+# Main security test aggregate
+.PHONY: test-security
+test-security: test-security-sast test-security-sca test-security-container test-security-iac ## Run all security tests (SAST, SCA, Container, IaC)
+	@echo "✅ All security tests completed"
 
 # -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
 # -----------------------------------------------------------------------------
-.PHONY: test-api-smoke test-api-endpoints test-api-ai test-api-queue test-api-all
+.PHONY: test-api-%
 
-test-api-smoke: ## Run API smoke tests (basic health checks) [FILTER=*]
-	@echo "🧪 Running API smoke tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_FILTER=$(FILTER) npm run test:smoke"
+test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
+	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" api sh -lc ' \
+	  TEST_TYPE="$*"; \
+	  if [ -n "$$SCOPE" ]; then \
+	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE"; \
+	    npm run test:$$TEST_TYPE -- "$$SCOPE"; \
+	  else \
+	    echo "▶ Running all $$TEST_TYPE tests"; \
+	    npm run test:$$TEST_TYPE; \
+	  fi'
 
-test-api-endpoints: ## Run API endpoint tests (CRUD functionality) [ENDPOINT=*] [METHOD=*]
-	@echo "🧪 Running API endpoint tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_ENDPOINT=$(ENDPOINT) TEST_METHOD=$(METHOD) npm run test:api"
-
-test-api-ai: ## Run API AI tests (generation and enrichment) [TYPE=*] [MODEL=*]
-	@echo "🧪 Running API AI tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_TYPE=$(TYPE) TEST_MODEL=$(MODEL) npm run test:ai"
-
-test-api-queue: ## Run API queue tests (job processing) [JOB_TYPE=*]
-	@echo "🧪 Running API queue tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "TEST_JOB_TYPE=$(JOB_TYPE) npm run test:queue"
-
-test-api-unit: ## Run API unit tests (pure functions, no external dependencies)
-	@echo "🧪 Running API unit tests..."
-	@$(DOCKER_COMPOSE) exec -T api sh -lc "npm run test:unit"
+.PHONY: test-api-smoke-restore
+test-api-smoke-restore: ## Run smoke tests in production mode (for restore validation)
+	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke:restore'
 
 # -----------------------------------------------------------------------------
 # Queue Management
@@ -505,3 +766,11 @@ queue-status: ## Show current queue status
 	@curl -s http://localhost:8787/api/v1/queue/stats | jq . || echo "API not available"
 
 queue-reset: queue-clear ## Reset queue and clear all jobs (alias for queue-clear)
+
+.PHONY: up-maildev
+up-maildev: ## Start MailDev service in detached mode
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d maildev
+
+.PHONY: down-maildev
+down-maildev: ## Stop MailDev service
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml stop maildev

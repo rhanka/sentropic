@@ -34,7 +34,7 @@ describe('Companies Store', () => {
     });
 
     it('should throw error when fetch fails', async () => {
-      mockFetchJsonOnce({}, 500);
+      mockFetchJsonOnce({ error: 'Failed to fetch companies' }, 500);
 
       await expect(fetchCompanies()).rejects.toThrow('Failed to fetch companies');
     });
@@ -52,9 +52,7 @@ describe('Companies Store', () => {
     });
 
     it('should throw error when creation fails', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false
-      });
+      mockFetchJsonOnce({ error: 'Failed to create company' }, 500);
 
       await expect(createCompany({ name: 'Test' })).rejects.toThrow('Failed to create company');
     });
@@ -81,7 +79,7 @@ describe('Companies Store', () => {
 
     it('should handle 409 conflict with detailed message', async () => {
       const errorResponse = {
-        message: 'Impossible de supprimer l\'entreprise car elle est utilisée',
+        message: "Impossible de supprimer l'entreprise",
         details: { folders: 2, useCases: 5 }
       };
       
@@ -89,7 +87,7 @@ describe('Companies Store', () => {
       mockFetchJsonOnce(errorResponse, 409);
 
       await expect(deleteCompany('1')).rejects.toThrow(
-        'Impossible de supprimer l\'entreprise car elle est utilisée (2 dossier(s) et 5 cas d\'usage)'
+        "Impossible de supprimer l'entreprise (2 dossier(s) et 5 cas d'usage)"
       );
     });
 

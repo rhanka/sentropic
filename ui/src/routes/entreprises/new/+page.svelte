@@ -5,6 +5,7 @@
   import { goto } from '$app/navigation';
   import { addToast, removeToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
 
   let company: Partial<Company> = { 
     name: '', 
@@ -76,12 +77,20 @@
     isCreating = true;
     try {
       const newCompany = await createCompany(company as Omit<Company, 'id'>);
+      console.log('[DEBUG] Company created:', newCompany);
       addToast({
         type: 'success',
         message: 'Entreprise créée avec succès !'
       });
       // Rediriger vers la page de détail de la nouvelle entreprise
-      goto(`/entreprises/${newCompany.id}`);
+      if (newCompany && newCompany.id) {
+        console.log('[DEBUG] Redirecting to:', `/entreprises/${newCompany.id}`);
+        // Lever le blocage du guard de navigation avant la redirection SPA
+        unsavedChangesStore.reset();
+        goto(`/entreprises/${newCompany.id}`);
+      } else {
+        console.error('[DEBUG] Company created but no ID:', newCompany);
+      }
     } catch (err) {
       console.error('Failed to create company:', err);
       addToast({
@@ -142,6 +151,7 @@
         </button>
         <button 
           class="rounded bg-green-500 px-4 py-2 text-white disabled:opacity-50"
+          title="Créer"
           on:click={handleCreateCompany}
           disabled={!company.name?.trim() || isCreating}
         >

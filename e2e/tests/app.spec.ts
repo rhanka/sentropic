@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { debug, setupDebugBuffer } from '../helpers/debug';
+
+// Setup debug buffer to display on test failure
+setupDebugBuffer();
 
 test.describe('Application principale', () => {
   test('devrait charger la page d\'accueil', async ({ page }) => {
@@ -13,7 +17,7 @@ test.describe('Application principale', () => {
     
     // Vérifier que la page répond (peut être 200, 304, ou 403 en dev)
     const response = await page.goto('/');
-    console.log('Response status:', response?.status());
+    debug(`Response status: ${response?.status()}`);
     expect([200, 304, 403]).toContain(response?.status());
     
     // Vérifier que le body est présent (peut être caché par CSS)
@@ -22,7 +26,7 @@ test.describe('Application principale', () => {
     
     // Log du contenu de la page pour debug
     const bodyText = await page.locator('body').textContent();
-    console.log('Body content:', bodyText?.substring(0, 200));
+    // console.log('Body content:', bodyText?.substring(0, 200));
   });
 
   test('devrait afficher la navigation correctement', async ({ page }) => {
@@ -91,16 +95,5 @@ test.describe('Application principale', () => {
     // Vérifier que la page se charge et que l'URL correspond
     await expect(page).toHaveURL('/page-inexistante');
     await expect(page.locator('body')).toBeAttached();
-  });
-});
-
-test.describe('API Health Check', () => {
-  test('devrait répondre aux requêtes API', async ({ request }) => {
-    // Tester l'endpoint de santé (utiliser le host docker compose de l'API)
-    const response = await request.get('http://api:8787/api/v1/health');
-    expect(response.status()).toBe(200);
-    
-    const data = await response.json();
-    expect(data).toHaveProperty('status', 'ok');
   });
 });

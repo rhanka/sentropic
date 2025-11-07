@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { foldersStore } from '$lib/stores/folders';
+  import { foldersStore, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
+  import { apiDelete } from '$lib/utils/api';
 
   let folder: any = undefined;
   let isEditing = false;
@@ -51,7 +52,24 @@
     if (!folder || !confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
 
     try {
+      await apiDelete(`/folders/${folder.id}`);
+      
+      // Si le dossier supprimé était le dossier sélectionné, réinitialiser la sélection
+      const wasSelected = $currentFolderId === folder.id;
+      const remainingFolders = $foldersStore.filter(f => f.id !== folder.id);
+      
       foldersStore.update(items => items.filter(f => f.id !== folder?.id));
+      
+      if (wasSelected) {
+        if (remainingFolders.length > 0) {
+          // Sélectionner le premier dossier restant
+          currentFolderId.set(remainingFolders[0].id);
+        } else {
+          // Aucun dossier restant, réinitialiser
+          currentFolderId.set(null);
+        }
+      }
+      
       addToast({ type: 'success', message: 'Dossier supprimé avec succès !' });
       goto('/dossiers');
     } catch (err) {

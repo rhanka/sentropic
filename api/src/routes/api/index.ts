@@ -11,18 +11,44 @@ import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { testRouter } from './test';
+import { requireAuth } from '../../middleware/auth';
+import { requireRole, requireAdmin, requireEditor } from '../../middleware/rbac';
 
 export const apiRouter = new Hono();
 
+// Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
-apiRouter.route('/companies', companiesRouter);
-apiRouter.route('/folders', foldersRouter);
-apiRouter.route('/use-cases', useCasesRouter);
-apiRouter.route('/settings', settingsRouter);
-apiRouter.route('/business-config', businessConfigRouter);
-apiRouter.route('/analytics', analyticsRouter);
-apiRouter.route('/admin', adminRouter);
-apiRouter.route('/prompts', promptsRouter);
-apiRouter.route('/queue', queueRouter);
-apiRouter.route('/ai-settings', aiSettingsRouter);
 apiRouter.route('/test', testRouter);
+
+// Editor routes (require editor role or higher)
+apiRouter.use('/companies/*', requireAuth, requireEditor);
+apiRouter.route('/companies', companiesRouter);
+
+apiRouter.use('/folders/*', requireAuth, requireEditor);
+apiRouter.route('/folders', foldersRouter);
+
+apiRouter.use('/use-cases/*', requireAuth, requireEditor);
+apiRouter.route('/use-cases', useCasesRouter);
+
+apiRouter.use('/analytics/*', requireAuth, requireEditor);
+apiRouter.route('/analytics', analyticsRouter);
+
+// Admin routes (require admin_org or admin_app)
+apiRouter.use('/settings/*', requireAuth, requireAdmin);
+apiRouter.route('/settings', settingsRouter);
+
+apiRouter.use('/business-config/*', requireAuth, requireAdmin);
+apiRouter.route('/business-config', businessConfigRouter);
+
+apiRouter.use('/prompts/*', requireAuth, requireAdmin);
+apiRouter.route('/prompts', promptsRouter);
+
+apiRouter.use('/ai-settings/*', requireAuth, requireAdmin);
+apiRouter.route('/ai-settings', aiSettingsRouter);
+
+// Admin app only routes (require admin_app)
+apiRouter.use('/admin/*', requireAuth, requireRole('admin_app'));
+apiRouter.route('/admin', adminRouter);
+
+apiRouter.use('/queue/*', requireAuth, requireRole('admin_app'));
+apiRouter.route('/queue', queueRouter);

@@ -15,9 +15,9 @@
  * 
  * @example
  * ```typescript
- * import { API_BASE_URL } from '$lib/config';
+ * import { apiGet } from '$lib/utils/api';
  * 
- * const response = await fetch(`${API_BASE_URL}/companies`);
+ * const companies = await apiGet('/companies');
  * ```
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787/api/v1';

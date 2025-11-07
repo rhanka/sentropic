@@ -1,73 +1,83 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { apiRequest, createTestId } from '../utils/test-helpers';
+import { app } from '../../src/app';
+import { createTestId } from '../utils/test-helpers';
+import { 
+  createAuthenticatedUser, 
+  authenticatedRequest, 
+  cleanupAuthData 
+} from '../utils/auth-helper';
 
 describe('Queue', () => {
+  let user: any;
+
   beforeAll(async () => {
+    // Create authenticated user for queue tests
+    user = await createAuthenticatedUser('admin_app');
+    
     // Clear queue before starting tests
     try {
-      await apiRequest('/api/v1/queue/purge', {
-        method: 'POST',
-        body: JSON.stringify({ status: 'force' })
-      });
+      await authenticatedRequest(app, 'POST', '/api/v1/queue/purge', user.sessionToken!, { status: 'force' });
     } catch {}
   });
 
   afterAll(async () => {
     // Final cleanup - purge all remaining jobs
     try {
-      await apiRequest('/api/v1/queue/purge', {
-        method: 'POST',
-        body: JSON.stringify({ status: 'force' })
-      });
+      await authenticatedRequest(app, 'POST', '/api/v1/queue/purge', user.sessionToken!, { status: 'force' });
     } catch {}
+    
+    // Clean up auth data
+    await cleanupAuthData();
   });
 
   it('should create an async enrichment job (without waiting)', async () => {
     // Create a company draft
-    const companyResponse = await apiRequest('/api/v1/companies/draft', {
-      method: 'POST',
-      body: JSON.stringify({ name: `Queue Test ${createTestId()}` })
+    const companyRes = await authenticatedRequest(app, 'POST', '/api/v1/companies/draft', user.sessionToken!, {
+      name: `Queue Test ${createTestId()}`
     });
-    expect(companyResponse.ok).toBe(true);
-    const companyId = companyResponse.data.id as string;
+    expect(companyRes.status).toBe(201);
+    const companyData = await companyRes.json();
+    const companyId = companyData.id;
 
     // Launch async enrichment job
-    const enrichResponse = await apiRequest(`/api/v1/companies/${companyId}/enrich`, {
-      method: 'POST',
-      body: JSON.stringify({ model: 'gpt-4.1-nano' })
+    const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/companies/${companyId}/enrich`, user.sessionToken!, {
+      model: 'gpt-4.1-nano'
     });
-    expect(enrichResponse.ok).toBe(true);
-    expect(enrichResponse.data.success).toBe(true);
-    expect(enrichResponse.data.jobId).toBeDefined();
+    expect(enrichRes.status).toBe(200);
+    const enrichData = await enrichRes.json();
+    expect(enrichData.success).toBe(true);
+    expect(enrichData.jobId).toBeDefined();
 
     // Cleanup
-    await apiRequest(`/api/v1/companies/${companyId}`, { method: 'DELETE' });
+    await authenticatedRequest(app, 'DELETE', `/api/v1/companies/${companyId}`, user.sessionToken!);
   });
 
   it('should expose queue statistics', async () => {
-    const stats = await apiRequest('/api/v1/queue/stats');
-    expect(stats.ok).toBe(true);
-    expect(stats.data).toHaveProperty('total');
-    expect(stats.data).toHaveProperty('pending');
-    expect(stats.data).toHaveProperty('processing');
-    expect(stats.data).toHaveProperty('completed');
-    expect(stats.data).toHaveProperty('failed');
-    expect(stats.data).toHaveProperty('byType');
+    const statsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', user.sessionToken!);
+    expect(statsRes.status).toBe(200);
+    const stats = await statsRes.json();
+    expect(stats).toHaveProperty('total');
+    expect(stats).toHaveProperty('pending');
+    expect(stats).toHaveProperty('processing');
+    expect(stats).toHaveProperty('completed');
+    expect(stats).toHaveProperty('failed');
+    expect(stats).toHaveProperty('byType');
   });
 
   it('should list queue jobs', async () => {
-    const jobs = await apiRequest('/api/v1/queue/jobs');
-    expect(jobs.ok).toBe(true);
-    expect(Array.isArray(jobs.data)).toBe(true);
+    const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
+    expect(jobsRes.status).toBe(200);
+    const jobs = await jobsRes.json();
+    expect(Array.isArray(jobs)).toBe(true);
   });
 
   it('should purge queue successfully', async () => {
-    const purge = await apiRequest('/api/v1/queue/purge', {
-      method: 'POST',
-      body: JSON.stringify({ status: 'force' })
+    const purgeRes = await authenticatedRequest(app, 'POST', '/api/v1/queue/purge', user.sessionToken!, {
+      status: 'force'
     });
-    expect(purge.ok).toBe(true);
-    expect(purge.data.success).toBe(true);
+    expect(purgeRes.status).toBe(200);
+    const purge = await purgeRes.json();
+    expect(purge.success).toBe(true);
   });
 });
 

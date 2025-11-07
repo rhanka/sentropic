@@ -5,18 +5,27 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: true,
   retries: 2,
-  workers: 2,
+  workers: 4,
   reporter: 'list',
-  // globalSetup removed; seed handled via Makefile (db-seed-test)
+  globalSetup: './global.setup.ts',
   use: {
-    baseURL: 'http://ui:5173',
+    baseURL: process.env.UI_BASE_URL || 'http://localhost:5173',
+    storageState: './.auth/state.json',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: [
+            '--unsafely-treat-insecure-origin-as-secure=http://localhost:5173',
+            '--allow-insecure-localhost'
+          ]
+        }
+      },
     },
   ],
   // webServer disabled - services are managed by docker-compose

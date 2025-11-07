@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiGet, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
   import ScoreCard from '$lib/components/ScoreCard.svelte';
   import References from '$lib/components/References.svelte';
@@ -53,34 +53,14 @@
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      const response = await fetch(`${API_BASE_URL}/use-cases/${useCaseId}`);
-      if (response.ok) {
-        useCase = await response.json();
-        
-        // Mettre à jour le store avec les données fraîches
-        useCasesStore.update(items => 
-          items.map(uc => uc.id === useCaseId ? useCase : uc)
-        );
-        
-        if (useCase) {
-          draft = { 
-            ...useCase,
-            dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
-            dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
-          };
-          await loadMatrixAndCalculateScores();
-        }
-      } else {
-        // Fallback sur le store local si l'API échoue
-        const useCases = $useCasesStore;
-        useCase = useCases.find(uc => uc.id === useCaseId);
-        
-        if (!useCase) {
-          addToast({ type: 'error', message: 'Cas d\'usage non trouvé' });
-          error = 'Cas d\'usage non trouvé';
-          return;
-        }
-        
+      useCase = await apiGet(`/use-cases/${useCaseId}`);
+      
+      // Mettre à jour le store avec les données fraîches
+      useCasesStore.update(items => 
+        items.map(uc => uc.id === useCaseId ? useCase : uc)
+      );
+      
+      if (useCase) {
         draft = { 
           ...useCase,
           dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
@@ -112,20 +92,17 @@
   // Refresh léger du cas d'usage - met à jour seulement les champs qui changent
   const refreshUseCaseStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/use-cases/${useCaseId}`);
-      if (response.ok) {
-        const updatedUseCase = await response.json();
+      const updatedUseCase = await apiGet(`/use-cases/${useCaseId}`);
+      
+      // Mettre à jour seulement les champs qui changent (status, etc.)
+      if (useCase) {
+        useCase = { ...useCase, ...updatedUseCase };
+        draft = { ...useCase };
         
-        // Mettre à jour seulement les champs qui changent (status, etc.)
-        if (useCase) {
-          useCase = { ...useCase, ...updatedUseCase };
-          draft = { ...useCase };
-          
-          // Mettre à jour le store
-          useCasesStore.update(items => 
-            items.map(uc => uc.id === useCaseId ? useCase : uc)
-          );
-        }
+        // Mettre à jour le store
+        useCasesStore.update(items => 
+          items.map(uc => uc.id === useCaseId ? useCase : uc)
+        );
       }
     } catch (error) {
       console.error('Failed to refresh use case status:', error);
@@ -179,18 +156,15 @@
     
     try {
       // Charger la matrice depuis le dossier
-      const response = await fetch(`${API_BASE_URL}/folders/${useCase.folderId}`);
-      if (response.ok) {
-        const folder = await response.json();
-        matrix = folder.matrixConfig;
-        
-        if (matrix && useCase.valueScores && useCase.complexityScores) {
-          calculatedScores = calculateUseCaseScores(
-            matrix,
-            useCase.valueScores,
-            useCase.complexityScores
-          );
-        }
+      const folder = await apiGet(`/folders/${useCase.folderId}`);
+      matrix = folder.matrixConfig;
+      
+      if (matrix && useCase.valueScores && useCase.complexityScores) {
+        calculatedScores = calculateUseCaseScores(
+          matrix,
+          useCase.valueScores,
+          useCase.complexityScores
+        );
       }
     } catch (err) {
       console.error('Failed to load matrix:', err);

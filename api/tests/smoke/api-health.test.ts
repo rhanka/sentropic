@@ -1,31 +1,45 @@
-import { describe, it, expect } from 'vitest';
-import { apiRequest } from '../utils/test-helpers';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { httpRequest, authenticatedHttpRequest } from '../utils/test-helpers';
+import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('API Health', () => {
   it('should respond to health check', async () => {
-    const response = await apiRequest('/api/v1/health');
-    expect(response.ok).toBe(true);
+    const response = await httpRequest('/api/v1/health');
     expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.status).toBe('ok');
   });
 
-  it('should have companies endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/companies');
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
-  });
+  describe('Authenticated endpoints', () => {
+    let user: any;
 
-  it('should have folders endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/folders');
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
-  });
+    beforeEach(async () => {
+      user = await createAuthenticatedUser('editor');
+    });
 
-  it('should have use-cases endpoint accessible', async () => {
-    const response = await apiRequest('/api/v1/use-cases');
-    expect(response.ok).toBe(true);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.data.items)).toBe(true);
+    afterEach(async () => {
+      await cleanupAuthData();
+    });
+
+    it('should have companies endpoint accessible', async () => {
+      const response = await authenticatedHttpRequest('GET', '/api/v1/companies', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
+
+    it('should have folders endpoint accessible', async () => {
+      const response = await authenticatedHttpRequest('GET', '/api/v1/folders', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
+
+    it('should have use-cases endpoint accessible', async () => {
+      const response = await authenticatedHttpRequest('GET', '/api/v1/use-cases', user.sessionToken!);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    });
   });
 });

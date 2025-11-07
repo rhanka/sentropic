@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { isAuthenticated } from './session';
 
 export interface RefreshState {
   folders: boolean;
@@ -37,6 +38,23 @@ export class RefreshManager {
     console.log('⏹️ RefreshManager stopped');
   }
 
+  // Helper method to check if user is authenticated before running callbacks
+  private async runCallbackIfAuthenticated(callback: () => Promise<void>): Promise<void> {
+    // Check authentication status
+    let authenticated = false;
+    const unsubscribe = isAuthenticated.subscribe(auth => {
+      authenticated = auth;
+    });
+    unsubscribe();
+    
+    if (!authenticated) {
+      console.log('🔄 Skipping refresh callback - user not authenticated');
+      return;
+    }
+    
+    await callback();
+  }
+
   // Actualiser les dossiers toutes les 2 secondes s'il y en a en génération
   startFoldersRefresh(callback: () => Promise<void>) {
     const key = 'folders';
@@ -48,7 +66,7 @@ export class RefreshManager {
       if (!this.isActive) return;
       
       try {
-        await callback();
+        await this.runCallbackIfAuthenticated(callback);
       } catch (error) {
         console.error('Error during folders refresh:', error);
       }
@@ -69,7 +87,7 @@ export class RefreshManager {
       if (!this.isActive) return;
       
       try {
-        await callback();
+        await this.runCallbackIfAuthenticated(callback);
       } catch (error) {
         console.error('Error during use cases refresh:', error);
       }
@@ -90,7 +108,7 @@ export class RefreshManager {
       if (!this.isActive) return;
       
       try {
-        await callback();
+        await this.runCallbackIfAuthenticated(callback);
       } catch (error) {
         console.error('Error during companies refresh:', error);
       }
@@ -111,7 +129,7 @@ export class RefreshManager {
       if (!this.isActive) return;
       
       try {
-        await callback();
+        await this.runCallbackIfAuthenticated(callback);
       } catch (error) {
         console.error(`Error during use case ${useCaseId} refresh:`, error);
       }
@@ -133,7 +151,7 @@ export class RefreshManager {
       if (!this.isActive) return;
       
       try {
-        await callback();
+        await this.runCallbackIfAuthenticated(callback);
       } catch (error) {
         console.error(`Error during company ${companyId} refresh:`, error);
       }

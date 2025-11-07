@@ -7,8 +7,8 @@ tags: [architecture, boundaries]
 # ARCHITECTURE
 - UI : SvelteKit 5 (`ui/`) — bilingual FR/EN (FR-first, EN To-be) with i18n, static build, Tailwind CSS.
 - API : Hono + TypeScript (`api/`) with REST/OpenAPI, Drizzle ORM.
-- Database : SQLite + Make targets for Drizzle ROM (db management) + Litestream (S3 backup) - single file persistence.
-- Queue : Custom SQLite-based job queue with QueueManager (no external libs).
+- Database : PostgreSQL 16 + Make targets for Drizzle ORM (db management) - Docker volume persistence.
+- Queue : Custom PostgreSQL-based job queue with QueueManager (no external libs).
 - AI : OpenAI integration via Node.js (no separate Python service).
 - Tests : Make targets + Vitest (unit/integration) + Playwright (E2E).
 - Security : OIDC sessions (Google/LinkedIn), human approval on ⚠ actions.
@@ -34,14 +34,12 @@ flowchart TB
     end
     
     subgraph "Data Layer"
-        DB[("SQLite Database<br/>app.db")]
-        Queue["Custom SQLite Queue<br/>QueueManager service"]
-        Backup["Litestream<br/>S3 Backup"]
+        DB[("PostgreSQL Database<br/>Postgres 16")]
+        Queue["Custom PostgreSQL Queue<br/>QueueManager service"]
     end
     
     subgraph "External Services"
         OpenAI["OpenAI API<br/>GPT Models"]
-        S3["Scaleway Object Storage<br/>Database Backups"]
         OIDC["OIDC Providers<br/>Google/LinkedIn"]
     end
     
@@ -58,8 +56,6 @@ flowchart TB
     API --> DB
     API --> Queue
     Queue --> AI
-    DB --> Backup
-    Backup --> S3
     API -->|OIDC Auth| OIDC
     
     Make --> Docker

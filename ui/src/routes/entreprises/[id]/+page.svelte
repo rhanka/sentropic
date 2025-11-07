@@ -1,16 +1,18 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchCompanies, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
+  import { fetchCompanies, fetchCompanyById, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
   import { API_BASE_URL } from '$lib/config';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { refreshManager } from '$lib/stores/refresh';
+  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
 
   let company: Company | null = null;
   let error = '';
-  
+  let lastLoadedId: string | null = null; // évite les rechargements en boucle
+
   // Helper pour transformer les sauts de ligne simples en doubles (pour markdown)
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -32,51 +34,71 @@
   // Réactivité pour détecter les changements de statut et gérer l'actualisation
   $: if (company) {
     const isEnriching = company.status === 'enriching';
-    
+
     if (isEnriching) {
-      // Démarrer l'actualisation légère si ce n'est pas déjà fait
       if (!refreshManager.isRefreshActive(`company-${company.id}`)) {
         refreshManager.startCompanyDetailRefresh(company.id, async () => {
           await refreshCompanyStatus();
         });
       }
     } else {
-      // Arrêter l'actualisation si l'enrichissement est terminé
       refreshManager.stopRefresh(`company-${company.id}`);
     }
   }
 
   onMount(async () => {
     await loadCompany();
-    // Démarrer l'actualisation automatique si nécessaire
     startAutoRefresh();
   });
 
   onDestroy(() => {
-    // Arrêter tous les refreshes quand on quitte la page
     refreshManager.stopAllRefreshes();
   });
+
+  // Recharger lorsque l'identifiant d'URL change, sans boucle
+  $: if ($page.params.id && $page.params.id !== lastLoadedId) {
+    loadCompany();
+  }
 
   const loadCompany = async () => {
     const companyId = $page.params.id;
     if (!companyId) return;
+    if (lastLoadedId === companyId) return;
 
     try {
-      const companies = await fetchCompanies();
-      company = companies.find(c => c.id === companyId) || null;
-      if (!company) {
-        error = 'Entreprise non trouvée';
+      lastLoadedId = companyId;
+      // Chargement direct par ID (plus fiable juste après création)
+      company = await fetchCompanyById(companyId);
+      error = '';
+      // Reset unsaved changes after loading company data
+      unsavedChangesStore.reset();
+      return;
+    } catch (firstErr) {
+      await new Promise((r) => setTimeout(r, 300));
+      try {
+        company = await fetchCompanyById(companyId);
+        error = '';
         return;
+      } catch (secondErr) {
+        try {
+          const companies = await fetchCompanies();
+          company = companies.find(c => c.id === companyId) || null;
+          if (!company) {
+            error = 'Entreprise non trouvée';
+          } else {
+            error = '';
+          }
+          unsavedChangesStore.reset();
+        } catch (listErr) {
+          error = 'Erreur lors du chargement de l\'entreprise';
+        }
       }
-    } catch (err) {
-      console.error('Failed to fetch company:', err);
-      error = 'Erreur lors du chargement de l\'entreprise';
     }
   };
 
   const refreshCompanyStatus = async () => {
     if (!company) return;
-    
+
     try {
       const companies = await fetchCompanies();
       const updatedCompany = companies.find(c => c.id === company.id);
@@ -84,7 +106,7 @@
         company = updatedCompany;
       }
     } catch (err) {
-      console.error('Failed to refresh company status:', err);
+      // ignore soft refresh errors
     }
   };
 
@@ -94,26 +116,24 @@
 
   const handleFieldUpdate = (field: string, value: string) => {
     if (!company) return;
-    // Mettre à jour l'objet company localement immédiatement
     company = { ...company, [field]: value };
-    // Mettre à jour companyData pour que fullData soit réactif
     companyData = { ...companyData, [field]: value };
   };
 
   const handleDelete = async () => {
     if (!company) return;
-    
+
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ?')) return;
-    
+
     try {
       await deleteCompany(company.id);
+      // Reset unsaved changes to allow navigation
+      unsavedChangesStore.reset();
       goto('/entreprises');
     } catch (err) {
-      console.error('Failed to delete company:', err);
       error = err instanceof Error ? err.message : 'Erreur lors de la suppression';
     }
   };
-
 </script>
 
 {#if error}
@@ -140,7 +160,7 @@
         </h1>
         {#if company.industry}
           <p class="text-lg text-slate-600 mt-1">
-            <span class="font-medium">Secteur:</span> 
+            <span class="font-medium">Secteur:</span>
             <EditableInput
               value={company.industry}
               originalValue={company.industry}
@@ -153,11 +173,11 @@
           </p>
         {/if}
       </div>
-      
+
       <div class="flex gap-2">
-        <button 
+        <button
           class="rounded bg-red-500 px-4 py-2 text-white"
-          data-testid="delete-company"
+          title="Supprimer"
           on:click={handleDelete}
         >
           Supprimer

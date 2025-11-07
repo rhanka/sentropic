@@ -12,12 +12,13 @@ export async function apiRequest<T = any>(
   options: RequestInit = {}
 ): Promise<TestResponse<T>> {
   try {
+    const mergedHeaders = new Headers(options.headers || {});
+    if (!mergedHeaders.has('Content-Type')) {
+      mergedHeaders.set('Content-Type', 'application/json');
+    }
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers: mergedHeaders,
     });
 
     let data = null;
@@ -54,4 +55,60 @@ export function sleep(ms: number): Promise<void> {
 
 export function getTestModel(): string {
   return process.env.TEST_MODEL || 'gpt-4.1-nano';
+}
+
+/**
+ * HTTP request helper that mimics app.request() signature but makes real HTTP requests
+ * This allows testing middleware like rate limiting, CORS, etc.
+ */
+export async function httpRequest(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const url = `${API_BASE_URL}${path}`;
+  
+  const mergedHeaders = new Headers(options.headers || {});
+  if (!mergedHeaders.has('Content-Type') && options.body) {
+    mergedHeaders.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: mergedHeaders,
+  });
+
+  // Return a Response-like object that matches app.request() behavior
+  return response;
+}
+
+/**
+ * Make authenticated HTTP request with session cookie
+ * This is the HTTP equivalent of authenticatedRequest for real HTTP testing
+ */
+export async function authenticatedHttpRequest(
+  method: string,
+  path: string,
+  sessionToken: string,
+  body?: any,
+  headers?: Record<string, string>
+): Promise<Response> {
+  const requestHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headers, // Merge custom headers
+  };
+
+  if (sessionToken) {
+    requestHeaders['Cookie'] = `session=${sessionToken}`;
+  }
+
+  const requestOptions: RequestInit = {
+    method,
+    headers: requestHeaders,
+  };
+
+  if (body && method !== 'GET' && method !== 'HEAD') {
+    requestOptions.body = JSON.stringify(body);
+  }
+
+  return httpRequest(path, requestOptions);
 }

@@ -7,12 +7,13 @@ tags: [database, migrations, drizzle]
 # DATABASE MANAGEMENT
 
 ## Architecture Overview
-- **Database**: SQLite (single file: `data/app.db`)
-- **ORM**: Drizzle ORM with TypeScript
+- **Database**: PostgreSQL 16 (Docker volume: `pg_data`)
+- **ORM**: Drizzle ORM with TypeScript (`drizzle-orm/node-postgres`)
 - **Migration Tool**: Drizzle Kit
-- **Backup**: Litestream (continuous replication to S3)
+- **Backup**: PostgreSQL native backup tools (pg_dump)
 - **Schema Location**: `api/src/db/schema.ts`
 - **Migration Files**: `api/drizzle/` directory
+- **Connection**: `DATABASE_URL` environment variable (postgres://user:pass@host:5432/db)
 
 ## Database Schema Structure
 
@@ -26,9 +27,9 @@ tags: [database, migrations, drizzle]
 - `job_queue` - Async job processing queue
 
 ### Schema Conventions
-- **Primary Keys**: UUID strings (text type)
+- **Primary Keys**: UUID strings (uuid type)
 - **Timestamps**: ISO strings with `CURRENT_TIMESTAMP` default
-- **JSON Fields**: Stored as text, parsed in application layer
+- **JSON Fields**: PostgreSQL JSONB type for efficient querying
 - **Foreign Keys**: Proper references with cascade deletes
 - **Naming**: snake_case for columns, camelCase for TypeScript
 
@@ -80,20 +81,20 @@ tags: [database, migrations, drizzle]
 
 ## Backup and Recovery
 
-### Litestream Configuration
-- **Config File**: `api/litestream.yml`
-- **Target**: Scaleway Object Storage (S3-compatible)
-- **Frequency**: Continuous replication
+### PostgreSQL Backup Configuration
+- **Backup Tool**: `pg_dump` (PostgreSQL native)
+- **Target**: File-based backups (can be stored on S3)
+- **Frequency**: Manual or scheduled via cron/jobs
 - **Retention**: Configurable backup retention
 
 ### Backup Commands
-- `make db-backup` - Create manual backup file
-- `make db-restore [BACKUP_FILE=filename]` - Restore from backup
-- **Automatic**: Litestream handles continuous backup to S3
+- `make db-backup` - Create manual backup file using pg_dump
+- `make db-restore [BACKUP_FILE=filename]` - Restore from backup using pg_restore
+- **Automatic**: Can be scheduled via cron or external backup service
 
 ### Recovery Procedures
 1. **Stop Application**: Prevent data corruption
-2. **Restore Backup**: `make db-restore BACKUP_FILE=backup.db`
+2. **Restore Backup**: `make db-restore BACKUP_FILE=backup.sql`
 3. **Verify Schema**: `make db-status`
 4. **Run Tests**: Ensure application functionality
 5. **Restart Application**: Resume normal operations
@@ -114,30 +115,31 @@ tags: [database, migrations, drizzle]
 ## Development Guidelines
 
 ### Local Development
-- **Database Location**: `data/app.db` (gitignored)
+- **Database Location**: Docker volume `pg_data` (PostgreSQL container)
 - **Reset Often**: Use `make db-reset` for clean state
 - **Seed Data**: Use `make db-seed` for test data
-- **Volume Mount**: Docker mounts `./data` to `/data`
+- **Volume Mount**: Docker Compose manages PostgreSQL volume
 
 ### Testing Strategy
-- **Test Database**: Separate database for tests
+- **Test Database**: Separate database for tests (via `DATABASE_URL` override)
 - **Migration Tests**: Test migrations in isolation
 - **Data Validation**: Test schema changes with sample data
 - **Rollback Tests**: Verify rollback procedures
 
 ### Performance Considerations
 - **Indexes**: Add indexes for frequently queried columns
-- **JSON Fields**: Consider performance impact of JSON queries
-- **File Size**: Monitor SQLite file size growth
-- **Connection Pooling**: Single connection for SQLite (file-based)
+- **JSON Fields**: PostgreSQL JSONB provides efficient querying and indexing
+- **Connection Pooling**: Use connection pooling (node-postgres pool)
+- **Query Optimization**: Monitor slow queries and optimize with EXPLAIN ANALYZE
 
 ## Troubleshooting
 
 ### Common Issues
 - **Migration Conflicts**: Resolve by regenerating migrations
 - **Schema Drift**: Use `make db-status` to check consistency
-- **Backup Failures**: Check Litestream configuration and S3 access
-- **Lock Issues**: SQLite handles concurrent access automatically
+- **Backup Failures**: Check PostgreSQL permissions and disk space
+- **Connection Issues**: Verify DATABASE_URL format and PostgreSQL service health
+- **Lock Issues**: PostgreSQL handles concurrent access with MVCC (Multi-Version Concurrency Control)
 
 ### Debug Commands
 - `make db-status` - Check database structure and migrations

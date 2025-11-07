@@ -3,7 +3,8 @@
   import { queueStore, loadJobs, getActiveJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
   import type { Job, JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
-  import { API_BASE_URL } from '$lib/config';
+  import { apiPost } from '$lib/utils/api';
+  import { isAuthenticated } from '$lib/stores/session';
 
   let refreshInterval: ReturnType<typeof setInterval>;
   let isVisible = false;
@@ -13,11 +14,30 @@
   $: allJobsCompleted = hasJobs && $queueStore.jobs.every(job => job.status === 'completed');
   $: hasFailedJobs = hasJobs && $queueStore.jobs.some(job => job.status === 'failed');
 
-  // Charger les jobs au montage et toutes les 5 secondes
+  // Charger les jobs au montage et toutes les 5 secondes (seulement si authentifié)
   onMount(async () => {
-    await loadJobs();
-    refreshInterval = setInterval(loadJobs, 5000);
+    if ($isAuthenticated) {
+      await loadJobs();
+      refreshInterval = setInterval(() => {
+        if ($isAuthenticated) {
+          loadJobs();
+        }
+      }, 5000);
+    }
   });
+
+  // Réagir aux changements d'authentification
+  $: if ($isAuthenticated && !refreshInterval) {
+    loadJobs();
+    refreshInterval = setInterval(() => {
+      if ($isAuthenticated) {
+        loadJobs();
+      }
+    }, 5000);
+  } else if (!$isAuthenticated && refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
 
   onDestroy(() => {
     if (refreshInterval) {
@@ -115,24 +135,12 @@
     }
     
     try {
-      const response = await fetch(`${API_BASE_URL}/queue/purge`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'all' })
+      const result = await apiPost('/queue/purge', { status: 'all' });
+      addToast({
+        type: 'success',
+        message: result.message
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        addToast({
-          type: 'success',
-          message: result.message
-        });
-        await loadJobs();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
+      await loadJobs();
     } catch (error) {
       console.error('Failed to delete all jobs:', error);
       addToast({
