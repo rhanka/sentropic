@@ -303,8 +303,7 @@ jobs:
   publish-ui-image:
     runs-on: ubuntu-latest
     needs: [changes, test-e2e, security-container]
-    if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
-    #&& github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -330,8 +329,7 @@ jobs:
   publish-api-image:
     runs-on: ubuntu-latest
     needs: [changes, test-e2e, test-smoke-restore, security-container]
-    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
-    # && github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -360,11 +358,9 @@ jobs:
     needs: [changes, publish-api-image]
     steps:
       - uses: actions/checkout@v4
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) 
-        # && github.ref == 'refs/heads/main'
+        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
       - name: Use Scaleway CLI
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' )
-        # && github.ref == 'refs/heads/main'
+        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
         uses: scaleway/action-scw@v0
         with:
           save-config: true
@@ -375,16 +371,14 @@ jobs:
           default-project-id: ${{ secrets.SCW_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_ORGANIZATION_ID }}
       - name: Deploy API
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' )
-        # && github.ref == 'refs/heads/main'
+        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
         run: make deploy-api
 
   # Deploy UI
   deploy-ui:
     runs-on: ubuntu-latest
     needs: [changes, deploy-api]
-    if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' )
-    # && github.ref == 'refs/heads/main'
+    if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
@@ -392,6 +386,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
