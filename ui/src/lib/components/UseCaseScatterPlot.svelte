@@ -165,16 +165,64 @@
       },
       datalabels: {
         display: true,
-        anchor: 'end',
-        align: 'top',
-        offset: 4,
+        anchor: (context: any) => {
+          // Positionner le label selon la position du point pour éviter les chevauchements
+          const point = context.dataset.data[context.dataIndex];
+          // Calculer les ratios en utilisant les valeurs min/max actuelles
+          const xMin = Math.min(...dataPoints.map((p: any) => p.x));
+          const xMax = Math.max(...dataPoints.map((p: any) => p.x));
+          const yMin = Math.min(...dataPoints.map((p: any) => p.y));
+          const yMax = Math.max(...dataPoints.map((p: any) => p.y));
+          
+          const xRange = xMax - xMin || 1;
+          const yRange = yMax - yMin || 1;
+          const xRatio = (point.x - xMin) / xRange;
+          const yRatio = (point.y - yMin) / yRange;
+          
+          // Si le point est à droite, mettre le label à gauche
+          if (xRatio > 0.6) return 'left';
+          // Si le point est à gauche, mettre le label à droite
+          if (xRatio < 0.4) return 'right';
+          // Sinon, centrer horizontalement
+          return 'center';
+        },
+        align: (context: any) => {
+          const point = context.dataset.data[context.dataIndex];
+          // Calculer les ratios en utilisant les valeurs min/max actuelles
+          const yMin = Math.min(...dataPoints.map((p: any) => p.y));
+          const yMax = Math.max(...dataPoints.map((p: any) => p.y));
+          const yRange = yMax - yMin || 1;
+          const yRatio = (point.y - yMin) / yRange;
+          
+          // Si le point est en haut, mettre le label en bas
+          if (yRatio > 0.6) return 'bottom';
+          // Si le point est en bas, mettre le label en haut
+          if (yRatio < 0.4) return 'top';
+          // Sinon, centrer verticalement
+          return 'center';
+        },
+        offset: 8,
+        clamp: true,
+        clip: false,
         font: {
-          size: 10,
-          weight: 'bold'
+          size: 9,
+          weight: 'normal'
         },
         color: '#374151',
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        borderColor: '#E5E7EB',
+        borderRadius: 4,
+        borderWidth: 1,
+        padding: {
+          top: 2,
+          bottom: 2,
+          left: 4,
+          right: 4
+        },
         formatter: (value: any, context: any) => {
-          return context.dataset.data[context.dataIndex].label;
+          const label = context.dataset.data[context.dataIndex].label;
+          // Tronquer les labels trop longs
+          return label.length > 35 ? label.substring(0, 32) + '...' : label;
         }
       }
     },
@@ -269,36 +317,38 @@
   }
 </script>
 
-<div class="w-full max-w-[50%] h-[600px] bg-white rounded-lg shadow-sm border border-slate-200 p-4">
-  {#if useCases.length === 0}
-    <div class="flex items-center justify-center h-full text-slate-500">
-      <div class="text-center">
-        <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-        </svg>
-        <p class="text-sm">Aucun cas d'usage à afficher</p>
+<div class="w-full max-w-[50%]">
+  <div class="w-full h-[600px] bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+    {#if useCases.length === 0}
+      <div class="flex items-center justify-center h-full text-slate-500">
+        <div class="text-center">
+          <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <p class="text-sm">Aucun cas d'usage à afficher</p>
+        </div>
       </div>
-    </div>
-  {:else if !matrix}
-    <div class="flex items-center justify-center h-full text-slate-500">
-      <div class="text-center">
-        <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-        </svg>
-        <p class="text-sm">Chargement de la matrice...</p>
+    {:else if !matrix}
+      <div class="flex items-center justify-center h-full text-slate-500">
+        <div class="text-center">
+          <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <p class="text-sm">Chargement de la matrice...</p>
+        </div>
       </div>
+    {:else}
+      <canvas bind:this={chartContainer} class="w-full h-full cursor-pointer"></canvas>
+    {/if}
+  </div>
+  
+  <!-- Indication de clic -->
+  <div class="mt-4 flex justify-center">
+    <div class="flex items-center gap-2 text-slate-500 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+      </svg>
+      <span>Cliquez sur un point pour voir le détail</span>
     </div>
-           {:else}
-             <canvas bind:this={chartContainer} class="w-full h-full cursor-pointer"></canvas>
-           {/if}
-</div>
-
-<!-- Indication de clic -->
-<div class="mt-4 flex justify-center">
-  <div class="flex items-center gap-2 text-slate-500 text-sm">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
-    </svg>
-    <span>Cliquez sur un point pour voir le détail</span>
   </div>
 </div>
