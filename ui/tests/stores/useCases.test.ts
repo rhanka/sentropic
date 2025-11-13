@@ -20,8 +20,8 @@ describe('Use Cases Store', () => {
   describe('fetchUseCases', () => {
     it('should fetch use cases successfully', async () => {
       const mockUseCases = [
-        { id: '1', name: 'Use Case 1', folderId: 'folder1', companyId: 'company1' },
-        { id: '2', name: 'Use Case 2', folderId: 'folder1', companyId: 'company1' }
+        { id: '1', name: 'Use Case 1', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano' },
+        { id: '2', name: 'Use Case 2', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano' }
       ];
       
       mockFetchJsonOnce({ items: mockUseCases });
@@ -135,6 +135,7 @@ describe('Use Cases Store', () => {
         complexityScores: [],
         totalValueScore: 0,
         totalComplexityScore: 0,
+        model: 'gpt-4.1-nano',
         createdAt: '2023-01-01'
       }];
       useCasesStore.set(useCases);

@@ -263,6 +263,10 @@ export class QueueManager {
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, input, companyId, model } = data;
     
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
+    
     // Récupérer les informations de l'entreprise si nécessaire
     let companyInfo = '';
     if (companyId) {
@@ -291,7 +295,7 @@ export class QueueManager {
     }
 
     // Générer la liste de cas d'usage
-    const useCaseList = await generateUseCaseList(input, companyInfo, model, signal);
+    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -327,7 +331,7 @@ export class QueueManager {
         complexityScores: JSON.stringify([]),
         totalValueScore: 0,
         totalComplexityScore: 0,
-        model: model || 'gpt-5',
+        model: selectedModel,
         status: 'generating',
         createdAt: new Date()
       };
@@ -351,7 +355,7 @@ export class QueueManager {
             useCaseId: useCase.id,
             useCaseName: useCase.name,
             folderId: folderId,
-            model: model
+            model: selectedModel
           });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
@@ -367,6 +371,10 @@ export class QueueManager {
    */
   private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
     const { useCaseId, useCaseName, folderId, model } = data;
+    
+    // Récupérer le modèle par défaut depuis les settings si non fourni
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer la configuration de la matrice
     const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
@@ -407,7 +415,7 @@ export class QueueManager {
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, model, signal);
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
@@ -457,7 +465,7 @@ export class QueueManager {
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
         totalValueScore: Math.round(computed.totalValueScore),
         totalComplexityScore: Math.round(computed.totalComplexityScore),
-        model: model || 'gpt-5',
+        model: selectedModel,
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));

@@ -36,6 +36,13 @@
       "when": 1763002669800,
       "tag": "0004_strong_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1763006411397,
+      "tag": "0005_youthful_goblin_queen",
+      "breakpoints": true
     }
   ]
 }
