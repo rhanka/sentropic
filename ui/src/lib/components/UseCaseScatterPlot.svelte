@@ -135,6 +135,53 @@
   $: yAxisMin = Math.max(0, yMin - yMargin);
   $: yAxisMax = Math.min(100, yMax + yMargin);
 
+  // Fonction pour calculer quels labels afficher en évitant les collisions
+  function calculateVisibleLabels(points: any[]): Set<number> {
+    const visible = new Set<number>();
+    const minDistance = 0.08; // Distance minimale entre les points (normalisée 0-1)
+    
+    // Trier les points par valeur décroissante (priorité aux points de haute valeur)
+    const sortedIndices = points
+      .map((p, i) => ({ index: i, value: p.y, x: p.x, y: p.y }))
+      .sort((a, b) => b.value - a.value);
+    
+    // Normaliser les coordonnées pour la détection de collision
+    const xRange = xMax - xMin || 1;
+    const yRange = yMax - yMin || 1;
+    
+    for (const { index, x, y } of sortedIndices) {
+      const normalizedX = (x - xMin) / xRange;
+      const normalizedY = (y - yMin) / yRange;
+      
+      let hasCollision = false;
+      
+      // Vérifier la collision avec les labels déjà affichés
+      for (const visibleIndex of visible) {
+        const otherPoint = points[visibleIndex];
+        const otherX = (otherPoint.x - xMin) / xRange;
+        const otherY = (otherPoint.y - yMin) / yRange;
+        
+        const distance = Math.sqrt(
+          Math.pow(normalizedX - otherX, 2) + Math.pow(normalizedY - otherY, 2)
+        );
+        
+        if (distance < minDistance) {
+          hasCollision = true;
+          break;
+        }
+      }
+      
+      if (!hasCollision) {
+        visible.add(index);
+      }
+    }
+    
+    return visible;
+  }
+
+  // Calculer quels labels sont visibles
+  $: visibleLabelIndices = dataPoints.length > 0 ? calculateVisibleLabels(dataPoints) : new Set<number>();
+
   $: chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -164,65 +211,59 @@
         }
       },
       datalabels: {
-        display: true,
+        display: (context: any) => {
+          // Afficher seulement les labels qui ne se chevauchent pas
+          return visibleLabelIndices.has(context.dataIndex);
+        },
         anchor: (context: any) => {
           // Positionner le label selon la position du point pour éviter les chevauchements
           const point = context.dataset.data[context.dataIndex];
-          // Calculer les ratios en utilisant les valeurs min/max actuelles
-          const xMin = Math.min(...dataPoints.map((p: any) => p.x));
-          const xMax = Math.max(...dataPoints.map((p: any) => p.x));
-          const yMin = Math.min(...dataPoints.map((p: any) => p.y));
-          const yMax = Math.max(...dataPoints.map((p: any) => p.y));
-          
           const xRange = xMax - xMin || 1;
           const yRange = yMax - yMin || 1;
           const xRatio = (point.x - xMin) / xRange;
           const yRatio = (point.y - yMin) / yRange;
           
           // Si le point est à droite, mettre le label à gauche
-          if (xRatio > 0.6) return 'left';
+          if (xRatio > 0.65) return 'left';
           // Si le point est à gauche, mettre le label à droite
-          if (xRatio < 0.4) return 'right';
+          if (xRatio < 0.35) return 'right';
           // Sinon, centrer horizontalement
           return 'center';
         },
         align: (context: any) => {
           const point = context.dataset.data[context.dataIndex];
-          // Calculer les ratios en utilisant les valeurs min/max actuelles
-          const yMin = Math.min(...dataPoints.map((p: any) => p.y));
-          const yMax = Math.max(...dataPoints.map((p: any) => p.y));
           const yRange = yMax - yMin || 1;
           const yRatio = (point.y - yMin) / yRange;
           
           // Si le point est en haut, mettre le label en bas
-          if (yRatio > 0.6) return 'bottom';
+          if (yRatio > 0.65) return 'bottom';
           // Si le point est en bas, mettre le label en haut
-          if (yRatio < 0.4) return 'top';
+          if (yRatio < 0.35) return 'top';
           // Sinon, centrer verticalement
           return 'center';
         },
-        offset: 8,
+        offset: 10,
         clamp: true,
         clip: false,
         font: {
-          size: 9,
+          size: 8,
           weight: 'normal'
         },
         color: '#374151',
-        backgroundColor: 'rgba(255, 255, 255, 0.85)',
-        borderColor: '#E5E7EB',
-        borderRadius: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: '#D1D5DB',
+        borderRadius: 3,
         borderWidth: 1,
         padding: {
-          top: 2,
-          bottom: 2,
-          left: 4,
-          right: 4
+          top: 1,
+          bottom: 1,
+          left: 3,
+          right: 3
         },
         formatter: (value: any, context: any) => {
           const label = context.dataset.data[context.dataIndex].label;
-          // Tronquer les labels trop longs
-          return label.length > 35 ? label.substring(0, 32) + '...' : label;
+          // Tronquer plus agressivement les labels trop longs
+          return label.length > 25 ? label.substring(0, 22) + '...' : label;
         }
       }
     },
