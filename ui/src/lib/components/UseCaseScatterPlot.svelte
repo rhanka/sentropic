@@ -78,6 +78,7 @@
       label: 'Cas d\'usage',
       data: offsetOverlappingPoints(rawData),
       backgroundColor: (context: any) => {
+        if (!context || !context.parsed) return 'rgba(107, 114, 128, 0.6)';
         const status = context.parsed.status;
         switch (status) {
           case 'completed': return 'rgba(34, 197, 94, 0.6)'; // Vert
@@ -87,6 +88,7 @@
         }
       },
       borderColor: (context: any) => {
+        if (!context || !context.parsed) return 'rgba(107, 114, 128, 1)';
         const status = context.parsed.status;
         switch (status) {
           case 'completed': return 'rgba(34, 197, 94, 1)';
@@ -95,22 +97,19 @@
           default: return 'rgba(107, 114, 128, 1)';
         }
       },
-               pointRadius: (context: any) => {
-                 return context.raw.isOffset ? 6 : 8; // Points décalés légèrement plus petits
-               },
-               pointHoverRadius: 12,
-               pointBorderWidth: (context: any) => {
-                 return context.raw.isOffset ? 3 : 2; // Bordure plus épaisse pour les points décalés
-               },
-               pointHoverBackgroundColor: (context: any) => {
-                 const status = context.parsed.status;
-                 switch (status) {
-                   case 'completed': return 'rgba(34, 197, 94, 0.8)';
-                   case 'generating': return 'rgba(251, 191, 36, 0.8)';
-                   case 'detailing': return 'rgba(59, 130, 246, 0.8)';
-                   default: return 'rgba(107, 114, 128, 0.8)';
-                 }
-               }
+      pointRadius: 8,
+      pointHoverRadius: 12,
+      pointBorderWidth: 2,
+      pointHoverBackgroundColor: (context: any) => {
+        if (!context || !context.parsed) return 'rgba(107, 114, 128, 0.8)';
+        const status = context.parsed.status;
+        switch (status) {
+          case 'completed': return 'rgba(34, 197, 94, 0.8)';
+          case 'generating': return 'rgba(251, 191, 36, 0.8)';
+          case 'detailing': return 'rgba(59, 130, 246, 0.8)';
+          default: return 'rgba(107, 114, 128, 0.8)';
+        }
+      }
     }]
   };
 
@@ -135,154 +134,15 @@
   $: yAxisMin = Math.max(0, yMin - yMargin);
   $: yAxisMax = Math.min(100, yMax + yMargin);
 
-  // Interface pour les positions de labels optimisées
-  interface LabelPosition {
-    x: number;
-    y: number;
-    anchor: string;
-    align: string;
-    offsetX: number;
-    offsetY: number;
-  }
-
-  // Algorithme de force simulation pour éviter les chevauchements de labels
-  function calculateLabelPositions(points: any[]): Map<number, LabelPosition> {
-    const positions = new Map<number, LabelPosition>();
-    const xRange = xMax - xMin || 1;
-    const yRange = yMax - yMin || 1;
-    
-    // Estimation de la taille d'un label (normalisée)
-    const labelWidth = 0.15; // ~15% de la largeur du graphique
-    const labelHeight = 0.03; // ~3% de la hauteur du graphique
-    const minDistance = Math.max(labelWidth, labelHeight) * 1.2; // Distance minimale entre labels
-    
-    // Initialiser les positions des labels près des points
-    const labelPositions: Array<{ x: number; y: number; index: number; point: any }> = points.map((point, index) => {
-      const normalizedX = (point.x - xMin) / xRange;
-      const normalizedY = (point.y - yMin) / yRange;
-      
-      // Position initiale du label (légèrement décalée du point)
-      let labelX = normalizedX;
-      let labelY = normalizedY;
-      let anchor = 'center';
-      let align = 'center';
-      
-      // Position initiale basée sur la position du point
-      if (normalizedX > 0.7) {
-        labelX = normalizedX - labelWidth / 2;
-        anchor = 'right';
-      } else if (normalizedX < 0.3) {
-        labelX = normalizedX + labelWidth / 2;
-        anchor = 'left';
-      }
-      
-      if (normalizedY > 0.7) {
-        labelY = normalizedY - labelHeight / 2;
-        align = 'bottom';
-      } else if (normalizedY < 0.3) {
-        labelY = normalizedY + labelHeight / 2;
-        align = 'top';
-      }
-      
-      return {
-        x: labelX,
-        y: labelY,
-        index,
-        point: { ...point, normalizedX, normalizedY }
-      };
-    });
-    
-    // Algorithme de force simulation (itératif)
-    const iterations = 50;
-    const repulsionForce = 0.02;
-    const attractionForce = 0.01;
-    const damping = 0.9;
-    
-    // Vitesses pour chaque label
-    const velocities = labelPositions.map(() => ({ vx: 0, vy: 0 }));
-    
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let i = 0; i < labelPositions.length; i++) {
-        const label = labelPositions[i];
-        let fx = 0; // Force X
-        let fy = 0; // Force Y
-        
-        // Force d'attraction vers le point d'origine
-        const dx = label.point.normalizedX - label.x;
-        const dy = label.point.normalizedY - label.y;
-        fx += dx * attractionForce;
-        fy += dy * attractionForce;
-        
-        // Force de répulsion entre labels (éviter les collisions)
-        for (let j = 0; j < labelPositions.length; j++) {
-          if (i === j) continue;
-          
-          const other = labelPositions[j];
-          const dx = label.x - other.x;
-          const dy = label.y - other.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < minDistance && distance > 0) {
-            // Force de répulsion inversement proportionnelle à la distance
-            const force = (minDistance - distance) / distance;
-            fx += (dx / distance) * force * repulsionForce;
-            fy += (dy / distance) * force * repulsionForce;
-          }
-        }
-        
-        // Appliquer les forces avec damping
-        velocities[i].vx = (velocities[i].vx + fx) * damping;
-        velocities[i].vy = (velocities[i].vy + fy) * damping;
-        
-        // Mettre à jour la position
-        label.x += velocities[i].vx;
-        label.y += velocities[i].vy;
-        
-        // Garder les labels dans les limites du graphique
-        label.x = Math.max(0, Math.min(1, label.x));
-        label.y = Math.max(0, Math.min(1, label.y));
-      }
-    }
-    
-    // Convertir les positions normalisées en positions finales avec anchor/align
-    labelPositions.forEach((label) => {
-      const point = label.point;
-      const dx = label.x - point.normalizedX;
-      const dy = label.y - point.normalizedY;
-      
-      // Déterminer anchor et align basés sur la position finale
-      let anchor = 'center';
-      let align = 'center';
-      
-      if (Math.abs(dx) > Math.abs(dy)) {
-        // Déplacement principalement horizontal
-        anchor = dx > 0 ? 'left' : 'right';
-        align = 'center';
-      } else {
-        // Déplacement principalement vertical
-        anchor = 'center';
-        align = dy > 0 ? 'top' : 'bottom';
-      }
-      
-      // Calculer les offsets en pixels (approximatif, sera ajusté par Chart.js)
-      const offsetX = dx * xRange;
-      const offsetY = dy * yRange;
-      
-      positions.set(label.index, {
-        x: label.x,
-        y: label.y,
-        anchor,
-        align,
-        offsetX,
-        offsetY
-      });
-    });
-    
-    return positions;
-  }
-
-  // Calculer les positions optimisées des labels
-  $: labelPositions = dataPoints.length > 0 ? calculateLabelPositions(dataPoints) : new Map<number, LabelPosition>();
+  // Approche simplifiée : afficher seulement les labels des points de haute valeur
+  // et utiliser le tooltip pour les autres
+  $: topUseCases = dataPoints.length > 0 
+    ? dataPoints
+        .map((p, i) => ({ ...p, index: i }))
+        .sort((a, b) => b.y - a.y)
+        .slice(0, Math.min(6, Math.floor(dataPoints.length * 0.4))) // Top 40% ou max 6
+        .map(p => p.index)
+    : [];
 
   $: chartOptions = {
     responsive: true,
@@ -300,47 +160,40 @@
         display: false
       },
       tooltip: {
-        enabled: true, // S'assurer que le tooltip est activé
+        enabled: true,
         callbacks: {
-          title: (context: any) => context[0].raw.label,
+          title: (context: any) => {
+            if (!context || !context[0] || !context[0].raw) return '';
+            return context[0].raw.label || '';
+          },
           label: (context: any) => {
+            if (!context || !context[0] || !context[0].raw) return [];
+            const raw = context[0].raw;
             const lines = [
-              context[0].raw.description ? `Description: ${context[0].raw.description.substring(0, 100)}${context[0].raw.description.length > 100 ? '...' : ''}` : '',
-              `Valeur: ${context[0].raw.y} pts (${context[0].raw.valueStars}/5 ⭐)`,
-              `Complexité: ${context[0].raw.x} pts (${context[0].raw.complexityStars}/5 ❌)`
+              raw.description ? `Description: ${raw.description.substring(0, 100)}${raw.description.length > 100 ? '...' : ''}` : '',
+              `Valeur: ${raw.y} pts (${raw.valueStars}/5 ⭐)`,
+              `Complexité: ${raw.x} pts (${raw.complexityStars}/5 ❌)`
             ];
             return lines.filter(line => line !== '');
           }
         }
       },
       datalabels: {
-        display: true, // Afficher tous les labels maintenant
-        anchor: (context: any) => {
-          const pos = labelPositions.get(context.dataIndex);
-          return pos ? pos.anchor : 'center';
+        display: (context: any) => {
+          // Afficher seulement les labels des top use cases
+          return topUseCases.includes(context.dataIndex);
         },
-        align: (context: any) => {
-          const pos = labelPositions.get(context.dataIndex);
-          return pos ? pos.align : 'center';
-        },
-        offset: (context: any) => {
-          const pos = labelPositions.get(context.dataIndex);
-          if (!pos) return 8;
-          
-          // Convertir les offsets normalisés en pixels approximatifs
-          // Chart.js utilise des pixels, donc on doit estimer
-          // On utilise un offset basé sur la distance calculée
-          const distance = Math.sqrt(pos.offsetX * pos.offsetX + pos.offsetY * pos.offsetY);
-          return Math.max(8, Math.min(30, distance * 2));
-        },
-        clamp: false, // Permettre aux labels de sortir légèrement pour éviter les collisions
+        anchor: 'end',
+        align: 'top',
+        offset: 8,
+        clamp: true,
         clip: false,
         font: {
-          size: 8,
+          size: 9,
           weight: 'normal'
         },
         color: '#374151',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
         borderColor: '#D1D5DB',
         borderRadius: 3,
         borderWidth: 1,
@@ -351,9 +204,9 @@
           right: 4
         },
         formatter: (value: any, context: any) => {
-          const label = context.dataset.data[context.dataIndex].label;
-          // Tronquer les labels trop longs
-          return label.length > 30 ? label.substring(0, 27) + '...' : label;
+          if (!context || !context.dataset || !context.dataset.data) return '';
+          const label = context.dataset.data[context.dataIndex]?.label || '';
+          return label.length > 25 ? label.substring(0, 22) + '...' : label;
         }
       }
     },
