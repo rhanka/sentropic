@@ -4,7 +4,6 @@
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import ChartDataLabels from 'chartjs-plugin-datalabels';
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -12,9 +11,221 @@
   let chartContainer: HTMLCanvasElement;
   let chartInstance: Chart | null = null;
 
-  // Enregistrer tous les composants Chart.js
-  Chart.register(...registerables);
-  Chart.register(ChartDataLabels);
+  // --- Helpers pour placement personnalisé des labels ---
+  const LABEL_FONT = '9px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const MAX_LABEL_WIDTH = 140;
+  const LABEL_PADDING = 6;
+  const LINE_HEIGHT = 14;
+
+  type LabelBox = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    textLines: string[];
+    point: { x: number; y: number };
+    isLeft: boolean;
+  };
+
+  function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    words.forEach((word) => {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const { width } = ctx.measureText(testLine);
+      if (width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    return lines;
+  }
+
+  function boxesOverlap(a: LabelBox, b: LabelBox) {
+    return !(
+      a.left + a.width < b.left ||
+      a.left > b.left + b.width ||
+      a.top + a.height < b.top ||
+      a.top > b.top + b.height
+    );
+  }
+
+  function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+  ) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  }
+
+  function resolveVerticalOverlaps(boxes: LabelBox[], chartArea: any) {
+    if (boxes.length === 0) return;
+    const spacing = 6;
+    boxes.sort((a, b) => a.top - b.top);
+
+    for (let i = 1; i < boxes.length; i++) {
+      const prev = boxes[i - 1];
+      const current = boxes[i];
+      const overlap = prev.top + prev.height + spacing - current.top;
+      if (overlap > 0) {
+        current.top += overlap;
+      }
+    }
+
+    for (let i = boxes.length - 2; i >= 0; i--) {
+      const next = boxes[i + 1];
+      const current = boxes[i];
+      const overlap = current.top + current.height + spacing - next.top;
+      if (overlap > 0) {
+        current.top -= overlap;
+      }
+    }
+
+    const minTop = chartArea.top + 4;
+    const maxBottom = chartArea.bottom - 4;
+    const currentMinTop = Math.min(...boxes.map((box) => box.top));
+    const currentMaxBottom = Math.max(...boxes.map((box) => box.top + box.height));
+
+    if (currentMinTop < minTop) {
+      const shift = minTop - currentMinTop;
+      boxes.forEach((box) => (box.top += shift));
+    }
+    if (currentMaxBottom > maxBottom) {
+      const shift = currentMaxBottom - maxBottom;
+      boxes.forEach((box) => (box.top -= shift));
+    }
+  }
+
+  function buildLabelBoxes(points: any[], chartArea: any, ctx: CanvasRenderingContext2D): LabelBox[] {
+    const centerX = chartArea.left + chartArea.width / 2;
+    const leftEntries: any[] = [];
+    const rightEntries: any[] = [];
+
+    points.forEach((pointData) => {
+      if (!pointData.element) return;
+      if (pointData.element.x < centerX) {
+        leftEntries.push(pointData);
+      } else {
+        rightEntries.push(pointData);
+      }
+    });
+
+    const createBoxes = (entries: any[], isLeft: boolean) => {
+      const boxes: LabelBox[] = [];
+      entries.forEach((pointData) => {
+        const element = pointData.element;
+        const raw = pointData.raw;
+        if (!element || !raw?.label) return;
+
+        const textLines = wrapText(ctx, raw.label, MAX_LABEL_WIDTH);
+        const textWidth = Math.max(...textLines.map((line: string) => ctx.measureText(line).width), 0);
+        const boxWidth = textWidth + LABEL_PADDING * 2;
+        const boxHeight = textLines.length * LINE_HEIGHT + LABEL_PADDING * 2;
+        const baseLeft = isLeft ? element.x - boxWidth - 16 : element.x + 16;
+        let left = clamp(baseLeft, chartArea.left + 4, chartArea.right - boxWidth - 4);
+        const top = clamp(element.y - boxHeight / 2, chartArea.top + 4, chartArea.bottom - boxHeight - 4);
+
+        boxes.push({
+          left,
+          top,
+          width: boxWidth,
+          height: boxHeight,
+          textLines,
+          point: { x: element.x, y: element.y },
+          isLeft
+        });
+      });
+
+      resolveVerticalOverlaps(boxes, chartArea);
+      return boxes;
+    };
+
+    const leftBoxes = createBoxes(leftEntries, true);
+    const rightBoxes = createBoxes(rightEntries, false);
+
+    return [...leftBoxes, ...rightBoxes];
+  }
+
+  const useCaseLabelPlugin = {
+    id: 'useCaseLabels',
+    afterDatasetsDraw(chart: Chart) {
+      const dataset = chart.getDatasetMeta(0);
+      if (!dataset || !dataset.data || dataset.data.length === 0) {
+        return;
+      }
+
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = LABEL_FONT;
+      ctx.textBaseline = 'top';
+      const chartArea = chart.chartArea;
+      const points = dataset.data
+        .map((element: any, index: number) => ({
+          element,
+          index,
+          raw: element?.$context?.raw
+        }))
+        .filter((item) => item.raw?.label);
+
+      const labelBoxes = buildLabelBoxes(points, chartArea, ctx);
+
+      labelBoxes.forEach((box) => {
+        const anchorX = box.isLeft ? box.left + box.width : box.left;
+        const anchorY = clamp(box.point.y, box.top + 4, box.top + box.height - 4);
+
+        ctx.strokeStyle = '#cbd5f5';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(box.point.x, box.point.y);
+        ctx.lineTo(anchorX, anchorY);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        drawRoundedRect(ctx, box.left, box.top, box.width, box.height, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#0f172a';
+        box.textLines.forEach((line, lineIndex) => {
+          ctx.fillText(
+            line,
+            box.left + LABEL_PADDING,
+            box.top + LABEL_PADDING + lineIndex * LINE_HEIGHT
+          );
+        });
+      });
+
+      ctx.restore();
+    }
+  };
+
+  // Enregistrer Chart.js + plugin custom
+  Chart.register(...registerables, useCaseLabelPlugin);
 
   // Fonction pour décaler les points superposés
   function offsetOverlappingPoints(data: any[]): any[] {
@@ -134,16 +345,6 @@
   $: yAxisMin = Math.max(0, yMin - yMargin);
   $: yAxisMax = Math.min(100, yMax + yMargin);
 
-  // Approche simplifiée : afficher seulement les labels des points de haute valeur
-  // et utiliser le tooltip pour les autres
-  $: topUseCases = dataPoints.length > 0 
-    ? dataPoints
-        .map((p, i) => ({ ...p, index: i }))
-        .sort((a, b) => b.y - a.y)
-        .slice(0, Math.min(6, Math.floor(dataPoints.length * 0.4))) // Top 40% ou max 6
-        .map(p => p.index)
-    : [];
-
   $: chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -176,37 +377,6 @@
             ];
             return lines.filter(line => line !== '');
           }
-        }
-      },
-      datalabels: {
-        display: (context: any) => {
-          // Afficher seulement les labels des top use cases
-          return topUseCases.includes(context.dataIndex);
-        },
-        anchor: 'end',
-        align: 'top',
-        offset: 8,
-        clamp: true,
-        clip: false,
-        font: {
-          size: 9,
-          weight: 'normal'
-        },
-        color: '#374151',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderColor: '#D1D5DB',
-        borderRadius: 3,
-        borderWidth: 1,
-        padding: {
-          top: 2,
-          bottom: 2,
-          left: 4,
-          right: 4
-        },
-        formatter: (value: any, context: any) => {
-          if (!context || !context.dataset || !context.dataset.data) return '';
-          const label = context.dataset.data[context.dataIndex]?.label || '';
-          return label.length > 25 ? label.substring(0, 22) + '...' : label;
         }
       }
     },
