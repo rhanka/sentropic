@@ -4,7 +4,7 @@
 
 **✅ Terminé :**
 - [x] Structure repo `/ui`, `/api`, Makefile, Dockerfiles, docker-compose
-- [x] Schéma PostgreSQL 16 + migrations (Drizzle) appliqués
+- [x] Schéma SQL + migrations (Drizzle) appliqués
 - [x] API TypeScript (Hono) avec schémas Zod, OpenAPI généré
 - [x] Service OpenAI (Node) et endpoint `/use-cases/generate`
 - [x] Calculs serveur et endpoints d'agrégation Dashboard
@@ -18,23 +18,25 @@
 - [x] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
 - [x] Fix 404 enterprises/[id] path in production
+- [x] Auth Webauth with mail chck + minimal RBAC
 
 **⏳ À faire :**
-- [ ] Auth:
-    - [ ] avec @simplewebauthn/{server,browser} cookie HttpOnly
-    - [ ] RP Config
-    - [ ] Schéma DB “webauthn_credentials” (Drizzle) pour lier clés → user : credentialId (base64url, unique), publicKey (PEM/COSE b64), counter, userId, deviceName, transports, uvFlag, timestamps (à confirmer)
-    - [ ] table pour stocker les refresh tokens / device sessions pour révocation, liste d’appareils, et état MFA.
-    - [ ] stockage des challenges (posgres + expiresAt + used + purge au démarrage cold start) avec TTL (60–300 s)
-    - [ ] Flow : routes d’init + de vérif (register & auth) côté server + appels @simplewebauthn/browser côté client.
-    - [ ] JWT/session après vérif (jose/cookies)
-    - [ ] RBAC (admin app, admin org, editor, guest)
-    - [ ] secureHeaders (équiv de Helmet pour Hono) (CSP/HSTS/COOP/COEP) et CORS strict
-    - [ ] Rate-limit sur /webauthn/*
-    - [ ] User Verification : required pour admins, preferred pour éditeurs.
-    - [ ] Attestation policy : la plupart du temps none; sinon gère la vérification des certs.
-    - [ ] secours lien magique
-- [ ] Traçabilité des modèles (GPT5, GPT4.1nano) utilisés pour chaque enrichissement
+- [ ] Améliorer l'apparence et la gestion des fiches de cas d'usage
+  - [ ] dans le détail de fiche, ajouter une numérotation pour les références (urls)
+  - [ ] modifier le prompt pour le format des références, afin pouvoir les lier le cas échéant depuis les descriptions
+  - [ ] modifier le format de la carte de cas d'usage
+      - [ ] éviter le débordement du texte et du titre : tronquer
+      - [ ] mettre un header et footer de carte
+      - [ ] retirer les icônes oeil et modifier (inutile, quand on clique on voit la fiche)
+      - [ ] la position de l'icone restant (poubelle) doit apparaitre au hove mais être fixe par rapport au bord droit dans le header
+  - [ ] ajouter le modèle utilisé pour la génration (GPT5 ou GPT4 ou autre) en tag sur la fiche (détail et carte)
+  - [ ] retirer l'affichage du label "Actif" (pas de sens à ce stade)
+- [ ] Améliorer Dashboard en tant que synthèse exécutive
+  - [ ] ajouter une zone de ROI (top left quadrant, vert, to be discussed)
+  - [ ] le graphique devrait remplir max 50% de l'écran, et devrait être plus haut
+  - [ ] le label du cas doit être inscrit sans hover, et au hover la description doit être affichée, valeur complexité et non le statut
+  - [ ] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
+  - [ ] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
 - [ ] Approfondissement d'un enrichissement (passer de GPT4.1.nano à GPT5 pour un enrichissement)
 - [ ] Interaction ciblée autour d'un cas d'usage ou entreprise
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
