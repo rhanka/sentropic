@@ -4,6 +4,7 @@
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
+  import ChartDataLabels from 'chartjs-plugin-datalabels';
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -13,6 +14,7 @@
 
   // Enregistrer tous les composants Chart.js
   Chart.register(...registerables);
+  Chart.register(ChartDataLabels);
 
   // Fonction pour décaler les points superposés
   function offsetOverlappingPoints(data: any[]): any[] {
@@ -63,6 +65,7 @@
         x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
         y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
         label: uc.name,
+        description: uc.description || '',
         status: uc.status,
         id: uc.id,
         valueStars: scores.valueStars,      // Valeur normalisée (1-5)
@@ -150,11 +153,28 @@
       tooltip: {
         callbacks: {
           title: (context: any) => context[0].raw.label,
-          label: (context: any) => [
-            `Valeur: ${context.raw.y} pts (${context.raw.valueStars}/5 ⭐)`,
-            `Complexité: ${context.raw.x} pts (${context.raw.complexityStars}/5 ❌)`,
-            `Statut: ${getStatusLabel(context.raw.status)}`
-          ]
+          label: (context: any) => {
+            const lines = [
+              context[0].raw.description ? `Description: ${context[0].raw.description.substring(0, 100)}${context[0].raw.description.length > 100 ? '...' : ''}` : '',
+              `Valeur: ${context[0].raw.y} pts (${context[0].raw.valueStars}/5 ⭐)`,
+              `Complexité: ${context[0].raw.x} pts (${context[0].raw.complexityStars}/5 ❌)`
+            ];
+            return lines.filter(line => line !== '');
+          }
+        }
+      },
+      datalabels: {
+        display: true,
+        anchor: 'end',
+        align: 'top',
+        offset: 4,
+        font: {
+          size: 10,
+          weight: 'bold'
+        },
+        color: '#374151',
+        formatter: (value: any, context: any) => {
+          return context.dataset.data[context.dataIndex].label;
         }
       }
     },
@@ -213,14 +233,6 @@
     }
   };
 
-  function getStatusLabel(status: string): string {
-    switch (status) {
-      case 'completed': return 'Terminé';
-      case 'generating': return 'Génération...';
-      case 'detailing': return 'Détail en cours...';
-      default: return 'Inconnu';
-    }
-  }
 
   function createChart() {
     if (chartContainer && chartData.datasets[0].data.length > 0) {
@@ -257,7 +269,7 @@
   }
 </script>
 
-<div class="w-full h-96 bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+<div class="w-full max-w-[50%] h-[600px] bg-white rounded-lg shadow-sm border border-slate-200 p-4">
   {#if useCases.length === 0}
     <div class="flex items-center justify-center h-full text-slate-500">
       <div class="text-center">

@@ -151,7 +151,9 @@
     <!-- Graphique scatter plot -->
     <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200">
       <h2 class="text-xl font-semibold text-slate-900 mb-4">Matrice Valeur vs Complexité</h2>
+      <div class="flex justify-center">
         <UseCaseScatterPlot useCases={filteredUseCases} {matrix} />
+      </div>
     </div>
 
   {/if}
