@@ -180,6 +180,35 @@
       });
     }
   };
+
+  // Fonction pour parser les références [1], [2] dans le markdown
+  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
+    if (!html || !references || references.length === 0) return html;
+    
+    // Remplacer les patterns [1], [2], etc par des liens cliquables
+    return html.replace(/\[(\d+)\]/g, (match, num) => {
+      const index = parseInt(num) - 1;
+      if (index >= 0 && index < references.length) {
+        const ref = references[index];
+        const refId = `ref-${num}`;
+        return `<a href="#${refId}" 
+                    class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
+                    title="${ref.title}"
+                    onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
+                    [${num}]
+                  </a>`;
+      }
+      return match; // Si la référence n'existe pas, garder le texte original
+    });
+  };
+
+  // Fonction pour obtenir le HTML de la description avec références parsées
+  $: descriptionHtml = useCase?.description 
+    ? parseReferencesInMarkdown(
+        marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+        useCase.references || []
+      )
+    : '';
 </script>
 
 <section class="space-y-6">
@@ -225,7 +254,7 @@
             </h1>
           </div>
           {#if useCase.model}
-            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-700">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
               {useCase.model}
             </span>
           {/if}
@@ -345,7 +374,7 @@
               </div>
             {:else}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
-                {@html useCase.description && marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">') || ''}
+                {@html descriptionHtml || ''}
               </div>
             {/if}
           </div>

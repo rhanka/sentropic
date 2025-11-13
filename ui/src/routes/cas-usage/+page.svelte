@@ -320,7 +320,7 @@
           </span>
           <div class="flex items-center gap-2">
             {#if useCase.model}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 {useCase.model}
               </span>
             {/if}
