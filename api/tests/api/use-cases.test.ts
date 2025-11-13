@@ -67,6 +67,10 @@ describe('Use Cases API', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(Array.isArray(data.items)).toBe(true);
+      // Model field should be present in all use cases
+      if (data.items.length > 0) {
+        expect(data.items[0]).toHaveProperty('model');
+      }
     });
   });
 
@@ -131,6 +135,8 @@ describe('Use Cases API', () => {
       const data = await response.json();
       expect(data.id).toBe(useCase.id);
       expect(data.name).toBe(useCase.name);
+      // Model field should be present (may be null or have default value from settings)
+      expect(data).toHaveProperty('model');
     });
 
     it('should return 404 for non-existent use case', async () => {

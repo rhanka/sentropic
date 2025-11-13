@@ -1,0 +1,1 @@
+ALTER TABLE "use_cases" ALTER COLUMN "model" DROP DEFAULT;

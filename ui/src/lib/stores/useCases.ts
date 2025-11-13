@@ -20,6 +20,7 @@ export type UseCase = {
   complexityScores: any[];
   totalValueScore: number;
   totalComplexityScore: number;
+  model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
   status?: 'draft' | 'generating' | 'detailing' | 'completed';
   createdAt: string;
 };

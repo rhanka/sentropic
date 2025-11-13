@@ -180,6 +180,85 @@
       });
     }
   };
+
+  // Fonction pour créer un lien de référence
+  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
+    const refId = `ref-${num}`;
+    return `<a href="#${refId}" 
+                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
+                title="${ref.title.replace(/"/g, '&quot;')}"
+                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
+                [${num}]
+              </a>`;
+  };
+
+  // Fonction pour parser les références [1], [2] dans le markdown HTML
+  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
+    if (!html || !references || references.length === 0) return html;
+    
+    // Remplacer les patterns [1], [2], etc par des liens cliquables
+    return html.replace(/\[(\d+)\]/g, (match, num) => {
+      const index = parseInt(num) - 1;
+      if (index >= 0 && index < references.length) {
+        return createReferenceLink(num, references[index]);
+      }
+      return match; // Si la référence n'existe pas, garder le texte original
+    });
+  };
+
+  // Fonction pour parser les références [1], [2] dans un texte simple (pas markdown)
+  const parseReferencesInText = (text: string, references: Array<{title: string; url: string}> = []): string => {
+    if (!text || !references || references.length === 0) return text;
+    
+    // Remplacer les patterns [1], [2], etc par des liens cliquables
+    return text.replace(/\[(\d+)\]/g, (match, num) => {
+      const index = parseInt(num) - 1;
+      if (index >= 0 && index < references.length) {
+        return createReferenceLink(num, references[index]);
+      }
+      return match; // Si la référence n'existe pas, garder le texte original
+    });
+  };
+
+  // Fonction pour obtenir le HTML de la description avec références parsées
+  $: descriptionHtml = useCase?.description 
+    ? parseReferencesInMarkdown(
+        marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+        useCase.references || []
+      )
+    : '';
+
+  // Fonctions réactives pour parser les autres champs
+  $: parsedBenefits = useCase?.benefits 
+    ? (useCase.benefits || []).map(benefit => parseReferencesInText(benefit, useCase.references || []))
+    : [];
+
+  $: parsedMetrics = useCase?.metrics 
+    ? (useCase.metrics || []).map(metric => parseReferencesInText(metric, useCase.references || []))
+    : [];
+
+  $: parsedRisks = useCase?.risks 
+    ? (useCase.risks || []).map(risk => parseReferencesInText(risk, useCase.references || []))
+    : [];
+
+  $: parsedNextSteps = useCase?.nextSteps 
+    ? (useCase.nextSteps || []).map(step => parseReferencesInText(step, useCase.references || []))
+    : [];
+
+  // Parser les justifications des axes valeur et complexité
+  $: parsedValueScores = useCase?.valueScores && matrix
+    ? (useCase.valueScores || []).map(score => ({
+        ...score,
+        description: parseReferencesInText(score.description || '', useCase.references || [])
+      }))
+    : [];
+
+  $: parsedComplexityScores = useCase?.complexityScores && matrix
+    ? (useCase.complexityScores || []).map(score => ({
+        ...score,
+        description: parseReferencesInText(score.description || '', useCase.references || [])
+      }))
+    : [];
 </script>
 
 <section class="space-y-6">
@@ -211,17 +290,24 @@
 
       <!-- Header -->
       <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-semibold">
-            {#if isEditing}
-              <input 
-                class="text-3xl font-semibold bg-transparent border-b-2 border-blue-500 outline-none"
-                bind:value={draft.name}
-              />
-            {:else}
-              {useCase.name}
-            {/if}
-          </h1>
+        <div class="flex items-center gap-3">
+          <div>
+            <h1 class="text-3xl font-semibold">
+              {#if isEditing}
+                <input 
+                  class="text-3xl font-semibold bg-transparent border-b-2 border-blue-500 outline-none"
+                  bind:value={draft.name}
+                />
+              {:else}
+                {useCase.name}
+              {/if}
+            </h1>
+          </div>
+          {#if useCase.model}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+              {useCase.model}
+            </span>
+          {/if}
         </div>
         
         <div class="flex gap-2">
@@ -338,7 +424,7 @@
               </div>
             {:else}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
-                {@html useCase.description && marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">') || ''}
+                {@html descriptionHtml || ''}
               </div>
             {/if}
           </div>
@@ -416,10 +502,10 @@
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.benefits || [] as benefit}
+                {#each parsedBenefits as benefit}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-green-500 mt-1">•</span>
-                    <span>{benefit}</span>
+                    <span>{@html benefit}</span>
                   </li>
                 {/each}
               </ul>
@@ -448,10 +534,10 @@
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.risks || [] as risk}
+                {#each parsedRisks as risk}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-red-500 mt-1">•</span>
-                    <span>{risk}</span>
+                    <span>{@html risk}</span>
                   </li>
                 {/each}
               </ul>
@@ -483,10 +569,10 @@
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.metrics || [] as metric}
+                {#each parsedMetrics as metric}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-blue-500 mt-1">•</span>
-                    <span>{metric}</span>
+                    <span>{@html metric}</span>
                   </li>
                 {/each}
               </ul>
@@ -515,10 +601,10 @@
               </div>
             {:else}
               <ul class="space-y-2">
-                {#each useCase.nextSteps || [] as step}
+                {#each parsedNextSteps as step}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-purple-500 mt-1">•</span>
-                    <span>{step}</span>
+                    <span>{@html step}</span>
                   </li>
                 {/each}
               </ul>
@@ -629,7 +715,7 @@
             </div>
             <div class="space-y-4">
               {#each matrix.valueAxes as axis}
-                {@const score = useCase.valueScores.find(s => s.axisId === axis.id)}
+                {@const score = parsedValueScores.find(s => s.axisId === axis.id)}
                 {#if score}
                   {@const stars = scoreToStars(Number(score.rating))}
                   <div class="rounded border border-slate-200 bg-white p-3">
@@ -646,7 +732,7 @@
                         <span class="text-sm text-slate-600">({score.rating} pts)</span>
                       </div>
                     </div>
-                    <p class="text-sm text-slate-600">{score.description}</p>
+                    <p class="text-sm text-slate-600">{@html score.description}</p>
                   </div>
                 {/if}
               {/each}
@@ -665,7 +751,7 @@
             </div>
             <div class="space-y-4">
               {#each matrix.complexityAxes as axis}
-                {@const score = useCase.complexityScores.find(s => s.axisId === axis.id)}
+                {@const score = parsedComplexityScores.find(s => s.axisId === axis.id)}
                 {#if score}
                   {@const stars = scoreToStars(Number(score.rating))}
                   <div class="rounded border border-slate-200 bg-white p-3">
@@ -688,7 +774,7 @@
                         <span class="text-sm text-slate-600">({score.rating} pts)</span>
                       </div>
                     </div>
-                    <p class="text-sm text-slate-600">{score.description}</p>
+                    <p class="text-sm text-slate-600">{@html score.description}</p>
                   </div>
                 {/if}
               {/each}

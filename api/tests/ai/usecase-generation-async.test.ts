@@ -201,6 +201,9 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(firstCompleted.description).toBeDefined();
     expect(firstCompleted.valueScores).toBeDefined();
     expect(firstCompleted.complexityScores).toBeDefined();
+    // Model field should be present and match the model used for generation
+    expect(firstCompleted.model).toBeDefined();
+    expect(firstCompleted.model).toBe(getTestModel());
 
     // 9) Verify all use cases are associated with the company
     const allAssociated = useCases.every((uc: any) => uc.companyId === createdCompanyId);

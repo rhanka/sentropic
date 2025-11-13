@@ -51,6 +51,7 @@ export const useCases = pgTable('use_cases', {
   complexityScores: text('complexity_scores'),
   totalValueScore: integer('total_value_score'),
   totalComplexityScore: integer('total_complexity_score'),
+  model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
 });
