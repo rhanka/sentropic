@@ -1,0 +1,1 @@
+ALTER TABLE "use_cases" ADD COLUMN "model" text DEFAULT 'gpt-5';

@@ -327,6 +327,7 @@ export class QueueManager {
         complexityScores: JSON.stringify([]),
         totalValueScore: 0,
         totalComplexityScore: 0,
+        model: model || 'gpt-5',
         status: 'generating',
         createdAt: new Date()
       };
@@ -456,6 +457,7 @@ export class QueueManager {
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
         totalValueScore: Math.round(computed.totalValueScore),
         totalComplexityScore: Math.round(computed.totalComplexityScore),
+        model: model || 'gpt-5',
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));
