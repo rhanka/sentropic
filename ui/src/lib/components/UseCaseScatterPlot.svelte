@@ -135,52 +135,154 @@
   $: yAxisMin = Math.max(0, yMin - yMargin);
   $: yAxisMax = Math.min(100, yMax + yMargin);
 
-  // Fonction pour calculer quels labels afficher en évitant les collisions
-  function calculateVisibleLabels(points: any[]): Set<number> {
-    const visible = new Set<number>();
-    const minDistance = 0.08; // Distance minimale entre les points (normalisée 0-1)
-    
-    // Trier les points par valeur décroissante (priorité aux points de haute valeur)
-    const sortedIndices = points
-      .map((p, i) => ({ index: i, value: p.y, x: p.x, y: p.y }))
-      .sort((a, b) => b.value - a.value);
-    
-    // Normaliser les coordonnées pour la détection de collision
+  // Interface pour les positions de labels optimisées
+  interface LabelPosition {
+    x: number;
+    y: number;
+    anchor: string;
+    align: string;
+    offsetX: number;
+    offsetY: number;
+  }
+
+  // Algorithme de force simulation pour éviter les chevauchements de labels
+  function calculateLabelPositions(points: any[]): Map<number, LabelPosition> {
+    const positions = new Map<number, LabelPosition>();
     const xRange = xMax - xMin || 1;
     const yRange = yMax - yMin || 1;
     
-    for (const { index, x, y } of sortedIndices) {
-      const normalizedX = (x - xMin) / xRange;
-      const normalizedY = (y - yMin) / yRange;
+    // Estimation de la taille d'un label (normalisée)
+    const labelWidth = 0.15; // ~15% de la largeur du graphique
+    const labelHeight = 0.03; // ~3% de la hauteur du graphique
+    const minDistance = Math.max(labelWidth, labelHeight) * 1.2; // Distance minimale entre labels
+    
+    // Initialiser les positions des labels près des points
+    const labelPositions: Array<{ x: number; y: number; index: number; point: any }> = points.map((point, index) => {
+      const normalizedX = (point.x - xMin) / xRange;
+      const normalizedY = (point.y - yMin) / yRange;
       
-      let hasCollision = false;
+      // Position initiale du label (légèrement décalée du point)
+      let labelX = normalizedX;
+      let labelY = normalizedY;
+      let anchor = 'center';
+      let align = 'center';
       
-      // Vérifier la collision avec les labels déjà affichés
-      for (const visibleIndex of visible) {
-        const otherPoint = points[visibleIndex];
-        const otherX = (otherPoint.x - xMin) / xRange;
-        const otherY = (otherPoint.y - yMin) / yRange;
-        
-        const distance = Math.sqrt(
-          Math.pow(normalizedX - otherX, 2) + Math.pow(normalizedY - otherY, 2)
-        );
-        
-        if (distance < minDistance) {
-          hasCollision = true;
-          break;
-        }
+      // Position initiale basée sur la position du point
+      if (normalizedX > 0.7) {
+        labelX = normalizedX - labelWidth / 2;
+        anchor = 'right';
+      } else if (normalizedX < 0.3) {
+        labelX = normalizedX + labelWidth / 2;
+        anchor = 'left';
       }
       
-      if (!hasCollision) {
-        visible.add(index);
+      if (normalizedY > 0.7) {
+        labelY = normalizedY - labelHeight / 2;
+        align = 'bottom';
+      } else if (normalizedY < 0.3) {
+        labelY = normalizedY + labelHeight / 2;
+        align = 'top';
+      }
+      
+      return {
+        x: labelX,
+        y: labelY,
+        index,
+        point: { ...point, normalizedX, normalizedY }
+      };
+    });
+    
+    // Algorithme de force simulation (itératif)
+    const iterations = 50;
+    const repulsionForce = 0.02;
+    const attractionForce = 0.01;
+    const damping = 0.9;
+    
+    // Vitesses pour chaque label
+    const velocities = labelPositions.map(() => ({ vx: 0, vy: 0 }));
+    
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let i = 0; i < labelPositions.length; i++) {
+        const label = labelPositions[i];
+        let fx = 0; // Force X
+        let fy = 0; // Force Y
+        
+        // Force d'attraction vers le point d'origine
+        const dx = label.point.normalizedX - label.x;
+        const dy = label.point.normalizedY - label.y;
+        fx += dx * attractionForce;
+        fy += dy * attractionForce;
+        
+        // Force de répulsion entre labels (éviter les collisions)
+        for (let j = 0; j < labelPositions.length; j++) {
+          if (i === j) continue;
+          
+          const other = labelPositions[j];
+          const dx = label.x - other.x;
+          const dy = label.y - other.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < minDistance && distance > 0) {
+            // Force de répulsion inversement proportionnelle à la distance
+            const force = (minDistance - distance) / distance;
+            fx += (dx / distance) * force * repulsionForce;
+            fy += (dy / distance) * force * repulsionForce;
+          }
+        }
+        
+        // Appliquer les forces avec damping
+        velocities[i].vx = (velocities[i].vx + fx) * damping;
+        velocities[i].vy = (velocities[i].vy + fy) * damping;
+        
+        // Mettre à jour la position
+        label.x += velocities[i].vx;
+        label.y += velocities[i].vy;
+        
+        // Garder les labels dans les limites du graphique
+        label.x = Math.max(0, Math.min(1, label.x));
+        label.y = Math.max(0, Math.min(1, label.y));
       }
     }
     
-    return visible;
+    // Convertir les positions normalisées en positions finales avec anchor/align
+    labelPositions.forEach((label) => {
+      const point = label.point;
+      const dx = label.x - point.normalizedX;
+      const dy = label.y - point.normalizedY;
+      
+      // Déterminer anchor et align basés sur la position finale
+      let anchor = 'center';
+      let align = 'center';
+      
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Déplacement principalement horizontal
+        anchor = dx > 0 ? 'left' : 'right';
+        align = 'center';
+      } else {
+        // Déplacement principalement vertical
+        anchor = 'center';
+        align = dy > 0 ? 'top' : 'bottom';
+      }
+      
+      // Calculer les offsets en pixels (approximatif, sera ajusté par Chart.js)
+      const offsetX = dx * xRange;
+      const offsetY = dy * yRange;
+      
+      positions.set(label.index, {
+        x: label.x,
+        y: label.y,
+        anchor,
+        align,
+        offsetX,
+        offsetY
+      });
+    });
+    
+    return positions;
   }
 
-  // Calculer quels labels sont visibles
-  $: visibleLabelIndices = dataPoints.length > 0 ? calculateVisibleLabels(dataPoints) : new Set<number>();
+  // Calculer les positions optimisées des labels
+  $: labelPositions = dataPoints.length > 0 ? calculateLabelPositions(dataPoints) : new Map<number, LabelPosition>();
 
   $: chartOptions = {
     responsive: true,
@@ -198,6 +300,7 @@
         display: false
       },
       tooltip: {
+        enabled: true, // S'assurer que le tooltip est activé
         callbacks: {
           title: (context: any) => context[0].raw.label,
           label: (context: any) => {
@@ -211,59 +314,46 @@
         }
       },
       datalabels: {
-        display: (context: any) => {
-          // Afficher seulement les labels qui ne se chevauchent pas
-          return visibleLabelIndices.has(context.dataIndex);
-        },
+        display: true, // Afficher tous les labels maintenant
         anchor: (context: any) => {
-          // Positionner le label selon la position du point pour éviter les chevauchements
-          const point = context.dataset.data[context.dataIndex];
-          const xRange = xMax - xMin || 1;
-          const yRange = yMax - yMin || 1;
-          const xRatio = (point.x - xMin) / xRange;
-          const yRatio = (point.y - yMin) / yRange;
-          
-          // Si le point est à droite, mettre le label à gauche
-          if (xRatio > 0.65) return 'left';
-          // Si le point est à gauche, mettre le label à droite
-          if (xRatio < 0.35) return 'right';
-          // Sinon, centrer horizontalement
-          return 'center';
+          const pos = labelPositions.get(context.dataIndex);
+          return pos ? pos.anchor : 'center';
         },
         align: (context: any) => {
-          const point = context.dataset.data[context.dataIndex];
-          const yRange = yMax - yMin || 1;
-          const yRatio = (point.y - yMin) / yRange;
-          
-          // Si le point est en haut, mettre le label en bas
-          if (yRatio > 0.65) return 'bottom';
-          // Si le point est en bas, mettre le label en haut
-          if (yRatio < 0.35) return 'top';
-          // Sinon, centrer verticalement
-          return 'center';
+          const pos = labelPositions.get(context.dataIndex);
+          return pos ? pos.align : 'center';
         },
-        offset: 10,
-        clamp: true,
+        offset: (context: any) => {
+          const pos = labelPositions.get(context.dataIndex);
+          if (!pos) return 8;
+          
+          // Convertir les offsets normalisés en pixels approximatifs
+          // Chart.js utilise des pixels, donc on doit estimer
+          // On utilise un offset basé sur la distance calculée
+          const distance = Math.sqrt(pos.offsetX * pos.offsetX + pos.offsetY * pos.offsetY);
+          return Math.max(8, Math.min(30, distance * 2));
+        },
+        clamp: false, // Permettre aux labels de sortir légèrement pour éviter les collisions
         clip: false,
         font: {
           size: 8,
           weight: 'normal'
         },
         color: '#374151',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#D1D5DB',
         borderRadius: 3,
         borderWidth: 1,
         padding: {
-          top: 1,
-          bottom: 1,
-          left: 3,
-          right: 3
+          top: 2,
+          bottom: 2,
+          left: 4,
+          right: 4
         },
         formatter: (value: any, context: any) => {
           const label = context.dataset.data[context.dataIndex].label;
-          // Tronquer plus agressivement les labels trop longs
-          return label.length > 25 ? label.substring(0, 22) + '...' : label;
+          // Tronquer les labels trop longs
+          return label.length > 30 ? label.substring(0, 27) + '...' : label;
         }
       }
     },
