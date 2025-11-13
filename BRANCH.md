@@ -48,6 +48,8 @@ Améliorer l'apparence et la gestion des fiches de cas d'usage selon les spécif
 - [ ] Tester l'affichage du tag modèle
 - [ ] Vérifier que les tests E2E existants passent toujours
 - [ ] Exécuter `make test-ui` pour vérifier les tests unitaires
+- [ ] Mettre à jour les tests API pour inclure le champ `model` (voir TEST_IMPACT_ANALYSIS.md)
+- [ ] Mettre à jour les tests UI pour inclure le champ `model` dans les mocks
 
 ## Réponses aux questions
 1. **Format des références dans les descriptions**: Format `[1]`, `[2]` dans le texte markdown. Alternative si nécessaire : transformer en liens cliquables qui scrollent vers la section références.
@@ -68,7 +70,7 @@ Améliorer l'apparence et la gestion des fiches de cas d'usage selon les spécif
 ## Status
 - **Progress**: 9/10 tasks completed (toutes les tâches principales implémentées)
 - **Current**: Feature complète - tous les éléments demandés sont implémentés
-- **Next**: Tests et validation avant merge
+- **Next**: Tests et validation avant merge (voir TEST_IMPACT_ANALYSIS.md pour les détails)
 
 ## Résumé des modifications
 
