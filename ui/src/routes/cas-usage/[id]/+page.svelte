@@ -211,17 +211,24 @@
 
       <!-- Header -->
       <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-semibold">
-            {#if isEditing}
-              <input 
-                class="text-3xl font-semibold bg-transparent border-b-2 border-blue-500 outline-none"
-                bind:value={draft.name}
-              />
-            {:else}
-              {useCase.name}
-            {/if}
-          </h1>
+        <div class="flex items-center gap-3">
+          <div>
+            <h1 class="text-3xl font-semibold">
+              {#if isEditing}
+                <input 
+                  class="text-3xl font-semibold bg-transparent border-b-2 border-blue-500 outline-none"
+                  bind:value={draft.name}
+                />
+              {:else}
+                {useCase.name}
+              {/if}
+            </h1>
+          </div>
+          {#if useCase.model}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-700">
+              {useCase.model}
+            </span>
+          {/if}
         </div>
         
         <div class="flex gap-2">

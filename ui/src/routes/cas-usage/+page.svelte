@@ -333,6 +333,11 @@
             {/if}
           </span>
           <div class="flex items-center gap-2">
+            {#if useCase.model}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                {useCase.model}
+              </span>
+            {/if}
             {#if isDetailing}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                 <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,10 +355,6 @@
             {:else if isDraft}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                 Brouillon
-              </span>
-            {:else}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Actif
               </span>
             {/if}
           </div>
