@@ -137,11 +137,21 @@ Transform the dashboard into an executive summary view with improved visualizati
 
 ## Commits & Progress
 - [x] **Initial commit**: Branch creation and BRANCH.md
+- [x] **Commit 1**: Phase 1 - Improve scatter plot UI (50% width, labels, tooltip)
+- [x] **Commit 2**: Phase 1 - Implémentation recuit simulé par cliques pour placement optimal des labels
+  - Refonte complète de l'algorithme de placement : recuit simulé par cliques au lieu de label-par-label
+  - Détection exhaustive des collisions : label↔label, label↔point (avec couverture partielle), trait↔label, trait↔point, trait↔trait
+  - Moves aléatoires avec jusqu'à 20 tentatives par clique (layout alternatif, déplacement vectoriel, swap Y)
+  - Rendu en couches : labels (fond 30% opacité) → traits → points (au top)
+  - Paramètres configurables centralisés : runs, itérations, température, magnitudes, coûts
+  - Cache des layouts pour éviter recalculs au hover
+  - Signature aléatoire pour forcer nouveau layout à chaque refresh
+  - Mise à jour dynamique du placement des traits selon position finale
 
 ## Status
-- **Progress**: 1/20 tasks completed
-- **Current**: Starting Phase 1 - UI improvements
-- **Next**: Task 1.1 - Adjust scatter plot dimensions
+- **Progress**: 5/20 tasks completed
+- **Current**: Phase 1 completed (scatter plot avec recuit simulé), starting Phase 2 - ROI Quadrant
+- **Next**: Task 2.1 - Calculate medians for value and complexity scores
 
 ## Specifications Confirmed
 
