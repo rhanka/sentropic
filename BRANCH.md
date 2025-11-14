@@ -12,34 +12,34 @@ Transform the dashboard into an executive summary view with improved visualizati
 ## Plan / Todo
 
 ### Phase 1: UI Improvements (Scatter Plot & Layout)
-- [ ] **Task 1.1**: Adjust scatter plot to max 50% screen width and increase height
+- [x] **Task 1.1**: Adjust scatter plot to max 50% screen width and increase height
   - Modify `UseCaseScatterPlot.svelte` component styling
   - Update container classes to limit width (max 50%) and increase height
   - Test responsive behavior
 
-- [ ] **Task 1.2**: Display use case labels directly on scatter plot (no hover required)
+- [x] **Task 1.2**: Display use case labels directly on scatter plot (no hover required)
   - Modify Chart.js configuration to show labels by default
   - Adjust label positioning to avoid overlaps
   - Ensure labels are readable
 
-- [ ] **Task 1.3**: Update tooltip to show description, value, and complexity (not status)
+- [x] **Task 1.3**: Update tooltip to show description, value, and complexity (not status)
   - Modify tooltip callbacks in `UseCaseScatterPlot.svelte`
   - Display: description, value score, complexity score
   - Remove status from tooltip
 
 ### Phase 2: ROI Quadrant (Relative to Medians)
-- [ ] **Task 2.1**: Calculate medians for value and complexity scores
+- [x] **Task 2.1**: Calculate medians for value and complexity scores
   - Calculate median value score from all use cases
   - Calculate median complexity score from all use cases
   - Only display quadrant if > 2 use cases exist
 
-- [ ] **Task 2.2**: Add ROI quadrant visualization (top-left quadrant, green)
+- [x] **Task 2.2**: Add ROI quadrant visualization (top-left quadrant, green)
   - Design ROI quadrant overlay on scatter plot (value > median, complexity < median)
   - Identify use cases in ROI quadrant (high value, low complexity)
   - Add visual indicator (green background/shading) for ROI quadrant
   - Hide quadrant if ≤ 2 use cases
 
-- [ ] **Task 2.3**: Add ROI statistics card
+- [x] **Task 2.3**: Add ROI statistics card
   - Create new KPI card showing count of use cases in ROI quadrant
   - Display average value and complexity for ROI quadrant
   - Position in dashboard layout
@@ -147,11 +147,18 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Cache des layouts pour éviter recalculs au hover
   - Signature aléatoire pour forcer nouveau layout à chaque refresh
   - Mise à jour dynamique du placement des traits selon position finale
+- [x] **Commit 3**: Phase 1 & 2 - Prise en compte des boîtes de quadrant dans le recuit et uniformisation des couleurs
+  - Ajout de la détection des collisions avec les boîtes fixes de quadrant (Gains rapide, Projets majeurs, Attendre, Ne pas faire) dans le recuit simulé
+  - Coût paramétrable `QUADRANT_LABEL_COST` pour l'évitement des boîtes de quadrant
+  - Centralisation des couleurs dans des constantes : `THEME_BLUE` (#475569), `THEME_BLUE_RGB`, `THEME_TEXT_DARK`
+  - Uniformisation de toutes les couleurs (cadres, traits, points, texte) en bleu-gris foncé (#475569)
+  - Correction du problème de recalcul des labels au hover (utilisation de `raw.x/y` au lieu de `element.x/y` dans la signature)
+  - Uniformisation du texte (labels, légendes des axes, labels de quadrant) avec la couleur bleu-gris
 
 ## Status
-- **Progress**: 5/20 tasks completed
-- **Current**: Phase 1 completed (scatter plot avec recuit simulé), starting Phase 2 - ROI Quadrant
-- **Next**: Task 2.1 - Calculate medians for value and complexity scores
+- **Progress**: 6/20 tasks completed
+- **Current**: Phase 1 completed (scatter plot avec recuit simulé), Phase 2 partiellement complétée (ROI Quadrant visualisé, stats card ajoutée)
+- **Next**: Task 2.4 - Create dashboard configuration accordion
 
 ## Specifications Confirmed
 

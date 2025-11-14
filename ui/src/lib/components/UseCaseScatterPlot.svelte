@@ -8,6 +8,8 @@
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
+  export let roiStats: { count: number; avgValue: number; avgComplexity: number } = { count: 0, avgValue: 0, avgComplexity: 0 };
+  export let showROIQuadrant: boolean = false;
 
   let chartContainer: HTMLCanvasElement;
   let chartInstance: Chart | null = null;
@@ -15,9 +17,9 @@
   // --- Helpers pour placement personnalisé des labels ---
   const LABEL_FONT = '9px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   const MAX_LABEL_WIDTH = 140;
-  const LABEL_PADDING_X = 2;
-  const LABEL_PADDING_TOP = 2;
-  const LABEL_PADDING_BOTTOM = 1;
+  const LABEL_PADDING_X = 3;
+  const LABEL_PADDING_TOP = 3;
+  const LABEL_PADDING_BOTTOM = 0;
   const LINE_HEIGHT = 14;
   const LABEL_ANCHOR_PADDING = 4;
   const BASE_LABEL_OFFSET = 16;
@@ -29,6 +31,7 @@
   const TRAIT_LABEL_COST = 500;
   const TRAIT_POINT_COST = 200;
   const TRAIT_TRAIT_COST = 100;
+  const QUADRANT_LABEL_COST = 300; // Coût d'évitement des boîtes de quadrant fixes
   const CLIQUE_JITTER_RATIO = 0.50;
   const MAX_CLIQUE_ATTEMPTS = 20;
   const ANNEALING_RUNS = 20;
@@ -36,6 +39,11 @@
   const INITIAL_TEMPERATURE = 40;
   const MIN_TEMPERATURE = 5;
   const TEMPERATURE_DECAY = 1;
+  
+  // Couleurs du thème
+  const THEME_BLUE = '#475569'; // Bleu-gris foncé pour cadres, traits et points
+  const THEME_BLUE_RGB = '71, 85, 105'; // RGB pour rgba()
+  const THEME_TEXT_DARK = '#0f172a'; // Gris foncé pour le texte (valeur/complexité)
 
   type LabelPlacement = 'left' | 'right' | 'top' | 'bottom';
 
@@ -67,7 +75,8 @@
     | { type: 'point'; targetIndex?: number; weight: number; vector: { x: number; y: number } }
     | { type: 'lineLabel'; targetIndex: number; weight: number; vector: { x: number; y: number } }
     | { type: 'linePoint'; targetIndex?: number; weight: number; vector: { x: number; y: number } }
-    | { type: 'lineLine'; targetIndex: number; weight: number; vector: { x: number; y: number } };
+    | { type: 'lineLine'; targetIndex: number; weight: number; vector: { x: number; y: number } }
+    | { type: 'quadrant'; weight: number; vector: { x: number; y: number } };
 
   type PerLabelStats = {
     index: number;
@@ -238,6 +247,15 @@
   }
 
   function boxesOverlap(a: LabelBox, b: LabelBox) {
+    return !(
+      a.left + a.width < b.left ||
+      a.left > b.left + b.width ||
+      a.top + a.height < b.top ||
+      a.top > b.top + b.height
+    );
+  }
+
+  function rectsOverlap(a: { left: number; top: number; width: number; height: number }, b: { left: number; top: number; width: number; height: number }) {
     return !(
       a.left + a.width < b.left ||
       a.left > b.left + b.width ||
@@ -438,18 +456,79 @@
     updateBoxPlacement(box);
   }
 
-  function computeLabelStats(boxes: LabelBox[], points: any[]) {
+  function getQuadrantBoxes(chartArea: any, medianX: number, medianY: number, xScale: any, yScale: any) {
+    if (!xScale || !yScale) return [];
+    const labelPadding = 8;
+    const labelHeight = 24;
+    const labelOffset = 8;
+    
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return [];
+    ctx.font = 'bold 11px "Inter", "DM Sans", system-ui, sans-serif';
+    
+    const boxes = [];
+    
+    // "Gains rapide" (haut gauche)
+    const gainsRapideText = 'Gains rapide';
+    const gainsRapideWidth = ctx.measureText(gainsRapideText).width + labelPadding * 2;
+    boxes.push({
+      left: chartArea.left + labelOffset,
+      top: chartArea.top + labelOffset,
+      width: gainsRapideWidth,
+      height: labelHeight,
+      label: 'Gains rapide'
+    });
+    
+    // "Projets majeurs" (haut droite)
+    const projetsMajeursText = 'Projets majeurs';
+    const projetsMajeursWidth = ctx.measureText(projetsMajeursText).width + labelPadding * 2;
+    boxes.push({
+      left: chartArea.right - labelOffset - projetsMajeursWidth,
+      top: chartArea.top + labelOffset,
+      width: projetsMajeursWidth,
+      height: labelHeight,
+      label: 'Projets majeurs'
+    });
+    
+    // "Attendre" (bas gauche)
+    const attendreText = 'Attendre';
+    const attendreWidth = ctx.measureText(attendreText).width + labelPadding * 2;
+    boxes.push({
+      left: chartArea.left + labelOffset,
+      top: chartArea.bottom - labelOffset - labelHeight,
+      width: attendreWidth,
+      height: labelHeight,
+      label: 'Attendre'
+    });
+    
+    // "Ne pas faire" (bas droite)
+    const nePasFaireText = 'Ne pas faire';
+    const nePasFaireWidth = ctx.measureText(nePasFaireText).width + labelPadding * 2;
+    boxes.push({
+      left: chartArea.right - labelOffset - nePasFaireWidth,
+      top: chartArea.bottom - labelOffset - labelHeight,
+      width: nePasFaireWidth,
+      height: labelHeight,
+      label: 'Ne pas faire'
+    });
+    
+    return boxes;
+  }
+
+  function computeLabelStats(boxes: LabelBox[], points: any[], chartArea?: any, medianX?: number, medianY?: number, xScale?: any, yScale?: any) {
     let cost = 0;
     let labelCollisions = 0;
     let pointCollisions = 0;
     let lineLabelCollisions = 0;
     let linePointCollisions = 0;
     let lineCrossCollisions = 0;
+    let quadrantCollisions = 0;
     const labelCollisionPairs: string[] = [];
     const pointCollisionsList: string[] = [];
     const lineLabelPairs: string[] = [];
     const linePointPairs: string[] = [];
     const lineCrossPairs: string[] = [];
+    const quadrantCollisionPairs: string[] = [];
     const perLabel: PerLabelStats[] = boxes.map((_, index) => ({
       index,
       cost: 0,
@@ -629,6 +708,37 @@
       }
     }
 
+    // Détection des collisions avec les boîtes de quadrant fixes
+    if (chartArea && medianX !== undefined && medianY !== undefined && xScale && yScale) {
+      const quadrantBoxes = getQuadrantBoxes(chartArea, medianX, medianY, xScale, yScale);
+      boxes.forEach((box, index) => {
+        const boxCenterX = box.left + box.width / 2;
+        const boxCenterY = box.top + box.height / 2;
+        quadrantBoxes.forEach((quadBox) => {
+          if (rectsOverlap(box, quadBox)) {
+            const overlapWidth =
+              Math.min(box.left + box.width, quadBox.left + quadBox.width) -
+              Math.max(box.left, quadBox.left);
+            const overlapHeight =
+              Math.min(box.top + box.height, quadBox.top + quadBox.height) -
+              Math.max(box.top, quadBox.top);
+            const overlapArea = Math.max(overlapWidth, 0) * Math.max(overlapHeight, 0);
+            if (overlapArea <= 0) return;
+            const weight = QUADRANT_LABEL_COST * (overlapArea / (box.width * box.height));
+            cost += weight;
+            quadrantCollisions++;
+            quadrantCollisionPairs.push(`${box.textLines[0] ?? 'Label'} ↔ ${quadBox.label}`);
+            const vector = ensureVector(
+              boxCenterX - (quadBox.left + quadBox.width / 2),
+              boxCenterY - (quadBox.top + quadBox.height / 2)
+            );
+            perLabel[index].cost += weight;
+            perLabel[index].issues.push({ type: 'quadrant', weight, vector });
+          }
+        });
+      });
+    }
+
     return {
       cost,
       labelCollisions,
@@ -636,11 +746,13 @@
       lineLabelCollisions,
       linePointCollisions,
       lineCrossCollisions,
+      quadrantCollisions,
       labelCollisionPairs,
       pointCollisionsList,
       lineLabelPairs,
       linePointPairs,
       lineCrossPairs,
+      quadrantCollisionPairs,
       perLabel
     };
   }
@@ -687,7 +799,11 @@
     stats: ReturnType<typeof computeLabelStats>,
     chartArea: any,
     temperature: number,
-    points: any[]
+    points: any[],
+    medianX?: number,
+    medianY?: number,
+    xScale?: any,
+    yScale?: any
   ) {
     const totalCost = clique.cost || 0;
     if (totalCost <= 0) {
@@ -750,7 +866,7 @@
       });
     }
 
-    const newStats = computeLabelStats(boxes, points);
+    const newStats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale);
     if (newStats.cost < stats.cost) {
       if (ENABLE_LAYOUT_DEBUG) {
         console.debug(
@@ -783,13 +899,13 @@
     return true;
   }
 
-  function runLabelAnnealing(initialBoxes: LabelBox[], chartArea: any, points: any[]): LabelBox[] {
+  function runLabelAnnealing(initialBoxes: LabelBox[], chartArea: any, points: any[], medianX?: number, medianY?: number, xScale?: any, yScale?: any): LabelBox[] {
     if (initialBoxes.length <= 1) return initialBoxes;
 
     const runs = ANNEALING_RUNS;
     const iterationsPerRun = ANNEALING_ITERATIONS;
     let bestBoxes = initialBoxes.map((box) => ({ ...box }));
-    let bestStats = computeLabelStats(bestBoxes, points);
+    let bestStats = computeLabelStats(bestBoxes, points, chartArea, medianX, medianY, xScale, yScale);
 
     for (let run = 0; run < runs; run++) {
       let temperature = INITIAL_TEMPERATURE;
@@ -798,11 +914,11 @@
         textLines: [...box.textLines],
         alternates: box.alternates.map((layout) => cloneLayout(layout))
       }));
-      let stats = computeLabelStats(boxes, points);
+      let stats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale);
       let currentCost = stats.cost;
 
       if (ENABLE_LAYOUT_DEBUG) {
-        const summary = `labels=${stats.labelCollisions} | points=${stats.pointCollisions} | traitLabels=${stats.lineLabelCollisions} | traitPoints=${stats.linePointCollisions} | traitLines=${stats.lineCrossCollisions}`;
+        const summary = `labels=${stats.labelCollisions} | points=${stats.pointCollisions} | traitLabels=${stats.lineLabelCollisions} | traitPoints=${stats.linePointCollisions} | traitLines=${stats.lineCrossCollisions} | quadrants=${stats.quadrantCollisions ?? 0}`;
         console.debug(
           `[Labels][run ${run + 1}/${runs}] coût initial=${currentCost.toFixed(2)} | ${summary}`,
           {
@@ -810,7 +926,8 @@
             pointCollisions: stats.pointCollisionsList,
             traitLabelCollisions: stats.lineLabelPairs,
             traitPointCollisions: stats.linePointPairs,
-            traitLineCollisions: stats.lineCrossPairs
+            traitLineCollisions: stats.lineCrossPairs,
+            quadrantCollisions: stats.quadrantCollisionPairs ?? []
           }
         );
       }
@@ -826,7 +943,7 @@
           for (const clique of cliques) {
             let attemptSucceeded = false;
             for (let attempt = 0; attempt < MAX_CLIQUE_ATTEMPTS; attempt++) {
-              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points);
+              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points, medianX, medianY, xScale, yScale);
               if (updated.accepted && updated.stats) {
                 stats = updated.stats;
                 currentCost = stats.cost;
@@ -849,7 +966,7 @@
         temperature = Math.max(MIN_TEMPERATURE, temperature * TEMPERATURE_DECAY);
 
         if (ENABLE_LAYOUT_DEBUG) {
-          const summary = `labels=${stats.labelCollisions} | points=${stats.pointCollisions} | traitLabels=${stats.lineLabelCollisions} | traitPoints=${stats.linePointCollisions} | traitLines=${stats.lineCrossCollisions}`;
+          const summary = `labels=${stats.labelCollisions} | points=${stats.pointCollisions} | traitLabels=${stats.lineLabelCollisions} | traitPoints=${stats.linePointCollisions} | traitLines=${stats.lineCrossCollisions} | quadrants=${stats.quadrantCollisions ?? 0}`;
           console.debug(
             `[Labels][run ${run + 1}/${runs}] itération ${iteration + 1}/${iterationsPerRun} | coût=${stats.cost.toFixed(2)} | ${summary}`,
             {
@@ -857,7 +974,8 @@
               pointCollisions: stats.pointCollisionsList,
               traitLabelCollisions: stats.lineLabelPairs,
               traitPointCollisions: stats.linePointPairs,
-              traitLineCollisions: stats.lineCrossPairs
+              traitLineCollisions: stats.lineCrossPairs,
+              quadrantCollisions: stats.quadrantCollisionPairs ?? []
             }
           );
         }
@@ -874,7 +992,7 @@
     }
 
     if (ENABLE_LAYOUT_DEBUG) {
-      const summary = `labels=${bestStats.labelCollisions} | points=${bestStats.pointCollisions} | traitLabels=${bestStats.lineLabelCollisions} | traitPoints=${bestStats.linePointCollisions} | traitLines=${bestStats.lineCrossCollisions}`;
+      const summary = `labels=${bestStats.labelCollisions} | points=${bestStats.pointCollisions} | traitLabels=${bestStats.lineLabelCollisions} | traitPoints=${bestStats.linePointCollisions} | traitLines=${bestStats.lineCrossCollisions} | quadrants=${bestStats.quadrantCollisions ?? 0}`;
       console.debug(
         `[Labels] meilleur coût=${bestStats.cost.toFixed(2)} | ${summary}`,
         {
@@ -882,7 +1000,8 @@
           pointCollisions: bestStats.pointCollisionsList,
           traitLabelCollisions: bestStats.lineLabelPairs,
           traitPointCollisions: bestStats.linePointPairs,
-          traitLineCollisions: bestStats.lineCrossPairs
+          traitLineCollisions: bestStats.lineCrossPairs,
+          quadrantCollisions: bestStats.quadrantCollisionPairs ?? []
         }
       );
     }
@@ -1015,16 +1134,17 @@
 
   let cachedLabelBoxes: LabelBox[] = [];
   let cachedLabelSignature = '';
+  let layoutRandomSeed = Math.random().toString(36).slice(2, 8); // Seed fixe pour toute la session
 
   function getLabelSignature(points: any[], chartArea: any) {
     const dims = `${chartArea.left.toFixed(1)}-${chartArea.top.toFixed(1)}-${chartArea.right.toFixed(
       1
     )}-${chartArea.bottom.toFixed(1)}`;
+    // Utiliser raw.x/y au lieu de element.x/y pour éviter les changements au hover
     const dataSig = points
-      .map((point) => `${point.raw?.id ?? point.index}-${point.element?.x?.toFixed(2)}-${point.element?.y?.toFixed(2)}`)
+      .map((point) => `${point.raw?.id ?? point.index}-${point.raw?.x?.toFixed(2) ?? '0'}-${point.raw?.y?.toFixed(2) ?? '0'}`)
       .join('|');
-    const randomSeed = Math.random().toString(36).slice(2, 8);
-    return `${dims}|${dataSig}|${randomSeed}`;
+    return `${dims}|${dataSig}|${layoutRandomSeed}`;
   }
 
   const useCaseLabelPlugin = {
@@ -1048,24 +1168,169 @@
         }))
         .filter((item: { raw?: { label?: string } }) => Boolean(item.raw?.label));
 
+      // Calculer les médianes pour le quadrant ROI
+      const valueScores = points.map((p: any) => p.raw?.y ?? 0);
+      const complexityScores = points.map((p: any) => p.raw?.x ?? 0);
+      const calculateMedian = (values: number[]) => {
+        if (values.length === 0) return 0;
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2
+          : sorted[mid];
+      };
+      const medianValue = calculateMedian(valueScores);
+      const medianComplexity = calculateMedian(complexityScores);
+      const showROIQuadrant = points.length > 2;
+
+      // Convertir les médianes en coordonnées pixels
+      const xScale = chart.scales.x;
+      const yScale = chart.scales.y;
+      const medianX = xScale.getPixelForValue(medianComplexity);
+      const medianY = yScale.getPixelForValue(medianValue);
+
+      // Layer 0: Quadrants (juste au-dessus de la grille, en dessous des traits)
+      if (showROIQuadrant && xScale && yScale) {
+        // Quadrant ROI (top-left) : haute valeur, faible complexité - Vert
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.15)'; // Vert avec 15% d'opacité
+        ctx.fillRect(
+          chartArea.left,
+          chartArea.top,
+          medianX - chartArea.left,
+          medianY - chartArea.top
+        );
+
+        // Quadrant bottom-right : faible valeur, haute complexité - Orange
+        ctx.fillStyle = 'rgba(251, 146, 60, 0.15)'; // Orange avec 15% d'opacité
+        ctx.fillRect(
+          medianX,
+          medianY,
+          chartArea.right - medianX,
+          chartArea.bottom - medianY
+        );
+
+        // Lignes de référence pour les médianes
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        
+        // Ligne verticale (médiane complexité)
+        ctx.beginPath();
+        ctx.moveTo(medianX, chartArea.top);
+        ctx.lineTo(medianX, chartArea.bottom);
+        ctx.stroke();
+        
+        // Ligne horizontale (médiane valeur)
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, medianY);
+        ctx.lineTo(chartArea.right, medianY);
+        ctx.stroke();
+        
+        ctx.setLineDash([]);
+
+        // Labels de quadrant (en gras, sur fond blanc, aux extrémités de chaque quadrant)
+        ctx.font = 'bold 11px "Inter", "DM Sans", system-ui, sans-serif';
+        ctx.textBaseline = 'top';
+        
+        const labelPadding = 8;
+        const labelHeight = 24;
+        const labelOffset = 8; // Distance depuis les bords
+        
+        // "Gains rapide" (haut gauche du quadrant top-left)
+        ctx.textAlign = 'left';
+        const gainsRapideText = 'Gains rapide';
+        const gainsRapideWidth = ctx.measureText(gainsRapideText).width + labelPadding * 2;
+        const gainsRapideX = chartArea.left + labelOffset;
+        const gainsRapideY = chartArea.top + labelOffset;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(gainsRapideX, gainsRapideY, gainsRapideWidth, labelHeight);
+        ctx.strokeStyle = THEME_BLUE;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gainsRapideX, gainsRapideY, gainsRapideWidth, labelHeight);
+        ctx.fillStyle = THEME_BLUE;
+        ctx.fillText(gainsRapideText, gainsRapideX + labelPadding, gainsRapideY + (labelHeight - 11) / 2);
+        
+        // "Projets majeurs" (haut droite du quadrant top-right)
+        ctx.textAlign = 'right';
+        const projetsMajeursText = 'Projets majeurs';
+        const projetsMajeursWidth = ctx.measureText(projetsMajeursText).width + labelPadding * 2;
+        const projetsMajeursX = chartArea.right - labelOffset - projetsMajeursWidth;
+        const projetsMajeursY = chartArea.top + labelOffset;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(projetsMajeursX, projetsMajeursY, projetsMajeursWidth, labelHeight);
+        ctx.strokeStyle = THEME_BLUE;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(projetsMajeursX, projetsMajeursY, projetsMajeursWidth, labelHeight);
+        ctx.fillStyle = THEME_BLUE;
+        ctx.fillText(projetsMajeursText, projetsMajeursX + projetsMajeursWidth - labelPadding, projetsMajeursY + (labelHeight - 11) / 2);
+        
+        // "Attendre" (bas gauche du quadrant bottom-left)
+        ctx.textAlign = 'left';
+        const attendreText = 'Attendre';
+        const attendreWidth = ctx.measureText(attendreText).width + labelPadding * 2;
+        const attendreX = chartArea.left + labelOffset;
+        const attendreY = chartArea.bottom - labelOffset - labelHeight;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(attendreX, attendreY, attendreWidth, labelHeight);
+        ctx.strokeStyle = THEME_BLUE;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(attendreX, attendreY, attendreWidth, labelHeight);
+        ctx.fillStyle = THEME_BLUE;
+        ctx.fillText(attendreText, attendreX + labelPadding, attendreY + (labelHeight - 11) / 2);
+        
+        // "Ne pas faire" (bas droite du quadrant bottom-right)
+        ctx.textAlign = 'right';
+        const nePasFaireText = 'Ne pas faire';
+        const nePasFaireWidth = ctx.measureText(nePasFaireText).width + labelPadding * 2;
+        const nePasFaireX = chartArea.right - labelOffset - nePasFaireWidth;
+        const nePasFaireY = chartArea.bottom - labelOffset - labelHeight;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(nePasFaireX, nePasFaireY, nePasFaireWidth, labelHeight);
+        ctx.strokeStyle = THEME_BLUE;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(nePasFaireX, nePasFaireY, nePasFaireWidth, labelHeight);
+        ctx.fillStyle = THEME_BLUE;
+        ctx.fillText(nePasFaireText, nePasFaireX + nePasFaireWidth - labelPadding, nePasFaireY + (labelHeight - 11) / 2);
+        
+        // Réinitialiser pour les autres layers
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = LABEL_FONT;
+      }
+
       const signature = getLabelSignature(points, chartArea);
       if (signature !== cachedLabelSignature) {
         const rawBoxes = buildLabelBoxes(points, chartArea, ctx);
-        const annealed = runLabelAnnealing(rawBoxes, chartArea, points);
+        const annealed = runLabelAnnealing(rawBoxes, chartArea, points, medianX, medianY, xScale, yScale);
         cachedLabelBoxes = annealed;
         cachedLabelSignature = signature;
       }
 
-      // Layer 1: Labels (fond semi-transparent à 30%)
+      // Layer 1: Traits (au-dessus des quadrants, en dessous des labels)
       cachedLabelBoxes.forEach((box) => {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.strokeStyle = '#e2e8f0';
+        const anchor = getLabelAnchorPoint(box);
+        const anchorX = anchor.x;
+        const anchorY = anchor.y;
+
+        ctx.strokeStyle = THEME_BLUE;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(box.point.x, box.point.y);
+        ctx.lineTo(anchorX, anchorY);
+        ctx.stroke();
+      });
+
+      // Layer 2: Labels (fond semi-transparent à 30%, au-dessus des traits, en dessous des points)
+      cachedLabelBoxes.forEach((box) => {
+        // Fond blanc semi-transparent à 30% - devrait masquer les quadrants si vraiment au-dessus
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
         drawRoundedRect(ctx, box.left, box.top, box.width, box.height, 6);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = THEME_BLUE;
         box.textLines.forEach((line, lineIndex) => {
           ctx.fillText(
             line,
@@ -1073,20 +1338,6 @@
             box.top + LABEL_PADDING_TOP + lineIndex * LINE_HEIGHT
           );
         });
-      });
-
-      // Layer 2: Traits (au-dessus des labels, en dessous des points)
-      cachedLabelBoxes.forEach((box) => {
-        const anchor = getLabelAnchorPoint(box);
-        const anchorX = anchor.x;
-        const anchorY = anchor.y;
-
-        ctx.strokeStyle = box.color;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(box.point.x, box.point.y);
-        ctx.lineTo(anchorX, anchorY);
-        ctx.stroke();
       });
 
       ctx.restore();
@@ -1136,6 +1387,16 @@
     return offsetData;
   }
 
+  // Fonction pour calculer la médiane
+  function calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
+
   // Calculer les scores pour chaque cas d'usage
   $: rawData = useCases
     .filter(uc => uc.valueScores && uc.complexityScores && matrix)
@@ -1156,9 +1417,30 @@
       };
     });
 
+  // Calculer les médianes pour le quadrant ROI
+  $: valueScores = rawData.map(point => point.y);
+  $: complexityScores = rawData.map(point => point.x);
+  $: medianValue = calculateMedian(valueScores);
+  $: medianComplexity = calculateMedian(complexityScores);
+
+  // Identifier les use cases dans le quadrant ROI (valeur > médiane ET complexité < médiane)
+  $: {
+    showROIQuadrant = rawData.length > 2;
+    const roiUseCases = showROIQuadrant
+      ? rawData.filter(point => point.y > medianValue && point.x < medianComplexity)
+      : [];
+    roiStats = showROIQuadrant && roiUseCases.length > 0
+      ? {
+          count: roiUseCases.length,
+          avgValue: roiUseCases.reduce((sum, p) => sum + p.y, 0) / roiUseCases.length,
+          avgComplexity: roiUseCases.reduce((sum, p) => sum + p.x, 0) / roiUseCases.length
+        }
+      : { count: 0, avgValue: 0, avgComplexity: 0 };
+  }
+
   $: offsetData = offsetOverlappingPoints(rawData);
-  $: backgroundColors = offsetData.map(point => `rgba(${point.colorRgb ?? STATUS_COLORS.default}, 0.85)`);
-  $: borderColors = offsetData.map(point => `rgba(${point.colorRgb ?? STATUS_COLORS.default}, 1)`);
+  $: backgroundColors = offsetData.map(() => `rgba(${THEME_BLUE_RGB}, 0.85)`);
+  $: borderColors = offsetData.map(() => `rgb(${THEME_BLUE_RGB})`);
 
   $: chartData = {
     datasets: [{
@@ -1206,7 +1488,8 @@
         font: {
           size: 16,
           weight: 'bold'
-        }
+        },
+        color: THEME_BLUE
       },
       legend: {
         display: false
@@ -1240,13 +1523,15 @@
           font: {
             size: 14,
             weight: 'bold'
-          }
+          },
+          color: THEME_BLUE
         },
         min: xAxisMin,
         max: xAxisMax,
         ticks: {
           stepSize: Math.max(5, Math.round((xAxisMax - xAxisMin) / 8)),
-          callback: (value: any) => `${value}`
+          callback: (value: any) => `${value}`,
+          color: THEME_BLUE
         },
         grid: {
           color: 'rgba(0, 0, 0, 0.1)'
@@ -1260,13 +1545,15 @@
           font: {
             size: 14,
             weight: 'bold'
-          }
+          },
+          color: THEME_BLUE
         },
         min: yAxisMin,
         max: yAxisMax,
         ticks: {
           stepSize: Math.max(5, Math.round((yAxisMax - yAxisMin) / 8)),
-          callback: (value: any) => `${value}`
+          callback: (value: any) => `${value}`,
+          color: THEME_BLUE
         },
         grid: {
           color: 'rgba(0, 0, 0, 0.1)'

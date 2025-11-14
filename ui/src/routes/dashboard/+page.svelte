@@ -72,6 +72,10 @@
     generating: filteredUseCases.filter(uc => uc.status === 'generating').length,
     detailing: filteredUseCases.filter(uc => uc.status === 'detailing').length
   };
+
+  // Bindings pour les stats ROI depuis le scatter plot
+  let roiStats = { count: 0, avgValue: 0, avgComplexity: 0 };
+  let showROIQuadrant = false;
 </script>
 
 <section class="space-y-6">
@@ -146,13 +150,34 @@
         </div>
       </div>
 
+      {#if showROIQuadrant}
+        <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+            </div>
+            <div class="ml-4 flex-1">
+              <p class="text-sm font-medium text-green-700">Quadrant ROI</p>
+              <p class="text-2xl font-semibold text-green-600">{roiStats.count}</p>
+              {#if roiStats.count > 0}
+                <p class="text-xs text-green-600 mt-1">
+                  Valeur moy: {roiStats.avgValue.toFixed(1)} pts | Complexité moy: {roiStats.avgComplexity.toFixed(1)} pts
+                </p>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
+
     </div>
 
     <!-- Graphique scatter plot -->
     <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200">
       <h2 class="text-xl font-semibold text-slate-900 mb-4">Matrice Valeur vs Complexité</h2>
       <div class="flex justify-center">
-        <UseCaseScatterPlot useCases={filteredUseCases} {matrix} />
+        <UseCaseScatterPlot useCases={filteredUseCases} {matrix} bind:roiStats bind:showROIQuadrant />
       </div>
     </div>
 
