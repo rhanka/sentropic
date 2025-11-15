@@ -34,7 +34,43 @@ export const searchWeb = async (query: string, signal?: AbortSignal): Promise<Se
   const data = await resp.json() as any;
   console.log(`✅ Tavily returned ${data.results?.length || 0} results`);
   return data.results || [];
+}; 
+
+export interface ExtractResult {
+  url: string;
+  content: string;   // markdown
+}
+
+export const extractUrlContent = async (
+  url: string,
+  signal?: AbortSignal
+): Promise<ExtractResult> => {
+  console.log(`🔍 Tavily extract called with query: "${url}"`);
+
+  if (signal?.aborted) throw new Error("AbortError");
+
+  const resp = await fetch("https://api.tavily.com/extract", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${TAVILY_API_KEY}`
+    },
+    body: JSON.stringify({
+      url,
+      format: "markdown",      // "markdown" | "text"
+      extract_depth: "advanced" // "basic" | "advanced"
+    }),
+    signal
+  } as any);
+
+  const data = await resp.json() as any;
+
+  return {
+    url,
+    content: data.markdown ?? data.content ?? ""
+  };
 };
+
 
 export interface ExecuteWithToolsOptions {
   model?: string;
@@ -69,7 +105,7 @@ export const executeWithTools = async (
     });
   }
 
-  // Appel avec recherche web
+  // Appel avec recherche web et extraction d'URL
   const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     type: "function",
     function: {
@@ -88,12 +124,33 @@ export const executeWithTools = async (
     }
   };
 
-  // Premier appel pour déclencher la recherche
+  const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+    type: "function",
+    function: {
+      name: "web_extract",
+      description: "Extract and retrieve the full content of one or more web page URLs. Use this tool to get detailed content from URLs found during web search or provided directly. You can extract multiple URLs in a single call for efficiency.",
+      parameters: {
+        type: "object",
+        properties: {
+          urls: { 
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Array of URLs to extract content from. Can be a single URL or multiple URLs." 
+          }
+        },
+        required: ["urls"]
+      }
+    }
+  };
+
+  // Premier appel pour déclencher la recherche et/ou l'extraction
   const response = await callOpenAI({
     messages: [
       {
         role: "system",
-        content: "Tu es un assistant qui utilise la recherche web pour fournir des informations récentes et précises. Utilise toujours l'outil de recherche web pour répondre aux questions."
+        content: "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes."
       },
       {
         role: "user",
@@ -101,7 +158,7 @@ export const executeWithTools = async (
       }
     ],
     model,
-    tools: [webSearchTool],
+    tools: [webSearchTool, webExtractTool],
     toolChoice: "required",
     responseFormat,
     signal
@@ -111,28 +168,48 @@ export const executeWithTools = async (
 
   if (message?.tool_calls) {
     let allSearchResults: any[] = [];
+    let allExtractResults: any[] = [];
 
-    // Exécuter toutes les recherches demandées
+    // Exécuter toutes les recherches et extractions demandées
     for (const toolCall of message.tool_calls) {
       if (signal?.aborted) {
         throw new Error('AbortError');
       }
-      if (toolCall.type === 'function' && toolCall.function.name === 'web_search') {
-        const args = JSON.parse(toolCall.function.arguments);
-        const searchResults = await searchWeb(args.query, signal);
-        allSearchResults.push({
-          query: args.query,
-          results: searchResults
-        });
+      if (toolCall.type === 'function') {
+        if (toolCall.function.name === 'web_search') {
+          const args = JSON.parse(toolCall.function.arguments);
+          const searchResults = await searchWeb(args.query, signal);
+          allSearchResults.push({
+            query: args.query,
+            results: searchResults
+          });
+        } else if (toolCall.function.name === 'web_extract') {
+          const args = JSON.parse(toolCall.function.arguments);
+          const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls];
+          // Extraire toutes les URLs en parallèle
+          const extractPromises = urls.map((url: string) => extractUrlContent(url, signal));
+          const extractResults = await Promise.all(extractPromises);
+          allExtractResults.push(...extractResults);
+        }
       }
     }
 
-    // Deuxième appel avec les résultats de recherche
+    // Construire le message avec les résultats
+    let resultsMessage = '';
+    if (allSearchResults.length > 0) {
+      resultsMessage += `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\n`;
+    }
+    if (allExtractResults.length > 0) {
+      resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
+    }
+    resultsMessage += 'Réponds à la question originale en utilisant ces informations récentes.';
+
+    // Deuxième appel avec les résultats de recherche et d'extraction
     const followUpResponse = await callOpenAI({
       messages: [
         {
           role: "system",
-          content: "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web."
+          content: "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs."
         },
         {
           role: "user",
@@ -140,11 +217,11 @@ export const executeWithTools = async (
         },
         {
           role: "assistant",
-          content: "Je vais rechercher des informations récentes pour vous."
+          content: "Je vais rechercher et extraire des informations récentes pour vous."
         },
         {
           role: "user",
-          content: `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\nRéponds à la question originale en utilisant ces informations récentes.`
+          content: resultsMessage
         }
       ],
       model,
