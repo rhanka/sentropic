@@ -1,19 +1,30 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet } from '$lib/utils/api';
+  import { apiGet, apiPost } from '$lib/utils/api';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
+  import { marked } from 'marked';
+  import { refreshManager } from '$lib/stores/refresh';
+  import References from '$lib/components/References.svelte';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
   let selectedFolderId: string | null = null;
+  let currentFolder: any = null;
+  let executiveSummary: any = null;
+  let isGeneratingSummary = false;
 
   onMount(async () => {
     loadConfig();
     await loadData();
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    refreshManager.stopAllRefreshes();
   });
 
   const loadData = async () => {
@@ -47,10 +58,92 @@
   const loadMatrix = async (folderId: string) => {
     try {
       const folder = await apiGet(`/folders/${folderId}`);
+      currentFolder = folder;
       matrix = folder.matrixConfig;
+      executiveSummary = folder.executiveSummary || null;
+      
+      // Mettre à jour le folder dans le store pour refléter les changements de statut
+      foldersStore.update(folders => 
+        folders.map(f => f.id === folderId ? { ...f, status: folder.status, executiveSummary: folder.executiveSummary } : f)
+      );
     } catch (error) {
       console.error('Failed to load matrix:', error);
     }
+  };
+
+  const generateExecutiveSummary = async () => {
+    if (!selectedFolderId) return;
+    
+    isGeneratingSummary = true;
+    try {
+      const result = await apiPost('/analytics/executive-summary', {
+        folder_id: selectedFolderId,
+        value_threshold: valueThreshold,
+        complexity_threshold: complexityThreshold
+      });
+      
+      addToast({
+        type: 'success',
+        message: result.message || 'Génération de la synthèse exécutive démarrée'
+      });
+      
+      // Recharger le folder pour mettre à jour le statut
+      await loadMatrix(selectedFolderId);
+      
+      // Mettre à jour le store des dossiers pour refléter le changement de statut
+      const folders = await fetchFolders();
+      foldersStore.set(folders);
+    } catch (error: any) {
+      console.error('Failed to generate executive summary:', error);
+      addToast({
+        type: 'error',
+        message: error?.data?.message || 'Erreur lors de la génération de la synthèse exécutive'
+      });
+    } finally {
+      isGeneratingSummary = false;
+    }
+  };
+
+  // Fonction pour créer un lien de référence
+  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
+    const refId = `ref-${num}`;
+    return `<a href="#${refId}" 
+                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
+                title="${ref.title.replace(/"/g, '&quot;')}"
+                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
+                [${num}]
+              </a>`;
+  };
+
+  // Fonction pour parser les références [1], [2] dans le markdown HTML
+  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
+    if (!html || !references || references.length === 0) return html;
+    
+    // Remplacer les patterns [1], [2], etc par des liens cliquables
+    return html.replace(/\[(\d+)\]/g, (match, num) => {
+      const index = parseInt(num) - 1;
+      if (index >= 0 && index < references.length) {
+        return createReferenceLink(num, references[index]);
+      }
+      return match; // Si la référence n'existe pas, garder le texte original
+    });
+  };
+
+  // Fonction pour rendre le markdown en HTML avec parsing des références
+  const renderMarkdown = (text: string | null | undefined, references: Array<{title: string; url: string}> = []): string => {
+    if (!text) return '';
+    let html = marked(text);
+    
+    // Post-traitement pour améliorer le rendu des listes
+    html = html.replace(/<ul>/g, '<ul class="list-disc space-y-2 mb-4" style="padding-left:1.5rem;">');
+    html = html.replace(/<ol>/g, '<ol class="list-decimal space-y-2 mb-4" style="padding-left:1.5rem;">');
+    html = html.replace(/<li>/g, '<li class="mb-1">');
+    
+    // Post-traitement pour améliorer le rendu des titres
+    html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
+    html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
+    
+    return parseReferencesInMarkdown(html, references);
   };
 
   const handleFolderChange = async (event: Event) => {
@@ -126,12 +219,98 @@
   
   // Nom du dossier sélectionné
   $: selectedFolderName = selectedFolderId ? ($foldersStore.find(f => f.id === selectedFolderId)?.name || '') : '';
+  
+  // Vérifier si la synthèse est en cours de génération
+  $: isSummaryGenerating = currentFolder?.status === 'generating' && !executiveSummary;
+
+  // Rafraîchir automatiquement le folder si la synthèse est en cours de génération
+  $: {
+    const hasGeneratingFolder = currentFolder?.status === 'generating';
+    
+    if (hasGeneratingFolder && selectedFolderId) {
+      if (!refreshManager.isRefreshActive('dashboard-folder')) {
+        refreshManager.startRefresh('dashboard-folder', async () => {
+          await loadMatrix(selectedFolderId!);
+          // Mettre à jour aussi le store des dossiers
+          const folders = await fetchFolders();
+          foldersStore.set(folders);
+        }, 2000);
+      }
+    } else {
+      refreshManager.stopRefresh('dashboard-folder');
+    }
+  }
+
+  const startAutoRefresh = () => {
+    const hasGeneratingFolder = currentFolder?.status === 'generating';
+    
+    if (hasGeneratingFolder && selectedFolderId) {
+      refreshManager.startRefresh('dashboard-folder', async () => {
+        await loadMatrix(selectedFolderId!);
+        // Mettre à jour aussi le store des dossiers
+        const folders = await fetchFolders();
+        foldersStore.set(folders);
+      }, 2000);
+    }
+  };
 </script>
 
-<section class="space-y-6">
+<section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
   </div>
+
+  <!-- Synthèse exécutive (FIRST) -->
+  {#if selectedFolderId}
+    {#if isSummaryGenerating || isGeneratingSummary}
+      <div class="rounded-lg border border-blue-200 bg-blue-50 p-6">
+        <div class="flex items-center gap-3">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div>
+            <p class="text-sm font-medium text-blue-700">Génération de la synthèse exécutive en cours...</p>
+            <p class="text-xs text-blue-600 mt-1">Cela peut prendre quelques instants</p>
+          </div>
+        </div>
+      </div>
+    {:else if executiveSummary}
+      <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+        <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
+          <h2 class="text-2xl font-semibold text-slate-900">Synthèse exécutive</h2>
+          <button
+            on:click={generateExecutiveSummary}
+            disabled={isGeneratingSummary}
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            {isGeneratingSummary ? 'Régénération...' : 'Régénérer'}
+          </button>
+        </div>
+        
+        {#if executiveSummary.synthese_executive}
+          <div class="prose prose-slate max-w-none">
+            <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+              {@html renderMarkdown(executiveSummary.synthese_executive, executiveSummary.references || [])}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {:else if currentFolder}
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 mb-1">Synthèse exécutive</h2>
+            <p class="text-sm text-slate-600">Aucune synthèse exécutive disponible pour ce dossier</p>
+          </div>
+          <button
+            on:click={generateExecutiveSummary}
+            disabled={isGeneratingSummary}
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isGeneratingSummary ? 'Génération...' : 'Générer la synthèse'}
+          </button>
+        </div>
+      </div>
+    {/if}
+  {/if}
 
   {#if isLoading}
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
@@ -153,6 +332,11 @@
           <div class="ml-4">
             <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
             <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
+            {#if roiStats.count > 0}
+              <p class="text-xs text-green-600 mt-1">
+                Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
+              </p>
+            {/if}
           </div>
         </div>
       </div>
@@ -169,11 +353,6 @@
             <div class="ml-4 flex-1">
               <p class="text-sm font-medium text-green-700">Gains rapides</p>
               <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
-              {#if roiStats.count > 0}
-                <p class="text-xs text-green-600 mt-1">
-                  Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
-                </p>
-              {/if}
             </div>
           </div>
         </div>
@@ -305,6 +484,59 @@
         />
       </div>
     </div>
+
+    <!-- Introduction, Analyse, Recommandations (après le Dashboard) -->
+    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
+      <div class="space-y-6">
+        {#if executiveSummary.introduction}
+          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900">Introduction</h2>
+            </div>
+            <div class="prose prose-slate max-w-none">
+              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                {@html renderMarkdown(executiveSummary.introduction, executiveSummary.references || [])}
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        {#if executiveSummary.analyse}
+          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900">Analyse</h2>
+            </div>
+            <div class="prose prose-slate max-w-none">
+              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                {@html renderMarkdown(executiveSummary.analyse, executiveSummary.references || [])}
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        {#if executiveSummary.recommandation}
+          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900">Recommandations</h2>
+            </div>
+            <div class="prose prose-slate max-w-none">
+              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                {@html renderMarkdown(executiveSummary.recommandation, executiveSummary.references || [])}
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        {#if executiveSummary.references && executiveSummary.references.length > 0}
+          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900">Références</h2>
+            </div>
+            <References references={executiveSummary.references} />
+          </div>
+        {/if}
+      </div>
+    {/if}
 
   {/if}
 </section>

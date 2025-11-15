@@ -86,14 +86,19 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Add new job type: `executive_summary` to queue
   - Update folder status to show executive summary generation in progress
 
-- [ ] **Task 3.5**: Add executive summary display in Dashboard
+- [x] **Task 3.5**: Add executive summary display in Dashboard
   - Integrate executive summary sections directly in `dashboard/+page.svelte` (no separate component)
   - Display sections in order: Synthèse exécutive FIRST, then Dashboard (scatter plot), then Introduction/Analyse/Recommandations
   - Fetch executive summary from folder data (stored in `folders.executiveSummary` JSON field)
   - Show loading state when generating (check folder status === 'generating')
-  - Add manual "Generate Summary" button for historical folders without summary
+  - Add manual "Generate Summary" and "Régénérer" buttons
   - Parse and render markdown sections using existing markdown rendering (marked library)
-  - Layout: Full-width sections with proper spacing and typography
+  - Add markdown styling for h2, h3, ul, ol, li elements
+  - Parse citations [1], [2] with links to references section
+  - Add References section at the end using References.svelte component
+  - Automatic refresh monitoring for job status (every 2s when generating)
+  - Hide Introduction/Analyse/Recommandations sections during generation
+  - Add responsive margins (px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32) for document-like layout
 
 ### Phase 4: Report Generation (DOCX)
 - [ ] **Task 4.1**: Install and configure docx library
