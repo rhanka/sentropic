@@ -1,0 +1,1 @@
+ALTER TABLE "folders" ADD COLUMN "executive_summary" text;

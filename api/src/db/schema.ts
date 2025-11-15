@@ -22,6 +22,7 @@ export const folders = pgTable('folders', {
   description: text('description'),
   companyId: text('company_id').references(() => companies.id),
   matrixConfig: text('matrix_config'),
+  executiveSummary: text('executive_summary'), // JSON string with 4 sections: { introduction, analyse, recommandation, synthese_executive }
   status: text('status').default('completed'), // 'generating', 'completed'
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
 });

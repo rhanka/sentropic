@@ -52,27 +52,30 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Accordéon déplacé du composant scatter plot vers le dashboard pour meilleure séparation des responsabilités
 
 ### Phase 3: Executive Summary Generation
-- [ ] **Task 3.1**: Add executive summary prompt to default-prompts.ts
-  - Create prompt template with 5 markdown sections:
+- [x] **Task 3.1**: Add executive summary prompt to default-prompts.ts
+  - Create prompt template with 4 markdown sections:
     - Introduction
     - Analyse
-    - Top cas
     - Recommandation (including prochaines étapes)
     - Synthèse exécutive
-  - Prompt takes: use cases, company info (if available), folder info
-  - Return JSON with 5 markdown sections
+  - Prompt takes: use cases, company info (if available), folder info, top cases (list of priority use case names)
+  - Top cases are provided as input (calculated by API using ROI quadrant thresholds or medians)
+  - Return JSON with 4 markdown sections (top_cas removed from output, provided as input)
 
 - [ ] **Task 3.2**: Create API endpoint for executive summary generation
   - New endpoint: `POST /api/v1/analytics/executive-summary`
   - Input: `folder_id`
   - Fetch folder description, company context, and all use cases
-  - Generate prompt for OpenAI with all context
-  - Return JSON with 5 markdown sections
+  - Calculate top cases (use cases in ROI quadrant: value >= threshold AND complexity <= threshold)
+  - Use custom thresholds if provided, otherwise use medians
+  - Format top cases as list of use case names
+  - Generate prompt for OpenAI with all context (including top cases)
+  - Return JSON with 4 markdown sections
   - Store result in database (folders table - new field `executive_summary`)
 
-- [ ] **Task 3.3**: Add database field for executive summary
+- [x] **Task 3.3**: Add database field for executive summary
   - Add `executive_summary` JSON field to folders table (migration)
-  - Store JSON with 5 sections: { introduction, analyse, top_cas, recommandation, synthese_executive }
+  - Store JSON with 4 sections: { introduction, analyse, recommandation, synthese_executive }
 
 - [ ] **Task 3.4**: Integrate automatic generation after use case completion
   - Modify `QueueManager.processUseCaseDetail` to check if all use cases are completed
@@ -80,12 +83,14 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Add new job type: `executive_summary` to queue
   - Update folder status to show executive summary generation in progress
 
-- [ ] **Task 3.5**: Add UI component for executive summary display
-  - Create `ExecutiveSummary.svelte` component
-  - Display sections in order: Synthèse exécutive, Introduction, Analyse, Recommandations
-  - Show loading state when generating
+- [ ] **Task 3.5**: Add executive summary display in Dashboard
+  - Integrate executive summary sections directly in `dashboard/+page.svelte` (no separate component)
+  - Display sections in order: Synthèse exécutive FIRST, then Dashboard (scatter plot), then Introduction/Analyse/Recommandations
+  - Fetch executive summary from folder data (stored in `folders.executiveSummary` JSON field)
+  - Show loading state when generating (check folder status === 'generating')
   - Add manual "Generate Summary" button for historical folders without summary
-  - Position: Synthèse exécutive FIRST, then Dashboard, then Introduction/Analyse/Recommandations
+  - Parse and render markdown sections using existing markdown rendering (marked library)
+  - Layout: Full-width sections with proper spacing and typography
 
 ### Phase 4: Report Generation (DOCX)
 - [ ] **Task 4.1**: Install and configure docx library
@@ -166,9 +171,9 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Simplification du composant scatter plot (retrait de la logique de configuration)
 
 ## Status
-- **Progress**: 7/20 tasks completed
-- **Current**: Phase 1 completed (scatter plot avec recuit simulé), Phase 2 completed (ROI Quadrant visualisé, stats card, configuration accordion)
-- **Next**: Phase 3 - Executive Summary Generation
+- **Progress**: 8/20 tasks completed
+- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 in progress (Task 3.1 completed)
+- **Next**: Task 3.2 - Create API endpoint for executive summary generation
 
 ## Specifications Confirmed
 
@@ -179,15 +184,20 @@ Transform the dashboard into an executive summary view with improved visualizati
 - **Visual**: Green background/shading for top-left quadrant
 
 ### Executive Summary
-- **Format**: JSON with 5 markdown sections:
+- **Format**: JSON with 4 markdown sections:
   - `introduction` (markdown)
   - `analyse` (markdown)
-  - `top_cas` (markdown)
   - `recommandation` (markdown, includes prochaines étapes)
   - `synthese_executive` (markdown)
-- **Storage**: JSON field in folders table
+- **Input**: Top cases (list of priority use case names) calculated using ROI quadrant thresholds or medians
+- **Storage**: JSON field in folders table (`folders.executiveSummary`)
 - **Generation**: Automatic after all use cases completed, manual button for historical folders
-- **UI Order**: Synthèse exécutive FIRST, then Dashboard, then Introduction/Analyse/Recommandations
+- **UI Integration**: 
+  - Integrated directly in `dashboard/+page.svelte` (no separate component)
+  - Display order: **Synthèse exécutive FIRST**, then **Dashboard (scatter plot)**, then **Introduction/Analyse/Recommandations**
+  - Fetch from folder data, parse JSON, render markdown with `marked` library
+  - Show loading state when `folder.status === 'generating'`
+  - Manual generation button for folders without summary
 
 ### Report
 - **Format**: DOCX (primary), with PDF option

@@ -43,6 +43,13 @@
       "when": 1763006411397,
       "tag": "0005_youthful_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763170969321,
+      "tag": "0006_low_riptide",
+      "breakpoints": true
     }
   ]
 }
