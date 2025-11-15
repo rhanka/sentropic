@@ -8,8 +8,9 @@ import { calculateScores } from '../utils/scoring';
 import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases } from '../db/schema';
 import { settingsService } from './settings';
+import { generateExecutiveSummary } from './executive-summary';
 
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail';
+export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
 
 export interface Job {
   id: string;
@@ -39,6 +40,13 @@ export interface UseCaseDetailJobData {
   useCaseId: string;
   useCaseName: string;
   folderId: string;
+  model?: string;
+}
+
+export interface ExecutiveSummaryJobData {
+  folderId: string;
+  valueThreshold?: number | null;
+  complexityThreshold?: number | null;
   model?: string;
 }
 
@@ -201,6 +209,9 @@ export class QueueManager {
           break;
         case 'usecase_detail':
           await this.processUseCaseDetail(jobData as UseCaseDetailJobData, controller.signal);
+          break;
+        case 'executive_summary':
+          await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
@@ -469,6 +480,64 @@ export class QueueManager {
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));
+
+    // Vérifier si tous les use cases du dossier sont complétés
+    const allUseCases = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+    const allCompleted = allUseCases.length > 0 && allUseCases.every(uc => uc.status === 'completed');
+
+    if (allCompleted) {
+      // Vérifier si une synthèse exécutive existe déjà
+      const [currentFolder] = await db.select().from(folders).where(eq(folders.id, folderId));
+      const hasExecutiveSummary = currentFolder?.executiveSummary;
+
+      if (!hasExecutiveSummary) {
+        console.log(`✅ Tous les use cases du dossier ${folderId} sont complétés, déclenchement de la génération de la synthèse exécutive`);
+        
+        // Mettre à jour le statut du dossier
+        await db.update(folders)
+          .set({ status: 'generating' })
+          .where(eq(folders.id, folderId));
+
+        // Ajouter le job de génération de synthèse exécutive
+        try {
+          await this.addJob('executive_summary', {
+            folderId,
+            model: selectedModel
+          });
+          console.log(`📝 Job executive_summary ajouté pour le dossier ${folderId}`);
+        } catch (error) {
+          console.error(`❌ Erreur lors de l'ajout du job executive_summary:`, error);
+          // Ne pas faire échouer le job usecase_detail si l'ajout du job executive_summary échoue
+        }
+      } else {
+        console.log(`ℹ️ Le dossier ${folderId} a déjà une synthèse exécutive, pas de régénération automatique`);
+      }
+    }
+  }
+
+  /**
+   * Worker pour la génération de synthèse exécutive
+   */
+  private async processExecutiveSummary(data: ExecutiveSummaryJobData, signal?: AbortSignal): Promise<void> {
+    const { folderId, valueThreshold, complexityThreshold, model } = data;
+
+    console.log(`📊 Génération de la synthèse exécutive pour le dossier ${folderId}`);
+
+    // Générer la synthèse exécutive
+    await generateExecutiveSummary({
+      folderId,
+      valueThreshold,
+      complexityThreshold,
+      model,
+      signal
+    });
+
+    // Mettre à jour le statut du dossier à 'completed'
+    await db.update(folders)
+      .set({ status: 'completed' })
+      .where(eq(folders.id, folderId));
+
+    console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
   }
 
   /**

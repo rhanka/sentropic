@@ -77,7 +77,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Add `executive_summary` JSON field to folders table (migration)
   - Store JSON with 4 sections: { introduction, analyse, recommandation, synthese_executive }
 
-- [ ] **Task 3.4**: Integrate automatic generation after use case completion
+- [x] **Task 3.4**: Integrate automatic generation after use case completion
   - Modify `QueueManager.processUseCaseDetail` to check if all use cases are completed
   - When all use cases completed, automatically trigger executive summary generation
   - Add new job type: `executive_summary` to queue
