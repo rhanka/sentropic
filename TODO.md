@@ -19,19 +19,9 @@
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
 - [x] Fix 404 enterprises/[id] path in production
 - [x] Auth Webauth with mail chck + minimal RBAC
+- [x] Usecase UI: card with headers/footer, model tag, citations
 
 **⏳ À faire :**
-- [x] Améliorer l'apparence et la gestion des fiches de cas d'usage (PR #XXX)
-  - [x] dans le détail de fiche, ajouter une numérotation pour les références (urls)
-  - [x] modifier le prompt pour le format des références, afin pouvoir les lier le cas échéant depuis les descriptions
-  - [x] modifier le format de la carte de cas d'usage
-      - [x] éviter le débordement du texte et du titre : tronquer
-      - [x] mettre un header et footer de carte
-      - [x] retirer les icônes oeil et modifier (inutile, quand on clique on voit la fiche)
-      - [x] la position de l'icone restant (poubelle) doit apparaitre au hove mais être fixe par rapport au bord droit dans le header
-  - [x] ajouter le modèle utilisé pour la génration (GPT5 ou GPT4 ou autre) en tag sur la fiche (détail et carte)
-  - [x] retirer l'affichage du label "Actif" (pas de sens à ce stade)
-  - [x] Parser les références [1], [2] dans tous les champs (description, bénéfices, métriques, risques, étapes, justifications)
 - [ ] Améliorer Dashboard en tant que synthèse exécutive
   - [ ] ajouter une zone de ROI (top left quadrant, vert, to be discussed)
   - [ ] le graphique devrait remplir max 50% de l'écran, et devrait être plus haut

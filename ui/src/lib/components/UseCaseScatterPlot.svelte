@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -10,9 +10,17 @@
   export let matrix: MatrixConfig | null = null;
   export let roiStats: { count: number; avgValue: number; avgComplexity: number } = { count: 0, avgValue: 0, avgComplexity: 0 };
   export let showROIQuadrant: boolean = false;
+  export let valueThreshold: number | null = null; // Seuil personnalisé pour la valeur (null = utiliser médiane)
+  export let complexityThreshold: number | null = null; // Seuil personnalisé pour la complexité (null = utiliser médiane)
+  export let medianValue: number = 0; // Médiane calculée (bindable)
+  export let medianComplexity: number = 0; // Médiane calculée (bindable)
 
   let chartContainer: HTMLCanvasElement;
   let chartInstance: Chart | null = null;
+  
+  // Utiliser les seuils passés en props ou les médianes
+  $: effectiveValueThreshold = valueThreshold !== null ? valueThreshold : computedMedianValue;
+  $: effectiveComplexityThreshold = complexityThreshold !== null ? complexityThreshold : computedMedianComplexity;
 
   // --- Helpers pour placement personnalisé des labels ---
   const LABEL_FONT = '9px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -92,7 +100,7 @@
     default: '100, 116, 139'
   };
 
-  const ENABLE_LAYOUT_DEBUG = dev;
+  const ENABLE_LAYOUT_DEBUG = false;
 
   function getStatusColorInfo(status?: string) {
     const rgb = STATUS_COLORS[status ?? 'default'] ?? STATUS_COLORS.default;
@@ -1147,6 +1155,36 @@
     return `${dims}|${dataSig}|${layoutRandomSeed}`;
   }
 
+  // Stocker les seuils dans un objet mutable accessible au plugin
+  const thresholdState = {
+    value: 0,
+    complexity: 0
+  };
+  
+  // Mettre à jour les seuils de manière réactive et forcer la mise à jour du graphique
+  $: {
+    const newValue = effectiveValueThreshold;
+    const newComplexity = effectiveComplexityThreshold;
+    // Toujours mettre à jour thresholdState
+    if (thresholdState.value !== newValue || thresholdState.complexity !== newComplexity) {
+      thresholdState.value = newValue;
+      thresholdState.complexity = newComplexity;
+      // Forcer la mise à jour du graphique immédiatement avec un redraw complet
+      if (chartInstance) {
+        // Invalider le cache pour forcer un recalcul complet
+        // cachedLabelSignature = '';
+        // Utiliser requestAnimationFrame pour s'assurer que le redraw se fait après la mise à jour de thresholdState
+        requestAnimationFrame(() => {
+          if (chartInstance) {
+            // Forcer un redraw complet en appelant update puis draw
+            chartInstance.update('active');
+            chartInstance.draw();
+          }
+        });
+      }
+    }
+  }
+
   const useCaseLabelPlugin = {
     id: 'useCaseLabels',
     beforeDatasetsDraw(chart: Chart) {
@@ -1168,27 +1206,21 @@
         }))
         .filter((item: { raw?: { label?: string } }) => Boolean(item.raw?.label));
 
-      // Calculer les médianes pour le quadrant ROI
-      const valueScores = points.map((p: any) => p.raw?.y ?? 0);
-      const complexityScores = points.map((p: any) => p.raw?.x ?? 0);
-      const calculateMedian = (values: number[]) => {
-        if (values.length === 0) return 0;
-        const sorted = [...values].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 === 0
-          ? (sorted[mid - 1] + sorted[mid]) / 2
-          : sorted[mid];
-      };
-      const medianValue = calculateMedian(valueScores);
-      const medianComplexity = calculateMedian(complexityScores);
+      // Lire les seuils depuis les options du chart (toujours à jour)
+      const pluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
+      const thresholdValue = pluginOptions.valueThreshold ?? thresholdState.value ?? 0;
+      const thresholdComplexity = pluginOptions.complexityThreshold ?? thresholdState.complexity ?? 0;
       const showROIQuadrant = points.length > 2;
 
-      // Convertir les médianes en coordonnées pixels
+      // Convertir les seuils en coordonnées pixels
       const xScale = chart.scales.x;
       const yScale = chart.scales.y;
-      const medianX = xScale.getPixelForValue(medianComplexity);
-      const medianY = yScale.getPixelForValue(medianValue);
+      
 
+      
+      const thresholdX = xScale.getPixelForValue(thresholdComplexity);
+      const thresholdY = yScale.getPixelForValue(thresholdValue);
+      
       // Layer 0: Quadrants (juste au-dessus de la grille, en dessous des traits)
       if (showROIQuadrant && xScale && yScale) {
         // Quadrant ROI (top-left) : haute valeur, faible complexité - Vert
@@ -1196,34 +1228,34 @@
         ctx.fillRect(
           chartArea.left,
           chartArea.top,
-          medianX - chartArea.left,
-          medianY - chartArea.top
+          thresholdX - chartArea.left,
+          thresholdY - chartArea.top
         );
 
         // Quadrant bottom-right : faible valeur, haute complexité - Orange
         ctx.fillStyle = 'rgba(251, 146, 60, 0.15)'; // Orange avec 15% d'opacité
         ctx.fillRect(
-          medianX,
-          medianY,
-          chartArea.right - medianX,
-          chartArea.bottom - medianY
+          thresholdX,
+          thresholdY,
+          chartArea.right - thresholdX,
+          chartArea.bottom - thresholdY
         );
 
-        // Lignes de référence pour les médianes
+        // Lignes de référence pour les seuils
         ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
         
-        // Ligne verticale (médiane complexité)
+        // Ligne verticale (seuil complexité)
         ctx.beginPath();
-        ctx.moveTo(medianX, chartArea.top);
-        ctx.lineTo(medianX, chartArea.bottom);
+        ctx.moveTo(thresholdX, chartArea.top);
+        ctx.lineTo(thresholdX, chartArea.bottom);
         ctx.stroke();
         
-        // Ligne horizontale (médiane valeur)
+        // Ligne horizontale (seuil valeur)
         ctx.beginPath();
-        ctx.moveTo(chartArea.left, medianY);
-        ctx.lineTo(chartArea.right, medianY);
+        ctx.moveTo(chartArea.left, thresholdY);
+        ctx.lineTo(chartArea.right, thresholdY);
         ctx.stroke();
         
         ctx.setLineDash([]);
@@ -1298,6 +1330,10 @@
         ctx.font = LABEL_FONT;
       }
 
+      // Pour le recuit, on utilise toujours les médianes pour positionner les boîtes fixes
+      const medianX = xScale.getPixelForValue(computedMedianComplexity);
+      const medianY = yScale.getPixelForValue(computedMedianValue);
+      
       const signature = getLabelSignature(points, chartArea);
       if (signature !== cachedLabelSignature) {
         const rawBoxes = buildLabelBoxes(points, chartArea, ctx);
@@ -1420,22 +1456,43 @@
   // Calculer les médianes pour le quadrant ROI
   $: valueScores = rawData.map(point => point.y);
   $: complexityScores = rawData.map(point => point.x);
-  $: medianValue = calculateMedian(valueScores);
-  $: medianComplexity = calculateMedian(complexityScores);
+  $: computedMedianValue = calculateMedian(valueScores);
+  $: computedMedianComplexity = calculateMedian(complexityScores);
+  
+  // Exposer les médianes calculées
+  $: medianValue = computedMedianValue;
+  $: medianComplexity = computedMedianComplexity;
+  
+  // Initialiser thresholdState dès que les valeurs effectives sont disponibles
+  $: if (effectiveValueThreshold > 0 && effectiveComplexityThreshold > 0) {
+    thresholdState.value = effectiveValueThreshold;
+    thresholdState.complexity = effectiveComplexityThreshold;
+  }
 
-  // Identifier les use cases dans le quadrant ROI (valeur > médiane ET complexité < médiane)
+  // Identifier les use cases dans le quadrant ROI (valeur >= seuil ET complexité <= seuil)
+  // Le quadrant ROI est en haut à gauche : haute valeur (y élevé) et faible complexité (x faible)
   $: {
     showROIQuadrant = rawData.length > 2;
-    const roiUseCases = showROIQuadrant
-      ? rawData.filter(point => point.y > medianValue && point.x < medianComplexity)
-      : [];
-    roiStats = showROIQuadrant && roiUseCases.length > 0
-      ? {
+    if (showROIQuadrant && effectiveValueThreshold > 0 && effectiveComplexityThreshold > 0) {
+      // Quadrant ROI : y >= seuil_valeur (haute valeur) ET x <= seuil_complexité (faible complexité)
+      const roiUseCases = rawData.filter(point => 
+        point.y >= effectiveValueThreshold && point.x <= effectiveComplexityThreshold
+      );
+      
+      if (roiUseCases.length > 0) {
+        const roiValues = roiUseCases.map(p => p.y);
+        const roiComplexities = roiUseCases.map(p => p.x);
+        roiStats = {
           count: roiUseCases.length,
-          avgValue: roiUseCases.reduce((sum, p) => sum + p.y, 0) / roiUseCases.length,
-          avgComplexity: roiUseCases.reduce((sum, p) => sum + p.x, 0) / roiUseCases.length
-        }
-      : { count: 0, avgValue: 0, avgComplexity: 0 };
+          avgValue: calculateMedian(roiValues),
+          avgComplexity: calculateMedian(roiComplexities)
+        };
+      } else {
+        roiStats = { count: 0, avgValue: 0, avgComplexity: 0 };
+      }
+    } else {
+      roiStats = { count: 0, avgValue: 0, avgComplexity: 0 };
+    }
   }
 
   $: offsetData = offsetOverlappingPoints(rawData);
@@ -1482,9 +1539,14 @@
     maintainAspectRatio: false,
     animation: false,
     plugins: {
+      // Passer les seuils au plugin via les options
+      useCaseLabels: {
+        valueThreshold: effectiveValueThreshold,
+        complexityThreshold: effectiveComplexityThreshold
+      },
       title: {
         display: true,
-        text: 'Matrice Valeur vs Complexité',
+        text: 'Matrice de priorisation',
         font: {
           size: 16,
           weight: 'bold'
@@ -1603,10 +1665,18 @@
     }
   });
 
-  // Mettre à jour le graphique quand les données changent
+  // Mettre à jour le graphique quand les données ou les options changent
   $: if (chartInstance) {
     updateChart();
+    // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils
+    if (chartInstance.options.plugins) {
+      (chartInstance.options.plugins as any).useCaseLabels = {
+        valueThreshold: effectiveValueThreshold,
+        complexityThreshold: effectiveComplexityThreshold
+      };
+    }
   }
+  
 </script>
 
 <div class="w-full max-w-[640px] mx-auto">

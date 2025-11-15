@@ -44,11 +44,12 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Display average value and complexity for ROI quadrant
   - Position in dashboard layout
 
-- [ ] **Task 2.4**: Create dashboard configuration accordion
-  - Add accordion component above dashboard with gear icon (⚙️) on the right
+- [x] **Task 2.4**: Create dashboard configuration accordion
+  - Add accordion component in top-right corner of scatter plot container with gear icon (⚙️)
   - Store configuration in localStorage (initialized to median values)
   - Allow configuration of ROI quadrant boundaries (value/complexity thresholds)
   - Configuration will be stored in backend later (not in this phase)
+  - Accordéon déplacé du composant scatter plot vers le dashboard pour meilleure séparation des responsabilités
 
 ### Phase 3: Executive Summary Generation
 - [ ] **Task 3.1**: Add executive summary prompt to default-prompts.ts
@@ -154,11 +155,20 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Uniformisation de toutes les couleurs (cadres, traits, points, texte) en bleu-gris foncé (#475569)
   - Correction du problème de recalcul des labels au hover (utilisation de `raw.x/y` au lieu de `element.x/y` dans la signature)
   - Uniformisation du texte (labels, légendes des axes, labels de quadrant) avec la couleur bleu-gris
+- [x] **Commit 4**: Phase 2 - Finalisation du dashboard et configuration ROI
+  - Ajout de l'accordéon de configuration du quadrant ROI en haut à droite du graphique
+  - Déplacement de la logique de configuration du composant scatter plot vers le dashboard
+  - Titre du dashboard affiche maintenant le nom du dossier sélectionné
+  - Statistiques ROI utilisent maintenant la médiane au lieu de la moyenne pour valeur et complexité
+  - Correction du filtre ROI pour utiliser `>=` et `<=` au lieu de `>` et `<` (inclusion des points sur les lignes de seuil)
+  - Changement de l'icône "Gains rapides" pour une flèche de croissance
+  - Retrait du sélecteur de dossier (remplacé par le titre dynamique)
+  - Simplification du composant scatter plot (retrait de la logique de configuration)
 
 ## Status
-- **Progress**: 6/20 tasks completed
-- **Current**: Phase 1 completed (scatter plot avec recuit simulé), Phase 2 partiellement complétée (ROI Quadrant visualisé, stats card ajoutée)
-- **Next**: Task 2.4 - Create dashboard configuration accordion
+- **Progress**: 7/20 tasks completed
+- **Current**: Phase 1 completed (scatter plot avec recuit simulé), Phase 2 completed (ROI Quadrant visualisé, stats card, configuration accordion)
+- **Next**: Phase 3 - Executive Summary Generation
 
 ## Specifications Confirmed
 
@@ -193,7 +203,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   8. Recommandations
 
 ### Dashboard Configuration
-- **UI**: Accordion above dashboard with gear icon (⚙️) on right
+- **UI**: Accordion in top-right corner of scatter plot container with gear icon (⚙️)
 - **Storage**: localStorage initially (no DB changes in this phase)
 - **Initial Values**: Median-based thresholds
 - **Future**: Will be stored in backend (not in this phase)
