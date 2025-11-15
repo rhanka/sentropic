@@ -125,7 +125,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Option to download as PDF
 
 ### Phase 5: Testing & Validation
-- [ ] **Task 5.1**: Update unit tests for new API endpoint
+- [x] **Task 5.1**: Update unit tests for new API endpoint
   - Test executive summary generation endpoint
   - Test error handling
   - Test with various folder/company combinations
