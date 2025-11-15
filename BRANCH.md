@@ -62,9 +62,12 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Top cases are provided as input (calculated by API using ROI quadrant thresholds or medians)
   - Return JSON with 4 markdown sections (top_cas removed from output, provided as input)
 
-- [ ] **Task 3.2**: Create API endpoint for executive summary generation
+- [x] **Task 3.2**: Create API endpoint for executive summary generation
   - New endpoint: `POST /api/v1/analytics/executive-summary`
-  - Input: `folder_id`
+  - Input: `folder_id`, optional `value_threshold`, `complexity_threshold`, `model`
+  - Queue job instead of direct generation (asynchronous processing)
+  - Update folder status to 'generating' when job is queued
+  - Return jobId and status immediately
   - Fetch folder description, company context, and all use cases
   - Calculate top cases (use cases in ROI quadrant: value >= threshold AND complexity <= threshold)
   - Use custom thresholds if provided, otherwise use medians

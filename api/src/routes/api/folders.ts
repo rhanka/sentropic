@@ -140,6 +140,7 @@ foldersRouter.get('/:id', async (c) => {
     companyId: folders.companyId,
     companyName: companies.name,
     matrixConfig: folders.matrixConfig,
+    executiveSummary: folders.executiveSummary,
     status: folders.status,
     createdAt: folders.createdAt
   })
@@ -150,9 +151,23 @@ foldersRouter.get('/:id', async (c) => {
   if (!folder) {
     return c.json({ message: 'Not found' }, 404);
   }
+  
+  // Parser executiveSummary si présent
+  let parsedExecutiveSummary = null;
+  if (folder.executiveSummary) {
+    try {
+      parsedExecutiveSummary = typeof folder.executiveSummary === 'string' 
+        ? JSON.parse(folder.executiveSummary) 
+        : folder.executiveSummary;
+    } catch (e) {
+      console.error('Failed to parse executiveSummary:', e);
+    }
+  }
+  
   return c.json({
     ...folder,
-    matrixConfig: parseMatrix(folder.matrixConfig ?? null)
+    matrixConfig: parseMatrix(folder.matrixConfig ?? null),
+    executiveSummary: parsedExecutiveSummary
   });
 });
 
