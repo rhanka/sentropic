@@ -177,11 +177,37 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Changement de l'icône "Gains rapides" pour une flèche de croissance
   - Retrait du sélecteur de dossier (remplacé par le titre dynamique)
   - Simplification du composant scatter plot (retrait de la logique de configuration)
+- [x] **Commit 5**: Phase 3 - Executive Summary Database Schema
+  - Ajout du champ `executiveSummary` JSONB à la table `folders`
+  - Migration 0006_low_riptide.sql
+- [x] **Commit 6**: Phase 3 - Executive Summary Generation Service
+  - Service de génération avec calcul des top cases basé sur les seuils ROI
+  - Support des seuils personnalisés et médianes par défaut
+  - Intégration OpenAI avec prompt executive summary
+- [x] **Commit 7**: Phase 3 - Web Extract Tool & Prompts Update
+  - Ajout du tool `web_extract` pour extraction de contenu web
+  - Mise à jour du prompt executive summary avec références
+- [x] **Commit 8**: Phase 3 - Queue Manager Integration
+  - Intégration de la génération automatique après complétion des use cases
+  - Nouveau job type `executive_summary`
+- [x] **Commit 9**: Phase 3 - API Endpoints
+  - Endpoint POST /analytics/executive-summary avec job queue
+  - Mise à jour GET /folders/:id pour inclure executiveSummary
+- [x] **Commit 10**: Phase 5 - Tests
+  - Tests de validation et génération de synthèse exécutive
+  - Tests de génération automatique
+- [x] **Commit 11**: Phase 3 - UI Refresh Manager Enhancement
+  - Amélioration du refresh manager pour intervalles personnalisés
+- [x] **Commit 12**: Phase 3 - Dashboard Integration
+  - Intégration complète de l'affichage de la synthèse exécutive
+  - Monitoring automatique du statut de génération
+  - Parsing markdown avec styles et citations
+  - Marges responsives pour aspect document
 
 ## Status
-- **Progress**: 8/20 tasks completed
-- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 in progress (Task 3.1 completed)
-- **Next**: Task 3.2 - Create API endpoint for executive summary generation
+- **Progress**: 13/20 tasks completed
+- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 pending, Phase 5 partially completed (Task 5.1 completed)
+- **Next**: Phase 4 - Report Generation (DOCX)
 
 ## Specifications Confirmed
 

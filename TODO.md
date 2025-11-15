@@ -22,11 +22,11 @@
 - [x] Usecase UI: card with headers/footer, model tag, citations
 
 **⏳ À faire :**
-- [ ] Améliorer Dashboard en tant que synthèse exécutive
-  - [ ] ajouter une zone de ROI (top left quadrant, vert, to be discussed)
-  - [ ] le graphique devrait remplir max 50% de l'écran, et devrait être plus haut
-  - [ ] le label du cas doit être inscrit sans hover, et au hover la description doit être affichée, valeur complexité et non le statut
-  - [ ] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
+- [x] Améliorer Dashboard en tant que synthèse exécutive
+  - [x] ajouter une zone de ROI (top left quadrant, vert, to be discussed)
+  - [x] le graphique devrait remplir max 50% de l'écran, et devrait être plus haut
+  - [x] le label du cas doit être inscrit sans hover, et au hover la description doit être affichée, valeur complexité et non le statut
+  - [x] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
   - [ ] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
 - [ ] Approfondissement d'un enrichissement (passer de GPT4.1.nano à GPT5 pour un enrichissement)
 - [ ] Interaction ciblée autour d'un cas d'usage ou entreprise
