@@ -39,10 +39,53 @@
     }
   }
 
-  onMount(async () => {
-    await loadUseCase();
+  onMount(() => {
+    loadUseCase();
     // Démarrer l'actualisation automatique si le cas d'usage est en génération
     startAutoRefresh();
+    
+    // Force display of all sections when printing
+    const handleBeforePrint = () => {
+      // Add print class to body to trigger print styles
+      document.body.classList.add('printing');
+      
+      // Force all sections to be visible (Svelte conditionals might hide them)
+      const useCasePrint = document.querySelector('.usecase-print');
+      if (useCasePrint) {
+        // Force display of all child divs
+        useCasePrint.querySelectorAll('div').forEach(el => {
+          const htmlEl = el as HTMLElement;
+          if (htmlEl.style.display === 'none') {
+            htmlEl.style.display = '';
+          }
+        });
+      }
+
+      // Force margin-top to 0 for section and usecase-print containers
+      const section = document.querySelector('section.space-y-6');
+      if (section) {
+        const htmlEl = section as HTMLElement;
+        htmlEl.style.marginTop = '0';
+        htmlEl.style.paddingTop = '0';
+      }
+      if (useCasePrint) {
+        const htmlEl = useCasePrint as HTMLElement;
+        htmlEl.style.marginTop = '0';
+        htmlEl.style.paddingTop = '0';
+      }
+    };
+    
+    const handleAfterPrint = () => {
+      document.body.classList.remove('printing');
+    };
+    
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
   });
 
   onDestroy(() => {
@@ -269,7 +312,7 @@
   {/if}
 
   {#if useCase}
-    <div class="space-y-6">
+    <div class="usecase-print space-y-6" data-print-mode="true">
       <!-- Status Banner pour génération en cours -->
       {#if useCase.status === 'generating' || useCase.status === 'detailing' || useCase.status === 'pending'}
         <div class="rounded border border-blue-200 bg-blue-50 p-4">
@@ -304,13 +347,13 @@
             </h1>
           </div>
           {#if useCase.model}
-            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 no-print">
               {useCase.model}
             </span>
           {/if}
         </div>
         
-        <div class="flex gap-2">
+        <div class="flex gap-2 no-print">
           {#if isEditing}
             <button 
               class="rounded bg-primary px-4 py-2 text-white"
@@ -326,6 +369,16 @@
               Annuler
             </button>
           {:else}
+            <button
+              on:click={() => window.print()}
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              title="Imprimer ou exporter en PDF"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+              </svg>
+              Exporter en PDF
+            </button>
             <button 
               class="rounded bg-blue-500 px-4 py-2 text-white"
               on:click={() => isEditing = true}
@@ -342,9 +395,10 @@
         </div>
       </div>
 
-      <!-- Scores calculés en 2 colonnes séparées -->
+      <!-- Scores et Infos -->
+
+      <div class="grid gap-6 lg:grid-cols-3 layout-head">
       {#if calculatedScores}
-        <div class="grid gap-6 md:grid-cols-2">
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2">
@@ -362,8 +416,8 @@
                   </svg>
                 {/each}
               </div>
-              <span class="text-lg font-bold text-green-600">
-                ({calculatedScores.finalValueScore.toFixed(1)} points)
+              <span class="font-bold text-green-600">
+                ({calculatedScores.finalValueScore.toFixed(0)} points)
               </span>
             </div>
           </div>
@@ -391,18 +445,34 @@
                   {/if}
                 {/each}
               </div>
-              <span class="text-lg font-bold text-red-600">
-                ({calculatedScores.finalComplexityScore.toFixed(1)} points)
+              <span class="font-bold text-red-600">
+                ({calculatedScores.finalComplexityScore.toFixed(0)} points)
               </span>
             </div>
           </div>
+        {/if}
+        <!-- Délai -->
+        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
+            <h3 class="font-semibold flex items-center gap-2">
+              <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              Délai
+            </h3>
+          </div>
+          <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+            {#if useCase.deadline}
+              <div>{useCase.deadline}</div>
+            {/if}
+          </div>
         </div>
-      {/if}
+      </div>
 
-      <!-- Description sur 2/3 colonnes -->
-      <div class="grid gap-6 lg:grid-cols-3">
-        <!-- Description (2 colonnes) -->
-        <div class="lg:col-span-2">
+      <!-- COLUMN A 2/3 + B 1/3 Col = 3/3 -->
+      <div class="grid gap-6 lg:grid-cols-3 layout-main">
+        <!-- Description (100% de COLUMN A, 2/3 page) -->
+        <div class="lg:col-span-2 column-a colspan-2-print">
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
               <h3 class="font-semibold flex items-center gap-2">
@@ -423,63 +493,15 @@
                 ></textarea>
               </div>
             {:else}
-              <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+              <div class="text-slate-600 text-base leading-relaxed prose max-w-none">
                 {@html descriptionHtml || ''}
               </div>
             {/if}
-          </div>
         </div>
 
-        <!-- Informations (1 colonne) -->
-        <div>
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-              <h3 class="font-semibold flex items-center gap-2">
-                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                Informations
-              </h3>
-            </div>
-            <div class="space-y-3 text-sm">
-              {#if useCase.contact}
-                <div>
-                  <span class="font-medium text-slate-700">Contact:</span>
-                  <span class="text-slate-600 ml-2">{useCase.contact}</span>
-                </div>
-              {/if}
-              {#if useCase.deadline}
-                <div>
-                  <span class="font-medium text-slate-700">Délai:</span>
-                  <span class="text-slate-600 ml-2">{useCase.deadline}</span>
-                </div>
-              {/if}
-              {#if useCase.technologies && useCase.technologies.length > 0}
-                <div>
-                  <span class="font-medium text-slate-700">Technologies:</span>
-                  <ul class="text-slate-600 ml-4 mt-1 space-y-2 list-disc">
-                    {#each useCase.technologies as tech}
-                      <li class="text-sm">{tech}</li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-              {#if useCase.process}
-                <div>
-                  <span class="font-medium text-slate-700">Domaine:</span>
-                  <span class="text-slate-600 ml-2">{useCase.process}</span>
-                </div>
-              {/if}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Layout 3 colonnes pour le reste -->
-      <div class="grid gap-6 lg:grid-cols-3">
-        <!-- COLONNE 1 -->
-        <div class="space-y-6">
-
+          <!-- Autes (COL A, chacun 1/3 de page) -->
+          <!-- Groupe Bénéfices + (Risques + Mesures du succès) (span 2 colonnes, lui-même en 2 colonnes) -->
+          <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2">
           <!-- Bénéfices -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
@@ -512,108 +534,127 @@
             {/if}
           </div>
 
-          <!-- Risques -->
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                </svg>
-                Risques
-              </h3>
-            </div>
-            {#if isEditing}
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Risques (un par ligne)</label>
-                <textarea 
-                  class="w-full rounded border border-slate-300 p-2 text-sm"
-                  placeholder="Risque 1&#10;Risque 2&#10;..."
-                  bind:value={draft.risksText}
-                  rows="3"
-                ></textarea>
+          <!-- Colonne 2 : Risques + Mesures du succès (empilés verticalement) -->
+          <div class="space-y-6">
+            <!-- Risques -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+                <h3 class="font-semibold flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                  </svg>
+                  Risques
+                </h3>
               </div>
-            {:else}
-              <ul class="space-y-2">
-                {#each parsedRisks as risk}
-                  <li class="flex items-start gap-2 text-sm text-slate-600">
-                    <span class="text-red-500 mt-1">•</span>
-                    <span>{@html risk}</span>
-                  </li>
-                {/each}
-              </ul>
+              {#if isEditing}
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Risques (un par ligne)</label>
+                  <textarea 
+                    class="w-full rounded border border-slate-300 p-2 text-sm"
+                    placeholder="Risque 1&#10;Risque 2&#10;..."
+                    bind:value={draft.risksText}
+                    rows="3"
+                  ></textarea>
+                </div>
+              {:else}
+                <ul class="space-y-2">
+                  {#each parsedRisks as risk}
+                    <li class="flex items-start gap-2 text-sm text-slate-600">
+                      <span class="text-red-500 mt-1">•</span>
+                      <span>{@html risk}</span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+
+            <!-- Mesures du succès -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+                <h3 class="font-semibold flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                  </svg>
+                  Mesures du succès
+                </h3>
+              </div>
+              {#if isEditing}
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Métriques (une par ligne)</label>
+                  <textarea 
+                    class="w-full rounded border border-slate-300 p-2 text-sm"
+                    placeholder="Métrique 1&#10;Métrique 2&#10;..."
+                    bind:value={draft.metricsText}
+                    rows="3"
+                  ></textarea>
+                </div>
+              {:else}
+                <ul class="space-y-2">
+                  {#each parsedMetrics as metric}
+                    <li class="flex items-start gap-2 text-sm text-slate-600">
+                      <span class="text-blue-500 mt-1">•</span>
+                      <span>{@html metric}</span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- COL B 1/3 Col -->
+        <div class="lg:col-span-1 column-b">
+
+        <!-- Informations -->
+        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
+            <h3 class="font-semibold flex items-center gap-2">
+              <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              Informations
+            </h3>
+          </div>
+          <div class="space-y-3 text-sm">
+            {#if useCase.contact}
+              <div>
+                <span class="font-medium text-slate-700">Contact:</span>
+                <span class="text-slate-600 ml-2">{useCase.contact}</span>
+              </div>
+            {/if}
+            {#if useCase.process}
+              <div>
+                <span class="font-medium text-slate-700">Domaine:</span>
+                <span class="text-slate-600 ml-2">{useCase.process}</span>
+              </div>
             {/if}
           </div>
         </div>
 
-        <!-- COLONNE 2 -->
-        <div class="space-y-6">
-          <!-- Métriques -->
+        <!-- Technologies -->
+        {#if useCase.technologies && useCase.technologies.length > 0}
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+            <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
               <h3 class="font-semibold flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
                 </svg>
-                Mesures du succès
+                Technologies
               </h3>
             </div>
-            {#if isEditing}
+            <div class="space-y-3 text-sm">
               <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Métriques (une par ligne)</label>
-                <textarea 
-                  class="w-full rounded border border-slate-300 p-2 text-sm"
-                  placeholder="Métrique 1&#10;Métrique 2&#10;..."
-                  bind:value={draft.metricsText}
-                  rows="3"
-                ></textarea>
+                <ul class="text-slate-600 ml-4 mt-1 space-y-2 list-disc">
+                  {#each useCase.technologies as tech}
+                    <li class="text-sm">{tech}</li>
+                  {/each}
+                </ul>
               </div>
-            {:else}
-              <ul class="space-y-2">
-                {#each parsedMetrics as metric}
-                  <li class="flex items-start gap-2 text-sm text-slate-600">
-                    <span class="text-blue-500 mt-1">•</span>
-                    <span>{@html metric}</span>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
-
-          <!-- Prochaines étapes -->
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-                </svg>
-                Prochaines étapes
-              </h3>
             </div>
-            {#if isEditing}
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Prochaines étapes (une par ligne)</label>
-                <textarea 
-                  class="w-full rounded border border-slate-300 p-2 text-sm"
-                  placeholder="Étape 1&#10;Étape 2&#10;..."
-                  bind:value={draft.nextStepsText}
-                  rows="3"
-                ></textarea>
-              </div>
-            {:else}
-              <ul class="space-y-2">
-                {#each parsedNextSteps as step}
-                  <li class="flex items-start gap-2 text-sm text-slate-600">
-                    <span class="text-purple-500 mt-1">•</span>
-                    <span>{@html step}</span>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
           </div>
-        </div>
+        {/if}
 
-        <!-- COLONNE 3 -->
-        <div class="space-y-6">
           <!-- Sources -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
@@ -681,28 +722,59 @@
               </ul>
             {/if}
           </div>
-
         </div>
       </div>
 
-      <!-- Références sur 3/3 colonnes -->
-      {#if !isEditing && (useCase.references && useCase.references.length > 0)}
-        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2">
-              <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-              </svg>
-              Références
-            </h3>
-          </div>
-          <References references={useCase.references || []} />
-        </div>
-      {/if}
+
 
       <!-- Matrice détaillée en 2 colonnes séparées -->
-      {#if matrix && useCase.valueScores && useCase.complexityScores && !isEditing}
-        <div class="grid gap-6 md:grid-cols-2">
+      <div class="grid gap-6 md:grid-cols-2 layout-bottom">
+        <!-- Prochaines étapes -->
+        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+            <h3 class="font-semibold flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+              </svg>
+              Prochaines étapes
+            </h3>
+          </div>
+          {#if isEditing}
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Prochaines étapes (une par ligne)</label>
+              <textarea 
+                class="w-full rounded border border-slate-300 p-2 text-sm"
+                placeholder="Étape 1&#10;Étape 2&#10;..."
+                bind:value={draft.nextStepsText}
+                rows="3"
+              ></textarea>
+            </div>
+          {:else}
+            <ul class="space-y-2">
+              {#each parsedNextSteps as step}
+                <li class="flex items-start gap-2 text-sm text-slate-600">
+                  <span class="text-purple-500 mt-1">•</span>
+                  <span>{@html step}</span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <!-- Références (désormais en 1/3, sous Données) -->
+        {#if !isEditing && (useCase.references && useCase.references.length > 0)}
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
+              <h3 class="font-semibold flex items-center gap-2">
+
+                Références
+              </h3>
+            </div>
+            <References references={useCase.references || []} />
+          </div>
+        {/if}
+
+        {#if matrix && useCase.valueScores && useCase.complexityScores && !isEditing}
           <!-- Axes de Valeur -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
@@ -780,8 +852,8 @@
               {/each}
             </div>
           </div>
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   {/if}
 </section>

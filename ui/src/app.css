@@ -5,3 +5,129 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+/* Hide use case annexes on screen (visible only in print) */
+.usecase-annex {
+  display: none;
+}
+
+/* Desktop layout: equal row spacing inside columns and bottom alignment */
+@media (min-width: 1024px) {
+  /* Ensure columns inside the main layout stack their cards with the same vertical gap as grid gap-6 (24px) */
+  .layout-main > .column-a,
+  .layout-main > .column-b {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; /* Marge minimale entre les divs */
+    min-height: 100%;
+    justify-content: flex-start; /* Aligner en haut, les boites s'étirent */
+    align-items: stretch; /* Les éléments enfants s'étirent */
+  }
+
+  /* Les boites (cartes) dans les colonnes s'étirent pour remplir l'espace disponible */
+  /* S'applique aux cartes directes de column-a (comme Description) et column-b */
+  .layout-main > .column-a > .rounded-lg,
+  .layout-main > .column-b > .rounded-lg {
+    flex-grow: 1; /* Les boites s'étirent pour remplir l'espace */
+    flex-shrink: 0; /* Ne pas rétrécir en dessous de leur contenu */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Le grid Bénéfices/Risques/Mesures reste un grid (pas flex) */
+  .layout-main > .column-a > .grid {
+    flex-grow: 1; /* Le grid s'étire pour remplir l'espace */
+    flex-shrink: 0; /* Ne pas rétrécir en dessous de son contenu */
+    /* Ne pas mettre display: flex ici, ça casse le grid en 2 colonnes */
+  }
+
+  /* Le contenu interne des cartes s'étire pour remplir l'espace disponible */
+  /* Exclure les cartes du bloc Bénéfices/Risques/Mesures qui ont leurs propres règles */
+  .layout-main > .column-a > .rounded-lg:not(.layout-main > .column-a > .grid > .rounded-lg) > *:last-child,
+  .layout-main > .column-b > .rounded-lg > *:last-child {
+    flex-grow: 1; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* Supprimer la marge bottom du dernier élément dans column-a pour aligner en bas */
+  .layout-main > .column-a > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom des groupes grid dans column-a */
+  .layout-main > .column-a > .grid {
+    margin-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom du wrapper space-y-6 dans column-a */
+  .layout-main > .column-a > .grid > .space-y-6 {
+    margin-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom du dernier élément dans le wrapper space-y-6 */
+  .layout-main > .column-a > .grid > .space-y-6 > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Exclure le space-y-6 du bloc Bénéfices/Risques/Mesures des marges générées par Tailwind */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > * + * {
+    margin-top: 0 !important; /* Le gap gère l'espacement, pas les marges Tailwind */
+  }
+
+  /* Alignement Bénéfices/Risques/Mesures : même hauteur et alignement top/bottom */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+    align-items: stretch !important; /* Les colonnes ont la même hauteur */
+  }
+
+  /* La carte Bénéfices s'étire pour avoir la même hauteur que le conteneur Risques+Mesures */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex-grow: 1 !important; /* S'assurer que la carte s'étire */
+    flex-shrink: 0 !important;
+  }
+
+  /* Le contenu interne de la carte Bénéfices s'étire */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child > *:last-child {
+    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* Le conteneur Risques + Mesures utilise flexbox pour aligner en haut et en bas */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important; /* Aligner en haut, les boites s'étirent */
+    height: 100% !important;
+    gap: 1.5rem !important; /* Marge minimale entre Risques et Mesures */
+  }
+
+  /* Les cartes Risques et Mesures s'étirent pour remplir l'espace disponible */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+    flex-grow: 1 !important; /* Les boites s'étirent pour remplir l'espace */
+    flex-shrink: 0 !important; /* Ne pas rétrécir en dessous de leur contenu */
+    display: flex !important;
+    flex-direction: column !important;
+    /* Supprimer toutes les marges qui pourraient interférer */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Le contenu interne des cartes Risques et Mesures s'étire */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg > *:last-child {
+    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* Supprimer la marge bottom du dernier élément (Mesures) pour l'alignement en bas */
+  .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > *:last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Augmenter l'espacement vertical entre les paragraphes dans la Description */
+.prose p {
+  margin-bottom: 0.5rem !important;
+}
+
+.prose p:last-child {
+  margin-bottom: 0 !important;
+}
