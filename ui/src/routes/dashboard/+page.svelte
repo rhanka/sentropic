@@ -1,16 +1,20 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
+  import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { marked } from 'marked';
   import { refreshManager } from '$lib/stores/refresh';
   import References from '$lib/components/References.svelte';
+  import { calculateUseCaseScores } from '$lib/utils/scoring';
 
   let isLoading = false;
+  let summaryBox: HTMLElement | null = null;
+  let summaryContent: HTMLElement | null = null;
   let matrix: MatrixConfig | null = null;
   let selectedFolderId: string | null = null;
   let currentFolder: any = null;
@@ -223,6 +227,16 @@
   // Vérifier si la synthèse est en cours de génération
   $: isSummaryGenerating = currentFolder?.status === 'generating' && !executiveSummary;
 
+  // Calculer les scores pour tous les usecases du dossier
+  $: useCaseScoresMap = new Map(
+    filteredUseCases
+      .filter(uc => uc.valueScores && uc.complexityScores && matrix)
+      .map(uc => [
+        uc.id,
+        calculateUseCaseScores(matrix!, uc.valueScores!, uc.complexityScores!)
+      ])
+  );
+
   // Rafraîchir automatiquement le folder si la synthèse est en cours de génération
   $: {
     const hasGeneratingFolder = currentFolder?.status === 'generating';
@@ -253,14 +267,84 @@
       }, 2000);
     }
   };
+
+  // Ajuster automatiquement la taille de police de la synthèse exécutive
+  const adjustSummaryFontSize = () => {
+    if (!summaryBox || !summaryContent) return;
+    
+    const box = summaryBox;
+    const content = summaryContent;
+    
+    // Taille de police initiale
+    let fontSize = 8; // pt
+    const minFontSize = 6;
+    const maxFontSize = 12;
+    
+    // Fonction pour vérifier si le contenu déborde
+    const checkOverflow = () => {
+      content.style.fontSize = `${fontSize}pt`;
+      return content.scrollHeight > content.clientHeight;
+    };
+    
+    // Réduire la taille jusqu'à ce que ça tienne
+    while (checkOverflow() && fontSize > minFontSize) {
+      fontSize -= 0.1;
+    }
+    
+    // Augmenter la taille si on a de la place
+    while (!checkOverflow() && fontSize < maxFontSize) {
+      fontSize += 0.1;
+    }
+    
+    // Ajuster légèrement vers le bas pour être sûr que ça tienne
+    fontSize -= 0.2;
+    
+    // Appliquer la taille finale
+    content.style.fontSize = `${Math.max(fontSize, minFontSize)}pt`;
+  };
+
+  // Ajuster quand la synthèse change ou au montage
+  $: if (executiveSummary && summaryBox && summaryContent) {
+    tick().then(() => {
+      adjustSummaryFontSize();
+    });
+  }
+
+  // Ajuster aussi lors de l'impression
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeprint', () => {
+      setTimeout(adjustSummaryFontSize, 100);
+    });
+  }
 </script>
 
-<section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32">
+<!-- Page de garde (visible uniquement en impression) -->
+{#if selectedFolderId && executiveSummary}
+  <div class="report-cover-page" style="background-image: url('/hero-tech-cover.jpg');">
+    <div class="report-cover-header">
+      <h1 class="report-cover-title">Rapport Top AI Ideas</h1>
+      <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
+    </div>
+    
+    {#if executiveSummary.synthese_executive}
+      <div class="report-cover-summary" bind:this={summaryBox}>
+        <h3>Synthèse exécutive</h3>
+        <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
+          <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+            {@html renderMarkdown(executiveSummary.synthese_executive, executiveSummary.references || [])}
+          </div>
+        </div>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
   </div>
 
-  <!-- Synthèse exécutive (FIRST) -->
+  <!-- Synthèse exécutive (FIRST) - Masquée en impression (déjà sur la page de garde) -->
   {#if selectedFolderId}
     {#if isSummaryGenerating || isGeneratingSummary}
       <div class="rounded-lg border border-blue-200 bg-blue-50 p-6">
@@ -273,7 +357,7 @@
         </div>
       </div>
     {:else if executiveSummary}
-      <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+      <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
         <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
           <h2 class="text-2xl font-semibold text-slate-900">Synthèse exécutive</h2>
           <button
@@ -535,6 +619,24 @@
             <References references={executiveSummary.references} />
           </div>
         {/if}
+      </div>
+    {/if}
+
+    <!-- Section Annexes (tous les usecases du dossier) -->
+    {#if selectedFolderId && filteredUseCases.length > 0}
+      <div class="space-y-0">
+        {#each filteredUseCases as useCase (useCase.id)}
+          <div class="usecase-annex">
+            <UseCaseDetail
+              useCase={useCase}
+              matrix={matrix}
+              calculatedScores={useCaseScoresMap.get(useCase.id) || null}
+              mode="print-only"
+              isEditing={false}
+              draft={{}}
+            />
+          </div>
+        {/each}
       </div>
     {/if}
 

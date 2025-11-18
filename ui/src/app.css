@@ -11,6 +11,11 @@ body {
   display: none;
 }
 
+/* Hide cover page on screen (visible only in print) */
+.report-cover-page {
+  display: none;
+}
+
 /* Desktop layout: equal row spacing inside columns and bottom alignment */
 @media (min-width: 1024px) {
   /* Ensure columns inside the main layout stack their cards with the same vertical gap as grid gap-6 (24px) */

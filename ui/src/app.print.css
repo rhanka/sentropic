@@ -10,10 +10,22 @@
     display: none !important;
   }
 
-  /* Page setup */
+  /* Page setup - Marges par défaut pour le rapport principal */
   @page {
     size: A4;
-    margin: 0.6cm 0.6cm 0.6cm 0.6cm; /* haut droite bas gauche - toutes identiques */
+    margin: 2cm 2cm 2cm 2cm; /* Marges normales pour le rapport principal */
+  }
+
+  /* Marges réduites pour les annexes (usecases) */
+  @page annex {
+    size: A4;
+    margin: 0.6cm 0.6cm 0.6cm 0.6cm; /* Marges réduites pour maximiser l'espace */
+  }
+
+  /* Page de garde - pleine page sans marges */
+  @page cover {
+    size: A4;
+    margin: 0;
   }
 
   body {
@@ -55,6 +67,136 @@
     margin: 0 !important;
   }
 
+  /* Page de garde - visible uniquement en impression */
+  .report-cover-page {
+    display: flex !important;
+    page: cover;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    background-color: white !important; /* Fond blanc pour les marges */
+    /* background-image défini dans le style inline du composant */
+    background-size: 100% calc(100vh - 4cm) !important; /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
+    background-position: center top 2cm !important; /* Positionné à 2cm du haut, centré horizontalement */
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important; /* Assure le chargement en impression */
+    /* Filtre pour éclaircir le background bleu (comme sent-tech.ca) */
+    filter: brightness(1.2) saturate(1.1) contrast(0.95) !important;
+    page-break-after: always;
+    page-break-inside: avoid;
+    padding: 2cm 0 0 0 !important; /* 2cm de blanc en haut seulement */
+    overflow: hidden;
+    /* Force le chargement de l'image en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Overlay léger bleu clair pour améliorer la lisibilité et éclaircir le background */
+  /* L'overlay ne couvre que la zone de l'image, pas les marges blanches */
+  .report-cover-page::before {
+    content: '';
+    position: absolute;
+    top: 2cm; /* Commence après la marge du haut */
+    left: 0;
+    right: 0;
+    height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
+    background: rgba(255, 255, 255, 0.15); /* Overlay blanc léger pour éclaircir */
+    z-index: 1;
+  }
+
+  /* Conteneur pour titre et sous-titre positionné à 1/3 de la hauteur */
+  .report-cover-header {
+    position: absolute;
+    z-index: 2;
+    width: 100%;
+    top: 33.33%; /* Positionné à 1/3 de la hauteur de la page */
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centre horizontalement et ajuste verticalement */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0 2cm;
+  }
+
+  .report-cover-title {
+    font-size: 36pt !important;
+    font-weight: 700 !important;
+    color: white !important;
+    margin-bottom: 0.5cm !important;
+    line-height: 1.2 !important;
+    text-shadow: 0 2pt 4pt rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .report-cover-subtitle {
+    font-size: 18pt !important;
+    font-weight: 500 !important;
+    color: white !important;
+    line-height: 1.3 !important;
+    text-shadow: 0 2pt 4pt rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Synthèse exécutive dans le tiers bas de la page */
+  .report-cover-summary {
+    position: absolute !important;
+    z-index: 2;
+    width: 80% !important;
+    max-width: 80% !important;
+    background: white !important;
+    border: 2pt solid white !important;
+    border-radius: 8pt !important;
+    padding: 0.6cm !important; /* Padding réduit pour maximiser l'espace */
+    /* Commence au tiers de fin de page (66.67%) et s'arrête à 3cm du bas */
+    top: 66.67% !important;
+    bottom: 3cm !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important; /* Centre horizontalement */
+    overflow: hidden !important; /* Pas de scroll, cache le débordement */
+    text-align: left !important;
+    box-shadow: 0 4pt 12pt rgba(0, 0, 0, 0.3) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100vh - 66.67vh - 3cm) !important; /* Hauteur fixe = de 66.67% jusqu'à 3cm du bas */
+    max-height: calc(100vh - 66.67vh - 3cm) !important;
+  }
+
+  .report-cover-summary h3 {
+    font-size: clamp(8pt, 1.2vw, 10pt) !important; /* Taille adaptative avec min/max */
+    font-weight: 600 !important;
+    color: #1e293b !important;
+    margin-bottom: 0.2cm !important; /* Marge réduite */
+    border-bottom: 1pt solid #cbd5e1 !important;
+    padding-bottom: 0.15cm !important; /* Padding réduit */
+    flex-shrink: 0 !important; /* Ne rétrécit pas */
+  }
+
+  .report-cover-summary .prose {
+    font-size: 8pt !important; /* Taille initiale, sera ajustée par JS */
+    line-height: 1.4 !important; /* Line-height réduit pour économiser l'espace */
+    color: #334155 !important;
+    overflow: hidden !important; /* Pas de scroll */
+    flex: 1 1 auto !important; /* Prend l'espace disponible */
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important; /* Permet au flex de rétrécir */
+  }
+
+  .report-cover-summary .prose p {
+    margin-bottom: 0.15cm !important; /* Marge réduite entre paragraphes */
+    margin-top: 0 !important;
+    flex-shrink: 1 !important; /* Peut rétrécir si nécessaire */
+  }
+
+  /* Contenu principal du rapport */
+  .report-main-content {
+    page: auto;
+  }
+
   /* Use case specific styles - FORCE 1 PAGE */
   .usecase-print {
     page-break-after: always;
@@ -64,7 +206,8 @@
     margin: 0 !important;
     margin-top: 0 !important;
     /* Remove height restriction to allow all content */
-    min-height: calc(100vh - 1.6cm) !important;
+    /* Pour les annexes avec marges 0.6cm : 100vh - 1.2cm (haut + bas) */
+    min-height: calc(100vh - 1.2cm) !important;
   }
   
   /* Force display of ALL elements in use case print - override everything */
@@ -1124,6 +1267,12 @@
   .usecase-annex {
     display: block !important;
     page-break-before: always;
+    page: annex; /* Utiliser les marges réduites pour les annexes */
+  }
+
+  /* S'assurer que le contenu principal utilise les marges normales */
+  .report-main-content {
+    page: auto; /* Utilise la page par défaut avec marges 2cm */
   }
 }
 
