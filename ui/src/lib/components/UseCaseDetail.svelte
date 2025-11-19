@@ -3,6 +3,7 @@
   import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { marked } from 'marked';
+  import { onMount } from 'svelte';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
@@ -92,6 +93,49 @@
 
   // Déterminer si on doit afficher les boutons d'action
   $: showActions = mode !== 'print-only';
+
+  // Détection du mode impression pour le scaling
+  let isPrinting = false;
+  
+  onMount(() => {
+    // Détecter si on est en mode impression
+    const checkPrintMode = () => {
+      isPrinting = window.matchMedia('print').matches;
+    };
+    
+    const handleBeforePrint = () => { isPrinting = true; };
+    const handleAfterPrint = () => { isPrinting = false; };
+    
+    checkPrintMode();
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  });
+
+  // Calcul des facteurs d'échelle pour réduire la taille si trop d'items
+  // Références : base = 8
+  $: referencesScaleFactor = (useCase?.references && useCase.references.length > 8 && (mode === 'print-only' || isPrinting))
+    ? 10 / useCase.references.length
+    : 1;
+  
+  // Sources des données : base = 5
+  $: dataSourcesScaleFactor = (useCase?.dataSources && useCase.dataSources.length > 5 && (mode === 'print-only' || isPrinting))
+    ? 5 / useCase.dataSources.length
+    : 1;
+  
+  // Données : base = 5
+  $: dataObjectsScaleFactor = (useCase?.dataObjects && useCase.dataObjects.length > 5 && (mode === 'print-only' || isPrinting))
+    ? 5 / useCase.dataObjects.length
+    : 1;
+  
+  // Technologies : base = 7
+  $: technologiesScaleFactor = (useCase?.technologies && useCase.technologies.length > 7 && (mode === 'print-only' || isPrinting))
+    ? 7 / useCase.technologies.length
+    : 1;
 </script>
 
 {#if useCase}
@@ -395,7 +439,10 @@
           </div>
           <div class="space-y-3 text-sm">
             <div>
-              <ul class="text-slate-600 ml-4 mt-1 space-y-2 list-disc">
+              <ul 
+                class="text-slate-600 ml-4 mt-1 space-y-2 list-disc technologies-content"
+                style={technologiesScaleFactor < 1 ? `font-size: ${technologiesScaleFactor}em; line-height: ${Math.max(1.2, technologiesScaleFactor * 1.5)}em;` : ''}
+              >
                 {#each useCase.technologies as tech}
                   <li class="text-sm">{tech}</li>
                 {/each}
@@ -426,10 +473,19 @@
             ></textarea>
           </div>
         {:else}
-          <ul class="space-y-2">
+          <ul 
+            class="space-y-2 data-sources-content"
+            style={dataSourcesScaleFactor < 1 ? `font-size: ${dataSourcesScaleFactor}em; line-height: ${Math.max(1.2, dataSourcesScaleFactor * 1.5)}em;` : ''}
+          >
             {#each useCase.dataSources || [] as source}
               <li class="flex items-start gap-2 text-sm text-slate-600">
-                <svg class="w-4 h-4 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg 
+                  class="w-4 h-4 text-blue-500 mt-0.5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  style={dataSourcesScaleFactor < 1 ? `width: ${dataSourcesScaleFactor * 1}em !important; height: ${dataSourcesScaleFactor * 1}em !important;` : ''}
+                >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
                 <span>{source}</span>
@@ -460,10 +516,19 @@
             ></textarea>
           </div>
         {:else}
-          <ul class="space-y-2">
+          <ul 
+            class="space-y-2 data-objects-content"
+            style={dataObjectsScaleFactor < 1 ? `font-size: ${dataObjectsScaleFactor}em; line-height: ${Math.max(1.2, dataObjectsScaleFactor * 1.5)}em;` : ''}
+          >
             {#each useCase.dataObjects || [] as data}
               <li class="flex items-start gap-2 text-sm text-slate-600">
-                <svg class="w-4 h-4 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg 
+                  class="w-4 h-4 text-blue-500 mt-0.5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  style={dataObjectsScaleFactor < 1 ? `width: ${dataObjectsScaleFactor * 1}em !important; height: ${dataObjectsScaleFactor * 1}em !important;` : ''}
+                >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
                 </svg>
                 <span>{data}</span>
@@ -517,7 +582,7 @@
             Références
           </h3>
         </div>
-        <References references={useCase.references || []} />
+        <References references={useCase.references || []} {referencesScaleFactor} />
       </div>
     {/if}
 

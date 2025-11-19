@@ -1,5 +1,6 @@
 <script lang="ts">
   export let references: Array<{title: string; url: string}> = [];
+  export let referencesScaleFactor: number = 1; // Facteur de réduction pour impression (> 10 refs)
   
   let clickedRefs = new Set<number>();
   
@@ -24,12 +25,31 @@
 </script>
 
 {#if (references && references.length > 0)}
-  <div class="space-y-2">    
+  {@const scale = referencesScaleFactor < 1 ? referencesScaleFactor : 1}
+  {@const lineHeight = scale < 1 ? scale * 1.5 : 1.5}
+  {@const gap = scale < 1 ? scale * 0.5 : 0.5}
+  <div 
+    class="space-y-2 references-content" 
+    style={scale < 1 ? `font-size: ${scale}em !important; line-height: ${lineHeight}em !important;` : ''}
+  >    
     <!-- Références (format objet) avec numérotation -->
     {#each references as ref, index}
-      <div class="flex items-start gap-2 text-sm" id="ref-{index + 1}">
-        <span class="text-slate-500 font-medium mt-0.5 flex-shrink-0">{index + 1}.</span>
-        <svg class="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div 
+        class="flex items-start gap-2 {scale < 1 ? '' : 'text-sm'}" 
+        id="ref-{index + 1}"
+        style={scale < 1 ? `gap: ${gap}rem; margin-bottom: ${gap}rem; font-size: inherit !important; line-height: inherit !important;` : ''}
+      >
+        <span 
+          class="text-slate-500 font-medium mt-0.5 flex-shrink-0"
+          style={scale < 1 ? `font-size: inherit !important; line-height: inherit !important;` : ''}
+        >{index + 1}.</span>
+        <svg 
+          class="text-green-500 mt-0.5 flex-shrink-0" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+          style={scale < 1 ? `width: ${scale * 1}em !important; height: ${scale * 1}em !important;` : 'width: 1em; height: 1em;'}
+        >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
         </svg>
         <a 
@@ -37,6 +57,7 @@
           target="_blank" 
           rel="noopener noreferrer"
           class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+          style={scale < 1 ? `font-size: inherit !important; line-height: inherit !important;` : ''}
           on:click={(e) => handleRefClick(index, ref.url, e)}
         >
           {ref.title}
