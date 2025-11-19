@@ -20,6 +20,17 @@
   let currentFolder: any = null;
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
+  
+  // Numéros de page pour le sommaire
+  let pageNumbers = {
+    introduction: 2,
+    sommaire: 3,
+    analyse: 4,
+    recommandations: 5,
+    references: 6,
+    annexes: 7,
+    useCases: [] as Array<{ name: string; page: number; id: string }>
+  };
 
   onMount(async () => {
     loadConfig();
@@ -277,18 +288,45 @@
     
     // Taille de police initiale
     let fontSize = 8; // pt
-    const minFontSize = 6;
+    const minFontSize = 5; // Réduit de 6 à 5 pour permettre un scaling plus agressif
     const maxFontSize = 12;
+    const baseLineHeight = 1.4;
+    const baseParagraphMargin = 0.15; // cm
+    const baseTitleMarginBottom = 0.15; // cm (marge sous le titre h3)
+    const baseTitlePaddingBottom = 0.1; // cm (padding sous le titre h3)
+    const baseBoxPadding = 0.6; // cm (padding de la boîte)
     
     // Fonction pour vérifier si le contenu déborde
     const checkOverflow = () => {
+      const scaleFactor = fontSize / 8; // Facteur de réduction par rapport à la taille initiale
       content.style.fontSize = `${fontSize}pt`;
+      content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+      // Réduire aussi les marges entre paragraphes
+      const paragraphs = content.querySelectorAll('p');
+      paragraphs.forEach((p, index) => {
+        const pEl = p as HTMLElement;
+        if (index === paragraphs.length - 1) {
+          // Dernier paragraphe : pas de marge en bas
+          pEl.style.setProperty('margin-bottom', '0', 'important');
+        } else {
+          pEl.style.setProperty('margin-bottom', `${baseParagraphMargin * scaleFactor}cm`, 'important');
+        }
+      });
+      // Réduire les marges du titre h3
+      const title = box.querySelector('h3');
+      if (title) {
+        const titleEl = title as HTMLElement;
+        titleEl.style.setProperty('margin-bottom', `${baseTitleMarginBottom * scaleFactor}cm`, 'important');
+        titleEl.style.setProperty('padding-bottom', `${baseTitlePaddingBottom * scaleFactor}cm`, 'important');
+      }
+      // Réduire le padding de la boîte si nécessaire
+      box.style.setProperty('padding', `${baseBoxPadding * scaleFactor}cm`, 'important');
       return content.scrollHeight > content.clientHeight;
     };
     
-    // Réduire la taille jusqu'à ce que ça tienne
+    // Réduire la taille jusqu'à ce que ça tienne (pas plus agressif : 0.2pt au lieu de 0.1pt)
     while (checkOverflow() && fontSize > minFontSize) {
-      fontSize -= 0.1;
+      fontSize -= 0.2;
     }
     
     // Augmenter la taille si on a de la place
@@ -296,11 +334,34 @@
       fontSize += 0.1;
     }
     
-    // Ajuster légèrement vers le bas pour être sûr que ça tienne
-    fontSize -= 0.2;
+    // Ajuster légèrement vers le bas pour être sûr que ça tienne (marge de sécurité plus grande)
+    fontSize -= 0.3;
     
-    // Appliquer la taille finale
-    content.style.fontSize = `${Math.max(fontSize, minFontSize)}pt`;
+    // Appliquer la taille finale avec line-height et marges proportionnels
+    const finalFontSize = Math.max(fontSize, minFontSize);
+    const scaleFactor = finalFontSize / 8;
+    content.style.fontSize = `${finalFontSize}pt`;
+    content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+    // Appliquer les marges réduites aux paragraphes
+    const paragraphs = content.querySelectorAll('p');
+    paragraphs.forEach((p, index) => {
+      const pEl = p as HTMLElement;
+      if (index === paragraphs.length - 1) {
+        // Dernier paragraphe : pas de marge en bas
+        pEl.style.setProperty('margin-bottom', '0', 'important');
+      } else {
+        pEl.style.setProperty('margin-bottom', `${baseParagraphMargin * scaleFactor}cm`, 'important');
+      }
+    });
+    // Appliquer les marges réduites au titre h3
+    const title = box.querySelector('h3');
+    if (title) {
+      const titleEl = title as HTMLElement;
+      titleEl.style.setProperty('margin-bottom', `${baseTitleMarginBottom * scaleFactor}cm`, 'important');
+      titleEl.style.setProperty('padding-bottom', `${baseTitlePaddingBottom * scaleFactor}cm`, 'important');
+    }
+    // Appliquer le padding réduit à la boîte
+    box.style.setProperty('padding', `${baseBoxPadding * scaleFactor}cm`, 'important');
   };
 
   // Ajuster quand la synthèse change ou au montage
@@ -310,12 +371,217 @@
     });
   }
 
+  // Calculer les numéros de page réels en fonction de la hauteur des sections
+  const calculatePageNumbers = async () => {
+    if (typeof window === 'undefined') return;
+    if (!executiveSummary) return;
+    
+    await tick();
+    
+    const pxPerCm = 37.8;
+    const pageHeightPx = 1123; // Hauteur d'une page A4 à 96 DPI
+    const defaultMarginPx = 2 * pxPerCm; // 2 cm
+    const annexMarginPx = 0.6 * pxPerCm; // 0.6 cm
+    const defaultUsableHeight = pageHeightPx - (defaultMarginPx * 2);
+    const annexUsableHeight = pageHeightPx - (annexMarginPx * 2);
+    
+    const selectorsToReveal = [
+      '.report-cover-page',
+      '.report-introduction',
+      '.report-table-of-contents',
+      '.report-analyse',
+      '.usecase-annex-section'
+    ];
+    
+    const hiddenElements: Array<{
+      el: HTMLElement;
+      styles: {
+        display: string;
+        visibility: string;
+        opacity: string;
+        position: string;
+        left: string;
+        width: string;
+        height: string;
+      };
+    }> = [];
+    
+    selectorsToReveal.forEach(selector => {
+      document.querySelectorAll<HTMLElement>(selector).forEach(el => {
+        const computed = window.getComputedStyle(el);
+        if (computed.display === 'none') {
+          hiddenElements.push({
+            el,
+            styles: {
+              display: el.style.display,
+              visibility: el.style.visibility,
+              opacity: el.style.opacity,
+              position: el.style.position,
+              left: el.style.left,
+              width: el.style.width,
+              height: el.style.height
+            }
+          });
+          
+          el.style.display = 'block';
+          el.style.visibility = 'hidden';
+          el.style.opacity = '0';
+          el.style.position = 'static';
+          el.style.left = '';
+          el.style.width = '100%';
+          el.style.height = 'auto';
+        }
+      });
+    });
+    
+    // Attendre le recalcul du layout
+    await new Promise(resolve => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+    
+    try {
+      const getHeight = (element: HTMLElement | null) => element ? element.getBoundingClientRect().height : 0;
+      const getPages = (height: number, type: 'default' | 'annex' | 'cover' = 'default') => {
+        const usableHeight = type === 'annex'
+          ? annexUsableHeight
+          : type === 'cover'
+            ? pageHeightPx
+            : defaultUsableHeight;
+        if (!height || height <= 0) return 1;
+        return Math.max(1, Math.ceil(height / usableHeight));
+      };
+      
+      const updatedPageNumbers = {
+        introduction: 0,
+        sommaire: 0,
+        analyse: 0,
+        recommandations: 0,
+        references: 0,
+        annexes: 0,
+        useCases: [] as Array<{ name: string; page: number; id: string }>
+      };
+      
+      let currentPage = 1;
+      const coverEl = document.querySelector('.report-cover-page') as HTMLElement | null;
+      if (coverEl) {
+        currentPage += getPages(getHeight(coverEl), 'cover');
+      }
+      
+      const introductionEl = document.querySelector('.report-introduction') as HTMLElement | null;
+      if (introductionEl && executiveSummary?.introduction) {
+        updatedPageNumbers.introduction = currentPage;
+        currentPage += getPages(getHeight(introductionEl), 'default');
+      } else {
+        updatedPageNumbers.introduction = 0;
+      }
+      
+      const processSection = (
+        selector: string,
+        key: 'sommaire' | 'analyse' | 'recommandations' | 'references',
+        condition: boolean
+      ) => {
+        if (!condition) {
+          updatedPageNumbers[key] = 0;
+          return;
+        }
+        const element = document.querySelector(selector) as HTMLElement | null;
+        if (!element) {
+          updatedPageNumbers[key] = 0;
+          return;
+        }
+        updatedPageNumbers[key] = currentPage;
+        currentPage += getPages(getHeight(element), 'default');
+      };
+      
+      processSection(
+        '.report-table-of-contents',
+        'sommaire',
+        Boolean(executiveSummary && selectedFolderId && !isSummaryGenerating)
+      );
+      processSection('#section-analyse', 'analyse', Boolean(executiveSummary?.analyse));
+      processSection('#section-recommandations', 'recommandations', Boolean(executiveSummary?.recommandation));
+      processSection('#section-references', 'references', Boolean(executiveSummary?.references && executiveSummary.references.length > 0));
+      
+      if (filteredUseCases.length > 0) {
+        // Trouver la deuxième page de garde (celle des annexes)
+        const allCoverPages = Array.from(document.querySelectorAll<HTMLElement>('.report-cover-page'));
+        const annexSeparator = allCoverPages.length > 1 ? allCoverPages[allCoverPages.length - 1] : null;
+        updatedPageNumbers.annexes = currentPage;
+        const separatorPages = annexSeparator ? getPages(getHeight(annexSeparator), 'cover') : 1;
+        currentPage += separatorPages;
+        
+        const annexElements = Array.from(document.querySelectorAll<HTMLElement>('.usecase-annex-section'));
+        const computedUseCases: Array<{ name: string; page: number; id: string }> = [];
+        
+        // Chaque cas d'usage fait exactement une page (garanti par le CSS)
+        annexElements.forEach(section => {
+          const titleAttr = section.getAttribute('data-usecase-title');
+          const heading = section.querySelector('h1');
+          const title = titleAttr || heading?.textContent?.trim() || 'Cas d\'usage';
+          const id = section.getAttribute('data-usecase-id') || '';
+          
+          computedUseCases.push({
+            name: title,
+            page: currentPage,
+            id
+          });
+          
+          // Chaque cas d'usage = 1 page exactement
+          currentPage += 1;
+        });
+        
+        updatedPageNumbers.useCases = computedUseCases;
+      } else {
+        updatedPageNumbers.annexes = 0;
+        updatedPageNumbers.useCases = [];
+      }
+      
+      pageNumbers = { ...pageNumbers, ...updatedPageNumbers };
+    } finally {
+      // Restaurer l'état original des éléments cachés
+      hiddenElements.forEach(({ el, styles }) => {
+        el.style.display = styles.display;
+        el.style.visibility = styles.visibility;
+        el.style.opacity = styles.opacity;
+        el.style.position = styles.position;
+        el.style.left = styles.left;
+        el.style.width = styles.width;
+        el.style.height = styles.height;
+      });
+    }
+  };
+
   // Ajuster aussi lors de l'impression
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeprint', () => {
-      setTimeout(adjustSummaryFontSize, 100);
+      setTimeout(() => {
+        adjustSummaryFontSize();
+        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers before print:', err));
+      }, 100);
     });
   }
+  
+  // Recalculer les pages quand le contenu change
+  $: if (executiveSummary) {
+    void filteredUseCases.length;
+    tick().then(() => {
+      // Attendre un peu pour que le DOM soit complètement rendu
+      setTimeout(() => {
+        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers:', err));
+      }, 200);
+    });
+  }
+  
+  // Recalculer aussi après le rendu complet
+  onMount(() => {
+    if (executiveSummary) {
+      setTimeout(() => {
+        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers on mount:', err));
+      }, 500);
+    }
+  });
 </script>
 
 <!-- Page de garde (visible uniquement en impression) -->
@@ -404,176 +670,175 @@
       </div>
     </div>
   {:else}
-    <!-- Statistiques -->
-    <div class="grid gap-4 md:grid-cols-2">
-      <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
-        <div class="flex items-center">
-          <div class="flex-shrink-0">
-            <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
-            <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
-            {#if roiStats.count > 0}
-              <p class="text-xs text-green-600 mt-1">
-                Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
-              </p>
-            {/if}
-          </div>
-        </div>
-      </div>
-
-
-      {#if showROIQuadrant}
-        <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-              </svg>
-            </div>
-            <div class="ml-4 flex-1">
-              <p class="text-sm font-medium text-green-700">Gains rapides</p>
-              <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
+    <!-- Contenu fusionné : statistiques, graphique, introduction -->
+    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
+      <div class="report-introduction">
+        <!-- Statistiques -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <div class="ml-4">
+                <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
+                <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
+                {#if roiStats.count > 0}
+                  <p class="text-xs text-green-600 mt-1">
+                    Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
+                  </p>
+                {/if}
+              </div>
             </div>
           </div>
-        </div>
-      {/if}
 
-    </div>
-
-    <!-- Graphique scatter plot -->
-    <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative">
-      <!-- Accordéon de configuration en haut à droite -->
-      <div class="absolute top-4 right-4 z-10">
-        <div class="rounded-lg bg-white border border-slate-200 shadow-sm">
-          <button
-            on:click={() => configOpen = !configOpen}
-            class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
-            title="Configuration du quadrant ROI"
-          >
-            <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            </svg>
-            {#if valueThreshold !== null || complexityThreshold !== null}
-              <span class="ml-1 w-2 h-2 bg-blue-600 rounded-full"></span>
-            {/if}
-          </button>
-          
-          {#if configOpen}
-            <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium text-slate-700">Configuration du quadrant ROI</span>
-                <button
-                  on:click={() => configOpen = false}
-                  class="text-slate-400 hover:text-slate-600"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          {#if showROIQuadrant}
+            <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                   </svg>
-                </button>
-              </div>
-              <div class="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                    Seuil de valeur (pts)
-                  </label>
-                  <div class="flex items-center gap-2">
-                    <input
-                      id="value-threshold"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={valueThreshold ?? ''}
-                      on:input={(e) => {
-                        const val = (e.target as HTMLInputElement).value;
-                        valueThreshold = val === '' ? null : parseFloat(val);
-                      }}
-                      placeholder={medianValue.toFixed(1)}
-                      class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <button
-                      on:click={() => valueThreshold = null}
-                      class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                      title="Utiliser la médiane"
-                    >
-                      Médiane ({medianValue.toFixed(1)})
-                    </button>
-                  </div>
-                  <p class="text-xs text-slate-500 mt-1">
-                    {valueThreshold !== null ? `Seuil personnalisé: ${valueThreshold.toFixed(1)}` : `Médiane actuelle: ${medianValue.toFixed(1)}`}
-                  </p>
                 </div>
-                
-                <div>
-                  <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                    Seuil de complexité (pts)
-                  </label>
-                  <div class="flex items-center gap-2">
-                    <input
-                      id="complexity-threshold"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={complexityThreshold ?? ''}
-                      on:input={(e) => {
-                        const val = (e.target as HTMLInputElement).value;
-                        complexityThreshold = val === '' ? null : parseFloat(val);
-                      }}
-                      placeholder={medianComplexity.toFixed(1)}
-                      class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <button
-                      on:click={() => complexityThreshold = null}
-                      class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                      title="Utiliser la médiane"
-                    >
-                      Médiane ({medianComplexity.toFixed(1)})
-                    </button>
-                  </div>
-                  <p class="text-xs text-slate-500 mt-1">
-                    {complexityThreshold !== null ? `Seuil personnalisé: ${complexityThreshold.toFixed(1)}` : `Médiane actuelle: ${medianComplexity.toFixed(1)}`}
-                  </p>
+                <div class="ml-4 flex-1">
+                  <p class="text-sm font-medium text-green-700">Gains rapides</p>
+                  <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
                 </div>
-              </div>
-              
-              <div class="flex justify-end">
-                <button
-                  on:click={resetToMedians}
-                  class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors"
-                >
-                  Réinitialiser aux médianes
-                </button>
               </div>
             </div>
           {/if}
         </div>
-      </div>
-      
-      <div class="flex justify-center">
-        <UseCaseScatterPlot 
-          useCases={filteredUseCases} 
-          {matrix} 
-          bind:roiStats 
-          bind:showROIQuadrant
-          bind:medianValue
-          bind:medianComplexity
-          {valueThreshold}
-          {complexityThreshold}
-        />
-      </div>
-    </div>
 
-    <!-- Introduction, Analyse, Recommandations (après le Dashboard) -->
-    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
-      <div class="space-y-6">
+        <!-- Graphique scatter plot -->
+        <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative report-scatter-plot-container my-6">
+          <!-- Accordéon de configuration en haut à droite -->
+          <div class="absolute top-4 right-4 z-10">
+            <div class="rounded-lg bg-white border border-slate-200 shadow-sm">
+              <button
+                on:click={() => configOpen = !configOpen}
+                class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
+                title="Configuration du quadrant ROI"
+              >
+                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                {#if valueThreshold !== null || complexityThreshold !== null}
+                  <span class="ml-1 w-2 h-2 bg-blue-600 rounded-full"></span>
+                {/if}
+              </button>
+              
+              {#if configOpen}
+                <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-slate-700">Configuration du quadrant ROI</span>
+                    <button
+                      on:click={() => configOpen = false}
+                      class="text-slate-400 hover:text-slate-600"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">
+                        Seuil de valeur (pts)
+                      </label>
+                      <div class="flex items-center gap-2">
+                        <input
+                          id="value-threshold"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={valueThreshold ?? ''}
+                          on:input={(e) => {
+                            const val = (e.target as HTMLInputElement).value;
+                            valueThreshold = val === '' ? null : parseFloat(val);
+                          }}
+                          placeholder={medianValue.toFixed(1)}
+                          class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          on:click={() => valueThreshold = null}
+                          class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
+                          title="Utiliser la médiane"
+                        >
+                          Médiane ({medianValue.toFixed(1)})
+                        </button>
+                      </div>
+                      <p class="text-xs text-slate-500 mt-1">
+                        {valueThreshold !== null ? `Seuil personnalisé: ${valueThreshold.toFixed(1)}` : `Médiane actuelle: ${medianValue.toFixed(1)}`}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">
+                        Seuil de complexité (pts)
+                      </label>
+                      <div class="flex items-center gap-2">
+                        <input
+                          id="complexity-threshold"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={complexityThreshold ?? ''}
+                          on:input={(e) => {
+                            const val = (e.target as HTMLInputElement).value;
+                            complexityThreshold = val === '' ? null : parseFloat(val);
+                          }}
+                          placeholder={medianComplexity.toFixed(1)}
+                          class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          on:click={() => complexityThreshold = null}
+                          class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
+                          title="Utiliser la médiane"
+                        >
+                          Médiane ({medianComplexity.toFixed(1)})
+                        </button>
+                      </div>
+                      <p class="text-xs text-slate-500 mt-1">
+                        {complexityThreshold !== null ? `Seuil personnalisé: ${complexityThreshold.toFixed(1)}` : `Médiane actuelle: ${medianComplexity.toFixed(1)}`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div class="flex justify-end">
+                    <button
+                      on:click={resetToMedians}
+                      class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors"
+                    >
+                      Réinitialiser aux médianes
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          </div>
+          
+          <div class="flex justify-center">
+            <UseCaseScatterPlot 
+              useCases={filteredUseCases} 
+              {matrix} 
+              bind:roiStats 
+              bind:showROIQuadrant
+              bind:medianValue
+              bind:medianComplexity
+              {valueThreshold}
+              {complexityThreshold}
+            />
+          </div>
+        </div>
+
+        <!-- Introduction -->
         {#if executiveSummary.introduction}
-          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="section-introduction" class="mt-6">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">Introduction</h2>
             </div>
@@ -584,9 +849,62 @@
             </div>
           </div>
         {/if}
+      </div>
+    {/if}
+
+    <!-- Sommaire (page 3) -->
+    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
+      <div class="report-table-of-contents">
+        <h2 class="text-2xl font-semibold text-slate-900 mb-6">Sommaire</h2>
+        <ul class="space-y-2 text-slate-700">
+          <li class="toc-item">
+            <a href="#section-introduction" class="toc-title toc-link">Introduction</a>
+            <span class="toc-dots"></span>
+            <span class="toc-page">{pageNumbers.introduction || '-'}</span>
+          </li>
+          <li class="toc-item">
+            <a href="#section-analyse" class="toc-title toc-link">Analyse</a>
+            <span class="toc-dots"></span>
+            <span class="toc-page">{pageNumbers.analyse || '-'}</span>
+          </li>
+          {#if executiveSummary.recommandation}
+            <li class="toc-item">
+              <a href="#section-recommandations" class="toc-title toc-link">Recommandations</a>
+              <span class="toc-dots"></span>
+              <span class="toc-page">{pageNumbers.recommandations || '-'}</span>
+            </li>
+          {/if}
+          {#if executiveSummary.references && executiveSummary.references.length > 0}
+            <li class="toc-item">
+              <a href="#section-references" class="toc-title toc-link">Références</a>
+              <span class="toc-dots"></span>
+              <span class="toc-page">{pageNumbers.references || '-'}</span>
+            </li>
+          {/if}
+          {#if filteredUseCases.length > 0}
+            <li class="toc-item">
+              <span class="toc-title">Annexes</span>
+              <span class="toc-dots"></span>
+              <span class="toc-page">{pageNumbers.annexes || '-'}</span>
+            </li>
+            {#each pageNumbers.useCases as useCasePage}
+              <li class="toc-item toc-item-nested">
+                <a href="#usecase-{useCasePage.id || ''}" class="toc-title toc-link">{useCasePage.name}</a>
+                <span class="toc-dots"></span>
+                <span class="toc-page">{useCasePage.page}</span>
+              </li>
+            {/each}
+          {/if}
+        </ul>
+      </div>
+    {/if}
+
+    <!-- Analyse, Recommandations, Références (après l'introduction) -->
+    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
+      <div class="space-y-6">
 
         {#if executiveSummary.analyse}
-          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="section-analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">Analyse</h2>
             </div>
@@ -599,7 +917,7 @@
         {/if}
 
         {#if executiveSummary.recommandation}
-          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="section-recommandations" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">Recommandations</h2>
             </div>
@@ -612,7 +930,7 @@
         {/if}
 
         {#if executiveSummary.references && executiveSummary.references.length > 0}
-          <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="section-references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">Références</h2>
             </div>
@@ -621,12 +939,24 @@
         {/if}
       </div>
     {/if}
+  {/if}
+</section>
 
-    <!-- Section Annexes (tous les usecases du dossier) -->
-    {#if selectedFolderId && filteredUseCases.length > 0}
-      <div class="space-y-0">
+<!-- Page de séparation pour les annexes (visible uniquement en impression) -->
+{#if selectedFolderId && filteredUseCases.length > 0}
+  <div class="report-cover-page" style="background-image: url('/hero-tech-cover.jpg');">
+    <div class="report-cover-header">
+      <h1 class="report-cover-title">Annexe</h1>
+      <h2 class="report-cover-subtitle">Fiches des cas d'usage</h2>
+    </div>
+  </div>
+{/if}
+
+<!-- Section Annexes (tous les usecases du dossier) -->
+<section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
+  {#if selectedFolderId && filteredUseCases.length > 0}
         {#each filteredUseCases as useCase (useCase.id)}
-          <div class="usecase-annex">
+        <section id="usecase-{useCase.id}" class="space-y-6 usecase-annex-section" data-usecase-id={useCase.id} data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
@@ -635,10 +965,7 @@
               isEditing={false}
               draft={{}}
             />
-          </div>
+        </section>
         {/each}
-      </div>
-    {/if}
-
   {/if}
 </section>
