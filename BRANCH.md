@@ -213,11 +213,10 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Gradient blanc overlay (opaque top → transparent bottom) pour fusion avec contenu
   - min-height 27.3cm sur usecase-print pour garantir footer au bas de page
   - Page de garde annexe: même structure que page de garde principale
-- [x] **Commit 16**: Phase 4 - Scaling agressif sommaire exécutif avec marges réduites
+- [x] **Commit 16**: Phase 4 - Scaling agressif sommaire exécutif et calcul numéros de page
   - Scaling plus agressif: minFontSize 5pt, step 0.2pt
   - Réduction proportionnelle marges titre h3 et padding boîte
   - Suppression marge dernier paragraphe
-- [x] **Commit 17**: Phase 4 - Calcul numéros de page simplifié et structure impression complète
   - Calcul numéros de page: chaque cas d'usage = 1 page exactement (currentPage += 1)
   - Fonction calculatePageNumbers avec calcul dynamique hauteurs sections
   - Structure impression complète: page de garde, synthèse, sommaire, sections, annexes
