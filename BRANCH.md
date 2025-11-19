@@ -126,6 +126,9 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Complete print structure: cover, summary, TOC, sections, annexes
 
 ### Phase 5: Testing & Validation
+- [x] **Task 5.0**: UAT
+  - [x] debug heavy priorisation chart: add weight 2000 to avoid labels to go out of the chart
+
 - [x] **Task 5.1**: Update unit tests for new API endpoint
   - Test executive summary generation endpoint
   - Test error handling

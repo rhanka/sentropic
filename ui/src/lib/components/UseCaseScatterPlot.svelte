@@ -23,30 +23,52 @@
   $: effectiveComplexityThreshold = complexityThreshold !== null ? complexityThreshold : computedMedianComplexity;
 
   // --- Helpers pour placement personnalisé des labels ---
-  const LABEL_FONT = '9px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  const MAX_LABEL_WIDTH = 140;
-  const LABEL_PADDING_X = 3;
-  const LABEL_PADDING_TOP = 3;
-  const LABEL_PADDING_BOTTOM = 0;
-  const LINE_HEIGHT = 14;
-  const LABEL_ANCHOR_PADDING = 4;
+  const BASE_LABEL_FONT_SIZE = 9;
+  const BASE_MAX_LABEL_WIDTH = 140;
+  const BASE_LABEL_PADDING_X = 3;
+  const BASE_LABEL_PADDING_TOP = 3;
+  const BASE_LABEL_PADDING_BOTTOM = 0;
+  const BASE_LINE_HEIGHT = 14;
+  const BASE_LABEL_ANCHOR_PADDING = 4;
   const BASE_LABEL_OFFSET = 16;
-  const MIN_INITIAL_OFFSET = 4;
+  const BASE_MIN_INITIAL_OFFSET = 4;
+  const BASE_POINT_RADIUS = 5;
+  const BASE_LABEL_BORDER_RADIUS = 6;
+  
+  // Scaling adaptatif basé sur le nombre de cas
+  const MIN_SCALE = 0.6;
+  const MAX_SCALE = 1.0;
+  const SCALE_BREAKPOINT_LOW = 10;  // En dessous, scale = 1.0
+  const SCALE_BREAKPOINT_HIGH = 30; // Au dessus, scale = 0.5
+  
+  function calculateScale(n: number): number {
+    if (n <= SCALE_BREAKPOINT_LOW) return MAX_SCALE;
+    if (n >= SCALE_BREAKPOINT_HIGH) return MIN_SCALE;
+    // Interpolation linéaire entre 10 et 30
+    const ratio = (n - SCALE_BREAKPOINT_LOW) / (SCALE_BREAKPOINT_HIGH - SCALE_BREAKPOINT_LOW);
+    return MAX_SCALE - (MAX_SCALE - MIN_SCALE) * ratio;
+  }
   const MOVE_MAGNITUDE_FACTOR = 2;
   const MOVE_MIN_SHIFT = 4;
   const CLIQUE_SWAP_PROBABILITY = 0.25;
-  const POINT_OVERLAP_WEIGHT = 1000;
+  const PLACEMENT_ROTATION_PROBABILITY = 0.4; // Probabilité de rotation du placement (left → top → right → bottom)
+  const LABEL_STANDARD_AREA = 2000; // Aire standard d'un label pour normalisation (px²)
+  const LABEL_OVERLAP_WEIGHT = 5000; // Coût pour 100% d'overlap entre deux labels (normalisé par LABEL_STANDARD_AREA)
+  const POINT_OVERLAP_WEIGHT = 2000;
   const TRAIT_LABEL_COST = 500;
   const TRAIT_POINT_COST = 200;
-  const TRAIT_TRAIT_COST = 100;
-  const QUADRANT_LABEL_COST = 300; // Coût d'évitement des boîtes de quadrant fixes
+  const TRAIT_TRAIT_COST = 1000;
+  const QUADRANT_LABEL_COST = 800; // Coût d'évitement des boîtes de quadrant fixes
+  const OUT_OF_BOUNDS_COST = 10000; // Coût pour éviter que les labels sortent du graphique
+  const DISTANCE_WEIGHT_FACTOR = 800; // Poids proportionnel à la distance (50% largeur = 1000)
   const CLIQUE_JITTER_RATIO = 0.50;
   const MAX_CLIQUE_ATTEMPTS = 20;
-  const ANNEALING_RUNS = 20;
-  const ANNEALING_ITERATIONS = 40;
+  const MAX_ALTERNATE_LAYOUT_ATTEMPTS = 4; // Nombre max de layouts alternatifs à explorer par box avant de changer de stratégie
+  const ANNEALING_RUNS = 5;
+  const ANNEALING_ITERATIONS = 20;
   const INITIAL_TEMPERATURE = 40;
   const MIN_TEMPERATURE = 5;
-  const TEMPERATURE_DECAY = 1;
+  const TEMPERATURE_DECAY = 2;
   
   // Couleurs du thème
   const THEME_BLUE = '#475569'; // Bleu-gris foncé pour cadres, traits et points
@@ -75,6 +97,7 @@
     color: string;
     placement: LabelPlacement;
     alternates: LabelLayout[];
+    alternateLayoutAttempts?: number; // Compteur de tentatives de layouts alternatifs
   };
 
   type CollisionIssue =
@@ -181,10 +204,14 @@
     return bestLines;
   }
 
-  function createLayout(lines: string[], ctx: CanvasRenderingContext2D): LabelLayout {
+  function createLayout(lines: string[], ctx: CanvasRenderingContext2D, scale: number): LabelLayout {
+    const paddingX = BASE_LABEL_PADDING_X * scale;
+    const paddingTop = BASE_LABEL_PADDING_TOP * scale;
+    const paddingBottom = BASE_LABEL_PADDING_BOTTOM * scale;
+    const lineHeight = BASE_LINE_HEIGHT * scale;
     const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 0);
-    const width = textWidth + LABEL_PADDING_X * 2;
-    const height = lines.length * LINE_HEIGHT + LABEL_PADDING_TOP + LABEL_PADDING_BOTTOM;
+    const width = textWidth + paddingX * 2;
+    const height = lines.length * lineHeight + paddingTop + paddingBottom;
     return { lines, width, height };
   }
 
@@ -214,7 +241,8 @@
       textLines: [...box.textLines],
       alternates: box.alternates.map((layout) => cloneLayout(layout)),
       placement: box.placement,
-      isLeft: box.isLeft
+      isLeft: box.isLeft,
+      alternateLayoutAttempts: box.alternateLayoutAttempts ?? 0
     };
   }
 
@@ -227,29 +255,32 @@
     target.alternates = snapshot.alternates.map((layout) => cloneLayout(layout));
     target.placement = snapshot.placement;
     target.isLeft = snapshot.isLeft;
+    target.alternateLayoutAttempts = snapshot.alternateLayoutAttempts;
   }
 
-  function buildLabelLayouts(text: string, ctx: CanvasRenderingContext2D): LabelLayout[] {
+  function buildLabelLayouts(text: string, ctx: CanvasRenderingContext2D, scale: number): LabelLayout[] {
     const layouts: LabelLayout[] = [];
-    const singleWidth = ctx.measureText(text).width + LABEL_PADDING_X * 2;
-    if (singleWidth <= MAX_LABEL_WIDTH && text.length <= 25) {
-      layouts.push(createLayout([text], ctx));
+    const maxLabelWidth = BASE_MAX_LABEL_WIDTH * scale;
+    const paddingX = BASE_LABEL_PADDING_X * scale;
+    const singleWidth = ctx.measureText(text).width + paddingX * 2;
+    if (singleWidth <= maxLabelWidth && text.length <= 25) {
+      layouts.push(createLayout([text], ctx, scale));
     } else {
-      const twoLineWidths = [80, 90, 100, 110, 120, 130, MAX_LABEL_WIDTH];
+      const twoLineWidths = [80, 90, 100, 110, 120, 130, BASE_MAX_LABEL_WIDTH].map(w => w * scale);
       const twoLines = findBalancedVariant(text, ctx, 2, twoLineWidths);
       if (twoLines) {
-        layouts.push(createLayout(twoLines, ctx));
+        layouts.push(createLayout(twoLines, ctx, scale));
       }
 
-      const threeLineWidths = [70, 80, 90, 100, 110, MAX_LABEL_WIDTH];
+      const threeLineWidths = [70, 80, 90, 100, 110, BASE_MAX_LABEL_WIDTH].map(w => w * scale);
       const threeLines = findBalancedVariant(text, ctx, 3, threeLineWidths);
       if (threeLines) {
-        layouts.push(createLayout(threeLines, ctx));
+        layouts.push(createLayout(threeLines, ctx, scale));
       }
     }
 
-    const fallback = wrapText(ctx, text, MAX_LABEL_WIDTH);
-    layouts.push(createLayout(fallback, ctx));
+    const fallback = wrapText(ctx, text, maxLabelWidth);
+    layouts.push(createLayout(fallback, ctx, scale));
 
     return layouts;
   }
@@ -523,7 +554,7 @@
     return boxes;
   }
 
-  function computeLabelStats(boxes: LabelBox[], points: any[], chartArea?: any, medianX?: number, medianY?: number, xScale?: any, yScale?: any) {
+  function computeLabelStats(boxes: LabelBox[], points: any[], chartArea?: any, medianX?: number, medianY?: number, xScale?: any, yScale?: any, labelStandardArea?: number) {
     let cost = 0;
     let labelCollisions = 0;
     let pointCollisions = 0;
@@ -548,6 +579,10 @@
     boxes.forEach((box, index) => {
       pointOwnerMap.set(box.pointKey, index);
     });
+
+    const chartWidth = chartArea ? chartArea.right - chartArea.left : 1000;
+    const distanceFactor = chartWidth > 0 ? DISTANCE_WEIGHT_FACTOR / chartWidth : 0;
+    const standardArea = labelStandardArea ?? LABEL_STANDARD_AREA;
 
     const ensureVector = (vx: number, vy: number) => {
       if (Math.abs(vx) < 1e-3 && Math.abs(vy) < 1e-3) {
@@ -575,7 +610,10 @@
           Math.max(boxes[i].top, boxes[j].top);
         const overlapArea = Math.max(overlapWidth, 0) * Math.max(overlapHeight, 0);
         if (overlapArea <= 0) continue;
-        cost += overlapArea;
+        // Coût normalisé : 100% overlap = LABEL_OVERLAP_WEIGHT
+        const normalizedOverlap = Math.min(overlapArea / standardArea, 1);
+        const weight = normalizedOverlap * LABEL_OVERLAP_WEIGHT;
+        cost += weight;
         labelCollisions++;
         labelCollisionPairs.push(`${boxes[i].textLines[0] ?? 'Label'} ↔ ${boxes[j].textLines[0] ?? 'Label'}`);
 
@@ -586,12 +624,12 @@
         const vecIJ = ensureVector(centerIX - centerJX, centerIY - centerJY);
         const vecJI = ensureVector(centerJX - centerIX, centerJY - centerIY);
 
-        perLabel[i].cost += overlapArea;
-        perLabel[j].cost += overlapArea;
-        perLabel[i].issues.push({ type: 'label', targetIndex: j, weight: overlapArea, vector: vecIJ });
-        perLabel[j].issues.push({ type: 'label', targetIndex: i, weight: overlapArea, vector: vecJI });
-        addEdge(i, j, overlapArea);
-        addEdge(j, i, overlapArea);
+        perLabel[i].cost += weight;
+        perLabel[j].cost += weight;
+        perLabel[i].issues.push({ type: 'label', targetIndex: j, weight, vector: vecIJ });
+        perLabel[j].issues.push({ type: 'label', targetIndex: i, weight, vector: vecJI });
+        addEdge(i, j, weight);
+        addEdge(j, i, weight);
       }
     }
 
@@ -599,6 +637,38 @@
       const boxCenterX = box.left + box.width / 2;
       const boxCenterY = box.top + box.height / 2;
       const anchor = anchors[index];
+
+      // 1. Pénalité si le label sort du graphique (même avec clamp, si la boîte est trop grande)
+      if (chartArea) {
+        const isOutOfBounds = 
+          box.left < chartArea.left || 
+          box.left + box.width > chartArea.right || 
+          box.top < chartArea.top || 
+          box.top + box.height > chartArea.bottom;
+        
+        if (isOutOfBounds) {
+          cost += OUT_OF_BOUNDS_COST;
+          perLabel[index].cost += OUT_OF_BOUNDS_COST;
+          // On ajoute une issue "out of bounds" virtuelle pour le debug si nécessaire
+        }
+      }
+
+      // 2. Coût proportionnel à la distance du point (pour garder les labels proches)
+      if (box.point) {
+        const dx = boxCenterX - box.point.x;
+        const dy = boxCenterY - box.point.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distWeight = distance * distanceFactor;
+        
+        if (distWeight > 0) {
+          cost += distWeight;
+          perLabel[index].cost += distWeight;
+          // Vecteur de rappel vers le point
+          const vector = ensureVector(box.point.x - boxCenterX, box.point.y - boxCenterY);
+          perLabel[index].issues.push({ type: 'point', weight: distWeight, vector });
+        }
+      }
+
       points.forEach((pointData: any, pointIdx: number) => {
         if (!pointData.element) return;
         const pointX = pointData.element.x;
@@ -811,7 +881,9 @@
     medianX?: number,
     medianY?: number,
     xScale?: any,
-    yScale?: any
+    yScale?: any,
+    labelStandardArea?: number,
+    scale?: number
   ) {
     const totalCost = clique.cost || 0;
     if (totalCost <= 0) {
@@ -824,8 +896,18 @@
 
     clique.indices.forEach((index) => {
       const box = boxes[index];
-      if (!useSwapStrategy && Math.random() < 0.3) {
-        tryAlternateLayout(box, chartArea);
+      if (!useSwapStrategy) {
+        const rand = Math.random();
+        // Essayer une rotation de placement avec probabilité PLACEMENT_ROTATION_PROBABILITY
+        if (rand < PLACEMENT_ROTATION_PROBABILITY) {
+          const clockwise = Math.random() < 0.5;
+          // Calculer le scale à partir de labelStandardArea si disponible
+          const currentScale = labelStandardArea ? Math.sqrt(labelStandardArea / LABEL_STANDARD_AREA) : 1.0;
+          tryAlternatePlacement(box, chartArea, clockwise, currentScale);
+        } else if (rand < PLACEMENT_ROTATION_PROBABILITY + 0.3) {
+          // Essayer un layout alternatif avec probabilité 0.3 (si pas de rotation)
+          tryAlternateLayout(box, chartArea);
+        }
       }
     });
 
@@ -838,6 +920,9 @@
       const tmpTop = firstBox.top;
       firstBox.top = secondBox.top;
       secondBox.top = tmpTop;
+      // Réinitialiser les compteurs de layouts alternatifs car on change de stratégie
+      firstBox.alternateLayoutAttempts = 0;
+      secondBox.alternateLayoutAttempts = 0;
       clampLabelBox(firstBox, chartArea);
       clampLabelBox(secondBox, chartArea);
       if (ENABLE_LAYOUT_DEBUG) {
@@ -870,11 +955,13 @@
         const dy = (targetVector.y / length) * scale;
         box.left += dx;
         box.top += dy;
+        // Réinitialiser le compteur de layouts alternatifs car on change de position
+        box.alternateLayoutAttempts = 0;
         clampLabelBox(box, chartArea);
       });
     }
 
-    const newStats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale);
+    const newStats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale, labelStandardArea);
     if (newStats.cost < stats.cost) {
       if (ENABLE_LAYOUT_DEBUG) {
         console.debug(
@@ -894,6 +981,11 @@
     if (!box.alternates || box.alternates.length === 0) {
       return false;
     }
+    // Vérifier si on a déjà exploré assez de layouts alternatifs
+    const attempts = box.alternateLayoutAttempts ?? 0;
+    if (attempts >= MAX_ALTERNATE_LAYOUT_ATTEMPTS) {
+      return false;
+    }
     const next = box.alternates.shift()!;
     box.alternates.push({
       lines: [...box.textLines],
@@ -903,26 +995,79 @@
     box.textLines = [...next.lines];
     box.width = next.width;
     box.height = next.height;
+    box.alternateLayoutAttempts = attempts + 1;
     clampLabelBox(box, chartArea);
     return true;
   }
 
-  function runLabelAnnealing(initialBoxes: LabelBox[], chartArea: any, points: any[], medianX?: number, medianY?: number, xScale?: any, yScale?: any): LabelBox[] {
+  function tryAlternatePlacement(box: LabelBox, chartArea: any, clockwise: boolean = true, scale: number = 1.0) {
+    if (!box.point) return false;
+    
+    const placements: LabelPlacement[] = ['left', 'top', 'right', 'bottom'];
+    const currentIndex = placements.indexOf(box.placement);
+    if (currentIndex === -1) return false;
+    
+    // Rotation horaire ou antihoraire
+    const nextIndex = clockwise 
+      ? (currentIndex + 1) % placements.length
+      : (currentIndex - 1 + placements.length) % placements.length;
+    const newPlacement = placements[nextIndex];
+    
+    const baseLabelOffset = BASE_LABEL_OFFSET * scale;
+    
+    // Recalculer la position selon le nouveau placement
+    const computePosition = (placement: LabelPlacement) => {
+      switch (placement) {
+        case 'left':
+          return {
+            left: box.point.x - box.width - baseLabelOffset,
+            top: box.point.y - box.height / 2
+          };
+        case 'right':
+          return {
+            left: box.point.x + baseLabelOffset,
+            top: box.point.y - box.height / 2
+          };
+        case 'top':
+          return {
+            left: box.point.x - box.width / 2,
+            top: box.point.y - box.height - baseLabelOffset
+          };
+        case 'bottom':
+          return {
+            left: box.point.x - box.width / 2,
+            top: box.point.y + baseLabelOffset
+          };
+      }
+    };
+    
+    const newPos = computePosition(newPlacement);
+    box.left = clamp(newPos.left, chartArea.left + 4, chartArea.right - box.width - 4);
+    box.top = clamp(newPos.top, chartArea.top + 4, chartArea.bottom - box.height - 4);
+    // Réinitialiser le compteur de layouts alternatifs car on change de stratégie
+    box.alternateLayoutAttempts = 0;
+    // clampLabelBox va appeler updateBoxPlacement pour mettre à jour le placement
+    clampLabelBox(box, chartArea);
+    return true;
+  }
+
+  function runLabelAnnealing(initialBoxes: LabelBox[], chartArea: any, points: any[], medianX?: number, medianY?: number, xScale?: any, yScale?: any, labelStandardArea?: number): LabelBox[] {
     if (initialBoxes.length <= 1) return initialBoxes;
 
     const runs = ANNEALING_RUNS;
     const iterationsPerRun = ANNEALING_ITERATIONS;
     let bestBoxes = initialBoxes.map((box) => ({ ...box }));
-    let bestStats = computeLabelStats(bestBoxes, points, chartArea, medianX, medianY, xScale, yScale);
+    let bestStats = computeLabelStats(bestBoxes, points, chartArea, medianX, medianY, xScale, yScale, labelStandardArea);
 
     for (let run = 0; run < runs; run++) {
       let temperature = INITIAL_TEMPERATURE;
       const boxes = initialBoxes.map((box) => ({
         ...box,
         textLines: [...box.textLines],
-        alternates: box.alternates.map((layout) => cloneLayout(layout))
+        alternates: box.alternates.map((layout) => cloneLayout(layout)),
+        alternateLayoutAttempts: 0 // Réinitialiser le compteur au début de chaque run
       }));
-      let stats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale);
+      let stats = computeLabelStats(boxes, points, chartArea, medianX, medianY, xScale, yScale, labelStandardArea);
       let currentCost = stats.cost;
 
       if (ENABLE_LAYOUT_DEBUG) {
@@ -948,10 +1093,12 @@
           if (cliques.length === 0) break;
 
           let cliqueImproved = false;
+          // Calculer le scale à partir de labelStandardArea si disponible
+          const currentScale = labelStandardArea ? Math.sqrt(labelStandardArea / LABEL_STANDARD_AREA) : 1.0;
           for (const clique of cliques) {
             let attemptSucceeded = false;
             for (let attempt = 0; attempt < MAX_CLIQUE_ATTEMPTS; attempt++) {
-              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points, medianX, medianY, xScale, yScale);
+              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points, medianX, medianY, xScale, yScale, labelStandardArea, currentScale);
               if (updated.accepted && updated.stats) {
                 stats = updated.stats;
                 currentCost = stats.cost;
@@ -1017,10 +1164,12 @@
     return bestBoxes;
   }
 
-  function buildLabelBoxes(points: any[], chartArea: any, ctx: CanvasRenderingContext2D): LabelBox[] {
+  function buildLabelBoxes(points: any[], chartArea: any, ctx: CanvasRenderingContext2D, scale: number): LabelBox[] {
     const centerX = chartArea.left + chartArea.width / 2;
     const leftEntries: any[] = [];
     const rightEntries: any[] = [];
+    const baseLabelOffset = BASE_LABEL_OFFSET * scale;
+    const minInitialOffset = BASE_MIN_INITIAL_OFFSET * scale;
 
     points.forEach((pointData) => {
       if (!pointData.element) return;
@@ -1040,7 +1189,7 @@
 
         const colorInfo = getStatusColorInfo(raw.status);
         const pointKey = getPointKey(raw, pointData.index);
-        const layouts = buildLabelLayouts(raw.label, ctx);
+        const layouts = buildLabelLayouts(raw.label, ctx, scale);
         const primaryLayout = layouts[0];
         const alternateLayouts = layouts.slice(1);
         const textLines = primaryLayout.lines;
@@ -1051,27 +1200,27 @@
           switch (placement) {
             case 'left':
               return {
-                left: element.x - boxWidth - BASE_LABEL_OFFSET,
+                left: element.x - boxWidth - baseLabelOffset,
                 top: element.y - boxHeight / 2
               };
             case 'right':
               return {
-                left: element.x + BASE_LABEL_OFFSET,
+                left: element.x + baseLabelOffset,
                 top: element.y - boxHeight / 2
               };
             case 'top':
               return {
                 left: element.x - boxWidth / 2,
-                top: element.y - boxHeight - BASE_LABEL_OFFSET
+                top: element.y - boxHeight - baseLabelOffset
               };
             case 'bottom':
               return {
                 left: element.x - boxWidth / 2,
-                top: element.y + BASE_LABEL_OFFSET
+                top: element.y + baseLabelOffset
               };
             default:
               return {
-                left: element.x + BASE_LABEL_OFFSET,
+                left: element.x + baseLabelOffset,
                 top: element.y - boxHeight / 2
               };
           }
@@ -1085,8 +1234,8 @@
 
         for (const placement of placements) {
           const position = computePosition(placement);
-          const tentativeLeft = clamp(position.left, chartArea.left + MIN_INITIAL_OFFSET, chartArea.right - boxWidth - MIN_INITIAL_OFFSET);
-          const tentativeTop = clamp(position.top, chartArea.top + MIN_INITIAL_OFFSET, chartArea.bottom - boxHeight - MIN_INITIAL_OFFSET);
+          const tentativeLeft = clamp(position.left, chartArea.left + minInitialOffset, chartArea.right - boxWidth - minInitialOffset);
+          const tentativeTop = clamp(position.top, chartArea.top + minInitialOffset, chartArea.bottom - boxHeight - minInitialOffset);
           const pointInside =
             element.x >= tentativeLeft &&
             element.x <= tentativeLeft + boxWidth &&
@@ -1103,8 +1252,8 @@
 
         if (!placed) {
           const fallback = computePosition(isLeft ? 'left' : 'right');
-          finalLeft = clamp(fallback.left, chartArea.left + MIN_INITIAL_OFFSET, chartArea.right - boxWidth - MIN_INITIAL_OFFSET);
-          finalTop = clamp(fallback.top, chartArea.top + MIN_INITIAL_OFFSET, chartArea.bottom - boxHeight - MIN_INITIAL_OFFSET);
+          finalLeft = clamp(fallback.left, chartArea.left + minInitialOffset, chartArea.right - boxWidth - minInitialOffset);
+          finalTop = clamp(fallback.top, chartArea.top + minInitialOffset, chartArea.bottom - boxHeight - minInitialOffset);
           placementUsed = isLeft ? 'left' : 'right';
         }
 
@@ -1126,8 +1275,10 @@
               : element.x < chartArea.left + chartArea.width / 2,
           color: colorInfo.solid,
           placement: placementUsed as LabelPlacement,
-          alternates: alternateLayouts
-        });
+          alternates: alternateLayouts,
+          alternateLayoutAttempts: 0,
+          pointIndex: pointData.index // Stocker l'index pour le hover
+        } as LabelBox & { pointIndex: number });
       });
 
       resolveVerticalOverlaps(boxes, chartArea);
@@ -1143,6 +1294,9 @@
   let cachedLabelBoxes: LabelBox[] = [];
   let cachedLabelSignature = '';
   let layoutRandomSeed = Math.random().toString(36).slice(2, 8); // Seed fixe pour toute la session
+  
+  // Stocker les boîtes de labels pour la détection de hover
+  let labelBoxesForHover: Array<LabelBox & { pointIndex?: number }> = [];
 
   function getLabelSignature(points: any[], chartArea: any) {
     const dims = `${chartArea.left.toFixed(1)}-${chartArea.top.toFixed(1)}-${chartArea.right.toFixed(
@@ -1195,7 +1349,15 @@
 
       const ctx = chart.ctx;
       ctx.save();
-      ctx.font = LABEL_FONT;
+      const pluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
+      const scale = pluginOptions.scale ?? 1.0;
+      const labelFontSize = BASE_LABEL_FONT_SIZE * scale;
+      const labelFont = `${labelFontSize}px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      // Calculer les valeurs scalées pour le plugin
+      const labelPaddingX = BASE_LABEL_PADDING_X * scale;
+      const labelPaddingTop = BASE_LABEL_PADDING_TOP * scale;
+      const lineHeight = BASE_LINE_HEIGHT * scale;
+      ctx.font = labelFont;
       ctx.textBaseline = 'top';
       const chartArea = chart.chartArea;
       const points = dataset.data
@@ -1207,7 +1369,6 @@
         .filter((item: { raw?: { label?: string } }) => Boolean(item.raw?.label));
 
       // Lire les seuils depuis les options du chart (toujours à jour)
-      const pluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
       const thresholdValue = pluginOptions.valueThreshold ?? thresholdState.value ?? 0;
       const thresholdComplexity = pluginOptions.complexityThreshold ?? thresholdState.complexity ?? 0;
       const showROIQuadrant = points.length > 2;
@@ -1327,20 +1488,28 @@
         // Réinitialiser pour les autres layers
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.font = LABEL_FONT;
+        ctx.font = labelFont;
       }
 
       // Pour le recuit, on utilise toujours les médianes pour positionner les boîtes fixes
       const medianX = xScale.getPixelForValue(computedMedianComplexity);
       const medianY = yScale.getPixelForValue(computedMedianValue);
       
-      const signature = getLabelSignature(points, chartArea);
-      if (signature !== cachedLabelSignature) {
-        const rawBoxes = buildLabelBoxes(points, chartArea, ctx);
-        const annealed = runLabelAnnealing(rawBoxes, chartArea, points, medianX, medianY, xScale, yScale);
-        cachedLabelBoxes = annealed;
-        cachedLabelSignature = signature;
-      }
+        const signature = getLabelSignature(points, chartArea);
+        if (signature !== cachedLabelSignature) {
+          const pluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
+          const scale = pluginOptions.scale ?? 1.0;
+          const labelStandardArea = pluginOptions.labelStandardArea ?? LABEL_STANDARD_AREA;
+          const rawBoxes = buildLabelBoxes(points, chartArea, ctx, scale);
+          const annealed = runLabelAnnealing(rawBoxes, chartArea, points, medianX, medianY, xScale, yScale, labelStandardArea);
+          cachedLabelBoxes = annealed;
+          cachedLabelSignature = signature;
+          // Stocker aussi pour la détection de hover (avec pointIndex)
+          labelBoxesForHover = annealed as Array<LabelBox & { pointIndex?: number }>;
+        } else {
+          // Mettre à jour les boîtes pour le hover même si le cache est valide
+          labelBoxesForHover = cachedLabelBoxes as Array<LabelBox & { pointIndex?: number }>;
+        }
 
       // Layer 1: Traits (au-dessus des quadrants, en dessous des labels)
       cachedLabelBoxes.forEach((box) => {
@@ -1362,21 +1531,29 @@
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
-        drawRoundedRect(ctx, box.left, box.top, box.width, box.height, 6);
+        const labelBorderRadius = pluginOptions.labelBorderRadius ?? BASE_LABEL_BORDER_RADIUS;
+        drawRoundedRect(ctx, box.left, box.top, box.width, box.height, labelBorderRadius);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = THEME_BLUE;
+        // Réappliquer la police scalée avant chaque ligne de texte (important pour le hover)
+        // Chart.js peut modifier le contexte lors du hover, donc on doit réappliquer systématiquement
         box.textLines.forEach((line, lineIndex) => {
+          ctx.font = labelFont; // Réappliquer à chaque itération pour garantir la bonne taille
           ctx.fillText(
             line,
-            box.left + LABEL_PADDING_X,
-            box.top + LABEL_PADDING_TOP + lineIndex * LINE_HEIGHT
+            box.left + labelPaddingX,
+            box.top + labelPaddingTop + lineIndex * lineHeight
           );
         });
       });
 
       ctx.restore();
+    },
+    // Suppression du hook afterTooltipDraw qui est inutile pour le tooltip natif (Canvas)
+    afterDraw(chart: Chart) {
+      // On garde le hook afterDraw vide ou pour d'autres usages futurs si nécessaire
     }
   };
 
@@ -1432,6 +1609,24 @@
       ? (sorted[mid - 1] + sorted[mid]) / 2
       : sorted[mid];
   }
+
+  // Calculer le facteur d'échelle basé sur le nombre de cas
+  $: scale = calculateScale(useCases.length);
+  
+  // Dimensions scalées
+  $: LABEL_FONT_SIZE = BASE_LABEL_FONT_SIZE * scale;
+  $: LABEL_FONT = `${LABEL_FONT_SIZE}px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  $: MAX_LABEL_WIDTH = BASE_MAX_LABEL_WIDTH * scale;
+  $: LABEL_PADDING_X = BASE_LABEL_PADDING_X * scale;
+  $: LABEL_PADDING_TOP = BASE_LABEL_PADDING_TOP * scale;
+  $: LABEL_PADDING_BOTTOM = BASE_LABEL_PADDING_BOTTOM * scale;
+  $: LINE_HEIGHT = BASE_LINE_HEIGHT * scale;
+  $: LABEL_ANCHOR_PADDING = BASE_LABEL_ANCHOR_PADDING * scale;
+  $: BASE_LABEL_OFFSET_SCALED = BASE_LABEL_OFFSET * scale;
+  $: MIN_INITIAL_OFFSET = BASE_MIN_INITIAL_OFFSET * scale;
+  $: POINT_RADIUS = Math.max(BASE_POINT_RADIUS * scale, 2.5);
+  $: LABEL_BORDER_RADIUS = BASE_LABEL_BORDER_RADIUS * scale;
+  $: LABEL_STANDARD_AREA_SCALED = LABEL_STANDARD_AREA * scale * scale; // Aire = scale²
 
   // Calculer les scores pour chaque cas d'usage
   $: rawData = useCases
@@ -1505,8 +1700,8 @@
       data: offsetData,
       backgroundColor: backgroundColors,
       borderColor: borderColors,
-      pointRadius: 5,
-      pointHoverRadius: 8,
+      pointRadius: POINT_RADIUS,
+      pointHoverRadius: POINT_RADIUS * 1.6,
       pointBorderWidth: 0,
       pointHoverBackgroundColor: borderColors,
       pointHoverBorderColor: borderColors
@@ -1539,10 +1734,13 @@
     maintainAspectRatio: false,
     animation: false,
     plugins: {
-      // Passer les seuils au plugin via les options
+      // Passer les seuils et le scale au plugin via les options
       useCaseLabels: {
         valueThreshold: effectiveValueThreshold,
-        complexityThreshold: effectiveComplexityThreshold
+        complexityThreshold: effectiveComplexityThreshold,
+        scale: scale,
+        labelStandardArea: LABEL_STANDARD_AREA_SCALED,
+        labelBorderRadius: LABEL_BORDER_RADIUS
       },
       title: {
         display: true,
@@ -1558,21 +1756,82 @@
       },
       tooltip: {
         enabled: true,
+        displayColors: false,
+        // Style identique aux labels mais à l'échelle 1
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        borderColor: THEME_BLUE,
+        borderWidth: 1,
+        cornerRadius: BASE_LABEL_BORDER_RADIUS,
+        padding: {
+          top: BASE_LABEL_PADDING_TOP,
+          bottom: BASE_LABEL_PADDING_BOTTOM,
+          left: BASE_LABEL_PADDING_X,
+          right: BASE_LABEL_PADDING_X
+        },
+        titleFont: {
+          family: '"Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          size: BASE_LABEL_FONT_SIZE,
+          weight: '600',
+          lineHeight: 1.2 // Multiplicateur standard au lieu de pixels fixes interprétés comme multiplicateur
+        },
+        bodyFont: {
+          family: '"Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          size: BASE_LABEL_FONT_SIZE,
+          lineHeight: 1.2 // 14 était interprété comme 14x la taille de la police (soit ~130px !)
+        },
+        titleColor: THEME_BLUE,
+        bodyColor: THEME_BLUE,
+        titleSpacing: 0,
+        bodySpacing: 0,
+        boxWidth: BASE_MAX_LABEL_WIDTH,
+        boxPadding: 0,
+        usePointStyle: false,
+        // Pas d'espacement supplémentaire entre les items
+        itemSpacing: 0,
+        // Utiliser un seul item pour éviter l'espacement entre les lignes
+        multiKeyBackground: 'transparent',
         callbacks: {
           title: (context: any) => {
+            // Dans Chart.js, le callback title reçoit un tableau de contextes
             if (!context || !context[0] || !context[0].raw) return '';
             return context[0].raw.label || '';
           },
           label: (context: any) => {
-            if (!context || !context[0] || !context[0].raw) return [];
-            const raw = context[0].raw;
+            // Dans Chart.js, le callback label reçoit un seul contexte, pas un tableau
+            if (!context || !context.raw) return [];
+            const raw = context.raw;
+            
+            // Fonction pour découper le texte en plusieurs lignes (wrapping)
+            const wrapText = (text: string, maxLength: number) => {
+              if (!text) return [];
+              const words = text.split(' ');
+              const lines = [];
+              let currentLine = words[0];
+
+              for (let i = 1; i < words.length; i++) {
+                if (currentLine.length + 1 + words[i].length <= maxLength) {
+                  currentLine += ' ' + words[i];
+                } else {
+                  lines.push(currentLine);
+                  currentLine = words[i];
+                }
+              }
+              lines.push(currentLine);
+              return lines;
+            };
+
+            // Découper la description (max 100 chars total, mais wrappé tous les 50 chars)
+            const fullDescription = raw.description ? `Description: ${raw.description.substring(0, 120)}${raw.description.length > 120 ? '...' : ''}` : '';
+            const descriptionLines = wrapText(fullDescription, 50); // Largeur réduite (~50 chars)
+
             const lines = [
-              raw.description ? `Description: ${raw.description.substring(0, 100)}${raw.description.length > 100 ? '...' : ''}` : '',
+              ...descriptionLines,
               `Valeur: ${raw.y} pts (${raw.valueStars}/5 ⭐)`,
               `Complexité: ${raw.x} pts (${raw.complexityStars}/5 ❌)`
             ];
             return lines.filter(line => line !== '');
-          }
+          },
+          labelTextColor: () => THEME_BLUE
         }
       }
     },
@@ -1638,28 +1897,165 @@
 
   function createChart() {
     if (chartContainer && chartData.datasets[0].data.length > 0) {
+      // Laisser Chart.js gérer la résolution du canvas
+      // On augmente juste le devicePixelRatio pour l'impression pour éviter la pixelisation
+      const isPrint = window.matchMedia('print').matches || (window as any).isPrinting;
+      const dpr = window.devicePixelRatio || 1;
+      const resolutionFactor = isPrint ? 3 : dpr; // 3x pour l'impression, dpr normal pour l'affichage
+      
       chartInstance = new Chart(chartContainer, {
         type: 'scatter',
         data: chartData,
-        options: chartOptions
+        options: {
+          ...chartOptions,
+          // Chart.js gère automatiquement le devicePixelRatio et la taille du canvas
+          // On augmente juste le facteur pour l'impression
+          devicePixelRatio: resolutionFactor,
+          maintainAspectRatio: false
+        }
       });
     }
   }
 
   function updateChart() {
     if (chartInstance) {
+      // Mettre à jour le devicePixelRatio pour l'impression si nécessaire
+      const isPrint = window.matchMedia('print').matches || (window as any).isPrinting;
+      const dpr = window.devicePixelRatio || 1;
+      const resolutionFactor = isPrint ? 3 : dpr;
+      
+      // Mettre à jour les options du chart pour la résolution
+      if (chartInstance.options) {
+        (chartInstance.options as any).devicePixelRatio = resolutionFactor;
+      }
+      
       chartInstance.data = chartData;
-      chartInstance.update();
+      chartInstance.update('none'); // 'none' pour éviter les animations
     } else {
       createChart();
     }
   }
-
+  
+  // Fonction pour gérer le hover sur les labels
+  function handleLabelHover(event: MouseEvent) {
+    if (!chartInstance || !chartContainer) return;
+    
+    const rect = chartContainer.getBoundingClientRect();
+    // Utiliser les coordonnées CSS directes car Chart.js travaille en coordonnées logiques
+    // (sauf si on modifie manuellement le scale du contexte, ce qu'on ne fait plus)
+    const canvasX = event.clientX - rect.left;
+    const canvasY = event.clientY - rect.top;
+    
+    // Debug temporaire (à retirer)
+    // console.log('Hover:', { x: canvasX, y: canvasY, boxes: labelBoxesForHover.length });
+    
+    // Les coordonnées des labels sont dans le système de coordonnées du canvas
+    // Vérifier si la souris est sur un label
+    let foundLabel = false;
+    let hoveredBox: (LabelBox & { pointIndex?: number }) | null = null;
+    
+    for (const box of labelBoxesForHover) {
+      // Ajouter une marge de tolérance de 2px
+      if (
+        canvasX >= box.left - 2 &&
+        canvasX <= box.left + box.width + 2 &&
+        canvasY >= box.top - 2 &&
+        canvasY <= box.top + box.height + 2
+      ) {
+        hoveredBox = box;
+        foundLabel = true;
+        // console.log('Found label:', box);
+        break;
+      }
+    }
+    
+    if (foundLabel && hoveredBox) {
+      // Trouver le point correspondant
+      const dataset = chartInstance.getDatasetMeta(0);
+      if (!dataset || !dataset.data) return;
+      
+      const pointIndex = hoveredBox.pointIndex;
+      if (pointIndex !== undefined && pointIndex < dataset.data.length) {
+        const element = dataset.data[pointIndex];
+        if (element) {
+          // Empêcher Chart.js de gérer cet événement pour éviter les conflits
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          
+          // Déclencher le tooltip en utilisant setActiveElements avec les coordonnées du point
+          chartInstance.setActiveElements([{ datasetIndex: 0, index: pointIndex }]);
+          
+          // Forcer la mise à jour du tooltip avec les coordonnées du point
+          if (chartInstance.tooltip) {
+            // Déclencher le tooltip avec les coordonnées du point
+            chartInstance.tooltip.setActiveElements(
+              [{ datasetIndex: 0, index: pointIndex }],
+              { x: element.x, y: element.y }
+            );
+            
+            // Mettre à jour le chart pour afficher le tooltip
+            chartInstance.update('none');
+          }
+          return;
+        }
+      }
+    }
+    
+    // Si on n'est sur aucun label, ne pas empêcher Chart.js de gérer normalement (hover sur les points)
+  }
+  
   onMount(() => {
     createChart();
+    
+    // Ajouter le gestionnaire de hover pour les labels après la création du chart
+    // Utiliser tick pour s'assurer que le chart est créé
+    tick().then(() => {
+      if (chartContainer) {
+        // Utiliser capture pour intercepter avant Chart.js
+        chartContainer.addEventListener('mousemove', handleLabelHover, true);
+      }
+    });
+    
+    // Écouter les changements de media query pour l'impression
+    const printMediaQuery = window.matchMedia('print');
+    if (printMediaQuery.addEventListener) {
+      printMediaQuery.addEventListener('change', () => {
+        if (chartInstance) {
+          updateChart();
+        }
+      });
+    } else {
+      // Fallback pour les navigateurs plus anciens
+      (printMediaQuery as any).addListener(() => {
+        if (chartInstance) {
+          updateChart();
+        }
+      });
+    }
+    
+    // Écouter l'événement beforeprint pour préparer le canvas haute résolution
+    window.addEventListener('beforeprint', () => {
+      (window as any).isPrinting = true;
+      if (chartInstance) {
+        updateChart();
+      }
+    });
+    
+    // Réinitialiser après l'impression
+    window.addEventListener('afterprint', () => {
+      (window as any).isPrinting = false;
+      if (chartInstance) {
+        updateChart();
+      }
+    });
   });
 
   onDestroy(() => {
+    // Nettoyer le gestionnaire de hover
+    if (chartContainer) {
+      chartContainer.removeEventListener('mousemove', handleLabelHover);
+    }
+    
     if (chartInstance) {
       chartInstance.destroy();
     }
@@ -1668,11 +2064,14 @@
   // Mettre à jour le graphique quand les données ou les options changent
   $: if (chartInstance) {
     updateChart();
-    // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils
+    // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils et au scale
     if (chartInstance.options.plugins) {
       (chartInstance.options.plugins as any).useCaseLabels = {
         valueThreshold: effectiveValueThreshold,
-        complexityThreshold: effectiveComplexityThreshold
+        complexityThreshold: effectiveComplexityThreshold,
+        scale: scale,
+        labelStandardArea: LABEL_STANDARD_AREA_SCALED,
+        labelBorderRadius: LABEL_BORDER_RADIUS
       };
     }
   }
@@ -1713,4 +2112,96 @@
       <span>Cliquez sur un point pour voir le détail</span>
     </div>
   </div>
+  
 </div>
+
+<style>
+  /* Style supplémentaire pour le tooltip Chart.js pour correspondre aux labels */
+  :global(.chartjs-tooltip) {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* Contrôler l'espacement des lignes dans le tooltip - Chart.js utilise une structure spécifique */
+  :global(.chartjs-tooltip-body) {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  :global(.chartjs-tooltip-body-list) {
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+  }
+  
+  :global(.chartjs-tooltip-body-item) {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 14px !important;
+    display: block !important;
+  }
+  
+  :global(.chartjs-tooltip-body-item + .chartjs-tooltip-body-item) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  :global(.chartjs-tooltip-body-item span) {
+    line-height: 14px !important;
+    display: block !important;
+  }
+  
+  :global(.chartjs-tooltip-title) {
+    margin-bottom: 2px !important;
+    padding-bottom: 0 !important;
+    line-height: 14px !important;
+  }
+  
+  :global(.chartjs-tooltip-title + .chartjs-tooltip-body) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Forcer l'espacement minimal pour tous les éléments du tooltip */
+  :global(.chartjs-tooltip *),
+  :global(.chartjs-tooltip-body *),
+  :global(.chartjs-tooltip-body-list *),
+  :global(.chartjs-tooltip-body-item *) {
+    line-height: 14px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* Cibler spécifiquement les éléments de liste */
+  :global(.chartjs-tooltip-body-list li) {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 14px !important;
+    display: block !important;
+  }
+  
+  :global(.chartjs-tooltip-body-list li + li) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Forcer l'espacement à 0 pour tous les body items - style très agressif */
+  :global(.chartjs-tooltip-body-item),
+  :global(.chartjs-tooltip-body-item *) {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 14px !important;
+    height: 14px !important;
+    min-height: 14px !important;
+    max-height: 14px !important;
+  }
+  
+  /* Supprimer tout espacement entre les items */
+  :global(.chartjs-tooltip-body-item + .chartjs-tooltip-body-item),
+  :global(.chartjs-tooltip-body-item:not(:first-child)) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+  }
+</style>
