@@ -1,7 +1,7 @@
 # Feature: Dashboard Executive Summary Enhancement
 
 ## Objective
-Transform the dashboard into an executive summary view with improved visualization, ROI quadrant (relative to medians), executive summary generation (automatic after use case completion), and DOCX report export capabilities.
+Transform the dashboard into an executive summary view with improved visualization, ROI quadrant (relative to medians), executive summary generation (automatic after use case completion), and print-ready report with CSS.
 
 ## Scope
 - **UI Changes**: Dashboard layout, scatter plot improvements, ROI quadrant, executive summary section, dashboard configuration accordion
@@ -100,34 +100,30 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Hide Introduction/Analyse/Recommandations sections during generation
   - Add responsive margins (px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32) for document-like layout
 
-### Phase 4: Report Generation (DOCX)
-- [ ] **Task 4.1**: Install and configure docx library
-  - Add `docx` npm package to API
-  - Add `pizzip` and `docx-preview` if needed for PDF conversion
-  - Or use `docx` with separate PDF conversion library
+### Phase 4: Print Report Generation (CSS-based)
+- [x] **Task 4.1**: Print CSS styling and layout
+  - Complete print CSS with @page rules for cover and annex pages
+  - Page de garde with background image and executive summary
+  - Table of contents with dynamic page numbers
+  - One page per use case with footer image
+  - Proper page breaks and margins
 
-- [ ] **Task 4.2**: Create report template structure
-  - Page de garde: folder name, company name (if available), report date
-  - Deuxième page: Synthèse exécutive
-  - Troisième page: Sommaire (table of contents)
-  - Introduction section
-  - One page per use case (all details)
-  - Dashboard section (screenshot or description)
-  - Analyse section
-  - Recommandations section
+- [x] **Task 4.2**: Fix print layout issues
+  - Fix layout-bottom 50/50 grid (switched to flexbox)
+  - Fix annex margins (0.6cm padding on containers, 0 margin on @page)
+  - Fix overflow issues for axes sections
+  - Unify structure between dashboard and individual view
 
-- [ ] **Task 4.3**: Implement report generation logic
-  - Create service to generate DOCX report
-  - Use docx library to build structured document
-  - Include all sections from template
-  - Generate downloadable DOCX file
-  - Add option to export as PDF (convert DOCX to PDF)
+- [x] **Task 4.3**: Dynamic content scaling
+  - Scaling for references (base 8), data sources (base 5), data objects (base 5), technologies (base 7)
+  - Aggressive scaling for executive summary with margin reduction
+  - Proportional font-size, line-height, gap, and icon scaling
 
-- [ ] **Task 4.4**: Add report export UI
-  - Add "Export Report" button in dashboard
-  - Show loading state during generation
-  - Download DOCX file
-  - Option to download as PDF
+- [x] **Task 4.4**: Page numbering and structure
+  - Dynamic page number calculation based on section heights
+  - Simplified calculation: each use case = 1 page exactly
+  - Footer image for use case pages with gradient overlay
+  - Complete print structure: cover, summary, TOC, sections, annexes
 
 ### Phase 5: Testing & Validation
 - [x] **Task 5.1**: Update unit tests for new API endpoint
@@ -141,13 +137,13 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Test ROI quadrant display (with > 2 use cases and ≤ 2 use cases)
   - Test dashboard configuration accordion
   - Test executive summary generation flow (automatic and manual)
-  - Test report export (DOCX and PDF)
+  - Test print report generation and formatting
 
 - [ ] **Task 5.3**: Manual testing and validation
   - Verify all UI changes work correctly
   - Test responsive design
   - Validate AI-generated summaries quality
-  - Test report generation and formatting
+  - Test print report generation and formatting (Chrome print preview and actual print)
 
 ## Commits & Progress
 - [x] **Initial commit**: Branch creation and BRANCH.md
@@ -203,11 +199,34 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Monitoring automatique du statut de génération
   - Parsing markdown avec styles et citations
   - Marges responsives pour aspect document
+- [x] **Commit 13**: Phase 4 - Corrections impression - layout-bottom 50/50, marges annexes, overflow axes
+  - Fix layout-bottom: passage de grid à flexbox pour garantir 50/50 en preview et print
+  - Fix marges annexes: @page annex margin 0, padding 0.6cm reporté sur conteneurs
+  - Fix overflow axes valeur/complexité: dédoublonnage space-y-6, page-break-after pour sections
+  - Structure unifiée: usecase-annex-section pour dashboard et cas-usage/[id]
+- [x] **Commit 14**: Phase 4 - Scaling dynamique références, données, technologies, sources
+  - Scaling proportionnel pour références (base 8), données (base 5), technologies (base 7), sources (base 5)
+  - Réduction font-size, line-height, gap et icônes SVG proportionnellement
+  - Détection mode impression via beforeprint/afterprint events
+- [x] **Commit 15**: Phase 4 - Footer image pour fiches cas d'usage et styles associés
+  - Ajout footer.jpg en background des fiches cas d'usage (position absolute bottom)
+  - Gradient blanc overlay (opaque top → transparent bottom) pour fusion avec contenu
+  - min-height 27.3cm sur usecase-print pour garantir footer au bas de page
+  - Page de garde annexe: même structure que page de garde principale
+- [x] **Commit 16**: Phase 4 - Scaling agressif sommaire exécutif avec marges réduites
+  - Scaling plus agressif: minFontSize 5pt, step 0.2pt
+  - Réduction proportionnelle marges titre h3 et padding boîte
+  - Suppression marge dernier paragraphe
+- [x] **Commit 17**: Phase 4 - Calcul numéros de page simplifié et structure impression complète
+  - Calcul numéros de page: chaque cas d'usage = 1 page exactement (currentPage += 1)
+  - Fonction calculatePageNumbers avec calcul dynamique hauteurs sections
+  - Structure impression complète: page de garde, synthèse, sommaire, sections, annexes
+  - Affichage numéros de page dans sommaire avec liens vers sections
 
 ## Status
-- **Progress**: 13/20 tasks completed
-- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 pending, Phase 5 partially completed (Task 5.1 completed)
-- **Next**: Phase 4 - Report Generation (DOCX)
+- **Progress**: 17/20 tasks completed
+- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 completed, Phase 5 partially completed (Task 5.1 completed)
+- **Next**: Phase 5 - Testing & Validation (E2E tests and manual validation)
 
 ## Specifications Confirmed
 
@@ -233,18 +252,23 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Show loading state when `folder.status === 'generating'`
   - Manual generation button for folders without summary
 
-### Report
-- **Format**: DOCX (primary), with PDF option
-- **Library**: npm `docx` package
+### Print Report
+- **Format**: CSS-based print (Chrome print to PDF)
 - **Structure**:
-  1. Page de garde (folder name, company, date)
-  2. Synthèse exécutive
-  3. Sommaire
-  4. Introduction
-  5. One page per use case
-  6. Dashboard
-  7. Analyse
-  8. Recommandations
+  1. Page de garde (folder name, company, background image, executive summary)
+  2. Table of contents (with dynamic page numbers)
+  3. Introduction
+  4. Analyse
+  5. Recommandations
+  6. Références
+  7. Page de garde annexes
+  8. One page per use case (with footer image)
+- **Features**:
+  - Dynamic page numbering
+  - Content scaling for long lists (references, data sources, technologies)
+  - Aggressive scaling for executive summary
+  - Footer image on use case pages
+  - Proper page breaks and margins
 
 ### Dashboard Configuration
 - **UI**: Accordion in top-right corner of scatter plot container with gear icon (⚙️)
@@ -258,12 +282,11 @@ Transform the dashboard into an executive summary view with improved visualizati
 - **Chart Library**: Chart.js (already in use)
 - **API Framework**: Hono with TypeScript
 - **AI Service**: OpenAI Node.js SDK (existing integration)
-- **Report Library**: docx (npm package)
+- **Print**: CSS @media print with @page rules
 - **Testing**: Vitest (unit) + Playwright (E2E)
 - **Database**: PostgreSQL 16 with Drizzle ORM
 
 ## Dependencies
-- `docx` - DOCX report generation
-- May need PDF conversion library (to be determined)
 - OpenAI service already available
+- No additional dependencies for print (CSS-based)
 
