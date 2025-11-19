@@ -7,12 +7,26 @@ body {
 }
 
 /* Hide use case annexes on screen (visible only in print) */
+/* Masquer les sections annexes dans le dashboard */
+.usecase-annex-section {
+  display: none;
+}
+
+/* Ancienne règle pour compatibilité (peut être supprimée si plus utilisée) */
 .usecase-annex {
   display: none;
 }
 
 /* Hide cover page on screen (visible only in print) */
 .report-cover-page {
+  display: none;
+}
+
+.report-table-of-contents {
+  display: none;
+}
+
+.report-annex-separator-page {
   display: none;
 }
 

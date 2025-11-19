@@ -16,10 +16,10 @@
     margin: 2cm 2cm 2cm 2cm; /* Marges normales pour le rapport principal */
   }
 
-  /* Marges réduites pour les annexes (usecases) */
+  /* Marges à 0 pour les annexes (usecases) - les marges sont reportées sur les conteneurs */
   @page annex {
     size: A4;
-    margin: 0.6cm 0.6cm 0.6cm 0.6cm; /* Marges réduites pour maximiser l'espace */
+    margin: 0; /* Pas de marges de page pour permettre l'image au bord */
   }
 
   /* Page de garde - pleine page sans marges */
@@ -49,13 +49,32 @@
     padding-top: 0 !important;
   }
 
-  /* Supprimer la marge du section qui enveloppe usecase-print */
+  /* Appliquer les marges de 0.6cm sur les conteneurs de contenu (cas-usage/[id] et dashboard) */
+  /* Vue cas-usage/[id] : section.space-y-6 */
   section.space-y-6 {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
+    padding-top: 0.6cm !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
   }
 
   section.space-y-6 > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Dashboard : sections annexes */
+  .usecase-annex-section {
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
+    padding-top: 0.6cm !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+  
+  /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
+  .usecase-annex-section > *:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
@@ -150,7 +169,7 @@
     background: white !important;
     border: 2pt solid white !important;
     border-radius: 8pt !important;
-    padding: 0.6cm !important; /* Padding réduit pour maximiser l'espace */
+    padding: 0.4cm !important; /* Padding réduit pour maximiser l'espace */
     /* Commence au tiers de fin de page (66.67%) et s'arrête à 3cm du bas */
     top: 66.67% !important;
     bottom: 3cm !important;
@@ -196,6 +215,227 @@
   .report-main-content {
     page: auto;
   }
+  
+  /* Annuler le padding horizontal de la section parente pour les annexes */
+  .report-main-content > .usecase-annex-section {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Masquer le titre du dashboard en impression */
+  .report-main-content > div:first-child {
+    display: none !important;
+  }
+
+  /* Cartes de statistiques en 2 colonnes avec polices plus petites */
+  .report-main-content .grid.gap-4.md\:grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5cm !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Styles pour les cartes de statistiques */
+  .report-main-content .grid.gap-4.md\:grid-cols-2 > .rounded-lg {
+    padding: 0.4cm !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-sm {
+    font-size: 9pt !important; /* Augmenté de 7pt à 9pt pour les titres des cartes */
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-2xl {
+    font-size: 14pt !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-xs {
+    font-size: 6pt !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 svg {
+    width: 0.84cm !important; /* Réduit de 30% : 1.2cm * 0.7 = 0.84cm */
+    height: 0.84cm !important;
+  }
+
+  /* Graphique scatter plot - retirer le cadre et réduire à 70% */
+  .report-main-content .report-scatter-plot-container {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0.5cm auto !important;
+    width: 70% !important;
+    max-width: 70% !important;
+  }
+
+  /* Retirer le cadre du conteneur interne du graphique */
+  .report-main-content .report-scatter-plot-container .relative.w-full.aspect-square {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Masquer le bouton de configuration en impression */
+  .report-main-content .report-scatter-plot-container .absolute.top-4.right-4 {
+    display: none !important;
+  }
+
+  /* Centrer le contenu du graphique */
+  .report-main-content .report-scatter-plot-container > .flex.justify-center {
+    width: 100% !important;
+  }
+
+  /* Masquer "Cliquez sur un point" en impression */
+  .scatter-plot-click-hint {
+    display: none !important;
+  }
+
+  /* Section fusionnée : stats + matrice + introduction */
+  .report-main-content .report-introduction {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    page-break-after: always !important; /* Saut de page après cette section */
+    page-break-inside: avoid !important; /* Évite de couper la section en deux */
+  }
+
+  /* Les cartes de statistiques */
+  .report-main-content .report-introduction > .grid.gap-4.md\:grid-cols-2 {
+    margin-top: 0 !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Le graphique scatter plot */
+  .report-main-content .report-introduction > .report-scatter-plot-container {
+    margin-top: 0.5cm !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Garder un trait sous le titre de l'introduction */
+  .report-main-content .report-introduction #section-introduction .border-b {
+    border-bottom: 0.1pt solid #cbd5e1 !important; /* Trait 0.1pt gris clair */
+    padding-bottom: 0 !important;
+    margin-bottom: 0.3cm !important;
+  }
+
+  /* Réduire la taille des titres h2 dans le rapport principal */
+  .report-main-content h2 {
+    font-size: 14pt !important; /* Réduit de 24pt (text-2xl) à 14pt */
+  }
+
+  /* Réduire aussi les h2 dans le texte (prose) */
+  .report-main-content .prose h2 {
+    font-size: 14pt !important;
+  }
+
+  /* Sommaire - page 3 */
+  .report-table-of-contents {
+    display: block !important; /* Visible en impression */
+    /* Pas de page-break-before car l'introduction a déjà page-break-after */
+    page-break-after: always !important; /* Saut de page après le sommaire */
+  }
+
+  .report-table-of-contents h2 {
+    font-size: 18pt !important;
+    margin-bottom: 1cm !important;
+  }
+
+  .report-table-of-contents ul {
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .report-table-of-contents li {
+    display: flex !important;
+    align-items: baseline !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    gap: 0.3cm !important;
+  }
+
+  .report-table-of-contents .toc-item {
+    display: flex !important;
+    align-items: baseline !important;
+  }
+
+  .report-table-of-contents .toc-item-nested {
+    padding-left: 1cm !important;
+  }
+
+  .report-table-of-contents .toc-title {
+    flex-shrink: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  .report-table-of-contents .toc-link {
+    color: #2563eb !important;
+    text-decoration: underline !important;
+    cursor: pointer !important;
+  }
+
+  .report-table-of-contents .toc-link:hover {
+    color: #1d4ed8 !important;
+  }
+
+  @media print {
+    /* Les liens doivent être cliquables en impression PDF */
+    .report-table-of-contents .toc-link {
+      color: #2563eb !important;
+      text-decoration: underline !important;
+    }
+  }
+
+  .report-table-of-contents .toc-dots {
+    flex: 1 !important;
+    border-bottom: 0.5pt dotted #cbd5e1 !important;
+    height: 1em !important;
+    min-width: 0.5cm !important;
+  }
+
+  .report-table-of-contents .toc-page {
+    flex-shrink: 0 !important;
+    font-size: 11pt !important;
+    color: #475569 !important;
+    margin-left: 0.3cm !important;
+  }
+
+  /* Styles pour l'analyse et recommandation - retirer le cadre mais garder le trait */
+  .report-main-content .report-analyse {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Saut de page uniquement après l'analyse */
+  .report-main-content .report-analyse-with-break {
+    page-break-after: always !important;
+  }
+
+  /* Garder un trait sous le titre de l'analyse et recommandation */
+  .report-main-content .report-analyse .border-b {
+    border-bottom: 0.1pt solid #cbd5e1 !important; /* Trait 0.1pt gris clair */
+    padding-bottom: 0 !important;
+    margin-bottom: 0.3cm !important;
+  }
+
+  /* Réduire la taille des h2 dans le contenu de l'analyse et recommandation */
+  .report-main-content .report-analyse .prose h2 {
+    font-size: 12pt !important; /* Réduit de 14pt à 12pt */
+  }
+
+  /* La deuxième page de garde (annexe) doit avoir un page-break-before */
+  .report-cover-page + .report-main-content ~ .report-cover-page,
+  .report-main-content ~ .report-cover-page {
+    page-break-before: always !important;
+  }
 
   /* Use case specific styles - FORCE 1 PAGE */
   .usecase-print {
@@ -205,9 +445,59 @@
     padding-top: 0 !important;
     margin: 0 !important;
     margin-top: 0 !important;
-    /* Remove height restriction to allow all content */
-    /* Pour les annexes avec marges 0.6cm : 100vh - 1.2cm (haut + bas) */
+    /* Force une hauteur minimale d'une page pour que le footer soit en bas */
+    /* A4 (29.7cm) - Marges Page (1.2cm) - Padding Section (1.2cm) = 27.3cm */
     min-height: calc(100vh - 1.2cm) !important;
+    position: relative;
+    background-color: transparent !important;
+    background: transparent !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+  
+  /* Image footer.jpg en bas de page, collée bord à bord (marges de page à 0) */
+  /* Utiliser position absolute pour que l'image n'apparaisse que sur les pages avec usecase-print */
+  /* Sortir des marges du conteneur parent (padding 0.6cm) pour aller au bord de la page */
+  .usecase-print::before {
+    content: '';
+    position: absolute; /* Position absolute pour être relatif au conteneur usecase-print */
+    bottom: -0.6cm; /* Sortir de la marge basse du conteneur parent */
+    left: -0.6cm; /* Sortir de la marge gauche du conteneur parent */
+    right: -0.6cm; /* Sortir de la marge droite du conteneur parent */
+    width: calc(100% + 1.2cm); /* Largeur = conteneur + marges gauche et droite */
+    height: auto;
+    min-height: 8cm; /* Hauteur minimale pour l'image */
+    background-image: url('/footer.jpg');
+    background-size: 100% auto;
+    background-position: center bottom 0cm !important;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    /* Force l'affichage en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
+  /* Dans les sections annexes, l'image doit sortir complètement du padding-bottom de 0.6cm de la section */
+  /* L'image doit sortir de .usecase-print (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -1.2cm */
+  .usecase-annex-section > .usecase-print::before {
+    bottom: -1.2cm !important; /* Sortir complètement du padding-bottom de la section annexe */
+  }
+  
+  
+  
+  
+  /* S'assurer que le contenu est au-dessus de l'image et du gradient */
+  .usecase-print > * {
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Dans les annexes du dashboard, ne pas forcer page-break-after car la section gère les sauts de page */
+  .usecase-annex-section > .usecase-print {
+    page-break-after: auto !important;
   }
   
   /* Force display of ALL elements in use case print - override everything */
@@ -289,13 +579,17 @@
     page-break-inside: avoid;
   }
 
-  /* Cards and boxes - COMPACT - Retirer toutes les bordures */
+  /* Cards and boxes - COMPACT - Retirer toutes les bordures et rendre transparent */
   .usecase-print .rounded-lg,
   .usecase-print .border,
   .usecase-print .shadow-sm,
-  .usecase-print [class*="border-"] {
+  .usecase-print [class*="border-"],
+  .usecase-print [class*="bg-white"],
+  .usecase-print [class*="bg-slate"] {
     border: none !important; /* Retirer toutes les bordures des cartes */
     box-shadow: none !important;
+    background-color: transparent !important; /* Rendre transparent pour voir l'image de fond */
+    background: transparent !important;
     page-break-inside: avoid;
     margin-top: 0 !important; /* Marge haute à 0 */
     margin-bottom: 0 !important; /* Marge basse à 0 */
@@ -329,7 +623,7 @@
     padding-top: 0 !important;
   }
 
-  /* Remove card headers padding */
+  /* Remove card headers padding et rendre transparent */
   .usecase-print .rounded-t-lg {
     margin: -6pt -6pt 4pt -6pt !important;
     padding: 4pt 6pt !important;
@@ -337,6 +631,8 @@
     border-left: none !important;
     border-right: none !important;
     border-bottom: 0.1px solid #6b7280 !important; /* Ligne de séparation entre titre et contenu pour TOUTES les cartes */
+    background-color: transparent !important;
+    background: transparent !important;
   }
 
   /* Forcer le border-bottom sur les headers même s'ils ont la classe border-b */
@@ -525,11 +821,15 @@
 
   /* Compact score cards headers - keep but make minimal (for value/complexity axes) */
   .usecase-print .bg-green-100,
-  .usecase-print .bg-red-100 {
+  .usecase-print .bg-red-100,
+  .usecase-print .bg-blue-100,
+  .usecase-print .bg-purple-100 {
     padding: 1pt 3pt !important;
     font-size: 7pt !important;
     font-weight: 600;
     display: block !important;
+    background-color: transparent !important;
+    background: transparent !important;
   }
 
   /* Make score cards more compact */
@@ -706,8 +1006,10 @@
   }
 
   /* Force display of matrix details section */
-  .usecase-print .grid.md\:grid-cols-2 {
+  /* EXCLURE layout-bottom pour éviter les conflits */
+  .usecase-print .grid.md\:grid-cols-2:not(.layout-bottom) {
     display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
   }
 
   /* Compact references section */
@@ -729,8 +1031,8 @@
     text-decoration: none !important; /* Ne pas souligner les liens */
   }
 
-  /* Optimize three-column layout for better space usage - EXCLUDE layout-head and layout-main */
-  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main) {
+  /* Optimize three-column layout for better space usage - EXCLUDE layout-head, layout-main, and layout-bottom */
+  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main):not(.layout-bottom) {
     display: grid !important;
     grid-template-columns: 1.2fr 1fr 0.8fr !important;
     gap: 4pt !important;
@@ -738,7 +1040,8 @@
   }
 
   /* Make matrix details (value/complexity axes) more compact */
-  .usecase-print .md\:grid-cols-2 {
+  /* EXCLURE layout-bottom de cette règle générale pour éviter les conflits */
+  .usecase-print .md\:grid-cols-2:not(.layout-bottom) {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 4pt !important;
@@ -1073,13 +1376,51 @@
     padding-bottom: 0 !important;
   }
 
-  /* Layout bottom (matrice détaillée) */
-  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6 {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 0 !important; /* Annuler gap entre cartes */
+  /* Layout bottom (matrice détaillée) - FORCER 50/50 avec flexbox */
+  /* Utiliser flexbox au lieu de grid pour éviter les problèmes de preview */
+  /* PLACER CETTE RÈGLE EN DERNIER pour override toutes les autres règles */
+  /* RÈGLES GLOBALES POUR LAYOUT-BOTTOM - S'appliquent en impression et preview */
+  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .usecase-print .layout-bottom.grid.gap-6,
+  .usecase-print div.layout-bottom.md\:grid-cols-2,
+  .usecase-print div.layout-bottom,
+  .usecase-print .layout-bottom[class*="grid"],
+  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
+  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"],
+  div.usecase-print div.layout-bottom.md\:grid-cols-2.grid.gap-6,
+  div.usecase-print div.layout-bottom.grid.gap-6 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0 !important;
     margin-bottom: 0 !important;
     margin-top: -4pt !important;
+  }
+  
+  /* Forcer chaque enfant à prendre exactement 50% de la largeur */
+  .usecase-print .layout-bottom > *,
+  div.usecase-print div.layout-bottom > * {
+    width: 50% !important;
+    max-width: 50% !important;
+    flex: 0 0 50% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* S'assurer qu'aucune règle lg:grid-cols-3 ne s'applique à layout-bottom */
+  .usecase-print .layout-bottom.lg\:grid-cols-3,
+  .usecase-print .layout-bottom[class*="lg:grid-cols-3"],
+  div.usecase-print div.layout-bottom.lg\:grid-cols-3 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
+  
+  /* S'assurer qu'aucune classe Tailwind ne modifie la largeur */
+  .usecase-print .layout-bottom > *[class*="col-span"],
+  .usecase-print .layout-bottom > *[class*="lg:col-span"],
+  .usecase-print .layout-bottom > *[class*="md:col-span"],
+  div.usecase-print div.layout-bottom > *[class*="col-span"] {
+    width: 50% !important;
+    max-width: 50% !important;
+    flex: 0 0 50% !important;
   }
 
   /* Description prend toute la colonne A (première colonne de 2fr) */
@@ -1262,17 +1603,151 @@
 
 }
 
+/* Règles pour forcer layout-bottom 50/50 même en preview d'impression */
+/* Ces règles s'appliquent aussi en mode preview, pas seulement en @media print */
+/* Utiliser @media print uniquement car c'est ce qui s'applique en preview */
+@media print {
+  /* Règle très spécifique pour override toutes les règles Tailwind en preview */
+  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .usecase-print .layout-bottom.grid.gap-6,
+  .usecase-print div.layout-bottom.md\:grid-cols-2,
+  .usecase-print div.layout-bottom,
+  .usecase-print .layout-bottom[class*="grid"],
+  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
+  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"] {
+    grid-template-columns: 1fr 1fr !important;
+    display: grid !important;
+  }
+  
+  /* Forcer les enfants directs à ne pas avoir de grid-column spécifique */
+  .usecase-print .layout-bottom > * {
+    grid-column: auto !important;
+  }
+}
+
 /* Use cases in dashboard (visible in print) */
 @media print {
-  .usecase-annex {
+  /* Sections annexes dans le dashboard - structure unifiée avec vue individuelle */
+  .usecase-annex-section {
     display: block !important;
-    page-break-before: always;
+    /* page-break-before: auto; Auto au lieu de always pour éviter les pages blanches */
     page: annex; /* Utiliser les marges réduites pour les annexes */
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marge interne de 0.6cm pour le contenu */
+    margin-top: 0 !important;
+    padding-top: 0.6cm !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important;
+  }
+  
+  /* Saut de page après chaque section sauf la dernière */
+  .usecase-annex-section:not(:last-child) {
+    page-break-after: always;
+  }
+
+  /* Le premier cas d'usage doit commencer sur une nouvelle page (après le séparateur qui a page-break-after) */
+  /* Le séparateur force déjà un saut, donc le premier cas commencera naturellement sur une nouvelle page */
+  
+  /* Pour les cas suivants, utiliser orphans pour forcer un saut si nécessaire sans créer de page blanche */
+  .usecase-annex-section:not(:first-of-type) {
+    orphans: 1; /* Force au moins 1 ligne en haut de page */
+    widows: 1; /* Force au moins 1 ligne en bas de page */
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* S'assurer que usecase-print dans les sections annexes n'a pas de marges top */
+  .usecase-annex-section > .usecase-print {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* S'assurer que le premier enfant de la section annexe n'a pas de marges top */
+  .usecase-annex-section > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Annuler les espacements space-y-6 en impression pour les sections annexes */
+  .usecase-annex-section > * + * {
+    margin-top: 0 !important;
+  }
+  
+  /* Dédoublonner space-y-6 : annuler space-y-6 sur usecase-print dans le dashboard */
+  /* Le dashboard a section.space-y-6 + div.space-y-6, la vue individuelle n'a qu'un seul */
+  .usecase-annex-section > .usecase-print.space-y-6 > * + * {
+    margin-top: 0 !important; /* Annuler le space-y-6 redondant */
   }
 
   /* S'assurer que le contenu principal utilise les marges normales */
   .report-main-content {
     page: auto; /* Utilise la page par défaut avec marges 2cm */
+  }
+
+  /* Page cas-usage/[id] : utiliser les mêmes marges réduites que les annexes */
+  /* Cette règle s'applique maintenant aussi aux sections annexes du dashboard */
+  section.space-y-6 > .usecase-print {
+    page: annex; /* Utiliser les marges réduites (0.6cm) comme les annexes */
+  }
+  
+  /* Appliquer les facteurs de réduction pour les sections avec beaucoup d'items */
+  /* Les facteurs sont calculés dans le composant et appliqués via style inline */
+  /* Ces règles CSS assurent que les styles inline sont respectés même avec les classes Tailwind */
+  
+  /* Technologies : base = 7 - Forcer les styles inline */
+  .technologies-content,
+  .technologies-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .technologies-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Sources des données : base = 5 - Forcer les styles inline */
+  .data-sources-content,
+  .data-sources-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .data-sources-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Données : base = 5 - Forcer les styles inline */
+  .data-objects-content,
+  .data-objects-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .data-objects-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Références : base = 8 - Forcer les styles inline */
+  .references-content,
+  .references-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  /* Forcer l'héritage de la taille pour tous les enfants quand le scaling est actif */
+  .references-content > div {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  .references-content > div > span,
+  .references-content > div > a {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  .references-content > div.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
   }
 }
 
