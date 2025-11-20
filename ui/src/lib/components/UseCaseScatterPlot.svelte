@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -17,6 +18,8 @@
 
   let chartContainer: HTMLCanvasElement;
   let chartInstance: Chart | null = null;
+  let isComputingLabels = false;
+  let computeTimeout: ReturnType<typeof setTimeout>;
   
   // Utiliser les seuils passés en props ou les médianes
   $: effectiveValueThreshold = valueThreshold !== null ? valueThreshold : computedMedianValue;
@@ -1495,22 +1498,76 @@
       const medianX = xScale.getPixelForValue(computedMedianComplexity);
       const medianY = yScale.getPixelForValue(computedMedianValue);
       
-        const signature = getLabelSignature(points, chartArea);
-        if (signature !== cachedLabelSignature) {
-          const pluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
-          const scale = pluginOptions.scale ?? 1.0;
-          const labelStandardArea = pluginOptions.labelStandardArea ?? LABEL_STANDARD_AREA;
-          const rawBoxes = buildLabelBoxes(points, chartArea, ctx, scale);
-          const annealed = runLabelAnnealing(rawBoxes, chartArea, points, medianX, medianY, xScale, yScale, labelStandardArea);
-          cachedLabelBoxes = annealed;
-          cachedLabelSignature = signature;
-          // Stocker aussi pour la détection de hover (avec pointIndex)
-          labelBoxesForHover = annealed as Array<LabelBox & { pointIndex?: number }>;
-        } else {
-          // Mettre à jour les boîtes pour le hover même si le cache est valide
-          labelBoxesForHover = cachedLabelBoxes as Array<LabelBox & { pointIndex?: number }>;
+      const signature = getLabelSignature(points, chartArea);
+      
+      if (signature !== cachedLabelSignature) {
+        // Si la signature a changé, on doit recalculer les labels.
+        // Pour ne pas bloquer le rendu initial (points), on lance le calcul de manière asynchrone.
+        
+        if (!isComputingLabels) {
+          isComputingLabels = true;
+          
+          if (computeTimeout) clearTimeout(computeTimeout);
+          
+          // Délai court pour laisser le temps à Chart.js de dessiner les points (layer dataset)
+          computeTimeout = setTimeout(() => {
+            if (!chartInstance) return;
+            
+            try {
+              // Recalculer les options et échelles au moment de l'exécution pour avoir les valeurs les plus fraîches
+              // Attention: chartArea peut avoir changé si resize, mais on utilise celui du scope draw précédent capturé par closure
+              // Idéalement on revérifie si chartArea est toujours cohérent, mais pour l'instant on fait confiance au state.
+              
+              const currentPluginOptions = (chart.options.plugins as any)?.useCaseLabels || {};
+              const currentScale = currentPluginOptions.scale ?? 1.0;
+              const currentLabelStandardArea = currentPluginOptions.labelStandardArea ?? LABEL_STANDARD_AREA;
+              
+              // IMPORTANT: Réappliquer la police scalée au contexte avant de mesurer le texte
+              // Sinon ctx.measureText utilise la police par défaut du canvas (souvent plus grande)
+              // ce qui fausse complètement les calculs de largeur et provoque des sauts de ligne inutiles
+              const labelFontSize = BASE_LABEL_FONT_SIZE * currentScale;
+              const labelFont = `${labelFontSize}px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+              ctx.font = labelFont;
+              
+              // Note: on utilise 'points' et 'chartArea' et 'ctx' de la closure 'beforeDatasetsDraw'
+              // Si le chart a été destroy entre temps, la vérification !chartInstance protège.
+              
+              const rawBoxes = buildLabelBoxes(points, chartArea, ctx, currentScale);
+              const annealed = runLabelAnnealing(
+                rawBoxes, 
+                chartArea, 
+                points, 
+                medianX, 
+                medianY, 
+                xScale, 
+                yScale, 
+                currentLabelStandardArea
+              );
+              
+              cachedLabelBoxes = annealed;
+              cachedLabelSignature = signature;
+              // Stocker aussi pour la détection de hover (avec pointIndex)
+              labelBoxesForHover = annealed as Array<LabelBox & { pointIndex?: number }>;
+              
+              isComputingLabels = false;
+              
+              // Redessiner le graphique pour afficher les labels calculés
+              chart.update('none');
+            } catch (err) {
+              console.error("Erreur lors du calcul des labels:", err);
+              isComputingLabels = false;
+            }
+          }, 50);
         }
+        
+        // En attendant le résultat du calcul, on ne dessine pas les layers de labels.
+        // On restaure le contexte et on arrête ici pour ce plugin.
+        ctx.restore();
+        return;
+      }
 
+      // Si la signature est identique au cache (calcul terminé), on dessine les traits et labels
+      
       // Layer 1: Traits (au-dessus des quadrants, en dessous des labels)
       cachedLabelBoxes.forEach((box) => {
         const anchor = getLabelAnchorPoint(box);
@@ -1702,6 +1759,8 @@
       borderColor: borderColors,
       pointRadius: POINT_RADIUS,
       pointHoverRadius: POINT_RADIUS * 1.6,
+      // Zone de détection plus large pour faciliter le hover sur les points
+      pointHitRadius: 20, 
       pointBorderWidth: 0,
       pointHoverBackgroundColor: borderColors,
       pointHoverBorderColor: borderColors
@@ -1733,6 +1792,11 @@
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
+    interaction: {
+      mode: 'nearest',
+      intersect: true,
+      axis: 'xy'
+    },
     plugins: {
       // Passer les seuils et le scale au plugin via les options
       useCaseLabels: {
@@ -2051,6 +2115,9 @@
   });
 
   onDestroy(() => {
+    // Nettoyer le timeout de calcul
+    if (computeTimeout) clearTimeout(computeTimeout);
+
     // Nettoyer le gestionnaire de hover
     if (chartContainer) {
       chartContainer.removeEventListener('mousemove', handleLabelHover);
@@ -2103,19 +2170,42 @@
     {/if}
   </div>
   
-  <!-- Indication de clic -->
+  <!-- Indication de clic et chargement -->
   <div class="mt-4 flex justify-center scatter-plot-click-hint">
     <div class="flex items-center gap-2 text-slate-500 text-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
-      </svg>
-      <span>Cliquez sur un point pour voir le détail</span>
+      {#if isComputingLabels}
+        <span class="inline-flex items-center gap-1 ml-2" transition:fade={{ duration: 200 }}>
+          Placement des labels en cours
+          <svg class="h-3 w-5 inline-block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 6" fill="currentColor">
+            <circle cx="3" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0s;"></circle>
+            <circle cx="10" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0.2s;"></circle>
+            <circle cx="17" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0.4s;"></circle>
+          </svg>
+        </span>
+      {:else}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+        </svg>
+        <span>
+          Cliquez sur un point pour voir le détail.
+        </span>
+      {/if}
     </div>
   </div>
   
 </div>
 
 <style>
+  /* Animation pour les 3 points de chargement */
+  @keyframes loading-dot-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  
+  .loading-dot {
+    animation: loading-dot-pulse 1.4s ease-in-out infinite;
+  }
+
   /* Style supplémentaire pour le tooltip Chart.js pour correspondre aux labels */
   :global(.chartjs-tooltip) {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;

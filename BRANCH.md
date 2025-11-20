@@ -128,6 +128,11 @@ Transform the dashboard into an executive summary view with improved visualizati
 ### Phase 5: Testing & Validation
 - [x] **Task 5.0**: UAT
   - [x] debug heavy priorisation chart: add weight 2000 to avoid labels to go out of the chart
+  - [x] decorrelate waiting data and simulated annealing: first render chart without labels, then add labels after simulation
+  - [ ] fix tooltip hover on points during label calculation (tentative avec afterLayout hook)
+  - [ ] fix tooltip hover on points during label calculation (tentative avec afterLayout hook)
+  - [ ] debug reg in cover pages (backround image + filter not in the right place)
+  - [ ] add 
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
   - Test executive summary generation endpoint
@@ -224,6 +229,10 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Fonction calculatePageNumbers avec calcul dynamique hauteurs sections
   - Structure impression complète: page de garde, synthèse, sommaire, sections, annexes
   - Affichage numéros de page dans sommaire avec liens vers sections
+- [x] **Commit 18**: Phase 5 - Tentative réorganisation plugin Chart.js pour tooltip hover
+  - Tentative de déplacer le calcul des labels dans `afterLayout` au lieu de `beforeDatasetsDraw`
+  - Objectif: permettre l'interaction (tooltip) sur les points dès le chargement, avant calcul des labels
+  - Note: solution non fonctionnelle, nécessite investigation supplémentaire
 
 ## Status
 - **Progress**: 17/20 tasks completed
