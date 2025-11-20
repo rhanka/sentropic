@@ -130,6 +130,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] debug heavy priorisation chart: add weight 2000 to avoid labels to go out of the chart
   - [x] decorrelate waiting data and simulated annealing: first render chart without labels, then add labels after simulation
   - [x] debug reg in cover pages (backround image + filter not in the right place)
+  - [x] add print button in dashboard
   - [ ] add edit mode (modifier) in dasboard, including api addition path to enable executive report modification
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
@@ -237,9 +238,16 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Retrait du style inline `background-image` du composant Svelte
   - Utilisation de `background-size: cover` pour préserver le ratio d'aspect sans étirement
   - Positionnement correct: marges 2cm haut/bas, image centrée horizontalement, filter appliqué uniquement sur background
+- [x] **Commit 20**: Phase 5 - Add print button in dashboard
+  - Ajout du bouton "Imprimer" dans le header du dashboard (à côté du titre)
+  - Icône SVG d'impression identique à celle utilisée dans les cas d'usage
+  - Bouton visible uniquement si `executiveSummary` existe (pas de rapport sans synthèse)
+  - Classe `print-hidden` pour masquer le bouton en impression
+  - Appel à `window.print()` pour lancer l'impression du rapport
+  - Renommage du texte du bouton de "Exporter en PDF" à "Imprimer" dans cas-usage/[id] pour cohérence
 
 ## Status
-- **Progress**: 18/20 tasks completed
+- **Progress**: 19/20 tasks completed
 - **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 completed, Phase 5 partially completed (Task 5.1 completed)
 - **Next**: Phase 5 - Testing & Validation (E2E tests and manual validation)
 
