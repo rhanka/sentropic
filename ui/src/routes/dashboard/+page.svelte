@@ -586,7 +586,7 @@
 
 <!-- Page de garde (visible uniquement en impression) -->
 {#if selectedFolderId && executiveSummary}
-  <div class="report-cover-page" style="background-image: url('/hero-tech-cover.jpg');">
+  <div class="report-cover-page">
     <div class="report-cover-header">
       <h1 class="report-cover-title">Rapport Top AI Ideas</h1>
       <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
@@ -944,7 +944,7 @@
 
 <!-- Page de séparation pour les annexes (visible uniquement en impression) -->
 {#if selectedFolderId && filteredUseCases.length > 0}
-  <div class="report-cover-page" style="background-image: url('/hero-tech-cover.jpg');">
+  <div class="report-cover-page">
     <div class="report-cover-header">
       <h1 class="report-cover-title">Annexe</h1>
       <h2 class="report-cover-subtitle">Fiches des cas d'usage</h2>

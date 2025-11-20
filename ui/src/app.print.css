@@ -97,17 +97,35 @@
     justify-content: space-between;
     align-items: center;
     background-color: white !important; /* Fond blanc pour les marges */
-    /* background-image défini dans le style inline du composant */
-    background-size: 100% calc(100vh - 4cm) !important; /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
-    background-position: center top 2cm !important; /* Positionné à 2cm du haut, centré horizontalement */
-    background-repeat: no-repeat !important;
-    background-attachment: fixed !important; /* Assure le chargement en impression */
-    /* Filtre pour éclaircir le background bleu (comme sent-tech.ca) */
-    filter: brightness(1.2) saturate(1.1) contrast(0.95) !important;
+    /* Retirer background-image, background-size, background-position et filter du parent */
+    /* Ils sont maintenant gérés par ::after pour éviter les problèmes de timing */
     page-break-after: always;
     page-break-inside: avoid;
     padding: 2cm 0 0 0 !important; /* 2cm de blanc en haut seulement */
     overflow: hidden;
+    /* Force le chargement de l'image en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Background image isolé dans ::after pour garantir le positionnement correct après calculs longs */
+  /* L'image est définie directement ici pour éviter les problèmes de timing avec les styles inline */
+  .report-cover-page::after {
+    content: '';
+    position: absolute;
+    top: 2cm; /* Commence après la marge du haut */
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
+    background-image: url('/hero-tech-cover.jpg') !important; /* Image définie directement dans CSS */
+    background-size: cover !important; /* Couvre toute la zone tout en préservant le ratio d'aspect */
+    background-position: center top !important; /* Centré horizontalement, aligné en haut */
+    background-repeat: no-repeat !important;
+    /* Filtre pour éclaircir le background bleu (comme sent-tech.ca) - appliqué uniquement sur le background */
+    filter: brightness(1.2) saturate(1.1) contrast(0.95) !important;
+    z-index: 0; /* Derrière l'overlay et le contenu */
     /* Force le chargement de l'image en impression */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -124,7 +142,7 @@
     right: 0;
     height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
     background: rgba(255, 255, 255, 0.15); /* Overlay blanc léger pour éclaircir */
-    z-index: 1;
+    z-index: 1; /* Au-dessus du background, en dessous du contenu */
   }
 
   /* Conteneur pour titre et sous-titre positionné à 1/3 de la hauteur */

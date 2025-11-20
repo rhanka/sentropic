@@ -129,10 +129,8 @@ Transform the dashboard into an executive summary view with improved visualizati
 - [x] **Task 5.0**: UAT
   - [x] debug heavy priorisation chart: add weight 2000 to avoid labels to go out of the chart
   - [x] decorrelate waiting data and simulated annealing: first render chart without labels, then add labels after simulation
-  - [ ] fix tooltip hover on points during label calculation (tentative avec afterLayout hook)
-  - [ ] fix tooltip hover on points during label calculation (tentative avec afterLayout hook)
-  - [ ] debug reg in cover pages (backround image + filter not in the right place)
-  - [ ] add 
+  - [x] debug reg in cover pages (backround image + filter not in the right place)
+  - [ ] add edit mode (modifier) in dasboard, including api addition path to enable executive report modification
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
   - Test executive summary generation endpoint
@@ -233,9 +231,15 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Tentative de déplacer le calcul des labels dans `afterLayout` au lieu de `beforeDatasetsDraw`
   - Objectif: permettre l'interaction (tooltip) sur les points dès le chargement, avant calcul des labels
   - Note: solution non fonctionnelle, nécessite investigation supplémentaire
+- [x] **Commit 19**: Phase 5 - Fix cover page background image and filter positioning
+  - Isolation du background image et du filter dans un pseudo-élément `::after` dédié
+  - Correction du problème de positionnement après calculs longs (labels) - plus besoin de Ctrl+Shift+R
+  - Retrait du style inline `background-image` du composant Svelte
+  - Utilisation de `background-size: cover` pour préserver le ratio d'aspect sans étirement
+  - Positionnement correct: marges 2cm haut/bas, image centrée horizontalement, filter appliqué uniquement sur background
 
 ## Status
-- **Progress**: 17/20 tasks completed
+- **Progress**: 18/20 tasks completed
 - **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 completed, Phase 5 partially completed (Task 5.1 completed)
 - **Next**: Phase 5 - Testing & Validation (E2E tests and manual validation)
 
