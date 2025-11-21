@@ -131,6 +131,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] decorrelate waiting data and simulated annealing: first render chart without labels, then add labels after simulation
   - [x] debug reg in cover pages (backround image + filter not in the right place)
   - [x] add print button in dashboard
+  - [x] bug -0.6cm in usecase printed in annex after 1st use case
   - [ ] add edit mode (modifier) in dasboard, including api addition path to enable executive report modification
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
@@ -245,6 +246,10 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Classe `print-hidden` pour masquer le bouton en impression
   - Appel à `window.print()` pour lancer l'impression du rapport
   - Renommage du texte du bouton de "Exporter en PDF" à "Imprimer" dans cas-usage/[id] pour cohérence
+- [x] **Commit 21**: Phase 5 - Fix annex print layout (footer overflow and missing top margin)
+  - Correction du positionnement du footer dans les annexes du dashboard : `bottom: -0.6cm` (aligné sur vue individuelle) au lieu de `-1.2cm` (incorrect)
+  - Correction de la disparition de la marge haute après saut de page : remplacement de `padding-top` par `border-top` (transparent)
+  - Résolution du débordement de 0.6cm sur la page suivante et du contenu collé en haut de page
 
 ## Status
 - **Progress**: 19/20 tasks completed

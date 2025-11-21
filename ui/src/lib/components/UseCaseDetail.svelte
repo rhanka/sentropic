@@ -59,6 +59,12 @@
       )
     : '';
 
+  // Détecter si la description est longue (plus de 200 caractères ou plus de 12 lignes)
+  $: isDescriptionLong = useCase?.description 
+    ? (useCase.description.length > 200 || useCase.description.split('\n').length > 12)
+    : false;
+
+  $: console.log('isDescriptionLong', isDescriptionLong, useCase?.description.length);
   // Fonctions réactives pour parser les autres champs
   $: parsedBenefits = useCase?.benefits 
     ? (useCase.benefits || []).map((benefit: string) => parseReferencesInText(benefit, useCase.references || []))
@@ -288,7 +294,7 @@
               ></textarea>
             </div>
           {:else}
-            <div class="text-slate-600 text-base leading-relaxed prose max-w-none">
+            <div class="text-slate-600 text-base leading-relaxed prose max-w-none {isDescriptionLong ? 'description-compact-print' : ''}">
               {@html descriptionHtml || ''}
             </div>
           {/if}

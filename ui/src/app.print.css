@@ -68,9 +68,25 @@
   .usecase-annex-section {
     margin: 0 !important;
     padding: 0.6cm !important; /* Marges reportées depuis @page annex */
-    padding-top: 0.6cm !important;
+    /* Par défaut (fiches 2+), utiliser border-top pour éviter la suppression après saut de page */
+    padding-top: 0 !important;
+    border-top: 0.6cm solid transparent !important;
     padding-bottom: 0.6cm !important;
     overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+
+  /* Exception pour la 1ère fiche : Revenir au padding-top car border-top crée un décalage, 
+     et le padding est respecté en début de flux */
+  .usecase-annex-section:first-of-type {
+    border-top: none !important;
+    padding-top: 0.6cm !important;
+  }
+
+  /* Exception pour la dernière fiche : éviter saut de page inutile */
+  .usecase-annex-section:last-of-type,
+  .usecase-annex-section:last-of-type > .usecase-print {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   
   /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
@@ -499,9 +515,10 @@
   }
   
   /* Dans les sections annexes, l'image doit sortir complètement du padding-bottom de 0.6cm de la section */
-  /* L'image doit sortir de .usecase-print (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -1.2cm */
+  /* L'image doit sortir de .usecase-print (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -0.6cm */
+  /* Correction: -1.2cm était incorrect (double compensation). -0.6cm suffit. */
   .usecase-annex-section > .usecase-print::before {
-    bottom: -1.2cm !important; /* Sortir complètement du padding-bottom de la section annexe */
+    bottom: -0.6cm !important; /* Sortir du padding-bottom de la section annexe */
   }
   
   
@@ -873,9 +890,9 @@
   }
 
   /* Taille réduite pour les textes dans les box (hors description) */
-  .usecase-print .rounded-lg .text-slate-600,
-  .usecase-print .border .text-slate-600,
-  .usecase-print .shadow-sm .text-slate-600 {
+  .usecase-print .rounded-lg .text-slate-600:not(.prose),
+  .usecase-print .border .text-slate-600:not(.prose),
+  .usecase-print .shadow-sm .text-slate-600:not(.prose) {
     font-size: 6.5pt !important;
   }
 
@@ -899,12 +916,39 @@
     line-height: 1.25 !important;
   }
 
+  /* Réduire la taille de police pour les descriptions longues en mode impression */
+  .usecase-print .prose.description-compact-print,
+  .usecase-print div.prose.description-compact-print,
+  div.usecase-print .prose.description-compact-print,
+  .usecase-print .text-slate-600.prose.description-compact-print {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Réduire la taille de police des paragraphes dans les descriptions longues */
+  .usecase-print .prose.description-compact-print p,
+  .usecase-print div.prose.description-compact-print p,
+  div.usecase-print .prose.description-compact-print p,
+  .usecase-print .text-slate-600.prose.description-compact-print p {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
   .usecase-print .prose p {
     margin-bottom: 4pt !important;
   }
 
   .usecase-print .prose p:last-child {
     margin-bottom: 0 !important;
+  }
+
+  /* Éviter les sauts de ligne supplémentaires après les liens de référence inline */
+  .usecase-print .prose a,
+  .usecase-print .prose p a {
+    display: inline !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* Force two-column layout for scores section (détails axes) - EXCLUDE layout-head and layout-main */
