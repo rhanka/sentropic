@@ -233,20 +233,20 @@
     </div>
   {/if}
   
-  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+  <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
     {#each $useCasesStore as useCase}
       {@const isDetailing = useCase.status === 'detailing'}
       {@const isDraft = useCase.status === 'draft'}
       {@const isGenerating = useCase.status === 'generating'}
-      <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
+      <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
                on:click={() => !(isDetailing || isGenerating) && goto(`/cas-usage/${useCase.id}`)}>
         <!-- Header -->
-        <div class="flex justify-between items-start p-4 pb-2 border-b border-slate-100">
+        <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-blue-200 bg-blue-50 gap-2 rounded-t-lg">
           <div class="flex-1 min-w-0">
-            <h2 class="text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'group-hover:text-blue-600 transition-colors'}">{useCase.name}</h2>
+            <h2 class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}">{useCase.name}</h2>
           </div>
           <button 
-            class="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
             on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
             title="Supprimer"
           >
@@ -257,47 +257,51 @@
         </div>
         
         <!-- Body -->
-        <div class="p-4 pt-2 flex-1">
+        <div class="p-3 sm:p-4 pt-2 flex-1 min-h-0">
           {#if useCase.description}
             <p class="text-sm text-slate-600 line-clamp-2 mb-3">{useCase.description}</p>
           {/if}
-          <div class="flex gap-4 text-sm text-slate-500 items-center">
-            <div class="flex items-center gap-1">
-              <span>Valeur:</span>
+          <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
+            <div class="flex items-center gap-1 flex-wrap">
+              <span class="whitespace-nowrap">Valeur:</span>
               {#if matrix && useCase.valueScores && useCase.complexityScores}
                 {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
                 {@const valueStars = calculatedScores.valueStars}
-                {#each Array(5) as _, i}
-                  {#if i < valueStars}
-                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                    </svg>
-                  {:else}
-                    <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                    </svg>
-                  {/if}
-                {/each}
+                <div class="flex items-center gap-0.5">
+                  {#each Array(5) as _, i}
+                    {#if i < valueStars}
+                      <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    {:else}
+                      <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    {/if}
+                  {/each}
+                </div>
               {:else}
                 <span class="text-gray-400">N/A</span>
               {/if}
             </div>
-            <div class="flex items-center gap-1">
-              <span>Complexité:</span>
+            <div class="flex items-center gap-1 flex-wrap">
+              <span class="whitespace-nowrap">Complexité:</span>
               {#if matrix && useCase.valueScores && useCase.complexityScores}
                 {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
                 {@const complexityStars = calculatedScores.complexityStars}
-                {#each Array(5) as _, i}
-                  {#if i < complexityStars}
-                    <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                  {:else}
-                    <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
-                    </svg>
-                  {/if}
-                {/each}
+                <div class="flex items-center gap-0.5">
+                  {#each Array(5) as _, i}
+                    {#if i < complexityStars}
+                      <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    {:else}
+                      <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                      </svg>
+                    {/if}
+                  {/each}
+                </div>
               {:else}
                 <span class="text-gray-400">N/A</span>
               {/if}
@@ -306,8 +310,8 @@
         </div>
         
         <!-- Footer -->
-        <div class="px-4 pb-4 pt-2 flex items-center justify-between border-t border-slate-100">
-          <span class="text-xs text-slate-400">
+        <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
+          <span class="text-xs text-slate-400 whitespace-nowrap">
             {#if isDetailing}
               Détail en cours...
             {:else if isGenerating}
@@ -318,28 +322,28 @@
               Cliquez pour voir les détails
             {/if}
           </span>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             {#if useCase.model}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
                 {useCase.model}
               </span>
             {/if}
             {#if isDetailing}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                <svg class="w-3 h-3 mr-1 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
                 Détail en cours
               </span>
             {:else if isGenerating}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                <svg class="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                <svg class="w-3 h-3 mr-1 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
                 Génération...
               </span>
             {:else if isDraft}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
                 Brouillon
               </span>
             {/if}

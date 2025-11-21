@@ -137,13 +137,16 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] Introduction (dans dashboard) devrait avoir un style de carte (en mode non impression), comme synthèse exécutive, analyse et recommandation
   - [x] Reduit les espacement entre paragraphes, li, et titres pour faire tenir chacune des section Analyses et Reco en une page
   - [x] Fix on ne voit plus les numero de page des cas d'usage en annexe - simplifie le calcul des pages, maintenant il est statique (1 page par cas, une page pour annexe reco ref)
-  - [ ] add edit mode in dasboard, including api addition path to enable executive report modification using EditableInput in markdown mode - commence par proposer un plan
+  - [x] fix responsiveness of usecase cards
+  - [x] propagate usage of usecase cards to dossier and enterprise
+  - [ ] add edit mode in dashboard
+    - [ ] including api addition path to enable executive report modification
+    - [ ] Dahsboard UI (synthese executive, introduction, analyse, recommandation) relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
+    - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields 
   - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
-  - [ ] fix responsiveness ofusecase cards
-  - [ ] propagate usage of usecase cards to dossier and enterprise
 
-- [x] **Task 5.1**: Update unit tests for new API endpoint
-  - Test executive summary generation endpoint
+- [ ] **Task 5.1**: Update unit tests for new API endpoints
+  - Test executive summary generation and update endpoint
   - Test error handling
   - Test with various folder/company combinations
   - Test automatic generation trigger
