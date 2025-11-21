@@ -1,3 +1,26 @@
+/* Print-specific overrides for layout */
+@media print {
+  /* Reset layout wrapper styles */
+  .min-h-screen {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  main.mx-auto.max-w-7xl.px-4.py-8 {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  /* Cacher les composants utilitaires qui pourraient créer des pages blanches */
+  .toast-container, 
+  .navigation-guard,
+  .queue-monitor {
+    display: none !important;
+  }
+}
+
 /* Print styles for Dashboard and Use Case views */
 
 @media print {
@@ -85,8 +108,8 @@
   /* Exception pour la dernière fiche : éviter saut de page inutile */
   .usecase-annex-section:last-of-type,
   .usecase-annex-section:last-of-type > .usecase-print {
-    page-break-after: auto !important;
-    break-after: auto !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
   
   /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
@@ -115,8 +138,6 @@
     background-color: white !important; /* Fond blanc pour les marges */
     /* Retirer background-image, background-size, background-position et filter du parent */
     /* Ils sont maintenant gérés par ::after pour éviter les problèmes de timing */
-    page-break-after: always;
-    page-break-inside: avoid;
     padding: 2cm 0 0 0 !important; /* 2cm de blanc en haut seulement */
     overflow: hidden;
     /* Force le chargement de l'image en impression */
@@ -204,16 +225,12 @@
     border-radius: 8pt !important;
     padding: 0.4cm !important; /* Padding réduit pour maximiser l'espace */
     /* Commence au tiers de fin de page (66.67%) et s'arrête à 3cm du bas */
-    top: 66.67% !important;
-    bottom: 3cm !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important; /* Centre horizontalement */
+    bottom: 4cm !important;
     overflow: hidden !important; /* Pas de scroll, cache le débordement */
     text-align: left !important;
     box-shadow: 0 4pt 12pt rgba(0, 0, 0, 0.3) !important;
     display: flex !important;
     flex-direction: column !important;
-    height: calc(100vh - 66.67vh - 3cm) !important; /* Hauteur fixe = de 66.67% jusqu'à 3cm du bas */
     max-height: calc(100vh - 66.67vh - 3cm) !important;
   }
 
@@ -228,8 +245,8 @@
   }
 
   .report-cover-summary .prose {
-    font-size: 8pt !important; /* Taille initiale, sera ajustée par JS */
-    line-height: 1.4 !important; /* Line-height réduit pour économiser l'espace */
+    font-size: 8pt; /* Taille initiale, sera ajustée par JS - PAS de !important pour permettre l'ajustement dynamique */
+    line-height: 1.4; /* Line-height réduit pour économiser l'espace - PAS de !important pour permettre l'ajustement dynamique */
     color: #334155 !important;
     overflow: hidden !important; /* Pas de scroll */
     flex: 1 1 auto !important; /* Prend l'espace disponible */
@@ -239,7 +256,7 @@
   }
 
   .report-cover-summary .prose p {
-    margin-bottom: 0.15cm !important; /* Marge réduite entre paragraphes */
+    margin-bottom: 0.15cm; /* Marge réduite entre paragraphes - PAS de !important pour permettre l'ajustement dynamique par JS */
     margin-top: 0 !important;
     flex-shrink: 1 !important; /* Peut rétrécir si nécessaire */
   }
@@ -464,15 +481,10 @@
     font-size: 12pt !important; /* Réduit de 14pt à 12pt */
   }
 
-  /* La deuxième page de garde (annexe) doit avoir un page-break-before */
-  .report-cover-page + .report-main-content ~ .report-cover-page,
-  .report-main-content ~ .report-cover-page {
-    page-break-before: always !important;
-  }
+
 
   /* Use case specific styles - FORCE 1 PAGE */
   .usecase-print {
-    page-break-after: always;
     max-width: 100% !important;
     padding: 0 !important;
     padding-top: 0 !important;
@@ -480,7 +492,7 @@
     margin-top: 0 !important;
     /* Force une hauteur minimale d'une page pour que le footer soit en bas */
     /* A4 (29.7cm) - Marges Page (1.2cm) - Padding Section (1.2cm) = 27.3cm */
-    min-height: calc(100vh - 1.2cm) !important;
+    height: calc(100vh - 1.2cm) !important;
     position: relative;
     background-color: transparent !important;
     background: transparent !important;
@@ -529,11 +541,7 @@
     z-index: 1;
   }
   
-  /* Dans les annexes du dashboard, ne pas forcer page-break-after car la section gère les sauts de page */
-  .usecase-annex-section > .usecase-print {
-    page-break-after: auto !important;
-  }
-  
+
   /* Force display of ALL elements in use case print - override everything */
   .usecase-print * {
     visibility: visible !important;
@@ -556,10 +564,6 @@
   .usecase-print .grid,
   .usecase-print [class*="grid"] {
     display: grid !important;
-  }
-
-  .usecase-print:last-child {
-    page-break-after: auto;
   }
 
   /* Headers and titles - COMPACT */

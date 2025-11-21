@@ -965,10 +965,10 @@
 {/if}
 
 <!-- Section Annexes (tous les usecases du dossier) -->
-<section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
+<section>
   {#if selectedFolderId && filteredUseCases.length > 0}
         {#each filteredUseCases as useCase (useCase.id)}
-        <section id="usecase-{useCase.id}" class="space-y-6 usecase-annex-section" data-usecase-id={useCase.id} data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
+        <section id="usecase-{useCase.id}" class="space-y-6" data-usecase-id={useCase.id} data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
@@ -979,5 +979,30 @@
             />
         </section>
         {/each}
-  {/if}
+    {/if}
 </section>
+
+
+<!-- Back cover -->
+<div class="report-cover-page">
+  <div class="report-cover-header">
+    <h1 class="report-cover-title">Top AI Ideas</h1>
+    <h2 class="report-cover-subtitle">Priorisez vos innovations par l'apport de valeur</h2>
+  </div>
+  <div class="report-cover-summary">
+    <h3>À Propos</h3>
+    <div class="prose prose-slate max-w-none">
+      <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+        <p>
+          Top AI Ideas s’inscrit dans la vision de SENT-tech : plus de vingt ans d’expertise en innovation, données, digital et intelligence artificielle. Ici, l’IA n’est jamais une finalité, mais un levier devenu indispensable à la compétitivité.
+        </p>
+        <p>
+          La valeur naît d’une approche holistique, où les opportunités d’affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.
+        </p>
+        <p>
+          Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

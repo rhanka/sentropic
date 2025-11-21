@@ -132,6 +132,7 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] debug reg in cover pages (backround image + filter not in the right place)
   - [x] add print button in dashboard
   - [x] bug -0.6cm in usecase printed in annex after 1st use case
+  - [x] add back cover page
   - [ ] add edit mode (modifier) in dasboard, including api addition path to enable executive report modification
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
@@ -250,6 +251,12 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Correction du positionnement du footer dans les annexes du dashboard : `bottom: -0.6cm` (aligné sur vue individuelle) au lieu de `-1.2cm` (incorrect)
   - Correction de la disparition de la marge haute après saut de page : remplacement de `padding-top` par `border-top` (transparent)
   - Résolution du débordement de 0.6cm sur la page suivante et du contenu collé en haut de page
+- [x] **Commit 22**: Phase 5 - Simplification CSS et résolution page blanche après back cover
+  - Suppression des règles CSS redondantes et surcharges inutiles
+  - Simplification du positionnement de la back cover : utilisation de `bottom: 4cm` au lieu de `top` avec transform
+  - Retrait des `!important` bloquant l'ajustement dynamique de la taille de police du sommaire exécutif
+  - Correction définitive du problème de page blanche après la back cover
+  - Simplification des règles `page-break` pour les annexes (remplacement de `auto` par `avoid` pour la dernière section)
 
 ## Status
 - **Progress**: 19/20 tasks completed
