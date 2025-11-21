@@ -133,7 +133,12 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] add print button in dashboard
   - [x] bug -0.6cm in usecase printed in annex after 1st use case
   - [x] add back cover page
-  - [ ] add edit mode (modifier) in dasboard, including api addition path to enable executive report modification
+  - [x] fix bug: don't display usecase in dashboard view in display (non print) mode
+  - [ ] Introduction (dans dashboard) devrait avoir un style de carte (en mode non impression), comme synthèse exécutive, analyse et recommandation
+  - [ ] add edit mode in dasboard, including api addition path to enable executive report modification using EditableInput in markdown mode - commence par proposer un plan
+  - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
+  - [ ] fix responsiveness ofusecase cards
+  - [ ] propagate usage of usecase cards to dossier and enterprise
 
 - [x] **Task 5.1**: Update unit tests for new API endpoint
   - Test executive summary generation endpoint

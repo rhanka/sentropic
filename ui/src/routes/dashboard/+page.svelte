@@ -312,26 +312,12 @@
           pEl.style.setProperty('margin-bottom', `${baseParagraphMargin * scaleFactor}cm`, 'important');
         }
       });
-      // Réduire les marges du titre h3
-      const title = box.querySelector('h3');
-      if (title) {
-        const titleEl = title as HTMLElement;
-        titleEl.style.setProperty('margin-bottom', `${baseTitleMarginBottom * scaleFactor}cm`, 'important');
-        titleEl.style.setProperty('padding-bottom', `${baseTitlePaddingBottom * scaleFactor}cm`, 'important');
-      }
-      // Réduire le padding de la boîte si nécessaire
-      box.style.setProperty('padding', `${baseBoxPadding * scaleFactor}cm`, 'important');
-      return content.scrollHeight > content.clientHeight;
+
     };
     
     // Réduire la taille jusqu'à ce que ça tienne (pas plus agressif : 0.2pt au lieu de 0.1pt)
     while (checkOverflow() && fontSize > minFontSize) {
       fontSize -= 0.2;
-    }
-    
-    // Augmenter la taille si on a de la place
-    while (!checkOverflow() && fontSize < maxFontSize) {
-      fontSize += 0.1;
     }
     
     // Ajuster légèrement vers le bas pour être sûr que ça tienne (marge de sécurité plus grande)
@@ -361,7 +347,7 @@
       titleEl.style.setProperty('padding-bottom', `${baseTitlePaddingBottom * scaleFactor}cm`, 'important');
     }
     // Appliquer le padding réduit à la boîte
-    box.style.setProperty('padding', `${baseBoxPadding * scaleFactor}cm`, 'important');
+    // box.style.setProperty('padding', `${baseBoxPadding * scaleFactor}cm`, 'important');
   };
 
   // Ajuster quand la synthèse change ou au montage
@@ -965,7 +951,7 @@
 {/if}
 
 <!-- Section Annexes (tous les usecases du dossier) -->
-<section>
+<section class="hidden print:block">
   {#if selectedFolderId && filteredUseCases.length > 0}
         {#each filteredUseCases as useCase (useCase.id)}
         <section id="usecase-{useCase.id}" class="space-y-6" data-usecase-id={useCase.id} data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>

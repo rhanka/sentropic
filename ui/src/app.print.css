@@ -214,7 +214,7 @@
     text-shadow: 0 2pt 4pt rgba(0, 0, 0, 0.5) !important;
   }
 
-  /* Synthèse exécutive dans le tiers bas de la page */
+  /* Synthèse exécutive centrée verticalement autour de 16.67% à partir du bas */
   .report-cover-summary {
     position: absolute !important;
     z-index: 2;
@@ -223,30 +223,31 @@
     background: white !important;
     border: 2pt solid white !important;
     border-radius: 8pt !important;
-    padding: 0.4cm !important; /* Padding réduit pour maximiser l'espace */
-    /* Commence au tiers de fin de page (66.67%) et s'arrête à 3cm du bas */
-    bottom: 4cm !important;
+    padding: 0.6cm !important;
+    /* Centré verticalement autour de 16.67% à partir du bas (83.33% du haut) */
+    bottom: calc(16.67% + 3cm) !important;
+    left: 50% !important;
+    transform: translate(-50%, 50%) !important; /* Centre horizontalement et verticalement autour du point */
     overflow: hidden !important; /* Pas de scroll, cache le débordement */
     text-align: left !important;
     box-shadow: 0 4pt 12pt rgba(0, 0, 0, 0.3) !important;
     display: flex !important;
     flex-direction: column !important;
-    max-height: calc(100vh - 66.67vh - 3cm) !important;
+    justify-content: center !important; /* Centre verticalement le contenu (header + texte) dans le bloc */
+    max-height: calc(100vh - 66.33vh - 2cm) !important; /* Limite la hauteur maximale */
   }
 
   .report-cover-summary h3 {
-    font-size: clamp(8pt, 1.2vw, 10pt) !important; /* Taille adaptative avec min/max */
+    font-size: clamp(8.5pt, 1.2vw, 11pt) !important; /* Taille adaptative avec min/max */
     font-weight: 600 !important;
     color: #1e293b !important;
-    margin-bottom: 0.2cm !important; /* Marge réduite */
     border-bottom: 1pt solid #cbd5e1 !important;
     padding-bottom: 0.15cm !important; /* Padding réduit */
     flex-shrink: 0 !important; /* Ne rétrécit pas */
   }
 
   .report-cover-summary .prose {
-    font-size: 8pt; /* Taille initiale, sera ajustée par JS - PAS de !important pour permettre l'ajustement dynamique */
-    line-height: 1.4; /* Line-height réduit pour économiser l'espace - PAS de !important pour permettre l'ajustement dynamique */
+    font-size: 8pt !important;
     color: #334155 !important;
     overflow: hidden !important; /* Pas de scroll */
     flex: 1 1 auto !important; /* Prend l'espace disponible */
