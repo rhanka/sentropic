@@ -111,6 +111,12 @@
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
+
+  /* Forcer un saut de page avant le 24ème cas d'usage */
+  .usecase-annex-section.force-page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
   
   /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
   .usecase-annex-section > *:first-child {
@@ -480,9 +486,65 @@
   /* Réduire la taille des h2 dans le contenu de l'analyse et recommandation */
   .report-main-content .report-analyse .prose h2 {
     font-size: 12pt !important; /* Réduit de 14pt à 12pt */
+    margin-top: 0.3cm !important;
+    margin-bottom: 0.2cm !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
   }
 
+  /* Réduire les espacements pour les h3 dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose h3 {
+    font-size: 10pt !important;
+    margin-top: 0.2cm !important;
+    margin-bottom: 0.15cm !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1.2 !important;
+  }
 
+  /* Réduire les espacements entre paragraphes dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose p {
+    margin-top: 0 !important;
+    margin-bottom: 0.15cm !important;
+    padding: 0 !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire les espacements pour les listes dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose ul,
+  .report-main-content .report-analyse .prose ol {
+    margin-top: 0.15cm !important;
+    margin-bottom: 0.15cm !important;
+    padding-left: 0.8cm !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire les espacements entre les éléments de liste */
+  .report-main-content .report-analyse .prose li {
+    margin-top: 0 !important;
+    margin-bottom: 0.08cm !important;
+    padding: 0 !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire l'espacement après le dernier élément d'une liste */
+  .report-main-content .report-analyse .prose ul:last-child,
+  .report-main-content .report-analyse .prose ol:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Réduire l'espacement après le dernier paragraphe */
+  .report-main-content .report-analyse .prose p:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* S'assurer que le conteneur prose n'ajoute pas d'espacement supplémentaire */
+  .report-main-content .report-analyse .prose {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 
   /* Use case specific styles - FORCE 1 PAGE */
   .usecase-print {

@@ -21,16 +21,43 @@
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
   
-  // Numéros de page pour le sommaire
-  let pageNumbers = {
+  // Numéros de page statiques pour le sommaire
+  const basePageNumbers = {
     introduction: 2,
     sommaire: 3,
     analyse: 4,
     recommandations: 5,
     references: 6,
-    annexes: 7,
-    useCases: [] as Array<{ name: string; page: number; id: string }>
+    annexes: 7
   };
+
+  // Détecter si on a plus de 23 cas d'usage (nécessite un saut de page supplémentaire)
+  $: hasMoreThan23UseCases = filteredUseCases.length > 23;
+  $: pageOffset = hasMoreThan23UseCases ? 1 : 0;
+
+  // Numéros de page ajustés (incrémentés de 1 si plus de 23 cas d'usage)
+  $: pageNumbers = {
+    introduction: basePageNumbers.introduction,
+    sommaire: basePageNumbers.sommaire,
+    analyse: basePageNumbers.analyse + pageOffset,
+    recommandations: basePageNumbers.recommandations + pageOffset,
+    references: basePageNumbers.references + pageOffset,
+    annexes: basePageNumbers.annexes + pageOffset
+  };
+
+  // Calculer les numéros de page des cas d'usage (statique : page annexes + index + 1)
+  // Si plus de 23 cas d'usage, le 24ème et suivants sont incrémentés de 1
+  $: useCasePages = filteredUseCases.map((uc, index) => {
+    const basePage = pageNumbers.annexes + index + 1;
+    // Les cas d'usage après le 23ème ont déjà leur page incrémentée via pageOffset
+    // Donc pas besoin d'ajustement supplémentaire ici
+    return {
+      name: uc.name || uc.titre || uc.nom || 'Cas d\'usage',
+      page: basePage,
+      id: uc.id,
+      is24thOrLater: index >= 23
+    };
+  });
 
   onMount(async () => {
     loadConfig();
@@ -357,217 +384,14 @@
     });
   }
 
-  // Calculer les numéros de page réels en fonction de la hauteur des sections
-  const calculatePageNumbers = async () => {
-    if (typeof window === 'undefined') return;
-    if (!executiveSummary) return;
-    
-    await tick();
-    
-    const pxPerCm = 37.8;
-    const pageHeightPx = 1123; // Hauteur d'une page A4 à 96 DPI
-    const defaultMarginPx = 2 * pxPerCm; // 2 cm
-    const annexMarginPx = 0.6 * pxPerCm; // 0.6 cm
-    const defaultUsableHeight = pageHeightPx - (defaultMarginPx * 2);
-    const annexUsableHeight = pageHeightPx - (annexMarginPx * 2);
-    
-    const selectorsToReveal = [
-      '.report-cover-page',
-      '.report-introduction',
-      '.report-table-of-contents',
-      '.report-analyse',
-      '.usecase-annex-section'
-    ];
-    
-    const hiddenElements: Array<{
-      el: HTMLElement;
-      styles: {
-        display: string;
-        visibility: string;
-        opacity: string;
-        position: string;
-        left: string;
-        width: string;
-        height: string;
-      };
-    }> = [];
-    
-    selectorsToReveal.forEach(selector => {
-      document.querySelectorAll<HTMLElement>(selector).forEach(el => {
-        const computed = window.getComputedStyle(el);
-        if (computed.display === 'none') {
-          hiddenElements.push({
-            el,
-            styles: {
-              display: el.style.display,
-              visibility: el.style.visibility,
-              opacity: el.style.opacity,
-              position: el.style.position,
-              left: el.style.left,
-              width: el.style.width,
-              height: el.style.height
-            }
-          });
-          
-          el.style.display = 'block';
-          el.style.visibility = 'hidden';
-          el.style.opacity = '0';
-          el.style.position = 'static';
-          el.style.left = '';
-          el.style.width = '100%';
-          el.style.height = 'auto';
-        }
-      });
-    });
-    
-    // Attendre le recalcul du layout
-    await new Promise(resolve => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(resolve);
-      });
-    });
-    
-    try {
-      const getHeight = (element: HTMLElement | null) => element ? element.getBoundingClientRect().height : 0;
-      const getPages = (height: number, type: 'default' | 'annex' | 'cover' = 'default') => {
-        const usableHeight = type === 'annex'
-          ? annexUsableHeight
-          : type === 'cover'
-            ? pageHeightPx
-            : defaultUsableHeight;
-        if (!height || height <= 0) return 1;
-        return Math.max(1, Math.ceil(height / usableHeight));
-      };
-      
-      const updatedPageNumbers = {
-        introduction: 0,
-        sommaire: 0,
-        analyse: 0,
-        recommandations: 0,
-        references: 0,
-        annexes: 0,
-        useCases: [] as Array<{ name: string; page: number; id: string }>
-      };
-      
-      let currentPage = 1;
-      const coverEl = document.querySelector('.report-cover-page') as HTMLElement | null;
-      if (coverEl) {
-        currentPage += getPages(getHeight(coverEl), 'cover');
-      }
-      
-      const introductionEl = document.querySelector('.report-introduction') as HTMLElement | null;
-      if (introductionEl && executiveSummary?.introduction) {
-        updatedPageNumbers.introduction = currentPage;
-        currentPage += getPages(getHeight(introductionEl), 'default');
-      } else {
-        updatedPageNumbers.introduction = 0;
-      }
-      
-      const processSection = (
-        selector: string,
-        key: 'sommaire' | 'analyse' | 'recommandations' | 'references',
-        condition: boolean
-      ) => {
-        if (!condition) {
-          updatedPageNumbers[key] = 0;
-          return;
-        }
-        const element = document.querySelector(selector) as HTMLElement | null;
-        if (!element) {
-          updatedPageNumbers[key] = 0;
-          return;
-        }
-        updatedPageNumbers[key] = currentPage;
-        currentPage += getPages(getHeight(element), 'default');
-      };
-      
-      processSection(
-        '.report-table-of-contents',
-        'sommaire',
-        Boolean(executiveSummary && selectedFolderId && !isSummaryGenerating)
-      );
-      processSection('#section-analyse', 'analyse', Boolean(executiveSummary?.analyse));
-      processSection('#section-recommandations', 'recommandations', Boolean(executiveSummary?.recommandation));
-      processSection('#section-references', 'references', Boolean(executiveSummary?.references && executiveSummary.references.length > 0));
-      
-      if (filteredUseCases.length > 0) {
-        // Trouver la deuxième page de garde (celle des annexes)
-        const allCoverPages = Array.from(document.querySelectorAll<HTMLElement>('.report-cover-page'));
-        const annexSeparator = allCoverPages.length > 1 ? allCoverPages[allCoverPages.length - 1] : null;
-        updatedPageNumbers.annexes = currentPage;
-        const separatorPages = annexSeparator ? getPages(getHeight(annexSeparator), 'cover') : 1;
-        currentPage += separatorPages;
-        
-        const annexElements = Array.from(document.querySelectorAll<HTMLElement>('.usecase-annex-section'));
-        const computedUseCases: Array<{ name: string; page: number; id: string }> = [];
-        
-        // Chaque cas d'usage fait exactement une page (garanti par le CSS)
-        annexElements.forEach(section => {
-          const titleAttr = section.getAttribute('data-usecase-title');
-          const heading = section.querySelector('h1');
-          const title = titleAttr || heading?.textContent?.trim() || 'Cas d\'usage';
-          const id = section.getAttribute('data-usecase-id') || '';
-          
-          computedUseCases.push({
-            name: title,
-            page: currentPage,
-            id
-          });
-          
-          // Chaque cas d'usage = 1 page exactement
-          currentPage += 1;
-        });
-        
-        updatedPageNumbers.useCases = computedUseCases;
-      } else {
-        updatedPageNumbers.annexes = 0;
-        updatedPageNumbers.useCases = [];
-      }
-      
-      pageNumbers = { ...pageNumbers, ...updatedPageNumbers };
-    } finally {
-      // Restaurer l'état original des éléments cachés
-      hiddenElements.forEach(({ el, styles }) => {
-        el.style.display = styles.display;
-        el.style.visibility = styles.visibility;
-        el.style.opacity = styles.opacity;
-        el.style.position = styles.position;
-        el.style.left = styles.left;
-        el.style.width = styles.width;
-        el.style.height = styles.height;
-      });
-    }
-  };
-
-  // Ajuster aussi lors de l'impression
+  // Ajuster la taille de police lors de l'impression
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeprint', () => {
       setTimeout(() => {
         adjustSummaryFontSize();
-        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers before print:', err));
       }, 100);
     });
   }
-  
-  // Recalculer les pages quand le contenu change
-  $: if (executiveSummary) {
-    void filteredUseCases.length;
-    tick().then(() => {
-      // Attendre un peu pour que le DOM soit complètement rendu
-      setTimeout(() => {
-        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers:', err));
-      }, 200);
-    });
-  }
-  
-  // Recalculer aussi après le rendu complet
-  onMount(() => {
-    if (executiveSummary) {
-      setTimeout(() => {
-        calculatePageNumbers().catch(err => console.error('Failed to calculate page numbers on mount:', err));
-      }, 500);
-    }
-  });
 </script>
 
 <!-- Page de garde (visible uniquement en impression) -->
@@ -836,7 +660,7 @@
 
         <!-- Introduction -->
         {#if executiveSummary.introduction}
-          <div id="section-introduction" class="mt-6">
+          <div id="section-introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">Introduction</h2>
             </div>
@@ -885,7 +709,7 @@
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.annexes || '-'}</span>
             </li>
-            {#each pageNumbers.useCases as useCasePage}
+            {#each useCasePages as useCasePage}
               <li class="toc-item toc-item-nested">
                 <a href="#usecase-{useCasePage.id || ''}" class="toc-title toc-link">{useCasePage.name}</a>
                 <span class="toc-dots"></span>
@@ -953,8 +777,12 @@
 <!-- Section Annexes (tous les usecases du dossier) -->
 <section class="hidden print:block">
   {#if selectedFolderId && filteredUseCases.length > 0}
-        {#each filteredUseCases as useCase (useCase.id)}
-        <section id="usecase-{useCase.id}" class="space-y-6" data-usecase-id={useCase.id} data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
+        {#each filteredUseCases as useCase, index (useCase.id)}
+        <section 
+          id="usecase-{useCase.id}" 
+          class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
+          data-usecase-id={useCase.id} 
+          data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}

@@ -134,7 +134,9 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] bug -0.6cm in usecase printed in annex after 1st use case
   - [x] add back cover page
   - [x] fix bug: don't display usecase in dashboard view in display (non print) mode
-  - [ ] Introduction (dans dashboard) devrait avoir un style de carte (en mode non impression), comme synthèse exécutive, analyse et recommandation
+  - [x] Introduction (dans dashboard) devrait avoir un style de carte (en mode non impression), comme synthèse exécutive, analyse et recommandation
+  - [x] Reduit les espacement entre paragraphes, li, et titres pour faire tenir chacune des section Analyses et Reco en une page
+  - [x] Fix on ne voit plus les numero de page des cas d'usage en annexe - simplifie le calcul des pages, maintenant il est statique (1 page par cas, une page pour annexe reco ref)
   - [ ] add edit mode in dasboard, including api addition path to enable executive report modification using EditableInput in markdown mode - commence par proposer un plan
   - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
   - [ ] fix responsiveness ofusecase cards
@@ -262,6 +264,12 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Retrait des `!important` bloquant l'ajustement dynamique de la taille de police du sommaire exécutif
   - Correction définitive du problème de page blanche après la back cover
   - Simplification des règles `page-break` pour les annexes (remplacement de `auto` par `avoid` pour la dernière section)
+- [x] **Commit 23**: Phase 5 - Simplification calcul pages statique et ajustements espacements
+  - Simplification calcul numéros de page : valeurs statiques (Intro p2, Sommaire p3, Analyse p4, Reco p5, Ref p6, Annexes p7)
+  - Cas d'usage : page annexes + index + 1 (1 page par cas d'usage)
+  - Suppression fonction calculatePageNumbers() et tous ses appels (180+ lignes supprimées)
+  - Ajustement espacements sections Analyse et Recommandations pour faire tenir chaque section sur une page
+  - Gestion cas avec plus de 23 cas d'usage : saut de page forcé au 24ème, incrémentation de 1 pour toutes les pages suivantes
 
 ## Status
 - **Progress**: 19/20 tasks completed
