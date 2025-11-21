@@ -139,8 +139,6 @@
     background-size: cover !important; /* Couvre toute la zone tout en préservant le ratio d'aspect */
     background-position: center top !important; /* Centré horizontalement, aligné en haut */
     background-repeat: no-repeat !important;
-    /* Filtre pour éclaircir le background bleu (comme sent-tech.ca) - appliqué uniquement sur le background */
-    filter: brightness(1.2) saturate(1.1) contrast(0.95) !important;
     z-index: 0; /* Derrière l'overlay et le contenu */
     /* Force le chargement de l'image en impression */
     -webkit-print-color-adjust: exact !important;
@@ -157,7 +155,8 @@
     left: 0;
     right: 0;
     height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
-    background: rgba(255, 255, 255, 0.15); /* Overlay blanc léger pour éclaircir */
+    background: linear-gradient(135deg, hsl(215 70% 25%) 0%, hsl(215 60% 30%) 50%, hsl(185 70% 40%) 100%) !important;
+    opacity: 0.9 !important;
     z-index: 1; /* Au-dessus du background, en dessous du contenu */
   }
 
