@@ -147,8 +147,20 @@ Transform the dashboard into an executive summary view with improved visualizati
         - [x] align html structures
         - [x] handle impression mode (avoid reg)
         - [x] visual testing (display & impression)
-    - [ ] including api addition path to enable executive report modification
-    - [ ] relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
+    - [x] including api addition path to enable executive report modification
+        - [x] Ajout schéma zod executiveSummaryDataSchema pour validation structure
+        - [x] Ajout executiveSummary au folderInput avec .optional()
+        - [x] Création parseExecutiveSummary() similaire à parseMatrix()
+        - [x] Modification PUT /folders/:id pour stringify/parse executiveSummary comme matrixConfig
+        - [x] Branchement EditableInput avec apiEndpoint="/folders/${id}" et fullData
+        - [x] Gestion sauvegarde avec rechargement folder et mise à jour store
+    - [x] Rendre éditable le titre du dossier dans le dashboard
+    - [x] Amélioration UX boutons imprimer et régénérer
+        - [x] Boutons avec icônes uniquement (sans texte)
+        - [x] Déplacement boutons imprimer et régénérer à droite du titre "Synthèse exécutive"
+        - [x] Suppression boutons du header principal (à côté du titre du dossier)
+        - [x] Ajout attributs title pour accessibilité
+    - [ ] relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
     - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields 
   - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
 
@@ -280,6 +292,14 @@ Transform the dashboard into an executive summary view with improved visualizati
   - Suppression fonction calculatePageNumbers() et tous ses appels (180+ lignes supprimées)
   - Ajustement espacements sections Analyse et Recommandations pour faire tenir chaque section sur une page
   - Gestion cas avec plus de 23 cas d'usage : saut de page forcé au 24ème, incrémentation de 1 pour toutes les pages suivantes
+- [x] **Commit 24**: Phase 5 - API et UI pour édition executiveSummary et améliorations UX
+  - API : Ajout schéma zod executiveSummaryDataSchema pour validation structure (introduction, analyse, recommandation, synthese_executive, references)
+  - API : Ajout executiveSummary au folderInput avec .optional() et parseExecutiveSummary()
+  - API : Modification PUT /folders/:id pour stringify/parse executiveSummary comme matrixConfig
+  - UI : Branchement EditableInput pour executiveSummary avec apiEndpoint="/folders/${id}" et fullData
+  - UI : Rendu éditable du titre du dossier dans le dashboard avec EditableInput
+  - UI : Amélioration UX boutons - icônes uniquement, déplacés à droite du titre "Synthèse exécutive"
+  - UI : Suppression boutons du header principal, ajout attributs title pour accessibilité
 
 ## Status
 - **Progress**: 19/20 tasks completed

@@ -13,6 +13,7 @@
   export let saveDelay = 5000; // Délai en ms avant sauvegarde (défaut: 5s)
   export let disabled = false;
   export let changeId = ""; // ID unique pour cette modification
+  /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
   export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]

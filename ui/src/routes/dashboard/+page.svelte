@@ -152,8 +152,13 @@
       
       // Mettre à jour le folder dans le store pour refléter les changements de statut
       foldersStore.update(folders => 
-        folders.map(f => f.id === folderId ? { ...f, status: folder.status, executiveSummary: folder.executiveSummary } : f)
+        folders.map(f => f.id === folderId ? { ...f, status: folder.status, executiveSummary: folder.executiveSummary, name: folder.name } : f)
       );
+      
+      // Mettre à jour le titre édité si c'est le dossier actuel
+      if (folderId === selectedFolderId) {
+        editedFolderName = folder.name || '';
+      }
     } catch (error) {
       console.error('Failed to load matrix:', error);
     }
@@ -189,6 +194,82 @@
       });
     } finally {
       isGeneratingSummary = false;
+    }
+  };
+
+  // Fonctions helper pour construire fullData pour chaque section de executiveSummary
+  const getExecutiveSummaryUpdateData = (field: string, newValue: string) => {
+    if (!executiveSummary || !selectedFolderId) return undefined;
+    
+    // Construire l'objet executiveSummary complet avec le champ mis à jour
+    return {
+      executiveSummary: {
+        introduction: field === 'introduction' ? newValue : (executiveSummary.introduction || ''),
+        analyse: field === 'analyse' ? newValue : (executiveSummary.analyse || ''),
+        recommandation: field === 'recommandation' ? newValue : (executiveSummary.recommandation || ''),
+        synthese_executive: field === 'synthese_executive' ? newValue : (executiveSummary.synthese_executive || ''),
+        references: executiveSummary.references || []
+      }
+    };
+  };
+  
+  // Variables réactives pour fullData (pour éviter les problèmes de type dans le template)
+  $: syntheseFullData = getExecutiveSummaryUpdateData('synthese_executive', editedSyntheseExecutive) || null;
+  $: introductionFullData = getExecutiveSummaryUpdateData('introduction', editedIntroduction) || null;
+  $: analyseFullData = getExecutiveSummaryUpdateData('analyse', editedAnalyse) || null;
+  $: recommandationFullData = getExecutiveSummaryUpdateData('recommandation', editedRecommandation) || null;
+
+  // Gérer la sauvegarde réussie - recharger le folder et mettre à jour
+  const handleExecutiveSummarySaved = async (field: string) => {
+    if (!selectedFolderId) return;
+    
+    try {
+      // Recharger le folder pour avoir les données à jour
+      await loadMatrix(selectedFolderId);
+      
+      // Mettre à jour le store des dossiers
+      const folders = await fetchFolders();
+      foldersStore.set(folders);
+      
+      // Mettre à jour originalValue pour refléter la nouvelle valeur sauvegardée
+      if (executiveSummary) {
+        const fieldMap: Record<string, keyof typeof executiveSummary> = {
+          'introduction': 'introduction',
+          'analyse': 'analyse',
+          'recommandation': 'recommandation',
+          'synthese_executive': 'synthese_executive'
+        };
+        
+        if (fieldMap[field] && executiveSummary[fieldMap[field]]) {
+          // Les variables edited* seront mises à jour via la réactivité de initializeEditedValues
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reload folder after save:', error);
+    }
+  };
+
+  // Variable pour le titre du dossier édité
+  let editedFolderName = '';
+  
+  // Initialiser le titre édité quand le dossier change
+  $: if (selectedFolderName !== undefined) {
+    editedFolderName = selectedFolderName || '';
+  }
+
+  // Gérer la sauvegarde du titre du dossier
+  const handleFolderNameSaved = async () => {
+    if (!selectedFolderId) return;
+    
+    try {
+      // Recharger le folder pour avoir les données à jour
+      await loadMatrix(selectedFolderId);
+      
+      // Mettre à jour le store des dossiers
+      const folders = await fetchFolders();
+      foldersStore.set(folders);
+    } catch (error) {
+      console.error('Failed to reload folder after name save:', error);
     }
   };
 
@@ -462,19 +543,23 @@
 {/if}
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
-  <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold print-hidden">{selectedFolderName || 'Dashboard'}</h1>
-    {#if executiveSummary && selectedFolderId}
-      <button
-        on:click={() => window.print()}
-        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 print-hidden"
-        title="Imprimer ou exporter le rapport en PDF"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-        </svg>
-        Imprimer
-      </button>
+  <div class="flex items-center">
+    {#if selectedFolderId}
+      <div class="text-3xl font-semibold print-hidden">
+        <EditableInput
+          label=""
+          value={editedFolderName}
+          markdown={false}
+          apiEndpoint={`/folders/${selectedFolderId}`}
+          fullData={{ name: editedFolderName }}
+          changeId={`folder-name-${selectedFolderId}`}
+          originalValue={selectedFolderName || ''}
+          on:change={(e) => editedFolderName = e.detail.value}
+          on:saved={handleFolderNameSaved}
+        />
+      </div>
+    {:else}
+      <h1 class="text-3xl font-semibold print-hidden">{selectedFolderName || 'Dashboard'}</h1>
     {/if}
   </div>
 
@@ -494,13 +579,27 @@
       <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
         <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
           <h2 class="text-2xl font-semibold text-slate-900">Synthèse exécutive</h2>
-          <button
-            on:click={generateExecutiveSummary}
-            disabled={isGeneratingSummary}
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-          >
-            {isGeneratingSummary ? 'Régénération...' : 'Régénérer'}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              on:click={() => window.print()}
+              class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+              title="Imprimer ou exporter le rapport en PDF"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+              </svg>
+            </button>
+            <button
+              on:click={generateExecutiveSummary}
+              disabled={isGeneratingSummary}
+              class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              title="Régénérer la synthèse exécutive"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" class:animate-spin={isGeneratingSummary}>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+            </button>
+          </div>
         </div>
         
         {#if editedSyntheseExecutive}
@@ -508,10 +607,13 @@
             label=""
             value={editedSyntheseExecutive}
             markdown={true}
-            apiEndpoint=""
+            apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+            fullData={syntheseFullData}
+            changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
             originalValue={executiveSummary?.synthese_executive || ''}
             references={executiveSummary?.references || []}
             on:change={(e) => editedSyntheseExecutive = e.detail.value}
+            on:saved={() => handleExecutiveSummarySaved('synthese_executive')}
           />
         {/if}
       </div>
@@ -720,10 +822,13 @@
                   label=""
                   value={editedIntroduction}
                   markdown={true}
-                  apiEndpoint=""
+                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                  fullData={introductionFullData}
+                  changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
                   originalValue={executiveSummary?.introduction || ''}
                   references={executiveSummary?.references || []}
                   on:change={(e) => editedIntroduction = e.detail.value}
+                  on:saved={() => handleExecutiveSummarySaved('introduction')}
                 />
               </div>
             </div>
@@ -794,10 +899,13 @@
                   label=""
                   value={editedAnalyse}
                   markdown={true}
-                  apiEndpoint=""
+                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                  fullData={analyseFullData}
+                  changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
                   originalValue={executiveSummary?.analyse || ''}
                   references={executiveSummary?.references || []}
                   on:change={(e) => editedAnalyse = e.detail.value}
+                  on:saved={() => handleExecutiveSummarySaved('analyse')}
                 />
               </div>
             </div>
@@ -815,10 +923,13 @@
                   label=""
                   value={editedRecommandation}
                   markdown={true}
-                  apiEndpoint=""
+                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                  fullData={recommandationFullData}
+                  changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
                   originalValue={executiveSummary?.recommandation || ''}
                   references={executiveSummary?.references || []}
                   on:change={(e) => editedRecommandation = e.detail.value}
+                  on:saved={() => handleExecutiveSummarySaved('recommandation')}
                 />
               </div>
             </div>
