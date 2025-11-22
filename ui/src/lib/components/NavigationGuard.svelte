@@ -13,6 +13,11 @@
       const target = event.target;
       const link = target.closest('a[href]');
       
+      // Ignorer les liens de références internes (#ref-...) - ils sont gérés par EditableInput
+      if (link && link.getAttribute('href')?.startsWith('#ref-')) {
+        return; // Laisser EditableInput gérer ces liens
+      }
+      
       if (link && $unsavedChangesStore.changes.length > 0) {
         event.preventDefault();
         showWarning = true;

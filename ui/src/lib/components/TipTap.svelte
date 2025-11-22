@@ -3,6 +3,12 @@
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
     import { Markdown } from 'tiptap-markdown';
+    import { 
+      BulletListWithClasses, 
+      OrderedListWithClasses, 
+      ListItemWithClasses, 
+      HeadingWithClasses 
+    } from '$lib/extensions/tailwind-classes';
 
     export let value;
     let editor, element;
@@ -18,7 +24,22 @@
   onMount(() => {
     editor = new Editor({
       element,
-      extensions: [StarterKit, Markdown],
+      extensions: [
+        // StarterKit avec certaines extensions désactivées pour utiliser nos versions avec classes Tailwind
+        StarterKit.configure({
+          bulletList: false,  // Remplacé par BulletListWithClasses
+          orderedList: false, // Remplacé par OrderedListWithClasses
+          listItem: false,    // Remplacé par ListItemWithClasses
+          heading: false,     // Remplacé par HeadingWithClasses
+        }),
+        // Nos extensions avec classes Tailwind
+        BulletListWithClasses,
+        OrderedListWithClasses,
+        ListItemWithClasses,
+        HeadingWithClasses,
+        // Extension Markdown
+        Markdown,
+      ],
       content: value,
       onUpdate: ({ editor }) => {
         const content = editor.storage.markdown.getMarkdown();
@@ -42,7 +63,6 @@
         outline: none!important;
     }
 
-    :global(.tiptap > ul > li) {
-        padding-bottom: 0.2rem;
-    }
+    /* Supprimé: padding-bottom: 0.2rem sur .tiptap > ul > li */
+    /* Maintenant géré par les classes Tailwind (space-y-2 + mb-1) */
 </style>

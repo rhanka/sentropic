@@ -462,8 +462,21 @@
 {/if}
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
+  <!-- Avertissement version temporaire -->
+  <div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-4 mb-4 print-hidden">
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+      </svg>
+      <div>
+        <p class="text-sm font-semibold text-amber-800">Version temporaire - Mode édition</p>
+        <p class="text-xs text-amber-700 mt-1">Les modifications ne sont pas sauvegardées. Rechargez la page pour revenir aux valeurs initiales.</p>
+      </div>
+    </div>
+  </div>
+  
   <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold print-hidden">{selectedFolderName || 'Dashboard'}</h1>
+    <h1 class="text-3xl font-semibold print-hidden">{selectedFolderName || 'Dashboard'} (Édition)</h1>
     {#if executiveSummary && selectedFolderId}
       <button
         on:click={() => window.print()}
@@ -629,7 +642,7 @@
                           step="0.1"
                           value={valueThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement).value;
                             valueThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianValue.toFixed(1)}
@@ -661,7 +674,7 @@
                           step="0.1"
                           value={complexityThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement).value;
                             complexityThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianComplexity.toFixed(1)}

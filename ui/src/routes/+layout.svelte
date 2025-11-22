@@ -29,6 +29,7 @@
     '/cas-usage',
     '/matrice',
     '/dashboard',
+    '/dashboard-tmp',
     '/parametres',
     '/auth/devices'
   ];

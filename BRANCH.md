@@ -139,9 +139,16 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] Fix on ne voit plus les numero de page des cas d'usage en annexe - simplifie le calcul des pages, maintenant il est statique (1 page par cas, une page pour annexe reco ref)
   - [x] fix responsiveness of usecase cards
   - [x] propagate usage of usecase cards to dossier and enterprise
-  - [ ] add edit mode in dashboard
+  - [x] add edit mode in dashboard
+    - [x] Align EditableInput with Dahsboard UI (synthese executive, introduction, analyse, recommandation) using dashboard-tmp view for interactive visual testing
+        - [x] config tiptap to apply tiptap classes (config TipTap extension)
+        - [x] align css including prose, remove css simplifications
+        - [x] add parserRefrencesInmarkdown() pour TipTap
+        - [x] align html structures
+        - [x] handle impression mode (avoid reg)
+        - [x] visual testing (display & impression)
     - [ ] including api addition path to enable executive report modification
-    - [ ] Dahsboard UI (synthese executive, introduction, analyse, recommandation) relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
+    - [ ] relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
     - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields 
   - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
 
