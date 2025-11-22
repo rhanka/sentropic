@@ -160,9 +160,13 @@ Transform the dashboard into an executive summary view with improved visualizati
         - [x] Déplacement boutons imprimer et régénérer à droite du titre "Synthèse exécutive"
         - [x] Suppression boutons du header principal (à côté du titre du dossier)
         - [x] Ajout attributs title pour accessibilité
-    - [ ] relying using EditableInput in markdown mode (direct edition like in enterprise), aligned to current print styles (for print, perhaps have a "print-ready" view, keeping EditableInput for display)
-    - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields 
-  - [ ] check why EditableIntput isn't used (anymore ?) in usecase, and use it for all fields
+  - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields
+    - [x] Phase 1: Description (markdown) alignée Dashboard (EditableInput + normalisation Markdown + API PUT stable)
+    - [ ] Phase 2: Justifications axes valeur/complexité (texte simple) avec traitement références
+    - [ ] Phase 3: Listes simples (Bénéfices, Risques, Mesures, Prochaines étapes) avec conversion array↔markdown et traitement références
+    - [ ] Phase 4: Listes avec icônes (Sources, Données) avec scaling dynamique (`dataSourcesScaleFactor`, `dataObjectsScaleFactor`), post-processing icônes SVG et traitement références
+    - [ ] Phase 5: Technologies avec scaling dynamique (`technologiesScaleFactor`)
+    - [x] Phase 6: Champs texte simples (Contact, Domaine, Délai) 
 
 - [ ] **Task 5.1**: Update unit tests for new API endpoints
   - Test executive summary generation and update endpoint

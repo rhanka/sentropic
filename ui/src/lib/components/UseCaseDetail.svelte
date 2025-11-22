@@ -1,9 +1,13 @@
 <script lang="ts">
   import References from '$lib/components/References.svelte';
-  import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
+import EditableInput from '$lib/components/EditableInput.svelte';
+import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { marked } from 'marked';
   import { onMount } from 'svelte';
+  import { apiGet } from '$lib/utils/api';
+  import { useCasesStore } from '$lib/stores/useCases';
+import { normalizeUseCaseMarkdown } from '$lib/utils/markdown';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
@@ -51,20 +55,57 @@
     });
   };
 
+  // Fonction pour recharger le cas d'usage après sauvegarde
+  const reloadUseCase = async (useCaseId: string) => {
+    try {
+      const updated = await apiGet(`/use-cases/${useCaseId}`);
+      useCasesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
+      if (useCase?.id === useCaseId) {
+        useCase = updated;
+      }
+    } catch (error) {
+      console.error('Failed to reload use case:', error);
+    }
+  };
+
+  let editedDescription = '';
+  let descriptionOriginalValue = '';
+  let lastUseCaseId: string | null = null;
+
+$: if (useCase?.id) {
+  const normalizedDescription = normalizeUseCaseMarkdown(useCase.description || '');
+
+  if (useCase.id !== lastUseCaseId) {
+    lastUseCaseId = useCase.id;
+    editedDescription = normalizedDescription;
+    descriptionOriginalValue = normalizedDescription;
+  } else if (useCase.description !== descriptionOriginalValue) {
+    editedDescription = normalizedDescription;
+    descriptionOriginalValue = normalizedDescription;
+  }
+}
+
+  const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
+
+  $: isDescriptionLong = (editedDescription?.length || 0) > 200 || countLines(editedDescription || '') > 12;
+
+$: descriptionFullData = useCase?.id
+  ? { description: normalizeUseCaseMarkdown(editedDescription || '') }
+  : null;
+
+  const handleDescriptionSaved = async () => {
+    if (!useCase?.id) return;
+    await reloadUseCase(useCase.id);
+  };
+
   // Fonction pour obtenir le HTML de la description avec références parsées
-  $: descriptionHtml = useCase?.description 
-    ? parseReferencesInMarkdown(
-        marked(useCase.description.replace(/^• /mg, '- ').replace(/\n/g, '\n\n')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-        useCase.references || []
-      )
-    : '';
+$: descriptionHtml = useCase?.description 
+  ? parseReferencesInMarkdown(
+      marked(normalizeUseCaseMarkdown(useCase.description)).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+      useCase.references || []
+    )
+  : '';
 
-  // Détecter si la description est longue (plus de 200 caractères ou plus de 12 lignes)
-  $: isDescriptionLong = useCase?.description 
-    ? (useCase.description.length > 200 || useCase.description.split('\n').length > 12)
-    : false;
-
-  $: console.log('isDescriptionLong', isDescriptionLong, useCase?.description.length);
   // Fonctions réactives pour parser les autres champs
   $: parsedBenefits = useCase?.benefits 
     ? (useCase.benefits || []).map((benefit: string) => parseReferencesInText(benefit, useCase.references || []))
@@ -169,14 +210,7 @@
       <div class="flex items-center gap-3">
         <div>
           <h1 class="text-3xl font-semibold">
-            {#if isEditing && mode !== 'print-only'}
-              <input 
-                class="text-3xl font-semibold bg-transparent border-b-2 border-blue-500 outline-none"
-                bind:value={draft.name}
-              />
-            {:else}
-              {useCase.name}
-            {/if}
+            {useCase.name}
           </h1>
         </div>
         {#if useCase.model && showActions}
@@ -188,11 +222,7 @@
       
       {#if showActions}
         <div class="flex gap-2 no-print">
-          {#if isEditing}
-            <slot name="actions-edit" />
-          {:else}
-            <slot name="actions-view" />
-          {/if}
+          <slot name="actions-view" />
         </div>
       {/if}
     </div>
@@ -283,19 +313,26 @@
               Description
             </h3>
           </div>
-          {#if isEditing && mode !== 'print-only'}
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
-              <textarea 
-                class="w-full rounded border border-slate-300 p-2 text-sm"
-                placeholder="Description du cas d'usage"
-                bind:value={draft.description}
-                rows="6"
-              ></textarea>
+          {#if mode === 'print-only'}
+            <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isDescriptionLong}>
+              {@html descriptionHtml || ''}
             </div>
           {:else}
-            <div class="text-slate-600 text-base leading-relaxed prose max-w-none {isDescriptionLong ? 'description-compact-print' : ''}">
-              {@html descriptionHtml || ''}
+            <div class="prose prose-slate max-w-none" class:description-compact-print={isDescriptionLong}>
+              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                <EditableInput
+                  label=""
+                  value={editedDescription}
+                  markdown={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={descriptionFullData}
+                  changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
+                  originalValue={descriptionOriginalValue}
+                  references={useCase?.references || []}
+                  on:change={(e) => editedDescription = e.detail.value}
+                  on:saved={handleDescriptionSaved}
+                />
+              </div>
             </div>
           {/if}
         </div>

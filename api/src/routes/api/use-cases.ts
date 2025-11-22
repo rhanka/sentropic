@@ -151,10 +151,24 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
   const folderId = payload.folderId ?? record.folderId;
   const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
-  const computed = withComputedScores(matrix, {
-    ...hydrateUseCase(record),
-    ...payload
-  } as UseCaseInput);
+  const shouldRecomputeScores = payload.valueScores !== undefined || payload.complexityScores !== undefined;
+  let roundedValueScore = record.totalValueScore ?? null;
+  let roundedComplexityScore = record.totalComplexityScore ?? null;
+
+  if (matrix && shouldRecomputeScores) {
+    const computed = withComputedScores(matrix, {
+      ...hydrateUseCase(record),
+      ...payload
+    } as UseCaseInput);
+
+    if (computed.totalValueScore !== null && computed.totalValueScore !== undefined) {
+      roundedValueScore = Math.round(computed.totalValueScore);
+    }
+
+    if (computed.totalComplexityScore !== null && computed.totalComplexityScore !== undefined) {
+      roundedComplexityScore = Math.round(computed.totalComplexityScore);
+    }
+  }
   await db
     .update(useCases)
     .set({
@@ -176,8 +190,8 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
       complexityScores: payload.complexityScores
         ? serializeScores(payload.complexityScores)
         : record.complexityScores,
-      totalValueScore: computed.totalValueScore ?? record.totalValueScore,
-      totalComplexityScore: computed.totalComplexityScore ?? record.totalComplexityScore
+      totalValueScore: roundedValueScore,
+      totalComplexityScore: roundedComplexityScore
     })
     .where(eq(useCases.id, id));
   const [updated] = await db.select().from(useCases).where(eq(useCases.id, id));
