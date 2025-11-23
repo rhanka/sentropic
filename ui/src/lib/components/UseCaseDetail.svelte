@@ -8,6 +8,18 @@ import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
 import { normalizeUseCaseMarkdown } from '$lib/utils/markdown';
+const arrayToMarkdown = (arr?: string[]) => {
+  if (!arr || arr.length === 0) return '';
+  return arr.map((item) => `- ${item}`).join('\n');
+};
+
+const markdownToArray = (md?: string) => {
+  if (!md) return [];
+  return md
+    .split('\n')
+    .map((line) => line.replace(/^-\s*/, '').trim())
+    .filter(Boolean);
+};
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
@@ -68,32 +80,49 @@ import { normalizeUseCaseMarkdown } from '$lib/utils/markdown';
     }
   };
 
-  let editedDescription = '';
-  let descriptionOriginalValue = '';
-  let lastUseCaseId: string | null = null;
+const TEXT_FIELDS = ['description', 'contact', 'deadline'];
+let textBuffers: Record<string, string> = {};
+let textOriginals: Record<string, string> = {};
+let lastUseCaseId: string | null = null;
 
 $: if (useCase?.id) {
-  const normalizedDescription = normalizeUseCaseMarkdown(useCase.description || '');
+  const normalizedValues = TEXT_FIELDS.reduce<Record<string, string>>((acc, field) => {
+    acc[field] = normalizeUseCaseMarkdown(useCase[field] || '');
+    return acc;
+  }, {});
 
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
-    editedDescription = normalizedDescription;
-    descriptionOriginalValue = normalizedDescription;
-  } else if (useCase.description !== descriptionOriginalValue) {
-    editedDescription = normalizedDescription;
-    descriptionOriginalValue = normalizedDescription;
+    TEXT_FIELDS.forEach((field) => {
+      textBuffers[field] = normalizedValues[field];
+      textOriginals[field] = normalizedValues[field];
+    });
+  } else {
+    TEXT_FIELDS.forEach((field) => {
+      if (normalizedValues[field] !== textOriginals[field]) {
+        textBuffers[field] = normalizedValues[field];
+        textOriginals[field] = normalizedValues[field];
+      }
+    });
   }
 }
 
-  const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
+const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
+const renderMarkdownWithRefs = (text?: string | null, refs: Array<{title: string; url: string}> = []) => {
+  if (!text) return '';
+  const normalized = normalizeUseCaseMarkdown(text);
+  const html = marked(normalized);
+  return parseReferencesInMarkdown(html, refs);
+};
+const getTextFullData = (field: string) =>
+  useCase?.id ? { [field]: normalizeUseCaseMarkdown(textBuffers[field] || '') } : null;
 
-  $: isDescriptionLong = (editedDescription?.length || 0) > 200 || countLines(editedDescription || '') > 12;
+$: descriptionValue = textBuffers.description || '';
+$: isDescriptionLong = (descriptionValue.length || 0) > 200 || countLines(descriptionValue) > 12;
 
-$: descriptionFullData = useCase?.id
-  ? { description: normalizeUseCaseMarkdown(editedDescription || '') }
-  : null;
+$: descriptionFullData = getTextFullData('description');
 
-  const handleDescriptionSaved = async () => {
+  const handleFieldSaved = async () => {
     if (!useCase?.id) return;
     await reloadUseCase(useCase.id);
   };
@@ -292,11 +321,28 @@ $: descriptionHtml = useCase?.description
             Délai
           </h3>
         </div>
-        <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
-          {#if useCase.deadline}
-            <div>{useCase.deadline}</div>
-          {/if}
-        </div>
+        {#if mode === 'print-only'}
+          <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+            {#if useCase.deadline}
+              {@html renderMarkdownWithRefs(useCase.deadline, useCase.references || [])}
+            {/if}
+          </div>
+        {:else}
+          <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+            <EditableInput
+              label=""
+              value={textBuffers.deadline || ''}
+              markdown={true}
+              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              fullData={getTextFullData('deadline')}
+              changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
+              originalValue={textOriginals.deadline || ''}
+              references={useCase?.references || []}
+              on:change={(e) => textBuffers.deadline = e.detail.value}
+              on:saved={handleFieldSaved}
+            />
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -322,15 +368,15 @@ $: descriptionHtml = useCase?.description
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedDescription}
+                  value={descriptionValue}
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={descriptionFullData}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
-                  originalValue={descriptionOriginalValue}
+                  originalValue={textOriginals.description || ''}
                   references={useCase?.references || []}
-                  on:change={(e) => editedDescription = e.detail.value}
-                  on:saved={handleDescriptionSaved}
+                  on:change={(e) => textBuffers.description = e.detail.value}
+                  on:saved={handleFieldSaved}
                 />
               </div>
             </div>
@@ -454,18 +500,30 @@ $: descriptionHtml = useCase?.description
           </h3>
         </div>
         <div class="space-y-3 text-sm">
-          {#if useCase.contact}
-            <div>
-              <span class="font-medium text-slate-700">Contact:</span>
-              <span class="text-slate-600 ml-2">{useCase.contact}</span>
-            </div>
-          {/if}
-          {#if useCase.process}
-            <div>
-              <span class="font-medium text-slate-700">Domaine:</span>
-              <span class="text-slate-600 ml-2">{useCase.process}</span>
-            </div>
-          {/if}
+          <div class="flex items-start gap-2">
+            <span class="font-medium text-slate-700 mt-1">Contact:</span>
+            {#if mode === 'print-only'}
+              <span class="text-slate-600">
+                {@html useCase.contact ? renderMarkdownWithRefs(useCase.contact, useCase.references || []) : ''}
+              </span>
+            {:else}
+              <span class="flex-1 text-slate-600">
+                <EditableInput
+                  label=""
+                  value={textBuffers.contact || ''}
+                  markdown={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getTextFullData('contact')}
+                  changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
+                  originalValue={textOriginals.contact || ''}
+                  references={useCase?.references || []}
+                  on:change={(e) => textBuffers.contact = e.detail.value}
+              on:saved={handleFieldSaved}
+                />
+              </span>
+            {/if}
+          </div>
+          <!-- Domaine affichage désactivé tant que non supporté par le prompt -->
         </div>
       </div>
 
