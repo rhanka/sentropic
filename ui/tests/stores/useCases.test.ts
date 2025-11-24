@@ -71,6 +71,88 @@ describe('Use Cases Store', () => {
       
       expect(result).toEqual(updatedUseCase);
     });
+
+    it('should update use case with markdown description', async () => {
+      const updates = { description: '**Bold** text with [reference](url)' };
+      const updatedUseCase = { 
+        id: '1', 
+        name: 'Use Case 1', 
+        folderId: 'folder1',
+        description: updates.description
+      };
+      
+      mockFetchJsonOnce(updatedUseCase);
+
+      const result = await updateUseCase('1', updates);
+      
+      expect(result.description).toBe(updates.description);
+    });
+
+    it('should update use case with simple text fields (contact, deadline)', async () => {
+      const updates = { 
+        contact: 'contact@example.com',
+        deadline: 'Q1 2024'
+      };
+      const updatedUseCase = { 
+        id: '1', 
+        name: 'Use Case 1', 
+        folderId: 'folder1',
+        ...updates
+      };
+      
+      mockFetchJsonOnce(updatedUseCase);
+
+      const result = await updateUseCase('1', updates);
+      
+      expect(result.contact).toBe(updates.contact);
+      expect(result.deadline).toBe(updates.deadline);
+    });
+
+    it('should update use case with list fields (benefits, risks, metrics, nextSteps)', async () => {
+      const updates = { 
+        benefits: ['Benefit 1', 'Benefit 2'],
+        risks: ['Risk 1'],
+        metrics: ['Metric 1', 'Metric 2'],
+        nextSteps: ['Step 1']
+      };
+      const updatedUseCase = { 
+        id: '1', 
+        name: 'Use Case 1', 
+        folderId: 'folder1',
+        ...updates
+      };
+      
+      mockFetchJsonOnce(updatedUseCase);
+
+      const result = await updateUseCase('1', updates);
+      
+      expect(result.benefits).toEqual(updates.benefits);
+      expect(result.risks).toEqual(updates.risks);
+      expect(result.metrics).toEqual(updates.metrics);
+      expect(result.nextSteps).toEqual(updates.nextSteps);
+    });
+
+    it('should update use case with icon list fields (dataSources, dataObjects, technologies)', async () => {
+      const updates = { 
+        dataSources: ['Source 1', 'Source 2'],
+        dataObjects: ['Object 1'],
+        technology: 'Technology Stack'
+      };
+      const updatedUseCase = { 
+        id: '1', 
+        name: 'Use Case 1', 
+        folderId: 'folder1',
+        ...updates
+      };
+      
+      mockFetchJsonOnce(updatedUseCase);
+
+      const result = await updateUseCase('1', updates);
+      
+      expect(result.dataSources).toEqual(updates.dataSources);
+      expect(result.dataObjects).toEqual(updates.dataObjects);
+      expect(result.technology).toBe(updates.technology);
+    });
   });
 
   describe('deleteUseCase', () => {

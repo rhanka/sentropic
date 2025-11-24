@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
-import { createTestId, getTestModel } from '../utils/test-helpers';
+import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
 import { folders, useCases } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
@@ -56,6 +56,7 @@ describe('Executive Summary Generation - AI', () => {
     it('should generate executive summary with default medians', async () => {
       const folderId = await createTestFolderWithUseCases();
 
+      // L'endpoint retourne maintenant jobId (asynchrone)
       const response = await authenticatedRequest(
         app,
         'POST',
@@ -70,19 +71,35 @@ describe('Executive Summary Generation - AI', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       
+      expect(data.success).toBe(true);
       expect(data.folder_id).toBe(folderId);
-      expect(data.executive_summary).toBeDefined();
-      expect(data.executive_summary).toHaveProperty('introduction');
-      expect(data.executive_summary).toHaveProperty('analyse');
-      expect(data.executive_summary).toHaveProperty('recommandation');
-      expect(data.executive_summary).toHaveProperty('synthese_executive');
-      expect(data.top_cases).toBeDefined();
-      expect(Array.isArray(data.top_cases)).toBe(true);
-      expect(data.thresholds).toBeDefined();
-      expect(data.thresholds).toHaveProperty('value');
-      expect(data.thresholds).toHaveProperty('complexity');
-      expect(data.thresholds).toHaveProperty('median_value');
-      expect(data.thresholds).toHaveProperty('median_complexity');
+      expect(data.jobId).toBeDefined();
+      expect(data.status).toBe('generating');
+
+      // Attendre la complétion du job
+      const adminUser = await createAuthenticatedUser('admin_app');
+      let jobCompleted = false;
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes max
+
+      while (!jobCompleted && attempts < maxAttempts) {
+        await sleep(10000); // Wait 10 seconds between checks
+
+        // Vérifier le statut du job
+        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+        expect(jobsRes.status).toBe(200);
+        const jobs = await jobsRes.json();
+        const job = jobs.find((j: any) => j.id === data.jobId);
+
+        if (job && (job.status === 'completed' || job.status === 'failed')) {
+          jobCompleted = true;
+          expect(job.status).toBe('completed');
+        }
+
+        attempts++;
+      }
+
+      expect(jobCompleted).toBe(true);
 
       // Verify stored in database
       const [folder] = await db.select({ executiveSummary: folders.executiveSummary })
@@ -97,13 +114,15 @@ describe('Executive Summary Generation - AI', () => {
       expect(stored).toHaveProperty('synthese_executive');
 
       // Cleanup
+      await cleanupAuthData(); // Cleanup admin user
       await db.delete(useCases).where(eq(useCases.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
-    }, 45000); // 45 seconds timeout for AI generation
+    }, 300000); // 5 minutes timeout for AI generation
 
     it('should generate executive summary with custom thresholds', async () => {
       const folderId = await createTestFolderWithUseCases();
 
+      // L'endpoint retourne maintenant jobId (asynchrone)
       const response = await authenticatedRequest(
         app,
         'POST',
@@ -120,15 +139,50 @@ describe('Executive Summary Generation - AI', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       
-      expect(data.thresholds.value).toBe(50);
-      expect(data.thresholds.complexity).toBe(40);
-      expect(data.thresholds.median_value).toBeDefined();
-      expect(data.thresholds.median_complexity).toBeDefined();
+      expect(data.success).toBe(true);
+      expect(data.jobId).toBeDefined();
+      expect(data.status).toBe('generating');
+
+      // Vérifier que les seuils personnalisés sont passés au job
+      const adminUser = await createAuthenticatedUser('admin_app');
+      await sleep(1000); // Attendre que le job soit créé
+      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+      expect(jobsRes.status).toBe(200);
+      const jobs = await jobsRes.json();
+      const job = jobs.find((j: any) => j.id === data.jobId);
+      
+      expect(job).toBeDefined();
+      expect(job.data.valueThreshold).toBe(50);
+      expect(job.data.complexityThreshold).toBe(40);
+
+      // Attendre la complétion du job
+      let jobCompleted = false;
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes max
+
+      while (!jobCompleted && attempts < maxAttempts) {
+        await sleep(10000); // Wait 10 seconds between checks
+
+        const jobsRes2 = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+        expect(jobsRes2.status).toBe(200);
+        const jobs2 = await jobsRes2.json();
+        const job2 = jobs2.find((j: any) => j.id === data.jobId);
+
+        if (job2 && (job2.status === 'completed' || job2.status === 'failed')) {
+          jobCompleted = true;
+          expect(job2.status).toBe('completed');
+        }
+
+        attempts++;
+      }
+
+      expect(jobCompleted).toBe(true);
 
       // Cleanup
+      await cleanupAuthData(); // Cleanup admin user
       await db.delete(useCases).where(eq(useCases.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
-    }, 45000); // 45 seconds timeout for AI generation
+    }, 300000); // 5 minutes timeout for AI generation
   });
 });
 

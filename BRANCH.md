@@ -169,18 +169,114 @@ Transform the dashboard into an executive summary view with improved visualizati
     - [x] Phase 5: Champs texte simples (Contact, Domaine, Délai) 
     - [x] Phase 6: Justifications axes valeur/complexité (texte simple) avec traitement références
 
-- [ ] **Task 5.1**: Update unit tests for new API endpoints
-  - Test executive summary generation and update endpoint
-  - Test error handling
-  - Test with various folder/company combinations
-  - Test automatic generation trigger
+- [x] **Task 5.1**: Update unit tests for new API endpoints
+  - **Catégorie**: Tests unitaires et d'intégration API
+  - **État des lieux des tests existants** (après `make test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai test-api-limit`):
+    - ✅ **test-api-smoke** : 6/6 tests passent
+    - ✅ **test-api-unit** : 136/136 tests passent
+    - ✅ **test-api-endpoints** : 116/116 tests passent (21 nouveaux tests ajoutés)
+      - ✅ **Corrigé** : `tests/api/analytics.test.ts` > "should return jobId and job should fail if folder has no use cases"
+        - **Correction** : Test mis à jour pour vérifier le `jobId` et attendre l'échec du job via polling de la queue
+      - ✅ **Ajouté** : 4 nouveaux tests dans `analytics.test.ts` (jobId, statut, thresholds, modèle par défaut)
+      - ✅ **Ajouté** : 6 nouveaux tests dans `folders.test.ts` (GET/PUT executiveSummary, parsing, validation)
+      - ✅ **Ajouté** : 4 nouveaux tests dans `use-cases.test.ts` (arrondi scores, recalcul conditionnel)
+    - ✅ **test-api-queue** : 4/4 tests passent
+    - ✅ **test-api-security** : 42/42 tests passent
+    - ✅ **test-api-ai** : 6/6 tests passent
+      - ✅ **Corrigé** : `tests/ai/executive-summary-sync.test.ts` > "should generate executive summary with default medians"
+        - **Correction** : Test mis à jour pour attendre la complétion du job via polling et vérifier le résultat dans la DB
+      - ✅ **Corrigé** : `tests/ai/executive-summary-sync.test.ts` > "should generate executive summary with custom thresholds"
+        - **Correction** : Même correction que ci-dessus
+    - ⚠️ **test-api-limit** : 1/3 tests passent (test lancé sans l'option DISABLE_RATE_LIMIT=true => ignoré pour l'instant)
+   - ✅ **test-ui** : 89/89 tests passent (8 nouveaux tests ajoutés, aucune régression)
+  - **Fichiers modifiés/créés**:
+    - ✅ `api/tests/api/folders.test.ts` (catégorie: **api**)
+      - ✅ Test `GET /folders/:id` retourne `executiveSummary` parsé (JSON object, pas string)
+      - ✅ Test `GET /folders/:id` avec `executiveSummary` null/absent
+      - ✅ Test `PUT /folders/:id` avec `executiveSummary` complet (création)
+      - ✅ Test `PUT /folders/:id` avec `executiveSummary` partiel (mise à jour d'une section)
+      - ✅ Test `PUT /folders/:id` avec `executiveSummary` invalide (structure incorrecte) → 400
+      - ✅ Test `PUT /folders/:id` avec `executiveSummary` contenant `references` array
+      - ✅ Test `PUT /folders/:id` avec `executiveSummary` objet vide (vidage)
+    - ✅ `api/tests/api/analytics.test.ts` (catégorie: **api**)
+      - ✅ Test `POST /analytics/executive-summary` retourne 401 sans authentification (déjà présent)
+      - ✅ Test `POST /analytics/executive-summary` retourne 404 si dossier inexistant (déjà présent)
+      - ✅ **Corrigé** : Test `POST /analytics/executive-summary` avec dossier sans use cases
+        - **Correction** : Test mis à jour pour vérifier que le job échoue avec le message "No use cases found" (polling de la queue)
+      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` retourne `jobId` et `status: 'generating'`
+      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` met à jour le statut du dossier à 'generating'
+      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` avec `value_threshold` et `complexity_threshold` personnalisés
+      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` utilise le modèle par défaut si non fourni
+    - ✅ `api/tests/api/use-cases.test.ts` (catégorie: **api**)
+      - ✅ Test `PUT /use-cases/:id` arrondit `totalValueScore` avec `Math.round()`
+      - ✅ Test `PUT /use-cases/:id` arrondit `totalComplexityScore` avec `Math.round()`
+      - ✅ Test `PUT /use-cases/:id` recalcule les scores uniquement si `valueScores` ou `complexityScores` modifiés
+      - ✅ Test `PUT /use-cases/:id` conserve les scores existants si pas de modification des scores
+    - ✅ `api/tests/ai/executive-summary-sync.test.ts` (catégorie: **ai** - corrigé)
+      - ✅ **Corrigé** : "should generate executive summary with default medians"
+        - **Correction** : Test mis à jour pour attendre la complétion du job via polling et vérifier le résultat dans la DB
+      - ✅ **Corrigé** : "should generate executive summary with custom thresholds"
+        - **Correction** : Même correction que ci-dessus
+    - ✅ `api/tests/ai/executive-summary-auto.test.ts` (catégorie: **ai** - vérifié, tests existants suffisants)
+  - **Tests UI unitaires**:
+    - ✅ `ui/tests/stores/folders.test.ts` (catégorie: **unit**)
+      - ✅ Test `updateFolder` avec `executiveSummary` dans les données
+      - ✅ Test `fetchFolders` parse `executiveSummary` correctement
+      - ✅ Test `fetchFolders` gère `executiveSummary` null
+      - ✅ Test mise à jour du store après modification `executiveSummary`
+    - ✅ `ui/tests/stores/useCases.test.ts` (catégorie: **unit**)
+      - ✅ Test `updateUseCase` avec description markdown
+      - ✅ Test `updateUseCase` avec champs texte simples (contact, deadline)
+      - ✅ Test `updateUseCase` avec listes simples (benefits, risks, metrics, nextSteps)
+      - ✅ Test `updateUseCase` avec listes avec icônes (dataSources, dataObjects, technologies)
+  - **Note sur parallélisation**: 
+    - Tests API: exécution séquentielle (`singleFork: true` dans `vitest.config.ts`) pour éviter les race conditions sur la DB
+    - Tests UI: exécution en parallèle (pas de contrainte de séquentialité)
+    - **À détailler**: Vérifier que les nouveaux tests respectent l'isolation (cleanup dans `afterEach`, pas de dépendances entre tests)
 
 - [ ] **Task 5.2**: Update E2E tests for dashboard
-  - Test scatter plot improvements
-  - Test ROI quadrant display (with > 2 use cases and ≤ 2 use cases)
-  - Test dashboard configuration accordion
-  - Test executive summary generation flow (automatic and manual)
-  - Test print report generation and formatting
+  - **Catégorie**: Tests end-to-end (Playwright)
+  - **Fichiers à modifier/créer**:
+    - `e2e/tests/dashboard.spec.ts` (catégorie: **e2e**)
+      - Test affichage executive summary (sections: synthèse exécutive, introduction, analyse, recommandation)
+      - Test affichage executive summary avec références [1], [2] cliquables
+      - Test génération executive summary manuelle (bouton "Générer")
+      - Test régénération executive summary (bouton "Régénérer")
+      - Test monitoring statut génération (affichage "Génération en cours...")
+      - Test édition executive summary (sections éditables avec EditableInput)
+      - Test sauvegarde automatique après édition (buffer 5s)
+      - Test scatter plot améliorations (50% width, labels visibles, tooltip)
+      - Test ROI quadrant affichage avec > 2 use cases (quadrant vert visible)
+      - Test ROI quadrant masqué avec ≤ 2 use cases
+      - Test dashboard configuration accordion (icône ⚙️, ouverture/fermeture)
+      - Test configuration ROI thresholds (modification value/complexity thresholds)
+      - Test bouton imprimer visible uniquement si `executiveSummary` existe
+      - Test bouton imprimer déclenche `window.print()`
+      - Test titre dossier éditable dans dashboard
+    - `e2e/tests/usecase-detail.spec.ts` (catégorie: **e2e**)
+      - Test édition description (markdown) avec EditableInput
+      - Test édition listes simples (bénéfices, risques, mesures, prochaines étapes)
+      - Test édition listes avec icônes (sources, données) avec scaling dynamique
+      - Test édition technologies avec scaling dynamique
+      - Test édition champs texte simples (contact, délai) en markdown
+      - Test édition justifications axes valeur/complexité
+      - Test sauvegarde automatique avec buffer (5s)
+      - Test traitement références [1], [2] dans les champs éditables
+      - Test conversion array ↔ markdown pour les listes
+      - Test affichage mode impression (masquage éléments UI, footer image)
+      - Test impression cas d'usage (vérifier que le contenu tient en une seule page)
+    - `e2e/tests/executive-summary.spec.ts` (catégorie: **e2e** - nouveau fichier)
+      - Test workflow complet: génération → affichage → édition → sauvegarde
+      - Test génération automatique après complétion de tous les use cases
+      - Test affichage sections executive summary dans l'ordre (synthèse → dashboard → intro/analyse/reco)
+      - Test impression rapport complet (page de garde, sommaire, sections, annexes)
+      - Test numérotation pages statique (Intro p2, Sommaire p3, Analyse p4, Reco p5, Ref p6, Annexes p7+)
+      - Test impression rapport dashboard (vérifier que les numéros de pages dans le sommaire correspondent aux pages réelles)
+      - Test scaling dynamique contenu long (références, technologies, sources, données)
+      - Test footer image sur pages cas d'usage en annexe
+  - **Note sur parallélisation**: 
+    - Tests E2E: exécution séquentielle par défaut (Playwright) pour éviter les conflits de ressources
+    - **À détailler**: Vérifier que les nouveaux tests E2E sont isolés (cleanup des données créées, pas de dépendances entre tests)
 
 - [ ] **Task 5.3**: Manual testing and validation
   - Verify all UI changes work correctly

@@ -8,6 +8,13 @@ export type Folder = {
   companyId?: string;
   companyName?: string;
   matrixConfig?: any;
+  executiveSummary?: {
+    introduction?: string;
+    analyse?: string;
+    recommandation?: string;
+    synthese_executive?: string;
+    references?: Array<{ title: string; url: string }>;
+  } | null;
   status?: 'generating' | 'completed';
   createdAt: string;
 };

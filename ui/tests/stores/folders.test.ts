@@ -31,6 +31,49 @@ describe('Folders Store', () => {
       expect(result).toEqual(mockFolders);
     });
 
+    it('should parse executiveSummary correctly when fetching folders', async () => {
+      const mockFolders = [
+        { 
+          id: '1', 
+          name: 'Folder 1', 
+          companyId: 'company1',
+          executiveSummary: {
+            introduction: 'Test introduction',
+            analyse: 'Test analyse',
+            recommandation: 'Test recommandation',
+            synthese_executive: 'Test synthese'
+          }
+        }
+      ];
+      
+      mockFetchJsonOnce({ items: mockFolders });
+
+      const result = await fetchFolders();
+      
+      expect(result).toEqual(mockFolders);
+      expect(result[0].executiveSummary).toBeDefined();
+      expect(result[0].executiveSummary?.introduction).toBe('Test introduction');
+      expect(typeof result[0].executiveSummary).toBe('object');
+    });
+
+    it('should handle null executiveSummary when fetching folders', async () => {
+      const mockFolders = [
+        { 
+          id: '1', 
+          name: 'Folder 1', 
+          companyId: 'company1',
+          executiveSummary: null
+        }
+      ];
+      
+      mockFetchJsonOnce({ items: mockFolders });
+
+      const result = await fetchFolders();
+      
+      expect(result).toEqual(mockFolders);
+      expect(result[0].executiveSummary).toBeNull();
+    });
+
     it('should throw error when fetch fails', async () => {
       mockFetchJsonOnce({ error: 'Failed to fetch folders' }, 500);
 
@@ -62,6 +105,34 @@ describe('Folders Store', () => {
       
       expect(result).toEqual(updatedFolder);
     });
+
+    it('should update folder with executiveSummary', async () => {
+      const executiveSummary = {
+        introduction: 'Test introduction',
+        analyse: 'Test analyse',
+        recommandation: 'Test recommandation',
+        synthese_executive: 'Test synthese',
+        references: [
+          { title: 'Reference 1', url: 'https://example.com/1' }
+        ]
+      };
+      const updates = { executiveSummary };
+      const updatedFolder = { 
+        id: '1', 
+        name: 'Test Folder', 
+        companyId: 'company1',
+        executiveSummary 
+      };
+      
+      mockFetchJsonOnce(updatedFolder);
+
+      const result = await updateFolder('1', updates);
+      
+      expect(result).toEqual(updatedFolder);
+      expect(result.executiveSummary).toBeDefined();
+      expect(result.executiveSummary?.introduction).toBe('Test introduction');
+      expect(result.executiveSummary?.references).toHaveLength(1);
+    });
   });
 
   describe('deleteFolder', () => {
@@ -89,6 +160,22 @@ describe('Folders Store', () => {
       const folders = [{ id: '1', name: 'Folder 1', companyId: 'company1' }];
       foldersStore.set(folders);
       expect(get(foldersStore)).toEqual(folders);
+    });
+
+    it('should update folders store with executiveSummary', () => {
+      const folders = [{ 
+        id: '1', 
+        name: 'Folder 1', 
+        companyId: 'company1',
+        executiveSummary: {
+          introduction: 'Test',
+          synthese_executive: 'Test synthese'
+        }
+      }];
+      foldersStore.set(folders);
+      const stored = get(foldersStore);
+      expect(stored).toEqual(folders);
+      expect(stored[0].executiveSummary).toBeDefined();
     });
 
     it('should update current folder ID', () => {
