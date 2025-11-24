@@ -1062,7 +1062,11 @@
 
   /* Éviter les sauts de ligne supplémentaires après les liens de référence inline */
   .usecase-print .prose a,
-  .usecase-print .prose p a {
+  .usecase-print .prose p a,
+  .usecase-print ul li a,
+  .usecase-print ul li span a,
+  .usecase-print ul.space-y-2 li a,
+  .usecase-print ul.space-y-2 li span a {
     display: inline !important;
     white-space: nowrap !important;
     margin: 0 !important;
