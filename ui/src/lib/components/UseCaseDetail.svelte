@@ -106,6 +106,9 @@ let listMarkdowns: Record<ListField, string> = {
   dataSources: '',
   dataObjects: '',
 };
+// Buffers pour les descriptions des scores (indexés par 'value-axisId' ou 'complexity-axisId')
+let scoreBuffers: Record<string, string> = {};
+let scoreOriginals: Record<string, string> = {};
 let lastUseCaseId: string | null = null;
 
 const setTextBuffer = (field: TextField, value: string) => {
@@ -113,6 +116,10 @@ const setTextBuffer = (field: TextField, value: string) => {
 };
 const setListBuffer = (field: ListField, value: string[]) => {
   listBuffers = { ...listBuffers, [field]: value };
+};
+const setScoreBuffer = (type: 'value' | 'complexity', axisId: string, value: string) => {
+  const key = `${type}-${axisId}`;
+  scoreBuffers = { ...scoreBuffers, [key]: value };
 };
 
 $: if (useCase?.id) {
@@ -126,12 +133,29 @@ $: if (useCase?.id) {
     return acc;
   }, {} as Record<ListField, string[]>);
 
+  // Initialiser les buffers de scores
+  const scoreValues: Record<string, string> = {};
+  if (useCase.valueScores && matrix) {
+    useCase.valueScores.forEach((score: any) => {
+      const key = `value-${score.axisId}`;
+      scoreValues[key] = normalizeUseCaseMarkdown(score.description || '');
+    });
+  }
+  if (useCase.complexityScores && matrix) {
+    useCase.complexityScores.forEach((score: any) => {
+      const key = `complexity-${score.axisId}`;
+      scoreValues[key] = normalizeUseCaseMarkdown(score.description || '');
+    });
+  }
+
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
     textBuffers = { ...normalizedValues };
     textOriginals = { ...normalizedValues };
     listBuffers = { ...listValues };
     listOriginals = { ...listValues };
+    scoreBuffers = { ...scoreValues };
+    scoreOriginals = { ...scoreValues };
   } else {
     let changed = false;
     const updatedBuffers = { ...textBuffers };
@@ -156,11 +180,23 @@ $: if (useCase?.id) {
       }
     });
 
+    // Mettre à jour les buffers de scores si nécessaire
+    const updatedScoreBuffers = { ...scoreBuffers };
+    const updatedScoreOriginals = { ...scoreOriginals };
+    Object.keys(scoreValues).forEach((key) => {
+      if (scoreValues[key] !== scoreOriginals[key]) {
+        updatedScoreBuffers[key] = scoreValues[key];
+        updatedScoreOriginals[key] = scoreValues[key];
+        changed = true;
+      }
+    });
     if (changed) {
       textBuffers = updatedBuffers;
       textOriginals = updatedOriginals;
       listBuffers = updatedListBuffers;
       listOriginals = updatedListOriginals;
+      scoreBuffers = updatedScoreBuffers;
+      scoreOriginals = updatedScoreOriginals;
     }
   }
 }
@@ -189,6 +225,25 @@ const getListFullData = (field: ListField) => {
   const cleaned = stripTrailingEmptyParagraph(markdown);
   return { [field]: markdownToArray(cleaned) };
 };
+const getScoreFullData = (type: 'value' | 'complexity', axisId: string) => {
+  if (!useCase?.id || !matrix) return null;
+  const key = `${type}-${axisId}`;
+  const normalized = normalizeUseCaseMarkdown(scoreBuffers[key] || '');
+  const cleaned = stripTrailingEmptyParagraph(normalized);
+  
+  // Mettre à jour le score.description dans l'array approprié
+  const scores = type === 'value' ? useCase.valueScores : useCase.complexityScores;
+  const updatedScores = (scores || []).map((score: any) => {
+    if (score.axisId === axisId) {
+      return { ...score, description: cleaned };
+    }
+    return score;
+  });
+  
+  return type === 'value' 
+    ? { valueScores: updatedScores }
+    : { complexityScores: updatedScores };
+};
 
 $: descriptionValue = textBuffers.description || '';
 $: isDescriptionLong = (descriptionValue.length || 0) > 200 || countLines(descriptionValue) > 12;
@@ -196,6 +251,10 @@ $: isDescriptionLong = (descriptionValue.length || 0) > 200 || countLines(descri
 $: descriptionFullData = getTextFullData('description');
 
   const handleFieldSaved = async () => {
+    if (!useCase?.id) return;
+    await reloadUseCase(useCase.id);
+  };
+  const handleScoreSaved = async () => {
     if (!useCase?.id) return;
     await reloadUseCase(useCase.id);
   };
@@ -237,19 +296,27 @@ $: descriptionHtml = useCase?.description
     ? (useCase.nextSteps || []).map((step: string) => parseReferencesInText(step, useCase.references || []))
     : [];
 
-  // Parser les justifications des axes valeur et complexité
+  // Parser les justifications des axes valeur et complexité avec buffers
   $: parsedValueScores = useCase?.valueScores && matrix
-    ? (useCase.valueScores || []).map((score: any) => ({
-        ...score,
-        description: parseReferencesInText(score.description || '', useCase.references || [])
-      }))
+    ? (useCase.valueScores || []).map((score: any) => {
+        const key = `value-${score.axisId}`;
+        const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
+        return {
+          ...score,
+          description: renderMarkdownWithRefs(description, useCase.references || [])
+        };
+      })
     : [];
 
   $: parsedComplexityScores = useCase?.complexityScores && matrix
-    ? (useCase.complexityScores || []).map((score: any) => ({
-        ...score,
-        description: parseReferencesInText(score.description || '', useCase.references || [])
-      }))
+    ? (useCase.complexityScores || []).map((score: any) => {
+        const key = `complexity-${score.axisId}`;
+        const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
+        return {
+          ...score,
+          description: renderMarkdownWithRefs(description, useCase.references || [])
+        };
+      })
     : [];
 
   // Déterminer si on doit afficher les boutons d'action
@@ -841,9 +908,12 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.valueAxes as axis}
-            {@const score = parsedValueScores.find((s) => s.axisId === axis.id)}
+            {@const score = useCase.valueScores?.find((s: any) => s.axisId === axis.id)}
+            {@const parsedScore = parsedValueScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
+              {@const key = `value-${axis.id}`}
+              {@const bufferValue = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '')}
               <div class="rounded border border-slate-200 bg-white p-3">
                 <div class="flex items-center justify-between mb-2">
                   <h5 class="font-medium text-slate-900">{axis.name}</h5>
@@ -858,7 +928,25 @@ $: descriptionHtml = useCase?.description
                     <span class="text-sm text-slate-600">({score.rating} pts)</span>
                   </div>
                 </div>
-                <p class="text-sm text-slate-600">{@html score.description}</p>
+                {#if isPrinting}
+                  <p class="text-sm text-slate-600">{@html parsedScore?.description || ''}</p>
+                {:else}
+                  <div class="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none">
+                    <EditableInput
+                      label=""
+                      value={bufferValue}
+                      markdown={true}
+                      apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                      fullData={getScoreFullData('value', axis.id)}
+                      fullDataGetter={() => getScoreFullData('value', axis.id)}
+                      changeId={useCase?.id ? `usecase-valueScore-${axis.id}-${useCase.id}` : ''}
+                      originalValue={scoreOriginals[key] || ''}
+                      references={useCase?.references || []}
+                      on:change={(e) => setScoreBuffer('value', axis.id, e.detail.value)}
+                      on:saved={handleScoreSaved}
+                    />
+                  </div>
+                {/if}
               </div>
             {/if}
           {/each}
@@ -877,9 +965,12 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.complexityAxes as axis}
-            {@const score = parsedComplexityScores.find((s) => s.axisId === axis.id)}
+            {@const score = useCase.complexityScores?.find((s: any) => s.axisId === axis.id)}
+            {@const parsedScore = parsedComplexityScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
+              {@const key = `complexity-${axis.id}`}
+              {@const bufferValue = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '')}
               <div class="rounded border border-slate-200 bg-white p-3">
                 <div class="flex items-center justify-between mb-2">
                   <h5 class="font-medium text-slate-900">{axis.name}</h5>
@@ -900,7 +991,25 @@ $: descriptionHtml = useCase?.description
                     <span class="text-sm text-slate-600">({score.rating} pts)</span>
                   </div>
                 </div>
-                <p class="text-sm text-slate-600">{@html score.description}</p>
+                {#if isPrinting}
+                  <p class="text-sm text-slate-600">{@html parsedScore?.description || ''}</p>
+                {:else}
+                  <div class="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none">
+                    <EditableInput
+                      label=""
+                      value={bufferValue}
+                      markdown={true}
+                      apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                      fullData={getScoreFullData('complexity', axis.id)}
+                      fullDataGetter={() => getScoreFullData('complexity', axis.id)}
+                      changeId={useCase?.id ? `usecase-complexityScore-${axis.id}-${useCase.id}` : ''}
+                      originalValue={scoreOriginals[key] || ''}
+                      references={useCase?.references || []}
+                      on:change={(e) => setScoreBuffer('complexity', axis.id, e.detail.value)}
+                      on:saved={handleScoreSaved}
+                    />
+                  </div>
+                {/if}
               </div>
             {/if}
           {/each}
