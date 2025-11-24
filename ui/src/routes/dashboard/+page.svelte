@@ -972,7 +972,6 @@
               useCase={useCase}
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
-              mode="print-only"
               isEditing={false}
               draft={{}}
             />

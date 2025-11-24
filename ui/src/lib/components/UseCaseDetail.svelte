@@ -12,7 +12,6 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
   export let calculatedScores: any = null;
-  export let mode: 'edit' | 'view' | 'print-only' = 'view';
   export let isEditing: boolean = false;
   export let draft: any = {};
 
@@ -227,7 +226,7 @@ $: descriptionHtml = useCase?.description
     : [];
 
   // Déterminer si on doit afficher les boutons d'action
-  $: showActions = mode !== 'print-only';
+  $: showActions = !isPrinting;
 
   // Détection du mode impression pour le scaling
   let isPrinting = false;
@@ -253,22 +252,22 @@ $: descriptionHtml = useCase?.description
 
   // Calcul des facteurs d'échelle pour réduire la taille si trop d'items
   // Références : base = 8
-  $: referencesScaleFactor = (useCase?.references && useCase.references.length > 8 && (mode === 'print-only' || isPrinting))
+  $: referencesScaleFactor = (useCase?.references && useCase.references.length > 8 && isPrinting)
     ? 10 / useCase.references.length
     : 1;
   
   // Sources des données : base = 5
-  $: dataSourcesScaleFactor = (useCase?.dataSources && useCase.dataSources.length > 5 && (mode === 'print-only' || isPrinting))
+  $: dataSourcesScaleFactor = (useCase?.dataSources && useCase.dataSources.length > 5 && isPrinting)
     ? 5 / useCase.dataSources.length
     : 1;
   
   // Données : base = 5
-  $: dataObjectsScaleFactor = (useCase?.dataObjects && useCase.dataObjects.length > 5 && (mode === 'print-only' || isPrinting))
+  $: dataObjectsScaleFactor = (useCase?.dataObjects && useCase.dataObjects.length > 5 && isPrinting)
     ? 5 / useCase.dataObjects.length
     : 1;
   
   // Technologies : base = 7
-  $: technologiesScaleFactor = (useCase?.technologies && useCase.technologies.length > 7 && (mode === 'print-only' || isPrinting))
+  $: technologiesScaleFactor = (useCase?.technologies && useCase.technologies.length > 7 && isPrinting)
     ? 7 / useCase.technologies.length
     : 1;
 </script>
@@ -380,7 +379,7 @@ $: descriptionHtml = useCase?.description
             Délai
           </h3>
         </div>
-        {#if mode === 'print-only'}
+        {#if isPrinting}
           <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
             {#if useCase.deadline}
               {@html renderMarkdownWithRefs(useCase.deadline, useCase.references || [])}
@@ -419,7 +418,7 @@ $: descriptionHtml = useCase?.description
               Description
             </h3>
           </div>
-          {#if mode === 'print-only'}
+          {#if isPrinting}
             <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isDescriptionLong}>
               {@html descriptionHtml || ''}
             </div>
@@ -498,7 +497,7 @@ $: descriptionHtml = useCase?.description
                   Risques
                 </h3>
               </div>
-              {#if isEditing && mode !== 'print-only'}
+              {#if isEditing && ! isPrinting}
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-1">Risques (un par ligne)</label>
                   <textarea 
@@ -530,7 +529,7 @@ $: descriptionHtml = useCase?.description
                   Mesures du succès
                 </h3>
               </div>
-              {#if isEditing && mode !== 'print-only'}
+              {#if isEditing && !isPrinting}
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-1">Métriques (une par ligne)</label>
                   <textarea 
@@ -567,22 +566,22 @@ $: descriptionHtml = useCase?.description
             Informations
           </h3>
         </div>
-        <div class="space-y-3 text-sm">
+        <div class="space-y-3">
           <div class="flex items-start gap-2">
             <span class="font-medium text-slate-700 mt-1">Contact:</span>
-            {#if mode === 'print-only'}
-              <span class="text-slate-600">
+            {#if isPrinting}
+              <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
                 {@html useCase.contact ? renderMarkdownWithRefs(useCase.contact, useCase.references || []) : ''}
-              </span>
+              </div>
             {:else}
-              <span class="flex-1 text-slate-600">
+              <span class="flex-1 text-slate-600 text-sm">
                 <EditableInput
                   label=""
                   value={textBuffers.contact || ''}
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('contact')}
-              fullDataGetter={() => getTextFullData('contact')}
+                  fullDataGetter={() => getTextFullData('contact')}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
                   originalValue={textOriginals.contact || ''}
                   references={useCase?.references || []}
@@ -632,7 +631,7 @@ $: descriptionHtml = useCase?.description
             Sources des données
           </h3>
         </div>
-        {#if isEditing && mode !== 'print-only'}
+        {#if isEditing && !isPrinting}
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Sources (une par ligne)</label>
             <textarea 
@@ -675,7 +674,7 @@ $: descriptionHtml = useCase?.description
             Données
           </h3>
         </div>
-        {#if isEditing && mode !== 'print-only'}
+        {#if isEditing && !isPrinting}
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Données liées (une par ligne)</label>
             <textarea 
@@ -722,7 +721,7 @@ $: descriptionHtml = useCase?.description
           Prochaines étapes
         </h3>
       </div>
-      {#if isEditing && mode !== 'print-only'}
+      {#if isEditing && !isPrinting}
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Prochaines étapes (une par ligne)</label>
           <textarea 
@@ -769,7 +768,7 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.valueAxes as axis}
-            {@const score = parsedValueScores.find((s: any) => s.axisId === axis.id)}
+            {@const score = parsedValueScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               <div class="rounded border border-slate-200 bg-white p-3">
@@ -805,7 +804,7 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.complexityAxes as axis}
-            {@const score = parsedComplexityScores.find((s: any) => s.axisId === axis.id)}
+            {@const score = parsedComplexityScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               <div class="rounded border border-slate-200 bg-white p-3">

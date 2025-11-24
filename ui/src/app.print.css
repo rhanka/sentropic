@@ -940,7 +940,6 @@
   }
 
   /* Text sizes in use case - plus petit pour les contenus hors description */
-  .usecase-print .text-sm,
   .usecase-print .text-xs {
     font-size: 6.5pt !important;
     line-height: 1.2;
@@ -971,13 +970,6 @@
     font-size: 6.5pt !important;
   }
 
-  /* Forcer la taille pour prose-sm (délai, contact) en mode print */
-  .usecase-print .prose.prose-sm,
-  .usecase-print .prose.prose-sm * {
-    font-size: 6.5pt !important;
-    line-height: 1.2 !important;
-  }
-
   /* Icons - smaller or hide */
   .usecase-print svg {
     width: 10pt !important;
@@ -1001,6 +993,41 @@
   .usecase-print .prose:not(.description-compact-print):not(.prose-sm) * {
     font-size: inherit !important;
     line-height: inherit !important;
+  }
+
+  /* Forcer la taille pour prose-sm (délai, contact) en mode print - APRÈS les règles générales pour priorité */
+  .usecase-print .prose.prose-sm,
+  .usecase-print .prose.prose-sm *,
+  .usecase-print div.prose.prose-sm,
+  .usecase-print div.prose.prose-sm *,
+  .usecase-print span.prose.prose-sm,
+  .usecase-print span.prose.prose-sm *,
+  .usecase-print .text-sm.prose.prose-sm,
+  .usecase-print .text-sm.prose.prose-sm * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Forcer text-sm à 6.5pt - priorité maximale */
+  .usecase-print .text-sm,
+  .usecase-print .text-sm *,
+  .usecase-print span.text-sm,
+  .usecase-print span.text-sm *,
+  .usecase-print .text-sm.prose,
+  .usecase-print .text-sm.prose *,
+  .usecase-print span.text-sm.prose,
+  .usecase-print span.text-sm.prose * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* S'assurer que markdown-wrapper dans un contexte text-sm ou prose-sm hérite de 6.5pt */
+  .usecase-print .text-sm .markdown-wrapper,
+  .usecase-print .text-sm .markdown-wrapper *,
+  .usecase-print .prose.prose-sm .markdown-wrapper,
+  .usecase-print .prose.prose-sm .markdown-wrapper * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
   }
 
   /* Réduire la taille de police pour les descriptions longues en mode impression - priorité maximale */
@@ -1315,6 +1342,24 @@
     gap: 2pt !important;
     margin-bottom: 0.5pt !important;
     display: flex !important;
+  }
+
+  /* Supprimer les marges des éléments markdown générés dans les li (p, strong, etc.) */
+  .usecase-print ul li.flex span p,
+  .usecase-print ul li.flex span > p,
+  .usecase-print ul.space-y-2 li span p,
+  .usecase-print ul.space-y-2 li span > p,
+  .usecase-print ul li.flex span *,
+  .usecase-print ul.space-y-2 li span * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Spécifiquement pour les paragraphes générés par markdown */
+  .usecase-print ul li.flex span p,
+  .usecase-print ul.space-y-2 li span p {
+    padding: 0 !important;
+    line-height: inherit !important;
   }
 
   /* Ensure all list items are visible */

@@ -234,7 +234,6 @@
       {useCase}
       {matrix}
       {calculatedScores}
-      mode="view"
       {isEditing}
       {draft}
     >
