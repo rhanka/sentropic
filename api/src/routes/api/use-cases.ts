@@ -156,10 +156,10 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
   let roundedComplexityScore = record.totalComplexityScore ?? null;
 
   if (matrix && shouldRecomputeScores) {
-    const computed = withComputedScores(matrix, {
-      ...hydrateUseCase(record),
-      ...payload
-    } as UseCaseInput);
+  const computed = withComputedScores(matrix, {
+    ...hydrateUseCase(record),
+    ...payload
+  } as UseCaseInput);
 
     if (computed.totalValueScore !== null && computed.totalValueScore !== undefined) {
       roundedValueScore = Math.round(computed.totalValueScore);

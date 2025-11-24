@@ -9,19 +9,44 @@
       ListItemWithClasses, 
       HeadingWithClasses 
     } from '$lib/extensions/tailwind-classes';
+import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
 
     export let value;
+    export let forceList = false;
     let editor, element;
     let lastValue;
     const dispatch = createEventDispatcher();
 
+    const LIST_LINE_REGEX = /^\s*(?:[-*+]|(?:\d+\.))\s+/;
+
+    const ensureListMarkdown = (text) => {
+      if (!forceList) return text || '';
+      const source = text ?? '';
+      const lines = source
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      const alreadyList = lines.length > 0 && lines.every((line) => LIST_LINE_REGEX.test(line));
+      if (alreadyList || !lines.length) {
+        return source;
+      }
+      const items = markdownToArray(source);
+      if (!items.length) return '';
+      return arrayToMarkdown(items);
+    };
+
     // Mettre à jour uniquement si value change depuis l'extérieur
-    $: if (editor && value !== lastValue) {
-        editor.commands.setContent(value);
-        lastValue = value;
+    // En mode forceList, on désactive le watcher pour éviter les boucles (normalisation uniquement à l'init)
+    $: if (editor && value !== lastValue && !forceList) {
+        const processed = ensureListMarkdown(value);
+        if (processed !== lastValue) {
+          editor.commands.setContent(processed);
+          lastValue = processed;
+        }
     }
 
   onMount(() => {
+    const initialContent = ensureListMarkdown(value);
     editor = new Editor({
       element,
       extensions: [
@@ -40,15 +65,83 @@
         // Extension Markdown
         Markdown,
       ],
-      content: value,
+      content: initialContent,
       onUpdate: ({ editor }) => {
-        const content = editor.storage.markdown.getMarkdown();
-        if (content !== value) {
-            lastValue = content;
-            value = content;
-            dispatch('change', { value: content });
+        const rawContent = editor.storage.markdown.getMarkdown();
+        if (rawContent !== lastValue) {
+            lastValue = rawContent;
+            dispatch('change', { value: rawContent });
         }
       },
+    });
+    lastValue = initialContent;
+
+    // Gérer les raccourcis clavier en mode forceList
+    if (forceList) {
+      editor.on('transaction', ({ editor, transaction }) => {
+        const { selection, doc } = editor.state;
+        const { $from } = selection;
+        
+        // Vérifier si on est dans un listItem
+        let inListItem = false;
+        for (let depth = $from.depth; depth >= 0; depth -= 1) {
+          if ($from.node(depth).type.name === 'listItem') {
+            inListItem = true;
+            break;
+          }
+        }
+        
+        // Si on n'est plus dans une liste après la transaction, forcer le retour en liste
+        if (!inListItem && doc.content.size > 0) {
+          const firstChild = doc.firstChild;
+          if (firstChild && firstChild.type.name !== 'bulletList' && firstChild.type.name !== 'orderedList') {
+            // Convertir le contenu en liste
+            editor.chain().focus().toggleBulletList().run();
+          }
+        }
+      });
+    }
+
+    const handleKeyDown = (event) => {
+      if (!forceList) return;
+      // Empêcher Tab (indentation) et Shift+Tab (sortie de liste)
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        return false;
+      }
+      // Empêcher Ctrl+Shift (autres raccourcis de sortie)
+      if (event.ctrlKey && event.shiftKey) {
+        event.preventDefault();
+        return false;
+      }
+      // Si Enter sur un listItem vide, créer un nouveau listItem au lieu de sortir
+      if (event.key === 'Enter') {
+        const { selection } = editor.state;
+        const { $from } = selection;
+        let inListItem = false;
+        let listItemNode = null;
+        for (let depth = $from.depth; depth >= 0; depth -= 1) {
+          const node = $from.node(depth);
+          if (node.type.name === 'listItem') {
+            inListItem = true;
+            listItemNode = node;
+            break;
+          }
+        }
+        if (inListItem && listItemNode && !listItemNode.textContent.trim()) {
+          // ListItem vide : forcer la création d'un nouveau listItem
+          event.preventDefault();
+          // Utiliser splitListItem pour créer un nouvel item
+          editor.chain().splitListItem('listItem').run();
+          return false;
+        }
+      }
+    };
+
+    element?.addEventListener('keydown', handleKeyDown, true);
+
+    onDestroy(() => {
+      element?.removeEventListener('keydown', handleKeyDown, true);
     });
   });
 

@@ -56,4 +56,23 @@ export function stripTrailingEmptyParagraph(text: string | null | undefined): st
   return lines.join('\n');
 }
 
+export function arrayToMarkdown(items?: string[]): string {
+  if (!items || items.length === 0) return '';
+  return items
+    .map((item) => item?.trim?.())
+    .filter((item): item is string => Boolean(item && item.length > 0))
+    .map((item) => `- ${item}`)
+    .join('\n');
+}
+
+export function markdownToArray(markdown?: string): string[] {
+  if (!markdown) return [];
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => line.replace(/^\s*(?:[-*+]|(?:\d+\.)|\u2022|\u2023|\u25e6)\s+/, '').trim())
+    .filter((line) => line.length > 0);
+}
+
 

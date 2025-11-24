@@ -18,6 +18,7 @@
   export let fullDataGetter = null; // Fonction pour récupérer les données complètes au moment de la sauvegarde
   export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]
+  export let forceList = false;
   
   let tiptapContainer;
   
@@ -549,7 +550,7 @@
   {:else}
     <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
       <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-        <TipTap bind:value={value} on:change={handleTipTapChange}/>
+        <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList}/>
       </div>
     </div>
   {/if}

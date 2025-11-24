@@ -46,7 +46,8 @@
     if (
       path.startsWith('/entreprises/') || 
       path.startsWith('/dossiers/') || 
-      path.startsWith('/cas-usage/')
+      path.startsWith('/cas-usage/') ||
+      path.startsWith('/cas-usage-old/')
     ) {
       return true;
     }

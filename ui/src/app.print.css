@@ -955,11 +955,27 @@
     line-height: 1.2;
   }
 
+  /* Forcer les éléments enfants des li à hériter de la taille (pour markdown rendu) */
+  .usecase-print ul li:not(.prose li) *,
+  .usecase-print ol li:not(.prose li) *,
+  .usecase-print .space-y-2 li:not(.prose li) *,
+  .usecase-print .space-y-3 li:not(.prose li) * {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
   /* Taille réduite pour les textes dans les box (hors description) */
   .usecase-print .rounded-lg .text-slate-600:not(.prose),
   .usecase-print .border .text-slate-600:not(.prose),
   .usecase-print .shadow-sm .text-slate-600:not(.prose) {
     font-size: 6.5pt !important;
+  }
+
+  /* Forcer la taille pour prose-sm (délai, contact) en mode print */
+  .usecase-print .prose.prose-sm,
+  .usecase-print .prose.prose-sm * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
   }
 
   /* Icons - smaller or hide */
@@ -976,26 +992,35 @@
   }
 
 
-  /* Compact prose content */
-  .usecase-print .prose {
+  /* Description normale (prose) reste à 10px = 7.5pt */
+  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) {
     font-size: 7.5pt !important;
-    line-height: 1.25 !important;
+    line-height: 1.5 !important;
   }
 
-  /* Réduire la taille de police pour les descriptions longues en mode impression */
+  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) * {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  /* Réduire la taille de police pour les descriptions longues en mode impression - priorité maximale */
   .usecase-print .prose.description-compact-print,
   .usecase-print div.prose.description-compact-print,
   div.usecase-print .prose.description-compact-print,
-  .usecase-print .text-slate-600.prose.description-compact-print {
+  .usecase-print .text-slate-600.prose.description-compact-print,
+  .usecase-print .prose.description-compact-print .markdown-wrapper,
+  .usecase-print div.prose.description-compact-print .markdown-wrapper {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
-  /* Réduire la taille de police des paragraphes dans les descriptions longues */
-  .usecase-print .prose.description-compact-print p,
-  .usecase-print div.prose.description-compact-print p,
-  div.usecase-print .prose.description-compact-print p,
-  .usecase-print .text-slate-600.prose.description-compact-print p {
+  /* Forcer tous les éléments enfants des descriptions compactes */
+  .usecase-print .prose.description-compact-print *,
+  .usecase-print div.prose.description-compact-print *,
+  div.usecase-print .prose.description-compact-print *,
+  .usecase-print .text-slate-600.prose.description-compact-print *,
+  .usecase-print .prose.description-compact-print .markdown-wrapper *,
+  .usecase-print div.prose.description-compact-print .markdown-wrapper * {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }

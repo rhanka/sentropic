@@ -7,19 +7,7 @@ import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
-import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph } from '$lib/utils/markdown';
-const arrayToMarkdown = (arr?: string[]) => {
-  if (!arr || arr.length === 0) return '';
-  return arr.map((item) => `- ${item}`).join('\n');
-};
-
-const markdownToArray = (md?: string) => {
-  if (!md) return [];
-  return md
-    .split('\n')
-    .map((line) => line.replace(/^-\s*/, '').trim())
-    .filter(Boolean);
-};
+import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph } from '$lib/utils/markdown';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
@@ -81,7 +69,9 @@ const markdownToArray = (md?: string) => {
   };
 
 const TEXT_FIELDS = ['description', 'contact', 'deadline'] as const;
+const LIST_FIELDS = ['benefits'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
+type ListField = (typeof LIST_FIELDS)[number];
 
 let textBuffers: Record<TextField, string> = {
   description: '',
@@ -93,26 +83,47 @@ let textOriginals: Record<TextField, string> = {
   contact: '',
   deadline: '',
 };
+let listBuffers: Record<ListField, string[]> = {
+  benefits: [],
+};
+let listOriginals: Record<ListField, string[]> = {
+  benefits: [],
+};
+let listMarkdowns: Record<ListField, string> = {
+  benefits: '',
+};
 let lastUseCaseId: string | null = null;
 
 const setTextBuffer = (field: TextField, value: string) => {
   textBuffers = { ...textBuffers, [field]: value };
+};
+const setListBuffer = (field: ListField, value: string[]) => {
+  listBuffers = { ...listBuffers, [field]: value };
 };
 
 $: if (useCase?.id) {
   const normalizedValues = TEXT_FIELDS.reduce<Record<TextField, string>>((acc, field) => {
     acc[field] = normalizeUseCaseMarkdown(useCase[field] || '');
     return acc;
-  }, { ...textBuffers });
+  }, {} as Record<TextField, string>);
+  const listValues = LIST_FIELDS.reduce<Record<ListField, string[]>>((acc, field) => {
+    const source = Array.isArray(useCase[field]) ? (useCase[field] as string[]) : [];
+    acc[field] = [...source];
+    return acc;
+  }, {} as Record<ListField, string[]>);
 
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
     textBuffers = { ...normalizedValues };
     textOriginals = { ...normalizedValues };
+    listBuffers = { ...listValues };
+    listOriginals = { ...listValues };
   } else {
     let changed = false;
     const updatedBuffers = { ...textBuffers };
     const updatedOriginals = { ...textOriginals };
+    const updatedListBuffers = { ...listBuffers };
+    const updatedListOriginals = { ...listOriginals };
 
     TEXT_FIELDS.forEach((field) => {
       if (normalizedValues[field] !== textOriginals[field]) {
@@ -122,12 +133,28 @@ $: if (useCase?.id) {
       }
     });
 
+    LIST_FIELDS.forEach((field) => {
+      const incoming = useCase[field] || [];
+      if (JSON.stringify(incoming) !== JSON.stringify(listOriginals[field])) {
+        updatedListBuffers[field] = [...incoming];
+        updatedListOriginals[field] = [...incoming];
+        changed = true;
+      }
+    });
+
     if (changed) {
       textBuffers = updatedBuffers;
       textOriginals = updatedOriginals;
+      listBuffers = updatedListBuffers;
+      listOriginals = updatedListOriginals;
     }
   }
 }
+
+$: listMarkdowns = LIST_FIELDS.reduce<Record<ListField, string>>((acc, field) => {
+  acc[field] = arrayToMarkdown(listBuffers[field]);
+  return acc;
+}, {} as Record<ListField, string>);
 
 const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
 const renderMarkdownWithRefs = (text?: string | null, refs: Array<{title: string; url: string}> = []) => {
@@ -141,6 +168,12 @@ const getTextFullData = (field: TextField) => {
   const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
   const cleaned = stripTrailingEmptyParagraph(normalized);
   return { [field]: cleaned };
+};
+const getListFullData = (field: ListField) => {
+  if (!useCase?.id) return null;
+  const markdown = arrayToMarkdown(listBuffers[field] || []);
+  const cleaned = stripTrailingEmptyParagraph(markdown);
+  return { [field]: markdownToArray(cleaned) };
 };
 
 $: descriptionValue = textBuffers.description || '';
@@ -424,25 +457,32 @@ $: descriptionHtml = useCase?.description
                 Bénéfices recherchés
               </h3>
             </div>
-            {#if isEditing && mode !== 'print-only'}
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Bénéfices (un par ligne)</label>
-                <textarea 
-                  class="w-full rounded border border-slate-300 p-2 text-sm"
-                  placeholder="Bénéfice 1&#10;Bénéfice 2&#10;..."
-                  bind:value={draft.benefitsText}
-                  rows="3"
-                ></textarea>
-              </div>
-            {:else}
+            {#if isPrinting}
               <ul class="space-y-2">
                 {#each parsedBenefits as benefit}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-green-500 mt-1">•</span>
-                    <span>{@html benefit}</span>
+                    <span>{@html renderMarkdownWithRefs(benefit, useCase.references || [])}</span>
                   </li>
                 {/each}
               </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  label=""
+                  value={listMarkdowns.benefits || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('benefits')}
+                  fullDataGetter={() => getListFullData('benefits')}
+                  changeId={useCase?.id ? `usecase-benefits-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.benefits) || ''}
+                  references={useCase?.references || []}
+                  on:change={(e) => setListBuffer('benefits', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
             {/if}
           </div>
 
