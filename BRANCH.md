@@ -168,6 +168,11 @@ Transform the dashboard into an executive summary view with improved visualizati
     - [x] Phase 4: Technologies avec scaling dynamique (`technologiesScaleFactor`)
     - [x] Phase 5: Champs texte simples (Contact, Domaine, Délai) 
     - [x] Phase 6: Justifications axes valeur/complexité (texte simple) avec traitement références
+  - [x] Retirer le bouton "Modifier" de la page cas d'usage (édition désormais uniquement via EditableInput en place)
+    - [x] Suppression du bouton "Modifier" et du slot `actions-edit` dans `cas-usage/[id]/+page.svelte`
+    - [x] Nettoyage de la logique d'édition (`isEditing`, `draft`, `handleUpdateUseCase`, `handleCancel`)
+    - [x] Retrait de l'import `apiPut` inutilisé
+    - [x] Conservation de la compatibilité avec `UseCaseDetail` (props `isEditing={false}` et `draft={{}}`)
 
 - [x] **Task 5.1**: Update unit tests for new API endpoints
   - **Catégorie**: Tests unitaires et d'intégration API

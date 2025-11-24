@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPut } from '$lib/utils/api';
+  import { apiGet } from '$lib/utils/api';
   import { goto } from '$app/navigation';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -11,8 +11,6 @@
   import { refreshManager } from '$lib/stores/refresh';
 
   let useCase: any = undefined;
-  let isEditing = false;
-  let draft: any = {};
   let error = '';
   let matrix: MatrixConfig | null = null;
   let calculatedScores: any = null;
@@ -101,11 +99,6 @@
       );
       
       if (useCase) {
-        draft = { 
-          ...useCase,
-          dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
-          dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
-        };
         await loadMatrixAndCalculateScores();
       }
     } catch (err) {
@@ -120,11 +113,6 @@
         return;
       }
       
-      draft = { 
-        ...useCase,
-        dataSourcesText: useCase.dataSources ? useCase.dataSources.join('\n') : '',
-        dataObjectsText: useCase.dataObjects ? useCase.dataObjects.join('\n') : ''
-      };
       await loadMatrixAndCalculateScores();
     }
   };
@@ -137,7 +125,6 @@
       // Mettre à jour seulement les champs qui changent (status, etc.)
       if (useCase) {
         useCase = { ...useCase, ...updatedUseCase };
-        draft = { ...useCase };
         
         // Mettre à jour le store
         useCasesStore.update(items => 
@@ -146,27 +133,6 @@
       }
     } catch (error) {
       console.error('Failed to refresh use case status:', error);
-    }
-  };
-
-  const handleUpdateUseCase = async () => {
-    if (!useCase || !draft.name?.trim()) return;
-
-    try {
-      // Convertir les textes en arrays
-      const updatedDraft = {
-        ...draft,
-        dataSources: draft.dataSourcesText ? draft.dataSourcesText.split('\n').filter(line => line.trim()) : draft.dataSources || [],
-        dataObjects: draft.dataObjectsText ? draft.dataObjectsText.split('\n').filter(line => line.trim()) : draft.dataObjects || []
-      };
-      
-      useCasesStore.update(items => items.map(uc => uc.id === useCase.id ? { ...uc, ...updatedDraft } : uc));
-      useCase = { ...useCase, ...updatedDraft };
-      isEditing = false;
-      addToast({ type: 'success', message: 'Cas d\'usage mis à jour avec succès !' });
-    } catch (err) {
-      console.error('Failed to update use case:', err);
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la mise à jour' });
     }
   };
 
@@ -181,14 +147,6 @@
       console.error('Failed to delete use case:', err);
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
     }
-  };
-
-  const handleCancel = () => {
-    if (useCase) {
-      draft = { ...useCase };
-    }
-    isEditing = false;
-    error = '';
   };
 
   const loadMatrixAndCalculateScores = async () => {
@@ -234,8 +192,8 @@
       {useCase}
       {matrix}
       {calculatedScores}
-      {isEditing}
-      {draft}
+      isEditing={false}
+      draft={{}}
     >
       <svelte:fragment slot="actions-view">
             <button
@@ -248,32 +206,11 @@
               </svg>
             </button>
             <button 
-              class="rounded bg-blue-500 px-4 py-2 text-white"
-              on:click={() => isEditing = true}
-            >
-              Modifier
-            </button>
-            <button 
               class="rounded bg-red-500 px-4 py-2 text-white"
               on:click={handleDelete}
             >
               Supprimer
             </button>
-      </svelte:fragment>
-      <svelte:fragment slot="actions-edit">
-        <button 
-          class="rounded bg-primary px-4 py-2 text-white"
-          on:click={handleUpdateUseCase}
-          disabled={!draft.name?.trim()}
-        >
-          Enregistrer
-        </button>
-        <button 
-          class="rounded border border-slate-300 px-4 py-2"
-          on:click={handleCancel}
-        >
-          Annuler
-        </button>
       </svelte:fragment>
     </UseCaseDetail>
   {/if}
