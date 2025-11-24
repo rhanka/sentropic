@@ -163,11 +163,11 @@ Transform the dashboard into an executive summary view with improved visualizati
   - [x] Fix additionnal non volontary empty paragraph in TipTap after list (hide it)
   - [ ] Detailed Usecase UI relying on editable inputs in markdown mode for all fields
     - [x] Phase 1: Description (markdown) alignée Dashboard (EditableInput + normalisation Markdown + API PUT stable)
-    - [ ] Phase 2: Listes simples (Bénéfices, Risques, Mesures, Prochaines étapes) avec conversion array↔markdown et traitement références
-    - [ ] Phase 3: Justifications axes valeur/complexité (texte simple) avec traitement références
-    - [ ] Phase 4: Listes avec icônes (Sources, Données) avec scaling dynamique (`dataSourcesScaleFactor`, `dataObjectsScaleFactor`), post-processing icônes SVG et traitement références
-    - [ ] Phase 5: Technologies avec scaling dynamique (`technologiesScaleFactor`)
-    - [x] Phase 6: Champs texte simples (Contact, Domaine, Délai) 
+    - [x] Phase 2: Listes simples (Bénéfices, Risques, Mesures, Prochaines étapes) avec conversion array↔markdown et traitement références
+    - [x] Phase 3: Listes avec icônes (Sources, Données) avec scaling dynamique (`dataSourcesScaleFactor`, `dataObjectsScaleFactor`), post-processing icônes SVG et traitement références
+    - [x] Phase 4: Technologies avec scaling dynamique (`technologiesScaleFactor`)
+    - [x] Phase 5: Champs texte simples (Contact, Domaine, Délai) 
+    - [ ] Phase 6: Justifications axes valeur/complexité (texte simple) avec traitement références
 
 - [ ] **Task 5.1**: Update unit tests for new API endpoints
   - Test executive summary generation and update endpoint

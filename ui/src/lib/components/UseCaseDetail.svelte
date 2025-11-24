@@ -68,7 +68,7 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
   };
 
 const TEXT_FIELDS = ['description', 'contact', 'deadline'] as const;
-const LIST_FIELDS = ['benefits'] as const;
+const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
@@ -84,12 +84,27 @@ let textOriginals: Record<TextField, string> = {
 };
 let listBuffers: Record<ListField, string[]> = {
   benefits: [],
+  risks: [],
+  metrics: [],
+  technologies: [],
+  dataSources: [],
+  dataObjects: [],
 };
 let listOriginals: Record<ListField, string[]> = {
   benefits: [],
+  risks: [],
+  metrics: [],
+  technologies: [],
+  dataSources: [],
+  dataObjects: [],
 };
 let listMarkdowns: Record<ListField, string> = {
   benefits: '',
+  risks: '',
+  metrics: '',
+  technologies: '',
+  dataSources: '',
+  dataObjects: '',
 };
 let lastUseCaseId: string | null = null;
 
@@ -195,15 +210,27 @@ $: descriptionHtml = useCase?.description
 
   // Fonctions réactives pour parser les autres champs
   $: parsedBenefits = useCase?.benefits 
-    ? (useCase.benefits || []).map((benefit: string) => parseReferencesInText(benefit, useCase.references || []))
+    ? (useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, useCase.references || []))
     : [];
 
   $: parsedMetrics = useCase?.metrics 
-    ? (useCase.metrics || []).map((metric: string) => parseReferencesInText(metric, useCase.references || []))
+    ? (useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, useCase.references || []))
     : [];
 
   $: parsedRisks = useCase?.risks 
-    ? (useCase.risks || []).map((risk: string) => parseReferencesInText(risk, useCase.references || []))
+    ? (useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, useCase.references || []))
+    : [];
+
+  $: parsedTechnologies = useCase?.technologies 
+    ? (useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, useCase.references || []))
+    : [];
+
+  $: parsedDataSources = useCase?.dataSources 
+    ? (useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, useCase.references || []))
+    : [];
+
+  $: parsedDataObjects = useCase?.dataObjects 
+    ? (useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, useCase.references || []))
     : [];
 
   $: parsedNextSteps = useCase?.nextSteps 
@@ -461,7 +488,7 @@ $: descriptionHtml = useCase?.description
                 {#each parsedBenefits as benefit}
                   <li class="flex items-start gap-2 text-sm text-slate-600">
                     <span class="text-green-500 mt-1">•</span>
-                    <span>{@html renderMarkdownWithRefs(benefit, useCase.references || [])}</span>
+                    <span>{@html benefit}</span>
                   </li>
                 {/each}
               </ul>
@@ -497,17 +524,7 @@ $: descriptionHtml = useCase?.description
                   Risques
                 </h3>
               </div>
-              {#if isEditing && ! isPrinting}
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1">Risques (un par ligne)</label>
-                  <textarea 
-                    class="w-full rounded border border-slate-300 p-2 text-sm"
-                    placeholder="Risque 1&#10;Risque 2&#10;..."
-                    bind:value={draft.risksText}
-                    rows="3"
-                  ></textarea>
-                </div>
-              {:else}
+              {#if isPrinting}
                 <ul class="space-y-2">
                   {#each parsedRisks as risk}
                     <li class="flex items-start gap-2 text-sm text-slate-600">
@@ -516,6 +533,23 @@ $: descriptionHtml = useCase?.description
                     </li>
                   {/each}
                 </ul>
+              {:else}
+                <div class="text-sm text-slate-600">
+                  <EditableInput
+                    label=""
+                    value={listMarkdowns.risks || ''}
+                    markdown={true}
+                    forceList={true}
+                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    fullData={getListFullData('risks')}
+                    fullDataGetter={() => getListFullData('risks')}
+                    changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
+                    originalValue={arrayToMarkdown(listOriginals.risks) || ''}
+                    references={useCase?.references || []}
+                    on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
+                    on:saved={handleFieldSaved}
+                  />
+                </div>
               {/if}
             </div>
 
@@ -529,17 +563,7 @@ $: descriptionHtml = useCase?.description
                   Mesures du succès
                 </h3>
               </div>
-              {#if isEditing && !isPrinting}
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1">Métriques (une par ligne)</label>
-                  <textarea 
-                    class="w-full rounded border border-slate-300 p-2 text-sm"
-                    placeholder="Métrique 1&#10;Métrique 2&#10;..."
-                    bind:value={draft.metricsText}
-                    rows="3"
-                  ></textarea>
-                </div>
-              {:else}
+              {#if isPrinting}
                 <ul class="space-y-2">
                   {#each parsedMetrics as metric}
                     <li class="flex items-start gap-2 text-sm text-slate-600">
@@ -548,6 +572,23 @@ $: descriptionHtml = useCase?.description
                     </li>
                   {/each}
                 </ul>
+              {:else}
+                <div class="text-sm text-slate-600">
+                  <EditableInput
+                    label=""
+                    value={listMarkdowns.metrics || ''}
+                    markdown={true}
+                    forceList={true}
+                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    fullData={getListFullData('metrics')}
+                    fullDataGetter={() => getListFullData('metrics')}
+                    changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
+                    originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
+                    references={useCase?.references || []}
+                    on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
+                    on:saved={handleFieldSaved}
+                  />
+                </div>
               {/if}
             </div>
           </div>
@@ -606,18 +647,36 @@ $: descriptionHtml = useCase?.description
               Technologies
             </h3>
           </div>
-          <div class="space-y-3 text-sm">
-            <div>
-              <ul 
-                class="text-slate-600 ml-4 mt-1 space-y-2 list-disc technologies-content"
-                style={technologiesScaleFactor < 1 ? `font-size: ${technologiesScaleFactor}em; line-height: ${Math.max(1.2, technologiesScaleFactor * 1.5)}em;` : ''}
-              >
-                {#each useCase.technologies as tech}
-                  <li class="text-sm">{tech}</li>
-                {/each}
-              </ul>
+          {#if isPrinting}
+            <ul 
+              class="space-y-2"
+              style={technologiesScaleFactor < 1 ? `font-size: ${technologiesScaleFactor}em; line-height: ${Math.max(1.2, technologiesScaleFactor * 1.5)}em;` : ''}
+            >
+              {#each parsedTechnologies as tech}
+                <li class="flex items-start gap-2 text-sm text-slate-600">
+                  <span class="text-slate-500 mt-1">•</span>
+                  <span>{@html tech}</span>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <div class="text-sm text-slate-600">
+              <EditableInput
+                label=""
+                value={listMarkdowns.technologies || ''}
+                markdown={true}
+                forceList={true}
+                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                fullData={getListFullData('technologies')}
+                fullDataGetter={() => getListFullData('technologies')}
+                changeId={useCase?.id ? `usecase-technologies-${useCase.id}` : ''}
+                originalValue={arrayToMarkdown(listOriginals.technologies) || ''}
+                references={useCase?.references || []}
+                on:change={(e) => setListBuffer('technologies', markdownToArray(e.detail.value))}
+                on:saved={handleFieldSaved}
+              />
             </div>
-          </div>
+          {/if}
         </div>
       {/if}
 
@@ -631,22 +690,12 @@ $: descriptionHtml = useCase?.description
             Sources des données
           </h3>
         </div>
-        {#if isEditing && !isPrinting}
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Sources (une par ligne)</label>
-            <textarea 
-              class="w-full rounded border border-slate-300 p-2 text-sm"
-              placeholder="Source 1&#10;Source 2&#10;..."
-              bind:value={draft.dataSourcesText}
-              rows="3"
-            ></textarea>
-          </div>
-        {:else}
+        {#if isPrinting}
           <ul 
-            class="space-y-2 data-sources-content"
+            class="space-y-2"
             style={dataSourcesScaleFactor < 1 ? `font-size: ${dataSourcesScaleFactor}em; line-height: ${Math.max(1.2, dataSourcesScaleFactor * 1.5)}em;` : ''}
           >
-            {#each useCase.dataSources || [] as source}
+            {#each parsedDataSources as source}
               <li class="flex items-start gap-2 text-sm text-slate-600">
                 <svg 
                   class="w-4 h-4 text-blue-500 mt-0.5" 
@@ -657,10 +706,27 @@ $: descriptionHtml = useCase?.description
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
-                <span>{source}</span>
+                <span>{@html source}</span>
               </li>
             {/each}
           </ul>
+        {:else}
+          <div class="text-sm text-slate-600">
+            <EditableInput
+              label=""
+              value={listMarkdowns.dataSources || ''}
+              markdown={true}
+              forceList={true}
+              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              fullData={getListFullData('dataSources')}
+              fullDataGetter={() => getListFullData('dataSources')}
+              changeId={useCase?.id ? `usecase-dataSources-${useCase.id}` : ''}
+              originalValue={arrayToMarkdown(listOriginals.dataSources) || ''}
+              references={useCase?.references || []}
+              on:change={(e) => setListBuffer('dataSources', markdownToArray(e.detail.value))}
+              on:saved={handleFieldSaved}
+            />
+          </div>
         {/if}
       </div>
 
@@ -674,22 +740,12 @@ $: descriptionHtml = useCase?.description
             Données
           </h3>
         </div>
-        {#if isEditing && !isPrinting}
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Données liées (une par ligne)</label>
-            <textarea 
-              class="w-full rounded border border-slate-300 p-2 text-sm"
-              placeholder="Donnée 1&#10;Donnée 2&#10;..."
-              bind:value={draft.dataObjectsText}
-              rows="3"
-            ></textarea>
-          </div>
-        {:else}
+        {#if isPrinting}
           <ul 
-            class="space-y-2 data-objects-content"
+            class="space-y-2"
             style={dataObjectsScaleFactor < 1 ? `font-size: ${dataObjectsScaleFactor}em; line-height: ${Math.max(1.2, dataObjectsScaleFactor * 1.5)}em;` : ''}
           >
-            {#each useCase.dataObjects || [] as data}
+            {#each parsedDataObjects as data}
               <li class="flex items-start gap-2 text-sm text-slate-600">
                 <svg 
                   class="w-4 h-4 text-blue-500 mt-0.5" 
@@ -700,10 +756,27 @@ $: descriptionHtml = useCase?.description
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
                 </svg>
-                <span>{data}</span>
+                <span>{@html data}</span>
               </li>
             {/each}
           </ul>
+        {:else}
+          <div class="text-sm text-slate-600">
+            <EditableInput
+              label=""
+              value={listMarkdowns.dataObjects || ''}
+              markdown={true}
+              forceList={true}
+              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              fullData={getListFullData('dataObjects')}
+              fullDataGetter={() => getListFullData('dataObjects')}
+              changeId={useCase?.id ? `usecase-dataObjects-${useCase.id}` : ''}
+              originalValue={arrayToMarkdown(listOriginals.dataObjects) || ''}
+              references={useCase?.references || []}
+              on:change={(e) => setListBuffer('dataObjects', markdownToArray(e.detail.value))}
+              on:saved={handleFieldSaved}
+            />
+          </div>
         {/if}
       </div>
     </div>
