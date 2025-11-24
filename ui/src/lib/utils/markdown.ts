@@ -1,5 +1,6 @@
 const BULLET_PATTERN = /(^|\n)[ \t]*[•▪‣●◦]/g;
-const SINGLE_NEWLINE_PATTERN = /([^\n\r])\r?\n(?!\r?\n|\s*[-*•])/g;
+const SINGLE_NEWLINE_PATTERN = /([^\n\r])\r?\n(?!\r?\n|\s*[-*•]|\s*$)/g;
+const BULLET_LINE_PATTERN = /^\s*(?:[-*+]|(?:\d+\.)|\u2022|\u2023|\u25e6)\s+/;
 
 /**
  * Normalise un champ markdown issu des use cases historiques.
@@ -20,6 +21,39 @@ export function normalizeUseCaseMarkdown(text: string | null | undefined): strin
   normalized = normalized.replace(SINGLE_NEWLINE_PATTERN, '$1\n\n');
 
   return normalized.trim();
+}
+
+/**
+ * Supprime le paragraphe vide généré automatiquement après une liste.
+ * - N'intervient que si les dernières lignes sont vides ET précédées d'une vraie liste
+ * - Idempotent : réappliquer ne change pas le résultat
+ */
+export function stripTrailingEmptyParagraph(text: string | null | undefined): string {
+  if (!text) return '';
+
+  const normalized = text.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+
+  let removed = false;
+  while (lines.length > 0 && !lines[lines.length - 1].trim()) {
+    lines.pop();
+    removed = true;
+  }
+
+  if (!removed) {
+    return text;
+  }
+
+  if (lines.length === 0) {
+    return '';
+  }
+
+  const lastLine = lines[lines.length - 1].trim();
+  if (!BULLET_LINE_PATTERN.test(lastLine)) {
+    return text;
+  }
+
+  return lines.join('\n');
 }
 
 

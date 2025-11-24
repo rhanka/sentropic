@@ -15,6 +15,7 @@
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
+  export let fullDataGetter = null; // Fonction pour récupérer les données complètes au moment de la sauvegarde
   export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]
   
@@ -69,7 +70,14 @@
       // Extract endpoint path from full URL if needed
       // apiEndpoint can be either "/companies/123" or "http://.../companies/123"
       // apiPut handles both cases
-      await apiPut(apiEndpoint, fullData || { value });
+      let payload = fullData || { value };
+      if (typeof fullDataGetter === 'function') {
+        const computed = fullDataGetter();
+        if (computed) {
+          payload = computed;
+        }
+      }
+      await apiPut(apiEndpoint, payload);
       
       // Success - response is OK by default (apiPut throws on error)
       hasUnsavedChanges = false;

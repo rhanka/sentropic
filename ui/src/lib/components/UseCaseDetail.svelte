@@ -7,7 +7,7 @@ import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
-import { normalizeUseCaseMarkdown } from '$lib/utils/markdown';
+import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph } from '$lib/utils/markdown';
 const arrayToMarkdown = (arr?: string[]) => {
   if (!arr || arr.length === 0) return '';
   return arr.map((item) => `- ${item}`).join('\n');
@@ -80,30 +80,52 @@ const markdownToArray = (md?: string) => {
     }
   };
 
-const TEXT_FIELDS = ['description', 'contact', 'deadline'];
-let textBuffers: Record<string, string> = {};
-let textOriginals: Record<string, string> = {};
+const TEXT_FIELDS = ['description', 'contact', 'deadline'] as const;
+type TextField = (typeof TEXT_FIELDS)[number];
+
+let textBuffers: Record<TextField, string> = {
+  description: '',
+  contact: '',
+  deadline: '',
+};
+let textOriginals: Record<TextField, string> = {
+  description: '',
+  contact: '',
+  deadline: '',
+};
 let lastUseCaseId: string | null = null;
 
+const setTextBuffer = (field: TextField, value: string) => {
+  textBuffers = { ...textBuffers, [field]: value };
+};
+
 $: if (useCase?.id) {
-  const normalizedValues = TEXT_FIELDS.reduce<Record<string, string>>((acc, field) => {
+  const normalizedValues = TEXT_FIELDS.reduce<Record<TextField, string>>((acc, field) => {
     acc[field] = normalizeUseCaseMarkdown(useCase[field] || '');
     return acc;
-  }, {});
+  }, { ...textBuffers });
 
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
-    TEXT_FIELDS.forEach((field) => {
-      textBuffers[field] = normalizedValues[field];
-      textOriginals[field] = normalizedValues[field];
-    });
+    textBuffers = { ...normalizedValues };
+    textOriginals = { ...normalizedValues };
   } else {
+    let changed = false;
+    const updatedBuffers = { ...textBuffers };
+    const updatedOriginals = { ...textOriginals };
+
     TEXT_FIELDS.forEach((field) => {
       if (normalizedValues[field] !== textOriginals[field]) {
-        textBuffers[field] = normalizedValues[field];
-        textOriginals[field] = normalizedValues[field];
+        updatedBuffers[field] = normalizedValues[field];
+        updatedOriginals[field] = normalizedValues[field];
+        changed = true;
       }
     });
+
+    if (changed) {
+      textBuffers = updatedBuffers;
+      textOriginals = updatedOriginals;
+    }
   }
 }
 
@@ -114,8 +136,12 @@ const renderMarkdownWithRefs = (text?: string | null, refs: Array<{title: string
   const html = marked(normalized);
   return parseReferencesInMarkdown(html, refs);
 };
-const getTextFullData = (field: string) =>
-  useCase?.id ? { [field]: normalizeUseCaseMarkdown(textBuffers[field] || '') } : null;
+const getTextFullData = (field: TextField) => {
+  if (!useCase?.id) return null;
+  const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
+  const cleaned = stripTrailingEmptyParagraph(normalized);
+  return { [field]: cleaned };
+};
 
 $: descriptionValue = textBuffers.description || '';
 $: isDescriptionLong = (descriptionValue.length || 0) > 200 || countLines(descriptionValue) > 12;
@@ -335,10 +361,11 @@ $: descriptionHtml = useCase?.description
               markdown={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getTextFullData('deadline')}
+              fullDataGetter={() => getTextFullData('deadline')}
               changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
               originalValue={textOriginals.deadline || ''}
               references={useCase?.references || []}
-              on:change={(e) => textBuffers.deadline = e.detail.value}
+              on:change={(e) => setTextBuffer('deadline', e.detail.value)}
               on:saved={handleFieldSaved}
             />
           </div>
@@ -372,10 +399,11 @@ $: descriptionHtml = useCase?.description
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={descriptionFullData}
+                  fullDataGetter={() => getTextFullData('description')}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
                   originalValue={textOriginals.description || ''}
                   references={useCase?.references || []}
-                  on:change={(e) => textBuffers.description = e.detail.value}
+                  on:change={(e) => setTextBuffer('description', e.detail.value)}
                   on:saved={handleFieldSaved}
                 />
               </div>
@@ -514,10 +542,11 @@ $: descriptionHtml = useCase?.description
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('contact')}
+              fullDataGetter={() => getTextFullData('contact')}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
                   originalValue={textOriginals.contact || ''}
                   references={useCase?.references || []}
-                  on:change={(e) => textBuffers.contact = e.detail.value}
+                  on:change={(e) => setTextBuffer('contact', e.detail.value)}
               on:saved={handleFieldSaved}
                 />
               </span>

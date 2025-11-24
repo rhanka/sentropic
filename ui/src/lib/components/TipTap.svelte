@@ -63,6 +63,28 @@
         outline: none!important;
     }
 
+    /* Masquer le paragraphe vide que TipTap ajoute après une liste */
+    :global(.markdown-wrapper .ProseMirror > p:last-child:empty),
+    :global(.markdown-wrapper .ProseMirror > p:last-child:has(> br:only-child)) {
+        display: none;
+    }
+
+    :global(.markdown-wrapper .ProseMirror > *:last-child),
+    :global(.markdown-wrapper .ProseMirror > *:nth-last-child(2):is(p, ul, ol)),
+    :global(.markdown-wrapper .ProseMirror > ul:last-child),
+    :global(.markdown-wrapper .ProseMirror > ol:last-child),
+    :global(.markdown-wrapper .ProseMirror > ul:nth-last-child(2)),
+    :global(.markdown-wrapper .ProseMirror > ol:nth-last-child(2)),
+    :global(.markdown-wrapper .ProseMirror > ul:last-child li:last-child),
+    :global(.markdown-wrapper .ProseMirror > ol:last-child li:last-child) {
+        margin-bottom: 0 !important;
+    }
+
+    :global(.markdown-wrapper .ProseMirror > ul:nth-last-child(2) li:last-child),
+    :global(.markdown-wrapper .ProseMirror > ol:nth-last-child(2) li:last-child) {
+        margin-bottom: 0 !important;
+    }
+
     /* Supprimé: padding-bottom: 0.2rem sur .tiptap > ul > li */
     /* Maintenant géré par les classes Tailwind (space-y-2 + mb-1) */
 </style>
