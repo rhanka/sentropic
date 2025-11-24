@@ -173,6 +173,10 @@ Transform the dashboard into an executive summary view with improved visualizati
     - [x] Nettoyage de la logique d'édition (`isEditing`, `draft`, `handleUpdateUseCase`, `handleCancel`)
     - [x] Retrait de l'import `apiPut` inutilisé
     - [x] Conservation de la compatibilité avec `UseCaseDetail` (props `isEditing={false}` et `draft={{}}`)
+  - [x] Remplacer le bouton "Supprimer" par une icône poubelle (aligné avec le bouton imprimer)
+    - [x] Remplacement du texte "Supprimer" par une icône SVG poubelle
+    - [x] Style aligné avec le bouton imprimer (icône uniquement, padding uniforme, hover)
+    - [x] Ajout de l'attribut `title="Supprimer le cas d'usage"` pour l'accessibilité
 
 - [x] **Task 5.1**: Update unit tests for new API endpoints
   - **Catégorie**: Tests unitaires et d'intégration API
