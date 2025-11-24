@@ -68,7 +68,7 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
   };
 
 const TEXT_FIELDS = ['description', 'contact', 'deadline'] as const;
-const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'technologies', 'dataSources', 'dataObjects'] as const;
+const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
@@ -86,6 +86,7 @@ let listBuffers: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
   metrics: [],
+  nextSteps: [],
   technologies: [],
   dataSources: [],
   dataObjects: [],
@@ -94,6 +95,7 @@ let listOriginals: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
   metrics: [],
+  nextSteps: [],
   technologies: [],
   dataSources: [],
   dataObjects: [],
@@ -102,6 +104,7 @@ let listMarkdowns: Record<ListField, string> = {
   benefits: '',
   risks: '',
   metrics: '',
+  nextSteps: '',
   technologies: '',
   dataSources: '',
   dataObjects: '',
@@ -861,17 +864,7 @@ $: descriptionHtml = useCase?.description
           Prochaines étapes
         </h3>
       </div>
-      {#if isEditing && !isPrinting}
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Prochaines étapes (une par ligne)</label>
-          <textarea 
-            class="w-full rounded border border-slate-300 p-2 text-sm"
-            placeholder="Étape 1&#10;Étape 2&#10;..."
-            bind:value={draft.nextStepsText}
-            rows="3"
-          ></textarea>
-        </div>
-      {:else}
+      {#if isPrinting}
         <ul class="space-y-2">
           {#each parsedNextSteps as step}
             <li class="flex items-start gap-2 text-sm text-slate-600">
@@ -880,6 +873,23 @@ $: descriptionHtml = useCase?.description
             </li>
           {/each}
         </ul>
+      {:else}
+        <div class="text-sm text-slate-600">
+          <EditableInput
+            label=""
+            value={listMarkdowns.nextSteps || ''}
+            markdown={true}
+            forceList={true}
+            apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+            fullData={getListFullData('nextSteps')}
+            fullDataGetter={() => getListFullData('nextSteps')}
+            changeId={useCase?.id ? `usecase-nextSteps-${useCase.id}` : ''}
+            originalValue={arrayToMarkdown(listOriginals.nextSteps) || ''}
+            references={useCase?.references || []}
+            on:change={(e) => setListBuffer('nextSteps', markdownToArray(e.detail.value))}
+            on:saved={handleFieldSaved}
+          />
+        </div>
       {/if}
     </div>
 
