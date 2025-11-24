@@ -181,11 +181,7 @@ Transform the dashboard into an executive summary view with improved visualizati
     - [x] Remplacement du texte "Supprimer" par une icône SVG poubelle
     - [x] Style aligné avec le bouton imprimer (icône uniquement, padding uniforme, hover)
     - [x] Ajout de l'attribut `title="Supprimer le cas d'usage"` pour l'accessibilité
-  - [ ] **BUG**: Édition des justifications axes valeur/complexité (score.description) fonctionne mais la sauvegarde échoue (400 Bad Request)
-    - **Symptôme**: Erreurs `PUT /api/v1/use-cases/:id` retournent 400 Bad Request uniquement pour les champs `score.description`
-    - **Source**: `EditableInput.svelte:91` - `Failed to save: ApiError` lors de la sauvegarde des justifications
-    - **Contexte**: Les autres champs (description, contact, deadline, listes) fonctionnent correctement. Seuls les `valueScores` et `complexityScores` avec `description` échouent
-    - **À investiguer**: Structure des données `getScoreFullData()` vs schéma Zod `scoreEntry`, validation des `valueScores`/`complexityScores` dans `useCaseInput`
+  - [x] **BUG**: Édition des justifications axes valeur/complexité (score.description) fonctionne mais la sauvegarde échoue (400 Bad Request) - correction du Zod pour accepter les scores fibonnaci
 
 - [x] **Task 5.1**: Update unit tests for new API endpoints
   - **Catégorie**: Tests unitaires et d'intégration API

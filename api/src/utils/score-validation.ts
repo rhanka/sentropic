@@ -90,7 +90,7 @@ export function fixScores(
   const missingValueAxes = valueAxisIds.filter(id => !validValueScores.some(score => score.axisId === id));
   const defaultValueScores = missingValueAxes.map(axisId => ({
     axisId,
-    rating: 5, // Score par défaut
+    rating: 5, // Valeur médiane Fibonacci (5 = 3 étoiles, entre 1=2 étoiles et 8=3 étoiles)
     description: 'Score par défaut - axe manquant dans la génération'
   }));
 
@@ -101,7 +101,7 @@ export function fixScores(
   const missingComplexityAxes = complexityAxisIds.filter(id => !validComplexityScores.some(score => score.axisId === id));
   const defaultComplexityScores = missingComplexityAxes.map(axisId => ({
     axisId,
-    rating: 5, // Score par défaut
+    rating: 5, // Valeur médiane Fibonacci (5 = 3 étoiles, entre 1=2 étoiles et 8=3 étoiles)
     description: 'Score par défaut - axe manquant dans la génération'
   }));
 
