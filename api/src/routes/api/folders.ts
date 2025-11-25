@@ -52,16 +52,39 @@ const matrixSchema = z.object({
   )
 });
 
+const executiveSummaryDataSchema = z.object({
+  introduction: z.string().optional(),
+  analyse: z.string().optional(),
+  recommandation: z.string().optional(),
+  synthese_executive: z.string().optional(),
+  references: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string()
+    })
+  ).optional()
+});
+
 const folderInput = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   companyId: z.string().optional(),
-  matrixConfig: matrixSchema.optional()
+  matrixConfig: matrixSchema.optional(),
+  executiveSummary: executiveSummaryDataSchema.optional()
 });
 
 export const foldersRouter = new Hono();
 
 const parseMatrix = (value: string | null) => {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+};
+
+const parseExecutiveSummary = (value: string | null) => {
   if (!value) return null;
   try {
     return JSON.parse(value);
@@ -140,6 +163,7 @@ foldersRouter.get('/:id', async (c) => {
     companyId: folders.companyId,
     companyName: companies.name,
     matrixConfig: folders.matrixConfig,
+    executiveSummary: folders.executiveSummary,
     status: folders.status,
     createdAt: folders.createdAt
   })
@@ -150,9 +174,23 @@ foldersRouter.get('/:id', async (c) => {
   if (!folder) {
     return c.json({ message: 'Not found' }, 404);
   }
+  
+  // Parser executiveSummary si présent
+  let parsedExecutiveSummary = null;
+  if (folder.executiveSummary) {
+    try {
+      parsedExecutiveSummary = typeof folder.executiveSummary === 'string' 
+        ? JSON.parse(folder.executiveSummary) 
+        : folder.executiveSummary;
+    } catch (e) {
+      console.error('Failed to parse executiveSummary:', e);
+    }
+  }
+  
   return c.json({
     ...folder,
-    matrixConfig: parseMatrix(folder.matrixConfig ?? null)
+    matrixConfig: parseMatrix(folder.matrixConfig ?? null),
+    executiveSummary: parsedExecutiveSummary
   });
 });
 
@@ -161,7 +199,8 @@ foldersRouter.put('/:id', zValidator('json', folderInput.partial()), async (c) =
   const payload = c.req.valid('json');
   const updatePayload = {
     ...payload,
-    matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined
+    matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined,
+    executiveSummary: payload.executiveSummary ? JSON.stringify(payload.executiveSummary) : undefined
   };
   const updated = await db
     .update(folders)
@@ -172,9 +211,23 @@ foldersRouter.put('/:id', zValidator('json', folderInput.partial()), async (c) =
     return c.json({ message: 'Not found' }, 404);
   }
   const folder = updated[0];
+  
+  // Parser executiveSummary si présent
+  let parsedExecutiveSummary = null;
+  if (folder.executiveSummary) {
+    try {
+      parsedExecutiveSummary = typeof folder.executiveSummary === 'string' 
+        ? JSON.parse(folder.executiveSummary) 
+        : folder.executiveSummary;
+    } catch (e) {
+      console.error('Failed to parse executiveSummary:', e);
+    }
+  }
+  
   return c.json({
     ...folder,
-    matrixConfig: parseMatrix(folder.matrixConfig ?? null)
+    matrixConfig: parseMatrix(folder.matrixConfig ?? null),
+    executiveSummary: parsedExecutiveSummary
   });
 });
 

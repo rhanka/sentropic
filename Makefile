@@ -54,10 +54,18 @@ build-ui-image: ## Build the UI Docker image for production
 build-ui: ## Build the SvelteKit UI (static)
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
 
+update-%:
+	@echo "🔒 Updating $* ..."
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh -lc "npm update"
+
+audit-fix-%:
+	@echo "🔒 audit fixing $* ..."
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh -lc "npm audit fix"
+
 .PHONY: lock-api
 lock-api: ## Update API package-lock.json using Node container (sync deps)
 	@echo "🔒 Updating API package-lock.json..."
-	docker run --rm -v $(PWD)/api:/app -w /app node:20 sh -lc "npm install --package-lock-only"
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm install --package-lock-only"
 
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
@@ -197,11 +205,11 @@ lint: lint-ui lint-api ## Run all linters
 
 .PHONY: lint-ui
 lint-ui:
-	$(COMPOSE_RUN_UI) npm run lint
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run lint
 
 .PHONY: lint-api
 lint-api:
-	$(COMPOSE_RUN_API) npm run lint
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run lint
 
 .PHONY: format
 format:

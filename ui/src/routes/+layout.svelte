@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import '../app.css';
+  import '../app.print.css';
   import Header from '$lib/components/Header.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
@@ -28,6 +29,7 @@
     '/cas-usage',
     '/matrice',
     '/dashboard',
+    '/dashboard-tmp',
     '/parametres',
     '/auth/devices'
   ];

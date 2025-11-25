@@ -181,6 +181,25 @@ export class RefreshManager {
     refreshState.set({ folders: false, useCases: false, companies: false, currentUseCase: null });
   }
 
+  // Méthode générique pour démarrer un refresh avec une clé personnalisée
+  startRefresh(key: string, callback: () => Promise<void>, intervalMs: number = 2000) {
+    // Arrêter l'intervalle existant s'il y en a un
+    this.stopRefresh(key);
+    
+    const interval = setInterval(async () => {
+      if (!this.isActive) return;
+      
+      try {
+        await this.runCallbackIfAuthenticated(callback);
+      } catch (error) {
+        console.error(`Error during ${key} refresh:`, error);
+      }
+    }, intervalMs);
+    
+    this.intervals.set(key, interval);
+    console.log(`🔄 Started refresh for ${key}`);
+  }
+
   // Vérifier si un refresh est actif
   isRefreshActive(key: string): boolean {
     return this.intervals.has(key);

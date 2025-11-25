@@ -157,6 +157,43 @@ describe('Folders API', () => {
       
       expect(response.status).toBe(404);
     });
+
+    it('should return executiveSummary as parsed JSON object', async () => {
+      const folder = await createTestFolder();
+      
+      // Set executiveSummary via PUT
+      const executiveSummary = {
+        introduction: 'Test introduction',
+        analyse: 'Test analyse',
+        recommandation: 'Test recommandation',
+        synthese_executive: 'Test synthese'
+      };
+
+      await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, {
+        executiveSummary
+      });
+
+      // Get folder and verify executiveSummary is parsed
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/folders/${folder.id}`, user.sessionToken!);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.executiveSummary).toBeDefined();
+      expect(typeof data.executiveSummary).toBe('object');
+      expect(Array.isArray(data.executiveSummary)).toBe(false); // Should be object, not array
+      expect(data.executiveSummary.introduction).toBe(executiveSummary.introduction);
+      expect(data.executiveSummary.analyse).toBe(executiveSummary.analyse);
+    });
+
+    it('should return null executiveSummary when not set', async () => {
+      const folder = await createTestFolder();
+      
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/folders/${folder.id}`, user.sessionToken!);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.executiveSummary).toBeNull();
+    });
   });
 
   describe('PUT /folders/:id', () => {
@@ -187,6 +224,108 @@ describe('Folders API', () => {
       const data = await response.json();
       expect(data.name).toBe(partialUpdate.name);
       expect(data.description).toBe(folder.description); // Should remain unchanged
+    });
+
+    it('should update folder with executiveSummary', async () => {
+      const folder = await createTestFolder();
+      const executiveSummary = {
+        introduction: 'Test introduction',
+        analyse: 'Test analyse',
+        recommandation: 'Test recommandation',
+        synthese_executive: 'Test synthese',
+        references: [
+          { title: 'Reference 1', url: 'https://example.com/1' },
+          { title: 'Reference 2', url: 'https://example.com/2' }
+        ]
+      };
+
+      const updateData = {
+        executiveSummary
+      };
+
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, updateData);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.executiveSummary).toBeDefined();
+      expect(data.executiveSummary.introduction).toBe(executiveSummary.introduction);
+      expect(data.executiveSummary.analyse).toBe(executiveSummary.analyse);
+      expect(data.executiveSummary.recommandation).toBe(executiveSummary.recommandation);
+      expect(data.executiveSummary.synthese_executive).toBe(executiveSummary.synthese_executive);
+      expect(data.executiveSummary.references).toBeDefined();
+      expect(data.executiveSummary.references).toHaveLength(2);
+      expect(data.executiveSummary.references[0].title).toBe('Reference 1');
+    });
+
+    it('should partially update executiveSummary (single section)', async () => {
+      const folder = await createTestFolder();
+      
+      // First, create a full executiveSummary
+      const fullExecutiveSummary = {
+        introduction: 'Original introduction',
+        analyse: 'Original analyse',
+        recommandation: 'Original recommandation',
+        synthese_executive: 'Original synthese'
+      };
+
+      await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, {
+        executiveSummary: fullExecutiveSummary
+      });
+
+      // Then update only one section
+      const partialUpdate = {
+        executiveSummary: {
+          introduction: 'Updated introduction'
+        }
+      };
+
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, partialUpdate);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.executiveSummary).toBeDefined();
+      expect(data.executiveSummary.introduction).toBe('Updated introduction');
+      // Other sections should remain (though API might not preserve them if not sent - depends on implementation)
+    });
+
+    it('should reject invalid executiveSummary structure', async () => {
+      const folder = await createTestFolder();
+      // Zod avec .optional() accepte les objets avec champs supplémentaires si tous les champs valides sont optionnels
+      // Testons plutôt avec un type invalide (array au lieu d'object)
+      const invalidExecutiveSummary = ['invalid', 'array'];
+
+      const updateData = {
+        executiveSummary: invalidExecutiveSummary
+      };
+
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, updateData);
+      
+      expect(response.status).toBe(400);
+    });
+
+    it('should allow empty executiveSummary object', async () => {
+      const folder = await createTestFolder();
+      
+      // First, create an executiveSummary
+      await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, {
+        executiveSummary: {
+          introduction: 'Test'
+        }
+      });
+
+      // Zod .optional() n'accepte pas null, seulement undefined
+      // Pour "vider" le champ, on peut envoyer un objet vide (tous les champs sont optionnels)
+      const updateDataEmpty = {
+        executiveSummary: {}
+      };
+
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/folders/${folder.id}`, user.sessionToken!, updateDataEmpty);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      // Un objet vide devrait être accepté (tous les champs sont optionnels)
+      expect(data.executiveSummary).toBeDefined();
+      expect(typeof data.executiveSummary).toBe('object');
     });
   });
 

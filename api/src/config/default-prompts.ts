@@ -23,7 +23,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant:
 IMPORTANT: 
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
-- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'entreprise
+- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'entreprise. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
     variables: ['company_name', 'industries']
   },
@@ -55,7 +55,7 @@ Format: JSON
 
 IMPORTANT: 
 - Génère le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Base-toi sur des exemples concrets et des technologies actuelles
 - Pour chaque cas d'usage, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
 
@@ -164,7 +164,7 @@ La réponse doit impérativement contenir tous les éléments suivants au format
 
 OBLIGATOIRE:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
 - Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références en utilisant [1], [2], [3]...
 - La description doit être formattée en markdown
@@ -177,5 +177,68 @@ OBLIGATOIRE:
 - Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 - Justifie chaque score Fibonacci choisi dans la description`,
     variables: ['use_case', 'user_input', 'matrix', 'company_info']
+  },
+  {
+    id: 'executive_summary',
+    name: 'Synthèse exécutive',
+    description: 'Prompt pour générer une synthèse exécutive complète d\'un dossier de cas d\'usage',
+    content: `Génère le rapport pour un dossier de cas d'usage d'IA.
+
+Contexte du dossier: {{folder_description}}
+
+Informations de l'entreprise (si disponibles): {{company_info}}
+
+Cas d'usage prioritaires (top cas):
+{{top_cas}}
+
+Liste complète des cas d'usage analysés:
+{{use_cases}}
+
+Pour chaque cas d'usage, les informations suivantes sont disponibles:
+- Nom et description
+- Scores de valeur et complexité (matrice de priorisation)
+- Bénéfices attendus
+- Risques identifiés
+- Prochaines étapes suggérées
+- Technologies requises
+- Métriques de succès
+
+IMPORTANT:
+- La liste des cas d'usage prioritaires (top cas) sont fournis ci-dessus - utilise-les comme référence principale pour les recommandations
+- Utilise web_extract (mais pas web_search) si tu souhaites parcourir certaines références clés citées dans les top cas et approfondir ton discours
+- Fais une analyse stratégique globale de l'ensemble des cas d'usage
+- Identifie les tendances, opportunités et défis communs
+- Mets l'accent sur les cas d'usage prioritaires dans l'analyse et les recommandations
+- Fournis des recommandations actionnables pour la direction
+- Utilise un ton professionnel et adapté à un public exécutif
+- Structure la réponse en 4 sections distinctes, chaque section en markdown dans un JSON
+
+OBLIGATOIRE: Réponds UNIQUEMENT avec un JSON valide contenant:
+{
+  "introduction": "...",
+  "analyse": "...",
+  "recommandation": "...",
+  "synthese_executive": "..."
+  "references": [ { "title": "description du lien 1", "url": "url du lien 1" }, { "title": "description du lien 2", "url": "url du lien 2" }, ...]
+}
+
+Spécification générale des sections
+- format markdown, ne PAS reprendre de titre principal (introduction, analyse, recommandation, synthese executive)
+- mises en exerge en gras des éléments importants
+- listes à puces pour les éléments de liste (évite les listes au sein d'un paragraphe, préfère les listes à puces ou numérotées)
+- citations vers les références en utilisant [1], [2], [3] - reprends soit des citations url des top cas d'usage, soit cite les cas eux même (avec leur intitulé exact, sans url)
+
+Spécification de chaque section:
+- introduction: Présente le contexte, l'objectif du rapport, de l'analyse et le périmètre couvert. 2 3 paragraphes, sans titre, avec mises en exerge en gras des éléments importants. Si tu listes les cas d'usage, utilise un mode liste à puces ou numérotées.
+- analyse: Section d'analyse en markdown (3-5 paragraphes avec chapitres en ##). Analyse les tendances, opportunités, défis et patterns identifiés dans l'ensemble des cas d'usage. Inclut des insights stratégiques. Paragraphe mettant l'accent sur les cas d'usage prioritaires fournis.
+- recommandation: Section de recommandations en markdown (4-6 paragraphes avec chapitres en ##). Fournit des recommandations actionnables pour la direction, incluant: 
+    - les prochaines étapes immédiates (en priorisant les cas d'usage prioritaires)
+    - Une feuille de route suggérée
+    - Les investissements nécessaires
+    - Les risques à anticiper
+    - Les opportunités à saisir
+- synthese_executive: Synthèse exécutive du dossier en markdown (2-3 paragraphes sans titre). Résumé concis et percutant pour les décideurs, mettant en avant les points clés, les recommandations principales et l'impact attendu.
+`,
+    variables: ['folder_description', 'company_info', 'top_cas', 'use_cases']
   }
 ];

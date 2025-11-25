@@ -1,0 +1,1955 @@
+/* Print-specific overrides for layout */
+@media print {
+  /* Reset layout wrapper styles */
+  .min-h-screen {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  main.mx-auto.max-w-7xl.px-4.py-8 {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  /* Cacher les composants utilitaires qui pourraient créer des pages blanches */
+  .toast-container, 
+  .navigation-guard,
+  .queue-monitor {
+    display: none !important;
+  }
+}
+
+/* Print styles for Dashboard and Use Case views */
+
+@media print {
+  /* Hide non-essential elements */
+  header,
+  nav,
+  button:not(.print-visible),
+  .no-print,
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Page setup - Marges par défaut pour le rapport principal */
+  @page {
+    size: A4;
+    margin: 2cm 2cm 2cm 2cm; /* Marges normales pour le rapport principal */
+  }
+
+  /* Marges à 0 pour les annexes (usecases) - les marges sont reportées sur les conteneurs */
+  @page annex {
+    size: A4;
+    margin: 0; /* Pas de marges de page pour permettre l'image au bord */
+  }
+
+  /* Page de garde - pleine page sans marges */
+  @page cover {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 8pt;
+    line-height: 1.35;
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Supprimer toutes les marges des conteneurs parents */
+  section,
+  main,
+  article {
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Appliquer les marges de 0.6cm sur les conteneurs de contenu (cas-usage/[id] et dashboard) */
+  /* Vue cas-usage/[id] : section.space-y-6 */
+  section.space-y-6 {
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
+    padding-top: 0.6cm !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+
+  section.space-y-6 > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Dashboard : sections annexes */
+  .usecase-annex-section {
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
+    /* Par défaut (fiches 2+), utiliser border-top pour éviter la suppression après saut de page */
+    padding-top: 0 !important;
+    border-top: 0.6cm solid transparent !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+
+  /* Exception pour la 1ère fiche : Revenir au padding-top car border-top crée un décalage, 
+     et le padding est respecté en début de flux */
+  .usecase-annex-section:first-of-type {
+    border-top: none !important;
+    padding-top: 0.6cm !important;
+  }
+
+  /* Exception pour la dernière fiche : éviter saut de page inutile */
+  .usecase-annex-section:last-of-type,
+  .usecase-annex-section:last-of-type > .usecase-print {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Forcer un saut de page avant le 24ème cas d'usage */
+  .usecase-annex-section.force-page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+  
+  /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
+  .usecase-annex-section > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Dashboard specific styles */
+  .dashboard-print {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Page de garde - visible uniquement en impression */
+  .report-cover-page {
+    display: flex !important;
+    page: cover;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    background-color: white !important; /* Fond blanc pour les marges */
+    /* Retirer background-image, background-size, background-position et filter du parent */
+    /* Ils sont maintenant gérés par ::after pour éviter les problèmes de timing */
+    padding: 2cm 0 0 0 !important; /* 2cm de blanc en haut seulement */
+    overflow: hidden;
+    /* Force le chargement de l'image en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Background image isolé dans ::after pour garantir le positionnement correct après calculs longs */
+  /* L'image est définie directement ici pour éviter les problèmes de timing avec les styles inline */
+  .report-cover-page::after {
+    content: '';
+    position: absolute;
+    top: 2cm; /* Commence après la marge du haut */
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
+    background-image: url('/hero-tech-cover.jpg') !important; /* Image définie directement dans CSS */
+    background-size: cover !important; /* Couvre toute la zone tout en préservant le ratio d'aspect */
+    background-position: center top !important; /* Centré horizontalement, aligné en haut */
+    background-repeat: no-repeat !important;
+    z-index: 0; /* Derrière l'overlay et le contenu */
+    /* Force le chargement de l'image en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Overlay léger bleu clair pour améliorer la lisibilité et éclaircir le background */
+  /* L'overlay ne couvre que la zone de l'image, pas les marges blanches */
+  .report-cover-page::before {
+    content: '';
+    position: absolute;
+    top: 2cm; /* Commence après la marge du haut */
+    left: 0;
+    right: 0;
+    height: calc(100vh - 4cm); /* Hauteur = 100vh - 4cm (2cm haut + 2cm bas) */
+    background: linear-gradient(135deg, hsl(215 70% 25%) 0%, hsl(215 60% 30%) 50%, hsl(185 70% 40%) 100%) !important;
+    opacity: 0.9 !important;
+    z-index: 1; /* Au-dessus du background, en dessous du contenu */
+  }
+
+  /* Conteneur pour titre et sous-titre positionné à 1/3 de la hauteur */
+  .report-cover-header {
+    position: absolute;
+    z-index: 2;
+    width: 100%;
+    top: 33.33%; /* Positionné à 1/3 de la hauteur de la page */
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centre horizontalement et ajuste verticalement */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0 2cm;
+  }
+
+  .report-cover-title {
+    font-size: 36pt !important;
+    font-weight: 700 !important;
+    color: white !important;
+    margin-bottom: 0.5cm !important;
+    line-height: 1.2 !important;
+    text-shadow: 0 2pt 4pt rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .report-cover-subtitle {
+    font-size: 18pt !important;
+    font-weight: 500 !important;
+    color: white !important;
+    line-height: 1.3 !important;
+    text-shadow: 0 2pt 4pt rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Synthèse exécutive centrée verticalement autour de 16.67% à partir du bas */
+  .report-cover-summary {
+    position: absolute !important;
+    z-index: 2;
+    width: 80% !important;
+    max-width: 80% !important;
+    background: white !important;
+    border: 2pt solid white !important;
+    border-radius: 8pt !important;
+    padding: 0.6cm !important;
+    /* Centré verticalement autour de 16.67% à partir du bas (83.33% du haut) */
+    bottom: calc(16.67% + 3cm) !important;
+    left: 50% !important;
+    transform: translate(-50%, 50%) !important; /* Centre horizontalement et verticalement autour du point */
+    overflow: hidden !important; /* Pas de scroll, cache le débordement */
+    text-align: left !important;
+    box-shadow: 0 4pt 12pt rgba(0, 0, 0, 0.3) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important; /* Centre verticalement le contenu (header + texte) dans le bloc */
+    max-height: calc(100vh - 66.33vh - 2cm) !important; /* Limite la hauteur maximale */
+  }
+
+  .report-cover-summary h3 {
+    font-size: clamp(8.5pt, 1.2vw, 11pt) !important; /* Taille adaptative avec min/max */
+    font-weight: 600 !important;
+    color: #1e293b !important;
+    border-bottom: 1pt solid #cbd5e1 !important;
+    padding-bottom: 0.15cm !important; /* Padding réduit */
+    flex-shrink: 0 !important; /* Ne rétrécit pas */
+  }
+
+  .report-cover-summary .prose {
+    font-size: 8pt !important;
+    color: #334155 !important;
+    overflow: hidden !important; /* Pas de scroll */
+    flex: 1 1 auto !important; /* Prend l'espace disponible */
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important; /* Permet au flex de rétrécir */
+  }
+
+  .report-cover-summary .prose p {
+    margin-bottom: 0.15cm; /* Marge réduite entre paragraphes - PAS de !important pour permettre l'ajustement dynamique par JS */
+    margin-top: 0 !important;
+    flex-shrink: 1 !important; /* Peut rétrécir si nécessaire */
+  }
+
+  /* Contenu principal du rapport */
+  .report-main-content {
+    page: auto;
+  }
+  
+  /* Annuler le padding horizontal de la section parente pour les annexes */
+  .report-main-content > .usecase-annex-section {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Masquer le titre du dashboard en impression */
+  .report-main-content > div:first-child {
+    display: none !important;
+  }
+
+  /* Cartes de statistiques en 2 colonnes avec polices plus petites */
+  .report-main-content .grid.gap-4.md\:grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5cm !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Styles pour les cartes de statistiques */
+  .report-main-content .grid.gap-4.md\:grid-cols-2 > .rounded-lg {
+    padding: 0.4cm !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-sm {
+    font-size: 9pt !important; /* Augmenté de 7pt à 9pt pour les titres des cartes */
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-2xl {
+    font-size: 14pt !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 .text-xs {
+    font-size: 6pt !important;
+  }
+
+  .report-main-content .grid.gap-4.md\:grid-cols-2 svg {
+    width: 0.84cm !important; /* Réduit de 30% : 1.2cm * 0.7 = 0.84cm */
+    height: 0.84cm !important;
+  }
+
+  /* Graphique scatter plot - retirer le cadre et réduire à 70% */
+  .report-main-content .report-scatter-plot-container {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0.5cm auto !important;
+    width: 70% !important;
+    max-width: 70% !important;
+  }
+
+  /* Retirer le cadre du conteneur interne du graphique */
+  .report-main-content .report-scatter-plot-container .relative.w-full.aspect-square {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Masquer le bouton de configuration en impression */
+  .report-main-content .report-scatter-plot-container .absolute.top-4.right-4 {
+    display: none !important;
+  }
+
+  /* Centrer le contenu du graphique */
+  .report-main-content .report-scatter-plot-container > .flex.justify-center {
+    width: 100% !important;
+  }
+
+  /* Masquer "Cliquez sur un point" en impression */
+  .scatter-plot-click-hint {
+    display: none !important;
+  }
+
+  /* Section fusionnée : stats + matrice + introduction */
+  .report-main-content .report-introduction {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    page-break-after: always !important; /* Saut de page après cette section */
+    page-break-inside: avoid !important; /* Évite de couper la section en deux */
+  }
+
+  /* Les cartes de statistiques */
+  .report-main-content .report-introduction > .grid.gap-4.md\:grid-cols-2 {
+    margin-top: 0 !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Le graphique scatter plot */
+  .report-main-content .report-introduction > .report-scatter-plot-container {
+    margin-top: 0.5cm !important;
+    margin-bottom: 0.5cm !important;
+  }
+
+  /* Garder un trait sous le titre de l'introduction */
+  .report-main-content .report-introduction #section-introduction .border-b {
+    border-bottom: 0.1pt solid #cbd5e1 !important; /* Trait 0.1pt gris clair */
+    padding-bottom: 0 !important;
+    margin-bottom: 0.3cm !important;
+  }
+
+  /* Réduire la taille des titres h2 dans le rapport principal */
+  .report-main-content h2 {
+    font-size: 14pt !important; /* Réduit de 24pt (text-2xl) à 14pt */
+  }
+
+  /* Réduire aussi les h2 dans le texte (prose) */
+  .report-main-content .prose h2 {
+    font-size: 14pt !important;
+  }
+
+  /* Sommaire - page 3 */
+  .report-table-of-contents {
+    display: block !important; /* Visible en impression */
+    /* Pas de page-break-before car l'introduction a déjà page-break-after */
+    page-break-after: always !important; /* Saut de page après le sommaire */
+  }
+
+  .report-table-of-contents h2 {
+    font-size: 18pt !important;
+    margin-bottom: 1cm !important;
+  }
+
+  .report-table-of-contents ul {
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .report-table-of-contents li {
+    display: flex !important;
+    align-items: baseline !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    gap: 0.3cm !important;
+  }
+
+  .report-table-of-contents .toc-item {
+    display: flex !important;
+    align-items: baseline !important;
+  }
+
+  .report-table-of-contents .toc-item-nested {
+    padding-left: 1cm !important;
+  }
+
+  .report-table-of-contents .toc-title {
+    flex-shrink: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  .report-table-of-contents .toc-link {
+    color: #2563eb !important;
+    text-decoration: underline !important;
+    cursor: pointer !important;
+  }
+
+  .report-table-of-contents .toc-link:hover {
+    color: #1d4ed8 !important;
+  }
+
+  @media print {
+    /* Les liens doivent être cliquables en impression PDF */
+    .report-table-of-contents .toc-link {
+      color: #2563eb !important;
+      text-decoration: underline !important;
+    }
+  }
+
+  .report-table-of-contents .toc-dots {
+    flex: 1 !important;
+    border-bottom: 0.5pt dotted #cbd5e1 !important;
+    height: 1em !important;
+    min-width: 0.5cm !important;
+  }
+
+  .report-table-of-contents .toc-page {
+    flex-shrink: 0 !important;
+    font-size: 11pt !important;
+    color: #475569 !important;
+    margin-left: 0.3cm !important;
+  }
+
+  /* Styles pour l'analyse et recommandation - retirer le cadre mais garder le trait */
+  .report-main-content .report-analyse {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Saut de page uniquement après l'analyse */
+  .report-main-content .report-analyse-with-break {
+    page-break-after: always !important;
+  }
+
+  /* Garder un trait sous le titre de l'analyse et recommandation */
+  .report-main-content .report-analyse .border-b {
+    border-bottom: 0.1pt solid #cbd5e1 !important; /* Trait 0.1pt gris clair */
+    padding-bottom: 0 !important;
+    margin-bottom: 0.3cm !important;
+  }
+
+  /* Réduire la taille des h2 dans le contenu de l'analyse et recommandation */
+  .report-main-content .report-analyse .prose h2 {
+    font-size: 12pt !important; /* Réduit de 14pt à 12pt */
+    margin-top: 0.3cm !important;
+    margin-bottom: 0.2cm !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Réduire les espacements pour les h3 dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose h3 {
+    font-size: 10pt !important;
+    margin-top: 0.2cm !important;
+    margin-bottom: 0.15cm !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Réduire les espacements entre paragraphes dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose p {
+    margin-top: 0 !important;
+    margin-bottom: 0.15cm !important;
+    padding: 0 !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire les espacements pour les listes dans les sections analyse et recommandation */
+  .report-main-content .report-analyse .prose ul,
+  .report-main-content .report-analyse .prose ol {
+    margin-top: 0.15cm !important;
+    margin-bottom: 0.15cm !important;
+    padding-left: 0.8cm !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire les espacements entre les éléments de liste */
+  .report-main-content .report-analyse .prose li {
+    margin-top: 0 !important;
+    margin-bottom: 0.08cm !important;
+    padding: 0 !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Réduire l'espacement après le dernier élément d'une liste */
+  .report-main-content .report-analyse .prose ul:last-child,
+  .report-main-content .report-analyse .prose ol:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Réduire l'espacement après le dernier paragraphe */
+  .report-main-content .report-analyse .prose p:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* S'assurer que le conteneur prose n'ajoute pas d'espacement supplémentaire */
+  .report-main-content .report-analyse .prose {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Use case specific styles - FORCE 1 PAGE */
+  .usecase-print {
+    max-width: 100% !important;
+    padding: 0 !important;
+    padding-top: 0 !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    /* Force une hauteur minimale d'une page pour que le footer soit en bas */
+    /* A4 (29.7cm) - Marges Page (1.2cm) - Padding Section (1.2cm) = 27.3cm */
+    height: calc(100vh - 1.2cm) !important;
+    position: relative;
+    background-color: transparent !important;
+    background: transparent !important;
+    overflow: visible !important; /* Permettre le débordement de l'image */
+  }
+  
+  /* Image footer.jpg en bas de page, collée bord à bord (marges de page à 0) */
+  /* Utiliser position absolute pour que l'image n'apparaisse que sur les pages avec usecase-print */
+  /* Sortir des marges du conteneur parent (padding 0.6cm) pour aller au bord de la page */
+  .usecase-print::before {
+    content: '';
+    position: absolute; /* Position absolute pour être relatif au conteneur usecase-print */
+    bottom: -0.6cm; /* Sortir de la marge basse du conteneur parent */
+    left: -0.6cm; /* Sortir de la marge gauche du conteneur parent */
+    right: -0.6cm; /* Sortir de la marge droite du conteneur parent */
+    width: calc(100% + 1.2cm); /* Largeur = conteneur + marges gauche et droite */
+    height: auto;
+    min-height: 8cm; /* Hauteur minimale pour l'image */
+    background-image: url('/footer.jpg');
+    background-size: 100% auto;
+    background-position: center bottom 0cm !important;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    /* Force l'affichage en impression */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
+  /* Dans les sections annexes, l'image doit sortir complètement du padding-bottom de 0.6cm de la section */
+  /* L'image doit sortir de .usecase-print (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -0.6cm */
+  /* Correction: -1.2cm était incorrect (double compensation). -0.6cm suffit. */
+  .usecase-annex-section > .usecase-print::before {
+    bottom: -0.6cm !important; /* Sortir du padding-bottom de la section annexe */
+  }
+  
+  
+  
+  
+  /* S'assurer que le contenu est au-dessus de l'image et du gradient */
+  .usecase-print > * {
+    position: relative;
+    z-index: 1;
+  }
+  
+
+  /* Force display of ALL elements in use case print - override everything */
+  .usecase-print * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Force display of all conditional sections in print - override Svelte conditionals */
+  .usecase-print [class*="rounded-lg"],
+  .usecase-print [class*="border"],
+  .usecase-print [class*="shadow-sm"],
+  .usecase-print > div[class*="grid"],
+  .usecase-print > div[class*="rounded"],
+  .usecase-print > div {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Force grid display */
+  .usecase-print .grid,
+  .usecase-print [class*="grid"] {
+    display: grid !important;
+  }
+
+  /* Headers and titles - COMPACT */
+  .usecase-print h1 {
+    font-size: 15pt !important;
+    padding: 0 !important;
+    page-break-after: avoid;
+    line-height: 1.2;
+  }
+
+  /* Remove top margin from print-only title wrapper and first child */
+  .usecase-print > .print-only:first-child,
+  .usecase-print > div:first-child.print-only {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .usecase-print > .print-only:first-child h1,
+  .usecase-print > div:first-child.print-only h1 {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .usecase-print h2 {
+    font-size: 10pt !important;
+    margin: 8pt 0 4pt 0 !important;
+    padding: 0 !important;
+    page-break-after: avoid;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+
+  .usecase-print h3 {
+    font-size: 9pt !important;
+    padding: 0 !important;
+    page-break-after: avoid;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+
+  .usecase-print h4 {
+    font-size: 8pt !important;
+    margin: 1pt 0 0.5pt 0 !important; /* Réduit de 50% : 2pt -> 1pt en haut, 1pt -> 0.5pt en bas */
+    padding: 0 !important;
+    font-weight: 600;
+  }
+
+  /* Sections - MINIMAL SPACING */
+  .usecase-print section {
+    margin-bottom: 2pt !important;
+    page-break-inside: avoid;
+  }
+
+  /* Cards and boxes - COMPACT - Retirer toutes les bordures et rendre transparent */
+  .usecase-print .rounded-lg,
+  .usecase-print .border,
+  .usecase-print .shadow-sm,
+  .usecase-print [class*="border-"],
+  .usecase-print [class*="bg-white"],
+  .usecase-print [class*="bg-slate"] {
+    border: none !important; /* Retirer toutes les bordures des cartes */
+    box-shadow: none !important;
+    background-color: transparent !important; /* Rendre transparent pour voir l'image de fond */
+    background: transparent !important;
+    page-break-inside: avoid;
+    margin-top: 0 !important; /* Marge haute à 0 */
+    margin-bottom: 0 !important; /* Marge basse à 0 */
+    padding-top: 0 !important; /* Padding haut à 0 */
+    padding-bottom: 0 !important; /* Padding bas à 0 */
+    padding-left: 4pt !important;
+    padding-right: 4pt !important;
+    border-radius: 0 !important;
+  }
+
+  /* Exclure les dernières cartes de chaque colonne des marges bottom pour alignement parfait */
+  .usecase-print .layout-main > .column-a > .rounded-lg:last-child,
+  .usecase-print .layout-main > .column-b > .rounded-lg:last-child,
+  .usecase-print .layout-main > .column-a > .grid:last-child,
+  .usecase-print .layout-main > .column-b > .grid:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Exclure les cartes du bloc Bénéfices/Risques/Mesures des marges génériques */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg,
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  /* Exclure le grid dans column-a des marges génériques (double div) */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Remove card headers padding et rendre transparent */
+  .usecase-print .rounded-t-lg {
+    margin: -6pt -6pt 4pt -6pt !important;
+    padding: 4pt 6pt !important;
+    border-top: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: 0.1px solid #6b7280 !important; /* Ligne de séparation entre titre et contenu pour TOUTES les cartes */
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
+  /* Forcer le border-bottom sur les headers même s'ils ont la classe border-b */
+  .usecase-print .rounded-t-lg.border-b,
+  .usecase-print .rounded-t-lg.border-b.border-slate-200 {
+    border-bottom: 0.1px solid #6b7280 !important; /* Ligne de séparation entre titre et contenu */
+  }
+
+  /* Forcer la même couleur de trait pour tous les headers, même ceux avec des couleurs de fond */
+  .usecase-print .rounded-t-lg.bg-green-100,
+  .usecase-print .rounded-t-lg.bg-red-100,
+  .usecase-print .rounded-t-lg.bg-blue-100,
+  .usecase-print .rounded-t-lg.bg-purple-100,
+  .usecase-print .rounded-t-lg.bg-white {
+    border-bottom: 0.1px solid #6b7280 !important; /* Même couleur de trait pour tous */
+  }
+
+  /* Grid layouts - COMPACT */
+  /* EXCLURE les layouts de cette règle générale */
+  .usecase-print .grid:not(.layout-head):not(.layout-main):not(.layout-bottom) {
+    gap: 0 !important; /* Annuler gap entre cartes */
+    margin-bottom: 0 !important;
+  }
+
+
+  .usecase-print .md\:grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6pt !important;
+  }
+
+  /* Charts and graphs */
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+
+  /* Lists - COMPACT */
+  /* EXCLURE Technologies (qui a ml-4) de cette règle générale */
+  .usecase-print ul:not(.ml-4),
+  .usecase-print ol:not(.ml-4) {
+    margin-left: 6pt !important;
+    margin-bottom: 4pt !important;
+    margin-top: 2pt !important;
+    padding-left: 4pt !important;
+  }
+
+  /* Marges de gauche réduites pour les listes dans les box (Bénéfices, Risques, Mesures, Sources, Données) */
+  /* EXCLURE Description (.prose) et Technologies (qui a ml-4) */
+  .usecase-print .rounded-lg ul:not(.prose ul):not(.ml-4),
+  .usecase-print .border ul:not(.prose ul):not(.ml-4),
+  .usecase-print .shadow-sm ul:not(.prose ul):not(.ml-4) {
+    margin-left: 2pt !important;
+    padding-left: 2pt !important;
+  }
+
+  /* Marges de gauche réduites pour les listes avec list-disc, SAUF celles avec ml-4 (Technologies) */
+  .usecase-print ul.list-disc:not(.prose ul.list-disc):not(.ml-4) {
+    margin-left: 2pt !important;
+    padding-left: 2pt !important;
+  }
+
+  /* Marges réduites pour les listes dans Description (.prose) */
+  .usecase-print .prose ul,
+  .usecase-print .prose ol {
+    margin-left: 6pt !important;
+    padding-left: 4pt !important;
+  }
+
+
+  /* Marges de gauche réduites pour les li avec flex (Bénéfices, Risques, Mesures) */
+  .usecase-print .rounded-lg li.flex,
+  .usecase-print .border li.flex,
+  .usecase-print .shadow-sm li.flex {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  .usecase-print li {
+    margin-bottom: 0.5pt !important;
+    font-size: 7.5pt !important;
+    line-height: 1.25;
+  }
+
+  /* Marges inférieures encore plus réduites pour les li dans les box */
+  .usecase-print .rounded-lg li,
+  .usecase-print .border li,
+  .usecase-print .shadow-sm li {
+    margin-bottom: 0.3pt !important;
+  }
+
+  /* Paragraphs - COMPACT */
+  .usecase-print p {
+    margin: 0 0 2pt 0 !important;
+    font-size: 7.5pt !important;
+    line-height: 1.25;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    margin-bottom: 12pt;
+  }
+
+  th, td {
+    border: 0.1px solid #6b7280 !important; /* Bordure ultra-fine gris foncé uniforme (0.1px) */
+    padding: 6pt;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    font-weight: bold;
+  }
+
+  /* Links */
+  a {
+    color: #1e40af !important;
+    text-decoration: none !important; /* Ne pas souligner les liens en impression */
+  }
+
+  a[href^="#"] {
+    text-decoration: none !important;
+  }
+
+  /* Code blocks */
+  pre, code {
+    background-color: #f3f4f6 !important;
+    border: 0.1px solid #6b7280 !important; /* Bordure ultra-fine gris foncé uniforme (0.1px) */
+    padding: 6pt;
+    page-break-inside: avoid;
+    font-size: 10pt;
+  }
+
+  /* Images */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+
+  /* Spacing - COMPACT for use cases */
+  /* EXCLURE les layouts et le bloc Bénéfices/Risques/Mesures de cette règle générale */
+  .usecase-print .space-y-6 > *:not(.layout-head):not(.layout-main):not(.layout-bottom):not(.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6) + *:not(.layout-head):not(.layout-main):not(.layout-bottom):not(.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6) {
+    margin-top: 2pt !important;
+  }
+
+  /* Exclure spécifiquement le conteneur space-y-6 du bloc Bénéfices/Risques/Mesures */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > * + * {
+    margin-top: 0 !important; /* Le gap gère l'espacement */
+  }
+  
+  
+  .usecase-print .space-y-4 > * + * {
+    margin-top: 2pt !important;
+  }
+
+  .usecase-print .space-y-2 > * + * {
+    margin-top: 0.5pt !important;
+  }
+  
+  .usecase-print .space-y-3 > * + * {
+    margin-top: 1pt !important;
+  }
+
+  /* Hide loading states and spinners */
+  .animate-spin,
+  [class*="spinner"],
+  [class*="loading"] {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Hide status banners and non-essential info in use case print */
+  .usecase-print .rounded.border-blue-200,
+  .usecase-print .bg-blue-50 {
+    display: none !important;
+  }
+
+  /* Compact score cards headers - keep but make minimal (for value/complexity axes) */
+  .usecase-print .bg-green-100,
+  .usecase-print .bg-red-100,
+  .usecase-print .bg-blue-100,
+  .usecase-print .bg-purple-100 {
+    padding: 1pt 3pt !important;
+    font-size: 7pt !important;
+    font-weight: 600;
+    display: block !important;
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
+  /* Make score cards more compact */
+  .usecase-print .bg-green-100 + *,
+  .usecase-print .bg-red-100 + * {
+    margin-top: 2pt !important;
+  }
+
+  /* Text sizes in use case - plus petit pour les contenus hors description */
+  .usecase-print .text-xs {
+    font-size: 6.5pt !important;
+    line-height: 1.2;
+  }
+
+  /* Taille réduite pour les textes dans les listes et sections (hors description) */
+  .usecase-print ul li:not(.prose li),
+  .usecase-print ol li:not(.prose li),
+  .usecase-print .space-y-2 li:not(.prose li),
+  .usecase-print .space-y-3 li:not(.prose li) {
+    font-size: 6.5pt !important;
+    line-height: 1.2;
+  }
+
+  /* Forcer les éléments enfants des li à hériter de la taille (pour markdown rendu) */
+  .usecase-print ul li:not(.prose li) *,
+  .usecase-print ol li:not(.prose li) *,
+  .usecase-print .space-y-2 li:not(.prose li) *,
+  .usecase-print .space-y-3 li:not(.prose li) * {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  /* Taille réduite pour les textes dans les box (hors description) */
+  .usecase-print .rounded-lg .text-slate-600:not(.prose),
+  .usecase-print .border .text-slate-600:not(.prose),
+  .usecase-print .shadow-sm .text-slate-600:not(.prose) {
+    font-size: 6.5pt !important;
+  }
+
+  /* Icons - smaller or hide */
+  .usecase-print svg {
+    width: 10pt !important;
+    height: 10pt !important;
+  }
+
+  /* Remove unnecessary borders and backgrounds */
+  .usecase-print .border-b:not(.rounded-t-lg) {
+    border-bottom: none !important; /* Retirer toutes les bordures, sauf celles des headers */
+    padding-bottom: 3pt !important;
+    margin-bottom: 3pt !important;
+  }
+
+
+  /* Description normale (prose) reste à 10px = 7.5pt */
+  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) {
+    font-size: 7.5pt !important;
+    line-height: 1.5 !important;
+  }
+
+  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) * {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  /* Forcer la taille pour prose-sm (délai, contact) en mode print - APRÈS les règles générales pour priorité */
+  .usecase-print .prose.prose-sm,
+  .usecase-print .prose.prose-sm *,
+  .usecase-print div.prose.prose-sm,
+  .usecase-print div.prose.prose-sm *,
+  .usecase-print span.prose.prose-sm,
+  .usecase-print span.prose.prose-sm *,
+  .usecase-print .text-sm.prose.prose-sm,
+  .usecase-print .text-sm.prose.prose-sm * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Forcer text-sm à 6.5pt - priorité maximale */
+  .usecase-print .text-sm,
+  .usecase-print .text-sm *,
+  .usecase-print span.text-sm,
+  .usecase-print span.text-sm *,
+  .usecase-print .text-sm.prose,
+  .usecase-print .text-sm.prose *,
+  .usecase-print span.text-sm.prose,
+  .usecase-print span.text-sm.prose * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* S'assurer que markdown-wrapper dans un contexte text-sm ou prose-sm hérite de 6.5pt */
+  .usecase-print .text-sm .markdown-wrapper,
+  .usecase-print .text-sm .markdown-wrapper *,
+  .usecase-print .prose.prose-sm .markdown-wrapper,
+  .usecase-print .prose.prose-sm .markdown-wrapper * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Réduire la taille de police pour les descriptions longues en mode impression - priorité maximale */
+  .usecase-print .prose.description-compact-print,
+  .usecase-print div.prose.description-compact-print,
+  div.usecase-print .prose.description-compact-print,
+  .usecase-print .text-slate-600.prose.description-compact-print,
+  .usecase-print .prose.description-compact-print .markdown-wrapper,
+  .usecase-print div.prose.description-compact-print .markdown-wrapper {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Forcer tous les éléments enfants des descriptions compactes */
+  .usecase-print .prose.description-compact-print *,
+  .usecase-print div.prose.description-compact-print *,
+  div.usecase-print .prose.description-compact-print *,
+  .usecase-print .text-slate-600.prose.description-compact-print *,
+  .usecase-print .prose.description-compact-print .markdown-wrapper *,
+  .usecase-print div.prose.description-compact-print .markdown-wrapper * {
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .usecase-print .prose p {
+    margin-bottom: 4pt !important;
+  }
+
+  .usecase-print .prose p:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Éviter les sauts de ligne supplémentaires après les liens de référence inline */
+  .usecase-print .prose a,
+  .usecase-print .prose p a,
+  .usecase-print ul li a,
+  .usecase-print ul li span a,
+  .usecase-print ul.space-y-2 li a,
+  .usecase-print ul.space-y-2 li span a {
+    display: inline !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force two-column layout for scores section (détails axes) - EXCLUDE layout-head and layout-main */
+  .usecase-print .grid.gap-6:not(.layout-head):not(.layout-main) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 !important; /* Annuler gap entre cartes */
+  }
+
+  /* Compact three-column layout - EXCLUDE layout-head and layout-main */
+  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main) {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+
+  /* Hide model badges and tags */
+  .usecase-print .inline-flex.items-center.px-3,
+  .usecase-print .rounded-full {
+    display: none !important;
+  }
+
+  /* Compact references */
+  .usecase-print .space-y-2 > * + * {
+    margin-top: 2pt !important;
+  }
+
+  /* Ensure content fits on one page */
+  .usecase-print * {
+    max-height: none !important;
+  }
+
+  /* Remove excessive padding from all elements */
+  .usecase-print [class*="p-"]:not(.usecase-print [class*="px-"]) {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .usecase-print [class*="py-"] {
+    padding-top: 2pt !important;
+    padding-bottom: 2pt !important;
+  }
+
+  .usecase-print [class*="mb-"] {
+    margin-bottom: 3pt !important;
+  }
+
+  /* Exclure les éléments du bloc Bénéfices/Risques/Mesures des règles génériques mb- */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 [class*="mb-"],
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 [class*="mb-"] {
+    margin-bottom: 0 !important;
+  }
+
+  .usecase-print [class*="mt-"] {
+    margin-top: 3pt !important;
+  }
+
+  /* Exclure les éléments du bloc Bénéfices/Risques/Mesures des règles génériques mt- */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 [class*="mt-"],
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 [class*="mt-"] {
+    margin-top: 0 !important;
+  }
+
+  /* Optimize description section */
+  .usecase-print .prose-sm {
+    font-size: 7.5pt !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Compact information sections */
+  .usecase-print .space-y-3 > * + * {
+    margin-top: 2pt !important;
+  }
+
+  /* Make stars and ratings smaller */
+  .usecase-print .flex.items-center.gap-1 svg,
+  .usecase-print .flex.items-center.gap-2 svg {
+    width: 8pt !important;
+    height: 8pt !important;
+  }
+
+  /* Compact flex containers */
+  .usecase-print .flex.items-center.gap-3 {
+    gap: 4pt !important;
+  }
+
+  /* Reduce font sizes in score displays */
+  .usecase-print .text-2xl {
+    font-size: 14pt !important;
+  }
+
+  .usecase-print .text-xl {
+    font-size: 12pt !important;
+  }
+
+  /* Optimize matrix details section */
+  .usecase-print .space-y-4 > * + * {
+    margin-top: 4pt !important;
+  }
+
+  /* Ensure all sections are visible in print - force display */
+  .usecase-print .rounded-lg,
+  .usecase-print .border,
+  .usecase-print .shadow-sm {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Force display of References component */
+  .usecase-print .space-y-2:has(> div[id^="ref-"]) {
+    display: block !important;
+  }
+
+  /* Force display of all lists (sources, data, etc.) */
+  .usecase-print ul.space-y-2 {
+    display: block !important;
+  }
+
+  /* Force display of matrix details section */
+  /* EXCLURE layout-bottom pour éviter les conflits */
+  .usecase-print .grid.md\:grid-cols-2:not(.layout-bottom) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Compact references section */
+  .usecase-print .space-y-2 > * + * {
+    margin-top: 1pt !important;
+  }
+
+  /* Make references, sources, and data sections very compact */
+  .usecase-print ul.space-y-2 li {
+    margin-bottom: 0.3pt !important;
+    font-size: 6.5pt !important;
+    line-height: 1.2;
+  }
+
+  /* Compact references links */
+  .usecase-print a {
+    font-size: 6.5pt !important;
+    line-height: 1.2;
+    text-decoration: none !important; /* Ne pas souligner les liens */
+  }
+
+  /* Optimize three-column layout for better space usage - EXCLUDE layout-head, layout-main, and layout-bottom */
+  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main):not(.layout-bottom) {
+    display: grid !important;
+    grid-template-columns: 1.2fr 1fr 0.8fr !important;
+    gap: 4pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  /* Make matrix details (value/complexity axes) more compact */
+  /* EXCLURE layout-bottom de cette règle générale pour éviter les conflits */
+  .usecase-print .md\:grid-cols-2:not(.layout-bottom) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  /* Compact value/complexity axis cards */
+  .usecase-print .space-y-4 > div,
+  .usecase-print .space-y-4 > div.rounded {
+    margin-bottom: 3pt !important;
+    padding: 3pt 0 !important; /* Annuler marges gauche et droite */
+    border: none !important; /* Retirer complètement les bordures des axes unitaires */
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Retirer border-top des cartes contenant les axes valeur/complexité */
+  .usecase-print .space-y-4 {
+    border-top: none !important;
+  }
+
+  /* Compact axis titles and descriptions */
+  .usecase-print .space-y-4 h4 {
+    font-size: 8pt !important;
+    margin: 2pt 0 1pt 0 !important;
+  }
+
+  /* Réduire la marge entre le titre et le texte de chaque axe (mb-2 = 8pt -> 2pt, réduit de 50% par rapport à 4pt) */
+  .usecase-print .space-y-4 > div > div.flex.items-center.justify-between {
+    margin-bottom: 2pt !important; /* Réduire de 50% (4pt -> 2pt) */
+  }
+
+  /* Titres des axes (h5) - taille réduite */
+  .usecase-print .space-y-4 h5 {
+    font-size: 6.5pt !important; /* Réduire la taille du titre */
+    margin: 0 !important;
+    line-height: 1.2;
+  }
+
+  .usecase-print .space-y-4 p {
+    font-size: 6pt !important; /* Réduire la taille du texte */
+    margin: 0 0 1pt 0 !important;
+    line-height: 1.2;
+  }
+
+  /* Compact stars and X marks in axes */
+  .usecase-print .space-y-4 .flex.items-center svg {
+    width: 6pt !important;
+    height: 6pt !important;
+  }
+
+  /* Compact score displays */
+  .usecase-print .space-y-4 .text-slate-500 {
+    font-size: 7pt !important;
+  }
+
+  /* Make references component compact */
+  .usecase-print .space-y-2 > div,
+  .usecase-print .space-y-2 > div.flex {
+    margin-bottom: 1pt !important;
+    font-size: 7.5pt !important;
+    line-height: 1.2;
+    display: flex !important;
+    align-items: center !important; /* Aligner verticalement le chiffre, l'icône et le texte */
+  }
+
+  /* Ajuster l'alignement vertical des éléments dans les références */
+  .usecase-print .space-y-2 > div[id^="ref-"] {
+    align-items: center !important;
+  }
+
+  /* Retirer le mt-0.5 du chiffre et de l'icône en impression pour un meilleur alignement */
+  .usecase-print .space-y-2 > div[id^="ref-"] > span:first-child,
+  .usecase-print .space-y-2 > div[id^="ref-"] > svg {
+    margin-top: 0 !important;
+  }
+
+  /* S'assurer que le lien est bien aligné et tronquer si trop long */
+  .usecase-print .space-y-2 > div[id^="ref-"] > a {
+    line-height: 1.2;
+    display: inline-block;
+    vertical-align: middle;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    max-width: 100% !important;
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+  }
+
+  /* S'assurer que le conteneur flex permet la troncature */
+  .usecase-print .space-y-2 > div[id^="ref-"] {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Retirer la marge bottom du dernier élément dans les références */
+  .usecase-print .space-y-2 > div:last-child,
+  .usecase-print .space-y-2 > div.flex:last-child,
+  .usecase-print .space-y-2:has(> div[id^="ref-"]) > div:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Ensure References component is visible */
+  .usecase-print .space-y-2 {
+    display: block !important;
+  }
+
+  /* Hide icons in lists for more space */
+  .usecase-print ul li svg {
+    width: 6pt !important;
+    height: 6pt !important;
+    margin-right: 2pt !important;
+  }
+
+  /* Compact list items - remove extra spacing */
+  .usecase-print ul li.flex {
+    gap: 2pt !important;
+    margin-bottom: 0.5pt !important;
+    display: flex !important;
+  }
+
+  /* Supprimer les marges des éléments markdown générés dans les li (p, strong, etc.) */
+  .usecase-print ul li.flex span p,
+  .usecase-print ul li.flex span > p,
+  .usecase-print ul.space-y-2 li span p,
+  .usecase-print ul.space-y-2 li span > p,
+  .usecase-print ul li.flex span *,
+  .usecase-print ul.space-y-2 li span * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Spécifiquement pour les paragraphes générés par markdown */
+  .usecase-print ul li.flex span p,
+  .usecase-print ul.space-y-2 li span p {
+    padding: 0 !important;
+    line-height: inherit !important;
+  }
+
+  /* Ensure all list items are visible */
+  .usecase-print ul li {
+    display: list-item !important;
+    visibility: visible !important;
+  }
+
+  /* Reduce padding in all cards even more */
+  .usecase-print .p-4 {
+    padding: 4pt !important;
+  }
+
+  /* Compact card headers */
+  .usecase-print .px-3.py-2 {
+    padding: 2pt 3pt !important;
+    font-size: 7.5pt !important;
+  }
+
+  /* Make all text smaller in use case print */
+  .usecase-print {
+    font-size: 7.5pt !important;
+  }
+
+  /* Compact grid gaps */
+  .usecase-print .gap-6 {
+    gap: 0pt !important;
+  }
+
+  /* Ensure references section is visible and compact */
+  .usecase-print .rounded-lg.border-slate-200 {
+    padding-left: 4pt !important;
+    padding-right: 4pt !important;
+  }
+
+  /* Compact the entire layout - reduce all vertical spacing */
+  .usecase-print > * {
+    margin-bottom: 4pt !important;
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .usecase-print > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .usecase-print > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Force display of all grid sections */
+  .usecase-print .grid {
+    display: grid !important;
+    visibility: visible !important;
+  }
+
+  /* Exclure le grid dans column-a des marges génériques des grids */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure h5 in axis cards are visible - mais pas pour les axes */
+  .usecase-print h5:not(.space-y-4 h5) {
+    font-size: 8pt !important;
+    margin: 0 0 1pt 0 !important;
+    font-weight: 600;
+  }
+
+  /* Ensure score descriptions in axes are visible - taille réduite */
+  .usecase-print .space-y-4 p.text-sm {
+    font-size: 6pt !important; /* Réduire la taille du texte */
+    margin: 0 !important;
+    line-height: 1;
+  }
+
+  /* Force display of all conditional sections */
+  .usecase-print [class*="grid"] {
+    display: grid !important;
+    visibility: visible !important;
+  }
+  
+  .usecase-print [class*="space-y"] {
+    display: block !important;
+    visibility: visible !important;
+  }
+  
+  /* Override any inline styles that might hide sections */
+  .usecase-print [style*="display: none"] {
+    display: block !important;
+  }
+  
+  .usecase-print [style*="display:none"] {
+    display: block !important;
+  }
+
+  /* ============================================
+     RÈGLES SPÉCIFIQUES POUR layout-head et layout-main
+     Doivent venir EN DERNIER pour écraser toutes les règles génériques
+     ============================================ */
+
+  /* Header layout (scores + infos) en 3 colonnes égales en print */
+  .usecase-print .layout-head.lg\:grid-cols-3.grid.gap-6 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0 !important; /* Annuler gap entre cartes */
+    margin-bottom: 0 !important;
+  }
+
+  /* A/B layout : 2/3 (A) - 1/3 (B) en print */
+  .usecase-print .layout-main.lg\:grid-cols-3.grid.gap-6 {
+    display: grid !important;
+    grid-template-columns: 2fr 1fr !important;
+    align-items: stretch !important; /* Les colonnes ont la même hauteur */
+    gap: 0 !important; /* Annuler gap entre cartes */
+    margin-bottom: 0 !important;
+  }
+
+  /* Alignement top/bottom des colonnes A et B en impression */
+  .usecase-print .layout-main > .column-a,
+  .usecase-print .layout-main > .column-b {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0pt !important; /* Marge minimale entre les divs */
+    height: 100% !important; /* Prendre toute la hauteur disponible */
+    justify-content: flex-start !important; /* Aligner en haut, les boites s'étirent */
+    align-items: stretch !important; /* Les éléments enfants s'étirent */
+    /* S'assurer qu'il n'y a pas de padding ou margin qui affecte l'alignement */
+    padding: 0 !important;
+    margin: 0 !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Les boites (cartes) dans les colonnes s'étirent pour remplir l'espace disponible */
+  .usecase-print .layout-main > .column-a > .rounded-lg,
+  .usecase-print .layout-main > .column-b > .rounded-lg,
+  .usecase-print .layout-main > .column-a > .grid {
+    flex-grow: 1 !important; /* Les boites s'étirent pour remplir l'espace */
+    flex-shrink: 0 !important; /* Ne pas rétrécir en dessous de leur contenu */
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Supprimer toutes les marges bottom des derniers éléments pour un alignement parfait */
+  .usecase-print .layout-main > .column-a > *:last-child,
+  .usecase-print .layout-main > .column-b > *:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom des groupes grid dans column-a (comme en desktop) */
+  .usecase-print .layout-main > .column-a > .grid {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom du wrapper space-y-6 dans column-a (comme en desktop) */
+  .usecase-print .layout-main > .column-a > .grid > .space-y-6 {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom du dernier élément dans le wrapper space-y-6 (comme en desktop) */
+  .usecase-print .layout-main > .column-a > .grid > .space-y-6 > *:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Supprimer la marge bottom des groupes grid dans column-b */
+  .usecase-print .layout-main > .column-b > .grid {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* S'assurer que les dernières cartes de chaque colonne ont exactement les mêmes paddings et marges */
+  .usecase-print .layout-main > .column-a > .rounded-lg:last-child,
+  .usecase-print .layout-main > .column-b > .rounded-lg:last-child {
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+    padding: 4pt !important; /* Padding uniforme sur tous les côtés */
+    padding-top: 4pt !important;
+    padding-bottom: 4pt !important;
+    padding-left: 4pt !important;
+    padding-right: 4pt !important;
+    /* S'assurer que la bordure est incluse dans la hauteur */
+    box-sizing: border-box !important;
+    /* Les dernières cartes s'étirent aussi pour remplir l'espace */
+    flex-grow: 1 !important;
+  }
+
+  /* Le contenu interne des cartes s'étire pour remplir l'espace disponible */
+  .usecase-print .layout-main > .column-a > .rounded-lg > *:last-child,
+  .usecase-print .layout-main > .column-b > .rounded-lg > *:last-child {
+    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* S'assurer que les headers des dernières cartes ont exactement les mêmes marges */
+  .usecase-print .layout-main > .column-a > .rounded-lg:last-child .rounded-t-lg,
+  .usecase-print .layout-main > .column-b > .rounded-lg:last-child .rounded-t-lg {
+    margin-bottom: 0pt !important; /* Même marge bottom que les autres */
+    margin-top: 0pt !important; /* Compenser le padding-top de la carte */
+    margin-left: -4pt !important;
+    margin-right: -4pt !important;
+  }
+
+  /* S'assurer que le contenu interne des dernières cartes n'ajoute pas de marge */
+  .usecase-print .layout-main > .column-a > .rounded-lg:last-child > *:last-child,
+  .usecase-print .layout-main > .column-b > .rounded-lg:last-child > *:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Layout bottom (matrice détaillée) - FORCER 50/50 avec flexbox */
+  /* Utiliser flexbox au lieu de grid pour éviter les problèmes de preview */
+  /* PLACER CETTE RÈGLE EN DERNIER pour override toutes les autres règles */
+  /* RÈGLES GLOBALES POUR LAYOUT-BOTTOM - S'appliquent en impression et preview */
+  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .usecase-print .layout-bottom.grid.gap-6,
+  .usecase-print div.layout-bottom.md\:grid-cols-2,
+  .usecase-print div.layout-bottom,
+  .usecase-print .layout-bottom[class*="grid"],
+  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
+  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"],
+  div.usecase-print div.layout-bottom.md\:grid-cols-2.grid.gap-6,
+  div.usecase-print div.layout-bottom.grid.gap-6 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0 !important;
+    margin-bottom: 0 !important;
+    margin-top: -4pt !important;
+  }
+  
+  /* Forcer chaque enfant à prendre exactement 50% de la largeur */
+  .usecase-print .layout-bottom > *,
+  div.usecase-print div.layout-bottom > * {
+    width: 50% !important;
+    max-width: 50% !important;
+    flex: 0 0 50% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* S'assurer qu'aucune règle lg:grid-cols-3 ne s'applique à layout-bottom */
+  .usecase-print .layout-bottom.lg\:grid-cols-3,
+  .usecase-print .layout-bottom[class*="lg:grid-cols-3"],
+  div.usecase-print div.layout-bottom.lg\:grid-cols-3 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
+  
+  /* S'assurer qu'aucune classe Tailwind ne modifie la largeur */
+  .usecase-print .layout-bottom > *[class*="col-span"],
+  .usecase-print .layout-bottom > *[class*="lg:col-span"],
+  .usecase-print .layout-bottom > *[class*="md:col-span"],
+  div.usecase-print div.layout-bottom > *[class*="col-span"] {
+    width: 50% !important;
+    max-width: 50% !important;
+    flex: 0 0 50% !important;
+  }
+
+  /* Description prend toute la colonne A (première colonne de 2fr) */
+  .usecase-print .layout-main .column-a.lg\:col-span-2 {
+    grid-column: 1 !important;
+  }
+
+  /* Neutraliser lg:col-span-2 pour les éléments dans layout-main en print */
+  .usecase-print .layout-main .lg\:col-span-2 {
+    grid-column: 1 !important;
+  }
+
+  /* Les groupes Bénéfices/Risques et Mesures/Prochaines étapes restent dans la colonne A */
+  .usecase-print .layout-main > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+    grid-column: 1 !important;
+    align-items: stretch !important; /* Les colonnes ont la même hauteur */
+  }
+
+  /* Alignement Bénéfices/Risques/Mesures en impression : même hauteur et alignement top/bottom */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+    align-items: stretch !important; /* Les colonnes ont la même hauteur */
+  }
+
+  /* Le conteneur Risques + Mesures utilise flexbox pour aligner en haut et en bas */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important; /* Aligner en haut, les boites s'étirent */
+    height: 100% !important;
+    gap: 4pt !important; /* Marge minimale entre Risques et Mesures */
+    /* Exclure des règles génériques space-y-6 */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Les cartes Risques et Mesures s'étirent pour remplir l'espace disponible */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+    flex-grow: 1 !important; /* Les boites s'étirent pour remplir l'espace */
+    flex-shrink: 0 !important; /* Ne pas rétrécir en dessous de leur contenu */
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Le contenu interne des cartes Risques et Mesures s'étire */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg > *:last-child {
+    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* Supprimer la marge bottom du dernier élément (Mesures) pour l'alignement en bas */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Exclure les cartes Bénéfices/Risques/Mesures des règles génériques de marge */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg,
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  /* La carte Bénéfices s'étire pour avoir la même hauteur que le conteneur Risques+Mesures */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Le contenu interne de la carte Bénéfices s'étire */
+  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child > *:last-child {
+    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  }
+
+  /* Colonne B (Technologies, Sources, Données, Références) dans la colonne 2 */
+  .usecase-print .layout-main > .column-b.lg\:col-span-1 {
+    grid-column: 2 !important;
+  }
+
+  /* ============================================
+     RÈGLE SPÉCIFIQUE POUR TECHNOLOGIES - DOIT VENIR EN DERNIER
+     ============================================ */
+  /* Marges plus importantes pour Technologies (qui utilise ml-4 = 16px = ~12pt) */
+  /* Spécificité maximale pour s'assurer que cette règle prend le dessus sur toutes les autres */
+  .usecase-print .rounded-lg.border.shadow-sm ul.list-disc.ml-4,
+  .usecase-print .rounded-lg.border ul.list-disc.ml-4,
+  .usecase-print .rounded-lg.shadow-sm ul.list-disc.ml-4,
+  .usecase-print .rounded-lg ul.list-disc.ml-4,
+  .usecase-print .border ul.list-disc.ml-4,
+  .usecase-print .shadow-sm ul.list-disc.ml-4,
+  .usecase-print ul.list-disc.ml-4 {
+    margin-left: 9pt !important;
+    padding-left: 5pt !important;
+  }
+
+  /* ============================================
+     MARGES ENTRE LAYOUTS - DOIT VENIR EN TOUT DERNIER
+     ============================================ */
+  /* Supprimer toutes les marges bottom des layouts */
+  .usecase-print .layout-head,
+  .usecase-print .layout-main,
+  .usecase-print .layout-bottom {
+    margin-top: 0 !important; /* Annuler marge haute */
+    margin-bottom: 0 !important; /* Annuler marge basse */
+  }
+
+  /* Marges très réduites entre layouts dans space-y-6 - Spécificité maximale avec sélecteurs multiples */
+  /* Cibler directement les layouts qui suivent d'autres layouts */
+  .usecase-print.space-y-6 > .layout-head + .layout-main,
+  .usecase-print.space-y-6 > .layout-main + .layout-bottom,
+  .usecase-print .space-y-6 > .layout-head + .layout-main,
+  .usecase-print .space-y-6 > .layout-main + .layout-bottom,
+  div.usecase-print.space-y-6 > div.layout-head + div.layout-main,
+  div.usecase-print.space-y-6 > div.layout-main + div.layout-bottom,
+  .usecase-print.space-y-6 > div.layout-head + div.layout-main,
+  .usecase-print.space-y-6 > div.layout-main + div.layout-bottom {
+    margin-top: 0 !important; /* Annuler marge entre layouts */
+  }
+
+  /* ============================================
+     SUPPRESSION MARGES TOP DU TITRE - DOIT VENIR EN TOUT DERNIER
+     ============================================ */
+  /* Supprimer la marge supérieure du premier enfant (titre print-only) */
+  .usecase-print.space-y-6 > *:first-child,
+  div.usecase-print.space-y-6 > div:first-child,
+  .usecase-print.space-y-6 > .print-only:first-child,
+  div.usecase-print.space-y-6 > div.print-only:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Supprimer la marge supérieure du h1 dans le titre print-only */
+  .usecase-print.space-y-6 > .print-only:first-child h1,
+  div.usecase-print.space-y-6 > div.print-only:first-child h1,
+  .usecase-print > .print-only:first-child h1,
+  div.usecase-print > div.print-only:first-child h1 {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Override Tailwind space-y-6 pour le premier enfant - Spécificité maximale */
+  .usecase-print.space-y-6 > *:first-child,
+  div.usecase-print.space-y-6 > *:first-child,
+  .usecase-print.space-y-6 > div:first-child,
+  div.usecase-print.space-y-6 > div:first-child,
+  section.space-y-6 > .usecase-print.space-y-6 > *:first-child,
+  section.space-y-6 > div.usecase-print.space-y-6 > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Override Tailwind space-y-6 généré - cibler spécifiquement le sélecteur Tailwind dans usecase-print */
+  .usecase-print.space-y-6 > * + * {
+    margin-top: 0 !important; /* Annuler toutes les marges verticales entre cartes */
+  }
+
+  /* Mais forcer le premier enfant à 0 */
+  .usecase-print.space-y-6 > *:first-child + * {
+    margin-top: 0 !important; /* Annuler toutes les marges verticales entre cartes */
+  }
+
+  /* RÈGLE FINALE - Forcer absolument la marge à 0 pour le titre print-only */
+  section.space-y-6 > div.usecase-print.space-y-6 > div.print-only:first-child,
+  section.space-y-6 > .usecase-print.space-y-6 > .print-only:first-child,
+  div.usecase-print.space-y-6 > div.print-only:first-child,
+  .usecase-print.space-y-6 > .print-only:first-child {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  section.space-y-6 > div.usecase-print.space-y-6 > div.print-only:first-child h1,
+  section.space-y-6 > .usecase-print.space-y-6 > .print-only:first-child h1,
+  div.usecase-print.space-y-6 > div.print-only:first-child h1,
+  .usecase-print.space-y-6 > .print-only:first-child h1 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+}
+
+/* Règles pour forcer layout-bottom 50/50 même en preview d'impression */
+/* Ces règles s'appliquent aussi en mode preview, pas seulement en @media print */
+/* Utiliser @media print uniquement car c'est ce qui s'applique en preview */
+@media print {
+  /* Règle très spécifique pour override toutes les règles Tailwind en preview */
+  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .usecase-print .layout-bottom.grid.gap-6,
+  .usecase-print div.layout-bottom.md\:grid-cols-2,
+  .usecase-print div.layout-bottom,
+  .usecase-print .layout-bottom[class*="grid"],
+  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
+  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"] {
+    grid-template-columns: 1fr 1fr !important;
+    display: grid !important;
+  }
+  
+  /* Forcer les enfants directs à ne pas avoir de grid-column spécifique */
+  .usecase-print .layout-bottom > * {
+    grid-column: auto !important;
+  }
+}
+
+/* Use cases in dashboard (visible in print) */
+@media print {
+  /* Sections annexes dans le dashboard - structure unifiée avec vue individuelle */
+  .usecase-annex-section {
+    display: block !important;
+    /* page-break-before: auto; Auto au lieu de always pour éviter les pages blanches */
+    page: annex; /* Utiliser les marges réduites pour les annexes */
+    margin: 0 !important;
+    padding: 0.6cm !important; /* Marge interne de 0.6cm pour le contenu */
+    margin-top: 0 !important;
+    padding-top: 0.6cm !important;
+    padding-bottom: 0.6cm !important;
+    overflow: visible !important;
+  }
+  
+  /* Saut de page après chaque section sauf la dernière */
+  .usecase-annex-section:not(:last-child) {
+    page-break-after: always;
+  }
+
+  /* Le premier cas d'usage doit commencer sur une nouvelle page (après le séparateur qui a page-break-after) */
+  /* Le séparateur force déjà un saut, donc le premier cas commencera naturellement sur une nouvelle page */
+  
+  /* Pour les cas suivants, utiliser orphans pour forcer un saut si nécessaire sans créer de page blanche */
+  .usecase-annex-section:not(:first-of-type) {
+    orphans: 1; /* Force au moins 1 ligne en haut de page */
+    widows: 1; /* Force au moins 1 ligne en bas de page */
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* S'assurer que usecase-print dans les sections annexes n'a pas de marges top */
+  .usecase-annex-section > .usecase-print {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* S'assurer que le premier enfant de la section annexe n'a pas de marges top */
+  .usecase-annex-section > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  
+  /* Annuler les espacements space-y-6 en impression pour les sections annexes */
+  .usecase-annex-section > * + * {
+    margin-top: 0 !important;
+  }
+  
+  /* Dédoublonner space-y-6 : annuler space-y-6 sur usecase-print dans le dashboard */
+  /* Le dashboard a section.space-y-6 + div.space-y-6, la vue individuelle n'a qu'un seul */
+  .usecase-annex-section > .usecase-print.space-y-6 > * + * {
+    margin-top: 0 !important; /* Annuler le space-y-6 redondant */
+  }
+
+  /* S'assurer que le contenu principal utilise les marges normales */
+  .report-main-content {
+    page: auto; /* Utilise la page par défaut avec marges 2cm */
+  }
+
+  /* Page cas-usage/[id] : utiliser les mêmes marges réduites que les annexes */
+  /* Cette règle s'applique maintenant aussi aux sections annexes du dashboard */
+  section.space-y-6 > .usecase-print {
+    page: annex; /* Utiliser les marges réduites (0.6cm) comme les annexes */
+  }
+  
+  /* Appliquer les facteurs de réduction pour les sections avec beaucoup d'items */
+  /* Les facteurs sont calculés dans le composant et appliqués via style inline */
+  /* Ces règles CSS assurent que les styles inline sont respectés même avec les classes Tailwind */
+  
+  /* Technologies : base = 7 - Forcer les styles inline */
+  .technologies-content,
+  .technologies-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .technologies-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Sources des données : base = 5 - Forcer les styles inline */
+  .data-sources-content,
+  .data-sources-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .data-sources-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Données : base = 5 - Forcer les styles inline */
+  .data-objects-content,
+  .data-objects-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  .data-objects-content li.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  /* Références : base = 8 - Forcer les styles inline */
+  .references-content,
+  .references-content * {
+    /* Les styles inline du composant ont priorité */
+  }
+  
+  /* Forcer l'héritage de la taille pour tous les enfants quand le scaling est actif */
+  .references-content > div {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  .references-content > div > span,
+  .references-content > div > a {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+  
+  .references-content > div.text-sm {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+}
+
