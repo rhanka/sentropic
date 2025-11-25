@@ -2,6 +2,9 @@
   "name": "top-ai-ideas-api",
   "version": "0.1.0",
   "type": "module",
+  "overrides": {
+    "glob": "^11.1.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --sourcemap",

@@ -319,6 +319,7 @@ Transform the dashboard into an executive summary view with improved visualizati
 
 - [ ] **Task 5.3**: CI Push and final testing
   - [x] All UAT, Unit test and e2e passing in local
+  - [ ] Preprod migration test pass
   - [ ] All ci test pass
 
 ## Commits & Progress
