@@ -27,9 +27,12 @@
   - [x] le graphique devrait remplir max 50% de l'écran, et devrait être plus haut
   - [x] le label du cas doit être inscrit sans hover, et au hover la description doit être affichée, valeur complexité et non le statut
   - [x] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
-  - [ ] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
+  - [x] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
+- [ ] Séparer dans la génération la description en: description (plus courte), problème, solution
+- [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
 - [ ] Approfondissement d'un enrichissement (passer de GPT4.1.nano à GPT5 pour un enrichissement)
-- [ ] Interaction ciblée autour d'un cas d'usage ou entreprise
+- [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
+- [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
 - [ ] Mise en place poker planning
 - [ ] Ajouter un tool de recherche de brevets (Lens API)
