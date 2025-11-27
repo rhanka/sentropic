@@ -1,7 +1,7 @@
 import { env } from './config/env';
 import { logger } from './logger';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { db } from './db/client';
+import { runMigrations } from './db/run-migrations';
+import { ensureIndexes } from './db/ensure-indexes';
 import { purgeExpiredAuthData } from './services/challenge-purge';
 
 const port = env.PORT;
@@ -9,10 +9,20 @@ const port = env.PORT;
 // Run database migrations at boot (idempotent)
 try {
   logger.info('Running database migrations at startup...');
-  await migrate(db, { migrationsFolder: './drizzle' });
+  await runMigrations();
   logger.info('Database migrations completed.');
 } catch (error) {
   logger.error({ err: error }, 'Database migration failed at startup');
+  process.exit(1);
+}
+
+// Ensure indexes exist at boot (idempotent)
+try {
+  logger.info('Ensuring database indexes at startup...');
+  await ensureIndexes();
+  logger.info('Database indexes ensured.');
+} catch (error) {
+  logger.error({ err: error }, 'Database index creation failed at startup');
   process.exit(1);
 }
 

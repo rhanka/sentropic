@@ -50,6 +50,13 @@
       "when": 1763170969321,
       "tag": "0006_low_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1764202914560,
+      "tag": "0007_handy_morlocks",
+      "breakpoints": true
     }
   ]
 }

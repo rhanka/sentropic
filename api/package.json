@@ -31,6 +31,8 @@
     "db:restore": "tsx src/scripts/db-restore.ts",
     "db:seed": "tsx src/scripts/db-seed.ts",
     "db:reset": "tsx src/scripts/db-reset.ts",
+    "db:migrate-data": "tsx src/scripts/migrate-usecases-to-data.ts",
+    "db:create-indexes": "tsx src/scripts/db-create-indexes.ts",
     "queue:clear": "tsx src/scripts/queue-clear.ts",
     "queue:status": "tsx src/scripts/queue-status.ts",
     "queue:reset": "tsx src/scripts/queue-reset.ts",

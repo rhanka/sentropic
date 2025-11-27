@@ -1,509 +1,945 @@
-# Feature: Dashboard Executive Summary Enhancement
+# Feature: Séparation de la description en description/problème/solution
 
 ## Objective
-Transform the dashboard into an executive summary view with improved visualization, ROI quadrant (relative to medians), executive summary generation (automatic after use case completion), and print-ready report with CSS.
+
+Séparer le champ `description` des cas d'usage en trois champs distincts pour une meilleure structuration :
+1. **description** : Description courte et concise du cas d'usage (colonne native)
+2. **problème** : Le problème métier adressé (stocké dans `data.problem` JSONB)
+3. **solution** : La solution proposée (stocké dans `data.solution` JSONB)
+
+Refactorisation du schéma pour une approche minimaliste : garder uniquement les champs de gestion d'état et les champs fréquemment accédés (`name`, `description`) en colonnes natives, et migrer toutes les données métier vers un champ `data` JSONB.
 
 ## Scope
-- **UI Changes**: Dashboard layout, scatter plot improvements, ROI quadrant, executive summary section, dashboard configuration accordion
-- **API Changes**: New endpoint for executive summary generation (AI-powered), automatic generation after use case completion
-- **Data Storage**: Executive summary stored in database (folders table), dashboard config in localStorage initially
-- **No Breaking Changes**: Existing functionality remains intact
+
+- **API** : Schéma DB, migrations, types TypeScript, services de génération, prompts
+- **UI** : Types, composants d'affichage et d'édition
+- **CI** : Aucun changement prévu (sauf si tests nécessitent des ajustements)
+
+## Limites de travail (éviter les effets de bord)
+
+- ✅ **Ne pas modifier** : Makefile, CI workflows (sauf ajustements tests si nécessaire)
+- ✅ **Minimal changes** : Se concentrer uniquement sur la refactorisation du schéma `use_cases`
+- ✅ **Rétrocompatibilité** : Maintenir la compatibilité avec les données existantes pendant la migration
+- ✅ **Tests** : Mettre à jour uniquement les tests affectés par le changement de schéma
+- ✅ **Pas de refactoring** : Ne pas refactoriser d'autres parties du code non liées à cette feature
+
+## Contexte
+
+Actuellement, le champ `description` des cas d'usage contient une description complète qui mélange plusieurs aspects. De plus, le schéma actuel a de nombreuses colonnes métier qui pourraient être consolidées dans un champ JSONB pour plus de flexibilité.
+
+## Schéma de la table `use_cases`
+
+### As-is (État actuel)
+
+**Fichier**: `api/src/db/schema.ts`
+
+```typescript
+export const useCases = pgTable('use_cases', {
+  id: text('id').primaryKey(),
+  folderId: text('folder_id')
+    .notNull()
+    .references(() => folders.id, { onDelete: 'cascade' }),
+  companyId: text('company_id').references(() => companies.id),
+  name: text('name').notNull(),
+  description: text('description'),  // ⚠️ Description complète qui mélange tout
+  process: text('process'),
+  domain: text('domain'),
+  technologies: text('technologies'),
+  prerequisites: text('prerequisites'),
+  deadline: text('deadline'),
+  contact: text('contact'),
+  benefits: text('benefits'),
+  metrics: text('metrics'),
+  risks: text('risks'),
+  nextSteps: text('next_steps'),
+  dataSources: text('data_sources'),
+  dataObjects: text('data_objects'),
+  references: text('references'),
+  valueScores: text('value_scores'),
+  complexityScores: text('complexity_scores'),
+  totalValueScore: integer('total_value_score'),
+  totalComplexityScore: integer('total_complexity_score'),
+  model: text('model'),
+  status: text('status').default('completed'),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+});
+```
+
+**Structure SQL actuelle**:
+```sql
+CREATE TABLE "use_cases" (
+  "id" text PRIMARY KEY NOT NULL,
+  "folder_id" text NOT NULL,
+  "company_id" text,
+  "name" text NOT NULL,
+  "description" text,  -- ⚠️ Champ unique contenant description + problème + solution
+  "process" text,
+  "domain" text,
+  "technologies" text,
+  "prerequisites" text,
+  "deadline" text,
+  "contact" text,
+  "benefits" text,
+  "metrics" text,
+  "risks" text,
+  "next_steps" text,
+  "data_sources" text,
+  "data_objects" text,
+  "references" text,
+  "value_scores" text,
+  "complexity_scores" text,
+  "total_value_score" integer,
+  "total_complexity_score" integer,
+  "model" text,
+  "status" text DEFAULT 'completed',
+  "created_at" timestamp DEFAULT now()
+);
+```
+
+**Problème actuel**:
+- Le champ `description` contient une description complète qui mélange :
+  - Une description générale du cas d'usage
+  - Le problème métier adressé
+  - La solution proposée
+- Pas de séparation structurée entre ces trois aspects
+- Difficile d'extraire ou d'afficher séparément le problème et la solution
+
+### To-be (État cible)
+
+**Fichier**: `api/src/db/schema.ts`
+
+```typescript
+export const useCases = pgTable('use_cases', {
+  // === GESTION D'ÉTAT ===
+  id: text('id').primaryKey(),
+  folderId: text('folder_id')
+    .notNull()
+    .references(() => folders.id, { onDelete: 'cascade' }),
+  companyId: text('company_id').references(() => companies.id),
+  status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
+  model: text('model'), // Modèle utilisé pour la génération
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  
+  // === CHAMPS FRÉQUEMMENT ACCÉDÉS EN MASSE (performance) ===
+  name: text('name').notNull(), // ✅ Colonne native pour requêtes rapides
+  description: text('description'), // ✅ Colonne native pour requêtes rapides (description courte)
+  
+  // === DONNÉES MÉTIER (tout dans JSONB pour flexibilité) ===
+  data: jsonb('data').notNull().default('{}')
+});
+```
+
+**Structure SQL cible**:
+```sql
+CREATE TABLE "use_cases" (
+  -- Gestion d'état
+  "id" text PRIMARY KEY NOT NULL,
+  "folder_id" text NOT NULL,
+  "company_id" text,
+  "status" text DEFAULT 'completed',
+  "model" text,
+  "created_at" timestamp DEFAULT now(),
+  
+  -- Champs fréquemment accédés en masse (colonnes natives pour performance)
+  "name" text NOT NULL,
+  "description" text,
+  
+  -- Données métier (tout dans JSONB)
+  "data" jsonb NOT NULL DEFAULT '{}'
+);
+```
+
+**Structure du champ `data` JSONB**:
+```typescript
+type UseCaseData = {
+  // === Nouveaux champs ===
+  problem?: string;
+  solution?: string;
+  
+  // === Détails métier ===
+  process?: string;
+  domain?: string;
+  technologies?: string[];
+  prerequisites?: string;
+  deadline?: string;
+  contact?: string;
+  
+  // === Listes ===
+  benefits?: string[];
+  metrics?: string[];
+  risks?: string[];
+  nextSteps?: string[];
+  dataSources?: string[];
+  dataObjects?: string[];
+  
+  // === Références ===
+  references?: Array<{
+    title: string;
+    url: string;
+  }>;
+  
+  // === Scores détaillés (pour recalcul dynamique) ===
+  valueScores?: Array<{
+    axisId: string;
+    rating: number;
+    description: string;
+  }>;
+  complexityScores?: Array<{
+    axisId: string;
+    rating: number;
+    description: string;
+  }>;
+  
+  // === Extensions futures ===
+  embeddings?: {
+    problem?: number[];
+    solution?: number[];
+  };
+  metadata?: Record<string, any>;
+};
+```
+
+**Migration SQL**:
+```sql
+-- 1. Ajouter le champ data JSONB
+ALTER TABLE "use_cases" ADD COLUMN "data" jsonb NOT NULL DEFAULT '{}';
+
+-- 2. Migrer les données existantes vers data
+UPDATE "use_cases" 
+SET "data" = jsonb_build_object(
+  'process', "process",
+  'domain', "domain",
+  'technologies', COALESCE("technologies"::jsonb, '[]'::jsonb),
+  'prerequisites', "prerequisites",
+  'deadline', "deadline",
+  'contact', "contact",
+  'benefits', COALESCE("benefits"::jsonb, '[]'::jsonb),
+  'metrics', COALESCE("metrics"::jsonb, '[]'::jsonb),
+  'risks', COALESCE("risks"::jsonb, '[]'::jsonb),
+  'nextSteps', COALESCE("next_steps"::jsonb, '[]'::jsonb),
+  'dataSources', COALESCE("data_sources"::jsonb, '[]'::jsonb),
+  'dataObjects', COALESCE("data_objects"::jsonb, '[]'::jsonb),
+  'references', COALESCE("references"::jsonb, '[]'::jsonb),
+  'valueScores', COALESCE("value_scores"::jsonb, '[]'::jsonb),
+  'complexityScores', COALESCE("complexity_scores"::jsonb, '[]'::jsonb)
+)
+WHERE "data" = '{}';
+
+-- 3. Supprimer les colonnes migrées (après vérification)
+-- ALTER TABLE "use_cases" DROP COLUMN "process";
+-- ALTER TABLE "use_cases" DROP COLUMN "domain";
+-- ... (toutes les colonnes métier sauf name, description, et gestion d'état)
+-- ALTER TABLE "use_cases" DROP COLUMN "total_value_score";  -- ✅ Supprimé (champ calculé)
+-- ALTER TABLE "use_cases" DROP COLUMN "total_complexity_score";  -- ✅ Supprimé (champ calculé)
+```
+
+**Indexation recommandée**:
+```sql
+-- Index sur name et description (colonnes natives)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX idx_use_cases_name_trgm 
+  ON use_cases USING GIN (name gin_trgm_ops);
+
+CREATE INDEX idx_use_cases_description_trgm 
+  ON use_cases USING GIN (description gin_trgm_ops);
+
+-- Index composite pour requêtes fréquentes
+CREATE INDEX idx_use_cases_folder_name 
+  ON use_cases (folder_id, name);
+
+-- Index JSONB pour problem/solution
+CREATE INDEX idx_use_cases_data_gin 
+  ON use_cases USING GIN (data);
+
+CREATE INDEX idx_use_cases_data_problem_trgm 
+  ON use_cases USING GIN ((data->>'problem') gin_trgm_ops);
+
+CREATE INDEX idx_use_cases_data_solution_trgm 
+  ON use_cases USING GIN ((data->>'solution') gin_trgm_ops);
+
+-- Index pour tri/filtrage sur statut
+CREATE INDEX idx_use_cases_folder_status 
+  ON use_cases (folder_id, status);
+```
+
+**Avantages de la nouvelle structure**:
+- ✅ **Performance** : `name` et `description` en colonnes natives pour requêtes en masse rapides
+- ✅ **Flexibilité** : Toutes les données métier dans `data` JSONB (ajout de champs sans migration)
+- ✅ **Séparation claire** : description courte, problème et solution distincts
+- ✅ **Pas de redondance** : Suppression des champs calculés (`totalValueScore`, `totalComplexityScore`)
+- ✅ **Recalcul dynamique** : Les scores totaux sont recalculés à partir de `data.valueScores` et `data.complexityScores` + matrice du dossier
+- ✅ **Indexation efficace** : Index GIN + pg_trgm pour recherches textuelles dans JSONB
+- ✅ **Rétrocompatibilité** : Migration progressive possible
+
+**Exemple de données**:
+
+**Avant**:
+```json
+{
+  "id": "uc_123",
+  "name": "Détection de défauts par vision",
+  "description": "Ce cas d'usage utilise l'IA pour détecter automatiquement les défauts de production. Le problème actuel est que la détection manuelle est lente et sujette à erreurs. La solution proposée utilise la computer vision pour analyser les images en temps réel et identifier les anomalies avec une précision de 99%."
+}
+```
+
+**Après**:
+```json
+{
+  "id": "uc_123",
+  "folder_id": "folder_456",
+  "company_id": "company_789",
+  "status": "completed",
+  "model": "gpt-4.1-nano",
+  "name": "Détection de défauts par vision",
+  "description": "Détection automatique des défauts de production par vision artificielle en temps réel.",
+  "created_at": "2024-01-15T10:30:00Z",
+  "data": {
+    "problem": "La détection manuelle des défauts est lente, coûteuse et sujette à erreurs humaines. Les opérateurs peuvent manquer des défauts subtils ou être incohérents dans leur évaluation.",
+    "solution": "Utilisation de la computer vision avec des modèles d'IA entraînés pour analyser les images de production en temps réel. Le système identifie automatiquement les anomalies avec une précision de 99% et alerte immédiatement les opérateurs.",
+    "process": "Production",
+    "domain": "Qualité",
+    "technologies": ["Computer Vision", "Deep Learning", "TensorFlow"],
+    "prerequisites": "Caméras haute résolution, infrastructure cloud",
+    "deadline": "6 mois",
+    "contact": "Responsable qualité",
+    "benefits": ["Réduction des erreurs", "Gain de temps", "Amélioration de la qualité"],
+    "metrics": ["Taux de détection", "Temps de traitement", "Précision"],
+    "risks": ["Coût initial", "Formation des équipes"],
+    "nextSteps": ["POC", "Déploiement pilote", "Formation"],
+    "dataSources": ["Images de production", "Base de données qualité"],
+    "dataObjects": ["Image", "Défaut détecté", "Rapport qualité"],
+    "references": [
+      { "title": "Computer Vision in Manufacturing", "url": "https://example.com" }
+    ],
+    "valueScores": [
+      { "axisId": "business_value", "rating": 89, "description": "Impact business élevé" }
+    ],
+    "complexityScores": [
+      { "axisId": "technical_complexity", "rating": 55, "description": "Complexité technique moyenne" }
+    ]
+  }
+}
+```
+
+**Note importante** : Les `totalValueScore` et `totalComplexityScore` ne sont plus stockés. Ils sont recalculés dynamiquement à partir de :
+- `data.valueScores` et `data.complexityScores`
+- La matrice de notation du dossier (`folder.matrixConfig`)
+
+## Plan d'implémentation
+
+### 1. Schéma de base de données
+
+**Fichier**: `api/src/db/schema.ts`
+
+- [x] Refactoriser le schéma pour adopter l'approche minimaliste :
+  - [x] Garder uniquement les champs de gestion d'état : `id`, `folderId`, `companyId`, `status`, `model`, `createdAt`
+  - [x] Garder `name` et `description` en colonnes natives (performance)
+  - [x] Ajouter un champ `data` JSONB pour toutes les données métier
+  - [x] **Supprimer** `totalValueScore` et `totalComplexityScore` (champs calculés)
+  - [x] Colonnes métier temporaires conservées (seront supprimées après migration des données)
+- [x] Générer la migration avec `make db-generate` → 0007_handy_morlocks.sql
+- [x] Vérifier la migration générée (ajout `data`, suppression colonnes calculées)
+- [x] Créer un script de migration des données existantes vers `data` (`migrate-usecases-to-data.ts`)
+- [x] Appliquer la migration avec `make db-migrate`
+- [x] Créer les modules centralisés pour migrations et indexation (`db/run-migrations.ts`, `db/ensure-indexes.ts`)
+- [x] Intégrer l'indexation au démarrage de l'API (`index.ts`)
+- [x] Créer les index recommandés (GIN, pg_trgm) via `db/ensure-indexes.ts` (idempotent, exécuté au démarrage)
+
+**Migration attendue**:
+```sql
+-- Ajout du champ data JSONB
+ALTER TABLE "use_cases" ADD COLUMN "data" jsonb NOT NULL DEFAULT '{}';
+
+-- Migration des données existantes (voir section détaillée ci-dessus)
+-- ...
+
+-- Suppression des colonnes migrées (après vérification)
+-- ALTER TABLE "use_cases" DROP COLUMN "total_value_score";
+-- ALTER TABLE "use_cases" DROP COLUMN "total_complexity_score";
+-- ... (autres colonnes métier)
+```
+
+### 2. Types TypeScript (API)
+
+**Fichiers**:
+- `api/src/services/context-usecase.ts`
+- `api/src/routes/api/use-cases.ts`
+- `api/src/utils/scoring.ts`
+
+- [ ] Créer le type `UseCaseData` pour structurer le champ `data`
+- [ ] Mettre à jour l'interface `UseCaseDetail` pour inclure :
+  - `description: string` (description courte)
+  - `problem?: string` (problème métier dans `data`)
+  - `solution?: string` (solution proposée dans `data`)
+- [ ] Mettre à jour le schéma Zod `useCaseInput` pour accepter `problem` et `solution`
+- [ ] Mettre à jour la fonction `hydrateUseCase` pour :
+  - Extraire les données de `data` JSONB
+  - Ne plus retourner `totalValueScore` et `totalComplexityScore` (calculés dynamiquement)
+- [ ] Mettre à jour les endpoints POST/PUT pour sérialiser/désérialiser `data`
+- [ ] Créer une fonction utilitaire pour calculer les scores totaux à la demande :
+  ```typescript
+  const calculateUseCaseScores = (useCase: UseCase, matrix: MatrixConfig) => {
+    const valueScores = useCase.data.valueScores || [];
+    const complexityScores = useCase.data.complexityScores || [];
+    return calculateScores(matrix, valueScores, complexityScores);
+  };
+  ```
+- [ ] Mettre à jour tous les endroits qui utilisent `totalValueScore`/`totalComplexityScore` pour utiliser le calcul dynamique
+
+### 3. Prompts de génération
+
+**Fichier**: `api/src/config/default-prompts.ts`
+
+- [ ] Modifier le prompt `use_case_list` pour générer :
+  - `description`: Description très courte (30-60 caractères)
+  - `problem`: Le problème métier adressé (40-80 caractères)
+  - `solution`: La solution proposée (40-80 caractères)
+- [ ] Modifier le prompt `use_case_detail` pour générer :
+  - `description`: Description très courte (30-60 caractères) - **même longueur que pour la liste**
+  - `problem`: Le problème métier adressé (40-80 caractères)
+  - `solution`: La solution proposée (40-80 caractères)
+- [ ] Mettre à jour les exemples JSON dans les prompts pour refléter la nouvelle structure
+
+### 4. Services de génération
+
+**Fichier**: `api/src/services/queue-manager.ts`
+
+- [ ] Mettre à jour `processUseCaseList` pour :
+  - Extraire et stocker `problem` et `solution` dans `data`
+  - Stocker toutes les données métier dans `data` (pas dans des colonnes séparées)
+  - Ne plus stocker `totalValueScore` et `totalComplexityScore`
+- [ ] Mettre à jour `processUseCaseDetail` pour :
+  - Extraire et stocker `problem` et `solution` dans `data`
+  - Stocker toutes les données métier dans `data`
+  - Ne plus stocker `totalValueScore` et `totalComplexityScore`
+- [ ] S'assurer que les longueurs respectent les contraintes :
+  - `description`: 30-60 caractères (très courte)
+  - `problem`: 40-80 caractères
+  - `solution`: 40-80 caractères
+
+### 5. Interface utilisateur (UI)
+
+**Fichiers**:
+- `ui/src/lib/stores/useCases.ts`
+- `ui/src/lib/components/UseCaseDetail.svelte`
+
+- [ ] Mettre à jour le type `UseCase` pour inclure :
+  - `data?: { problem?: string, solution?: string }`
+- [ ] Ajouter `problem` et `solution` dans les champs éditables de `UseCaseDetail.svelte`
+- [ ] Adapter l'affichage pour montrer les trois sections distinctement :
+  - Description (courte)
+  - Problème
+  - Solution
+- [ ] Mettre à jour la logique de sauvegarde pour gérer `data.problem` et `data.solution`
+
+### 6. Migration des données existantes
+
+- [ ] Créer un script de migration SQL pour :
+  - Migrer toutes les colonnes métier vers `data` JSONB
+  - Conserver `name` et `description` en colonnes natives
+  - Analyser les descriptions existantes et tenter d'extraire problème/solution si possible (ou laisser vide)
+  - Conserver la description actuelle comme description courte (tronquée si nécessaire)
+  - Supprimer les colonnes migrées après vérification
+- [ ] Tester la migration sur une copie de la base de données
+- [ ] Vérifier l'intégrité des données après migration
+
+### 7. Tests
+
+- [ ] Mettre à jour les tests unitaires pour :
+  - La nouvelle structure avec `data` JSONB
+  - Le calcul dynamique des scores totaux
+  - La migration des données
+- [ ] Mettre à jour les tests d'intégration pour :
+  - Vérifier la génération des trois champs (description, problem, solution)
+  - Vérifier le calcul dynamique des scores
+  - Vérifier les requêtes en masse sur `name` et `description`
+- [ ] Mettre à jour les tests E2E si nécessaire
+- [ ] Vérifier que les anciennes données sont toujours accessibles après migration
+- [ ] Tester les performances des requêtes en masse avec colonnes natives vs JSONB
+
+### 8. Documentation
+
+- [ ] Mettre à jour la documentation de l'API si nécessaire
+- [ ] Documenter la nouvelle structure dans les spécifications
+
+## Structure de données attendue
+
+### Avant
+```typescript
+{
+  id: "uc_123",
+  name: "Cas d'usage",
+  description: "Description complète qui mélange tout...",
+  process: "...",
+  technologies: "...",
+  totalValueScore: 89,
+  totalComplexityScore: 55,
+  // ... beaucoup de colonnes
+}
+```
+
+### Après
+```typescript
+{
+  // Gestion d'état (colonnes natives)
+  id: "uc_123",
+  folderId: "folder_456",
+  companyId: "company_789",
+  status: "completed",
+  model: "gpt-4.1-nano",
+  createdAt: "2024-01-15T10:30:00Z",
+  
+  // Champs fréquemment accédés (colonnes natives pour performance)
+  name: "Cas d'usage",
+  description: "Description courte du cas d'usage",
+  
+  // Toutes les données métier (JSONB pour flexibilité)
+  data: {
+    problem: "Le problème métier adressé...",
+    solution: "La solution proposée...",
+    process: "...",
+    technologies: ["..."],
+    valueScores: [...],  // Pour recalcul dynamique
+    complexityScores: [...],  // Pour recalcul dynamique
+    // ... tout le reste
+  }
+  
+  // Note: totalValueScore et totalComplexityScore sont calculés dynamiquement
+}
+```
+
+## Points d'attention
+
+1. **Rétrocompatibilité** : Les cas d'usage existants doivent continuer à fonctionner même sans `data.problem` et `data.solution`
+2. **Validation** : S'assurer que les champs optionnels sont bien gérés partout
+3. **Affichage** : L'UI doit gérer gracieusement l'absence de `problem` ou `solution`
+4. **Prompts** : Les prompts doivent être clairs sur la séparation des trois éléments
+5. **Performance** : `name` et `description` restent en colonnes natives pour les requêtes en masse rapides
+6. **Scores calculés** : Les `totalValueScore` et `totalComplexityScore` doivent être recalculés dynamiquement à partir de `data.valueScores`, `data.complexityScores` et la matrice du dossier
+7. **Migration** : Migration progressive recommandée (ajout de `data`, migration des données, puis suppression des colonnes)
+8. **Indexation** : Créer les index recommandés (GIN, pg_trgm) pour optimiser les recherches dans JSONB
+9. **Longueurs des champs** :
+   - `description`: 30-60 caractères (très courte, même pour liste et détail)
+   - `problem`: 40-80 caractères
+   - `solution`: 40-80 caractères
+
+## Questions à clarifier avant implémentation
+
+1. **Validation des longueurs** : Faut-il valider les longueurs côté API (Zod schema) pour s'assurer que description = 30-60, problem = 40-80, solution = 40-80 ?
+
+2. **Affichage dans les listes** : Dans la page `/cas-usage`, les cartes affichent actuellement `name`. Faut-il aussi afficher la `description` courte ? Faut-il afficher `problem`/`solution` au hover ?
+
+3. **Affichage dans le dashboard** : Le scatter plot affiche la description au hover. Faut-il afficher aussi `problem`/`solution` ? Ou garder uniquement la description courte ?
+
+4. **Export/rapport** : Dans le rapport généré (dashboard), comment afficher ces 3 champs ? Faut-il les 3 sections distinctes dans `UseCaseDetail` pour l'impression ?
+
+5. **Migration des données existantes** : 
+   - Comment gérer les descriptions longues existantes ? Les tronquer à 60 caractères ?
+   - Comment extraire `problem` et `solution` des descriptions existantes ? Via IA ou laisser vide ?
+
+6. **Recherche** : Faut-il permettre de rechercher dans `problem` et `solution` ? Les index pg_trgm sont prévus, mais faut-il une interface de recherche ?
+
+7. **UI/UX** : Comment présenter ces 3 champs dans `UseCaseDetail` ? 
+   - 3 sections distinctes avec titres ?
+   - Tooltips ou expand/collapse ?
+   - Ordre d'affichage : description → problem → solution ?
 
 ## Plan / Todo
 
-### Phase 1: UI Improvements (Scatter Plot & Layout)
-- [x] **Task 1.1**: Adjust scatter plot to max 50% screen width and increase height
-  - Modify `UseCaseScatterPlot.svelte` component styling
-  - Update container classes to limit width (max 50%) and increase height
-  - Test responsive behavior
+### Phase 1 : Schéma DB + Migration
 
-- [x] **Task 1.2**: Display use case labels directly on scatter plot (no hover required)
-  - Modify Chart.js configuration to show labels by default
-  - Adjust label positioning to avoid overlaps
-  - Ensure labels are readable
+**Ce que je fais (AI)** :
+- [x] Refactoriser le schéma (supprimer colonnes métier, ajouter `data` JSONB)
+- [x] Créer la migration SQL avec Drizzle (0007_handy_morlocks.sql)
+- [x] Créer le script de migration des données existantes (`migrate-usecases-to-data.ts`)
+- [x] Appliquer la migration (`make db-migrate`)
+- [x] Créer les modules centralisés (`db/run-migrations.ts`, `db/ensure-indexes.ts`)
+- [x] Intégrer l'indexation au démarrage de l'API (`index.ts`)
+- [x] Refactoriser les scripts pour utiliser les modules centralisés
 
-- [x] **Task 1.3**: Update tooltip to show description, value, and complexity (not status)
-  - Modify tooltip callbacks in `UseCaseScatterPlot.svelte`
-  - Display: description, value score, complexity score
-  - Remove status from tooltip
+**Vérifications automatiques (AI exécute)** :
+- [x] `make db-generate` - Migration générée (0007_handy_morlocks.sql)
+- [x] `make db-migrate` - Migration appliquée avec succès
+- [x] `make db-status` - Structure de la table vérifiée
+- [x] `make db-migrate-data` - Script de migration testé (base vide, fonctionne)
+- [x] `make build-api` - Build API vérifié (passe)
+- [x] `make db-create-indexes` - Script d'indexation testé (via module centralisé)
 
-### Phase 2: ROI Quadrant (Relative to Medians)
-- [x] **Task 2.1**: Calculate medians for value and complexity scores
-  - Calculate median value score from all use cases
-  - Calculate median complexity score from all use cases
-  - Only display quadrant if > 2 use cases exist
+**Vérifications manuelles (TU vérifies)** :
+- [ ] Vérifier via `make db-inspect` que le schéma est correct (colonnes `name`, `description`, `data` présentes)
+- [ ] Vérifier que les colonnes supprimées ne sont plus dans le schéma
+- [ ] Vérifier que les données existantes sont toujours accessibles
+- [ ] Vérifier que le champ `data` est bien de type JSONB et contient les données migrées
+- [ ] Vérifier que les index sont créés (`make db-status` ou `make db-inspect`)
 
-- [x] **Task 2.2**: Add ROI quadrant visualization (top-left quadrant, green)
-  - Design ROI quadrant overlay on scatter plot (value > median, complexity < median)
-  - Identify use cases in ROI quadrant (high value, low complexity)
-  - Add visual indicator (green background/shading) for ROI quadrant
-  - Hide quadrant if ≤ 2 use cases
+### Phase 2 : Types TypeScript (API)
 
-- [x] **Task 2.3**: Add ROI statistics card
-  - Create new KPI card showing count of use cases in ROI quadrant
-  - Display average value and complexity for ROI quadrant
-  - Position in dashboard layout
+**Ce que je fais (AI)** :
+- [ ] Créer le type `UseCaseData` pour structurer le champ `data`
+- [ ] Mettre à jour l'interface `UseCaseDetail`
+- [ ] Créer la fonction de calcul dynamique des scores
+- [ ] Mettre à jour `hydrateUseCase` pour extraire les données de `data`
+- [ ] Mettre à jour les endpoints POST/PUT pour sérialiser/désérialiser `data`
+- [ ] Mettre à jour tous les endroits utilisant `totalValueScore`/`totalComplexityScore`
 
-- [x] **Task 2.4**: Create dashboard configuration accordion
-  - Add accordion component in top-right corner of scatter plot container with gear icon (⚙️)
-  - Store configuration in localStorage (initialized to median values)
-  - Allow configuration of ROI quadrant boundaries (value/complexity thresholds)
-  - Configuration will be stored in backend later (not in this phase)
-  - Accordéon déplacé du composant scatter plot vers le dashboard pour meilleure séparation des responsabilités
+**Vérifications automatiques (AI exécute)** :
+- `make build-api` - Vérifier que le build passe
+- `make test-api SCOPE=tests/api/use-cases.test.ts` - Tester les endpoints use-cases
+- `make dev` puis `make logs-api TAIL=50` - Vérifier que l'API démarre correctement et qu'il n'y a pas d'erreurs dans les logs
+- `make logs-ui TAIL=50` - Vérifier que l'UI démarre correctement et qu'il n'y a pas d'erreurs dans les logs
 
-### Phase 3: Executive Summary Generation
-- [x] **Task 3.1**: Add executive summary prompt to default-prompts.ts
-  - Create prompt template with 4 markdown sections:
-    - Introduction
-    - Analyse
-    - Recommandation (including prochaines étapes)
-    - Synthèse exécutive
-  - Prompt takes: use cases, company info (if available), folder info, top cases (list of priority use case names)
-  - Top cases are provided as input (calculated by API using ROI quadrant thresholds or medians)
-  - Return JSON with 4 markdown sections (top_cas removed from output, provided as input)
+**Vérifications manuelles (TU vérifies)** :
+- [ ] Vérifier dans le code que le type `UseCaseData` est bien défini et complet
+- [ ] Vérifier que `hydrateUseCase` extrait bien les données de `data` JSONB
+- [ ] Vérifier que les scores totaux ne sont plus retournés directement mais calculés dynamiquement
+- [ ] Tester les endpoints API via curl ou Postman :
+  - GET `/use-cases/:id` - Vérifier que `data.problem` et `data.solution` sont présents
+  - PUT `/use-cases/:id` - Vérifier que la sérialisation/désérialisation fonctionne
+  - Vérifier que les anciens endpoints fonctionnent toujours (rétrocompatibilité)
 
-- [x] **Task 3.2**: Create API endpoint for executive summary generation
-  - New endpoint: `POST /api/v1/analytics/executive-summary`
-  - Input: `folder_id`, optional `value_threshold`, `complexity_threshold`, `model`
-  - Queue job instead of direct generation (asynchronous processing)
-  - Update folder status to 'generating' when job is queued
-  - Return jobId and status immediately
-  - Fetch folder description, company context, and all use cases
-  - Calculate top cases (use cases in ROI quadrant: value >= threshold AND complexity <= threshold)
-  - Use custom thresholds if provided, otherwise use medians
-  - Format top cases as list of use case names
-  - Generate prompt for OpenAI with all context (including top cases)
-  - Return JSON with 4 markdown sections
-  - Store result in database (folders table - new field `executive_summary`)
+### Phase 3 : Prompts de génération
 
-- [x] **Task 3.3**: Add database field for executive summary
-  - Add `executive_summary` JSON field to folders table (migration)
-  - Store JSON with 4 sections: { introduction, analyse, recommandation, synthese_executive }
+**Ce que je fais (AI)** :
+- [ ] Modifier le prompt `use_case_list` pour générer `description`, `problem`, `solution`
+- [ ] Modifier le prompt `use_case_detail` pour générer `description`, `problem`, `solution`
+- [ ] Mettre à jour les exemples JSON dans les prompts
 
-- [x] **Task 3.4**: Integrate automatic generation after use case completion
-  - Modify `QueueManager.processUseCaseDetail` to check if all use cases are completed
-  - When all use cases completed, automatically trigger executive summary generation
-  - Add new job type: `executive_summary` to queue
-  - Update folder status to show executive summary generation in progress
+**Vérifications automatiques (AI exécute)** :
+- `make build-api` - Vérifier que le build passe
+- `make test-api-ai SCOPE=tests/ai/*-sync.test.ts` - Tester la génération AI
+- `make dev` puis `make logs-api TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs API
+- `make logs-ui TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs UI
 
-- [x] **Task 3.5**: Add executive summary display in Dashboard
-  - Integrate executive summary sections directly in `dashboard/+page.svelte` (no separate component)
-  - Display sections in order: Synthèse exécutive FIRST, then Dashboard (scatter plot), then Introduction/Analyse/Recommandations
-  - Fetch executive summary from folder data (stored in `folders.executiveSummary` JSON field)
-  - Show loading state when generating (check folder status === 'generating')
-  - Add manual "Generate Summary" and "Régénérer" buttons
-  - Parse and render markdown sections using existing markdown rendering (marked library)
-  - Add markdown styling for h2, h3, ul, ol, li elements
-  - Parse citations [1], [2] with links to references section
-  - Add References section at the end using References.svelte component
-  - Automatic refresh monitoring for job status (every 2s when generating)
-  - Hide Introduction/Analyse/Recommandations sections during generation
-  - Add responsive margins (px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32) for document-like layout
+**Vérifications manuelles (TU vérifies - IMPORTANT)** :
+- [ ] **Vérifier le contenu des prompts** dans `api/src/config/default-prompts.ts` :
+  - Le prompt `use_case_list` demande bien `description`, `problem`, `solution` séparément
+  - Le prompt `use_case_detail` demande bien `description`, `problem`, `solution` séparément
+  - Les exemples JSON dans les prompts reflètent la nouvelle structure
+  - Les instructions sont claires sur la séparation des trois champs
+  - **Les longueurs sont spécifiées** : description (30-60 caractères), problem (40-80), solution (40-80)
+- [ ] Générer un cas d'usage via l'UI et vérifier :
+  - Que les trois champs (description, problem, solution) sont bien générés
+  - Que `description` respecte 30-60 caractères
+  - Que `problem` respecte 40-80 caractères
+  - Que `solution` respecte 40-80 caractères
+  - Que les données sont stockées correctement dans `data` JSONB
+- [ ] Vérifier via `make db-inspect-usecases` que les nouveaux cas d'usage ont bien `data.problem` et `data.solution`
 
-### Phase 4: Print Report Generation (CSS-based)
-- [x] **Task 4.1**: Print CSS styling and layout
-  - Complete print CSS with @page rules for cover and annex pages
-  - Page de garde with background image and executive summary
-  - Table of contents with dynamic page numbers
-  - One page per use case with footer image
-  - Proper page breaks and margins
+### Phase 4 : Services de génération
 
-- [x] **Task 4.2**: Fix print layout issues
-  - Fix layout-bottom 50/50 grid (switched to flexbox)
-  - Fix annex margins (0.6cm padding on containers, 0 margin on @page)
-  - Fix overflow issues for axes sections
-  - Unify structure between dashboard and individual view
+**Ce que je fais (AI)** :
+- [ ] Mettre à jour `processUseCaseList` pour stocker dans `data` JSONB
+- [ ] Mettre à jour `processUseCaseDetail` pour stocker dans `data` JSONB
+- [ ] Supprimer le stockage des scores totaux
 
-- [x] **Task 4.3**: Dynamic content scaling
-  - Scaling for references (base 8), data sources (base 5), data objects (base 5), technologies (base 7)
-  - Aggressive scaling for executive summary with margin reduction
-  - Proportional font-size, line-height, gap, and icon scaling
+**Vérifications automatiques (AI exécute)** :
+- `make build-api` - Vérifier le build
+- `make test-api-queue SCOPE=tests/queue/*.test.ts` - Tester le traitement de la queue
+- `make test-api-ai` - Tester la génération complète
+- `make dev` puis `make logs-api TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs lors de la génération
+- `make logs-ui TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs UI
 
-- [x] **Task 4.4**: Page numbering and structure
-  - Dynamic page number calculation based on section heights
-  - Simplified calculation: each use case = 1 page exactly
-  - Footer image for use case pages with gradient overlay
-  - Complete print structure: cover, summary, TOC, sections, annexes
+**Vérifications manuelles (TU vérifies)** :
+- [ ] Vérifier dans le code que `processUseCaseList` stocke bien dans `data` JSONB (pas dans des colonnes séparées)
+- [ ] Vérifier dans le code que `processUseCaseDetail` stocke bien dans `data` JSONB
+- [ ] Vérifier dans le code que les scores totaux ne sont plus stockés (pas de `totalValueScore`/`totalComplexityScore` dans les insert/update)
+- [ ] Générer une liste de cas d'usage via l'UI et vérifier :
+  - Que `data.problem` et `data.solution` sont bien remplis dans la DB
+  - Que toutes les données métier sont dans `data` JSONB
+  - Que `name` et `description` sont bien en colonnes natives
+- [ ] Vérifier via `make db-inspect-usecases` que les données sont bien structurées dans `data` JSONB
+- [ ] Vérifier que les scores totaux sont calculés dynamiquement (pas stockés en DB) :
+  - Regarder dans la DB qu'il n'y a pas de `total_value_score`/`total_complexity_score`
+  - Vérifier que les scores sont calculés à la volée dans l'API
 
-### Phase 5: Testing & Validation
-- [x] **Task 5.0**: UAT
-  - [x] debug heavy priorisation chart: add weight 2000 to avoid labels to go out of the chart
-  - [x] decorrelate waiting data and simulated annealing: first render chart without labels, then add labels after simulation
-  - [x] debug reg in cover pages (backround image + filter not in the right place)
-  - [x] add print button in dashboard
-  - [x] bug -0.6cm in usecase printed in annex after 1st use case
-  - [x] add back cover page
-  - [x] fix bug: don't display usecase in dashboard view in display (non print) mode
-  - [x] Introduction (dans dashboard) devrait avoir un style de carte (en mode non impression), comme synthèse exécutive, analyse et recommandation
-  - [x] Reduit les espacement entre paragraphes, li, et titres pour faire tenir chacune des section Analyses et Reco en une page
-  - [x] Fix on ne voit plus les numero de page des cas d'usage en annexe - simplifie le calcul des pages, maintenant il est statique (1 page par cas, une page pour annexe reco ref)
-  - [x] fix responsiveness of usecase cards
-  - [x] propagate usage of usecase cards to dossier and enterprise
-  - [x] add edit mode in dashboard
-    - [x] Align EditableInput with Dahsboard UI (synthese executive, introduction, analyse, recommandation) using dashboard-tmp view for interactive visual testing
-        - [x] config tiptap to apply tiptap classes (config TipTap extension)
-        - [x] align css including prose, remove css simplifications
-        - [x] add parserRefrencesInmarkdown() pour TipTap
-        - [x] align html structures
-        - [x] handle impression mode (avoid reg)
-        - [x] visual testing (display & impression)
-    - [x] including api addition path to enable executive report modification
-        - [x] Ajout schéma zod executiveSummaryDataSchema pour validation structure
-        - [x] Ajout executiveSummary au folderInput avec .optional()
-        - [x] Création parseExecutiveSummary() similaire à parseMatrix()
-        - [x] Modification PUT /folders/:id pour stringify/parse executiveSummary comme matrixConfig
-        - [x] Branchement EditableInput avec apiEndpoint="/folders/${id}" et fullData
-        - [x] Gestion sauvegarde avec rechargement folder et mise à jour store
-    - [x] Rendre éditable le titre du dossier dans le dashboard
-    - [x] Amélioration UX boutons imprimer et régénérer
-        - [x] Boutons avec icônes uniquement (sans texte)
-        - [x] Déplacement boutons imprimer et régénérer à droite du titre "Synthèse exécutive"
-        - [x] Suppression boutons du header principal (à côté du titre du dossier)
-        - [x] Ajout attributs title pour accessibilité
-  - [x] Fix additionnal non volontary empty paragraph in TipTap after list (hide it)
-  - [x] Detailed Usecase UI relying on editable inputs in markdown mode for all fields
-    - [x] Phase 1: Description (markdown) alignée Dashboard (EditableInput + normalisation Markdown + API PUT stable)
-    - [x] Phase 2: Listes simples (Bénéfices, Risques, Mesures, Prochaines étapes) avec conversion array↔markdown et traitement références
-    - [x] Phase 3: Listes avec icônes (Sources, Données) avec scaling dynamique (`dataSourcesScaleFactor`, `dataObjectsScaleFactor`), post-processing icônes SVG et traitement références
-    - [x] Phase 4: Technologies avec scaling dynamique (`technologiesScaleFactor`)
-    - [x] Phase 5: Champs texte simples (Contact, Domaine, Délai) 
-    - [x] Phase 6: Justifications axes valeur/complexité (texte simple) avec traitement références
-    - [x] Phase 7: Prochaines étapes (liste simple) alignée sur benefits avec conversion array↔markdown et traitement références
-      - [x] Ajout de `nextSteps` dans `LIST_FIELDS` et buffers associés
-      - [x] Remplacement de la section "Prochaines étapes" pour utiliser `EditableInput` comme benefits
-      - [x] Support du mode impression avec `parsedNextSteps`
-  - [x] Retirer le bouton "Modifier" de la page cas d'usage (édition désormais uniquement via EditableInput en place)
-    - [x] Suppression du bouton "Modifier" et du slot `actions-edit` dans `cas-usage/[id]/+page.svelte`
-    - [x] Nettoyage de la logique d'édition (`isEditing`, `draft`, `handleUpdateUseCase`, `handleCancel`)
-    - [x] Retrait de l'import `apiPut` inutilisé
-    - [x] Conservation de la compatibilité avec `UseCaseDetail` (props `isEditing={false}` et `draft={{}}`)
-  - [x] Remplacer le bouton "Supprimer" par une icône poubelle (aligné avec le bouton imprimer)
-    - [x] Remplacement du texte "Supprimer" par une icône SVG poubelle
-    - [x] Style aligné avec le bouton imprimer (icône uniquement, padding uniforme, hover)
-    - [x] Ajout de l'attribut `title="Supprimer le cas d'usage"` pour l'accessibilité
-  - [x] **BUG**: Édition des justifications axes valeur/complexité (score.description) fonctionne mais la sauvegarde échoue (400 Bad Request) - correction du Zod pour accepter les scores fibonnaci
+### Phase 5 : Interface utilisateur
 
-- [x] **Task 5.1**: Update unit tests for new API endpoints
-  - **Catégorie**: Tests unitaires et d'intégration API
-  - **État des lieux des tests existants** (après `make test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai test-api-limit`):
-    - ✅ **test-api-smoke** : 6/6 tests passent
-    - ✅ **test-api-unit** : 136/136 tests passent
-    - ✅ **test-api-endpoints** : 116/116 tests passent (21 nouveaux tests ajoutés)
-      - ✅ **Corrigé** : `tests/api/analytics.test.ts` > "should return jobId and job should fail if folder has no use cases"
-        - **Correction** : Test mis à jour pour vérifier le `jobId` et attendre l'échec du job via polling de la queue
-      - ✅ **Ajouté** : 4 nouveaux tests dans `analytics.test.ts` (jobId, statut, thresholds, modèle par défaut)
-      - ✅ **Ajouté** : 6 nouveaux tests dans `folders.test.ts` (GET/PUT executiveSummary, parsing, validation)
-      - ✅ **Ajouté** : 4 nouveaux tests dans `use-cases.test.ts` (arrondi scores, recalcul conditionnel)
-    - ✅ **test-api-queue** : 4/4 tests passent
-    - ✅ **test-api-security** : 42/42 tests passent
-    - ✅ **test-api-ai** : 6/6 tests passent
-      - ✅ **Corrigé** : `tests/ai/executive-summary-sync.test.ts` > "should generate executive summary with default medians"
-        - **Correction** : Test mis à jour pour attendre la complétion du job via polling et vérifier le résultat dans la DB
-      - ✅ **Corrigé** : `tests/ai/executive-summary-sync.test.ts` > "should generate executive summary with custom thresholds"
-        - **Correction** : Même correction que ci-dessus
-    - ⚠️ **test-api-limit** : 1/3 tests passent (test lancé sans l'option DISABLE_RATE_LIMIT=true => ignoré pour l'instant)
-   - ✅ **test-ui** : 89/89 tests passent (8 nouveaux tests ajoutés, aucune régression)
-  - **Fichiers modifiés/créés**:
-    - ✅ `api/tests/api/folders.test.ts` (catégorie: **api**)
-      - ✅ Test `GET /folders/:id` retourne `executiveSummary` parsé (JSON object, pas string)
-      - ✅ Test `GET /folders/:id` avec `executiveSummary` null/absent
-      - ✅ Test `PUT /folders/:id` avec `executiveSummary` complet (création)
-      - ✅ Test `PUT /folders/:id` avec `executiveSummary` partiel (mise à jour d'une section)
-      - ✅ Test `PUT /folders/:id` avec `executiveSummary` invalide (structure incorrecte) → 400
-      - ✅ Test `PUT /folders/:id` avec `executiveSummary` contenant `references` array
-      - ✅ Test `PUT /folders/:id` avec `executiveSummary` objet vide (vidage)
-    - ✅ `api/tests/api/analytics.test.ts` (catégorie: **api**)
-      - ✅ Test `POST /analytics/executive-summary` retourne 401 sans authentification (déjà présent)
-      - ✅ Test `POST /analytics/executive-summary` retourne 404 si dossier inexistant (déjà présent)
-      - ✅ **Corrigé** : Test `POST /analytics/executive-summary` avec dossier sans use cases
-        - **Correction** : Test mis à jour pour vérifier que le job échoue avec le message "No use cases found" (polling de la queue)
-      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` retourne `jobId` et `status: 'generating'`
-      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` met à jour le statut du dossier à 'generating'
-      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` avec `value_threshold` et `complexity_threshold` personnalisés
-      - ✅ **Ajouté** : Test `POST /analytics/executive-summary` utilise le modèle par défaut si non fourni
-    - ✅ `api/tests/api/use-cases.test.ts` (catégorie: **api**)
-      - ✅ Test `PUT /use-cases/:id` arrondit `totalValueScore` avec `Math.round()`
-      - ✅ Test `PUT /use-cases/:id` arrondit `totalComplexityScore` avec `Math.round()`
-      - ✅ Test `PUT /use-cases/:id` recalcule les scores uniquement si `valueScores` ou `complexityScores` modifiés
-      - ✅ Test `PUT /use-cases/:id` conserve les scores existants si pas de modification des scores
-    - ✅ `api/tests/ai/executive-summary-sync.test.ts` (catégorie: **ai** - corrigé)
-      - ✅ **Corrigé** : "should generate executive summary with default medians"
-        - **Correction** : Test mis à jour pour attendre la complétion du job via polling et vérifier le résultat dans la DB
-      - ✅ **Corrigé** : "should generate executive summary with custom thresholds"
-        - **Correction** : Même correction que ci-dessus
-    - ✅ `api/tests/ai/executive-summary-auto.test.ts` (catégorie: **ai** - vérifié, tests existants suffisants)
-  - **Tests UI unitaires**:
-    - ✅ `ui/tests/stores/folders.test.ts` (catégorie: **unit**)
-      - ✅ Test `updateFolder` avec `executiveSummary` dans les données
-      - ✅ Test `fetchFolders` parse `executiveSummary` correctement
-      - ✅ Test `fetchFolders` gère `executiveSummary` null
-      - ✅ Test mise à jour du store après modification `executiveSummary`
-    - ✅ `ui/tests/stores/useCases.test.ts` (catégorie: **unit**)
-      - ✅ Test `updateUseCase` avec description markdown
-      - ✅ Test `updateUseCase` avec champs texte simples (contact, deadline)
-      - ✅ Test `updateUseCase` avec listes simples (benefits, risks, metrics, nextSteps)
-      - ✅ Test `updateUseCase` avec listes avec icônes (dataSources, dataObjects, technologies)
-  - **Note sur parallélisation**: 
-    - Tests API: exécution séquentielle (`singleFork: true` dans `vitest.config.ts`) pour éviter les race conditions sur la DB
-    - Tests UI: exécution en parallèle (pas de contrainte de séquentialité)
-    - **À détailler**: Vérifier que les nouveaux tests respectent l'isolation (cleanup dans `afterEach`, pas de dépendances entre tests)
+**Ce que je fais (AI)** :
+- [ ] Mettre à jour le type `UseCase` pour inclure `data`
+- [ ] Ajouter `problem` et `solution` dans les champs éditables
+- [ ] Adapter l'affichage pour montrer les trois sections distinctement
+- [ ] Mettre à jour la logique de sauvegarde
 
-- [x] **Task 5.2**: Update E2E tests for dashboard
-  - **Catégorie**: Tests end-to-end (Playwright)
-  - **Statut**: ✅ **Complété** - 133 tests passent, 13 skippés (tests conditionnels)
-  - **Fichiers modifiés/créés**:
-    - ✅ `e2e/tests/dashboard.spec.ts` (catégorie: **e2e**)
-      - ✅ Test affichage executive summary (sections: synthèse exécutive, introduction, analyse, recommandation)
-      - ✅ Test affichage executive summary avec références [1], [2] cliquables
-      - ✅ Test génération executive summary manuelle (bouton "Générer")
-      - ✅ Test régénération executive summary (bouton "Régénérer")
-      - ✅ Test monitoring statut génération (affichage "Génération en cours...")
-      - ✅ Test édition executive summary (sections éditables avec EditableInput)
-      - ✅ Test bouton imprimer visible uniquement si `executiveSummary` existe
-      - ✅ Test bouton imprimer déclenche `window.print()`
-      - ✅ Test titre dossier éditable dans dashboard
-      - ✅ Test scatter plot avec 50% de largeur
-      - ✅ Test ROI quadrant affichage avec > 2 use cases (quadrant vert visible)
-      - ✅ Test dashboard configuration accordion (icône ⚙️, ouverture/fermeture)
-      - ✅ Test configuration ROI thresholds (modification value/complexity thresholds)
-      - ✅ **Corrigé** : Test "devrait afficher la page dashboard"
-        - **Correction** : Recherche du titre dans `div.text-3xl.font-semibold` ou `h1` (nouvelle structure sans sélecteur de dossier)
-      - ✅ **Corrigé** : Test "devrait afficher les statistiques des cas d'usage"
-        - **Correction** : Test conditionnel (statistiques visibles uniquement si `executiveSummary` existe)
-      - ✅ **Corrigé** : Test "devrait afficher le graphique scatter plot"
-        - **Correction** : Recherche dans `.report-scatter-plot-container` (nouvelle structure)
-      - ✅ **Corrigé** : Test "devrait afficher un message de chargement"
-        - **Correction** : Utilisation de `.first()` pour éviter strict mode violation (plusieurs éléments `.animate-spin`)
-      - ⏭️ **Skippé** : Test "devrait afficher le sélecteur de dossier" (fonctionnalité supprimée)
-      - ⏭️ **Skippé** : Test "devrait changer de dossier et mettre à jour les données" (fonctionnalité supprimée)
-      - ⏭️ **Skippé** : Test "devrait gérer le cas sans dossier sélectionné" (seed data fournit toujours des dossiers)
-    - ✅ `e2e/tests/usecase-detail.spec.ts` (catégorie: **e2e**)
-      - ✅ Test édition description (markdown) avec EditableInput
-      - ✅ Test édition listes simples (bénéfices, risques, mesures, prochaines étapes)
-      - ✅ Test édition listes avec icônes (sources, données) avec scaling dynamique
-      - ✅ Test édition technologies avec scaling dynamique
-      - ✅ Test édition champs texte simples (contact, délai) en markdown
-      - ✅ Test édition justifications axes valeur/complexité
-      - ✅ Test sauvegarde automatique avec buffer (5s)
-      - ✅ Test traitement références [1], [2] dans les champs éditables
-      - ✅ Test conversion array ↔ markdown pour les listes
-      - ✅ Test affichage mode impression (masquage éléments UI, footer image)
-      - ✅ Test impression cas d'usage (vérifier que le contenu tient en une seule page)
-    - ✅ `e2e/tests/executive-summary.spec.ts` (catégorie: **e2e** - nouveau fichier)
-      - ✅ Test workflow complet: génération → affichage → édition → sauvegarde
-      - ✅ Test affichage sections executive summary dans l'ordre (synthèse → dashboard → intro/analyse/reco)
-      - ✅ Test impression rapport complet (page de garde, sommaire, sections, annexes)
-      - ✅ Test numérotation pages statique (vérifier que les numéros de pages dans le sommaire correspondent aux pages réelles)
-      - ✅ Test scaling dynamique contenu long (références, technologies, sources, données)
-      - ✅ Test footer image sur pages cas d'usage en annexe
-    - ✅ `e2e/tests/workflow.spec.ts` (catégorie: **e2e** - corrigé)
-      - ✅ **Corrigé** : Test "devrait exécuter le workflow complet : entreprise → génération → dossiers → cas d'usage → dashboard"
-        - **Correction** : Recherche du titre dashboard dans `div.text-3xl.font-semibold` ou `h1` (nouvelle structure)
-        - **Correction** : Test statistiques conditionnel (visible uniquement si `executiveSummary` existe)
-        - **Correction** : Test scatter plot avec nouveau sélecteur `.report-scatter-plot-container`
-      - ⏭️ **Skippé** : Test "devrait permettre de changer de dossier dans le dashboard" (fonctionnalité supprimée)
-  - **Résultats des tests**:
-    - ✅ **133 tests passent** (tous les tests E2E fonctionnent correctement)
-    - ⏭️ **13 tests skippés** (tests conditionnels ou fonctionnalités supprimées)
-    - ❌ **0 test en échec**
-  - **Corrections apportées aux tests existants**:
-    - **Problème identifié** : Les tests E2E existants ciblaient l'ancienne structure du dashboard (sélecteur de dossier `#folder-select`, cartes de statistiques, titre "Dashboard" dans un `h1` unique)
-    - **Solution** : Mise à jour des tests pour correspondre à la nouvelle structure (rapport complet avec executive summary, titre dans `div.text-3xl.font-semibold`, statistiques conditionnelles)
-    - **Tests corrigés** :
-      1. `dashboard.spec.ts` : 4 tests corrigés (affichage page, statistiques, scatter plot, message chargement)
-      2. `workflow.spec.ts` : 1 test corrigé (workflow complet)
-    - **Tests skippés** : 3 tests liés au sélecteur de dossier (fonctionnalité supprimée dans la nouvelle structure)
-  - **Note sur parallélisation**: 
-    - Tests E2E: exécution séquentielle par défaut (Playwright) pour éviter les conflits de ressources
-    - ✅ **Vérifié** : Les nouveaux tests E2E sont isolés (cleanup des données créées, pas de dépendances entre tests)
+**Vérifications automatiques (AI exécute)** :
+- `make build-ui` - Vérifier que le build UI passe
+- `make test-ui` - Exécuter les tests unitaires UI
+- `make dev` puis `make logs-ui TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs UI
+- `make logs-api TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs API
 
-- [ ] **Task 5.3**: CI Push and final testing
-  - [x] All UAT, Unit test and e2e passing in local
-  - [ ] Preprod migration test pass
-  - [ ] All ci test pass
+**Vérifications manuelles (TU vérifies - UAT partiel)** :
+- [ ] Vérifier dans le code que le type `UseCase` inclut bien `data?: { problem?: string, solution?: string }`
+- [ ] Vérifier dans le code que la logique de sauvegarde gère bien `data.problem` et `data.solution`
+- [ ] Ouvrir l'UI en mode dev (`make dev`)
+- [ ] Naviguer vers un cas d'usage existant et vérifier :
+  - Que les trois sections (Description, Problème, Solution) s'affichent distinctement
+  - Que chaque section a son propre titre/header
+  - Que les sections sont visuellement séparées
+- [ ] Tester l'édition de chaque champ :
+  - Éditer la description et sauvegarder
+  - Éditer le problème et sauvegarder
+  - Éditer la solution et sauvegarder
+- [ ] Vérifier que les modifications sont persistées :
+  - Recharger la page et vérifier que les modifications sont toujours là
+  - Vérifier via `make db-inspect-usecases` que les données sont bien enregistrées dans `data` JSONB
+- [ ] Tester avec un cas d'usage sans `problem` ou `solution` (rétrocompatibilité) :
+  - Vérifier que l'UI gère gracieusement l'absence de ces champs
+  - Vérifier qu'on peut les ajouter via l'édition
+
+### Phase 6 : Migration des données
+- [ ] Exécuter le script de migration sur une copie de la DB
+- [ ] Vérifier l'intégrité des données
+- [ ] Supprimer les anciennes colonnes (après vérification)
+
+**Vérification** :
+- `make db-backup` - Faire un backup avant migration
+- Exécuter le script de migration
+- `make db-status` - Vérifier la structure après migration
+- `make db-inspect-usecases` - Vérifier que toutes les données sont migrées
+- `make db-inspect` - Vérifier manuellement quelques cas d'usage
+- `make dev` puis `make logs-api TAIL=50` - Vérifier qu'il n'y a pas d'erreurs après migration
+- `make logs-ui TAIL=50` - Vérifier qu'il n'y a pas d'erreurs dans les logs UI
+
+**Test manuel** :
+- Vérifier que tous les cas d'usage existants sont toujours accessibles
+- Vérifier que les données métier sont bien dans `data` JSONB
+- Vérifier que `name` et `description` sont toujours en colonnes natives
+- Tester l'affichage et l'édition de cas d'usage existants dans l'UI
+
+### Phase 7 : Tests (selon testing.mdc)
+- [ ] Mettre à jour les tests unitaires
+- [ ] Mettre à jour les tests d'intégration
+- [ ] Mettre à jour les tests E2E si nécessaire
+- [ ] Exécuter `make test-api` et `make test-ui`
+- [ ] Valider les performances des requêtes
+
+**Vérification** :
+- `make test-api-unit` - Tests unitaires API
+- `make test-api` - Tous les tests API (unit + intégration)
+- `make test-ui` - Tests unitaires UI
+- `make test-api-smoke` - Tests smoke API
+- `make test-api-endpoints` - Tests endpoints CRUD
+- `make build-ui-image build-api` puis `make test-e2e` - Tests E2E complets
+
+**Test manuel** :
+- Vérifier que tous les tests passent
+- Vérifier les performances avec des requêtes en masse sur `name` et `description`
+
+### Phase 8 : GitHub CI execution check
+- [ ] Push vers GitHub
+- [ ] Vérifier que GitHub Actions passe
+- [ ] Corriger les éventuels problèmes CI
+- [ ] Valider que tous les tests passent en CI
+
+**Vérification** :
+- `make build` - Build complet avant push
+- `make test-api test-ui` - Tous les tests avant push
+- `make build-ui-image build-api` puis `make test-e2e` - Tests E2E avant push
+- Push vers GitHub et vérifier les GitHub Actions
+
+**UAT Final (User Acceptance Testing)** :
+- ✅ **Génération** : Générer une nouvelle liste de cas d'usage et vérifier que `description`, `problem`, `solution` sont bien générés
+- ✅ **Affichage** : Vérifier que les trois sections s'affichent correctement dans l'UI
+- ✅ **Édition** : Tester l'édition de chaque champ (description, problem, solution) et la sauvegarde
+- ✅ **Données existantes** : Vérifier que les cas d'usage existants fonctionnent toujours
+- ✅ **Performance** : Vérifier que les requêtes en masse sur `name` et `description` sont rapides
+- ✅ **Scores** : Vérifier que les scores totaux sont calculés dynamiquement et correctement
+- ✅ **Recherche** : Tester la recherche dans `problem` et `solution` (si implémentée)
+- ✅ **Migration** : Vérifier que les données migrées sont correctes et accessibles
 
 ## Commits & Progress
-- [x] **Initial commit**: Branch creation and BRANCH.md
-- [x] **Commit 1**: Phase 1 - Improve scatter plot UI (50% width, labels, tooltip)
-- [x] **Commit 2**: Phase 1 - Implémentation recuit simulé par cliques pour placement optimal des labels
-  - Refonte complète de l'algorithme de placement : recuit simulé par cliques au lieu de label-par-label
-  - Détection exhaustive des collisions : label↔label, label↔point (avec couverture partielle), trait↔label, trait↔point, trait↔trait
-  - Moves aléatoires avec jusqu'à 20 tentatives par clique (layout alternatif, déplacement vectoriel, swap Y)
-  - Rendu en couches : labels (fond 30% opacité) → traits → points (au top)
-  - Paramètres configurables centralisés : runs, itérations, température, magnitudes, coûts
-  - Cache des layouts pour éviter recalculs au hover
-  - Signature aléatoire pour forcer nouveau layout à chaque refresh
-  - Mise à jour dynamique du placement des traits selon position finale
-- [x] **Commit 3**: Phase 1 & 2 - Prise en compte des boîtes de quadrant dans le recuit et uniformisation des couleurs
-  - Ajout de la détection des collisions avec les boîtes fixes de quadrant (Gains rapide, Projets majeurs, Attendre, Ne pas faire) dans le recuit simulé
-  - Coût paramétrable `QUADRANT_LABEL_COST` pour l'évitement des boîtes de quadrant
-  - Centralisation des couleurs dans des constantes : `THEME_BLUE` (#475569), `THEME_BLUE_RGB`, `THEME_TEXT_DARK`
-  - Uniformisation de toutes les couleurs (cadres, traits, points, texte) en bleu-gris foncé (#475569)
-  - Correction du problème de recalcul des labels au hover (utilisation de `raw.x/y` au lieu de `element.x/y` dans la signature)
-  - Uniformisation du texte (labels, légendes des axes, labels de quadrant) avec la couleur bleu-gris
-- [x] **Commit 4**: Phase 2 - Finalisation du dashboard et configuration ROI
-  - Ajout de l'accordéon de configuration du quadrant ROI en haut à droite du graphique
-  - Déplacement de la logique de configuration du composant scatter plot vers le dashboard
-  - Titre du dashboard affiche maintenant le nom du dossier sélectionné
-  - Statistiques ROI utilisent maintenant la médiane au lieu de la moyenne pour valeur et complexité
-  - Correction du filtre ROI pour utiliser `>=` et `<=` au lieu de `>` et `<` (inclusion des points sur les lignes de seuil)
-  - Changement de l'icône "Gains rapides" pour une flèche de croissance
-  - Retrait du sélecteur de dossier (remplacé par le titre dynamique)
-  - Simplification du composant scatter plot (retrait de la logique de configuration)
-- [x] **Commit 5**: Phase 3 - Executive Summary Database Schema
-  - Ajout du champ `executiveSummary` JSONB à la table `folders`
-  - Migration 0006_low_riptide.sql
-- [x] **Commit 6**: Phase 3 - Executive Summary Generation Service
-  - Service de génération avec calcul des top cases basé sur les seuils ROI
-  - Support des seuils personnalisés et médianes par défaut
-  - Intégration OpenAI avec prompt executive summary
-- [x] **Commit 7**: Phase 3 - Web Extract Tool & Prompts Update
-  - Ajout du tool `web_extract` pour extraction de contenu web
-  - Mise à jour du prompt executive summary avec références
-- [x] **Commit 8**: Phase 3 - Queue Manager Integration
-  - Intégration de la génération automatique après complétion des use cases
-  - Nouveau job type `executive_summary`
-- [x] **Commit 9**: Phase 3 - API Endpoints
-  - Endpoint POST /analytics/executive-summary avec job queue
-  - Mise à jour GET /folders/:id pour inclure executiveSummary
-- [x] **Commit 10**: Phase 5 - Tests
-  - Tests de validation et génération de synthèse exécutive
-  - Tests de génération automatique
-- [x] **Commit 11**: Phase 3 - UI Refresh Manager Enhancement
-  - Amélioration du refresh manager pour intervalles personnalisés
-- [x] **Commit 12**: Phase 3 - Dashboard Integration
-  - Intégration complète de l'affichage de la synthèse exécutive
-  - Monitoring automatique du statut de génération
-  - Parsing markdown avec styles et citations
-  - Marges responsives pour aspect document
-- [x] **Commit 13**: Phase 4 - Corrections impression - layout-bottom 50/50, marges annexes, overflow axes
-  - Fix layout-bottom: passage de grid à flexbox pour garantir 50/50 en preview et print
-  - Fix marges annexes: @page annex margin 0, padding 0.6cm reporté sur conteneurs
-  - Fix overflow axes valeur/complexité: dédoublonnage space-y-6, page-break-after pour sections
-  - Structure unifiée: usecase-annex-section pour dashboard et cas-usage/[id]
-- [x] **Commit 14**: Phase 4 - Scaling dynamique références, données, technologies, sources
-  - Scaling proportionnel pour références (base 8), données (base 5), technologies (base 7), sources (base 5)
-  - Réduction font-size, line-height, gap et icônes SVG proportionnellement
-  - Détection mode impression via beforeprint/afterprint events
-- [x] **Commit 15**: Phase 4 - Footer image pour fiches cas d'usage et styles associés
-  - Ajout footer.jpg en background des fiches cas d'usage (position absolute bottom)
-  - Gradient blanc overlay (opaque top → transparent bottom) pour fusion avec contenu
-  - min-height 27.3cm sur usecase-print pour garantir footer au bas de page
-  - Page de garde annexe: même structure que page de garde principale
-- [x] **Commit 16**: Phase 4 - Scaling agressif sommaire exécutif et calcul numéros de page
-  - Scaling plus agressif: minFontSize 5pt, step 0.2pt
-  - Réduction proportionnelle marges titre h3 et padding boîte
-  - Suppression marge dernier paragraphe
-  - Calcul numéros de page: chaque cas d'usage = 1 page exactement (currentPage += 1)
-  - Fonction calculatePageNumbers avec calcul dynamique hauteurs sections
-  - Structure impression complète: page de garde, synthèse, sommaire, sections, annexes
-  - Affichage numéros de page dans sommaire avec liens vers sections
-- [x] **Commit 18**: Phase 5 - Tentative réorganisation plugin Chart.js pour tooltip hover
-  - Tentative de déplacer le calcul des labels dans `afterLayout` au lieu de `beforeDatasetsDraw`
-  - Objectif: permettre l'interaction (tooltip) sur les points dès le chargement, avant calcul des labels
-  - Note: solution non fonctionnelle, nécessite investigation supplémentaire
-- [x] **Commit 19**: Phase 5 - Fix cover page background image and filter positioning
-  - Isolation du background image et du filter dans un pseudo-élément `::after` dédié
-  - Correction du problème de positionnement après calculs longs (labels) - plus besoin de Ctrl+Shift+R
-  - Retrait du style inline `background-image` du composant Svelte
-  - Utilisation de `background-size: cover` pour préserver le ratio d'aspect sans étirement
-  - Positionnement correct: marges 2cm haut/bas, image centrée horizontalement, filter appliqué uniquement sur background
-- [x] **Commit 20**: Phase 5 - Add print button in dashboard
-  - Ajout du bouton "Imprimer" dans le header du dashboard (à côté du titre)
-  - Icône SVG d'impression identique à celle utilisée dans les cas d'usage
-  - Bouton visible uniquement si `executiveSummary` existe (pas de rapport sans synthèse)
-  - Classe `print-hidden` pour masquer le bouton en impression
-  - Appel à `window.print()` pour lancer l'impression du rapport
-  - Renommage du texte du bouton de "Exporter en PDF" à "Imprimer" dans cas-usage/[id] pour cohérence
-- [x] **Commit 21**: Phase 5 - Fix annex print layout (footer overflow and missing top margin)
-  - Correction du positionnement du footer dans les annexes du dashboard : `bottom: -0.6cm` (aligné sur vue individuelle) au lieu de `-1.2cm` (incorrect)
-  - Correction de la disparition de la marge haute après saut de page : remplacement de `padding-top` par `border-top` (transparent)
-  - Résolution du débordement de 0.6cm sur la page suivante et du contenu collé en haut de page
-- [x] **Commit 22**: Phase 5 - Simplification CSS et résolution page blanche après back cover
-  - Suppression des règles CSS redondantes et surcharges inutiles
-  - Simplification du positionnement de la back cover : utilisation de `bottom: 4cm` au lieu de `top` avec transform
-  - Retrait des `!important` bloquant l'ajustement dynamique de la taille de police du sommaire exécutif
-  - Correction définitive du problème de page blanche après la back cover
-  - Simplification des règles `page-break` pour les annexes (remplacement de `auto` par `avoid` pour la dernière section)
-- [x] **Commit 23**: Phase 5 - Simplification calcul pages statique et ajustements espacements
-  - Simplification calcul numéros de page : valeurs statiques (Intro p2, Sommaire p3, Analyse p4, Reco p5, Ref p6, Annexes p7)
-  - Cas d'usage : page annexes + index + 1 (1 page par cas d'usage)
-  - Suppression fonction calculatePageNumbers() et tous ses appels (180+ lignes supprimées)
-  - Ajustement espacements sections Analyse et Recommandations pour faire tenir chaque section sur une page
-  - Gestion cas avec plus de 23 cas d'usage : saut de page forcé au 24ème, incrémentation de 1 pour toutes les pages suivantes
-- [x] **Commit 24**: Phase 5 - API et UI pour édition executiveSummary et améliorations UX
-  - API : Ajout schéma zod executiveSummaryDataSchema pour validation structure (introduction, analyse, recommandation, synthese_executive, references)
-  - API : Ajout executiveSummary au folderInput avec .optional() et parseExecutiveSummary()
-  - API : Modification PUT /folders/:id pour stringify/parse executiveSummary comme matrixConfig
-  - UI : Branchement EditableInput pour executiveSummary avec apiEndpoint="/folders/${id}" et fullData
-  - UI : Rendu éditable du titre du dossier dans le dashboard avec EditableInput
-  - UI : Amélioration UX boutons - icônes uniquement, déplacés à droite du titre "Synthèse exécutive"
-  - UI : Suppression boutons du header principal, ajout attributs title pour accessibilité
+
+- [x] **Commit 1** : Refactorisation du schéma DB + migration + indexation
+  - [x] Schéma modifié : ajout de `data` JSONB, suppression de `totalValueScore` et `totalComplexityScore`
+  - [x] Migration Drizzle générée (0007_handy_morlocks.sql) - ajout colonne `data`, suppression colonnes calculées
+  - [x] Migration appliquée avec `make db-migrate`
+  - [x] Script de migration des données créé (`migrate-usecases-to-data.ts`)
+  - [x] Commande `make db-migrate-data` ajoutée
+  - [x] Module `api/src/db/run-migrations.ts` créé (logique centralisée)
+  - [x] Module `api/src/db/ensure-indexes.ts` créé (logique centralisée, idempotente)
+  - [x] Indexation intégrée au démarrage de l'API (`index.ts`)
+  - [x] Script `db-create-indexes.ts` refactorisé pour utiliser `db/ensure-indexes.ts`
+  - [x] Script `db-migrate.ts` refactorisé pour utiliser `db/run-migrations.ts`
+  - [x] Build API vérifié (`make build-api` passe)
+- [ ] **Commit 2** : Types TypeScript et calcul dynamique des scores
+- [ ] **Commit 3** : Mise à jour des prompts de génération
+- [ ] **Commit 4** : Mise à jour des services de génération
+- [ ] **Commit 5** : Mise à jour de l'interface utilisateur
+- [ ] **Commit 6** : Migration des données existantes (quand données réelles disponibles)
+- [ ] **Commit 7** : Mise à jour des tests
+- [ ] **Commit 8** : Validation CI
 
 ## Status
-- **Progress**: 19/20 tasks completed
-- **Current**: Phase 1 completed, Phase 2 completed, Phase 3 completed, Phase 4 completed, Phase 5 partially completed (Task 5.1 completed)
-- **Next**: Phase 5 - Testing & Validation (E2E tests and manual validation)
 
-## Specifications Confirmed
+- **Progress**: Phase 1 terminée ✅
+- **Current**: Phase 1 complétée - Schéma DB + Migration + Indexation
+- **Next**: Phase 2 - Types TypeScript et calcul dynamique des scores
 
-### ROI Quadrant
-- **Boundaries**: Relative to medians (value > median AND complexity < median)
-- **Display**: Only if > 2 use cases exist
-- **Configuration**: Stored in localStorage initially, configurable via accordion with gear icon
-- **Visual**: Green background/shading for top-left quadrant
+## Make Commands for Development & Testing
 
-### Executive Summary
-- **Format**: JSON with 4 markdown sections:
-  - `introduction` (markdown)
-  - `analyse` (markdown)
-  - `recommandation` (markdown, includes prochaines étapes)
-  - `synthese_executive` (markdown)
-- **Input**: Top cases (list of priority use case names) calculated using ROI quadrant thresholds or medians
-- **Storage**: JSON field in folders table (`folders.executiveSummary`)
-- **Generation**: Automatic after all use cases completed, manual button for historical folders
-- **UI Integration**: 
-  - Integrated directly in `dashboard/+page.svelte` (no separate component)
-  - Display order: **Synthèse exécutive FIRST**, then **Dashboard (scatter plot)**, then **Introduction/Analyse/Recommandations**
-  - Fetch from folder data, parse JSON, render markdown with `marked` library
-  - Show loading state when `folder.status === 'generating'`
-  - Manual generation button for folders without summary
+**⚠️ MANDATORY**: All development and testing MUST go through `make` commands (Docker-first architecture). Never run npm/python commands directly.
 
-### Print Report
-- **Format**: CSS-based print (Chrome print to PDF)
-- **Structure**:
-  1. Page de garde (folder name, company, background image, executive summary)
-  2. Table of contents (with dynamic page numbers)
-  3. Introduction
-  4. Analyse
-  5. Recommandations
-  6. Références
-  7. Page de garde annexes
-  8. One page per use case (with footer image)
-- **Features**:
-  - Dynamic page numbering
-  - Content scaling for long lists (references, data sources, technologies)
-  - Aggressive scaling for executive summary
-  - Footer image on use case pages
-  - Proper page breaks and margins
+### Development Environment
 
-### Dashboard Configuration
-- **UI**: Accordion in top-right corner of scatter plot container with gear icon (⚙️)
-- **Storage**: localStorage initially (no DB changes in this phase)
-- **Initial Values**: Median-based thresholds
-- **Future**: Will be stored in backend (not in this phase)
+```bash
+# Start full stack in development mode (watch mode)
+make dev
 
-## Technical Notes
+# Start only UI or API
+make dev-ui
+make dev-api
 
-- **UI Framework**: SvelteKit 5 with Tailwind CSS
-- **Chart Library**: Chart.js (already in use)
-- **API Framework**: Hono with TypeScript
-- **AI Service**: OpenAI Node.js SDK (existing integration)
-- **Print**: CSS @media print with @page rules
-- **Testing**: Vitest (unit) + Playwright (E2E)
-- **Database**: PostgreSQL 16 with Drizzle ORM
+# Start full stack in detached mode
+make up
 
-## Dependencies
-- OpenAI service already available
-- No additional dependencies for print (CSS-based)
+# Start only API (for testing)
+make up-api
+make up-api-test  # With DISABLE_RATE_LIMIT=true
+
+# Stop all services
+make down
+
+# View logs
+# ⚠️ NEVER use head/grep/tail directly - always use make commands
+make logs              # All services
+make logs-api         # API only
+make logs-ui          # UI only
+make logs-db          # Database only
+TAIL=100 make logs-api # Last 100 lines (use TAIL variable, not tail command)
+
+# Access container shell
+make sh-api           # API container shell
+make sh-ui            # UI container shell
+```
+
+### Database Management
+
+```bash
+# Generate migration from schema.ts changes
+make db-generate
+
+# Apply pending migrations
+make db-migrate
+
+# Check database status
+make db-status
+
+# Reset database (⚠️ DESTRUCTIVE - destroys all data)
+make db-reset [SKIP_CONFIRM=true]
+
+# Backup database
+make db-backup
+
+# Restore database (⚠️ approval required)
+make db-restore BACKUP_FILE=filename.dump [SKIP_CONFIRM=true]
+
+# Seed database with sample data
+make db-seed
+
+# Inspect database
+make db-inspect           # Direct postgres access
+make db-inspect-usecases  # Use cases and folders
+make db-inspect-folders   # Folders with use cases count
+make db-inspect-users     # Users and roles
+```
+
+### Build & Quality
+
+```bash
+# Build all (UI + API)
+make build
+
+# Build individually
+make build-ui
+make build-api
+make build-ui-image      # Docker image for production
+make build-api-image      # Docker image for production
+
+# Code quality
+make typecheck           # TypeScript type checking (UI + API)
+make lint                # Linting (UI + API)
+make format              # Format code (UI + API)
+make format-check        # Check formatting without modifying
+```
+
+### Testing (MANDATORY before commit)
+
+**⚠️ Always run tests before commit - no exceptions** (see `workflow.mdc` and `testing.mdc`)
+
+#### Main Test Commands
+
+```bash
+# On TARGET=development (default):
+make test-ui [SCOPE=tests/test.ts]    # UI unit tests (Vitest)
+make test-api [SCOPE=tests/test.ts]   # API unit + integration tests (Vitest)
+
+# On TARGET=production (⚠️ MANDATORY: build images first to ensure prod images are up-to-date):
+make build-ui-image build-api            # Build production images FIRST
+make test-e2e [E2E_test=tests/test.ts]   # E2E tests (Playwright) - uses production images
+make test-smoke                          # Quick E2E subset - uses production images
+```
+
+#### API Test Commands (with filters)
+
+```bash
+make test-api-smoke [SCOPE=tests/test.ts]      # API smoke tests
+make test-api-endpoints [SCOPE=tests/test.ts]  # API CRUD tests
+make test-api-ai [SCOPE=tests/test.ts]         # AI generation tests
+make test-api-queue [SCOPE=tests/test.ts]     # Queue job tests
+make test-api [SCOPE=tests/test.ts]            # All API tests (without e2e)
+```
+
+#### Security Tests
+
+```bash
+make test-security              # All security tests
+make test-security-sast         # SAST scanning
+make test-security-sca          # Dependency scanning
+make test-security-container    # Container scanning
+make test-security-iac          # Infrastructure as Code scanning
+```
+
+#### Testing Workflow (per workflow.mdc)
+
+1. **Before commit**: Always run `make test-api` and/or `make test-ui` (depending on changes)
+2. **Before PR**: Run `make build-api build-ui-image test-e2e` to validate consistency
+3. **Quality gates**: All tests must pass before merge
+
+### Package Management
+
+```bash
+# Install npm package (API)
+make install-api ${NPM_LIB}
+
+# Install npm package (UI)
+make install-ui ${NPM_LIB}
+
+# Install dev dependency
+make install-api-dev ${NPM_LIB}
+make install-ui-dev ${NPM_LIB}
+
+# Update package-lock.json
+make lock-api
+```
+
+### Queue Management
+
+```bash
+make queue-status    # Show current queue status
+make queue-clear     # Clear all pending jobs
+make queue-reset     # Reset queue (alias for queue-clear)
+```
+
+### Important Notes
+
+- **Docker-first**: All commands execute in Docker containers - no native npm/python on developer machine
+- **Consistent environment**: Same commands work locally and in CI
+- **No git add .**: Use selective staging (`git add <specific-files>`) - see workflow.mdc
+- **Test before commit**: MANDATORY - always run `make test-api` or `make test-ui` before committing
+- **Quality gates**: All tests must pass before merge (see testing.mdc)
+- **E2E tests require build**: Always run `make build-ui-image build-api` before `make test-e2e` to ensure production images are up-to-date
+- **⚠️ NEVER use head/grep/tail directly**: Always use make commands for logs:
+  - ✅ `TAIL=100 make logs-api` (correct)
+  - ❌ `make logs-api | tail -100` (wrong - loses time and context)
+  - ❌ `make logs-api | grep "error"` (wrong - use make commands)
 
