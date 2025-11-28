@@ -141,15 +141,17 @@ describe('Executive Summary - Automatic Generation', () => {
       })
     });
 
-    // 2. Create completed use cases
+    // 2. Create completed use cases (scores calculés dynamiquement, pas stockés)
     const useCaseId = createTestId();
     await db.insert(useCases).values({
       id: useCaseId,
       folderId,
-      name: 'Test Use Case',
-      description: 'Test use case',
-      totalValueScore: 50,
-      totalComplexityScore: 30,
+      data: {
+        name: 'Test Use Case',
+        description: 'Test use case',
+        valueScores: [{ axisId: 'value1', rating: 50, description: 'Test value' }],
+        complexityScores: [{ axisId: 'complexity1', rating: 30, description: 'Test complexity' }]
+      } as any,
       status: 'completed'
     });
 
