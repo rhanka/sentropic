@@ -157,12 +157,24 @@
       const folder = await apiGet(`/folders/${useCase.folderId}`);
       matrix = folder.matrixConfig;
       
-      if (matrix && useCase.valueScores && useCase.complexityScores) {
+      // Extraire les scores depuis data (avec fallback rétrocompatibilité)
+      const valueScores = useCase?.data?.valueScores || useCase?.valueScores || [];
+      const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || [];
+      
+      if (matrix && valueScores.length > 0 && complexityScores.length > 0) {
         calculatedScores = calculateUseCaseScores(
           matrix,
-          useCase.valueScores,
-          useCase.complexityScores
+          valueScores,
+          complexityScores
         );
+      } else if (useCase?.data?.totalValueScore !== undefined || useCase?.data?.totalComplexityScore !== undefined) {
+        // Si les scores totaux sont déjà dans data, les utiliser directement
+        calculatedScores = {
+          finalValueScore: useCase?.data?.totalValueScore || useCase?.totalValueScore || 0,
+          finalComplexityScore: useCase?.data?.totalComplexityScore || useCase?.totalComplexityScore || 0,
+          valueStars: Math.round((useCase?.data?.totalValueScore || useCase?.totalValueScore || 0) / 20),
+          complexityStars: Math.round((useCase?.data?.totalComplexityScore || useCase?.totalComplexityScore || 0) / 20)
+        };
       }
     } catch (err) {
       console.error('Failed to load matrix:', err);
