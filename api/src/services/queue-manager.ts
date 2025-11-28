@@ -4,7 +4,7 @@ import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
-import { calculateScores } from '../utils/scoring';
+import type { UseCaseData } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases } from '../db/schema';
 import { settingsService } from './settings';
@@ -322,12 +322,28 @@ export class QueueManager {
     // Créer les cas d'usage en mode generating
     const draftUseCases = useCaseList.useCases.map((useCaseItem: any) => {
       const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
+      const useCaseData: UseCaseData = {
+        name: title, // Stocker name dans data
+        description: useCaseItem.description || '', // Stocker description dans data
+        process: '',
+        technologies: [],
+        deadline: '',
+        contact: '',
+        benefits: [],
+        metrics: [],
+        risks: [],
+        nextSteps: [],
+        dataSources: [],
+        dataObjects: [],
+        valueScores: [],
+        complexityScores: []
+      };
       return {
         id: createId(),
         folderId: folderId,
         companyId: companyId || null,
-        name: title,
-        description: useCaseItem.description || '',
+        data: useCaseData as any, // Drizzle accepte JSONB directement (inclut name et description)
+        // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         process: '',
         technologies: JSON.stringify([]),
         deadline: '',
@@ -340,8 +356,6 @@ export class QueueManager {
         dataObjects: JSON.stringify([]),
         valueScores: JSON.stringify([]),
         complexityScores: JSON.stringify([]),
-        totalValueScore: 0,
-        totalComplexityScore: 0,
         model: selectedModel,
         status: 'generating',
         createdAt: new Date()
@@ -362,9 +376,11 @@ export class QueueManager {
     } else {
       for (const useCase of draftUseCases) {
         try {
+          // Extraire name depuis data
+          const useCaseName = (useCase.data as UseCaseData)?.name || 'Cas d\'usage sans nom';
           await this.addJob('usecase_detail', {
             useCaseId: useCase.id,
-            useCaseName: useCase.name,
+            useCaseName: useCaseName,
             folderId: folderId,
             model: selectedModel
           });
@@ -452,14 +468,49 @@ export class QueueManager {
       console.warn(`⚠️ Avertissements pour ${useCaseName}:`, validation.warnings);
     }
     
-    // Calculer les scores
-    const computed = calculateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+    // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
+    const [existingUseCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    let existingData: UseCaseData = {};
+    if (existingUseCase?.data) {
+      try {
+        if (typeof existingUseCase.data === 'object') {
+          existingData = existingUseCase.data as UseCaseData;
+        } else if (typeof existingUseCase.data === 'string') {
+          existingData = JSON.parse(existingUseCase.data) as UseCaseData;
+        }
+      } catch (error) {
+        // Ignorer les erreurs de parsing
+      }
+    }
+    
+    // Construire l'objet data JSONB (préserver name et description existants, ou utiliser ceux du détail)
+    const useCaseData: UseCaseData = {
+      name: existingData.name || useCaseDetail.name, // Préserver name existant ou utiliser celui du détail
+      description: existingData.description || useCaseDetail.description, // Préserver description existante ou utiliser celle du détail
+      problem: useCaseDetail.problem,
+      solution: useCaseDetail.solution,
+      process: useCaseDetail.domain, // domain du prompt -> process en DB
+      domain: useCaseDetail.domain,
+      technologies: useCaseDetail.technologies,
+      prerequisites: useCaseDetail.prerequisites,
+      deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
+      contact: useCaseDetail.contact,
+      benefits: useCaseDetail.benefits,
+      metrics: useCaseDetail.metrics,
+      risks: useCaseDetail.risks,
+      nextSteps: useCaseDetail.nextSteps,
+      dataSources: useCaseDetail.dataSources,
+      dataObjects: useCaseDetail.dataObjects,
+      references: useCaseDetail.references || [],
+      valueScores: useCaseDetail.valueScores,
+      complexityScores: useCaseDetail.complexityScores
+    };
     
     // Mettre à jour le cas d'usage
     await db.update(useCases)
       .set({
-        name: useCaseDetail.name,
-        description: useCaseDetail.description,
+        data: useCaseData as any, // Drizzle accepte JSONB directement (inclut name et description)
+        // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         domain: useCaseDetail.domain,
         technologies: JSON.stringify(useCaseDetail.technologies),
         prerequisites: useCaseDetail.prerequisites,
@@ -474,8 +525,6 @@ export class QueueManager {
         references: JSON.stringify(useCaseDetail.references || []),
         valueScores: JSON.stringify(useCaseDetail.valueScores),
         complexityScores: JSON.stringify(useCaseDetail.complexityScores),
-        totalValueScore: Math.round(computed.totalValueScore),
-        totalComplexityScore: Math.round(computed.totalComplexityScore),
         model: selectedModel,
         status: 'completed'
       })
