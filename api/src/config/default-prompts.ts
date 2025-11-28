@@ -57,14 +57,24 @@ IMPORTANT:
 - Génère le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Base-toi sur des exemples concrets et des technologies actuelles
+- Génère le titre et la description pour chaque cas d'usage
+- La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque cas d'usage, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
   "dossier": "titre court du dossier",
   "useCases": [
-    {"titre": "titre court 1", "description": "Description cas d'usage 1 avec références [1], [2]...", "ref": "1. [Titre référence 1](url1)\n2. [Titre référence 2](url2)\n..."},
-    {"titre": "titre court 2", "description": "Description cas d'usage 2 avec références [1], [2]...", "ref": "1. [Titre référence 1](url1)\n2. [Titre référence 2](url2)\n..."},
+    {
+      "titre": "titre court 1",
+      "description": "Description courte (60-100 mots) du cas d'usage",
+      "ref": "1. [Titre référence 1](url1)\n2. [Titre référence 2](url2)\n..."
+    },
+    {
+      "titre": "titre court 2",
+      "description": "Description courte (60-100 mots) du cas d'usage",
+      "ref": "1. [Titre référence 1](url1)\n2. [Titre référence 2](url2)\n..."
+    },
     ...
   ]
 }`,
@@ -86,7 +96,9 @@ Utilise la matrice valeur/complexité fournie pour évaluer chaque axe de valeur
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
   "name": "{{use_case}}",
-  "description": "Description détaillée en markdown du cas d'usage sur 5-10 lignes. Utilise [1], [2], [3]... pour référencer les numéros des références listées ci-dessous.",
+  "description": "Description courte (60-100 mots) qui résume le cas d'usage.",
+  "problem": "Le problème métier à résoudre (40-80 mots)",
+  "solution": "La solution IA proposée (40-80 mots)",
   "domain": "Le domaine d'application principal (industrie ou processus)",
   "technologies": [
     "technologie 1 (e.g IA / NLP, computer vision, etc.)",
@@ -166,11 +178,15 @@ OBLIGATOIRE:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
-- Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références en utilisant [1], [2], [3]...
-- La description doit être formattée en markdown
-- Bénéfices mesures de succès doivent être basé sur un véritable rationnel et citation vers références
+- Consolide la description au regard des nouvelles informations identifiées dans la réflexion et les recherches
+- Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références en utilisant [1], [2], [3]... en bonne articulation avec problem et solution
+- Tous les champs non numériques (description, problem, solution, chaque items des bénéfices et mesures de succès, risques, prochaines étapes et descriptions des valeur et complexités) doivent être formattée en markdown, avec mises en exergue en gras des éléments importants
+- Les champs description, problem et solution doivent être formattés en markdown, potentiellement multilignes (listes à puces) pour une meilleure lisibilité
+- Le problème doit être évaluée le plus profondément au regard du contexte (de l'entreprise et du cas d'usage si fourni), prenant en compte des données récentes (entreprise et/ou secteur/processus métier) via web_search et potentiellement web_extract
+- La solution solution doit prendre en compte ls informations fournies si une entreprise est fournie, et une recherche de solutions potentielles avec référence doit permettre de fiabiliser l'évaluation de complexité, le cas échénat via web_search et potentiellement web_extract
+- Bénéfices mesures de succès doivent être basés sur un véritable rationnel et citation vers références
 - Les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
-- Numérote les références dans l'ordre (1, 2, 3...) et utilise ces numéros [1], [2], [3]... dans la description pour référencer les sources
+- Numérote les références dans l'ordre (1, 2, 3...) et utilise ces numéros [1], [2], [3]... dans la description et les autres champs pour référencer les sources
 - Ne mets pas les "sources" (systèmes ERP et MES fournissant les données) dans les "références"
 - Les axes de valeur et complexité doivent être selon la matrice fournie (id exact), et non improvisés
 - Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
