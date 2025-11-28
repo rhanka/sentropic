@@ -1,8 +1,8 @@
 /**
  * Script de migration des données use_cases vers le champ data JSONB
  * 
- * Ce script migre toutes les colonnes métier vers data JSONB, en conservant
- * name et description en colonnes natives.
+ * Ce script migre toutes les colonnes métier vers data JSONB, y compris
+ * name et description (Phase 4 rework).
  * 
  * Usage: tsx src/scripts/migrate-usecases-to-data.ts
  */
@@ -27,42 +27,98 @@ async function migrateUseCasesToData() {
 
     console.log('✅ Colonne data trouvée');
 
-    // Compter les cas d'usage à migrer
-    const countResult = await pool.query(`
+    // Vérifier si les colonnes name et description existent encore
+    const checkNameColumn = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'use_cases' AND column_name = 'name'
+    `);
+    const checkDescriptionColumn = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'use_cases' AND column_name = 'description'
+    `);
+    
+    const hasNameColumn = checkNameColumn.rows.length > 0;
+    const hasDescriptionColumn = checkDescriptionColumn.rows.length > 0;
+    
+    console.log(`📊 Colonnes natives: name=${hasNameColumn ? 'présente' : 'absente'}, description=${hasDescriptionColumn ? 'présente' : 'absente'}`);
+
+    // Compter les cas d'usage à migrer (ceux qui n'ont pas data.name ou data.description)
+    let countQuery = `
       SELECT COUNT(*) as count 
       FROM use_cases 
-      WHERE data = '{}'::jsonb OR data IS NULL
-    `);
+      WHERE ("data"->>'name' IS NULL OR "data"->>'description' IS NULL)
+    `;
+    if (hasNameColumn) {
+      countQuery += ` OR ("name" IS NOT NULL AND ("data"->>'name' IS NULL))`;
+    }
+    if (hasDescriptionColumn) {
+      countQuery += ` OR ("description" IS NOT NULL AND ("data"->>'description' IS NULL))`;
+    }
+    const countResult = await pool.query(countQuery);
     const count = parseInt(countResult.rows[0].count);
-    console.log(`📊 ${count} cas d'usage à migrer`);
+    console.log(`📊 ${count} cas d'usage à migrer (name/description vers data)`);
 
     if (count === 0) {
       console.log('✅ Aucune migration nécessaire, toutes les données sont déjà migrées');
       return;
     }
 
-    // Migrer les données
-    const result = await pool.query(`
-      UPDATE use_cases 
-      SET "data" = jsonb_build_object(
-        'process', COALESCE("process", NULL),
-        'domain', COALESCE("domain", NULL),
-        'technologies', COALESCE("technologies"::jsonb, '[]'::jsonb),
-        'prerequisites', COALESCE("prerequisites", NULL),
-        'deadline', COALESCE("deadline", NULL),
-        'contact', COALESCE("contact", NULL),
-        'benefits', COALESCE("benefits"::jsonb, '[]'::jsonb),
-        'metrics', COALESCE("metrics"::jsonb, '[]'::jsonb),
-        'risks', COALESCE("risks"::jsonb, '[]'::jsonb),
-        'nextSteps', COALESCE("next_steps"::jsonb, '[]'::jsonb),
-        'dataSources', COALESCE("data_sources"::jsonb, '[]'::jsonb),
-        'dataObjects', COALESCE("data_objects"::jsonb, '[]'::jsonb),
-        'references', COALESCE("references"::jsonb, '[]'::jsonb),
-        'valueScores', COALESCE("value_scores"::jsonb, '[]'::jsonb),
-        'complexityScores', COALESCE("complexity_scores"::jsonb, '[]'::jsonb)
-      )
-      WHERE "data" = '{}'::jsonb OR "data" IS NULL
-    `);
+    // Migrer les données : déplacer name et description vers data, préserver les données existantes dans data
+    let updateQuery = '';
+    if (hasNameColumn && hasDescriptionColumn) {
+      // Les deux colonnes existent, les migrer vers data
+      updateQuery = `
+        UPDATE use_cases 
+        SET "data" = COALESCE("data", '{}'::jsonb) || jsonb_build_object(
+          'name', COALESCE("data"->>'name', "name"),
+          'description', COALESCE("data"->>'description', "description"),
+          'process', COALESCE("data"->>'process', "process"),
+          'domain', COALESCE("data"->>'domain', "domain"),
+          'technologies', COALESCE("data"->'technologies', COALESCE("technologies"::jsonb, '[]'::jsonb)),
+          'prerequisites', COALESCE("data"->>'prerequisites', "prerequisites"),
+          'deadline', COALESCE("data"->>'deadline', "deadline"),
+          'contact', COALESCE("data"->>'contact', "contact"),
+          'benefits', COALESCE("data"->'benefits', COALESCE("benefits"::jsonb, '[]'::jsonb)),
+          'metrics', COALESCE("data"->'metrics', COALESCE("metrics"::jsonb, '[]'::jsonb)),
+          'risks', COALESCE("data"->'risks', COALESCE("risks"::jsonb, '[]'::jsonb)),
+          'nextSteps', COALESCE("data"->'nextSteps', COALESCE("next_steps"::jsonb, '[]'::jsonb)),
+          'dataSources', COALESCE("data"->'dataSources', COALESCE("data_sources"::jsonb, '[]'::jsonb)),
+          'dataObjects', COALESCE("data"->'dataObjects', COALESCE("data_objects"::jsonb, '[]'::jsonb)),
+          'references', COALESCE("data"->'references', COALESCE("references"::jsonb, '[]'::jsonb)),
+          'valueScores', COALESCE("data"->'valueScores', COALESCE("value_scores"::jsonb, '[]'::jsonb)),
+          'complexityScores', COALESCE("data"->'complexityScores', COALESCE("complexity_scores"::jsonb, '[]'::jsonb))
+        )
+        WHERE ("data"->>'name' IS NULL OR "data"->>'description' IS NULL)
+          OR ("name" IS NOT NULL AND ("data"->>'name' IS NULL))
+          OR ("description" IS NOT NULL AND ("data"->>'description' IS NULL))
+      `;
+    } else if (hasNameColumn) {
+      // Seule la colonne name existe
+      updateQuery = `
+        UPDATE use_cases 
+        SET "data" = COALESCE("data", '{}'::jsonb) || jsonb_build_object(
+          'name', COALESCE("data"->>'name', "name")
+        )
+        WHERE ("data"->>'name' IS NULL OR ("name" IS NOT NULL AND ("data"->>'name' IS NULL)))
+      `;
+    } else if (hasDescriptionColumn) {
+      // Seule la colonne description existe
+      updateQuery = `
+        UPDATE use_cases 
+        SET "data" = COALESCE("data", '{}'::jsonb) || jsonb_build_object(
+          'description', COALESCE("data"->>'description', "description")
+        )
+        WHERE ("data"->>'description' IS NULL OR ("description" IS NOT NULL AND ("data"->>'description' IS NULL)))
+      `;
+    } else {
+      // Aucune colonne native, migration déjà faite
+      console.log('✅ Les colonnes name et description n\'existent plus, migration déjà effectuée');
+      return;
+    }
+
+    const result = await pool.query(updateQuery);
 
     console.log(`✅ ${result.rowCount} cas d'usage migrés avec succès`);
 
