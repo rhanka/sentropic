@@ -869,7 +869,7 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || useCase?.titre || useCase?.nom || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
