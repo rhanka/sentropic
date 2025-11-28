@@ -5,8 +5,8 @@ import { sql } from 'drizzle-orm';
  * Ensure all recommended indexes exist for use_cases table (idempotent)
  * 
  * This function creates indexes for:
- * - Native columns (name, description) with pg_trgm for text search
  * - JSONB data field for general queries
+ * - JSONB data.name and data.description with pg_trgm for text search
  * - JSONB data.problem and data.solution with pg_trgm for text search
  * - Composite indexes for common query patterns
  * 
@@ -18,22 +18,23 @@ export async function ensureIndexes(): Promise<void> {
   // Extension pg_trgm pour recherche textuelle efficace
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
 
-  // Index sur name (colonne native) avec pg_trgm
+  // Index sur data.name (JSONB) avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_name_trgm 
-    ON use_cases USING GIN (name gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_use_cases_data_name_trgm 
+    ON use_cases USING GIN ((data->>'name') gin_trgm_ops)
   `);
 
-  // Index sur description (colonne native) avec pg_trgm
+  // Index sur data.description (JSONB) avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_description_trgm 
-    ON use_cases USING GIN (description gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_use_cases_data_description_trgm 
+    ON use_cases USING GIN ((data->>'description') gin_trgm_ops)
   `);
 
-  // Index composite pour requêtes fréquentes (folder_id + name)
+  // Index composite pour requêtes fréquentes (folder_id + data.name)
+  // Note: on utilise une expression pour extraire data.name
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_folder_name 
-    ON use_cases (folder_id, name)
+    CREATE INDEX IF NOT EXISTS idx_use_cases_folder_data_name 
+    ON use_cases (folder_id, (data->>'name'))
   `);
 
   // Index GIN sur data JSONB pour requêtes générales
