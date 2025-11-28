@@ -38,11 +38,7 @@ export const useCases = pgTable('use_cases', {
   model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   
-  // === CHAMPS FRÉQUEMMENT ACCÉDÉS EN MASSE (performance) ===
-  name: text('name').notNull(), // Colonne native pour requêtes rapides
-  description: text('description'), // Colonne native pour requêtes rapides (description courte 30-60 caractères)
-  
-  // === DONNÉES MÉTIER (tout dans JSONB pour flexibilité) ===
+  // === DONNÉES MÉTIER (tout dans JSONB, y compris name et description) ===
   data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
   
   // === COLONNES MÉTIER À MIGRER (temporaires, seront supprimées après migration) ===
