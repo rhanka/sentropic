@@ -7,8 +7,8 @@ import { folders, useCases, companies } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
-import { calculateScores, type ScoreEntry } from '../../utils/scoring';
-import type { MatrixConfig } from '../../types/matrix';
+import { calculateUseCaseScores, type ScoreEntry } from '../../utils/scoring';
+import type { UseCaseData, UseCase } from '../../types/usecase';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
@@ -27,8 +27,13 @@ const useCaseInput = z.object({
   folderId: z.string(),
   companyId: z.string().optional(),
   name: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional(), // 30-60 caractères
+  // Nouveaux champs pour data JSONB
+  problem: z.string().optional(), // 40-80 caractères
+  solution: z.string().optional(), // 40-80 caractères
+  // Champs métier (seront dans data JSONB)
   process: z.string().optional(),
+  domain: z.string().optional(),
   technologies: z.array(z.string()).optional(),
   deadline: z.string().optional(),
   contact: z.string().optional(),
@@ -38,6 +43,10 @@ const useCaseInput = z.object({
   nextSteps: z.array(z.string()).optional(),
   dataSources: z.array(z.string()).optional(),
   dataObjects: z.array(z.string()).optional(),
+  references: z.array(z.object({
+    title: z.string(),
+    url: z.string()
+  })).optional(),
   valueScores: z.array(scoreEntry).optional(),
   complexityScores: z.array(scoreEntry).optional()
 });
@@ -45,9 +54,6 @@ const useCaseInput = z.object({
 type UseCaseInput = z.infer<typeof useCaseInput>;
 
 type SerializedUseCase = typeof useCases.$inferSelect;
-
-const serializeArray = (values?: string[]) => (values ? JSON.stringify(values) : null);
-const serializeScores = (values?: ScoreEntry[]) => (values ? JSON.stringify(values) : null);
 
 const parseJson = <T>(value: string | null): T | undefined => {
   if (!value) return undefined;
@@ -58,35 +64,215 @@ const parseJson = <T>(value: string | null): T | undefined => {
   }
 };
 
-const withComputedScores = (matrix: MatrixConfig | null, payload: UseCaseInput) => {
-  if (!matrix) {
-    return {
-      totalValueScore: null,
-      totalComplexityScore: null
-    };
+/**
+ * Extrait les données de data JSONB et des colonnes temporaires (rétrocompatibilité)
+ * Calcule les scores dynamiquement à partir de la matrice du dossier
+ */
+const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
+  // Récupérer la matrice du dossier pour calculer les scores
+  const [folder] = await db.select().from(folders).where(eq(folders.id, row.folderId));
+  const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
+  
+  // Extraire data JSONB (peut être vide {} pour les anciens enregistrements)
+  let data: UseCaseData = {};
+  try {
+    if (row.data && typeof row.data === 'object') {
+      data = row.data as UseCaseData;
+    } else if (typeof row.data === 'string') {
+      data = JSON.parse(row.data) as UseCaseData;
+    }
+  } catch (error) {
+    // Si data n'est pas valide, on part d'un objet vide
+    data = {};
   }
-  const valueScores = payload.valueScores ?? [];
-  const complexityScores = payload.complexityScores ?? [];
-  const computed = calculateScores(matrix, valueScores, complexityScores);
+  
+  // Rétrocompatibilité : migrer depuis les colonnes natives si data.name ou data.description manquent
+  // (pour les anciens enregistrements qui ont encore name/description en colonnes natives)
+  if (!data.name && (row as any).name) {
+    data.name = (row as any).name;
+  }
+  if (!data.description && (row as any).description) {
+    data.description = (row as any).description;
+  }
+  
+  // Rétrocompatibilité : migrer depuis les colonnes temporaires si data est vide
+  if (!data.process && row.process) {
+    data.process = row.process;
+  }
+  if (!data.domain && row.domain) {
+    data.domain = row.domain;
+  }
+  if (!data.technologies && row.technologies) {
+    data.technologies = parseJson<string[]>(row.technologies) ?? [];
+  }
+  if (!data.prerequisites && row.prerequisites) {
+    data.prerequisites = row.prerequisites;
+  }
+  if (!data.deadline && row.deadline) {
+    data.deadline = row.deadline;
+  }
+  if (!data.contact && row.contact) {
+    data.contact = row.contact;
+  }
+  if (!data.benefits && row.benefits) {
+    data.benefits = parseJson<string[]>(row.benefits) ?? [];
+  }
+  if (!data.metrics && row.metrics) {
+    data.metrics = parseJson<string[]>(row.metrics) ?? [];
+  }
+  if (!data.risks && row.risks) {
+    data.risks = parseJson<string[]>(row.risks) ?? [];
+  }
+  if (!data.nextSteps && row.nextSteps) {
+    data.nextSteps = parseJson<string[]>(row.nextSteps) ?? [];
+  }
+  if (!data.dataSources && row.dataSources) {
+    data.dataSources = parseJson<string[]>(row.dataSources) ?? [];
+  }
+  if (!data.dataObjects && row.dataObjects) {
+    data.dataObjects = parseJson<string[]>(row.dataObjects) ?? [];
+  }
+  if (!data.references && row.references) {
+    data.references = parseJson<Array<{title: string; url: string}>>(row.references) ?? [];
+  }
+  if (!data.valueScores && row.valueScores) {
+    data.valueScores = parseJson<ScoreEntry[]>(row.valueScores) ?? [];
+  }
+  if (!data.complexityScores && row.complexityScores) {
+    data.complexityScores = parseJson<ScoreEntry[]>(row.complexityScores) ?? [];
+  }
+  
+  // S'assurer que name est présent (obligatoire)
+  if (!data.name) {
+    data.name = 'Cas d\'usage sans nom';
+  }
+  
+  // Calculer les scores dynamiquement
+  const computedScores = calculateUseCaseScores(matrix, data);
+  
   return {
-    totalValueScore: computed.totalValueScore,
-    totalComplexityScore: computed.totalComplexityScore
+    id: row.id,
+    folderId: row.folderId,
+    companyId: row.companyId,
+    status: row.status ?? 'completed',
+    model: row.model,
+    createdAt: row.createdAt,
+    data,
+    totalValueScore: computedScores?.totalValueScore ?? null,
+    totalComplexityScore: computedScores?.totalComplexityScore ?? null
   };
 };
 
-const hydrateUseCase = (row: SerializedUseCase) => ({
-  ...row,
-  benefits: parseJson<string[]>(row.benefits) ?? [],
-  metrics: parseJson<string[]>(row.metrics) ?? [],
-  risks: parseJson<string[]>(row.risks) ?? [],
-  nextSteps: parseJson<string[]>(row.nextSteps) ?? [],
-  dataSources: parseJson<string[]>(row.dataSources) ?? [],
-  dataObjects: parseJson<string[]>(row.dataObjects) ?? [],
-  references: parseJson<Array<{title: string; url: string}>>(row.references) ?? [],
-  technologies: parseJson<string[]>(row.technologies) ?? [],
-  valueScores: parseJson<ScoreEntry[]>(row.valueScores) ?? [],
-  complexityScores: parseJson<ScoreEntry[]>(row.complexityScores) ?? []
-});
+/**
+ * Hydrate plusieurs use cases en une fois (optimisé pour les listes)
+ */
+export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCase[]> => {
+  // Récupérer tous les dossiers uniques pour éviter les requêtes multiples
+  const folderIds = [...new Set(rows.map(r => r.folderId))];
+  const foldersMap = new Map<string, typeof folders.$inferSelect>();
+  
+  for (const folderId of folderIds) {
+    const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
+    if (folder) {
+      foldersMap.set(folderId, folder);
+    }
+  }
+  
+  return Promise.all(rows.map(async (row) => {
+    const folder = foldersMap.get(row.folderId);
+    const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
+    
+    // Extraire data JSONB
+    let data: UseCaseData = {};
+    try {
+      if (row.data && typeof row.data === 'object') {
+        data = row.data as UseCaseData;
+      } else if (typeof row.data === 'string') {
+        data = JSON.parse(row.data) as UseCaseData;
+      }
+    } catch (error) {
+      data = {};
+    }
+    
+    // Rétrocompatibilité : migrer depuis les colonnes natives si data.name ou data.description manquent
+    if (!data.name && (row as any).name) {
+      data.name = (row as any).name;
+    }
+    if (!data.description && (row as any).description) {
+      data.description = (row as any).description;
+    }
+    
+    // Rétrocompatibilité : migrer depuis les colonnes temporaires si data est vide
+    if (!data.process && row.process) data.process = row.process;
+    if (!data.domain && row.domain) data.domain = row.domain;
+    if (!data.technologies && row.technologies) data.technologies = parseJson<string[]>(row.technologies) ?? [];
+    if (!data.prerequisites && row.prerequisites) data.prerequisites = row.prerequisites;
+    if (!data.deadline && row.deadline) data.deadline = row.deadline;
+    if (!data.contact && row.contact) data.contact = row.contact;
+    if (!data.benefits && row.benefits) data.benefits = parseJson<string[]>(row.benefits) ?? [];
+    if (!data.metrics && row.metrics) data.metrics = parseJson<string[]>(row.metrics) ?? [];
+    if (!data.risks && row.risks) data.risks = parseJson<string[]>(row.risks) ?? [];
+    if (!data.nextSteps && row.nextSteps) data.nextSteps = parseJson<string[]>(row.nextSteps) ?? [];
+    if (!data.dataSources && row.dataSources) data.dataSources = parseJson<string[]>(row.dataSources) ?? [];
+    if (!data.dataObjects && row.dataObjects) data.dataObjects = parseJson<string[]>(row.dataObjects) ?? [];
+    if (!data.references && row.references) data.references = parseJson<Array<{title: string; url: string}>>(row.references) ?? [];
+    if (!data.valueScores && row.valueScores) data.valueScores = parseJson<ScoreEntry[]>(row.valueScores) ?? [];
+    if (!data.complexityScores && row.complexityScores) data.complexityScores = parseJson<ScoreEntry[]>(row.complexityScores) ?? [];
+    
+    // S'assurer que name est présent (obligatoire)
+    if (!data.name) {
+      data.name = 'Cas d\'usage sans nom';
+    }
+    
+    // Calculer les scores dynamiquement
+    const computedScores = calculateUseCaseScores(matrix, data);
+    
+    return {
+      id: row.id,
+      folderId: row.folderId,
+      companyId: row.companyId,
+      status: row.status ?? 'completed',
+      model: row.model,
+      createdAt: row.createdAt,
+      data,
+      totalValueScore: computedScores?.totalValueScore ?? null,
+      totalComplexityScore: computedScores?.totalComplexityScore ?? null
+    };
+  }));
+};
+
+/**
+ * Construit l'objet data JSONB à partir d'un UseCaseInput
+ */
+const buildUseCaseData = (payload: UseCaseInput, existingData?: UseCaseData): UseCaseData => {
+  const data: UseCaseData = existingData ? { ...existingData } : { name: '' };
+  
+  // Champs principaux (obligatoires)
+  if (payload.name !== undefined) data.name = payload.name;
+  if (payload.description !== undefined) data.description = payload.description;
+  
+  // Nouveaux champs
+  if (payload.problem !== undefined) data.problem = payload.problem;
+  if (payload.solution !== undefined) data.solution = payload.solution;
+  
+  // Champs métier
+  if (payload.process !== undefined) data.process = payload.process;
+  if (payload.domain !== undefined) data.domain = payload.domain;
+  if (payload.technologies !== undefined) data.technologies = payload.technologies;
+  if (payload.deadline !== undefined) data.deadline = payload.deadline;
+  if (payload.contact !== undefined) data.contact = payload.contact;
+  if (payload.benefits !== undefined) data.benefits = payload.benefits;
+  if (payload.metrics !== undefined) data.metrics = payload.metrics;
+  if (payload.risks !== undefined) data.risks = payload.risks;
+  if (payload.nextSteps !== undefined) data.nextSteps = payload.nextSteps;
+  if (payload.dataSources !== undefined) data.dataSources = payload.dataSources;
+  if (payload.dataObjects !== undefined) data.dataObjects = payload.dataObjects;
+  if (payload.references !== undefined) data.references = payload.references;
+  if (payload.valueScores !== undefined) data.valueScores = payload.valueScores;
+  if (payload.complexityScores !== undefined) data.complexityScores = payload.complexityScores;
+  
+  return data;
+};
 
 export const useCasesRouter = new Hono();
 
@@ -95,7 +281,8 @@ useCasesRouter.get('/', async (c) => {
   const rows = folderId
     ? await db.select().from(useCases).where(eq(useCases.folderId, folderId))
     : await db.select().from(useCases);
-  return c.json({ items: rows.map(hydrateUseCase) });
+  const hydrated = await Promise.all(rows.map(row => hydrateUseCase(row)));
+  return c.json({ items: hydrated });
 });
 
 useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
@@ -104,32 +291,37 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
   if (!folder) {
     return c.json({ message: 'Folder not found' }, 404);
   }
-  const matrix = parseMatrixConfig(folder.matrixConfig ?? null);
-  const computed = withComputedScores(matrix, payload);
   const id = createId();
+  const data = buildUseCaseData(payload);
+  
+  // S'assurer que name est présent dans data (obligatoire)
+  if (!data.name) {
+    data.name = payload.name;
+  }
+  
   await db.insert(useCases).values({
     id,
     folderId: payload.folderId,
     companyId: payload.companyId,
-    name: payload.name,
-    description: payload.description,
+    data: data as any, // Drizzle accepte JSONB directement (inclut name et description)
+    // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
     process: payload.process,
-    technologies: serializeArray(payload.technologies),
+    technologies: payload.technologies ? JSON.stringify(payload.technologies) : null,
     deadline: payload.deadline,
     contact: payload.contact,
-    benefits: serializeArray(payload.benefits),
-    metrics: serializeArray(payload.metrics),
-    risks: serializeArray(payload.risks),
-    nextSteps: serializeArray(payload.nextSteps),
-    dataSources: serializeArray(payload.dataSources),
-    dataObjects: serializeArray(payload.dataObjects),
-    valueScores: serializeScores(payload.valueScores),
-    complexityScores: serializeScores(payload.complexityScores),
-    totalValueScore: computed.totalValueScore ?? null,
-    totalComplexityScore: computed.totalComplexityScore ?? null
+    benefits: payload.benefits ? JSON.stringify(payload.benefits) : null,
+    metrics: payload.metrics ? JSON.stringify(payload.metrics) : null,
+    risks: payload.risks ? JSON.stringify(payload.risks) : null,
+    nextSteps: payload.nextSteps ? JSON.stringify(payload.nextSteps) : null,
+    dataSources: payload.dataSources ? JSON.stringify(payload.dataSources) : null,
+    dataObjects: payload.dataObjects ? JSON.stringify(payload.dataObjects) : null,
+    references: payload.references ? JSON.stringify(payload.references) : null,
+    valueScores: payload.valueScores ? JSON.stringify(payload.valueScores) : null,
+    complexityScores: payload.complexityScores ? JSON.stringify(payload.complexityScores) : null
   });
   const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
-  return c.json(hydrateUseCase(record), 201);
+  const hydrated = await hydrateUseCase(record);
+  return c.json(hydrated, 201);
 });
 
 useCasesRouter.get('/:id', async (c) => {
@@ -138,7 +330,8 @@ useCasesRouter.get('/:id', async (c) => {
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
-  return c.json(hydrateUseCase(record));
+  const hydrated = await hydrateUseCase(record);
+  return c.json(hydrated);
 });
 
 useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c) => {
@@ -148,54 +341,63 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
-  const folderId = payload.folderId ?? record.folderId;
-  const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
-  const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
-  const shouldRecomputeScores = payload.valueScores !== undefined || payload.complexityScores !== undefined;
-  let roundedValueScore = record.totalValueScore ?? null;
-  let roundedComplexityScore = record.totalComplexityScore ?? null;
-
-  if (matrix && shouldRecomputeScores) {
-  const computed = withComputedScores(matrix, {
-    ...hydrateUseCase(record),
-    ...payload
-  } as UseCaseInput);
-
-    if (computed.totalValueScore !== null && computed.totalValueScore !== undefined) {
-      roundedValueScore = Math.round(computed.totalValueScore);
+  
+  // Extraire data existant pour le merge
+  let existingData: UseCaseData = {};
+  try {
+    if (record.data && typeof record.data === 'object') {
+      existingData = record.data as UseCaseData;
+    } else if (typeof record.data === 'string') {
+      existingData = JSON.parse(record.data) as UseCaseData;
     }
-
-    if (computed.totalComplexityScore !== null && computed.totalComplexityScore !== undefined) {
-      roundedComplexityScore = Math.round(computed.totalComplexityScore);
-    }
+  } catch (error) {
+    existingData = {};
   }
+  
+  // Construire le nouveau data en mergeant avec l'existant
+  const newData = buildUseCaseData(payload, existingData);
+  
+  // S'assurer que name est présent dans data (obligatoire)
+  if (!newData.name && existingData.name) {
+    newData.name = existingData.name;
+  } else if (!newData.name && (record as any).name) {
+    // Rétrocompatibilité : utiliser la colonne native si data.name n'existe pas
+    newData.name = (record as any).name;
+  } else if (!newData.name && payload.name) {
+    newData.name = payload.name;
+  } else if (!newData.name) {
+    newData.name = 'Cas d\'usage sans nom';
+  }
+  
+  const folderId = payload.folderId ?? record.folderId;
+  
   await db
     .update(useCases)
     .set({
       folderId,
       companyId: payload.companyId ?? record.companyId,
-      name: payload.name ?? record.name,
-      description: payload.description ?? record.description,
+      data: newData as any, // Drizzle accepte JSONB directement (inclut name et description)
+      // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
       process: payload.process ?? record.process,
-      technologies: serializeArray(payload.technologies) ?? record.technologies,
+      technologies: payload.technologies ? JSON.stringify(payload.technologies) : record.technologies,
       deadline: payload.deadline ?? record.deadline,
       contact: payload.contact ?? record.contact,
-      benefits: payload.benefits ? serializeArray(payload.benefits) : record.benefits,
-      metrics: payload.metrics ? serializeArray(payload.metrics) : record.metrics,
-      risks: payload.risks ? serializeArray(payload.risks) : record.risks,
-      nextSteps: payload.nextSteps ? serializeArray(payload.nextSteps) : record.nextSteps,
-      dataSources: payload.dataSources ? serializeArray(payload.dataSources) : record.dataSources,
-      dataObjects: payload.dataObjects ? serializeArray(payload.dataObjects) : record.dataObjects,
-      valueScores: payload.valueScores ? serializeScores(payload.valueScores) : record.valueScores,
+      benefits: payload.benefits ? JSON.stringify(payload.benefits) : record.benefits,
+      metrics: payload.metrics ? JSON.stringify(payload.metrics) : record.metrics,
+      risks: payload.risks ? JSON.stringify(payload.risks) : record.risks,
+      nextSteps: payload.nextSteps ? JSON.stringify(payload.nextSteps) : record.nextSteps,
+      dataSources: payload.dataSources ? JSON.stringify(payload.dataSources) : record.dataSources,
+      dataObjects: payload.dataObjects ? JSON.stringify(payload.dataObjects) : record.dataObjects,
+      references: payload.references ? JSON.stringify(payload.references) : record.references,
+      valueScores: payload.valueScores ? JSON.stringify(payload.valueScores) : record.valueScores,
       complexityScores: payload.complexityScores
-        ? serializeScores(payload.complexityScores)
-        : record.complexityScores,
-      totalValueScore: roundedValueScore,
-      totalComplexityScore: roundedComplexityScore
+        ? JSON.stringify(payload.complexityScores)
+        : record.complexityScores
     })
     .where(eq(useCases.id, id));
   const [updated] = await db.select().from(useCases).where(eq(useCases.id, id));
-  return c.json(hydrateUseCase(updated));
+  const hydrated = await hydrateUseCase(updated);
+  return c.json(hydrated);
 });
 
 useCasesRouter.delete('/:id', async (c) => {
