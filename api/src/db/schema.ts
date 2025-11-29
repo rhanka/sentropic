@@ -38,26 +38,11 @@ export const useCases = pgTable('use_cases', {
   model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   
-  // === DONNÉES MÉTIER (tout dans JSONB, y compris name et description) ===
-  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
-  
-  // === COLONNES MÉTIER À MIGRER (temporaires, seront supprimées après migration) ===
-  process: text('process'),
-  domain: text('domain'),
-  technologies: text('technologies'),
-  prerequisites: text('prerequisites'),
-  deadline: text('deadline'),
-  contact: text('contact'),
-  benefits: text('benefits'),
-  metrics: text('metrics'),
-  risks: text('risks'),
-  nextSteps: text('next_steps'),
-  dataSources: text('data_sources'),
-  dataObjects: text('data_objects'),
-  references: text('references'),
-  valueScores: text('value_scores'),
-  complexityScores: text('complexity_scores')
-  // Note: totalValueScore et totalComplexityScore supprimés (champs calculés)
+  // === DONNÉES MÉTIER (tout dans JSONB, y compris name, description, et toutes les autres colonnes métier) ===
+  // Toutes les colonnes métier (name, description, process, domain, technologies, etc.) ont été migrées vers data JSONB
+  // et supprimées de la table (migration 0008)
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`)
+  // Note: totalValueScore et totalComplexityScore supprimés (champs calculés dynamiquement)
 });
 
 export const settings = pgTable('settings', {

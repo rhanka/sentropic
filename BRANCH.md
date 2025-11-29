@@ -1108,8 +1108,14 @@ ALTER TABLE "use_cases" ADD COLUMN "data" jsonb NOT NULL DEFAULT '{}';
   - ✅ Tests Unitaires : scoring.test.ts (déjà à jour), types/matrix/score-validation (pas de changement)
 - [x] **Complété** : Mise à jour des tests UI (stores)
   - ✅ Tests UI Stores : useCases.test.ts (15 tests) - adaptation pour data.name, data.description, data.problem, data.solution
-- [ ] **À faire** : Mise à jour des tests E2E
-- [ ] UAT
+- [x] Mise à jour des tests E2E
+- [x] **Fix migration 0008** : Migration des données vers data JSONB AVANT suppression des colonnes
+  - ✅ Migration 0008 corrigée : migre toutes les données (name, description, process, domain, technologies, etc.) vers data JSONB
+  - ✅ Suppression de toutes les colonnes temporaires après migration (name, description, process, domain, technologies, prerequisites, deadline, contact, benefits, metrics, risks, next_steps, data_sources, data_objects, references, value_scores, complexity_scores)
+  - ✅ Schéma Drizzle mis à jour : toutes les colonnes temporaires supprimées du schéma
+  - ✅ **Problème résolu** : Les données de prod restaurées depuis backup sont maintenant correctement migrées vers data JSONB
+- [x] Test reprise des données de prod (db-backup-prod db-restore) - À valider après fix migration
+- [x] UAT (non reg tests)
 
 ### Phase 9 : Validation CI
 - [ ] **À faire** : Validation CI GitHub Actions

@@ -74,72 +74,72 @@ const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
   
   // Extraire data JSONB (peut être vide {} pour les anciens enregistrements)
-  let data: UseCaseData = {};
+  let data: Partial<UseCaseData> = {};
   try {
     if (row.data && typeof row.data === 'object') {
-      data = row.data as UseCaseData;
+      data = row.data as Partial<UseCaseData>;
     } else if (typeof row.data === 'string') {
-      data = JSON.parse(row.data) as UseCaseData;
+      data = JSON.parse(row.data) as Partial<UseCaseData>;
     }
   } catch (error) {
     // Si data n'est pas valide, on part d'un objet vide
     data = {};
   }
   
-  // Rétrocompatibilité : migrer depuis les colonnes natives si data.name ou data.description manquent
-  // (pour les anciens enregistrements qui ont encore name/description en colonnes natives)
-  if (!data.name && (row as any).name) {
-    data.name = (row as any).name;
+  // Rétrocompatibilité : migrer depuis les colonnes natives si elles existent encore dans la DB
+  // (pour les backups de prod qui ont encore ces colonnes avant application de la migration 0008)
+  // Note: Après la migration 0008, toutes les colonnes sont supprimées et toutes les données sont dans data
+  const rowAny = row as any;
+  if (!data.name && rowAny.name) {
+    data.name = rowAny.name;
   }
-  if (!data.description && (row as any).description) {
-    data.description = (row as any).description;
+  if (!data.description && rowAny.description) {
+    data.description = rowAny.description;
   }
-  
-  // Rétrocompatibilité : migrer depuis les colonnes temporaires si data est vide
-  if (!data.process && row.process) {
-    data.process = row.process;
+  if (!data.process && rowAny.process) {
+    data.process = rowAny.process;
   }
-  if (!data.domain && row.domain) {
-    data.domain = row.domain;
+  if (!data.domain && rowAny.domain) {
+    data.domain = rowAny.domain;
   }
-  if (!data.technologies && row.technologies) {
-    data.technologies = parseJson<string[]>(row.technologies) ?? [];
+  if (!data.technologies && rowAny.technologies) {
+    data.technologies = parseJson<string[]>(rowAny.technologies) ?? [];
   }
-  if (!data.prerequisites && row.prerequisites) {
-    data.prerequisites = row.prerequisites;
+  if (!data.prerequisites && rowAny.prerequisites) {
+    data.prerequisites = rowAny.prerequisites;
   }
-  if (!data.deadline && row.deadline) {
-    data.deadline = row.deadline;
+  if (!data.deadline && rowAny.deadline) {
+    data.deadline = rowAny.deadline;
   }
-  if (!data.contact && row.contact) {
-    data.contact = row.contact;
+  if (!data.contact && rowAny.contact) {
+    data.contact = rowAny.contact;
   }
-  if (!data.benefits && row.benefits) {
-    data.benefits = parseJson<string[]>(row.benefits) ?? [];
+  if (!data.benefits && rowAny.benefits) {
+    data.benefits = parseJson<string[]>(rowAny.benefits) ?? [];
   }
-  if (!data.metrics && row.metrics) {
-    data.metrics = parseJson<string[]>(row.metrics) ?? [];
+  if (!data.metrics && rowAny.metrics) {
+    data.metrics = parseJson<string[]>(rowAny.metrics) ?? [];
   }
-  if (!data.risks && row.risks) {
-    data.risks = parseJson<string[]>(row.risks) ?? [];
+  if (!data.risks && rowAny.risks) {
+    data.risks = parseJson<string[]>(rowAny.risks) ?? [];
   }
-  if (!data.nextSteps && row.nextSteps) {
-    data.nextSteps = parseJson<string[]>(row.nextSteps) ?? [];
+  if (!data.nextSteps && rowAny.nextSteps) {
+    data.nextSteps = parseJson<string[]>(rowAny.nextSteps) ?? [];
   }
-  if (!data.dataSources && row.dataSources) {
-    data.dataSources = parseJson<string[]>(row.dataSources) ?? [];
+  if (!data.dataSources && rowAny.dataSources) {
+    data.dataSources = parseJson<string[]>(rowAny.dataSources) ?? [];
   }
-  if (!data.dataObjects && row.dataObjects) {
-    data.dataObjects = parseJson<string[]>(row.dataObjects) ?? [];
+  if (!data.dataObjects && rowAny.dataObjects) {
+    data.dataObjects = parseJson<string[]>(rowAny.dataObjects) ?? [];
   }
-  if (!data.references && row.references) {
-    data.references = parseJson<Array<{title: string; url: string}>>(row.references) ?? [];
+  if (!data.references && rowAny.references) {
+    data.references = parseJson<Array<{title: string; url: string}>>(rowAny.references) ?? [];
   }
-  if (!data.valueScores && row.valueScores) {
-    data.valueScores = parseJson<ScoreEntry[]>(row.valueScores) ?? [];
+  if (!data.valueScores && rowAny.valueScores) {
+    data.valueScores = parseJson<ScoreEntry[]>(rowAny.valueScores) ?? [];
   }
-  if (!data.complexityScores && row.complexityScores) {
-    data.complexityScores = parseJson<ScoreEntry[]>(row.complexityScores) ?? [];
+  if (!data.complexityScores && rowAny.complexityScores) {
+    data.complexityScores = parseJson<ScoreEntry[]>(rowAny.complexityScores) ?? [];
   }
   
   // S'assurer que name est présent (obligatoire)
@@ -148,7 +148,7 @@ const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
   }
   
   // Calculer les scores dynamiquement
-  const computedScores = calculateUseCaseScores(matrix, data);
+  const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
   
   return {
     id: row.id,
@@ -156,8 +156,8 @@ const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
     companyId: row.companyId,
     status: row.status ?? 'completed',
     model: row.model,
-    createdAt: row.createdAt,
-    data,
+    createdAt: row.createdAt ?? new Date(),
+    data: data as UseCaseData,
     totalValueScore: computedScores?.totalValueScore ?? null,
     totalComplexityScore: computedScores?.totalComplexityScore ?? null
   };
@@ -183,41 +183,41 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
     
     // Extraire data JSONB
-    let data: UseCaseData = {};
+    let data: Partial<UseCaseData> = {};
     try {
       if (row.data && typeof row.data === 'object') {
-        data = row.data as UseCaseData;
+        data = row.data as Partial<UseCaseData>;
       } else if (typeof row.data === 'string') {
-        data = JSON.parse(row.data) as UseCaseData;
+        data = JSON.parse(row.data) as Partial<UseCaseData>;
       }
     } catch (error) {
       data = {};
     }
     
-    // Rétrocompatibilité : migrer depuis les colonnes natives si data.name ou data.description manquent
-    if (!data.name && (row as any).name) {
-      data.name = (row as any).name;
+    // Rétrocompatibilité : migrer depuis les colonnes natives si elles existent encore dans la DB
+    // (pour les backups de prod qui ont encore ces colonnes avant application de la migration 0008)
+    const rowAny = row as any;
+    if (!data.name && rowAny.name) {
+      data.name = rowAny.name;
     }
-    if (!data.description && (row as any).description) {
-      data.description = (row as any).description;
+    if (!data.description && rowAny.description) {
+      data.description = rowAny.description;
     }
-    
-    // Rétrocompatibilité : migrer depuis les colonnes temporaires si data est vide
-    if (!data.process && row.process) data.process = row.process;
-    if (!data.domain && row.domain) data.domain = row.domain;
-    if (!data.technologies && row.technologies) data.technologies = parseJson<string[]>(row.technologies) ?? [];
-    if (!data.prerequisites && row.prerequisites) data.prerequisites = row.prerequisites;
-    if (!data.deadline && row.deadline) data.deadline = row.deadline;
-    if (!data.contact && row.contact) data.contact = row.contact;
-    if (!data.benefits && row.benefits) data.benefits = parseJson<string[]>(row.benefits) ?? [];
-    if (!data.metrics && row.metrics) data.metrics = parseJson<string[]>(row.metrics) ?? [];
-    if (!data.risks && row.risks) data.risks = parseJson<string[]>(row.risks) ?? [];
-    if (!data.nextSteps && row.nextSteps) data.nextSteps = parseJson<string[]>(row.nextSteps) ?? [];
-    if (!data.dataSources && row.dataSources) data.dataSources = parseJson<string[]>(row.dataSources) ?? [];
-    if (!data.dataObjects && row.dataObjects) data.dataObjects = parseJson<string[]>(row.dataObjects) ?? [];
-    if (!data.references && row.references) data.references = parseJson<Array<{title: string; url: string}>>(row.references) ?? [];
-    if (!data.valueScores && row.valueScores) data.valueScores = parseJson<ScoreEntry[]>(row.valueScores) ?? [];
-    if (!data.complexityScores && row.complexityScores) data.complexityScores = parseJson<ScoreEntry[]>(row.complexityScores) ?? [];
+    if (!data.process && rowAny.process) data.process = rowAny.process;
+    if (!data.domain && rowAny.domain) data.domain = rowAny.domain;
+    if (!data.technologies && rowAny.technologies) data.technologies = parseJson<string[]>(rowAny.technologies) ?? [];
+    if (!data.prerequisites && rowAny.prerequisites) data.prerequisites = rowAny.prerequisites;
+    if (!data.deadline && rowAny.deadline) data.deadline = rowAny.deadline;
+    if (!data.contact && rowAny.contact) data.contact = rowAny.contact;
+    if (!data.benefits && rowAny.benefits) data.benefits = parseJson<string[]>(rowAny.benefits) ?? [];
+    if (!data.metrics && rowAny.metrics) data.metrics = parseJson<string[]>(rowAny.metrics) ?? [];
+    if (!data.risks && rowAny.risks) data.risks = parseJson<string[]>(rowAny.risks) ?? [];
+    if (!data.nextSteps && rowAny.nextSteps) data.nextSteps = parseJson<string[]>(rowAny.nextSteps) ?? [];
+    if (!data.dataSources && rowAny.dataSources) data.dataSources = parseJson<string[]>(rowAny.dataSources) ?? [];
+    if (!data.dataObjects && rowAny.dataObjects) data.dataObjects = parseJson<string[]>(rowAny.dataObjects) ?? [];
+    if (!data.references && rowAny.references) data.references = parseJson<Array<{title: string; url: string}>>(rowAny.references) ?? [];
+    if (!data.valueScores && rowAny.valueScores) data.valueScores = parseJson<ScoreEntry[]>(rowAny.valueScores) ?? [];
+    if (!data.complexityScores && rowAny.complexityScores) data.complexityScores = parseJson<ScoreEntry[]>(rowAny.complexityScores) ?? [];
     
     // S'assurer que name est présent (obligatoire)
     if (!data.name) {
@@ -225,7 +225,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     }
     
     // Calculer les scores dynamiquement
-    const computedScores = calculateUseCaseScores(matrix, data);
+    const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
     
     return {
       id: row.id,
@@ -233,8 +233,8 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
       companyId: row.companyId,
       status: row.status ?? 'completed',
       model: row.model,
-      createdAt: row.createdAt,
-      data,
+      createdAt: row.createdAt ?? new Date(),
+      data: data as UseCaseData,
       totalValueScore: computedScores?.totalValueScore ?? null,
       totalComplexityScore: computedScores?.totalComplexityScore ?? null
     };
@@ -242,13 +242,16 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
 };
 
 /**
- * Construit l'objet data JSONB à partir d'un UseCaseInput
+ * Construit l'objet data JSONB à partir d'un UseCaseInput (peut être partiel pour PUT)
  */
-const buildUseCaseData = (payload: UseCaseInput, existingData?: UseCaseData): UseCaseData => {
-  const data: UseCaseData = existingData ? { ...existingData } : { name: '' };
+const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial<UseCaseData>): UseCaseData => {
+  // S'assurer que name est toujours défini (obligatoire)
+  const name: string = payload.name ?? existingData?.name ?? 'Cas d\'usage sans nom';
+  const data: UseCaseData = existingData 
+    ? { ...existingData, name } 
+    : { name };
   
-  // Champs principaux (obligatoires)
-  if (payload.name !== undefined) data.name = payload.name;
+  // Champs principaux (obligatoires) - name est déjà défini ci-dessus
   if (payload.description !== undefined) data.description = payload.description;
   
   // Nouveaux champs
@@ -303,21 +306,7 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
     id,
     folderId: payload.folderId,
     companyId: payload.companyId,
-    data: data as any, // Drizzle accepte JSONB directement (inclut name et description)
-    // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
-    process: payload.process,
-    technologies: payload.technologies ? JSON.stringify(payload.technologies) : null,
-    deadline: payload.deadline,
-    contact: payload.contact,
-    benefits: payload.benefits ? JSON.stringify(payload.benefits) : null,
-    metrics: payload.metrics ? JSON.stringify(payload.metrics) : null,
-    risks: payload.risks ? JSON.stringify(payload.risks) : null,
-    nextSteps: payload.nextSteps ? JSON.stringify(payload.nextSteps) : null,
-    dataSources: payload.dataSources ? JSON.stringify(payload.dataSources) : null,
-    dataObjects: payload.dataObjects ? JSON.stringify(payload.dataObjects) : null,
-    references: payload.references ? JSON.stringify(payload.references) : null,
-    valueScores: payload.valueScores ? JSON.stringify(payload.valueScores) : null,
-    complexityScores: payload.complexityScores ? JSON.stringify(payload.complexityScores) : null
+    data: data as any // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
   });
   const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
   const hydrated = await hydrateUseCase(record);
@@ -343,30 +332,24 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
   }
   
   // Extraire data existant pour le merge
-  let existingData: UseCaseData = {};
+  let existingData: Partial<UseCaseData> = {};
   try {
     if (record.data && typeof record.data === 'object') {
-      existingData = record.data as UseCaseData;
+      existingData = record.data as Partial<UseCaseData>;
     } else if (typeof record.data === 'string') {
-      existingData = JSON.parse(record.data) as UseCaseData;
+      existingData = JSON.parse(record.data) as Partial<UseCaseData>;
     }
   } catch (error) {
     existingData = {};
   }
   
   // Construire le nouveau data en mergeant avec l'existant
-  const newData = buildUseCaseData(payload, existingData);
+  // buildUseCaseData garantit toujours un name défini
+  let newData = buildUseCaseData(payload, existingData);
   
-  // S'assurer que name est présent dans data (obligatoire)
-  if (!newData.name && existingData.name) {
-    newData.name = existingData.name;
-  } else if (!newData.name && (record as any).name) {
-    // Rétrocompatibilité : utiliser la colonne native si data.name n'existe pas
-    newData.name = (record as any).name;
-  } else if (!newData.name && payload.name) {
-    newData.name = payload.name;
-  } else if (!newData.name) {
-    newData.name = 'Cas d\'usage sans nom';
+  // Rétrocompatibilité : si name n'est toujours pas défini (cas edge), utiliser la colonne native
+  if (!newData.name && (record as any).name) {
+    newData = { ...newData, name: (record as any).name };
   }
   
   const folderId = payload.folderId ?? record.folderId;
@@ -376,23 +359,7 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
     .set({
       folderId,
       companyId: payload.companyId ?? record.companyId,
-      data: newData as any, // Drizzle accepte JSONB directement (inclut name et description)
-      // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
-      process: payload.process ?? record.process,
-      technologies: payload.technologies ? JSON.stringify(payload.technologies) : record.technologies,
-      deadline: payload.deadline ?? record.deadline,
-      contact: payload.contact ?? record.contact,
-      benefits: payload.benefits ? JSON.stringify(payload.benefits) : record.benefits,
-      metrics: payload.metrics ? JSON.stringify(payload.metrics) : record.metrics,
-      risks: payload.risks ? JSON.stringify(payload.risks) : record.risks,
-      nextSteps: payload.nextSteps ? JSON.stringify(payload.nextSteps) : record.nextSteps,
-      dataSources: payload.dataSources ? JSON.stringify(payload.dataSources) : record.dataSources,
-      dataObjects: payload.dataObjects ? JSON.stringify(payload.dataObjects) : record.dataObjects,
-      references: payload.references ? JSON.stringify(payload.references) : record.references,
-      valueScores: payload.valueScores ? JSON.stringify(payload.valueScores) : record.valueScores,
-      complexityScores: payload.complexityScores
-        ? JSON.stringify(payload.complexityScores)
-        : record.complexityScores
+      data: newData as any // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
     })
     .where(eq(useCases.id, id));
   const [updated] = await db.select().from(useCases).where(eq(useCases.id, id));
@@ -505,10 +472,16 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
       .set({ status: 'detailing' })
       .where(eq(useCases.id, id));
     
+    // Extraire le nom depuis data JSONB (avec rétrocompatibilité)
+    const useCaseData = useCase.data && typeof useCase.data === 'object' 
+      ? useCase.data as Partial<UseCaseData>
+      : {};
+    const useCaseName = useCaseData.name || (useCase as any).name || 'Cas d\'usage sans nom';
+    
     // Ajouter le job à la queue
     const jobId = await queueManager.addJob('usecase_detail', {
       useCaseId: id,
-      useCaseName: useCase.name,
+      useCaseName,
       folderId: useCase.folderId,
       model: selectedModel
     });
