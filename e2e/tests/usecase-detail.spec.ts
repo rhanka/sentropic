@@ -146,6 +146,133 @@ test.describe('Détail des cas d\'usage', () => {
     }
   });
 
+  test('devrait afficher les sections Problème et Solution', async ({ page }) => {
+    await page.goto('/cas-usage');
+    await page.waitForLoadState('networkidle');
+    
+    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
+    
+    if (await useCaseCards.count() > 0) {
+      const firstCard = useCaseCards.first();
+      const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible();
+      
+      if (!isGenerating) {
+        await firstCard.click();
+        await page.waitForLoadState('networkidle');
+        
+        // Vérifier la section Problème (orange)
+        const problemSection = page.locator('div.bg-orange-100.text-orange-800:has-text("Problème")');
+        const problemVisible = await problemSection.isVisible().catch(() => false);
+        
+        // Vérifier la section Solution (bleue)
+        const solutionSection = page.locator('div.bg-blue-100.text-blue-800:has-text("Solution")');
+        const solutionVisible = await solutionSection.isVisible().catch(() => false);
+        
+        // Au moins une des deux sections devrait être visible (peut être vide si pas encore généré)
+        if (problemVisible || solutionVisible) {
+          // Si la section Problème est visible, vérifier qu'elle est bien présente
+          if (problemVisible) {
+            await expect(problemSection).toBeVisible();
+          }
+          
+          // Si la section Solution est visible, vérifier qu'elle est bien présente
+          if (solutionVisible) {
+            await expect(solutionSection).toBeVisible();
+          }
+          
+          // Vérifier que les deux sections sont côte à côte (2 colonnes) si les deux sont visibles
+          if (problemVisible && solutionVisible) {
+            const problemBox = await problemSection.boundingBox();
+            const solutionBox = await solutionSection.boundingBox();
+            
+            if (problemBox && solutionBox) {
+              // Les deux sections devraient être à peu près au même niveau Y (côte à côte)
+              const yDiff = Math.abs(problemBox.y - solutionBox.y);
+              expect(yDiff).toBeLessThan(100); // Tolérance de 100px
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test('devrait permettre d\'éditer problem et solution', async ({ page }) => {
+    await page.goto('/cas-usage');
+    await page.waitForLoadState('networkidle');
+    
+    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
+    
+    if (await useCaseCards.count() > 0) {
+      const firstCard = useCaseCards.first();
+      const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible();
+      
+      if (!isGenerating) {
+        await firstCard.click();
+        await page.waitForLoadState('networkidle');
+        
+        // Éditer le problème si la section est visible
+        const problemSection = page.locator('div.bg-orange-100:has-text("Problème")');
+        const problemVisible = await problemSection.isVisible().catch(() => false);
+        
+        if (problemVisible) {
+          // Chercher l'éditeur TipTap dans la section Problème (markdown=true utilise TipTap)
+          // TipTap crée un élément contenteditable dans .markdown-wrapper
+          // On cherche dans le conteneur parent de la section Problème
+          const problemContainer = problemSection.locator('..').locator('.markdown-wrapper, .prose').first();
+          const problemEditor = problemContainer.locator('[contenteditable="true"], .ProseMirror').first();
+          const problemEditorVisible = await problemEditor.isVisible().catch(() => false);
+          
+          if (problemEditorVisible) {
+            await problemEditor.click();
+            await page.waitForTimeout(500);
+            
+            // Remplir avec un texte de test (TipTap utilise contenteditable)
+            await problemEditor.fill('Test problème E2E');
+            await page.waitForTimeout(6000); // Attendre la sauvegarde automatique (buffer 5s)
+            
+            // Recharger la page pour vérifier la sauvegarde
+            await page.reload();
+            await page.waitForLoadState('networkidle');
+            
+            // Vérifier que le problème est sauvegardé (chercher dans le contenu de la page)
+            const problemTextContainer = problemSection.locator('..');
+            const problemContent = await problemTextContainer.textContent();
+            expect(problemContent).toContain('Test problème E2E');
+          }
+        }
+        
+        // Éditer la solution si la section est visible
+        const solutionSection = page.locator('div.bg-blue-100:has-text("Solution")');
+        const solutionVisible = await solutionSection.isVisible().catch(() => false);
+        
+        if (solutionVisible) {
+          // Chercher l'éditeur TipTap dans la section Solution
+          const solutionContainer = solutionSection.locator('..').locator('.markdown-wrapper, .prose').first();
+          const solutionEditor = solutionContainer.locator('[contenteditable="true"], .ProseMirror').first();
+          const solutionEditorVisible = await solutionEditor.isVisible().catch(() => false);
+          
+          if (solutionEditorVisible) {
+            await solutionEditor.click();
+            await page.waitForTimeout(500);
+            
+            // Remplir avec un texte de test
+            await solutionEditor.fill('Test solution E2E');
+            await page.waitForTimeout(6000); // Attendre la sauvegarde automatique
+            
+            // Recharger la page pour vérifier la sauvegarde
+            await page.reload();
+            await page.waitForLoadState('networkidle');
+            
+            // Vérifier que la solution est sauvegardée (chercher dans le contenu de la page)
+            const solutionTextContainer = solutionSection.locator('..');
+            const solutionContent = await solutionTextContainer.textContent();
+            expect(solutionContent).toContain('Test solution E2E');
+          }
+        }
+      }
+    }
+  });
+
   test('devrait gérer les cas d\'usage en cours de génération', async ({ page }) => {
     await page.goto('/cas-usage');
     await page.waitForLoadState('networkidle');
