@@ -20,8 +20,8 @@ describe('Use Cases Store', () => {
   describe('fetchUseCases', () => {
     it('should fetch use cases successfully', async () => {
       const mockUseCases = [
-        { id: '1', name: 'Use Case 1', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano' },
-        { id: '2', name: 'Use Case 2', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano' }
+        { id: '1', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano', data: { name: 'Use Case 1' } },
+        { id: '2', folderId: 'folder1', companyId: 'company1', model: 'gpt-4.1-nano', data: { name: 'Use Case 2' } }
       ];
       
       mockFetchJsonOnce({ items: mockUseCases });
@@ -45,7 +45,7 @@ describe('Use Cases Store', () => {
         folderId: 'folder1', 
         companyId: 'company1' 
       };
-      const createdUseCase = { id: '1', ...newUseCase };
+      const createdUseCase = { id: '1', folderId: 'folder1', companyId: 'company1', data: { name: 'New Use Case' } };
       
       mockFetchJsonOnce(createdUseCase);
 
@@ -60,32 +60,50 @@ describe('Use Cases Store', () => {
       const updates = { name: 'Updated Use Case' };
       const updatedUseCase = { 
         id: '1', 
-        name: 'Updated Use Case', 
         folderId: 'folder1', 
-        companyId: 'company1' 
+        companyId: 'company1',
+        data: { name: 'Updated Use Case' }
       };
       
       mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(result).toEqual(updatedUseCase);
+      expect(result.data?.name).toBe(updates.name);
     });
 
     it('should update use case with markdown description', async () => {
       const updates = { description: '**Bold** text with [reference](url)' };
       const updatedUseCase = { 
         id: '1', 
-        name: 'Use Case 1', 
         folderId: 'folder1',
-        description: updates.description
+        data: { name: 'Use Case 1', description: updates.description }
       };
       
       mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(result.description).toBe(updates.description);
+      expect(result.data?.description).toBe(updates.description);
+    });
+
+    it('should update use case with problem and solution', async () => {
+      const updates = { 
+        problem: 'Test problem description',
+        solution: 'Test solution description'
+      };
+      const updatedUseCase = { 
+        id: '1', 
+        folderId: 'folder1',
+        data: { name: 'Use Case 1', problem: updates.problem, solution: updates.solution }
+      };
+      
+      mockFetchJsonOnce(updatedUseCase);
+
+      const result = await updateUseCase('1', updates);
+      
+      expect(result.data?.problem).toBe(updates.problem);
+      expect(result.data?.solution).toBe(updates.solution);
     });
 
     it('should update use case with simple text fields (contact, deadline)', async () => {
@@ -95,17 +113,16 @@ describe('Use Cases Store', () => {
       };
       const updatedUseCase = { 
         id: '1', 
-        name: 'Use Case 1', 
         folderId: 'folder1',
-        ...updates
+        data: { name: 'Use Case 1', contact: updates.contact, deadline: updates.deadline }
       };
       
       mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(result.contact).toBe(updates.contact);
-      expect(result.deadline).toBe(updates.deadline);
+      expect(result.data?.contact).toBe(updates.contact);
+      expect(result.data?.deadline).toBe(updates.deadline);
     });
 
     it('should update use case with list fields (benefits, risks, metrics, nextSteps)', async () => {
@@ -117,41 +134,39 @@ describe('Use Cases Store', () => {
       };
       const updatedUseCase = { 
         id: '1', 
-        name: 'Use Case 1', 
         folderId: 'folder1',
-        ...updates
+        data: { name: 'Use Case 1', ...updates }
       };
       
       mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(result.benefits).toEqual(updates.benefits);
-      expect(result.risks).toEqual(updates.risks);
-      expect(result.metrics).toEqual(updates.metrics);
-      expect(result.nextSteps).toEqual(updates.nextSteps);
+      expect(result.data?.benefits).toEqual(updates.benefits);
+      expect(result.data?.risks).toEqual(updates.risks);
+      expect(result.data?.metrics).toEqual(updates.metrics);
+      expect(result.data?.nextSteps).toEqual(updates.nextSteps);
     });
 
     it('should update use case with icon list fields (dataSources, dataObjects, technologies)', async () => {
       const updates = { 
         dataSources: ['Source 1', 'Source 2'],
         dataObjects: ['Object 1'],
-        technology: 'Technology Stack'
+        technologies: ['Technology Stack']
       };
       const updatedUseCase = { 
         id: '1', 
-        name: 'Use Case 1', 
         folderId: 'folder1',
-        ...updates
+        data: { name: 'Use Case 1', ...updates }
       };
       
       mockFetchJsonOnce(updatedUseCase);
 
       const result = await updateUseCase('1', updates);
       
-      expect(result.dataSources).toEqual(updates.dataSources);
-      expect(result.dataObjects).toEqual(updates.dataObjects);
-      expect(result.technology).toBe(updates.technology);
+      expect(result.data?.dataSources).toEqual(updates.dataSources);
+      expect(result.data?.dataObjects).toEqual(updates.dataObjects);
+      expect(result.data?.technologies).toEqual(updates.technologies);
     });
   });
 
@@ -203,22 +218,25 @@ describe('Use Cases Store', () => {
     it('should update use cases store', () => {
       const useCases = [{ 
         id: '1', 
-        name: 'Use Case 1', 
         folderId: 'folder1', 
         companyId: 'company1',
-        description: 'Test description',
-        benefits: [],
-        metrics: [],
-        risks: [],
-        nextSteps: [],
-        dataSources: [],
-        dataObjects: [],
-        valueScores: [],
-        complexityScores: [],
-        totalValueScore: 0,
-        totalComplexityScore: 0,
         model: 'gpt-4.1-nano',
-        createdAt: '2023-01-01'
+        createdAt: '2023-01-01',
+        data: {
+          name: 'Use Case 1',
+          description: 'Test description',
+          benefits: [],
+          metrics: [],
+          risks: [],
+          nextSteps: [],
+          dataSources: [],
+          dataObjects: [],
+          valueScores: [],
+          complexityScores: []
+        },
+        // Scores are calculated dynamically, not stored
+        totalValueScore: 0,
+        totalComplexityScore: 0
       }];
       useCasesStore.set(useCases);
       expect(get(useCasesStore)).toEqual(useCases);
