@@ -1,10 +1,10 @@
 import { db } from '../db/client';
 import { useCases, folders, companies } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { parseJson } from '../utils/json';
 import { executeWithTools } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
+import { hydrateUseCases } from '../routes/api/use-cases';
 
 // Fonction helper pour calculer la médiane
 function calculateMedian(values: number[]): number {
@@ -64,8 +64,9 @@ export async function generateExecutiveSummary(
     throw new Error('Folder not found');
   }
 
-  // Récupérer tous les cas d'usage du dossier
-  const useCasesList = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  // Récupérer tous les cas d'usage du dossier et les hydrater
+  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  const useCasesList = await hydrateUseCases(rows);
 
   if (useCasesList.length === 0) {
     throw new Error('No use cases found for this folder');
@@ -92,11 +93,11 @@ export async function generateExecutiveSummary(
 
   // Formater les cas d'usage pour le prompt
   const useCasesFormatted = useCasesList.map((uc, index) => {
-    const benefits = parseJson<string[]>(uc.benefits) ?? [];
-    const risks = parseJson<string[]>(uc.risks) ?? [];
-    const nextSteps = parseJson<string[]>(uc.nextSteps) ?? [];
-    const metrics = parseJson<string[]>(uc.metrics) ?? [];
-    const technologies = parseJson<string[]>(uc.technologies) ?? [];
+    const benefits = uc.data.benefits ?? [];
+    const risks = uc.data.risks ?? [];
+    const nextSteps = uc.data.nextSteps ?? [];
+    const metrics = uc.data.metrics ?? [];
+    const technologies = uc.data.technologies ?? [];
 
     return `Cas d'usage ${index + 1}: ${uc.name}
 Description: ${uc.description || 'Non disponible'}
@@ -105,9 +106,9 @@ Bénéfices: ${benefits.length > 0 ? benefits.join(', ') : 'Non spécifiés'}
 Risques: ${risks.length > 0 ? risks.join(', ') : 'Non spécifiés'}
 Prochaines étapes: ${nextSteps.length > 0 ? nextSteps.join(', ') : 'Non spécifiées'}
 Métriques: ${metrics.length > 0 ? metrics.join(', ') : 'Non spécifiées'}
-Technologies: ${technologies.length > 0 ? technologies.join(', ') : (uc.technologies || 'Non spécifiées')}
-Prérequis: ${uc.prerequisites || 'Non spécifiés'}
-Contact: ${uc.contact || 'Non spécifié'}`;
+Technologies: ${technologies.length > 0 ? technologies.join(', ') : 'Non spécifiées'}
+Prérequis: ${uc.data.prerequisites || 'Non spécifiés'}
+Contact: ${uc.data.contact || 'Non spécifié'}`;
   }).join('\n\n---\n\n');
 
   // Formater les top cas

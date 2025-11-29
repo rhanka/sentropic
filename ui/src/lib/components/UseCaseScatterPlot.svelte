@@ -1687,15 +1687,21 @@
 
   // Calculer les scores pour chaque cas d'usage
   $: rawData = useCases
-    .filter(uc => uc.valueScores && uc.complexityScores && matrix)
+    .filter(uc => {
+      const valueScores = uc.data?.valueScores || uc.valueScores;
+      const complexityScores = uc.data?.complexityScores || uc.complexityScores;
+      return valueScores && complexityScores && matrix;
+    })
     .map(uc => {
-      const scores = calculateUseCaseScores(matrix!, uc.valueScores, uc.complexityScores);
+      const valueScores = uc.data?.valueScores || uc.valueScores || [];
+      const complexityScores = uc.data?.complexityScores || uc.complexityScores || [];
+      const scores = calculateUseCaseScores(matrix!, valueScores, complexityScores);
       const colorInfo = getStatusColorInfo(uc.status);
       return {
         x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
         y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
-        label: uc.name,
-        description: uc.description || '',
+        label: uc.data?.name || uc.name || 'Cas d\'usage sans nom',
+        description: uc.data?.description || uc.description || '',
         status: uc.status,
         id: uc.id,
         valueStars: scores.valueStars,      // Valeur normalisée (1-5)

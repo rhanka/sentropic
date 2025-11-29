@@ -243,7 +243,7 @@
         <!-- Header -->
         <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-blue-200 bg-blue-50 gap-2 rounded-t-lg">
           <div class="flex-1 min-w-0">
-            <h2 class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}">{useCase.name}</h2>
+            <h2 class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}">{useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}</h2>
           </div>
           <button 
             class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
@@ -258,15 +258,18 @@
         
         <!-- Body -->
         <div class="p-3 sm:p-4 pt-2 flex-1 min-h-0">
-          {#if useCase.description}
-            <p class="text-sm text-slate-600 line-clamp-2 mb-3">{useCase.description}</p>
+          {#if useCase?.data?.description || useCase?.description}
+            <p class="text-sm text-slate-600 line-clamp-2 mb-3">{useCase?.data?.description || useCase?.description || ''}</p>
           {/if}
           <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
             <div class="flex items-center gap-1 flex-wrap">
               <span class="whitespace-nowrap">Valeur:</span>
-              {#if matrix && useCase.valueScores && useCase.complexityScores}
-                {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
-                {@const valueStars = calculatedScores.valueStars}
+              {#if matrix}
+                {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
+                {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
+                {#if valueScores && complexityScores}
+                  {@const calculatedScores = calculateUseCaseScores(matrix, valueScores, complexityScores)}
+                  {@const valueStars = calculatedScores.valueStars}
                 <div class="flex items-center gap-0.5">
                   {#each Array(5) as _, i}
                     {#if i < valueStars}
@@ -280,15 +283,21 @@
                     {/if}
                   {/each}
                 </div>
+                {:else}
+                  <span class="text-gray-400">N/A</span>
+                {/if}
               {:else}
                 <span class="text-gray-400">N/A</span>
               {/if}
             </div>
             <div class="flex items-center gap-1 flex-wrap">
               <span class="whitespace-nowrap">Complexité:</span>
-              {#if matrix && useCase.valueScores && useCase.complexityScores}
-                {@const calculatedScores = calculateUseCaseScores(matrix, useCase.valueScores, useCase.complexityScores)}
-                {@const complexityStars = calculatedScores.complexityStars}
+              {#if matrix}
+                {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
+                {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
+                {#if valueScores && complexityScores}
+                  {@const calculatedScores = calculateUseCaseScores(matrix, valueScores, complexityScores)}
+                  {@const complexityStars = calculatedScores.complexityStars}
                 <div class="flex items-center gap-0.5">
                   {#each Array(5) as _, i}
                     {#if i < complexityStars}
@@ -302,6 +311,9 @@
                     {/if}
                   {/each}
                 </div>
+                {:else}
+                  <span class="text-gray-400">N/A</span>
+                {/if}
               {:else}
                 <span class="text-gray-400">N/A</span>
               {/if}

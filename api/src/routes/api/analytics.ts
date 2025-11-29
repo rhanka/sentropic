@@ -4,10 +4,9 @@ import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import { useCases, folders } from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { parseJson } from '../../utils/json';
-import type { ScoreEntry } from '../../utils/scoring';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { hydrateUseCases } from './use-cases';
 
 export const analyticsRouter = new Hono();
 
@@ -16,7 +15,8 @@ analyticsRouter.get('/summary', async (c) => {
   if (!folderId) {
     return c.json({ message: 'folder_id is required' }, 400);
   }
-  const items = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  const items = await hydrateUseCases(rows);
   const totals = items.reduce(
     (acc, item) => {
       acc.total += 1;
@@ -38,17 +38,18 @@ analyticsRouter.get('/scatter', async (c) => {
   if (!folderId) {
     return c.json({ message: 'folder_id is required' }, 400);
   }
-  const items = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+  const items = await hydrateUseCases(rows);
   const mapped = items.map((item) => ({
     id: item.id,
     name: item.name,
-    process: item.process,
+    process: item.data.process,
     value_norm: item.totalValueScore ?? 0,
     ease: item.totalComplexityScore ? 100 - item.totalComplexityScore : 0,
     original_value: item.totalValueScore ?? 0,
     original_ease: item.totalComplexityScore ?? 0,
-    value_scores: parseJson<ScoreEntry[]>(item.valueScores) ?? [],
-    complexity_scores: parseJson<ScoreEntry[]>(item.complexityScores) ?? []
+    value_scores: item.data.valueScores ?? [],
+    complexity_scores: item.data.complexityScores ?? []
   }));
   return c.json({ items: mapped });
 });

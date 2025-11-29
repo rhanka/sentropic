@@ -1,28 +1,53 @@
 import { writable } from 'svelte/store';
 
+export type UseCaseData = {
+  name: string;
+  description?: string;
+  problem?: string;
+  solution?: string;
+  process?: string;
+  domain?: string;
+  technologies?: string[];
+  prerequisites?: string;
+  deadline?: string;
+  contact?: string;
+  benefits?: string[];
+  metrics?: string[];
+  risks?: string[];
+  nextSteps?: string[];
+  dataSources?: string[];
+  dataObjects?: string[];
+  references?: Array<{title: string; url: string}>;
+  valueScores?: any[];
+  complexityScores?: any[];
+};
+
 export type UseCase = {
   id: string;
   folderId: string;
   companyId?: string;
-  name: string;
-  description: string;
+  status?: 'draft' | 'generating' | 'detailing' | 'completed';
+  model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
+  createdAt: string;
+  data: UseCaseData;
+  totalValueScore?: number | null;
+  totalComplexityScore?: number | null;
+  // Rétrocompatibilité : garder les propriétés directes pour l'ancien code
+  name?: string;
+  description?: string;
   process?: string;
   technology?: string;
   deadline?: string;
   contact?: string;
-  benefits: string[];
-  metrics: string[];
-  risks: string[];
-  nextSteps: string[];
-  dataSources: string[];
-  dataObjects: string[];
-  valueScores: any[];
-  complexityScores: any[];
-  totalValueScore: number;
-  totalComplexityScore: number;
-  model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
-  status?: 'draft' | 'generating' | 'detailing' | 'completed';
-  createdAt: string;
+  benefits?: string[];
+  metrics?: string[];
+  risks?: string[];
+  nextSteps?: string[];
+  dataSources?: string[];
+  dataObjects?: string[];
+  valueScores?: any[];
+  complexityScores?: any[];
+  references?: Array<{title: string; url: string}>;
 };
 
 export const useCasesStore = writable<UseCase[]>([]);

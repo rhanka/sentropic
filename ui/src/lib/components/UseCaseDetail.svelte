@@ -54,31 +54,45 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
     });
   };
 
-  // Fonction pour recharger le cas d'usage après sauvegarde
+  // Fonction pour recharger le cas d'usage après sauvegarde (debounced)
+  let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
   const reloadUseCase = async (useCaseId: string) => {
-    try {
-      const updated = await apiGet(`/use-cases/${useCaseId}`);
-      useCasesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
-      if (useCase?.id === useCaseId) {
-        useCase = updated;
-      }
-    } catch (error) {
-      console.error('Failed to reload use case:', error);
+    // Annuler le rechargement précédent s'il existe
+    if (reloadTimeout) {
+      clearTimeout(reloadTimeout);
     }
+    // Programmer le rechargement avec un délai de 500ms
+    reloadTimeout = setTimeout(async () => {
+      try {
+        const updated = await apiGet(`/use-cases/${useCaseId}`);
+        useCasesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
+        if (useCase?.id === useCaseId) {
+          useCase = updated;
+        }
+      } catch (error) {
+        console.error('Failed to reload use case:', error);
+      } finally {
+        reloadTimeout = null;
+      }
+    }, 500);
   };
 
-const TEXT_FIELDS = ['description', 'contact', 'deadline'] as const;
+const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'deadline'] as const;
 const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
 let textBuffers: Record<TextField, string> = {
   description: '',
+  problem: '',
+  solution: '',
   contact: '',
   deadline: '',
 };
 let textOriginals: Record<TextField, string> = {
   description: '',
+  problem: '',
+  solution: '',
   contact: '',
   deadline: '',
 };
@@ -126,26 +140,43 @@ const setScoreBuffer = (type: 'value' | 'complexity', axisId: string, value: str
 };
 
 $: if (useCase?.id) {
+  // Extraire les valeurs depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
+  const getFieldValue = (field: TextField): string => {
+    // Pour name, description, problem, solution : chercher dans data d'abord
+    if (field === 'name' || field === 'description' || field === 'problem' || field === 'solution') {
+      return useCase?.data?.[field] || useCase?.[field] || '';
+    }
+    // Pour les autres champs : chercher dans data puis dans les propriétés directes
+    return useCase?.data?.[field] || useCase?.[field] || '';
+  };
+  
   const normalizedValues = TEXT_FIELDS.reduce<Record<TextField, string>>((acc, field) => {
-    acc[field] = normalizeUseCaseMarkdown(useCase[field] || '');
+    acc[field] = normalizeUseCaseMarkdown(getFieldValue(field));
     return acc;
   }, {} as Record<TextField, string>);
   const listValues = LIST_FIELDS.reduce<Record<ListField, string[]>>((acc, field) => {
-    const source = Array.isArray(useCase[field]) ? (useCase[field] as string[]) : [];
+    // Extraire depuis data (avec fallback sur les propriétés directes)
+    const source = Array.isArray(useCase?.data?.[field]) 
+      ? (useCase.data[field] as string[]) 
+      : Array.isArray(useCase?.[field]) 
+        ? (useCase[field] as string[]) 
+        : [];
     acc[field] = [...source];
     return acc;
   }, {} as Record<ListField, string[]>);
 
-  // Initialiser les buffers de scores
+  // Initialiser les buffers de scores (extraire depuis data)
   const scoreValues: Record<string, string> = {};
-  if (useCase.valueScores && matrix) {
-    useCase.valueScores.forEach((score: any) => {
+  const valueScores = useCase?.data?.valueScores || useCase?.valueScores || [];
+  const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || [];
+  if (valueScores && matrix) {
+    valueScores.forEach((score: any) => {
       const key = `value-${score.axisId}`;
       scoreValues[key] = normalizeUseCaseMarkdown(score.description || '');
     });
   }
-  if (useCase.complexityScores && matrix) {
-    useCase.complexityScores.forEach((score: any) => {
+  if (complexityScores && matrix) {
+    complexityScores.forEach((score: any) => {
       const key = `complexity-${score.axisId}`;
       scoreValues[key] = normalizeUseCaseMarkdown(score.description || '');
     });
@@ -175,7 +206,12 @@ $: if (useCase?.id) {
     });
 
     LIST_FIELDS.forEach((field) => {
-      const incoming = useCase[field] || [];
+      // Extraire depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
+      const incoming = Array.isArray(useCase?.data?.[field]) 
+        ? (useCase.data[field] as string[]) 
+        : Array.isArray(useCase?.[field]) 
+          ? (useCase[field] as string[]) 
+          : [];
       if (JSON.stringify(incoming) !== JSON.stringify(listOriginals[field])) {
         updatedListBuffers[field] = [...incoming];
         updatedListOriginals[field] = [...incoming];
@@ -220,12 +256,14 @@ const getTextFullData = (field: TextField) => {
   if (!useCase?.id) return null;
   const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
   const cleaned = stripTrailingEmptyParagraph(normalized);
+  // Retourner directement le champ au niveau racine (buildUseCaseData construira l'objet data)
   return { [field]: cleaned };
 };
 const getListFullData = (field: ListField) => {
   if (!useCase?.id) return null;
   const markdown = arrayToMarkdown(listBuffers[field] || []);
   const cleaned = stripTrailingEmptyParagraph(markdown);
+  // Retourner directement le champ au niveau racine (buildUseCaseData construira l'objet data)
   return { [field]: markdownToArray(cleaned) };
 };
 const getScoreFullData = (type: 'value' | 'complexity', axisId: string) => {
@@ -234,8 +272,10 @@ const getScoreFullData = (type: 'value' | 'complexity', axisId: string) => {
   const normalized = normalizeUseCaseMarkdown(scoreBuffers[key] || '');
   const cleaned = stripTrailingEmptyParagraph(normalized);
   
-  // Mettre à jour le score.description dans l'array approprié
-  const scores = type === 'value' ? useCase.valueScores : useCase.complexityScores;
+  // Mettre à jour le score.description dans l'array approprié (extraire depuis data)
+  const scores = type === 'value' 
+    ? (useCase?.data?.valueScores || useCase?.valueScores || [])
+    : (useCase?.data?.complexityScores || useCase?.complexityScores || []);
   const updatedScores = (scores || []).map((score: any) => {
     if (score.axisId === axisId) {
       return { ...score, description: cleaned };
@@ -243,15 +283,35 @@ const getScoreFullData = (type: 'value' | 'complexity', axisId: string) => {
     return score;
   });
   
+  // Retourner directement le champ au niveau racine (buildUseCaseData construira l'objet data)
   return type === 'value' 
     ? { valueScores: updatedScores }
     : { complexityScores: updatedScores };
 };
 
-$: descriptionValue = textBuffers.description || '';
-$: isDescriptionLong = (descriptionValue.length || 0) > 200 || countLines(descriptionValue) > 12;
+// Critère partagé pour description, problem et solution
+$: isTextContentLong = ((textBuffers.description || '').length || 0) + Math.max(((textBuffers.problem || '').length || 0), ((textBuffers.solution || '').length || 0)) * 2 > 2000;
 
-$: descriptionFullData = getTextFullData('description');
+// Extraire les scores totaux depuis data (avec fallback)
+$: totalValueScore = useCase?.data?.totalValueScore !== undefined 
+  ? useCase.data.totalValueScore 
+  : (useCase?.totalValueScore !== undefined 
+    ? useCase.totalValueScore 
+    : (calculatedScores?.finalValueScore !== undefined ? calculatedScores.finalValueScore : null));
+
+$: totalComplexityScore = useCase?.data?.totalComplexityScore !== undefined 
+  ? useCase.data.totalComplexityScore 
+  : (useCase?.totalComplexityScore !== undefined 
+    ? useCase.totalComplexityScore 
+    : (calculatedScores?.finalComplexityScore !== undefined ? calculatedScores.finalComplexityScore : null));
+
+$: valueStars = calculatedScores?.valueStars !== undefined 
+  ? calculatedScores.valueStars 
+  : (totalValueScore !== null && totalValueScore !== undefined ? Math.round(totalValueScore / 20) : 0);
+
+$: complexityStars = calculatedScores?.complexityStars !== undefined 
+  ? calculatedScores.complexityStars 
+  : (totalComplexityScore !== null && totalComplexityScore !== undefined ? Math.round(totalComplexityScore / 20) : 0);
 
   const handleFieldSaved = async () => {
     if (!useCase?.id) return;
@@ -263,61 +323,77 @@ $: descriptionFullData = getTextFullData('description');
   };
 
   // Fonction pour obtenir le HTML de la description avec références parsées
-$: descriptionHtml = useCase?.description 
+$: descriptionHtml = (useCase?.data?.description || useCase?.description)
   ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.description)).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      useCase.references || []
+      marked(normalizeUseCaseMarkdown(useCase.data?.description || useCase.description || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+      getReferences()
+    )
+  : '';
+  
+$: problemHtml = (useCase?.data?.problem || useCase?.problem)
+  ? parseReferencesInMarkdown(
+      marked(normalizeUseCaseMarkdown(useCase.data?.problem || useCase.problem || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+      getReferences()
+    )
+  : '';
+  
+$: solutionHtml = (useCase?.data?.solution || useCase?.solution)
+  ? parseReferencesInMarkdown(
+      marked(normalizeUseCaseMarkdown(useCase.data?.solution || useCase.solution || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
+      getReferences()
     )
   : '';
 
-  // Fonctions réactives pour parser les autres champs
-  $: parsedBenefits = useCase?.benefits 
-    ? (useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, useCase.references || []))
+  // Fonctions réactives pour parser les autres champs (extraire depuis data)
+  const getReferences = () => useCase?.data?.references || useCase?.references || [];
+  
+  $: parsedBenefits = (useCase?.data?.benefits || useCase?.benefits)
+    ? (useCase.data?.benefits || useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, getReferences()))
     : [];
 
-  $: parsedMetrics = useCase?.metrics 
-    ? (useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, useCase.references || []))
+  $: parsedMetrics = (useCase?.data?.metrics || useCase?.metrics)
+    ? (useCase.data?.metrics || useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, getReferences()))
     : [];
 
-  $: parsedRisks = useCase?.risks 
-    ? (useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, useCase.references || []))
+  $: parsedRisks = (useCase?.data?.risks || useCase?.risks)
+    ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, getReferences()))
     : [];
 
-  $: parsedTechnologies = useCase?.technologies 
-    ? (useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, useCase.references || []))
+  $: parsedTechnologies = (useCase?.data?.technologies || useCase?.technologies)
+    ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, getReferences()))
     : [];
 
-  $: parsedDataSources = useCase?.dataSources 
-    ? (useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, useCase.references || []))
+  $: parsedDataSources = (useCase?.data?.dataSources || useCase?.dataSources)
+    ? (useCase.data?.dataSources || useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, getReferences()))
     : [];
 
-  $: parsedDataObjects = useCase?.dataObjects 
-    ? (useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, useCase.references || []))
+  $: parsedDataObjects = (useCase?.data?.dataObjects || useCase?.dataObjects)
+    ? (useCase.data?.dataObjects || useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, getReferences()))
     : [];
 
-  $: parsedNextSteps = useCase?.nextSteps 
-    ? (useCase.nextSteps || []).map((step: string) => parseReferencesInText(step, useCase.references || []))
+  $: parsedNextSteps = (useCase?.data?.nextSteps || useCase?.nextSteps)
+    ? (useCase.data?.nextSteps || useCase.nextSteps || []).map((step: string) => parseReferencesInText(step, getReferences()))
     : [];
 
-  // Parser les justifications des axes valeur et complexité avec buffers
-  $: parsedValueScores = useCase?.valueScores && matrix
-    ? (useCase.valueScores || []).map((score: any) => {
+  // Parser les justifications des axes valeur et complexité avec buffers (extraire depuis data)
+  $: parsedValueScores = (useCase?.data?.valueScores || useCase?.valueScores) && matrix
+    ? (useCase.data?.valueScores || useCase.valueScores || []).map((score: any) => {
         const key = `value-${score.axisId}`;
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, useCase.references || [])
+          description: renderMarkdownWithRefs(description, getReferences())
         };
       })
     : [];
 
-  $: parsedComplexityScores = useCase?.complexityScores && matrix
-    ? (useCase.complexityScores || []).map((score: any) => {
+  $: parsedComplexityScores = (useCase?.data?.complexityScores || useCase?.complexityScores) && matrix
+    ? (useCase.data?.complexityScores || useCase.complexityScores || []).map((score: any) => {
         const key = `complexity-${score.axisId}`;
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, useCase.references || [])
+          description: renderMarkdownWithRefs(description, getReferences())
         };
       })
     : [];
@@ -349,23 +425,23 @@ $: descriptionHtml = useCase?.description
 
   // Calcul des facteurs d'échelle pour réduire la taille si trop d'items
   // Références : base = 8
-  $: referencesScaleFactor = (useCase?.references && useCase.references.length > 8 && isPrinting)
-    ? 10 / useCase.references.length
+  $: referencesScaleFactor = (getReferences().length > 8 && isPrinting)
+    ? 10 / getReferences().length
     : 1;
   
   // Sources des données : base = 5
-  $: dataSourcesScaleFactor = (useCase?.dataSources && useCase.dataSources.length > 5 && isPrinting)
-    ? 5 / useCase.dataSources.length
+  $: dataSourcesScaleFactor = ((useCase?.data?.dataSources || useCase?.dataSources) && (useCase.data?.dataSources || useCase.dataSources || []).length > 5 && isPrinting)
+    ? 5 / (useCase.data?.dataSources || useCase.dataSources || []).length
     : 1;
   
   // Données : base = 5
-  $: dataObjectsScaleFactor = (useCase?.dataObjects && useCase.dataObjects.length > 5 && isPrinting)
-    ? 5 / useCase.dataObjects.length
+  $: dataObjectsScaleFactor = ((useCase?.data?.dataObjects || useCase?.dataObjects) && (useCase.data?.dataObjects || useCase.dataObjects || []).length > 5 && isPrinting)
+    ? 5 / (useCase.data?.dataObjects || useCase.dataObjects || []).length
     : 1;
   
   // Technologies : base = 7
-  $: technologiesScaleFactor = (useCase?.technologies && useCase.technologies.length > 7 && isPrinting)
-    ? 7 / useCase.technologies.length
+  $: technologiesScaleFactor = ((useCase?.data?.technologies || useCase?.technologies) && (useCase.data?.technologies || useCase.technologies || []).length > 7 && isPrinting)
+    ? 7 / (useCase.data?.technologies || useCase.technologies || []).length
     : 1;
 </script>
 
@@ -394,7 +470,7 @@ $: descriptionHtml = useCase?.description
       <div class="flex items-center gap-3">
         <div>
           <h1 class="text-3xl font-semibold">
-            {useCase.name}
+            {useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
           </h1>
         </div>
         {#if useCase.model && showActions}
@@ -413,7 +489,7 @@ $: descriptionHtml = useCase?.description
 
     <!-- Scores et Infos -->
     <div class="grid gap-6 lg:grid-cols-3 layout-head">
-      {#if calculatedScores}
+      {#if totalValueScore !== null && totalValueScore !== undefined}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
@@ -426,17 +502,19 @@ $: descriptionHtml = useCase?.description
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
               {#each Array(5) as _, i}
-                <svg class="w-6 h-6 {i < calculatedScores.valueStars ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="w-6 h-6 {i < valueStars ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
               {/each}
             </div>
             <span class="font-bold text-green-600">
-              ({calculatedScores.finalValueScore.toFixed(0)} points)
+              ({totalValueScore.toFixed(0)} points)
             </span>
           </div>
         </div>
-        
+      {/if}
+      
+      {#if totalComplexityScore !== null && totalComplexityScore !== undefined}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
@@ -449,7 +527,7 @@ $: descriptionHtml = useCase?.description
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
               {#each Array(5) as _, i}
-                {#if i < calculatedScores.complexityStars}
+                {#if i < complexityStars}
                   <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                   </svg>
@@ -461,7 +539,7 @@ $: descriptionHtml = useCase?.description
               {/each}
             </div>
             <span class="font-bold text-red-600">
-              ({calculatedScores.finalComplexityScore.toFixed(0)} points)
+              ({totalComplexityScore.toFixed(0)} points)
             </span>
           </div>
         </div>
@@ -478,8 +556,8 @@ $: descriptionHtml = useCase?.description
         </div>
         {#if isPrinting}
           <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
-            {#if useCase.deadline}
-              {@html renderMarkdownWithRefs(useCase.deadline, useCase.references || [])}
+            {#if useCase?.data?.deadline || useCase?.deadline}
+              {@html renderMarkdownWithRefs(useCase?.data?.deadline || useCase?.deadline || '', getReferences())}
             {/if}
           </div>
         {:else}
@@ -493,9 +571,9 @@ $: descriptionHtml = useCase?.description
               fullDataGetter={() => getTextFullData('deadline')}
               changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
               originalValue={textOriginals.deadline || ''}
-              references={useCase?.references || []}
-              on:change={(e) => setTextBuffer('deadline', e.detail.value)}
-              on:saved={handleFieldSaved}
+                  references={getReferences()}
+                  on:change={(e) => setTextBuffer('deadline', e.detail.value)}
+                  on:saved={handleFieldSaved}
             />
           </div>
         {/if}
@@ -516,28 +594,101 @@ $: descriptionHtml = useCase?.description
             </h3>
           </div>
           {#if isPrinting}
-            <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isDescriptionLong}>
+            <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isTextContentLong}>
               {@html descriptionHtml || ''}
             </div>
           {:else}
-            <div class="prose prose-slate max-w-none" class:description-compact-print={isDescriptionLong}>
+            <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={descriptionValue}
+                  value={textBuffers.description || ''}
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                  fullData={descriptionFullData}
+                  fullData={getTextFullData('description')}
                   fullDataGetter={() => getTextFullData('description')}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
                   originalValue={textOriginals.description || ''}
-                  references={useCase?.references || []}
+                  references={getReferences()}
                   on:change={(e) => setTextBuffer('description', e.detail.value)}
                   on:saved={handleFieldSaved}
                 />
               </div>
             </div>
           {/if}
+        </div>
+
+        <!-- Problème et Solution (2 colonnes équilibrées) -->
+        <div class="grid gap-6 lg:grid-cols-2">
+          <!-- Problème -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="bg-orange-100 text-orange-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                Problème
+              </h3>
+            </div>
+            {#if isPrinting}
+              <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isTextContentLong}>
+                {@html problemHtml || ''}
+              </div>
+            {:else}
+              <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
+                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                  <EditableInput
+                    label=""
+                    value={textBuffers.problem || ''}
+                    markdown={true}
+                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    fullData={getTextFullData('problem')}
+                    fullDataGetter={() => getTextFullData('problem')}
+                    changeId={useCase?.id ? `usecase-problem-${useCase.id}` : ''}
+                    originalValue={textOriginals.problem || ''}
+                    references={getReferences()}
+                    on:change={(e) => setTextBuffer('problem', e.detail.value)}
+                    on:saved={handleFieldSaved}
+                  />
+                </div>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Solution -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+                Solution
+              </h3>
+            </div>
+            {#if isPrinting}
+              <div class="text-slate-600 text-base leading-relaxed prose max-w-none" class:description-compact-print={isTextContentLong}>
+                {@html solutionHtml || ''}
+              </div>
+            {:else}
+              <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
+                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                  <EditableInput
+                    label=""
+                    value={textBuffers.solution || ''}
+                    markdown={true}
+                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    fullData={getTextFullData('solution')}
+                    fullDataGetter={() => getTextFullData('solution')}
+                    changeId={useCase?.id ? `usecase-solution-${useCase.id}` : ''}
+                    originalValue={textOriginals.solution || ''}
+                    references={getReferences()}
+                    on:change={(e) => setTextBuffer('solution', e.detail.value)}
+                    on:saved={handleFieldSaved}
+                  />
+                </div>
+              </div>
+            {/if}
+          </div>
         </div>
 
         <!-- Autes (COL A, chacun 1/3 de page) -->
@@ -574,7 +725,7 @@ $: descriptionHtml = useCase?.description
                   fullDataGetter={() => getListFullData('benefits')}
                   changeId={useCase?.id ? `usecase-benefits-${useCase.id}` : ''}
                   originalValue={arrayToMarkdown(listOriginals.benefits) || ''}
-                  references={useCase?.references || []}
+                  references={getReferences()}
                   on:change={(e) => setListBuffer('benefits', markdownToArray(e.detail.value))}
                   on:saved={handleFieldSaved}
                 />
@@ -615,7 +766,7 @@ $: descriptionHtml = useCase?.description
                     fullDataGetter={() => getListFullData('risks')}
                     changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.risks) || ''}
-                    references={useCase?.references || []}
+                    references={getReferences()}
                     on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
                     on:saved={handleFieldSaved}
                   />
@@ -654,7 +805,7 @@ $: descriptionHtml = useCase?.description
                     fullDataGetter={() => getListFullData('metrics')}
                     changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
-                    references={useCase?.references || []}
+                    references={getReferences()}
                     on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
                     on:saved={handleFieldSaved}
                   />
@@ -682,7 +833,7 @@ $: descriptionHtml = useCase?.description
             <span class="font-medium text-slate-700 mt-1">Contact:</span>
             {#if isPrinting}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
-                {@html useCase.contact ? renderMarkdownWithRefs(useCase.contact, useCase.references || []) : ''}
+                {@html (useCase?.data?.contact || useCase?.contact) ? renderMarkdownWithRefs(useCase?.data?.contact || useCase?.contact || '', getReferences()) : ''}
               </div>
             {:else}
               <span class="flex-1 text-slate-600 text-sm">
@@ -695,7 +846,7 @@ $: descriptionHtml = useCase?.description
                   fullDataGetter={() => getTextFullData('contact')}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
                   originalValue={textOriginals.contact || ''}
-                  references={useCase?.references || []}
+                  references={getReferences()}
                   on:change={(e) => setTextBuffer('contact', e.detail.value)}
               on:saved={handleFieldSaved}
                 />
@@ -707,7 +858,7 @@ $: descriptionHtml = useCase?.description
       </div>
 
       <!-- Technologies -->
-      {#if useCase.technologies && useCase.technologies.length > 0}
+      {#if (useCase?.data?.technologies || useCase?.technologies) && (useCase?.data?.technologies || useCase?.technologies || []).length > 0}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
             <h3 class="font-semibold flex items-center gap-2">
@@ -741,7 +892,7 @@ $: descriptionHtml = useCase?.description
                 fullDataGetter={() => getListFullData('technologies')}
                 changeId={useCase?.id ? `usecase-technologies-${useCase.id}` : ''}
                 originalValue={arrayToMarkdown(listOriginals.technologies) || ''}
-                references={useCase?.references || []}
+                references={getReferences()}
                 on:change={(e) => setListBuffer('technologies', markdownToArray(e.detail.value))}
                 on:saved={handleFieldSaved}
               />
@@ -792,7 +943,7 @@ $: descriptionHtml = useCase?.description
               fullDataGetter={() => getListFullData('dataSources')}
               changeId={useCase?.id ? `usecase-dataSources-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataSources) || ''}
-              references={useCase?.references || []}
+              references={getReferences()}
               on:change={(e) => setListBuffer('dataSources', markdownToArray(e.detail.value))}
               on:saved={handleFieldSaved}
             />
@@ -842,7 +993,7 @@ $: descriptionHtml = useCase?.description
               fullDataGetter={() => getListFullData('dataObjects')}
               changeId={useCase?.id ? `usecase-dataObjects-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataObjects) || ''}
-              references={useCase?.references || []}
+              references={getReferences()}
               on:change={(e) => setListBuffer('dataObjects', markdownToArray(e.detail.value))}
               on:saved={handleFieldSaved}
             />
@@ -885,7 +1036,7 @@ $: descriptionHtml = useCase?.description
             fullDataGetter={() => getListFullData('nextSteps')}
             changeId={useCase?.id ? `usecase-nextSteps-${useCase.id}` : ''}
             originalValue={arrayToMarkdown(listOriginals.nextSteps) || ''}
-            references={useCase?.references || []}
+            references={getReferences()}
             on:change={(e) => setListBuffer('nextSteps', markdownToArray(e.detail.value))}
             on:saved={handleFieldSaved}
           />
@@ -894,18 +1045,18 @@ $: descriptionHtml = useCase?.description
     </div>
 
     <!-- Références (désormais en 1/3, sous Données) -->
-    {#if !isEditing && (useCase.references && useCase.references.length > 0)}
+    {#if !isEditing && getReferences().length > 0}
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">
             Références
           </h3>
         </div>
-        <References references={useCase.references || []} {referencesScaleFactor} />
+        <References references={getReferences()} {referencesScaleFactor} />
       </div>
     {/if}
 
-    {#if matrix && useCase.valueScores && useCase.complexityScores && !isEditing}
+    {#if matrix && (useCase?.data?.valueScores || useCase?.valueScores) && (useCase?.data?.complexityScores || useCase?.complexityScores) && !isEditing}
       <!-- Axes de Valeur -->
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
@@ -918,7 +1069,8 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.valueAxes as axis}
-            {@const score = useCase.valueScores?.find((s: any) => s.axisId === axis.id)}
+            {@const allValueScores = useCase?.data?.valueScores || useCase?.valueScores || []}
+            {@const score = allValueScores.find((s: any) => s.axisId === axis.id)}
             {@const parsedScore = parsedValueScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
@@ -951,7 +1103,7 @@ $: descriptionHtml = useCase?.description
                       fullDataGetter={() => getScoreFullData('value', axis.id)}
                       changeId={useCase?.id ? `usecase-valueScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
-                      references={useCase?.references || []}
+                      references={getReferences()}
                       on:change={(e) => setScoreBuffer('value', axis.id, e.detail.value)}
                       on:saved={handleScoreSaved}
                     />
@@ -975,7 +1127,8 @@ $: descriptionHtml = useCase?.description
         </div>
         <div class="space-y-4">
           {#each matrix.complexityAxes as axis}
-            {@const score = useCase.complexityScores?.find((s: any) => s.axisId === axis.id)}
+            {@const allComplexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || []}
+            {@const score = allComplexityScores.find((s: any) => s.axisId === axis.id)}
             {@const parsedScore = parsedComplexityScores.find((s) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
@@ -1014,7 +1167,7 @@ $: descriptionHtml = useCase?.description
                       fullDataGetter={() => getScoreFullData('complexity', axis.id)}
                       changeId={useCase?.id ? `usecase-complexityScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
-                      references={useCase?.references || []}
+                      references={getReferences()}
                       on:change={(e) => setScoreBuffer('complexity', axis.id, e.detail.value)}
                       on:saved={handleScoreSaved}
                     />

@@ -4,7 +4,9 @@ import type { MatrixConfig } from '../types/matrix';
 
 export interface UseCaseListItem {
   titre: string;
-  description: string;
+  description: string; // 30-60 caractères (description courte)
+  problem?: string; // 40-80 caractères (nouveau champ)
+  solution?: string; // 40-80 caractères (nouveau champ)
   ref: string;
 }
 
@@ -15,7 +17,9 @@ export interface UseCaseList {
 
 export interface UseCaseDetail {
   name: string;
-  description: string;
+  description: string; // 30-60 caractères (description courte)
+  problem?: string; // 40-80 caractères (nouveau champ)
+  solution?: string; // 40-80 caractères (nouveau champ)
   domain: string;
   technologies: string[];
   leadtime: string;

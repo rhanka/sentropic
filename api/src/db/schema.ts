@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const companies = pgTable('companies', {
@@ -28,33 +28,21 @@ export const folders = pgTable('folders', {
 });
 
 export const useCases = pgTable('use_cases', {
+  // === GESTION D'ÉTAT ===
   id: text('id').primaryKey(),
   folderId: text('folder_id')
     .notNull()
     .references(() => folders.id, { onDelete: 'cascade' }),
   companyId: text('company_id').references(() => companies.id),
-  name: text('name').notNull(),
-  description: text('description'),
-  process: text('process'),
-  domain: text('domain'),
-  technologies: text('technologies'),
-  prerequisites: text('prerequisites'),
-  deadline: text('deadline'),
-  contact: text('contact'),
-  benefits: text('benefits'),
-  metrics: text('metrics'),
-  risks: text('risks'),
-  nextSteps: text('next_steps'),
-  dataSources: text('data_sources'),
-  dataObjects: text('data_objects'),
-  references: text('references'),
-  valueScores: text('value_scores'),
-  complexityScores: text('complexity_scores'),
-  totalValueScore: integer('total_value_score'),
-  totalComplexityScore: integer('total_complexity_score'),
-  model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+  model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  
+  // === DONNÉES MÉTIER (tout dans JSONB, y compris name, description, et toutes les autres colonnes métier) ===
+  // Toutes les colonnes métier (name, description, process, domain, technologies, etc.) ont été migrées vers data JSONB
+  // et supprimées de la table (migration 0008)
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`)
+  // Note: totalValueScore et totalComplexityScore supprimés (champs calculés dynamiquement)
 });
 
 export const settings = pgTable('settings', {

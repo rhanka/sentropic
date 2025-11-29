@@ -98,7 +98,7 @@
     // Les cas d'usage après le 23ème ont déjà leur page incrémentée via pageOffset
     // Donc pas besoin d'ajustement supplémentaire ici
     return {
-      name: uc.name || uc.titre || uc.nom || 'Cas d\'usage',
+      name: uc.data?.name || uc.name || uc.titre || uc.nom || 'Cas d\'usage',
       page: basePage,
       id: uc.id,
       is24thOrLater: index >= 23
@@ -395,11 +395,19 @@
   // Calculer les scores pour tous les usecases du dossier
   $: useCaseScoresMap = new Map(
     filteredUseCases
-      .filter(uc => uc.valueScores && uc.complexityScores && matrix)
-      .map(uc => [
-        uc.id,
-        calculateUseCaseScores(matrix!, uc.valueScores!, uc.complexityScores!)
-      ])
+      .filter(uc => {
+        const valueScores = uc.data?.valueScores || uc.valueScores;
+        const complexityScores = uc.data?.complexityScores || uc.complexityScores;
+        return valueScores && complexityScores && matrix;
+      })
+      .map(uc => {
+        const valueScores = uc.data?.valueScores || uc.valueScores || [];
+        const complexityScores = uc.data?.complexityScores || uc.complexityScores || [];
+        return [
+          uc.id,
+          calculateUseCaseScores(matrix!, valueScores, complexityScores)
+        ];
+      })
   );
 
   // Rafraîchir automatiquement le folder si la synthèse est en cours de génération
@@ -967,7 +975,7 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase.name || useCase.titre || useCase.nom || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || (useCase as any)?.titre || (useCase as any)?.nom || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}

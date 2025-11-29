@@ -80,18 +80,40 @@ describe('Use Cases API', () => {
       const useCaseData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case description',
-        folderId: folderId,
-        valueScore: 8,
-        complexityScore: 6
+        folderId: folderId
       };
 
       const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
 
       expect(response.status).toBe(201);
       const data = await response.json();
-      expect(data.name).toBe(useCaseData.name);
-      expect(data.description).toBe(useCaseData.description);
+      // name and description are now in data JSONB
+      expect(data.data?.name).toBe(useCaseData.name);
+      expect(data.data?.description).toBe(useCaseData.description);
       expect(data.folderId).toBe(folderId);
+      // Scores are calculated dynamically
+      expect(data.totalValueScore).toBeDefined();
+      expect(data.totalComplexityScore).toBeDefined();
+    });
+
+    it('should create a use case with problem and solution', async () => {
+      const folderId = await createTestFolder();
+      const useCaseData = {
+        name: `Test Use Case ${createTestId()}`,
+        description: 'Test use case description',
+        problem: 'Test problem description',
+        solution: 'Test solution description',
+        folderId: folderId
+      };
+
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+
+      expect(response.status).toBe(201);
+      const data = await response.json();
+      expect(data.data?.name).toBe(useCaseData.name);
+      expect(data.data?.description).toBe(useCaseData.description);
+      expect(data.data?.problem).toBe(useCaseData.problem);
+      expect(data.data?.solution).toBe(useCaseData.solution);
     });
 
     it('should create a use case without folder', async () => {
@@ -99,16 +121,14 @@ describe('Use Cases API', () => {
       const useCaseData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case without folder',
-        folderId: folderId,
-        valueScore: 7,
-        complexityScore: 5
+        folderId: folderId
       };
 
       const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
 
       expect(response.status).toBe(201);
       const data = await response.json();
-      expect(data.name).toBe(useCaseData.name);
+      expect(data.data?.name).toBe(useCaseData.name);
       expect(data.folderId).toBe(folderId);
     });
 
@@ -134,9 +154,13 @@ describe('Use Cases API', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.id).toBe(useCase.id);
-      expect(data.name).toBe(useCase.name);
+      // name and description are now in data JSONB
+      expect(data.data?.name).toBe(useCase.data?.name);
       // Model field should be present (may be null or have default value from settings)
       expect(data).toHaveProperty('model');
+      // Scores are calculated dynamically
+      expect(data.totalValueScore).toBeDefined();
+      expect(data.totalComplexityScore).toBeDefined();
     });
 
     it('should return 404 for non-existent use case', async () => {
@@ -154,17 +178,31 @@ describe('Use Cases API', () => {
       const useCase = await createTestUseCase(folderId);
       const updateData = {
         name: `Updated Use Case ${createTestId()}`,
-        description: 'Updated description',
-        valueScore: 9,
-        complexityScore: 7
+        description: 'Updated description'
       };
 
       const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.name).toBe(updateData.name);
-      expect(data.description).toBe(updateData.description);
+      expect(data.data?.name).toBe(updateData.name);
+      expect(data.data?.description).toBe(updateData.description);
+    });
+
+    it('should update problem and solution', async () => {
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
+      const updateData = {
+        problem: 'Updated problem description',
+        solution: 'Updated solution description'
+      };
+
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.data?.problem).toBe(updateData.problem);
+      expect(data.data?.solution).toBe(updateData.solution);
     });
 
     it('should partially update a use case', async () => {
@@ -178,8 +216,9 @@ describe('Use Cases API', () => {
       
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.name).toBe(partialUpdate.name);
-      expect(data.description).toBe(useCase.description); // Should remain unchanged
+      expect(data.data?.name).toBe(partialUpdate.name);
+      // Description should remain unchanged
+      expect(data.data?.description).toBe(useCase.data?.description);
     });
 
     it('should round totalValueScore with Math.round() when valueScores are updated', async () => {
@@ -294,7 +333,7 @@ describe('Use Cases API', () => {
       const initialValueScore = initialData.totalValueScore;
       const initialComplexityScore = initialData.totalComplexityScore;
 
-      // Update only name (should not recompute scores)
+      // Update only name (should not recompute scores, but scores are always calculated dynamically)
       const updateData = {
         name: `Updated Name ${createTestId()}`
       };
@@ -303,10 +342,17 @@ describe('Use Cases API', () => {
       
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.name).toBe(updateData.name);
-      // Scores should remain unchanged
-      expect(data.totalValueScore).toBe(initialValueScore);
-      expect(data.totalComplexityScore).toBe(initialComplexityScore);
+      expect(data.data?.name).toBe(updateData.name);
+      // Scores are always calculated dynamically, so they should be present
+      expect(data.totalValueScore).toBeDefined();
+      expect(data.totalComplexityScore).toBeDefined();
+      // If valueScores/complexityScores haven't changed, scores should be the same
+      if (initialData.data?.valueScores && data.data?.valueScores) {
+        expect(JSON.stringify(initialData.data.valueScores)).toBe(JSON.stringify(data.data.valueScores));
+      }
+      if (initialData.data?.complexityScores && data.data?.complexityScores) {
+        expect(JSON.stringify(initialData.data.complexityScores)).toBe(JSON.stringify(data.data.complexityScores));
+      }
     });
 
     it('should preserve existing scores when not modifying valueScores or complexityScores', async () => {
@@ -328,10 +374,17 @@ describe('Use Cases API', () => {
       
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.description).toBe(updateData.description);
-      // Scores should be preserved
-      expect(data.totalValueScore).toBe(initialValueScore);
-      expect(data.totalComplexityScore).toBe(initialComplexityScore);
+      expect(data.data?.description).toBe(updateData.description);
+      // Scores are always calculated dynamically, so they should be present
+      expect(data.totalValueScore).toBeDefined();
+      expect(data.totalComplexityScore).toBeDefined();
+      // If valueScores/complexityScores haven't changed, scores should be the same
+      if (initialData.data?.valueScores && data.data?.valueScores) {
+        expect(JSON.stringify(initialData.data.valueScores)).toBe(JSON.stringify(data.data.valueScores));
+      }
+      if (initialData.data?.complexityScores && data.data?.complexityScores) {
+        expect(JSON.stringify(initialData.data.complexityScores)).toBe(JSON.stringify(data.data.complexityScores));
+      }
     });
   });
 

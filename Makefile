@@ -583,6 +583,14 @@ db-seed:
 db-seed-test: ## Seed database with test data for E2E tests
 	$(DOCKER_COMPOSE) exec api sh -lc "node dist/tests/utils/seed-test-data.js"
 
+.PHONY: db-migrate-data
+db-migrate-data: ## Migrate use_cases data to JSONB data field
+	$(COMPOSE_RUN_API) npm run db:migrate-data
+
+.PHONY: db-create-indexes
+db-create-indexes: ## Create recommended indexes for use_cases table
+	$(COMPOSE_RUN_API) npm run db:create-indexes
+
 .PHONY: db-lint
 db-lint:
 	@echo "Database lint placeholder" && exit 0

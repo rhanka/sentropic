@@ -1,14 +1,12 @@
 #!/usr/bin/env tsx
 
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { runMigrations } from '../db/run-migrations';
 import { pool } from '../db/client';
-import { drizzle } from 'drizzle-orm/node-postgres';
 
-async function runMigrations() {
+async function main() {
   console.log('🔄 Running Postgres migrations with drizzle...');
   try {
-    const db = drizzle(pool);
-    await migrate(db, { migrationsFolder: 'drizzle' });
+    await runMigrations();
     console.log('✅ Migrations applied');
   } catch (error) {
     console.error('❌ Error running migrations:', error);
@@ -18,4 +16,4 @@ async function runMigrations() {
   }
 }
 
-runMigrations();
+main();

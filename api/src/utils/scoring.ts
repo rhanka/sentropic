@@ -1,10 +1,8 @@
 import type { MatrixConfig } from '../types/matrix';
+import type { ScoreEntry, UseCase, UseCaseData } from '../types/usecase';
 
-export type ScoreEntry = {
-  axisId: string;
-  rating: number;
-  description: string;
-};
+// Re-export for backward compatibility
+export type { ScoreEntry } from '../types/usecase';
 
 const maxPossibleScore = (axes: { weight: number }[]) => {
   // Score maximum basé sur le poids des axes (rating max = 10)
@@ -16,17 +14,29 @@ export const calculateScores = (
   valueScores: ScoreEntry[],
   complexityScores: ScoreEntry[]
 ) => {
-  const totalValueScore = valueScores.reduce((acc, entry) => {
+  // Calculer la moyenne pondérée (mean) pour valeur
+  let totalWeightedValueScore = 0;
+  let totalValueWeight = 0;
+  for (const entry of valueScores) {
     const axis = matrix.valueAxes.find((axisItem) => axisItem.id === entry.axisId);
-    if (!axis) return acc;
-    return acc + entry.rating * axis.weight;
-  }, 0);
+    if (axis) {
+      totalWeightedValueScore += entry.rating * axis.weight;
+      totalValueWeight += axis.weight;
+    }
+  }
+  const totalValueScore = totalValueWeight > 0 ? Math.round(totalWeightedValueScore / totalValueWeight) : 0;
 
-  const totalComplexityScore = complexityScores.reduce((acc, entry) => {
+  // Calculer la moyenne pondérée (mean) pour complexité
+  let totalWeightedComplexityScore = 0;
+  let totalComplexityWeight = 0;
+  for (const entry of complexityScores) {
     const axis = matrix.complexityAxes.find((axisItem) => axisItem.id === entry.axisId);
-    if (!axis) return acc;
-    return acc + entry.rating * axis.weight;
-  }, 0);
+    if (axis) {
+      totalWeightedComplexityScore += entry.rating * axis.weight;
+      totalComplexityWeight += axis.weight;
+    }
+  }
+  const totalComplexityScore = totalComplexityWeight > 0 ? Math.round(totalWeightedComplexityScore / totalComplexityWeight) : 0;
 
   const maxValue = maxPossibleScore(matrix.valueAxes);
   const maxComplexity = maxPossibleScore(matrix.complexityAxes);
@@ -37,10 +47,40 @@ export const calculateScores = (
   return {
     totalValueScore,
     totalComplexityScore,
-    valueLevel: Math.round(totalValueScore / maxValue * 10), // Niveau basé sur le pourcentage
-    complexityLevel: Math.round(totalComplexityScore / maxComplexity * 10), // Niveau basé sur le pourcentage
+    valueLevel: maxValue === 0 ? 0 : Math.round(totalValueScore / maxValue * 10), // Niveau basé sur le pourcentage
+    complexityLevel: maxComplexity === 0 ? 0 : Math.round(totalComplexityScore / maxComplexity * 10), // Niveau basé sur le pourcentage
     valueNorm,
     complexityNorm,
     ease: 100 - complexityNorm
   };
+};
+
+/**
+ * Calcule les scores totaux pour un cas d'usage à partir de sa matrice et de ses scores détaillés
+ * Cette fonction remplace l'ancien stockage de totalValueScore et totalComplexityScore
+ * 
+ * @param matrix - Configuration de la matrice de notation
+ * @param useCaseData - Données du cas d'usage (data JSONB)
+ * @returns Scores calculés (totalValueScore, totalComplexityScore, etc.) ou null si pas de matrice
+ */
+export const calculateUseCaseScores = (
+  matrix: MatrixConfig | null,
+  useCaseData: UseCaseData
+): {
+  totalValueScore: number | null;
+  totalComplexityScore: number | null;
+  valueNorm: number;
+  complexityNorm: number;
+  valueLevel: number;
+  complexityLevel: number;
+  ease: number;
+} | null => {
+  if (!matrix) {
+    return null;
+  }
+
+  const valueScores = useCaseData.valueScores ?? [];
+  const complexityScores = useCaseData.complexityScores ?? [];
+  
+  return calculateScores(matrix, valueScores, complexityScores);
 };

@@ -29,22 +29,24 @@ describe('Executive Summary Generation - AI', () => {
       status: 'completed',
     });
 
-    // Create use cases with scores
+    // Create use cases with scores (scores calculés dynamiquement, pas stockés)
     const useCasesData = [
-      { name: 'High Value Low Complexity', totalValueScore: 80, totalComplexityScore: 20 },
-      { name: 'High Value High Complexity', totalValueScore: 75, totalComplexityScore: 70 },
-      { name: 'Low Value Low Complexity', totalValueScore: 30, totalComplexityScore: 25 },
-      { name: 'Low Value High Complexity', totalValueScore: 25, totalComplexityScore: 75 },
+      { name: 'High Value Low Complexity', valueScores: [{ axisId: 'value1', rating: 80, description: 'High value' }], complexityScores: [{ axisId: 'complexity1', rating: 20, description: 'Low complexity' }] },
+      { name: 'High Value High Complexity', valueScores: [{ axisId: 'value1', rating: 75, description: 'High value' }], complexityScores: [{ axisId: 'complexity1', rating: 70, description: 'High complexity' }] },
+      { name: 'Low Value Low Complexity', valueScores: [{ axisId: 'value1', rating: 30, description: 'Low value' }], complexityScores: [{ axisId: 'complexity1', rating: 25, description: 'Low complexity' }] },
+      { name: 'Low Value High Complexity', valueScores: [{ axisId: 'value1', rating: 25, description: 'Low value' }], complexityScores: [{ axisId: 'complexity1', rating: 75, description: 'High complexity' }] },
     ];
 
     for (const uc of useCasesData) {
       await db.insert(useCases).values({
         id: createTestId(),
         folderId,
-        name: uc.name,
-        description: `Description for ${uc.name}`,
-        totalValueScore: uc.totalValueScore,
-        totalComplexityScore: uc.totalComplexityScore,
+        data: {
+          name: uc.name,
+          description: `Description for ${uc.name}`,
+          valueScores: uc.valueScores,
+          complexityScores: uc.complexityScores
+        } as any,
         status: 'completed',
       });
     }

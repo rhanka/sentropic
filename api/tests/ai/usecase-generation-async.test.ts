@@ -197,10 +197,14 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Verify the first completed use case
     const firstCompleted = completedUseCases[0];
     expect(firstCompleted.companyId).toBe(createdCompanyId);
-    expect(firstCompleted.name).toBeDefined();
-    expect(firstCompleted.description).toBeDefined();
-    expect(firstCompleted.valueScores).toBeDefined();
-    expect(firstCompleted.complexityScores).toBeDefined();
+    // name and description are now in data JSONB
+    expect(firstCompleted.data?.name).toBeDefined();
+    expect(firstCompleted.data?.description).toBeDefined();
+    expect(firstCompleted.data?.valueScores).toBeDefined();
+    expect(firstCompleted.data?.complexityScores).toBeDefined();
+    // Scores are calculated dynamically
+    expect(firstCompleted.totalValueScore).toBeDefined();
+    expect(firstCompleted.totalComplexityScore).toBeDefined();
     // Model field should be present and match the model used for generation
     expect(firstCompleted.model).toBeDefined();
     expect(firstCompleted.model).toBe(getTestModel());

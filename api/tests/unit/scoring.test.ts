@@ -25,18 +25,18 @@ describe('Scoring Utils', () => {
   ];
 
   describe('calculateScores', () => {
-    it('should calculate scores correctly with valid inputs', () => {
+    it('should calculate scores correctly with valid inputs (weighted mean)', () => {
       const result = calculateScores(mockMatrix, mockValueScores, mockComplexityScores);
 
-      // Value calculation: (5 * 0.3) + (8 * 0.7) = 1.5 + 5.6 = 7.1
-      expect(result.totalValueScore).toBe(7.1);
+      // Value calculation (weighted mean): ((5 * 0.3) + (8 * 0.7)) / (0.3 + 0.7) = 7.1 / 1.0 = 7.1 -> 7 (rounded)
+      expect(result.totalValueScore).toBe(7);
       
-      // Complexity calculation: (3 * 0.4) + (13 * 0.6) = 1.2 + 7.8 = 9.0
-      expect(result.totalComplexityScore).toBe(9.0);
+      // Complexity calculation (weighted mean): ((3 * 0.4) + (13 * 0.6)) / (0.4 + 0.6) = 9.0 / 1.0 = 9.0 -> 9 (rounded)
+      expect(result.totalComplexityScore).toBe(9);
       
       // Max values: (10 * 0.3) + (10 * 0.7) = 10, (10 * 0.4) + (10 * 0.6) = 10
-      expect(result.valueNorm).toBe(71); // 7.1/10 * 100 = 71
-      expect(result.complexityNorm).toBe(90); // 9.0/10 * 100 = 90
+      expect(result.valueNorm).toBe(70); // 7/10 * 100 = 70
+      expect(result.complexityNorm).toBe(90); // 9/10 * 100 = 90
       expect(result.ease).toBe(10); // 100 - 90 = 10
     });
 
@@ -58,9 +58,9 @@ describe('Scoring Utils', () => {
 
       const result = calculateScores(mockMatrix, incompleteValueScores, mockComplexityScores);
 
-      // Only value1 should be calculated: 5 * 0.3 = 1.5
-      expect(result.totalValueScore).toBe(1.5);
-      expect(result.totalComplexityScore).toBe(9.0);
+      // Only value1 should be calculated (weighted mean): (5 * 0.3) / 0.3 = 5.0 -> 5 (rounded)
+      expect(result.totalValueScore).toBe(5);
+      expect(result.totalComplexityScore).toBe(9);
     });
 
     it('should handle invalid axis IDs', () => {
@@ -78,10 +78,10 @@ describe('Scoring Utils', () => {
     it('should calculate levels correctly', () => {
       const result = calculateScores(mockMatrix, mockValueScores, mockComplexityScores);
 
-      // valueLevel: 7.1/10 * 10 = 7.1 -> 7
+      // valueLevel: 7/10 * 10 = 7.0 -> 7
       expect(result.valueLevel).toBe(7);
       
-      // complexityLevel: 9.0/10 * 10 = 9.0 -> 9
+      // complexityLevel: 9/10 * 10 = 9.0 -> 9
       expect(result.complexityLevel).toBe(9);
     });
 
