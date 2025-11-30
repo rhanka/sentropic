@@ -52,7 +52,15 @@ function getMailTransporter(): nodemailer.Transporter | null {
   }
 
   try {
-    const transporterConfig: any = {
+    const transporterConfig: {
+      host: string;
+      port: number;
+      secure: boolean;
+      requireTLS: boolean;
+      ignoreTLS: boolean;
+      tls?: { rejectUnauthorized: boolean };
+      auth?: { user: string; pass: string };
+    } = {
       host: env.MAIL_HOST,
       port: env.MAIL_PORT,
       secure: env.MAIL_SECURE, // Use env var (false for maildev, true for production)
@@ -183,12 +191,14 @@ export async function generateEmailVerificationCode(
       await transporter.sendMail(mailOptions);
 
       logger.info({ email: normalizedEmail }, 'Email verification code sent');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorDetails = error instanceof Error 
+        ? { errorCode: (error as { code?: string }).code, errorMessage: error.message }
+        : { errorCode: undefined, errorMessage: String(error) };
       logger.error({ 
         err: error, 
         email: normalizedEmail,
-        errorCode: error.code,
-        errorMessage: error.message,
+        ...errorDetails,
         host: env.MAIL_HOST,
         port: env.MAIL_PORT
       }, 'Failed to send email verification code');
