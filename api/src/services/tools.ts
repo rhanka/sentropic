@@ -13,6 +13,15 @@ export interface SearchResult {
   score: number;
 }
 
+interface TavilySearchResponse {
+  results?: SearchResult[];
+}
+
+interface TavilyExtractResponse {
+  markdown?: string;
+  content?: string;
+}
+
 export const searchWeb = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
   console.log(`🔍 Tavily search called with query: "${query}"`);
   if (signal?.aborted) {
@@ -29,9 +38,9 @@ export const searchWeb = async (query: string, signal?: AbortSignal): Promise<Se
       max_results: 10
     }),
     signal
-  } as any);
+  });
   
-  const data = await resp.json() as any;
+  const data = (await resp.json()) as TavilySearchResponse;
   console.log(`✅ Tavily returned ${data.results?.length || 0} results`);
   return data.results || [];
 }; 
@@ -61,9 +70,9 @@ export const extractUrlContent = async (
       extract_depth: "advanced" // "basic" | "advanced"
     }),
     signal
-  } as any);
+  });
 
-  const data = await resp.json() as any;
+  const data = (await resp.json()) as TavilyExtractResponse;
 
   return {
     url,
@@ -167,8 +176,8 @@ export const executeWithTools = async (
   const message = response.choices[0]?.message;
 
   if (message?.tool_calls) {
-    const allSearchResults: any[] = [];
-    const allExtractResults: any[] = [];
+    const allSearchResults: SearchResult[] = [];
+    const allExtractResults: ExtractResult[] = [];
 
     // Exécuter toutes les recherches et extractions demandées
     for (const toolCall of message.tool_calls) {
