@@ -70,7 +70,7 @@ export async function generateWebAuthnAuthenticationOptions(
       .limit(1);
     
     if (user) {
-      userVerification = getUserVerificationRequirement(user.role as any);
+      userVerification = getUserVerificationRequirement(user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest');
     }
   }
   
