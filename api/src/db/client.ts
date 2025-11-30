@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import type { SQL } from 'drizzle-orm';
 import { env } from '../config/env';
 
 // Expect DATABASE_URL like: postgres://user:pass@host:5432/db[?ssl=true&options=databaseid%3D<id>]
@@ -38,28 +39,33 @@ const pgDb = drizzle(pool);
 
 // Backward-compat helpers: provide .all/.run used in existing code paths
 // Map to drizzle execute() which returns rows array for raw SQL
-const compatDb: typeof pgDb & { all?: any; run?: any; get?: any } = pgDb as any;
-compatDb.all = async (query: any) => {
+type CompatDbMethods = {
+  all: (query: SQL) => Promise<unknown[]>;
+  run: (query: SQL) => Promise<unknown>;
+  get: (query: SQL) => Promise<unknown | undefined>;
+};
+
+type CompatDb = typeof pgDb & CompatDbMethods;
+
+const compatDb = pgDb as CompatDb;
+compatDb.all = async (query: SQL): Promise<unknown[]> => {
   // drizzle sql`` returns a Query; execute returns { rows }
-  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
-  const res: any = await pgDb.execute(query);
-  if (res && Array.isArray(res.rows)) return res.rows;
+  const res: { rows?: unknown[] } | unknown[] = await pgDb.execute(query);
+  if (res && typeof res === 'object' && 'rows' in res && Array.isArray(res.rows)) return res.rows;
   if (Array.isArray(res)) return res;
   return [];
 };
-compatDb.run = async (query: any) => {
+compatDb.run = async (query: SQL): Promise<unknown> => {
   // For non-select, still execute; caller usually ignores return structure
-  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
   return await pgDb.execute(query);
 };
 
-compatDb.get = async (query: any) => {
+compatDb.get = async (query: SQL): Promise<unknown | undefined> => {
   // Execute and return first row or undefined
-  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
-  const res: any = await pgDb.execute(query);
+  const res: { rows?: unknown[] } | unknown[] = await pgDb.execute(query);
   // drizzle execute on node-postgres returns { rows }
-  if (res && Array.isArray((res as any).rows)) {
-    return (res as any).rows[0];
+  if (res && typeof res === 'object' && 'rows' in res && Array.isArray(res.rows)) {
+    return res.rows[0];
   }
   // Some cases (our all shim) might return an array directly
   if (Array.isArray(res)) return res[0];
