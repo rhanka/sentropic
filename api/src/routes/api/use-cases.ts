@@ -10,7 +10,7 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateUseCaseScores, type ScoreEntry } from '../../utils/scoring';
 import type { UseCaseData, UseCase } from '../../types/usecase';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-import { defaultPrompts } from '../../config/default-prompts';
+// import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 

@@ -47,7 +47,7 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
   - Consider adding `make lint` and `make typecheck` to CI workflow
   - This can be a separate task if too much scope
 
-## Linting Errors Analysis (70 errors found)
+## Linting Errors Analysis (70 errors found - API)
 
 ### Error Categories:
 1. **Auto-fixable (2 errors)**: `prefer-const` - can be fixed automatically
@@ -56,7 +56,7 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
 4. **@ts-ignore au lieu de @ts-expect-error (3 errors)**: `@typescript-eslint/ban-ts-comment`
 5. **Blocs vides (2 errors)**: `no-empty`
 
-### Progressive Fix Plan
+### Progressive Fix Plan - API
 
 #### Phase 1: Auto-fixable + Quick wins (7 errors) ✅ COMPLETÉ
 - [x] Fixed `prefer-const` errors (2 errors) - changed `let` to `const` in tools.ts
@@ -70,9 +70,11 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
 
 **Résultat**: 70 erreurs → 42 erreurs (-28 erreurs, -40%)
 
-#### Phase 3: Variables non utilisées complexes (10-15 errors)
-- [ ] Analyser variables inutilisées qui pourraient être nécessaires
-- [ ] Décider: supprimer ou préfixer avec `_` pour indiquer intentionnel
+#### Phase 3: Variables non utilisées complexes (2 errors) ✅ COMPLETÉ
+- [x] Analysé `defaultPrompts` import - supprimé car utilisation commentée
+- [x] Analysé `REFRESH_DURATION` - gardé avec eslint-disable comment pour usage futur (refresh tokens)
+
+**Résultat**: 42 erreurs → 40 erreurs (-2 erreurs). Toutes les erreurs restantes sont des types `any` explicites (Phase 4)
 
 #### Phase 4: Types `any` explicites (~40 errors)
 - [ ] Commencer par les plus simples (params de fonction)
@@ -92,8 +94,10 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
 ## Commits & Progress
 
 - [x] **Commit 1** (1f3a1e2): Standardize all typecheck and lint targets - add up-* dependencies and use exec -T pattern like test-* targets
+- [x] **Commit 2** (a515791): Fix linting errors - Phase 1 and 2 (70 → 42 errors)
+- [x] **Commit 3** (273114d): Fix linting errors - Phase 3 (42 → 40 errors)
 
 ## Status
-- **Progress**: 3/5 tasks completed
-- **Current**: All targets standardized following test-* pattern
-- **Next**: Test all targets to verify they work correctly
+- **Progress**: Phases 1, 2 & 3 completed ✅
+- **Current**: 70 errors → 40 errors (-30, -43%)
+- **Next**: Phase 4 (types `any` explicites - 40 errors remaining)

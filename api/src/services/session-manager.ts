@@ -42,6 +42,8 @@ const JWT_SECRET = new TextEncoder().encode(
 
 // Token durations
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
+// REFRESH_DURATION kept for future refresh token implementation
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const REFRESH_DURATION = 30 * 24 * 60 * 60; // 30 days in seconds
 
 /**

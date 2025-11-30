@@ -29,8 +29,7 @@
   - [x] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
   - [x] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
 - [x] Séparer dans la génération la description en: description (plus courte), problème, solution
-- [ ] Ajouter les modèles 5.1 max (5.1 avec reasoning "max"), 5.1 (sans paramétrage), 5.1-mini, 5.1-nano
-- [ ] Fixer les tests de linting et de typecheck et les appliquer
+- [ ] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
@@ -43,4 +42,36 @@
 - [ ] Ré-activer et corriger les 2 tests E2E entreprises (création + bouton IA)
   - Raison du skip: `EditableInput` avec auto-save (5s) et enrichissement IA parfois >30s
   - Action: adapter le test pour attendre la fin d'auto-save et stabiliser l'enrichissement
+
+## Éléments identifiés pour implémentation future (lors du linting)
+
+- [ ] **Implémenter le système de refresh tokens**
+  - Activer `REFRESH_DURATION` (30 jours) et `refreshExpiresAt` dans `session-manager.ts`
+  - Ajouter endpoint pour rafraîchir les tokens
+  - Gérer la rotation des refresh tokens
+
+- [ ] **Utiliser `credentialBackedUp` pour la gestion des devices**
+  - Activer la vérification si un device est sauvegardé (backup)
+  - Utiliser pour améliorer la gestion des credentials WebAuthn
+  - Fichier: `api/src/services/webauthn-registration.ts`
+
+- [ ] **Réactiver l'enrichissement asynchrone des entreprises**
+  - Activer la fonction `enrichCompanyAsync` dans `api/src/routes/api/companies.ts`
+  - Utiliser la queue pour les enrichissements longs
+  - Actuellement commentée car non utilisée
+
+- [ ] **Réactiver le prompt de nom de dossier**
+  - Activer `folderNamePrompt` dans `api/src/routes/api/use-cases.ts`
+  - Utiliser pour générer automatiquement les noms de dossiers
+  - Actuellement commenté car non utilisé
+
+- [ ] **Réactiver la fonction `parseExecutiveSummary`**
+  - Activer dans `api/src/routes/api/folders.ts` si nécessaire
+  - Utiliser pour parser les synthèses exécutives stockées
+  - Actuellement commentée car non utilisée
+
+- [ ] **Implémenter l'annulation réelle des jobs dans la queue**
+  - Actuellement juste un TODO dans `api/src/routes/api/queue.ts`
+  - Nécessite d'interrompre réellement un job en cours d'exécution
+  - Utiliser les AbortController déjà présents dans QueueManager
 
