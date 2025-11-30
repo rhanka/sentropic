@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { queueManager } from '../../services/queue-manager';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
@@ -37,11 +36,10 @@ queueRouter.get('/jobs/:id', async (c) => {
 // POST /queue/jobs/:id/cancel - Annuler un job
 queueRouter.post('/jobs/:id/cancel', async (c) => {
   try {
-    const jobId = c.req.param('id');
-    
     // Pour l'instant, on ne peut pas vraiment annuler un job en cours
     // On peut juste marquer qu'il a échoué
     // TODO: Implémenter une vraie annulation si nécessaire
+    // const jobId = c.req.param('id');
     
     return c.json({ 
       success: true, 

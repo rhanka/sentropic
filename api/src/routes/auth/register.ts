@@ -8,8 +8,8 @@ import {
 import { createSession } from '../../services/session-manager';
 import { verifyChallenge } from '../../services/challenge-manager';
 import { db } from '../../db/client';
-import { users, magicLinks, webauthnCredentials } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { users, webauthnCredentials } from '../../db/schema';
+import { eq, desc } from 'drizzle-orm';
 import { env } from '../../config/env';
 import type { RegistrationResponseJSON } from '@simplewebauthn/types';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
@@ -395,7 +395,9 @@ registerRouter.post('/verify', async (c) => {
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
         domainAttr = 'Domain=localhost';
       }
-    } catch {}
+    } catch {
+      // Ignore errors when accessing request URL (may not be available in all contexts)
+    }
 
     const isProduction = process.env.NODE_ENV === 'production';
     const cookieParts = [

@@ -67,7 +67,8 @@ export async function createSession(
   const sessionId = crypto.randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION * 1000);
-  const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
+  // refreshExpiresAt not currently used but may be needed for future refresh token logic
+  // const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
   
   // Generate JWT session token
   const sessionToken = await new SignJWT({ userId, sessionId, role })

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, useCases, companies } from '../../db/schema';
+import { folders, useCases } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
@@ -14,8 +14,8 @@ import { defaultPrompts } from '../../config/default-prompts';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 
-// Récupération des prompts depuis la configuration centralisée
-const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
+// Récupération des prompts depuis la configuration centralisée (désactivé - non utilisé)
+// const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
 
 const scoreEntry = z.object({
   axisId: z.string(),
@@ -465,7 +465,8 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
       return c.json({ message: 'Dossier non trouvé' }, 404);
     }
     
-    const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
+    // matrixConfig parsed but not used in this endpoint
+    // const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
     
     // Mettre à jour le statut à "detailing"
     await db.update(useCases)

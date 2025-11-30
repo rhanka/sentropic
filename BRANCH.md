@@ -39,16 +39,50 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
   - Added `up-ui` dependency to `lint-ui` (already used `exec`, added `-T` flag)
   - Added `up-api` dependency to `lint-api` (already used `exec`, added `-T` flag)
 
-- [ ] **Task 4**: Test standardized targets
-  - Run `make typecheck-ui` and verify it works standalone
-  - Run `make typecheck-api` and verify it works standalone
-  - Run `make lint-ui` and verify it works standalone
-  - Run `make lint-api` and verify it works standalone
-  - Run `make typecheck` and `make lint` to verify they work
+- [ ] **Task 4**: Test standardized targets and fix linting errors
+  - ✅ Tested `make lint-api` - found 70 errors
+  - Plan progressif de correction des erreurs de linting (voir ci-dessous)
 
 - [ ] **Task 5**: Add quality gates in CI (optional, can be done later)
   - Consider adding `make lint` and `make typecheck` to CI workflow
   - This can be a separate task if too much scope
+
+## Linting Errors Analysis (70 errors found)
+
+### Error Categories:
+1. **Auto-fixable (2 errors)**: `prefer-const` - can be fixed automatically
+2. **Variables non utilisées (~30 errors)**: `@typescript-eslint/no-unused-vars`
+3. **Types `any` explicites (~40 errors)**: `@typescript-eslint/no-explicit-any`
+4. **@ts-ignore au lieu de @ts-expect-error (3 errors)**: `@typescript-eslint/ban-ts-comment`
+5. **Blocs vides (2 errors)**: `no-empty`
+
+### Progressive Fix Plan
+
+#### Phase 1: Auto-fixable + Quick wins (7 errors) ✅ COMPLETÉ
+- [x] Fixed `prefer-const` errors (2 errors) - changed `let` to `const` in tools.ts
+- [x] Fixed `@ts-ignore` → `@ts-expect-error` (3 errors) - db/client.ts
+- [x] Fixed empty blocks (2 errors) - added comments in register.ts and queue-manager.ts
+
+#### Phase 2: Variables non utilisées simples (~28 errors) ✅ COMPLETÉ
+- [x] Removed unused imports: `cors`, `z`, `eq`, `companies`, `magicLinks`, `and`, `randomBytes`, `settings`, `UseCase`
+- [x] Commented/removed unused variables: `enrichCompanyAsync`, `folderNamePrompt`, `matrixConfig`, `parseExecutiveSummary`, `jobId`, `deleted`, `CODE_LENGTH`, `refreshExpiresAt`, `credentialBackedUp`, `settingsResult`, `queueResult`
+- [x] Changed `_` to named variable `,` in queue-manager.ts
+
+**Résultat**: 70 erreurs → 42 erreurs (-28 erreurs, -40%)
+
+#### Phase 3: Variables non utilisées complexes (10-15 errors)
+- [ ] Analyser variables inutilisées qui pourraient être nécessaires
+- [ ] Décider: supprimer ou préfixer avec `_` pour indiquer intentionnel
+
+#### Phase 4: Types `any` explicites (~40 errors)
+- [ ] Commencer par les plus simples (params de fonction)
+- [ ] Progresser vers les types complexes
+- [ ] Pour certains cas, utiliser `unknown` ou types génériques
+
+#### Phase 5: Validation finale
+- [ ] Run `make lint-api` et vérifier 0 erreurs
+- [ ] Run `make lint-ui` et vérifier
+- [ ] Run `make typecheck` et vérifier
 
 ## Scope
 - **Files to modify**: `Makefile` only
@@ -57,7 +91,7 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
 
 ## Commits & Progress
 
-- [x] **Commit 1** (0439e50): Standardize all typecheck and lint targets - add up-* dependencies and use exec -T pattern like test-* targets
+- [x] **Commit 1** (1f3a1e2): Standardize all typecheck and lint targets - add up-* dependencies and use exec -T pattern like test-* targets
 
 ## Status
 - **Progress**: 3/5 tasks completed

@@ -167,8 +167,8 @@ export const executeWithTools = async (
   const message = response.choices[0]?.message;
 
   if (message?.tool_calls) {
-    let allSearchResults: any[] = [];
-    let allExtractResults: any[] = [];
+    const allSearchResults: any[] = [];
+    const allExtractResults: any[] = [];
 
     // Exécuter toutes les recherches et extractions demandées
     for (const toolCall of message.tool_calls) {

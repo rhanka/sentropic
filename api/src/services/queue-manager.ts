@@ -96,10 +96,12 @@ export class QueueManager {
 
   async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
     this.cancelAllInProgress = true;
-    for (const [_, controller] of this.jobControllers.entries()) {
+    for (const [, controller] of this.jobControllers.entries()) {
       try {
         controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {}
+      } catch {
+        // Ignore abort errors if controller is already aborted
+      }
     }
     await this.drain();
     this.cancelAllInProgress = false;

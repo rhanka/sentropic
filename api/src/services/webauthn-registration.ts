@@ -164,7 +164,8 @@ export async function verifyWebAuthnRegistration(
     
     const {
       credentialDeviceType,
-      credentialBackedUp,
+      // credentialBackedUp not currently used but may be useful for future device management
+      // credentialBackedUp,
       userVerified,
     } = registrationInfo;
     

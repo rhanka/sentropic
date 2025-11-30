@@ -172,7 +172,7 @@ credentialsRouter.delete('/:id', async (c) => {
     }
     
     // Delete credential
-    const [deleted] = await db
+    await db
       .delete(webauthnCredentials)
       .where(
         and(

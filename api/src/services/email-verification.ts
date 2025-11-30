@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { emailVerificationCodes } from '../db/schema';
 import { eq, and, gt, desc } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { SignJWT } from 'jose';
 import { env } from '../config/env';
@@ -27,7 +27,6 @@ interface VerifyCodeParams {
 
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
-const CODE_LENGTH = 6;
 
 let mailTransporter: nodemailer.Transporter | null = null;
 let transporterConfigHash: string | null = null;

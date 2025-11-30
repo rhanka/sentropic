@@ -41,7 +41,7 @@ const pgDb = drizzle(pool);
 const compatDb: typeof pgDb & { all?: any; run?: any; get?: any } = pgDb as any;
 compatDb.all = async (query: any) => {
   // drizzle sql`` returns a Query; execute returns { rows }
-  // @ts-ignore
+  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
   const res: any = await pgDb.execute(query);
   if (res && Array.isArray(res.rows)) return res.rows;
   if (Array.isArray(res)) return res;
@@ -49,13 +49,13 @@ compatDb.all = async (query: any) => {
 };
 compatDb.run = async (query: any) => {
   // For non-select, still execute; caller usually ignores return structure
-  // @ts-ignore
+  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
   return await pgDb.execute(query);
 };
 
 compatDb.get = async (query: any) => {
   // Execute and return first row or undefined
-  // @ts-ignore
+  // @ts-expect-error - drizzle execute() return type doesn't match expected structure
   const res: any = await pgDb.execute(query);
   // drizzle execute on node-postgres returns { rows }
   if (res && Array.isArray((res as any).rows)) {
