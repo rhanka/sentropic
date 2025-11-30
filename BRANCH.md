@@ -76,10 +76,18 @@ Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`)
 
 **Résultat**: 42 erreurs → 40 erreurs (-2 erreurs). Toutes les erreurs restantes sont des types `any` explicites (Phase 4)
 
-#### Phase 4: Types `any` explicites (~40 errors)
-- [ ] Commencer par les plus simples (params de fonction)
-- [ ] Progresser vers les types complexes
-- [ ] Pour certains cas, utiliser `unknown` ou types génériques
+#### Phase 4: Types `any` explicites (40 errors) - EN COURS
+- [x] **app.ts** (1 error) - Fixed keyGenerator, use headers only
+- [x] **scripts/queue-status.ts** (1 error) - Use JobQueueRow type
+- [x] **services/webauthn-authentication.ts** (1 error) - Explicit role type union
+- [x] **services/webauthn-registration.ts** (1 error) - Explicit role type union
+- [ ] **db/client.ts** - 11 errors in compatibility layer (lines 41-62)
+- [ ] **routes/api/use-cases.ts** - 7 errors (lines 92, 199, 309, 351, 352, 362, 480)
+- [ ] **services/queue-manager.ts** - 9 errors (lines 18, 120, 174, 186, 325, 347, 514, 600, 622, 624)
+- [ ] **services/email-verification.ts** - 2 errors (lines 55, 186)
+- [ ] **services/tools.ts** - 6 errors (lines 32, 34, 64, 66, 170, 171)
+
+**Progrès**: 40 → 36 errors (-4, -10%). Total: 70 → 36 errors (-34, -49%)
 
 #### Phase 5: Validation finale
 - [ ] Run `make lint-api` et vérifier 0 erreurs
