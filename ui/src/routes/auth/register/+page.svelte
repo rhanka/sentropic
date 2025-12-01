@@ -20,6 +20,9 @@
   let userId = '';
   let verificationToken = '';
 
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
   onMount(() => {
     webauthnSupported = isWebAuthnSupported();
     if (!webauthnSupported) {
@@ -309,11 +312,11 @@
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-3">
+            <label for="code-0" class="block text-sm font-medium text-gray-700 mb-3">
               Code à 6 chiffres
             </label>
             <div class="flex gap-2 justify-center" on:paste={handleCodePaste}>
-              {#each codeDigits as _, index}
+              {#each range(codeDigits.length) as index (index)}
                 <input
                   id="code-{index}"
                   type="text"

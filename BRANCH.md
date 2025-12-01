@@ -170,15 +170,38 @@ All 136 unit tests passing ✅
 - **Action**: Fixed HTML structure and label associations
 - **Status**: ✅ Fixed
 
+#### Step 3.5: `routes/entreprises/[id]/+page.svelte` (2 errors) ✅
+- **Errors**:
+  - `'updateCompany' is defined but never used` → Removed unused import
+  - `'addToast' is defined but never used` → Removed unused import
+- **Action**: Removed unused imports
+- **Status**: ✅ Fixed
+
+#### Step 3.6: `routes/auth/register/+page.svelte` (2 errors) ✅
+- **Errors**:
+  - A form label must be associated with a control → Added `for="code-0"` to label
+  - `'_' is defined but never used` → Created `range()` helper function and used it instead of `{#each codeDigits as _, index}`
+- **Action**: Fixed label association and used `range()` helper for iteration
+- **Status**: ✅ Fixed
+
+#### Step 3.7: `routes/cas-usage/+page.svelte` (4 errors) ✅
+- **Errors**:
+  - `'detailUseCase' is defined but never used` → Removed unused import
+  - `'scoreToStars' is defined but never used` → Removed unused import
+  - Accessibility errors on `<article>` with click → Added `role="button"`, `tabindex` conditional, keyboard handler, and ESLint disable comment
+  - `'_' is defined but never used` (x2) → Created `range()` helper function and used it for star rating loops
+- **Action**: Removed unused imports, improved accessibility of `<article>` element, added `range()` helper
+- **Status**: ✅ Fixed
+
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 3 in progress - Step 3.4 completed ✅
+**Currently working on**: Phase 3 in progress - Step 3.7 completed ✅
 
 **Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 84 errors (-40 errors, -32.3%)
+**Progress**: 124 → 74 errors (-50 errors, -40.3%)
 
 ---
 
