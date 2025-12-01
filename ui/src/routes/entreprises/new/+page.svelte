@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/stores';
-  import { createCompany, createDraftCompany, startCompanyEnrichment, type Company, type CompanyEnrichmentData } from '$lib/stores/companies';
+  import { createCompany, createDraftCompany, startCompanyEnrichment, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
-  import { addToast, removeToast } from '$lib/stores/toast';
+  import { addToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
 

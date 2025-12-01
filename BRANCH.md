@@ -154,15 +154,31 @@ All 136 unit tests passing ✅
 - **Action**: Removed unused variables/functions, added `aria-label`
 - **Status**: ✅ Fixed
 
+#### Step 3.3: `routes/entreprises/new/+page.svelte` (4 errors) ✅
+- **Errors**:
+  - `'onMount' is defined but never used` → Removed unused import from `svelte`
+  - `'page' is defined but never used` → Removed unused import from `$app/stores`
+  - `'CompanyEnrichmentData' is defined but never used` → Removed unused type import
+  - `'removeToast' is defined but never used` → Removed unused import from `$lib/stores/toast`
+- **Action**: Removed unused imports
+- **Status**: ✅ Fixed
+
+#### Step 3.4: `routes/dossiers/[id]/+page.svelte` (3 errors) ✅
+- **Errors**:
+  - `<div>` cannot be a child of `<p>` → Moved `<div>` outside of `<p>` element
+  - A form label must be associated with a control (x2) → Added `id` to textareas and `for` to labels
+- **Action**: Fixed HTML structure and label associations
+- **Status**: ✅ Fixed
+
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 3 in progress - Step 3.2 completed ✅
+**Currently working on**: Phase 3 in progress - Step 3.4 completed ✅
 
 **Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 95 errors (-29 errors, -23.4%)
+**Progress**: 124 → 84 errors (-40 errors, -32.3%)
 
 ---
 
