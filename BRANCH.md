@@ -154,7 +154,7 @@ These will be tackled after Phases 1-2 are complete and tested.
 - [x] **Phase 1** (04c5998): Fix 4 simple components (124 → 120 errors)
   - Fixed `Header.svelte`, `Toast.svelte`, `TipTap.svelte`, `+layout.svelte`
   
-- [x] **Phase 2** (43fd1c2): Fix 4 medium components (120 → 105 errors)
+- [x] **Phase 2** (b2ef11f): Fix 4 medium components (120 → 105 errors)
   - Fixed `StarRating.svelte`: removed unused 'total', added range() helper with index keys
   - Fixed `QueueMonitor.svelte`: removed unused imports/variables, added aria-label
   - Fixed `EditableInput.svelte`: fixed label association, removed unused CSS
