@@ -193,15 +193,27 @@ All 136 unit tests passing ✅
 - **Action**: Removed unused imports, improved accessibility of `<article>` element, added `range()` helper
 - **Status**: ✅ Fixed
 
+#### Step 3.8: `lib/components/UseCaseScatterPlot.svelte` (8 errors) ✅
+- **Errors**:
+  - `'dev' is defined but never used` → Removed unused import from `$app/environment`
+  - `'THEME_TEXT_DARK' is assigned a value but never used` → Removed unused constant
+  - `'logLabelAction' is defined but never used` → Removed unused function
+  - `'anchor' is assigned a value but never used` → Removed unused variable
+  - `'scale' is defined but never used` (parameter) → Removed unused parameter
+  - `'chart' is defined but never used` (parameter) → Removed unused parameter from `afterDraw` hook
+  - `'LABEL_FONT'`, `'MAX_LABEL_WIDTH'`, `'LABEL_FONT_SIZE'`, `'LABEL_PADDING_X'`, `'LABEL_PADDING_TOP'`, `'LABEL_PADDING_BOTTOM'`, `'LINE_HEIGHT'`, `'BASE_LABEL_OFFSET_SCALED'`, `'MIN_INITIAL_OFFSET'` are defined but never used → Removed unused reactive statements
+- **Action**: Removed unused imports, constants, functions, variables, and reactive statements
+- **Status**: ✅ Fixed
+
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 3 in progress - Step 3.7 completed ✅
+**Currently working on**: Phase 3 in progress - Step 3.8 completed ✅
 
 **Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 74 errors (-50 errors, -40.3%)
+**Progress**: 124 → 60 errors (-64 errors, -51.6%)
 
 ---
 

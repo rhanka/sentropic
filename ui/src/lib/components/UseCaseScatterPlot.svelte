@@ -5,7 +5,6 @@
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { dev } from '$app/environment';
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -76,7 +75,6 @@
   // Couleurs du thème
   const THEME_BLUE = '#475569'; // Bleu-gris foncé pour cadres, traits et points
   const THEME_BLUE_RGB = '71, 85, 105'; // RGB pour rgba()
-  const THEME_TEXT_DARK = '#0f172a'; // Gris foncé pour le texte (valeur/complexité)
 
   type LabelPlacement = 'left' | 'right' | 'top' | 'bottom';
 
@@ -135,16 +133,6 @@
       solid: `rgb(${rgb})`,
       withAlpha: (alpha: number) => `rgba(${rgb}, ${alpha})`
     };
-  }
-
-  function logLabelAction(box: LabelBox, message: string, extra?: any) {
-    if (!ENABLE_LAYOUT_DEBUG) return;
-    const name = box.textLines[0] ?? 'Label';
-    if (extra) {
-      console.debug(`[Labels][${name}] ${message}`, extra);
-    } else {
-      console.debug(`[Labels][${name}] ${message}`);
-    }
   }
 
   function getPointKey(raw: any, fallbackIndex: number) {
@@ -639,8 +627,6 @@
     boxes.forEach((box, index) => {
       const boxCenterX = box.left + box.width / 2;
       const boxCenterY = box.top + box.height / 2;
-      const anchor = anchors[index];
-
       // 1. Pénalité si le label sort du graphique (même avec clamp, si la boîte est trop grande)
       if (chartArea) {
         const isOutOfBounds = 
@@ -885,8 +871,7 @@
     medianY?: number,
     xScale?: any,
     yScale?: any,
-    labelStandardArea?: number,
-    scale?: number
+    labelStandardArea?: number
   ) {
     const totalCost = clique.cost || 0;
     if (totalCost <= 0) {
@@ -1609,7 +1594,7 @@
       ctx.restore();
     },
     // Suppression du hook afterTooltipDraw qui est inutile pour le tooltip natif (Canvas)
-    afterDraw(chart: Chart) {
+    afterDraw() {
       // On garde le hook afterDraw vide ou pour d'autres usages futurs si nécessaire
     }
   };
@@ -1671,16 +1656,7 @@
   $: scale = calculateScale(useCases.length);
   
   // Dimensions scalées
-  $: LABEL_FONT_SIZE = BASE_LABEL_FONT_SIZE * scale;
-  $: LABEL_FONT = `${LABEL_FONT_SIZE}px "Inter", "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-  $: MAX_LABEL_WIDTH = BASE_MAX_LABEL_WIDTH * scale;
-  $: LABEL_PADDING_X = BASE_LABEL_PADDING_X * scale;
-  $: LABEL_PADDING_TOP = BASE_LABEL_PADDING_TOP * scale;
-  $: LABEL_PADDING_BOTTOM = BASE_LABEL_PADDING_BOTTOM * scale;
-  $: LINE_HEIGHT = BASE_LINE_HEIGHT * scale;
   $: LABEL_ANCHOR_PADDING = BASE_LABEL_ANCHOR_PADDING * scale;
-  $: BASE_LABEL_OFFSET_SCALED = BASE_LABEL_OFFSET * scale;
-  $: MIN_INITIAL_OFFSET = BASE_MIN_INITIAL_OFFSET * scale;
   $: POINT_RADIUS = Math.max(BASE_POINT_RADIUS * scale, 2.5);
   $: LABEL_BORDER_RADIUS = BASE_LABEL_BORDER_RADIUS * scale;
   $: LABEL_STANDARD_AREA_SCALED = LABEL_STANDARD_AREA * scale * scale; // Aire = scale²
