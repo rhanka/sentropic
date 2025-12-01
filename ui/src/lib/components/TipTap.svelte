@@ -78,7 +78,7 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
 
     // Gérer les raccourcis clavier en mode forceList
     if (forceList) {
-      editor.on('transaction', ({ editor, transaction }) => {
+      editor.on('transaction', ({ editor }) => {
         const { selection, doc } = editor.state;
         const { $from } = selection;
         

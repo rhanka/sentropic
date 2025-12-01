@@ -1,6 +1,6 @@
 <script lang="ts">
   import { toasts, removeToast } from '$lib/stores/toast';
-  import { fade, fly } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
 
   const getToastClasses = (type: string) => {

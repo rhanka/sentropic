@@ -1,117 +1,166 @@
 # Feature: Fix Make Targets for Linting and Typecheck
 
-## Objective
-Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`) and typecheck (`typecheck`, `typecheck-ui`, `typecheck-api`) so they work consistently both locally and in CI. Apply them progressively, target by target, with a clear plan.
+## 📋 Objective
+Fix and standardize the make targets for linting (`lint`, `lint-ui`, `lint-api`) and typecheck (`typecheck`, `typecheck-ui`, `typecheck-api`) so they work consistently both locally and in CI. Apply fixes progressively, one component at a time.
 
-## Questions / Analysis
+---
 
-### Current State
-- **typecheck-ui**: Uses `COMPOSE_RUN_UI` (run --rm, container created on demand)
-- **typecheck-api**: Uses `COMPOSE_RUN_API` (run --rm, container created on demand)
-- **lint-ui**: Uses `exec` (requires container to be running)
-- **lint-api**: Uses `exec` (requires container to be running)
-- **format**: Uses `COMPOSE_RUN_*` (consistent)
-- **format-check**: Uses `COMPOSE_RUN_*` (consistent)
+## ✅ Part 1: API Linting - COMPLETED
 
-### Issues Identified
-1. Inconsistency: `lint-*` targets use `exec` but don't have `up-*` dependencies (like `test-*` pattern), while `typecheck-*` use `COMPOSE_RUN_*` which doesn't work without images built
-2. Pattern mismatch: `test-*` targets follow pattern: `target: up-*` + `exec`, but `typecheck-*` and `lint-*` don't follow this
-3. Not used in CI: These targets are not currently called in GitHub Actions workflows
+### Status: **0 errors** ✅ (70 → 0 errors)
 
-### Correct Pattern (from test-*)
-- `test-ui: up-ui` then uses `exec` on running container
-- `test-api: up-api-test` then uses sub-targets with `exec`
-- Pattern: **Dependency on `up-*` target + use `exec` on running container**
+All API linting errors have been fixed. See detailed progress below.
 
-## Plan / Todo
+#### Summary of API Fixes:
+- **Phase 1-2**: Auto-fixable + unused variables (70 → 42 errors)
+- **Phase 3**: Complex unused variables (42 → 40 errors)
+- **Phase 4**: Explicit `any` types (40 → 0 errors)
 
-- [x] **Task 1**: Analyze current implementation and understand pattern
-  - Identified pattern used by `test-*` targets
-  - Confirmed need to follow same pattern for consistency
+All 136 unit tests passing ✅
 
-- [x] **Task 2**: Standardize typecheck targets to follow test-* pattern
-  - Added `up-ui` dependency to `typecheck-ui`
-  - Changed `typecheck-ui` to use `exec -T` instead of `COMPOSE_RUN_UI`
-  - Added `up-api` dependency to `typecheck-api`
-  - Changed `typecheck-api` to use `exec -T` instead of `COMPOSE_RUN_API`
+---
 
-- [x] **Task 3**: Standardize lint targets to add missing dependencies
-  - Added `up-ui` dependency to `lint-ui` (already used `exec`, added `-T` flag)
-  - Added `up-api` dependency to `lint-api` (already used `exec`, added `-T` flag)
+## 🎯 Part 2: UI Linting - IN PROGRESS
 
-- [ ] **Task 4**: Test standardized targets and fix linting errors
-  - ✅ Tested `make lint-api` - found 70 errors
-  - Plan progressif de correction des erreurs de linting (voir ci-dessous)
+### Status: **124 errors in 23 files** (to be analyzed and fixed progressively)
 
-- [ ] **Task 5**: Add quality gates in CI (optional, can be done later)
-  - Consider adding `make lint` and `make typecheck` to CI workflow
-  - This can be a separate task if too much scope
+**Note**: Total lint errors including build files is ~239, but we focus only on source files in `src/` (124 errors).
 
-## Linting Errors Analysis (70 errors found - API)
+### 📊 Error Analysis
 
-### Error Categories:
-1. **Auto-fixable (2 errors)**: `prefer-const` - can be fixed automatically
-2. **Variables non utilisées (~30 errors)**: `@typescript-eslint/no-unused-vars`
-3. **Types `any` explicites (~40 errors)**: `@typescript-eslint/no-explicit-any`
-4. **@ts-ignore au lieu de @ts-expect-error (3 errors)**: `@typescript-eslint/ban-ts-comment`
-5. **Blocs vides (2 errors)**: `no-empty`
+**Total files with errors**: 23 files
 
-### Progressive Fix Plan - API
+**Error distribution by file** (sorted by error count):
+1. `lib/components/UseCaseDetail.svelte` - **21 errors**
+2. `routes/matrice/+page.svelte` - **14 errors**
+3. `lib/components/UseCaseScatterPlot.svelte` - **14 errors**
+4. `routes/parametres/+page.svelte` - **13 errors**
+5. `routes/home/+page.svelte` - **7 errors**
+6. `routes/cas-usage/+page.svelte` - **6 errors**
+7. `routes/dossiers/+page.svelte` - **5 errors**
+8. `routes/dashboard-tmp/+page.svelte` - **5 errors**
+9. `routes/dashboard/+page.svelte` - **5 errors**
+10. `routes/entreprises/new/+page.svelte` - **4 errors**
+11. `routes/auth/login/+page.svelte` - **4 errors**
+12. `lib/components/EditableInput.svelte` - **4 errors**
+13. `routes/entreprises/+page.svelte` - **3 errors**
+14. `routes/dossiers/[id]/+page.svelte` - **3 errors**
+15. `lib/components/StarRating.svelte` - **3 errors**
+16. `lib/components/QueueMonitor.svelte` - **3 errors**
+17. `routes/entreprises/[id]/+page.svelte` - **2 errors**
+18. `routes/auth/register/+page.svelte` - **2 errors**
+19. `lib/components/NavigationGuard.svelte` - **2 errors** ⚠️ **DO NOT TOUCH**
+20. `routes/+layout.svelte` - **1 error**
+21. `lib/components/Toast.svelte` - **1 error**
+22. `lib/components/TipTap.svelte` - **1 error**
+23. `lib/components/Header.svelte` - **1 error**
 
-#### Phase 1: Auto-fixable + Quick wins (7 errors) ✅ COMPLETÉ
-- [x] Fixed `prefer-const` errors (2 errors) - changed `let` to `const` in tools.ts
-- [x] Fixed `@ts-ignore` → `@ts-expect-error` (3 errors) - db/client.ts
-- [x] Fixed empty blocks (2 errors) - added comments in register.ts and queue-manager.ts
+### 🔍 Error Categories Found:
+1. **`no-unused-vars`**: Variables/imports defined but never used
+2. **`svelte/no-at-html-tags`**: XSS risk with `{@html}` (requires review)
+3. **`svelte/valid-compile`**: Accessibility and HTML structure issues
+4. **`a11y_*`**: Accessibility violations
+5. **`css_unused_selector`**: Unused CSS selectors
 
-#### Phase 2: Variables non utilisées simples (~28 errors) ✅ COMPLETÉ
-- [x] Removed unused imports: `cors`, `z`, `eq`, `companies`, `magicLinks`, `and`, `randomBytes`, `settings`, `UseCase`
-- [x] Commented/removed unused variables: `enrichCompanyAsync`, `folderNamePrompt`, `matrixConfig`, `parseExecutiveSummary`, `jobId`, `deleted`, `CODE_LENGTH`, `refreshExpiresAt`, `credentialBackedUp`, `settingsResult`, `queueResult`
-- [x] Changed `_` to named variable `,` in queue-manager.ts
+---
 
-**Résultat**: 70 erreurs → 42 erreurs (-28 erreurs, -40%)
+## 📝 Progressive Fix Plan - UI (ONE COMPONENT AT A TIME)
 
-#### Phase 3: Variables non utilisées complexes (2 errors) ✅ COMPLETÉ
-- [x] Analysé `defaultPrompts` import - supprimé car utilisation commentée
-- [x] Analysé `REFRESH_DURATION` - gardé avec eslint-disable comment pour usage futur (refresh tokens)
+**⚠️ IMPORTANT RULES:**
+- ✅ Fix **ONE component at a time**
+- ✅ Test UI after each fix
+- ✅ Wait for user approval before committing
+- ❌ **NEVER touch `NavigationGuard.svelte`** (user will handle separately)
+- ✅ Start with simplest files (1-2 errors) first
 
-**Résultat**: 42 erreurs → 40 erreurs (-2 erreurs). Toutes les erreurs restantes sont des types `any` explicites (Phase 4)
+### Phase 1: Simple Components (1-2 errors)
 
-#### Phase 4: Types `any` explicites (40 errors) - EN COURS
-- [x] **app.ts** (1 error) - Fixed keyGenerator, use headers only
-- [x] **scripts/queue-status.ts** (1 error) - Use JobQueueRow type
-- [x] **app.ts** (1 error) - Fixed keyGenerator, use headers only
-- [x] **scripts/queue-status.ts** (1 error) - Use JobQueueRow type
-- [x] **services/webauthn-authentication.ts** (1 error) - Explicit role type union
-- [x] **services/webauthn-registration.ts** (1 error) - Explicit role type union
-- [x] **services/email-verification.ts** (2 errors) - Explicit transporter config type, unknown for error
-- [x] **services/tools.ts** (6 errors) - Added Tavily response interfaces, removed all any
-- [ ] **db/client.ts** - 11 errors in compatibility layer (lines 41-62)
-- [ ] **routes/api/use-cases.ts** - 7 errors (lines 92, 199, 309, 351, 352, 362, 480)
-- [ ] **services/queue-manager.ts** - 9 errors (lines 18, 120, 174, 186, 325, 347, 514, 600, 622, 624)
+#### Step 1.1: `lib/components/Header.svelte` (1 error) ✅
+- **Error**: `'locale' is defined but never used`
+- **Action**: Removed unused `locale` import from `svelte-i18n`
+- **Status**: ✅ Fixed
 
-- [x] **routes/api/use-cases.ts** (7 errors) - Added LegacyUseCaseRow type, replaced all any with proper types
+#### Step 1.2: `lib/components/Toast.svelte` (1 error) ✅
+- **Error**: `'fade' is defined but never used`
+- **Action**: Removed unused `fade` import from `svelte/transition`
+- **Status**: ✅ Fixed
 
-- [x] **services/queue-manager.ts** (10 errors) - Added JobData type union, JobQueueRow types, UseCaseListItem types
+#### Step 1.3: `lib/components/TipTap.svelte` (1 error) ✅
+- **Error**: `'transaction' is defined but never used`
+- **Action**: Removed unused `transaction` parameter from callback
+- **Status**: ✅ Fixed
 
-**Progrès**: 10 → 0 errors (-10, -100%). Total: 70 → 0 errors (-70, -100%) ✅
+#### Step 1.4: `routes/+layout.svelte` (1 error) ✅
+- **Error**: `'isAuthenticated' is defined but never used`
+- **Action**: Removed unused `isAuthenticated` import from session store
+- **Status**: ✅ Fixed
 
-#### Phase 5: Validation finale
-- [ ] Run `make lint-api` et vérifier 0 erreurs
-- [ ] Run `make lint-ui` et vérifier
-- [ ] Run `make typecheck` et vérifier
+#### Step 1.5: `lib/components/NavigationGuard.svelte` (2 errors) ⚠️
+- **Error**: `'interceptPush'` and `'interceptReplace'` assigned but never used
+- **Action**: ⚠️ **SKIP - User will handle separately**
+- **Status**: ⏸️ Skipped per user request
 
-## Scope
-- **Files to modify**: `Makefile` only
-- **Testing**: Local verification of make targets
-- **CI changes**: Optional, can be deferred to avoid scope creep
+### Phase 2: Medium Components (3-4 errors)
 
-## Commits & Progress
+#### Step 2.1: `lib/components/StarRating.svelte` (3 errors)
+- **Errors**: 
+  - `'total' is defined but never used`
+  - `'_' is defined but never used` (x2)
+- **Action**: Remove unused variables or use them
+- **Status**: ⏳ Pending
 
-- [x] **Commit 1** (1f3a1e2): Standardize all typecheck and lint targets - add up-* dependencies and use exec -T pattern like test-* targets
-- [x] **Commit 2** (a515791): Fix linting errors - Phase 1 and 2 (70 → 42 errors)
-- [x] **Commit 3** (273114d): Fix linting errors - Phase 3 (42 → 40 errors)
+#### Step 2.2: `lib/components/QueueMonitor.svelte` (3 errors)
+- **Errors**:
+  - `'Job' is defined but never used`
+  - `'activeJobs' is defined but never used`
+  - Missing `aria-label` on button/link
+- **Action**: Remove unused imports/variables, add aria-label
+- **Status**: ⏳ Pending
 
-## Status
-- **Progress**: Phases 1, 2 & 3 completed ✅
-- **Current**: 70 errors → 40 errors (-30, -43%)
-- **Next**: Phase 4 (types `any` explicites - 40 errors remaining)
+#### Step 2.3: `lib/components/EditableInput.svelte` (4 errors)
+- **Errors**:
+  - `'e' is defined but never used`
+  - Form label not associated with control
+  - Unused CSS selector "textarea" (x2)
+- **Action**: Fix variable, fix label association, remove/use CSS
+- **Status**: ⏳ Pending
+
+#### Step 2.4: `routes/auth/login/+page.svelte` (4 errors)
+- **Errors**:
+  - `'email' is assigned but never used`
+  - `'magicLinkSent' is assigned but never used`
+  - Invalid href `'#'` (x2)
+- **Action**: Use variables or remove, fix href attributes
+- **Status**: ⏳ Pending
+
+### Phase 3: Complex Components (5+ errors)
+
+These will be tackled after Phases 1-2 are complete and tested.
+
+---
+
+## 🚧 Current Work
+
+**Currently working on**: Phase 1 completed ✅ - Ready for Phase 2
+
+**Next step**: Fix Phase 2 components (3-4 errors each)
+
+**Progress**: 124 → 120 errors (-4 errors, -3.2%)
+
+---
+
+## 📝 Commits & Progress
+
+- [x] **Phase 1** (Phase 1): Fix 4 simple components (124 → 120 errors)
+  - Fixed `Header.svelte`: removed unused `locale` import
+  - Fixed `Toast.svelte`: removed unused `fade` import
+  - Fixed `TipTap.svelte`: removed unused `transaction` parameter
+  - Fixed `+layout.svelte`: removed unused `isAuthenticated` import
+
+---
+
+## 📚 Notes
+
+- All fixes must be tested in UI after each change
+- User will manually test and approve before commits
+- NavigationGuard is explicitly excluded from fixes
