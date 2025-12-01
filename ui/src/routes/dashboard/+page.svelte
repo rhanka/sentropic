@@ -940,7 +940,6 @@
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
-              draft={{}}
             />
         </section>
         {/each}

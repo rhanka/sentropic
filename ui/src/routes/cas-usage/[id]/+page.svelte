@@ -205,7 +205,6 @@
       {matrix}
       {calculatedScores}
       isEditing={false}
-      draft={{}}
     >
       <svelte:fragment slot="actions-view">
             <button

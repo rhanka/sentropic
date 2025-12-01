@@ -1,7 +1,7 @@
 <script lang="ts">
   import References from '$lib/components/References.svelte';
 import EditableInput from '$lib/components/EditableInput.svelte';
-import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
+import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
@@ -12,8 +12,9 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
   export let matrix: MatrixConfig | null = null;
   export let calculatedScores: any = null;
   export let isEditing: boolean = false;
-  export let draft: any = {};
 
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   // Fonction pour recharger le cas d'usage après sauvegarde (debounced)
   let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -206,7 +207,6 @@ $: listMarkdowns = LIST_FIELDS.reduce<Record<ListField, string>>((acc, field) =>
   return acc;
 }, {} as Record<ListField, string>);
 
-const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
 const getTextFullData = (field: TextField) => {
   if (!useCase?.id) return null;
   const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
@@ -459,7 +459,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
-              {#each Array(5) as _, i}
+              {#each range(5) as i (i)}
                 <svg class="w-6 h-6 {i < valueStars ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
@@ -484,7 +484,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
-              {#each Array(5) as _, i}
+              {#each range(5) as i (i)}
                 {#if i < complexityStars}
                   <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

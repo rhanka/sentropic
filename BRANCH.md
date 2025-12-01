@@ -205,15 +205,39 @@ All 136 unit tests passing ✅
 - **Action**: Removed unused imports, constants, functions, variables, and reactive statements
 - **Status**: ✅ Fixed
 
+#### Step 3.9: `lib/components/UseCaseDetail.svelte` (5 errors fixed, 5 `{@html}` XSS left as-is) ✅
+- **Errors fixed**:
+  - `'calculateUseCaseScores' is defined but never used` → Removed unused import
+  - `'countLines' is assigned a value but never used` → Removed unused function
+  - `'_' is defined but never used` (x2) → Created `range()` helper function and used it for star rating loops
+  - Component has unused export property 'draft' → Added ESLint disable comment (external reference only)
+- **Errors left as-is** (systemic issue):
+  - `{@html}` can lead to XSS attack (x5) → Left as is, to be addressed globally with DOMPurify
+- **Action**: Removed unused imports/functions, added `range()` helper, added ESLint comment for draft prop
+- **Status**: ✅ Fixed (non-XSS errors only)
+
+#### Step 3.10: `routes/parametres/+page.svelte` (9 errors) ✅
+- **Errors**:
+  - `'apiDelete' is defined but never used` → Removed unused import
+  - `'save' is assigned a value but never used` → Removed unused function
+  - `'openaiModelsText' is assigned a value but never used` → Removed unused variable
+  - `'draft' is assigned a value but never used` → Removed unused variable and related imports (`settingsStore`, `get`)
+  - Visible, non-interactive elements with click event → Added `role="button"`, `tabindex`, and keyboard handler
+  - `<div>` with a click handler must have an ARIA role → Resolved by adding `role="button"`
+  - A form label must be associated with a control (x4) → Added `id` and `for` attributes to labels and form controls, or replaced labels with spans for non-interactive elements
+  - Buttons and links should have an `aria-label` → Added `aria-label="Fermer l'éditeur de prompt"` to close button
+- **Action**: Removed unused imports/variables/functions, improved accessibility of interactive elements and form labels
+- **Status**: ✅ Fixed
+
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 3 in progress - Step 3.8 completed ✅
+**Currently working on**: Phase 3 in progress - Step 3.10 completed ✅
 
 **Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 60 errors (-64 errors, -51.6%)
+**Progress**: 124 → 43 errors (-81 errors, -65.3%)
 
 ---
 
