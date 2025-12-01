@@ -135,17 +135,24 @@ All 136 unit tests passing ✅
 
 ### Phase 3: Complex Components (5+ errors)
 
-These will be tackled after Phases 1-2 are complete and tested.
+#### Step 3.1: `routes/dossiers/+page.svelte` (5 errors) ✅
+- **Errors**:
+  - `'apiPut' is defined but never used` → Removed unused import
+  - `'loadUseCases' is assigned a value but never used` → Removed unused function
+  - `'selectFolder' is assigned a value but never used` → Removed unused function
+  - Accessibility errors on `<article>` with click → Added `role="button"`, `tabindex` conditional, and keyboard handler
+- **Action**: Removed unused imports/functions, fixed accessibility
+- **Status**: ✅ Fixed
 
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 1 + Phase 2 completed ✅ - Ready for Phase 3
+**Currently working on**: Phase 3 in progress - Step 3.1 completed ✅
 
-**Next step**: User testing Phase 2 fixes, then proceed to Phase 3
+**Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 105 errors (-19 errors, -15.3%)
+**Progress**: 124 → 100 errors (-24 errors, -19.4%)
 
 ---
 
