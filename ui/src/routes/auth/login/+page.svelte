@@ -13,8 +13,6 @@ let loading = false;
 let error = '';
 let webauthnSupported = false;
 let showLostDevice = false;
-let email = '';
-let magicLinkSent = false;
 
   onMount(() => {
     webauthnSupported = isWebAuthnSupported();
@@ -103,13 +101,13 @@ let magicLinkSent = false;
         </div>
 
         <div class="text-center">
-          <a 
-            href="#" 
-            class="font-medium text-indigo-600 hover:text-indigo-500"
-            on:click|preventDefault={handleLostDevice}
+          <button
+            type="button"
+            class="font-medium text-indigo-600 hover:text-indigo-500 bg-transparent border-none cursor-pointer"
+            on:click={handleLostDevice}
           >
             J'ai perdu mon appareil
-          </a>
+          </button>
         </div>
 
         <div class="text-center">
@@ -140,13 +138,13 @@ let magicLinkSent = false;
         </div>
 
         <div class="text-center">
-          <a 
-            href="#" 
-            class="font-medium text-gray-600 hover:text-gray-500"
-            on:click|preventDefault={() => showLostDevice = false}
+          <button
+            type="button"
+            class="font-medium text-gray-600 hover:text-gray-500 bg-transparent border-none cursor-pointer"
+            on:click={() => showLostDevice = false}
           >
             Retour à la connexion normale
-          </a>
+          </button>
         </div>
       </div>
     {/if}

@@ -102,36 +102,36 @@ All 136 unit tests passing ✅
 
 ### Phase 2: Medium Components (3-4 errors)
 
-#### Step 2.1: `lib/components/StarRating.svelte` (3 errors)
+#### Step 2.1: `lib/components/StarRating.svelte` (3 errors) ✅
 - **Errors**: 
-  - `'total' is defined but never used`
-  - `'_' is defined but never used` (x2)
-- **Action**: Remove unused variables or use them
-- **Status**: ⏳ Pending
+  - `'total' is defined but never used` → Removed unused reactive statement
+  - `'_' is defined but never used` (x2) → Used `range()` helper with index as key
+- **Action**: Removed unused `total`, created `range()` helper, used index in loops
+- **Status**: ✅ Fixed
 
-#### Step 2.2: `lib/components/QueueMonitor.svelte` (3 errors)
+#### Step 2.2: `lib/components/QueueMonitor.svelte` (3 errors) ✅
 - **Errors**:
-  - `'Job' is defined but never used`
-  - `'activeJobs' is defined but never used`
-  - Missing `aria-label` on button/link
-- **Action**: Remove unused imports/variables, add aria-label
-- **Status**: ⏳ Pending
+  - `'Job' is defined but never used` → Removed unused import
+  - `'activeJobs' is defined but never used` → Removed unused reactive statement
+  - Missing `aria-label` on button/link → Added aria-label to close button
+- **Action**: Removed unused imports/variables, added aria-label
+- **Status**: ✅ Fixed
 
-#### Step 2.3: `lib/components/EditableInput.svelte` (4 errors)
+#### Step 2.3: `lib/components/EditableInput.svelte` (4 errors) ✅
 - **Errors**:
-  - `'e' is defined but never used`
-  - Form label not associated with control
-  - Unused CSS selector "textarea" (x2)
-- **Action**: Fix variable, fix label association, remove/use CSS
-- **Status**: ⏳ Pending
+  - `'e' is defined but never used` → Removed unused parameter
+  - Form label not associated with control → Added unique `inputId` and `for` attribute
+  - Unused CSS selector "textarea" (x2) → Removed unused CSS rules
+- **Action**: Fixed variable, fixed label association, removed CSS
+- **Status**: ✅ Fixed
 
-#### Step 2.4: `routes/auth/login/+page.svelte` (4 errors)
+#### Step 2.4: `routes/auth/login/+page.svelte` (4 errors) ✅
 - **Errors**:
-  - `'email' is assigned but never used`
-  - `'magicLinkSent' is assigned but never used`
-  - Invalid href `'#'` (x2)
-- **Action**: Use variables or remove, fix href attributes
-- **Status**: ⏳ Pending
+  - `'email' is assigned but never used` → Removed unused variable
+  - `'magicLinkSent' is assigned but never used` → Removed unused variable
+  - Invalid href `'#'` (x2) → Changed `<a href="#">` to `<button type="button">`
+- **Action**: Removed unused variables, changed links to buttons for accessibility
+- **Status**: ✅ Fixed
 
 ### Phase 3: Complex Components (5+ errors)
 
@@ -141,21 +141,24 @@ These will be tackled after Phases 1-2 are complete and tested.
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 1 completed ✅ - Ready for Phase 2
+**Currently working on**: Phase 1 + Phase 2 completed ✅ - Ready for Phase 3
 
-**Next step**: Fix Phase 2 components (3-4 errors each)
+**Next step**: User testing Phase 2 fixes, then proceed to Phase 3
 
-**Progress**: 124 → 120 errors (-4 errors, -3.2%)
+**Progress**: 124 → 105 errors (-19 errors, -15.3%)
 
 ---
 
 ## 📝 Commits & Progress
 
-- [x] **Phase 1** (Phase 1): Fix 4 simple components (124 → 120 errors)
-  - Fixed `Header.svelte`: removed unused `locale` import
-  - Fixed `Toast.svelte`: removed unused `fade` import
-  - Fixed `TipTap.svelte`: removed unused `transaction` parameter
-  - Fixed `+layout.svelte`: removed unused `isAuthenticated` import
+- [x] **Phase 1** (04c5998): Fix 4 simple components (124 → 120 errors)
+  - Fixed `Header.svelte`, `Toast.svelte`, `TipTap.svelte`, `+layout.svelte`
+  
+- [x] **Phase 2** (43fd1c2): Fix 4 medium components (120 → 105 errors)
+  - Fixed `StarRating.svelte`: removed unused 'total', added range() helper with index keys
+  - Fixed `QueueMonitor.svelte`: removed unused imports/variables, added aria-label
+  - Fixed `EditableInput.svelte`: fixed label association, removed unused CSS
+  - Fixed `auth/login/+page.svelte`: removed unused variables, changed href='#' to buttons
 
 ---
 
