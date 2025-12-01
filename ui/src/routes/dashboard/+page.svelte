@@ -7,11 +7,11 @@
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { marked } from 'marked';
   import { refreshManager } from '$lib/stores/refresh';
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -273,55 +273,15 @@
     }
   };
 
-  // Fonction pour créer un lien de référence
-  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
-    const refId = `ref-${num}`;
-    return `<a href="#${refId}" 
-                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-                title="${ref.title.replace(/"/g, '&quot;')}"
-                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-                [${num}]
-              </a>`;
-  };
-
-  // Fonction pour parser les références [1], [2] dans le markdown HTML
-  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!html || !references || references.length === 0) return html;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return html.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
+  // Fonction pour rendre le markdown avec références et styles (utilise la fonction partagée)
+  const renderMarkdown = (text: string | null | undefined, references: Array<{title: string; url: string}> = []): string => {
+    return renderMarkdownWithRefs(text, references, {
+      addListStyles: true,
+      addHeadingStyles: true,
+      listPadding: 1.5
     });
   };
 
-  // Fonction pour rendre le markdown en HTML avec parsing des références
-  const renderMarkdown = (text: string | null | undefined, references: Array<{title: string; url: string}> = []): string => {
-    if (!text) return '';
-    let html = marked(text);
-    
-    // Post-traitement pour améliorer le rendu des listes
-    html = html.replace(/<ul>/g, '<ul class="list-disc space-y-2 mb-4" style="padding-left:1.5rem;">');
-    html = html.replace(/<ol>/g, '<ol class="list-decimal space-y-2 mb-4" style="padding-left:1.5rem;">');
-    html = html.replace(/<li>/g, '<li class="mb-1">');
-    
-    // Post-traitement pour améliorer le rendu des titres
-    html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
-    html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
-    
-    return parseReferencesInMarkdown(html, references);
-  };
-
-  const handleFolderChange = async (event: Event) => {
-    const target = event.target as HTMLSelectElement;
-    selectedFolderId = target.value;
-    if (selectedFolderId) {
-      await loadMatrix(selectedFolderId);
-    }
-  };
 
   // Filtrer les cas d'usage par dossier sélectionné
   $: filteredUseCases = selectedFolderId 
@@ -451,12 +411,10 @@
     // Taille de police initiale
     let fontSize = 8; // pt
     const minFontSize = 5; // Réduit de 6 à 5 pour permettre un scaling plus agressif
-    const maxFontSize = 12;
     const baseLineHeight = 1.4;
     const baseParagraphMargin = 0.15; // cm
     const baseTitleMarginBottom = 0.15; // cm (marge sous le titre h3)
     const baseTitlePaddingBottom = 0.1; // cm (padding sous le titre h3)
-    const baseBoxPadding = 0.6; // cm (padding de la boîte)
     
     // Fonction pour vérifier si le contenu déborde
     const checkOverflow = () => {
@@ -719,6 +677,7 @@
                     <button
                       on:click={() => configOpen = false}
                       class="text-slate-400 hover:text-slate-600"
+                      aria-label="Fermer la configuration"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

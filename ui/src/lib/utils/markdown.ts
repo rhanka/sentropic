@@ -1,6 +1,31 @@
+import { marked } from 'marked';
+
 const BULLET_PATTERN = /(^|\n)[ \t]*[•▪‣●◦]/g;
 const SINGLE_NEWLINE_PATTERN = /([^\n\r])\r?\n(?!\r?\n|\s*[-*•]|\s*$)/g;
 const BULLET_LINE_PATTERN = /^\s*(?:[-*+]|(?:\d+\.)|\u2022|\u2023|\u25e6)\s+/;
+
+export interface Reference {
+  title: string;
+  url: string;
+}
+
+export interface RenderMarkdownOptions {
+  /**
+   * Si true, ajoute des styles CSS pour les listes (ul, ol, li)
+   * @default false
+   */
+  addListStyles?: boolean;
+  /**
+   * Si true, ajoute des styles CSS pour les titres (h2, h3)
+   * @default false
+   */
+  addHeadingStyles?: boolean;
+  /**
+   * Padding des listes en rem (utilisé si addListStyles est true)
+   * @default 1.5
+   */
+  listPadding?: number;
+}
 
 /**
  * Normalise un champ markdown issu des use cases historiques.
@@ -73,6 +98,95 @@ export function markdownToArray(markdown?: string): string[] {
     .filter((line) => line.length > 0)
     .map((line) => line.replace(/^\s*(?:[-*+]|(?:\d+\.)|\u2022|\u2023|\u25e6)\s+/, '').trim())
     .filter((line) => line.length > 0);
+}
+
+/**
+ * Crée un lien HTML vers une référence avec scroll smooth
+ */
+export function createReferenceLink(num: string, ref: Reference): string {
+  const refId = `ref-${num}`;
+  return `<a href="#${refId}" 
+              class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
+              title="${ref.title.replace(/"/g, '&quot;')}"
+              onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
+              [${num}]
+            </a>`;
+}
+
+/**
+ * Parse les références [1], [2] dans du HTML markdown et les remplace par des liens cliquables
+ */
+export function parseReferencesInMarkdown(html: string, references: Reference[] = []): string {
+  if (!html || !references || references.length === 0) return html;
+  
+  // Remplacer les patterns [1], [2], etc par des liens cliquables
+  return html.replace(/\[(\d+)\]/g, (match, num) => {
+    const index = parseInt(num) - 1;
+    if (index >= 0 && index < references.length) {
+      return createReferenceLink(num, references[index]);
+    }
+    return match; // Si la référence n'existe pas, garder le texte original
+  });
+}
+
+/**
+ * Parse les références [1], [2] dans un texte simple (pas markdown) et les remplace par des liens cliquables
+ */
+export function parseReferencesInText(text: string, references: Reference[] = []): string {
+  if (!text || !references || references.length === 0) return text;
+  
+  // Remplacer les patterns [1], [2], etc par des liens cliquables
+  return text.replace(/\[(\d+)\]/g, (match, num) => {
+    const index = parseInt(num) - 1;
+    if (index >= 0 && index < references.length) {
+      return createReferenceLink(num, references[index]);
+    }
+    return match; // Si la référence n'existe pas, garder le texte original
+  });
+}
+
+/**
+ * Rend du markdown en HTML avec parsing des références et options de styling
+ * 
+ * @param text - Le texte markdown à rendre
+ * @param references - Les références pour parser les patterns [1], [2], etc.
+ * @param options - Options pour le post-traitement CSS (listes, titres)
+ * @returns Le HTML rendu avec références parsées
+ */
+export function renderMarkdownWithRefs(
+  text: string | null | undefined,
+  references: Reference[] = [],
+  options: RenderMarkdownOptions = {}
+): string {
+  if (!text) return '';
+  
+  // Normaliser le markdown (puces unicode, sauts de ligne, etc.)
+  const normalized = normalizeUseCaseMarkdown(text);
+  
+  // Convertir markdown en HTML
+  const markedResult = marked(normalized);
+  let html = typeof markedResult === 'string' ? markedResult : String(markedResult);
+  
+  // Post-traitement optionnel pour les styles CSS
+  const {
+    addListStyles = false,
+    addHeadingStyles = false,
+    listPadding = 1.5
+  } = options;
+  
+  if (addListStyles) {
+    html = html.replace(/<ul>/g, `<ul class="list-disc space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
+    html = html.replace(/<ol>/g, `<ol class="list-decimal space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
+    html = html.replace(/<li>/g, '<li class="mb-1">');
+  }
+  
+  if (addHeadingStyles) {
+    html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
+    html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
+  }
+  
+  // Parser les références [1], [2], etc.
+  return parseReferencesInMarkdown(html, references);
 }
 
 

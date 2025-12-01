@@ -3,11 +3,10 @@
 import EditableInput from '$lib/components/EditableInput.svelte';
 import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { marked } from 'marked';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
-import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph } from '$lib/utils/markdown';
+import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
@@ -15,44 +14,6 @@ import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTraili
   export let isEditing: boolean = false;
   export let draft: any = {};
 
-  // Fonction pour créer un lien de référence
-  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
-    const refId = `ref-${num}`;
-    return `<a href="#${refId}" 
-                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-                title="${ref.title.replace(/"/g, '&quot;')}"
-                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-                [${num}]
-              </a>`;
-  };
-
-  // Fonction pour parser les références [1], [2] dans le markdown HTML
-  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!html || !references || references.length === 0) return html;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return html.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
-    });
-  };
-
-  // Fonction pour parser les références [1], [2] dans un texte simple (pas markdown)
-  const parseReferencesInText = (text: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!text || !references || references.length === 0) return text;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return text.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
-    });
-  };
 
   // Fonction pour recharger le cas d'usage après sauvegarde (debounced)
   let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -246,12 +207,6 @@ $: listMarkdowns = LIST_FIELDS.reduce<Record<ListField, string>>((acc, field) =>
 }, {} as Record<ListField, string>);
 
 const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
-const renderMarkdownWithRefs = (text?: string | null, refs: Array<{title: string; url: string}> = []) => {
-  if (!text) return '';
-  const normalized = normalizeUseCaseMarkdown(text);
-  const html = marked(normalized);
-  return parseReferencesInMarkdown(html, refs);
-};
 const getTextFullData = (field: TextField) => {
   if (!useCase?.id) return null;
   const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
@@ -324,23 +279,26 @@ $: complexityStars = calculatedScores?.complexityStars !== undefined
 
   // Fonction pour obtenir le HTML de la description avec références parsées
 $: descriptionHtml = (useCase?.data?.description || useCase?.description)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.description || useCase.description || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.description || useCase.description || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
   
 $: problemHtml = (useCase?.data?.problem || useCase?.problem)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.problem || useCase.problem || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.problem || useCase.problem || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
   
 $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.solution || useCase.solution || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.solution || useCase.solution || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
 
@@ -348,27 +306,27 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   const getReferences = () => useCase?.data?.references || useCase?.references || [];
   
   $: parsedBenefits = (useCase?.data?.benefits || useCase?.benefits)
-    ? (useCase.data?.benefits || useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, getReferences()))
+    ? (useCase.data?.benefits || useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedMetrics = (useCase?.data?.metrics || useCase?.metrics)
-    ? (useCase.data?.metrics || useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, getReferences()))
+    ? (useCase.data?.metrics || useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedRisks = (useCase?.data?.risks || useCase?.risks)
-    ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, getReferences()))
+    ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedTechnologies = (useCase?.data?.technologies || useCase?.technologies)
-    ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, getReferences()))
+    ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedDataSources = (useCase?.data?.dataSources || useCase?.dataSources)
-    ? (useCase.data?.dataSources || useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, getReferences()))
+    ? (useCase.data?.dataSources || useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedDataObjects = (useCase?.data?.dataObjects || useCase?.dataObjects)
-    ? (useCase.data?.dataObjects || useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, getReferences()))
+    ? (useCase.data?.dataObjects || useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
 
   $: parsedNextSteps = (useCase?.data?.nextSteps || useCase?.nextSteps)
@@ -382,7 +340,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, getReferences())
+          description: renderMarkdownWithRefs(description, getReferences(), { addListStyles: true, listPadding: 1.5 })
         };
       })
     : [];
@@ -393,7 +351,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, getReferences())
+          description: renderMarkdownWithRefs(description, getReferences(), { addListStyles: true, listPadding: 1.5 })
         };
       })
     : [];

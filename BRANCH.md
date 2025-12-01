@@ -144,15 +144,71 @@ All 136 unit tests passing ✅
 - **Action**: Removed unused imports/functions, fixed accessibility
 - **Status**: ✅ Fixed
 
+#### Step 3.2: `routes/dashboard/+page.svelte` (5 errors) ✅
+- **Errors**:
+  - `'handleFolderChange' is assigned a value but never used` → Removed unused function
+  - `'maxFontSize' is assigned a value but never used` → Removed unused variable
+  - `'baseBoxPadding' is assigned a value but never used` → Removed unused variable
+  - Missing `aria-label` on button → Added `aria-label="Fermer la configuration"`
+  - `{@html}` XSS warning → Left as is (systemic issue, to be addressed globally)
+- **Action**: Removed unused variables/functions, added `aria-label`
+- **Status**: ✅ Fixed
+
 ---
 
 ## 🚧 Current Work
 
-**Currently working on**: Phase 3 in progress - Step 3.1 completed ✅
+**Currently working on**: Phase 3 in progress - Step 3.2 completed ✅
 
 **Next step**: Continue Phase 3 with next component
 
-**Progress**: 124 → 100 errors (-24 errors, -19.4%)
+**Progress**: 124 → 95 errors (-29 errors, -23.4%)
+
+---
+
+## 🔧 Refactoring Markdown (Inter-Phase Work)
+
+### Status: ✅ Completed
+
+#### Problem
+- Duplicate markdown rendering logic between `dashboard/+page.svelte` and `UseCaseDetail.svelte`
+- Inconsistent CSS styling (1rem vs 1.5rem)
+- Repeated reference parsing code
+
+#### Solution: Refactoring into Shared Utility
+- **Extracted functions** in `ui/src/lib/utils/markdown.ts`:
+  - `createReferenceLink(reference, index)` - Creates reference link HTML
+  - `parseReferencesInMarkdown(text, references)` - Parses references in markdown text
+  - `parseReferencesInText(text, references)` - Parses references in plain text
+  - `renderMarkdownWithRefs(text, references?, options?)` - Main rendering function with:
+    - Text normalization (whitespace handling)
+    - Marked conversion to HTML
+    - Optional CSS styling for lists/headings
+    - Reference parsing and link insertion
+
+#### Changes Made
+1. **`ui/src/lib/utils/markdown.ts`**: 
+   - Extracted shared markdown functions
+   - Added `renderMarkdownWithRefs()` with unified styling (1rem for lists/headings)
+   - Proper TypeScript typing for `marked` library
+2. **`ui/src/routes/dashboard/+page.svelte`**: 
+   - Refactored to use `renderMarkdownWithRefs()`
+   - Simplified code (57 lines removed)
+3. **`ui/src/lib/components/UseCaseDetail.svelte`**: 
+   - Refactored to use `renderMarkdownWithRefs()`
+   - Simplified code (94 lines removed)
+4. **`ui/.eslintrc.cjs`**: 
+   - Added TypeScript parser configuration for ESLint module resolution
+   - Added `parserOptions.project: './tsconfig.json'` and `tsconfigRootDir: __dirname`
+5. **`ui/src/types/marked.d.ts`**: 
+   - Added TypeScript declaration file for `marked` library
+   - Ensures VSCode TypeScript Language Server can resolve the module
+
+#### Benefits
+- ✅ DRY: Single source of truth for markdown rendering
+- ✅ Consistent styling across components
+- ✅ Easier maintenance and testing
+- ✅ TypeScript types properly resolved in VSCode and ESLint
 
 ---
 
@@ -166,6 +222,17 @@ All 136 unit tests passing ✅
   - Fixed `QueueMonitor.svelte`: removed unused imports/variables, added aria-label
   - Fixed `EditableInput.svelte`: fixed label association, removed unused CSS
   - Fixed `auth/login/+page.svelte`: removed unused variables, changed href='#' to buttons
+
+- [x] **Phase 3.1** (58a0c84): Fix `routes/dossiers/+page.svelte` (105 → 100 errors)
+  - Removed unused imports/functions, improved accessibility of `<article>` element
+
+- [x] **Phase 3.2** (fdcc0f7): Fix `routes/dashboard/+page.svelte` (100 → 95 errors)
+  - Removed unused variables/functions, added `aria-label`
+
+- [x] **Refactoring Markdown** (TBD): Extract shared markdown rendering functions
+  - Created `renderMarkdownWithRefs()` in `ui/src/lib/utils/markdown.ts`
+  - Refactored `dashboard/+page.svelte` and `UseCaseDetail.svelte` to use shared function
+  - Added TypeScript declarations and ESLint config for `marked` library
 
 ---
 
