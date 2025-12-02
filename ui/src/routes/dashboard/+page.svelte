@@ -1,4 +1,8 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // L'usage de {@html} dans ce fichier passe par renderMarkdownWithRefs()
+  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  
   import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';

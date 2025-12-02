@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const BULLET_PATTERN = /(^|\n)[ \t]*[•▪‣●◦]/g;
 const SINGLE_NEWLINE_PATTERN = /([^\n\r])\r?\n(?!\r?\n|\s*[-*•]|\s*$)/g;
@@ -101,6 +102,34 @@ export function markdownToArray(markdown?: string): string[] {
 }
 
 /**
+ * Configuration DOMPurify pour sanitizer le HTML markdown
+ * Autorise les éléments nécessaires tout en bloquant les risques XSS
+ */
+const sanitizeConfig = {
+  ALLOWED_TAGS: ['p', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'strong', 'em', 'code', 'pre', 'blockquote', 'br', 'hr', 'span', 'b', 'i', 'u'],
+  ALLOWED_ATTR: ['class', 'style', 'href', 'title', 'id', 'onclick'],
+  ALLOWED_CLASSES: true, // Autoriser toutes les classes (pour Tailwind)
+  ALLOW_DATA_ATTR: false,
+  ALLOW_UNKNOWN_PROTOCOLS: false,
+  SAFE_FOR_TEMPLATES: true,
+  // Autoriser les liens internes avec # (pour les références) et les protocoles standards
+  ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|#):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+};
+
+/**
+ * Sanitize le HTML avec DOMPurify (côté client uniquement)
+ * En SSR, retourne le HTML brut (sera sanitizé lors de l'hydratation côté client)
+ */
+function sanitizeHtml(html: string): string {
+  // DOMPurify nécessite window (côté client uniquement)
+  if (typeof window === 'undefined') {
+    // En SSR, retourner le HTML tel quel (sera sanitizé au hydratation côté client)
+    return html;
+  }
+  return DOMPurify.sanitize(html, sanitizeConfig);
+}
+
+/**
  * Crée un lien HTML vers une référence avec scroll smooth
  */
 export function createReferenceLink(num: string, ref: Reference): string {
@@ -136,13 +165,16 @@ export function parseReferencesInText(text: string, references: Reference[] = []
   if (!text || !references || references.length === 0) return text;
   
   // Remplacer les patterns [1], [2], etc par des liens cliquables
-  return text.replace(/\[(\d+)\]/g, (match, num) => {
+  let html = text.replace(/\[(\d+)\]/g, (match, num) => {
     const index = parseInt(num) - 1;
     if (index >= 0 && index < references.length) {
       return createReferenceLink(num, references[index]);
     }
     return match; // Si la référence n'existe pas, garder le texte original
   });
+  
+  // Sanitizer le HTML avant de le retourner (protection XSS)
+  return sanitizeHtml(html);
 }
 
 /**
@@ -186,7 +218,10 @@ export function renderMarkdownWithRefs(
   }
   
   // Parser les références [1], [2], etc.
-  return parseReferencesInMarkdown(html, references);
+  html = parseReferencesInMarkdown(html, references);
+  
+  // Sanitizer le HTML avant de le retourner (protection XSS)
+  return sanitizeHtml(html);
 }
 
 

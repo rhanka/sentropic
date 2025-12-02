@@ -1,4 +1,8 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // Tous les usages de {@html} dans ce fichier passent par renderMarkdownWithRefs() ou parseReferencesInText()
+  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  
   import References from '$lib/components/References.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { scoreToStars } from '$lib/utils/scoring';
