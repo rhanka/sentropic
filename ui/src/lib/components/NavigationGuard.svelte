@@ -2,7 +2,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
-  import { goto, pushState, replaceState } from '$app/navigation';
+  import { goto } from '$app/navigation';
   
   let showWarning = false;
   let pendingNavigation = null;
@@ -25,32 +25,6 @@
           goto(link.getAttribute('href'));
         };
       }
-    };
-    
-    // Intercepter les changements d'URL programmatiques
-    const originalPushState = pushState;
-    const originalReplaceState = replaceState;
-    
-    const interceptPush = (...args) => {
-      if ($unsavedChangesStore.changes.length > 0) {
-        showWarning = true;
-        pendingNavigation = () => {
-          originalPushState(...args);
-        };
-        return;
-      }
-      originalPushState(...args);
-    };
-    
-    const interceptReplace = (...args) => {
-      if ($unsavedChangesStore.changes.length > 0) {
-        showWarning = true;
-        pendingNavigation = () => {
-          originalReplaceState(...args);
-        };
-        return;
-      }
-      originalReplaceState(...args);
     };
     
     // Intercepter les clics sur les boutons de navigation

@@ -30,6 +30,13 @@
   - [x] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
 - [x] Séparer dans la génération la description en: description (plus courte), problème, solution
 - [ ] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
+- [ ] Minor feat and fixs
+  - [ ] Fix: le refresh dans github pages (CTRL+R) des pages cas-usage|entreprise/[id] génère un 404 (c'est une régression)
+  - [ ] Fix: Dans matrix, le nombre de cas n'est pas décompté (nombre par seuil de valeur pour configuration des seuils de valeur et complexité).
+  - [ ] Feat: Dans matrice, il faut pouvoir ajouter et supprimer des axes de valeur complexité
+  - [ ] Feat: dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
+  - [ ] Feat: dans les fiches entreprise (vue /entreprises), tronquet taille au meme nombre de caractères que produits et services (...)
+  - [ ] Fix: NavigationGuard: sauver automatiquement, tout simplement !
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
