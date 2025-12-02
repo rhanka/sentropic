@@ -273,14 +273,6 @@
     }
   };
 
-  // Fonction pour rendre le markdown avec références et styles (utilise la fonction partagée)
-  const renderMarkdown = (text: string | null | undefined, references: Array<{title: string; url: string}> = []): string => {
-    return renderMarkdownWithRefs(text, references, {
-      addListStyles: true,
-      addHeadingStyles: true,
-      listPadding: 1.5
-    });
-  };
 
 
   // Filtrer les cas d'usage par dossier sélectionné
@@ -500,7 +492,11 @@
         <h3>Synthèse exécutive</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-            {@html renderMarkdown(editedSyntheseExecutive, executiveSummary?.references || [])}
+            {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
+              addListStyles: true,
+              addHeadingStyles: true,
+              listPadding: 1.5
+            })}
           </div>
         </div>
       </div>

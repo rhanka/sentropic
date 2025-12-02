@@ -1,12 +1,12 @@
 <script lang="ts">
   import References from '$lib/components/References.svelte';
-import EditableInput from '$lib/components/EditableInput.svelte';
-import { scoreToStars } from '$lib/utils/scoring';
+  import EditableInput from '$lib/components/EditableInput.svelte';
+  import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
-import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
+  import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
