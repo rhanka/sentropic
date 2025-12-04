@@ -255,7 +255,7 @@
       <!-- eslint-disable-next-line svelte/valid-compile -->
       <article 
         role={canClick ? 'button' : undefined}
-        tabindex={canClick ? '0' : '-1'}
+        tabindex={canClick ? 0 : -1}
         class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
         on:click={() => canClick && handleUseCaseClick(useCase.id, useCase.status || 'completed')}
         on:keydown={(e) => {

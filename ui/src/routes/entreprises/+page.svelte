@@ -86,7 +86,7 @@
       <!-- svelte-ignore a11y-no-noninteractive-element-to-interactive-role -->
       <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
                role="button"
-               tabindex={isEnriching ? '-1' : '0'}
+               tabindex={isEnriching ? -1 : 0}
                on:click={() => { if (!isEnriching) goto(`/entreprises/${company.id}`); }}
                on:keydown={(e) => { if (!isEnriching && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goto(`/entreprises/${company.id}`); } }}>
         {#if isEnriching}

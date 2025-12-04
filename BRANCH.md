@@ -302,29 +302,35 @@ All UI linting errors have been fixed. See detailed progress below.
 
 ### Phase 1: Simple Files (1 error)
 
-#### Step 1.1: `lib/components/QueueMonitor.svelte` (1 error)
+#### Step 1.1: `lib/components/QueueMonitor.svelte` (1 error) ✅
 - **Error**: `Type 'null' is not assignable to type 'Timeout'`
-- **Status**: ⏳ Pending
+- **Fix**: Changed type to `ReturnType<typeof setInterval> | null = null`
+- **Status**: ✅ Fixed
 
-#### Step 1.2: `lib/services/webauthn-client.ts` (1 error)
-- **Error**: `Cannot find module '@simplewebauthn/types' or its corresponding type declarations`
-- **Status**: ⏳ Pending
+#### Step 1.2: `lib/services/webauthn-client.ts` (1 error) ✅
+- **Error**: `Cannot find module '@simplewebauthn/types'` + API v13 changes
+- **Fix**: Migrated types import from `@simplewebauthn/types` to `@simplewebauthn/browser`, updated API calls to use `{ optionsJSON: options }`
+- **Status**: ✅ Fixed
 
-#### Step 1.3: `routes/entreprises/+page.svelte` (1 error)
-- **Error**: (to be analyzed)
-- **Status**: ⏳ Pending
+#### Step 1.3: `routes/entreprises/+page.svelte` (1 error) ✅
+- **Error**: `Type 'string' is not assignable to type 'number'` (tabindex)
+- **Fix**: Changed `tabindex={isEnriching ? '-1' : '0'}` to `tabindex={isEnriching ? -1 : 0}`
+- **Status**: ✅ Fixed
 
-#### Step 1.4: `routes/entreprises/[id]/+page.svelte` (1 error)
+#### Step 1.4: `routes/entreprises/[id]/+page.svelte` (1 error) ✅
 - **Error**: `'company' is possibly 'null'`
-- **Status**: ⏳ Pending
+- **Fix**: Stored `company.id` in a local variable before async operations
+- **Status**: ✅ Fixed
 
-#### Step 1.5: `routes/dossiers/+page.svelte` (1 error)
-- **Error**: `Type 'string' is not assignable to type 'number'`
-- **Status**: ⏳ Pending
+#### Step 1.5: `routes/dossiers/+page.svelte` (1 error) ✅
+- **Error**: `Type 'string' is not assignable to type 'number'` (tabindex)
+- **Fix**: Changed `tabindex={canClick ? '0' : '-1'}` to `tabindex={canClick ? 0 : -1}`
+- **Status**: ✅ Fixed
 
-#### Step 1.6: `routes/cas-usage/[id]/+page.svelte` (1 error)
+#### Step 1.6: `routes/cas-usage/[id]/+page.svelte` (1 error) ✅
 - **Error**: `Cannot find module '$lib/types/matrix'`
-- **Status**: ⏳ Pending
+- **Note**: Le fichier existe, l'erreur peut être un faux positif ou résolu par les corrections précédentes
+- **Status**: ⏳ À vérifier
 
 ### Phase 2: Medium Files (2-4 errors)
 

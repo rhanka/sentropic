@@ -37,6 +37,7 @@
   - [ ] Feat: dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
   - [ ] Feat: dans les fiches entreprise (vue /entreprises), tronquet taille au meme nombre de caractères que produits et services (...)
   - [ ] Fix: NavigationGuard: sauver automatiquement, tout simplement !
+  - [ ] Fix webauthn : in prod web auth is both ok for register and login, but in localhost for dev, webauthn is ok for register but not for login with a smartphone
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)

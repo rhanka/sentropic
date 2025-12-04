@@ -252,7 +252,7 @@
             <article 
               class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
               role={canClick ? 'button' : undefined}
-              tabindex={canClick ? '0' : '-1'}
+              tabindex={canClick ? 0 : -1}
               on:click={() => canClick ? handleFolderClick(folder.id, folder.status || 'completed') : null}
               on:keydown={(e) => {
                 if (canClick && (e.key === 'Enter' || e.key === ' ')) {

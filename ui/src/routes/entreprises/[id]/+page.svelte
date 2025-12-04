@@ -98,9 +98,10 @@
   const refreshCompanyStatus = async () => {
     if (!company) return;
 
+    const currentCompanyId = company.id;
     try {
       const companies = await fetchCompanies();
-      const updatedCompany = companies.find(c => c.id === company.id);
+      const updatedCompany = companies.find(c => c.id === currentCompanyId);
       if (updatedCompany) {
         company = updatedCompany;
       }

@@ -6,7 +6,7 @@
   import { apiPost } from '$lib/utils/api';
   import { isAuthenticated } from '$lib/stores/session';
 
-  let refreshInterval: ReturnType<typeof setInterval>;
+  let refreshInterval: ReturnType<typeof setInterval> | null = null;
   let isVisible = false;
 
   $: hasJobs = $queueStore.jobs.length > 0;
