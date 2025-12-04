@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 
 interface UnsavedChange {
   id: string;
@@ -18,7 +18,9 @@ const initialState: UnsavedChangesState = {
 };
 
 function createUnsavedChangesStore() {
-  const { subscribe, set, update } = writable<UnsavedChangesState>(initialState);
+  // Garder une référence au store interne pour pouvoir utiliser get() directement
+  const internalStore = writable<UnsavedChangesState>(initialState);
+  const { subscribe, set, update } = internalStore;
 
   return {
     subscribe,
@@ -50,8 +52,7 @@ function createUnsavedChangesStore() {
     
     // Sauvegarder toutes les modifications
     saveAll: async () => {
-      let currentState: UnsavedChangesState;
-      subscribe(state => currentState = state)();
+      const currentState = get(internalStore);
       const savePromises = currentState.changes.map(change => change.saveFunction());
       
       try {
@@ -66,15 +67,13 @@ function createUnsavedChangesStore() {
     
     // Vérifier s'il y a des modifications non sauvegardées
     hasUnsavedChanges: () => {
-      let currentState: UnsavedChangesState;
-      subscribe(state => currentState = state)();
+      const currentState = get(internalStore);
       return currentState.changes.length > 0;
     },
     
     // Obtenir le nombre de modifications
     getChangeCount: () => {
-      let currentState: UnsavedChangesState;
-      subscribe(state => currentState = state)();
+      const currentState = get(internalStore);
       return currentState.changes.length;
     },
     

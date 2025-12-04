@@ -1086,7 +1086,7 @@
           for (const clique of cliques) {
             let attemptSucceeded = false;
             for (let attempt = 0; attempt < MAX_CLIQUE_ATTEMPTS; attempt++) {
-              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points, medianX, medianY, xScale, yScale, labelStandardArea, currentScale);
+              const updated = attemptCliqueMove(clique, boxes, stats, chartArea, temperature, points, medianX, medianY, xScale, yScale, labelStandardArea);
               if (updated.accepted && updated.stats) {
                 stats = updated.stats;
                 currentCost = stats.cost;
@@ -1773,11 +1773,11 @@
   $: chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: false,
+    animation: false as const,
     interaction: {
-      mode: 'nearest',
+      mode: 'nearest' as const,
       intersect: true,
-      axis: 'xy'
+      axis: 'xy' as const
     },
     plugins: {
       // Passer les seuils et le scale au plugin via les options
@@ -1793,7 +1793,7 @@
         text: 'Matrice de priorisation',
         font: {
           size: 16,
-          weight: 'bold'
+          weight: 'bold' as const
         },
         color: THEME_BLUE
       },
@@ -1958,7 +1958,7 @@
           // On augmente juste le facteur pour l'impression
           devicePixelRatio: resolutionFactor,
           maintainAspectRatio: false
-        }
+        } as any
       });
     }
   }

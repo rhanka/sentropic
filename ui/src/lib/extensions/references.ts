@@ -92,13 +92,13 @@ export const References = Mark.create<ReferencesOptions>({
       {
         key: 'parseReferences',
         props: {
-          handleText: (view, pos, text) => {
+          handleText: (view: any, pos: number, text: string) => {
             // Cette approche nécessite de post-traiter le markdown avant qu'il ne soit rendu
             // Alternative: post-traiter dans EditableInput après rendu
             return false;
           },
         },
-      },
+      } as any,
     ];
   },
 });
