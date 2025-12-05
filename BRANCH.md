@@ -32,15 +32,15 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Fichiers à vérifier: `api/src/services/webauthn-authentication.ts`, configuration dev
 
 ### Phase 2: Nouvelles fonctionnalités (Features)
-- [ ] **Feat 1**: Dans matrice, pouvoir ajouter et supprimer des axes de valeur/complexité
+- [x] **Feat 1**: Dans matrice, pouvoir ajouter et supprimer des axes de valeur/complexité
   - Scope: UI + API (page matrice + endpoints)
   - Fichiers à vérifier: `ui/src/routes/matrice/+page.svelte`, `api/src/routes/api/folders.ts`
   
-- [ ] **Feat 2**: Dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
+- [x] **Feat 2**: Dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
   - Scope: UI (composant EditableInput)
   - Fichiers à vérifier: `ui/src/lib/components/EditableInput.svelte`
   
-- [ ] **Feat 3**: Dans les fiches entreprise (vue /entreprises), tronquer taille au même nombre de caractères que produits et services
+- [x] **Feat 3**: Dans les fiches entreprise (vue /entreprises), tronquer taille au même nombre de caractères que produits et services
   - Scope: UI (page entreprises)
   - Fichiers à vérifier: `ui/src/routes/entreprises/+page.svelte`
 
@@ -115,11 +115,14 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 3**: Fix auto-save des seuils et recalcul automatique des comptages
 - [x] **Commit 4**: Fix NavigationGuard - sauvegarde automatique au lieu d'afficher un dialogue
 - [x] **Commit 5**: Fix WebAuthn - accepter les IPs locales pour login smartphone en localhost dev
+- [x] **Commit 6**: Feat ajout/suppression d'axes dans matrice
+- [x] **Commit 7**: Feat EditableInput markdown avec point orange et hover bord gauche gris
+- [x] **Commit 8**: Feat tronquer taille dans fiches entreprise
 
 ## Status
-- **Progress**: 5/20 tâches complétées
-- **Current**: Fix WebAuthn - acceptation des IPs locales pour smartphone complété
-- **Next**: Phase 2 - Features (ajout/suppression d'axes, EditableInput markdown, troncature entreprise)
+- **Progress**: 8/20 tâches complétées
+- **Current**: Feat tronquer taille dans fiches entreprise complété
+- **Next**: Phase 1 complétée - Toutes les fixes et features mineures sont terminées
 
 ## Questions avant de commencer
 1. **Priorité**: Quelle phase doit être traitée en premier ? (suggéré: Phase 1 - corrections critiques)

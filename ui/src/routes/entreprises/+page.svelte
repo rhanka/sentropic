@@ -154,7 +154,7 @@
                   <p class="text-sm text-slate-600">Secteur: {company.industry}</p>
                 {/if}
                 {#if company.size}
-                  <p class="text-sm text-slate-500">Taille: {company.size}</p>
+                  <p class="text-sm text-slate-500 line-clamp-2">Taille: {company.size}</p>
                 {/if}
               </div>
             {/if}
