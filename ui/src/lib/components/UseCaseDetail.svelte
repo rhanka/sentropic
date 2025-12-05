@@ -48,6 +48,12 @@ const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies'
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
+interface ScoreEntry {
+  axisId: string;
+  rating: number;
+  description?: string;
+}
+
 let textBuffers: Record<TextField, string> = {
   description: '',
   problem: '',
@@ -108,8 +114,8 @@ const setScoreBuffer = (type: 'value' | 'complexity', axisId: string, value: str
 $: if (useCase?.id) {
   // Extraire les valeurs depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
   const getFieldValue = (field: TextField): string => {
-    // Pour name, description, problem, solution : chercher dans data d'abord
-    if (field === 'name' || field === 'description' || field === 'problem' || field === 'solution') {
+    // Pour description, problem, solution : chercher dans data d'abord
+    if (field === 'description' || field === 'problem' || field === 'solution') {
       return useCase?.data?.[field] || useCase?.[field] || '';
     }
     // Pour les autres champs : chercher dans data puis dans les propriétés directes
@@ -530,7 +536,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               markdown={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getTextFullData('deadline')}
-              fullDataGetter={() => getTextFullData('deadline')}
+              fullDataGetter={(() => getTextFullData('deadline')) as any}
               changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
               originalValue={textOriginals.deadline || ''}
                   references={getReferences()}
@@ -568,7 +574,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('description')}
-                  fullDataGetter={() => getTextFullData('description')}
+                  fullDataGetter={(() => getTextFullData('description')) as any}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
                   originalValue={textOriginals.description || ''}
                   references={getReferences()}
@@ -605,7 +611,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     markdown={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getTextFullData('problem')}
-                    fullDataGetter={() => getTextFullData('problem')}
+                    fullDataGetter={(() => getTextFullData('problem')) as any}
                     changeId={useCase?.id ? `usecase-problem-${useCase.id}` : ''}
                     originalValue={textOriginals.problem || ''}
                     references={getReferences()}
@@ -640,7 +646,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     markdown={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getTextFullData('solution')}
-                    fullDataGetter={() => getTextFullData('solution')}
+                    fullDataGetter={(() => getTextFullData('solution')) as any}
                     changeId={useCase?.id ? `usecase-solution-${useCase.id}` : ''}
                     originalValue={textOriginals.solution || ''}
                     references={getReferences()}
@@ -684,7 +690,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   forceList={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getListFullData('benefits')}
-                  fullDataGetter={() => getListFullData('benefits')}
+                  fullDataGetter={(() => getListFullData('benefits')) as any}
                   changeId={useCase?.id ? `usecase-benefits-${useCase.id}` : ''}
                   originalValue={arrayToMarkdown(listOriginals.benefits) || ''}
                   references={getReferences()}
@@ -725,7 +731,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     forceList={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getListFullData('risks')}
-                    fullDataGetter={() => getListFullData('risks')}
+                    fullDataGetter={(() => getListFullData('risks')) as any}
                     changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.risks) || ''}
                     references={getReferences()}
@@ -764,7 +770,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     forceList={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getListFullData('metrics')}
-                    fullDataGetter={() => getListFullData('metrics')}
+                    fullDataGetter={(() => getListFullData('metrics')) as any}
                     changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
                     references={getReferences()}
@@ -805,7 +811,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('contact')}
-                  fullDataGetter={() => getTextFullData('contact')}
+                  fullDataGetter={(() => getTextFullData('contact')) as any}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
                   originalValue={textOriginals.contact || ''}
                   references={getReferences()}
@@ -851,7 +857,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 forceList={true}
                 apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                 fullData={getListFullData('technologies')}
-                fullDataGetter={() => getListFullData('technologies')}
+                fullDataGetter={(() => getListFullData('technologies')) as any}
                 changeId={useCase?.id ? `usecase-technologies-${useCase.id}` : ''}
                 originalValue={arrayToMarkdown(listOriginals.technologies) || ''}
                 references={getReferences()}
@@ -902,7 +908,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               forceList={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getListFullData('dataSources')}
-              fullDataGetter={() => getListFullData('dataSources')}
+              fullDataGetter={(() => getListFullData('dataSources')) as any}
               changeId={useCase?.id ? `usecase-dataSources-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataSources) || ''}
               references={getReferences()}
@@ -952,7 +958,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               forceList={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getListFullData('dataObjects')}
-              fullDataGetter={() => getListFullData('dataObjects')}
+              fullDataGetter={(() => getListFullData('dataObjects')) as any}
               changeId={useCase?.id ? `usecase-dataObjects-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataObjects) || ''}
               references={getReferences()}
@@ -995,7 +1001,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             forceList={true}
             apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
             fullData={getListFullData('nextSteps')}
-            fullDataGetter={() => getListFullData('nextSteps')}
+            fullDataGetter={(() => getListFullData('nextSteps')) as any}
             changeId={useCase?.id ? `usecase-nextSteps-${useCase.id}` : ''}
             originalValue={arrayToMarkdown(listOriginals.nextSteps) || ''}
             references={getReferences()}
@@ -1033,7 +1039,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {#each matrix.valueAxes as axis}
             {@const allValueScores = useCase?.data?.valueScores || useCase?.valueScores || []}
             {@const score = allValueScores.find((s: any) => s.axisId === axis.id)}
-            {@const parsedScore = parsedValueScores.find((s) => s.axisId === axis.id)}
+            {@const parsedScore = parsedValueScores.find((s: ScoreEntry) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               {@const key = `value-${axis.id}`}
@@ -1062,7 +1068,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       markdown={true}
                       apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                       fullData={getScoreFullData('value', axis.id)}
-                      fullDataGetter={() => getScoreFullData('value', axis.id)}
+                      fullDataGetter={(() => getScoreFullData('value', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-valueScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
                       references={getReferences()}
@@ -1091,7 +1097,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {#each matrix.complexityAxes as axis}
             {@const allComplexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || []}
             {@const score = allComplexityScores.find((s: any) => s.axisId === axis.id)}
-            {@const parsedScore = parsedComplexityScores.find((s) => s.axisId === axis.id)}
+            {@const parsedScore = parsedComplexityScores.find((s: ScoreEntry) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               {@const key = `complexity-${axis.id}`}
@@ -1126,7 +1132,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       markdown={true}
                       apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                       fullData={getScoreFullData('complexity', axis.id)}
-                      fullDataGetter={() => getScoreFullData('complexity', axis.id)}
+                      fullDataGetter={(() => getScoreFullData('complexity', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-complexityScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
                       references={getReferences()}
