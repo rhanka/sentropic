@@ -317,6 +317,82 @@
     }
   };
 
+  /**
+   * Ajoute un nouvel axe de valeur ou de complexité
+   */
+  const addAxis = (isValue: boolean) => {
+    const newAxis: MatrixAxis = {
+      id: `axis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: isValue ? 'Nouvel axe de valeur' : 'Nouvel axe de complexité',
+      weight: 1.0,
+      description: '',
+      levelDescriptions: []
+    };
+    
+    if (isValue) {
+      const newValueAxes = [...editedConfig.valueAxes, newAxis];
+      editedConfig = { ...editedConfig, valueAxes: newValueAxes };
+    } else {
+      const newComplexityAxes = [...editedConfig.complexityAxes, newAxis];
+      editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
+    }
+    
+    // Enregistrer la modification dans le store
+    unsavedChangesStore.addChange({
+      id: `matrix-axes-all`,
+      component: 'matrix-axes',
+      value: editedConfig,
+      saveFunction: saveThresholds // Réutiliser la même fonction de sauvegarde
+    });
+    
+    // Programmer la sauvegarde après 5 secondes
+    scheduleThresholdSave();
+    
+    // Recalculer les comptages après ajout d'axe
+    updateCaseCounts();
+    
+    addToast({
+      type: 'success',
+      message: `Nouvel axe ${isValue ? 'de valeur' : 'de complexité'} ajouté`
+    });
+  };
+
+  /**
+   * Supprime un axe de valeur ou de complexité
+   */
+  const removeAxis = (isValue: boolean, index: number) => {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.`)) {
+      return;
+    }
+    
+    if (isValue) {
+      const newValueAxes = editedConfig.valueAxes.filter((_, i) => i !== index);
+      editedConfig = { ...editedConfig, valueAxes: newValueAxes };
+    } else {
+      const newComplexityAxes = editedConfig.complexityAxes.filter((_, i) => i !== index);
+      editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
+    }
+    
+    // Enregistrer la modification dans le store
+    unsavedChangesStore.addChange({
+      id: `matrix-axes-all`,
+      component: 'matrix-axes',
+      value: editedConfig,
+      saveFunction: saveThresholds
+    });
+    
+    // Programmer la sauvegarde après 5 secondes
+    scheduleThresholdSave();
+    
+    // Recalculer les comptages après suppression d'axe
+    updateCaseCounts();
+    
+    addToast({
+      type: 'success',
+      message: `Axe ${isValue ? 'de valeur' : 'de complexité'} supprimé`
+    });
+  };
+
   const updateAxisName = (isValue: boolean, index: number, newName: string) => {
     if (isValue) {
       const newAxes = [...editedConfig.valueAxes];
@@ -539,7 +615,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
+        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
             {#each range(3) as i (i)}
@@ -547,8 +623,18 @@
             {/each}
             {#each range(2) as i (i)}
               <span class="text-gray-300 text-xl">★</span>
-        {/each}
+            {/each}
           </h2>
+          <button
+            on:click={() => addAxis(true)}
+            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+            title="Ajouter un axe de valeur"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            Ajouter
+          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
@@ -589,17 +675,29 @@
                     />
                   </td>
                   <td class="px-4 py-3">
-                    <button 
-                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
-                      on:click={() => openAxisDescriptions(axis, true)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
-                    >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
-        </button>
+                    <div class="flex items-center gap-2">
+                      <button 
+                        class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                        on:click={() => openAxisDescriptions(axis, true)}
+                        title="Voir les niveaux"
+                        aria-label="Voir les niveaux de {axis.name}"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                        on:click={() => removeAxis(true, index)}
+                        title="Supprimer cet axe"
+                        aria-label="Supprimer {axis.name}"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               {/each}
@@ -610,7 +708,7 @@
       
       <!-- Complexity Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
+        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
             {#each range(3) as i (i)}
@@ -618,8 +716,18 @@
             {/each}
             {#each range(2) as i (i)}
               <span class="text-gray-300 font-bold">X</span>
-        {/each}
+            {/each}
           </h2>
+          <button
+            on:click={() => addAxis(false)}
+            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+            title="Ajouter un axe de complexité"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            Ajouter
+          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
@@ -660,17 +768,29 @@
                     />
                   </td>
                   <td class="px-4 py-3">
-                    <button 
-                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
-                      on:click={() => openAxisDescriptions(axis, false)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
-                    >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
-        </button>
+                    <div class="flex items-center gap-2">
+                      <button 
+                        class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                        on:click={() => openAxisDescriptions(axis, false)}
+                        title="Voir les niveaux"
+                        aria-label="Voir les niveaux de {axis.name}"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                        on:click={() => removeAxis(false, index)}
+                        title="Supprimer cet axe"
+                        aria-label="Supprimer {axis.name}"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               {/each}

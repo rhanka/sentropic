@@ -27,7 +27,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Scope: UI (composant NavigationGuard)
   - Fichiers à vérifier: `ui/src/lib/components/NavigationGuard.svelte` ou similaire
   
-- [ ] **Fix 4**: WebAuthn - en prod OK pour register et login, mais en localhost pour dev, webauthn OK pour register mais pas pour login avec smartphone
+- [x] **Fix 4**: WebAuthn - en prod OK pour register et login, mais en localhost pour dev, webauthn OK pour register mais pas pour login avec smartphone
   - Scope: API (service WebAuthn)
   - Fichiers à vérifier: `api/src/services/webauthn-authentication.ts`, configuration dev
 
@@ -114,11 +114,12 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 2**: Fix comptage dans matrix - calcul et affichage du nombre de cas par seuil
 - [x] **Commit 3**: Fix auto-save des seuils et recalcul automatique des comptages
 - [x] **Commit 4**: Fix NavigationGuard - sauvegarde automatique au lieu d'afficher un dialogue
+- [x] **Commit 5**: Fix WebAuthn - accepter les IPs locales pour login smartphone en localhost dev
 
 ## Status
-- **Progress**: 4/20 tâches complétées
-- **Current**: Fix NavigationGuard - sauvegarde automatique complété
-- **Next**: Fix 4 - WebAuthn login avec smartphone en localhost
+- **Progress**: 5/20 tâches complétées
+- **Current**: Fix WebAuthn - acceptation des IPs locales pour smartphone complété
+- **Next**: Phase 2 - Features (ajout/suppression d'axes, EditableInput markdown, troncature entreprise)
 
 ## Questions avant de commencer
 1. **Priorité**: Quelle phase doit être traitée en premier ? (suggéré: Phase 1 - corrections critiques)
