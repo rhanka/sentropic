@@ -112,10 +112,11 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit initial**: Création de la branche et BRANCH.md
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
 - [x] **Commit 2**: Fix comptage dans matrix - calcul et affichage du nombre de cas par seuil
+- [x] **Commit 3**: Fix auto-save des seuils et recalcul automatique des comptages
 
 ## Status
-- **Progress**: 2/20 tâches complétées
-- **Current**: Fix 2 complété (Comptage dans matrix)
+- **Progress**: 3/20 tâches complétées
+- **Current**: Fix auto-save des seuils et recalcul des comptages complété
 - **Next**: Fix 3 - NavigationGuard sauver automatiquement
 
 ## Questions avant de commencer
