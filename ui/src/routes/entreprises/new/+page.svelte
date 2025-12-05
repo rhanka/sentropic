@@ -108,15 +108,18 @@
 {#if company}
   <div class="space-y-6">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-semibold">
+    <div class="grid grid-cols-12 gap-4 items-center">
+      <!-- Titre sur 50% (6/12) -->
+      <div class="col-span-6 min-w-0">
+        <h1 class="text-3xl font-semibold break-words mb-0">
           <EditableInput
             value={company.name || 'Nouvelle entreprise'}
             originalValue=""
             changeId="new-company-name"
             apiEndpoint=""
             fullData={companyData}
+            markdown={false}
+            multiline={true}
             on:change={(e) => handleFieldUpdate('name', e.detail.value)}
             on:saved={() => {}}
           />
@@ -137,7 +140,8 @@
         {/if}
       </div>
       
-      <div class="flex gap-2">
+      <!-- Boutons sur 50% (6/12) -->
+      <div class="col-span-6 flex items-center justify-end gap-2">
         <button 
           class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
           data-testid="enrich-company"

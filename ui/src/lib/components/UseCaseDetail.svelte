@@ -455,42 +455,52 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
     {/if}
 
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="flex-1 min-w-0">
-          {#if isPrinting}
-            <h1 class="text-3xl font-semibold">
-              {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
-            </h1>
-          {:else}
-            <h1 class="text-3xl font-semibold">
-              <EditableInput
-                label=""
-                value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
-                markdown={false}
-                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                fullData={getNameFullData()}
-                fullDataGetter={getNameFullData as any}
-                changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
-                originalValue={nameOriginal || ''}
-                on:change={(e) => {
-                  nameBuffer = e.detail.value;
-                }}
-                on:saved={handleFieldSaved}
-              />
-            </h1>
-          {/if}
-        </div>
-        {#if useCase.model && showActions}
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 no-print ml-2">
-            {useCase.model}
-          </span>
+    <div class="grid grid-cols-12 gap-4 items-center print:grid-cols-1">
+      <!-- Titre sur 2 colonnes (8/12) -->
+      <div class="col-span-8 print:col-span-1 min-w-0">
+        {#if isPrinting}
+          <h1 class="text-3xl font-semibold break-words">
+            {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+          </h1>
+        {:else}
+          <h1 class="text-3xl font-semibold break-words mb-0">
+            <EditableInput
+              label=""
+              value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+              markdown={false}
+              multiline={true}
+              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              fullData={getNameFullData()}
+              fullDataGetter={getNameFullData as any}
+              changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
+              originalValue={nameOriginal || ''}
+              on:change={(e) => {
+                nameBuffer = e.detail.value;
+              }}
+              on:saved={handleFieldSaved}
+            />
+          </h1>
         {/if}
       </div>
       
+      <!-- Badge + Boutons sur 1 colonne (4/12) -->
       {#if showActions}
-        <div class="flex gap-2 no-print">
-          <slot name="actions-view" />
+        <div class="col-span-4 print:col-span-1 flex items-center justify-end gap-2 no-print">
+          {#if useCase.model}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+              {useCase.model}
+            </span>
+          {/if}
+          <div class="flex gap-2">
+            <slot name="actions-view" />
+          </div>
+        </div>
+      {:else if useCase.model}
+        <!-- En mode print, afficher le badge si présent -->
+        <div class="col-span-4 print:col-span-1 flex items-center justify-end">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+            {useCase.model}
+          </span>
         </div>
       {/if}
     </div>

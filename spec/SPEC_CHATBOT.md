@@ -1,0 +1,16 @@
+    - [ ] Design phase
+      - [ ] Spec à itérer
+        - [ ] Les objets (dossier, cas d'usage, synthèse) seront modifiable (regénération, ou modification d'un ensemble de champs) par des session de chat utilisateur via des tools
+        - [ ] Chaque objet (dossier, cas d'usage, synthèse exécutive) est associé à contexte de son historique (primo génération génération, regénération ou sessions interactives via tool utilisateur l'ayant modifié via un tool)
+        - [ ] Chaque action d'IA primo ou re-génération actuelle (entreprise, liste de cas) sera stockée, associée, avec le prompt id
+        - [ ] L'appel à chaque tool 
+        - [ ] Chaque prompt id  est associé à un type de génération (entreprise, liste de cas, cas d'usages)
+        - [ ] Dans chaque vue, l'utilisateur aura l'historique des interaction et succession de prompts utilisés pour générer l'objet, et interagir via les tools
+        - [ ] Pour chaque objet, l'IA d'une session aura à l'historique de la session (éventuelleemnt un résumé pour la gestion de conexte trop longue à terme), et pourra à l'historique des modification de l'utilisateur sur l'objet (tool) et actionner les modification des objets via des tools
+      - [ ] Modéliser les données de session live / contexte mgt (objet) / historique
+      - [ ] Modéliser le le streaming via la lib openai / exposition websocket
+        - [ ] L'IA et ses étapes de raisonnement devront être 
+      - [ ] Modéliser les composants d'UI et le streaming (incluant les reasoning token) utilisant 
+      - [ ] Définire l'archi logicielle incluant la gestion de queue et PG LISTEN/Notify
+    - [ ] Implémentation
+      Mettre en place les tables, incluant l'usage de PG LISTEN/Notify
