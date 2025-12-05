@@ -26,8 +26,8 @@ test.describe('Gestion des entreprises', () => {
     await page.click('button:has-text("Ajouter")');
     await expect(page).toHaveURL(/\/entreprises\/new$/);
     
-    // Renseigner le nom via l'EditableInput dans le H1
-    const nameInput = page.locator('h1 input.editable-input');
+    // Renseigner le nom via l'EditableInput dans le H1 (textarea pour multiline)
+    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(nameInput).toBeVisible();
     await nameInput.fill('Test Company');
     // Laisser la réactivité Svelte stabiliser l'état local
@@ -78,7 +78,7 @@ test.describe('Gestion des entreprises', () => {
     await expect(page).toHaveURL(/\/entreprises\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 3000 });
     
     // Vérifier directement sur la page de détail que le nom est bien celui saisi
-    const detailNameInput = page.locator('h1 input.editable-input');
+    const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(detailNameInput).toHaveValue('Test Company');
   });
 
@@ -95,7 +95,7 @@ test.describe('Gestion des entreprises', () => {
     await expect(aiButton).toBeDisabled();
     
     // Renseigner un nom pour activer le bouton IA
-    const nameInput = page.locator('h1 input.editable-input');
+    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Microsoft');
     await expect(aiButton).toBeEnabled();
   });
@@ -107,7 +107,7 @@ test.describe('Gestion des entreprises', () => {
     // Créer une entreprise d'abord (comme sur main)
     await page.click('button:has-text("Ajouter")');
     await expect(page).toHaveURL(/\/entreprises\/new$/);
-    const nameInput = page.locator('h1 input.editable-input');
+    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Company to Delete');
     await page.waitForTimeout(75);
     const createBtn2 = page.locator('button[title="Créer"], button:has-text("Créer")');
@@ -169,7 +169,7 @@ test.describe('Gestion des entreprises', () => {
     // Créer une entreprise et lancer l'enrichissement IA depuis la page New
     await page.click('button:has-text("Ajouter")');
     await expect(page).toHaveURL(/\/entreprises\/new$/);
-    const nameInput2 = page.locator('h1 input.editable-input');
+    const nameInput2 = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput2.fill('MicrosoftAITest');
     const aiButton = page.locator('[data-testid="enrich-company"], button:has-text("IA")');
     await expect(aiButton).toBeEnabled();

@@ -492,7 +492,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             </span>
           {/if}
           <div class="flex gap-2">
-            <slot name="actions-view" />
+          <slot name="actions-view" />
           </div>
         </div>
       {:else if useCase.model}

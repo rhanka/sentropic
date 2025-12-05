@@ -10,8 +10,8 @@ test.describe('Workflow métier complet', () => {
     await page.click('button:has-text("Ajouter")');
     await expect(page).toHaveURL(/\/entreprises\/new$/);
     
-    // Remplir le nom via l'EditableInput dans le H1
-    const nameInput = page.locator('h1 input.editable-input');
+    // Remplir le nom via l'EditableInput dans le H1 (textarea pour multiline)
+    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(nameInput).toBeVisible();
     await nameInput.fill('TestCompanyE2E');
     
@@ -20,7 +20,7 @@ test.describe('Workflow métier complet', () => {
     await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/);
     
     // Vérifier sur la page détail
-    const detailNameInput = page.locator('h1 input.editable-input');
+    const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(detailNameInput).toHaveValue('TestCompanyE2E');
     
     // Étape 2: Générer des cas d'usage
