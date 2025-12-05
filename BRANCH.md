@@ -46,7 +46,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Scope: UI (page entreprises)
   - Fichiers à vérifier: `ui/src/routes/entreprises/+page.svelte`*
 
-- [ ] **Feat 4**: Permettre l'édition du titre/nom du usecase avec EditableInput
+- [x] **Feat 4**: Permettre l'édition du titre/nom du usecase avec EditableInput
 
 
 ### Phase 3: Normalisation et améliorations techniques
@@ -123,10 +123,11 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 6**: Feat ajout/suppression d'axes dans matrice
 - [x] **Commit 7**: Feat tronquer taille dans fiches entreprise
 - [x] **Commit 8**: Feat EditableInput markdown avec bordure orange et hover bord gauche gris
+- [x] **Commit 9**: Feat édition du titre/nom du usecase avec EditableInput
 
 ## Status
-- **Progress**: 8/20 tâches complétées
-- **Current**: Feat EditableInput markdown avec bordure orange et hover complété
+- **Progress**: 9/20 tâches complétées
+- **Current**: Feat édition du titre/nom du usecase complété
 - **Next**: Phase 3 - Normalisation et améliorations techniques
 
 ## Questions avant de commencer

@@ -48,6 +48,10 @@ const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies'
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
+// Buffer pour le nom/titre du usecase (texte simple, pas markdown)
+let nameBuffer = '';
+let nameOriginal = '';
+
 interface ScoreEntry {
   axisId: string;
   rating: number;
@@ -154,6 +158,9 @@ $: if (useCase?.id) {
     });
   }
 
+  // Extraire le nom (avec fallback pour rétrocompatibilité)
+  const useCaseName = useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom';
+
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
     textBuffers = { ...normalizedValues };
@@ -162,6 +169,8 @@ $: if (useCase?.id) {
     listOriginals = { ...listValues };
     scoreBuffers = { ...scoreValues };
     scoreOriginals = { ...scoreValues };
+    nameBuffer = useCaseName;
+    nameOriginal = useCaseName;
   } else {
     let changed = false;
     const updatedBuffers = { ...textBuffers };
@@ -176,6 +185,13 @@ $: if (useCase?.id) {
         changed = true;
       }
     });
+    
+    // Mettre à jour le buffer de nom si nécessaire
+    if (useCaseName !== nameOriginal) {
+      nameBuffer = useCaseName;
+      nameOriginal = useCaseName;
+      changed = true;
+    }
 
     LIST_FIELDS.forEach((field) => {
       // Extraire depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
@@ -223,6 +239,11 @@ const getTextFullData = (field: TextField) => {
   const cleaned = stripTrailingEmptyParagraph(normalized);
   // Retourner directement le champ au niveau racine (buildUseCaseData construira l'objet data)
   return { [field]: cleaned };
+};
+const getNameFullData = () => {
+  if (!useCase?.id) return null;
+  // Le nom est stocké dans data.name (pas au niveau racine)
+  return { name: nameBuffer || 'Cas d\'usage sans nom' };
 };
 const getListFullData = (field: ListField) => {
   if (!useCase?.id) return null;
@@ -436,13 +457,32 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div>
-          <h1 class="text-3xl font-semibold">
-            {useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
-          </h1>
+        <div class="flex-1 min-w-0">
+          {#if isPrinting}
+            <h1 class="text-3xl font-semibold">
+              {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+            </h1>
+          {:else}
+            <h1 class="text-3xl font-semibold">
+              <EditableInput
+                label=""
+                value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+                markdown={false}
+                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                fullData={getNameFullData()}
+                fullDataGetter={getNameFullData as any}
+                changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
+                originalValue={nameOriginal || ''}
+                on:change={(e) => {
+                  nameBuffer = e.detail.value;
+                }}
+                on:saved={handleFieldSaved}
+              />
+            </h1>
+          {/if}
         </div>
         {#if useCase.model && showActions}
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 no-print">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 no-print ml-2">
             {useCase.model}
           </span>
         {/if}
