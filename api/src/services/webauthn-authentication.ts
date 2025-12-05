@@ -193,11 +193,51 @@ export async function verifyWebAuthnAuthentication(
       counterValue: webAuthnCredential.counter,
     }, 'WebAuthnCredential object before verification');
     
+    // In development, allow local IP addresses for smartphone access
+    // Extract origin from credential response to check if it's a local IP
+    let expectedOrigins = Array.isArray(config.origin) ? config.origin : [config.origin];
+    
+    // In development, if rpID is localhost, also accept local IP addresses
+    if (config.rpID === 'localhost' && process.env.NODE_ENV !== 'production') {
+      // Parse clientDataJSON to get the actual origin used by the client
+      try {
+        const clientData = JSON.parse(
+          Buffer.from(credential.response.clientDataJSON, 'base64url').toString()
+        );
+        const clientOrigin = clientData.origin;
+        
+        // If client used a local IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), accept it
+        if (clientOrigin && typeof clientOrigin === 'string') {
+          const url = new URL(clientOrigin);
+          const hostname = url.hostname;
+          
+          // Check if it's a local IP address
+          const isLocalIP = 
+            hostname.startsWith('192.168.') ||
+            hostname.startsWith('10.') ||
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+            hostname === '127.0.0.1';
+          
+          if (isLocalIP && !expectedOrigins.includes(clientOrigin)) {
+            // Add the local IP origin to expected origins for this verification
+            expectedOrigins = [...expectedOrigins, clientOrigin];
+            logger.debug({ 
+              clientOrigin, 
+              addedOrigin: clientOrigin 
+            }, 'Added local IP origin for development WebAuthn verification');
+          }
+        }
+      } catch (error) {
+        // If we can't parse clientDataJSON, fall back to default origins
+        logger.debug({ err: error }, 'Could not parse clientDataJSON to extract origin');
+      }
+    }
+    
     // Verify authentication response
     const verification: VerifiedAuthenticationResponse = await verifyAuthenticationResponse({
       response: credential,
       expectedChallenge,
-      expectedOrigin: Array.isArray(config.origin) ? config.origin : [config.origin],
+      expectedOrigin: expectedOrigins,
       expectedRPID: config.rpID,
       credential: webAuthnCredential, // Changed from 'authenticator' to 'credential'
       requireUserVerification: requireUV, // Required for admins, optional for others

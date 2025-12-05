@@ -23,7 +23,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Scope: UI (page matrice)
   - Fichiers à vérifier: `ui/src/routes/matrice/+page.svelte`
   
-- [ ] **Fix 3**: NavigationGuard: sauver automatiquement
+- [x] **Fix 3**: NavigationGuard: sauver automatiquement
   - Scope: UI (composant NavigationGuard)
   - Fichiers à vérifier: `ui/src/lib/components/NavigationGuard.svelte` ou similaire
   
@@ -113,11 +113,12 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
 - [x] **Commit 2**: Fix comptage dans matrix - calcul et affichage du nombre de cas par seuil
 - [x] **Commit 3**: Fix auto-save des seuils et recalcul automatique des comptages
+- [x] **Commit 4**: Fix NavigationGuard - sauvegarde automatique au lieu d'afficher un dialogue
 
 ## Status
-- **Progress**: 3/20 tâches complétées
-- **Current**: Fix auto-save des seuils et recalcul des comptages complété
-- **Next**: Fix 3 - NavigationGuard sauver automatiquement
+- **Progress**: 4/20 tâches complétées
+- **Current**: Fix NavigationGuard - sauvegarde automatique complété
+- **Next**: Fix 4 - WebAuthn login avec smartphone en localhost
 
 ## Questions avant de commencer
 1. **Priorité**: Quelle phase doit être traitée en premier ? (suggéré: Phase 1 - corrections critiques)
