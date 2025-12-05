@@ -6,14 +6,14 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 ## Status
 - **Progress**: 9/20 tâches complétées
 - **Current**: Feat 4 complété (édition multiline du titre avec layouts différenciés)
-- **Next**: Phase 3 - Normalisation et améliorations techniques
+- **Next**: Retravailler Fix WebAuthn pour login smartphone en localhost dev
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
 - [x] **Commit 2**: Fix comptage dans matrix - calcul et affichage du nombre de cas par seuil
 - [x] **Commit 3**: Fix auto-save des seuils et recalcul automatique des comptages
 - [x] **Commit 4**: Fix NavigationGuard - sauvegarde automatique au lieu d'afficher un dialogue
-- [x] **Commit 5**: Fix WebAuthn - accepter les IPs locales pour login smartphone en localhost dev
+- [ ] **Commit 5**: Fix WebAuthn - accepter les IPs locales pour login smartphone en localhost dev (reverté, à retravailler)
 - [x] **Commit 6**: Feat ajout/suppression d'axes dans matrice
 - [x] **Commit 7**: Feat tronquer taille dans fiches entreprise
 - [x] **Commit 8**: Feat EditableInput markdown avec bordure orange et hover bord gauche gris

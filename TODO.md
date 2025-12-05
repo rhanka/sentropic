@@ -29,15 +29,7 @@
   - [x] ajouter un prompt pour synthèse exécutive de l'ensemble des cas : introduction incluant description du dossier et enjeux de l'entreprise, une analyse générale présentant une mise en exergue les tops cas - format à challenger / discuter
   - [x] Génération d'un rapport reprenant synthèse exécutive et dashboard et l'ensemble des cas (une page par cas ?)
 - [x] Séparer dans la génération la description en: description (plus courte), problème, solution
-- [ ] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
-- [ ] Minor feat and fixs
-  - [ ] Fix: le refresh dans github pages (CTRL+R) des pages cas-usage|entreprise/[id] génère un 404 (c'est une régression)
-  - [ ] Fix: Dans matrix, le nombre de cas n'est pas décompté (nombre par seuil de valeur pour configuration des seuils de valeur et complexité).
-  - [ ] Feat: Dans matrice, il faut pouvoir ajouter et supprimer des axes de valeur complexité
-  - [ ] Feat: dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
-  - [ ] Feat: dans les fiches entreprise (vue /entreprises), tronquet taille au meme nombre de caractères que produits et services (...)
-  - [ ] Fix: NavigationGuard: sauver automatiquement, tout simplement !
-  - [ ] Fix webauthn : in prod web auth is both ok for register and login, but in localhost for dev, webauthn is ok for register but not for login with a smartphone
+- [x] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
@@ -50,6 +42,16 @@
 - [ ] Ré-activer et corriger les 2 tests E2E entreprises (création + bouton IA)
   - Raison du skip: `EditableInput` avec auto-save (5s) et enrichissement IA parfois >30s
   - Action: adapter le test pour attendre la fin d'auto-save et stabiliser l'enrichissement
+
+
+## Minor fixes
+- [x] Fix: le refresh dans github pages (CTRL+R) des pages cas-usage|entreprise/[id] génère un 404 (c'est une régression)
+- [x] Fix: Dans matrix, le nombre de cas n'est pas décompté (nombre par seuil de valeur pour configuration des seuils de valeur et complexité).
+- [x] Feat: Dans matrice, il faut pouvoir ajouter et supprimer des axes de valeur complexité
+- [x] Feat: dans EditableInput, pour les input markdown, mettre en exergue les champs édités avec un point orange (comme les inputs normaux) + hover avec bord gauche en gris
+- [x] Feat: dans les fiches entreprise (vue /entreprises), tronquet taille au meme nombre de caractères que produits et services (...)
+- [x] Fix: NavigationGuard: sauver automatiquement, tout simplement !
+- [ ] Fix webauthn : in prod web auth is both ok for register and login, but in localhost for dev, webauthn is ok for register but not for login with a smartphone (à retravailler)
 
 ## Éléments identifiés pour implémentation future (lors du linting)
 
