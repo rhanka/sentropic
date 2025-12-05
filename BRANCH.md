@@ -111,11 +111,12 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 ## Commits & Progress
 - [x] **Commit initial**: Création de la branche et BRANCH.md
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
+- [x] **Commit 2**: Fix comptage dans matrix - calcul et affichage du nombre de cas par seuil
 
 ## Status
-- **Progress**: 1/20 tâches complétées
-- **Current**: Fix 1 complété (404 sur refresh GitHub Pages)
-- **Next**: Fix 2 - Comptage dans matrix
+- **Progress**: 2/20 tâches complétées
+- **Current**: Fix 2 complété (Comptage dans matrix)
+- **Next**: Fix 3 - NavigationGuard sauver automatiquement
 
 ## Questions avant de commencer
 1. **Priorité**: Quelle phase doit être traitée en premier ? (suggéré: Phase 1 - corrections critiques)

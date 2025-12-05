@@ -5,7 +5,7 @@
   import { apiGet, apiPut } from '$lib/utils/api';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -24,10 +24,21 @@
   let createMatrixType = 'default'; // 'default', 'copy', 'blank'
   let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
+  
+  // Variables pour l'auto-save des seuils
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isSavingThresholds = false;
 
   onMount(async () => {
     await loadMatrix();
     await updateCaseCounts();
+  });
+
+  onDestroy(() => {
+    // Nettoyer le timeout d'auto-save si la page est quittée
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
   });
 
   const loadMatrix = async () => {
@@ -187,6 +198,21 @@
       if (index !== -1) {
         newThresholds[index] = { ...newThresholds[index], points: pointsNum };
         editedConfig = { ...editedConfig, valueThresholds: newThresholds };
+        
+        // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
+        // Une seule entrée pour tous les seuils (évite les appels multiples)
+        unsavedChangesStore.addChange({
+          id: 'matrix-thresholds-all',
+          component: 'matrix-thresholds',
+          value: editedConfig,
+          saveFunction: saveThresholds
+        });
+        
+        // Programmer la sauvegarde après 5 secondes (auto-save)
+        scheduleThresholdSave();
+        
+        // Recalculer les comptages immédiatement (pour feedback visuel)
+        updateCaseCounts();
       }
     } else if (!isValue && editedConfig.complexityThresholds) {
       const newThresholds = [...editedConfig.complexityThresholds];
@@ -194,7 +220,78 @@
       if (index !== -1) {
         newThresholds[index] = { ...newThresholds[index], points: pointsNum };
         editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
+        
+        // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
+        // Une seule entrée pour tous les seuils (évite les appels multiples)
+        unsavedChangesStore.addChange({
+          id: 'matrix-thresholds-all',
+          component: 'matrix-thresholds',
+          value: editedConfig,
+          saveFunction: saveThresholds
+        });
+        
+        // Programmer la sauvegarde après 5 secondes (auto-save)
+        scheduleThresholdSave();
+        
+        // Recalculer les comptages immédiatement
+        updateCaseCounts();
       }
+    }
+  };
+
+  /**
+   * Programme la sauvegarde des seuils après 5 secondes d'inactivité
+   */
+  const scheduleThresholdSave = () => {
+    // Annuler le timeout précédent s'il existe
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    
+    // Programmer la sauvegarde après 5 secondes
+    saveTimeout = setTimeout(async () => {
+      await saveThresholds();
+    }, 5000);
+  };
+
+  /**
+   * Sauvegarde automatique des seuils modifiés
+   * Cette fonction est appelée soit :
+   * - Automatiquement après 5 secondes d'inactivité (via scheduleThresholdSave)
+   * - Par NavigationGuard lors de la navigation (via unsavedChangesStore.saveAll)
+   */
+  const saveThresholds = async () => {
+    if (!$currentFolderId || isSavingThresholds) return;
+    
+    isSavingThresholds = true;
+    try {
+      await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
+      matrixStore.set(editedConfig);
+      originalConfig = { ...editedConfig };
+      
+      // Nettoyer la modification sauvegardée du store
+      // On retire la modification globale des seuils
+      unsavedChangesStore.removeChange('matrix-thresholds-all');
+      
+      // Annuler le timeout d'auto-save s'il existe (car on vient de sauvegarder)
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+      }
+      
+      // Recalculer les comptages après sauvegarde
+      await updateCaseCounts();
+      
+      // Toast silencieux (pas de notification visible pour auto-save)
+      // L'utilisateur verra les comptages mis à jour
+    } catch (error) {
+      console.error('Failed to save thresholds:', error);
+      addToast({
+        type: 'error',
+        message: 'Erreur lors de la sauvegarde automatique des seuils'
+      });
+    } finally {
+      isSavingThresholds = false;
     }
   };
 
