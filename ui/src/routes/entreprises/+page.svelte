@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { companiesStore, fetchCompanies, deleteCompany } from '$lib/stores/companies';
+  import { companiesStore, fetchCompanies, deleteCompany, type Company } from '$lib/stores/companies';
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
   import { refreshManager } from '$lib/stores/refresh';
@@ -83,12 +83,8 @@
     {#each $companiesStore as company}
       {@const isEnriching = company.status === 'enriching'}
       {@const isDraft = company.status === 'draft'}
-      <!-- svelte-ignore a11y-no-noninteractive-element-to-interactive-role -->
       <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
-               role="button"
-               tabindex={isEnriching ? -1 : 0}
-               on:click={() => { if (!isEnriching) goto(`/entreprises/${company.id}`); }}
-               on:keydown={(e) => { if (!isEnriching && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goto(`/entreprises/${company.id}`); } }}>
+               on:click={() => { if (!isEnriching) goto(`/entreprises/${company.id}`); }}>
         {#if isEnriching}
           <!-- Vue pour l'enrichissement avec nom et bouton de suppression -->
           <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-purple-200 bg-purple-50 gap-2 rounded-t-lg">

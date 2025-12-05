@@ -33,9 +33,6 @@
   let span;
   let input;
   
-  // ID unique pour l'input (pour associer le label)
-  let inputId = `editable-input-${changeId || Math.random().toString(36).substr(2, 9)}`;
-  
   // Basculer entre le mode édition et le mode affichage
   const toggleEditing = () => {
     if (disabled) return;
@@ -131,23 +128,24 @@
     const newValue = event.detail.value;
     value = newValue;
     
-    // Ne marquer comme modifié que si la valeur a vraiment changé
-    hasUnsavedChanges = newValue !== originalValue;
+    // Mettre à jour hasUnsavedChanges immédiatement pour un feedback visuel instantané
+    const isUnsaved = newValue !== originalValue;
+    hasUnsavedChanges = isUnsaved;
     
     // Ajouter au store des modifications non sauvegardées seulement si nécessaire
-    if (changeId && apiEndpoint && hasUnsavedChanges) {
+    if (changeId && apiEndpoint && isUnsaved) {
       unsavedChangesStore.addChange({
         id: changeId,
         component: 'EditableInput',
         value: value,
         saveFunction: performSave
       });
-    } else if (changeId && !hasUnsavedChanges) {
+    } else if (changeId && !isUnsaved) {
       // Supprimer du store si pas de modifications
       unsavedChangesStore.removeChange(changeId);
     }
     
-    if (hasUnsavedChanges) {
+    if (isUnsaved) {
       saveWithBuffer();
     }
     dispatch('change', { value });
@@ -375,7 +373,7 @@
           newLink.onclick = null;
           
           // Empêcher aussi le comportement via onmousedown (plus tôt dans la chaîne)
-          newLink.onmousedown = () => {
+          newLink.onmousedown = (e) => {
             // Ne pas empêcher complètement, juste marquer le lien
             newLink.__referenceLink = true;
           };
@@ -512,16 +510,13 @@
 </script>
 
 <div class="editable-container" style={markdown ? "width: 100%!important" : ""}>
-  {#if label}
-    <label for={inputId}>{label}</label>
-  {/if}
+  <label>{label}</label>
   {#if !markdown}
     <div class="input-wrapper">
       <span class="size-measure" bind:this={span}></span>
       {#if new RegExp(/\[.*\]/).test(value)}
         <mark>
           <input
-            id={inputId}
             type="text"
             bind:value
             bind:this={input}
@@ -535,7 +530,6 @@
         </mark>
       {:else}
         <input
-          id={inputId}
           type="text"
           bind:value
           bind:this={input}
@@ -555,10 +549,15 @@
       {/if}
     </div>
   {:else}
-    <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
-      <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-        <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList}/>
+    <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges}>
+      <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
+        <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList}/>
+        </div>
       </div>
+      {#if isSaving}
+        <span class="saving-indicator-markdown" title="Sauvegarde en cours...">⟳</span>
+      {/if}
     </div>
   {/if}
 </div>
@@ -607,6 +606,15 @@
   :global(.markdown-wrapper a[href^="#ref-"].reference-link) {
     color: #2563eb !important;
     cursor: pointer !important;
+  }
+  textarea {
+    border: 1px;
+    margin-left: 1rem;
+  }
+
+  textarea:focus {
+    border: 1px solid #ccc;
+    outline: none;
   }
 
   .size-measure {
@@ -657,7 +665,60 @@
 
   .editable-input:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+  }
+
+  /* Styles pour les inputs markdown */
+  .markdown-input-wrapper {
+    position: relative;
+    padding-left: 0.5rem;
+    margin-left: -0.5rem;
+    border-left: 3px solid transparent;
+    transition: border-left-color 0.1s, background-color 0.3s;
+  }
+
+  .markdown-input-wrapper:hover {
+    border-left-color: #ced4da;
+    background-color: #f8f9fa;
+  }
+
+  .markdown-input-wrapper.has-unsaved-changes {
+    border-left-color: #ffc107 !important;
+  }
+
+  /* S'assurer que la bordure orange reste visible même quand TipTap a le focus */
+  .markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused) {
+    border-left-color: #ffc107 !important;
+  }
+
+  .markdown-input-wrapper.has-unsaved-changes:hover {
+    border-left-color: #ffc107 !important;
+    background-color: #f8f9fa;
+  }
+
+  .markdown-input-wrapper.has-unsaved-changes:hover:has(.ProseMirror-focused) {
+    border-left-color: #ffc107 !important;
+    background-color: #f8f9fa;
+  }
+
+  .saving-indicator-markdown {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.25rem;
+    color: #007bff;
+    font-size: 0.875rem;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 10;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .editable-input::placeholder {
