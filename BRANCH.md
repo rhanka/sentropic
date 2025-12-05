@@ -109,12 +109,13 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [ ] **Test 4**: Vérifier la CI GitHub Actions après push
 
 ## Commits & Progress
-- [ ] **Commit initial**: Création de la branche et BRANCH.md
+- [x] **Commit initial**: Création de la branche et BRANCH.md
+- [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
 
 ## Status
-- **Progress**: 0/20 tâches complétées
-- **Current**: Planification et création de la branche
-- **Next**: Commencer par les corrections critiques (Phase 1)
+- **Progress**: 1/20 tâches complétées
+- **Current**: Fix 1 complété (404 sur refresh GitHub Pages)
+- **Next**: Fix 2 - Comptage dans matrix
 
 ## Questions avant de commencer
 1. **Priorité**: Quelle phase doit être traitée en premier ? (suggéré: Phase 1 - corrections critiques)

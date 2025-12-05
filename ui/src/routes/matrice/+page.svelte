@@ -7,6 +7,8 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
   import { API_BASE_URL } from '$lib/config';
+  import { fetchUseCases } from '$lib/stores/useCases';
+  import { calculateUseCaseScores } from '$lib/utils/scoring';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -25,6 +27,7 @@
 
   onMount(async () => {
     await loadMatrix();
+    await updateCaseCounts();
   });
 
   const loadMatrix = async () => {
@@ -65,6 +68,94 @@
       });
     } finally {
       isLoading = false;
+    }
+  };
+
+  /**
+   * Détermine le niveau (1-5) d'un score en comparant avec les thresholds
+   * Le niveau est le plus grand level tel que score >= threshold.points
+   */
+  const getLevelFromScore = (score: number, thresholds: Array<{ level: number; points: number }>): number => {
+    // Trier les thresholds par level décroissant pour trouver le plus grand level qui correspond
+    const sortedThresholds = [...thresholds].sort((a, b) => b.level - a.level);
+    for (const threshold of sortedThresholds) {
+      if (score >= threshold.points) {
+        return threshold.level;
+      }
+    }
+    return 1; // Par défaut, niveau 1 si aucun threshold ne correspond
+  };
+
+  /**
+   * Met à jour le comptage des cas d'usage par seuil de valeur et complexité
+   */
+  const updateCaseCounts = async () => {
+    if (!$currentFolderId || !editedConfig) return;
+
+    try {
+      // Charger les cas d'usage du dossier
+      const useCases = await fetchUseCases($currentFolderId);
+
+      // Initialiser les compteurs à 0
+      const valueCounts: Record<number, number> = {};
+      const complexityCounts: Record<number, number> = {};
+      
+      editedConfig.valueThresholds.forEach(t => valueCounts[t.level] = 0);
+      editedConfig.complexityThresholds.forEach(t => complexityCounts[t.level] = 0);
+
+      // Pour chaque cas d'usage, calculer les scores et déterminer les niveaux
+      for (const useCase of useCases) {
+        const valueScores = useCase.data?.valueScores || useCase.valueScores || [];
+        const complexityScores = useCase.data?.complexityScores || useCase.complexityScores || [];
+
+        if (valueScores.length > 0 || complexityScores.length > 0) {
+          // Adapter editedConfig au type attendu par calculateUseCaseScores
+          const configForScoring = {
+            valueAxes: editedConfig.valueAxes.map(axis => ({
+              id: axis.id,
+              name: axis.name,
+              weight: axis.weight,
+              description: axis.description || '',
+              levelDescriptions: axis.levelDescriptions || []
+            })),
+            complexityAxes: editedConfig.complexityAxes.map(axis => ({
+              id: axis.id,
+              name: axis.name,
+              weight: axis.weight,
+              description: axis.description || '',
+              levelDescriptions: axis.levelDescriptions || []
+            })),
+            valueThresholds: editedConfig.valueThresholds.map(t => ({ level: t.level, points: t.points })),
+            complexityThresholds: editedConfig.complexityThresholds.map(t => ({ level: t.level, points: t.points }))
+          };
+          
+          const scores = calculateUseCaseScores(configForScoring, valueScores, complexityScores);
+          
+          // Déterminer le niveau pour la valeur
+          const valueLevel = getLevelFromScore(scores.finalValueScore, editedConfig.valueThresholds);
+          valueCounts[valueLevel] = (valueCounts[valueLevel] || 0) + 1;
+          
+          // Déterminer le niveau pour la complexité
+          const complexityLevel = getLevelFromScore(scores.finalComplexityScore, editedConfig.complexityThresholds);
+          complexityCounts[complexityLevel] = (complexityCounts[complexityLevel] || 0) + 1;
+        }
+      }
+
+      // Mettre à jour editedConfig avec les comptages
+      editedConfig = {
+        ...editedConfig,
+        valueThresholds: editedConfig.valueThresholds.map(t => ({
+          ...t,
+          cases: valueCounts[t.level] || 0
+        })),
+        complexityThresholds: editedConfig.complexityThresholds.map(t => ({
+          ...t,
+          cases: complexityCounts[t.level] || 0
+        }))
+      };
+    } catch (error) {
+      console.error('Failed to update case counts:', error);
+      // Ne pas afficher d'erreur toast car c'est une fonctionnalité secondaire
     }
   };
 
@@ -113,6 +204,9 @@
     try {
       await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
       matrixStore.set(editedConfig);
+      originalConfig = { ...editedConfig };
+      // Mettre à jour les comptages après sauvegarde
+      await updateCaseCounts();
       addToast({
         type: 'success',
         message: 'Configuration de la matrice mise à jour'
@@ -280,7 +374,10 @@
         await apiPut(`/folders/${$currentFolderId}/matrix`, matrixToUse);
         matrixStore.set(matrixToUse);
         editedConfig = { ...matrixToUse };
+        originalConfig = { ...matrixToUse };
         showCreateMatrixDialog = false;
+        // Mettre à jour les comptages après création
+        await updateCaseCounts();
         addToast({
           type: 'success',
           message: 'Nouvelle matrice créée avec succès'
