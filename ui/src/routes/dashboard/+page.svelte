@@ -102,7 +102,7 @@
     // Les cas d'usage après le 23ème ont déjà leur page incrémentée via pageOffset
     // Donc pas besoin d'ajustement supplémentaire ici
     return {
-      name: uc.data?.name || uc.name || uc.titre || uc.nom || 'Cas d\'usage',
+      name: uc.data?.name || uc.name || 'Cas d\'usage',
       page: basePage,
       id: uc.id,
       is24thOrLater: index >= 23
@@ -413,10 +413,10 @@
     const baseTitlePaddingBottom = 0.1; // cm (padding sous le titre h3)
     
     // Fonction pour vérifier si le contenu déborde
-    const checkOverflow = () => {
+    const checkOverflow = (): boolean => {
       const scaleFactor = fontSize / 8; // Facteur de réduction par rapport à la taille initiale
-      content.style.fontSize = `${fontSize}pt`;
-      content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+      content.style.setProperty('font-size', `${fontSize}pt`, 'important');
+      content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
       // Réduire aussi les marges entre paragraphes
       const paragraphs = content.querySelectorAll('p');
       paragraphs.forEach((p, index) => {
@@ -428,7 +428,7 @@
           pEl.style.setProperty('margin-bottom', `${baseParagraphMargin * scaleFactor}cm`, 'important');
         }
       });
-
+      return content.scrollHeight > content.clientHeight;
     };
     
     // Réduire la taille jusqu'à ce que ça tienne (pas plus agressif : 0.2pt au lieu de 0.1pt)
@@ -442,8 +442,9 @@
     // Appliquer la taille finale avec line-height et marges proportionnels
     const finalFontSize = Math.max(fontSize, minFontSize);
     const scaleFactor = finalFontSize / 8;
-    content.style.fontSize = `${finalFontSize}pt`;
-    content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+    content.style.setProperty('font-size', `${finalFontSize}pt`, 'important');
+    content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
+    console.log('content.style', content.style);
     // Appliquer les marges réduites aux paragraphes
     const paragraphs = content.querySelectorAll('p');
     paragraphs.forEach((p, index) => {
@@ -698,7 +699,7 @@
                           step="0.1"
                           value={valueThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement)?.value || '';
                             valueThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianValue.toFixed(1)}
@@ -730,7 +731,7 @@
                           step="0.1"
                           value={complexityThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement)?.value || '';
                             complexityThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianComplexity.toFixed(1)}
@@ -934,7 +935,7 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase?.data?.name || useCase?.name || (useCase as any)?.titre || (useCase as any)?.nom || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}

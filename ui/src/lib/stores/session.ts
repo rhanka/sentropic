@@ -88,11 +88,11 @@ export async function initializeSession(): Promise<void> {
     try {
       const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
       
-      const user = {
+      const user: User = {
         id: data.userId,
         email: data.email ?? null,
         displayName: data.displayName ?? null,
-        role: data.role,
+        role: data.role as User['role'],
       };
       
       sessionStore.set({ user, loading: false });
@@ -169,11 +169,11 @@ async function validateSessionInBackground(): Promise<void> {
   try {
     const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
     
-    const user = {
+    const user: User = {
       id: data.userId,
       email: data.email ?? null,
       displayName: data.displayName ?? null,
-      role: data.role,
+      role: data.role as User['role'],
     };
     
     console.log('✅ Background validation: session valid, updating localStorage');
@@ -274,16 +274,12 @@ export function clearUser(): void {
  * Check if user has specific role
  */
 export function hasRole(role: User['role']): boolean {
-  let currentUser: User | null = null;
-  
-  const unsubscribe = sessionStore.subscribe(state => {
-    currentUser = state.user;
-  });
-  unsubscribe();
+  const currentState = get(sessionStore);
+  const currentUser = currentState.user;
   
   if (!currentUser) return false;
   
-  const roleHierarchy = {
+  const roleHierarchy: Record<User['role'], number> = {
     admin_app: 4,
     admin_org: 3,
     editor: 2,
@@ -297,12 +293,8 @@ export function hasRole(role: User['role']): boolean {
  * Check if user is admin (admin_app or admin_org)
  */
 export function isAdmin(): boolean {
-  let currentUser: User | null = null;
-  
-  const unsubscribe = sessionStore.subscribe(state => {
-    currentUser = state.user;
-  });
-  unsubscribe();
+  const currentState = get(sessionStore);
+  const currentUser = currentState.user;
   
   return currentUser?.role === 'admin_app' || currentUser?.role === 'admin_org';
 }

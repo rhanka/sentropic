@@ -83,3 +83,17 @@
   - Nécessite d'interrompre réellement un job en cours d'exécution
   - Utiliser les AbortController déjà présents dans QueueManager
 
+- [ ] **Normaliser l'incohérence titre/name/nom pour les UseCase**
+  - **Problème identifié** : Incohérence dans le flux de données entre prompt/API/DB/UI
+    - Prompt génère `"titre"` (français) dans `default-prompts.ts:69`
+    - Interface API utilise `titre: string` dans `context-usecase.ts:6`
+    - Conversion `titre` → `name` dans `queue-manager.ts:328-330`
+    - Stockage final utilise `name` (anglais) dans `UseCaseData`
+    - Code UI cherche encore `titre` ou `nom` dans `dashboard/+page.svelte:937`
+  - **Actions à faire** :
+    1. Vérifier si le prompt doit générer `"name"` au lieu de `"titre"` pour cohérence
+    2. Vérifier le schéma Zod côté API pour validation
+    3. Normaliser sur `name` partout OU documenter la rétrocompatibilité
+    4. Supprimer les fallbacks `(useCase as any)?.titre || (useCase as any)?.nom` si plus nécessaires
+    5. Mettre à jour l'interface `UseCaseListItem` si nécessaire
+
