@@ -4,14 +4,22 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
+  interface Prompt {
+    id: string;
+    name: string;
+    description: string;
+    content: string;
+    variables: string[];
+  }
+
   let isResetting = false;
-  let prompts = [];
-  let selectedPrompt = null;
+  let prompts: Prompt[] = [];
+  let selectedPrompt: Prompt | null = null;
   let showPromptEditor = false;
   let promptContent = '';
   let promptName = '';
   let promptDescription = '';
-  let promptVariables = [];
+  let promptVariables: string[] = [];
   
   // Configuration IA
   let aiSettings = {
@@ -40,14 +48,14 @@
 
   const loadPrompts = async () => {
     try {
-      const data = await apiGet<{ prompts: any[] }>('/prompts');
+      const data = await apiGet<{ prompts: Prompt[] }>('/prompts');
       prompts = data.prompts;
     } catch (error) {
       console.error('Erreur lors du chargement des prompts:', error);
     }
   };
 
-  const openPromptEditor = (prompt) => {
+  const openPromptEditor = (prompt: Prompt) => {
     selectedPrompt = prompt;
     promptName = prompt.name;
     promptDescription = prompt.description;
@@ -56,10 +64,10 @@
     showPromptEditor = true;
   };
 
-  const extractVariablesFromContent = (content) => {
+  const extractVariablesFromContent = (content: string): string[] => {
     const matches = content.match(/\{\{([^}]+)\}\}/g);
     if (matches) {
-      return matches.map(match => match.replace(/\{\{|\}\}/g, '')).filter((value, index, self) => self.indexOf(value) === index);
+      return matches.map((match: string) => match.replace(/\{\{|\}\}/g, '')).filter((value: string, index: number, self: string[]) => self.indexOf(value) === index);
     }
     return [];
   };
@@ -69,15 +77,17 @@
   }
 
   const savePrompt = async () => {
+    if (!selectedPrompt) return;
+
     try {
-      const updatedPrompt = {
+      const updatedPrompt: Prompt = {
         ...selectedPrompt,
         content: promptContent,
         variables: promptVariables
       };
 
-      const updatedPrompts = prompts.map(p => 
-        p.id === selectedPrompt.id ? updatedPrompt : p
+      const updatedPrompts = prompts.map((p: Prompt) => 
+        p.id === updatedPrompt.id ? updatedPrompt : p
       );
 
       await apiPut('/prompts', { prompts: updatedPrompts });
