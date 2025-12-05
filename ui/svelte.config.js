@@ -5,8 +5,8 @@ const config = {
   kit: {
     adapter: adapter({
       // Generate 404.html as fallback for SPA routing on GitHub Pages
-      // fallback: '404.html' // Disabled during build to avoid redirect issues
-      fallback: undefined
+      // This allows dynamic routes to work on refresh (GitHub Pages uses 404.html as fallback)
+      fallback: '404.html'
     }),
     // Force des URLs d'actifs absolues (/_app/...) au lieu de chemins relatifs
     paths: {
