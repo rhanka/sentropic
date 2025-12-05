@@ -42,6 +42,8 @@ const JWT_SECRET = new TextEncoder().encode(
 
 // Token durations
 const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
+// REFRESH_DURATION kept for future refresh token implementation
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const REFRESH_DURATION = 30 * 24 * 60 * 60; // 30 days in seconds
 
 /**
@@ -67,7 +69,8 @@ export async function createSession(
   const sessionId = crypto.randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION * 1000);
-  const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
+  // refreshExpiresAt not currently used but may be needed for future refresh token logic
+  // const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
   
   // Generate JWT session token
   const sessionToken = await new SignJWT({ userId, sessionId, role })

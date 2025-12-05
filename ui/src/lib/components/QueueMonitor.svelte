@@ -1,15 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { queueStore, loadJobs, getActiveJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
-  import type { Job, JobStatus, JobType } from '$lib/stores/queue';
+  import { queueStore, loadJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
+  import type { JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
   import { apiPost } from '$lib/utils/api';
   import { isAuthenticated } from '$lib/stores/session';
 
-  let refreshInterval: ReturnType<typeof setInterval>;
+  let refreshInterval: ReturnType<typeof setInterval> | null = null;
   let isVisible = false;
 
-  $: activeJobs = getActiveJobs($queueStore.jobs);
   $: hasJobs = $queueStore.jobs.length > 0;
   $: allJobsCompleted = hasJobs && $queueStore.jobs.every(job => job.status === 'completed');
   $: hasFailedJobs = hasJobs && $queueStore.jobs.some(job => job.status === 'failed');
@@ -201,6 +200,7 @@
             <button
               class="text-gray-400 hover:text-gray-600"
               on:click={() => isVisible = false}
+              aria-label="Fermer le panneau de monitoring"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

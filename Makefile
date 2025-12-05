@@ -193,23 +193,23 @@ deploy-api: deploy-api-container wait-for-container
 typecheck: typecheck-ui typecheck-api ## Run all type checks
 
 .PHONY: typecheck-ui
-typecheck-ui:
-	$(COMPOSE_RUN_UI) npm run check
+typecheck-ui: up-ui ## Run UI type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 
 .PHONY: typecheck-api
-typecheck-api:
-	$(COMPOSE_RUN_API) npm run typecheck
+typecheck-api: up-api ## Run API type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run typecheck
 
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
 
 .PHONY: lint-ui
-lint-ui:
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec ui npm run lint
+lint-ui: up-ui ## Run UI linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 
 .PHONY: lint-api
-lint-api:
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run lint
+lint-api: up-api ## Run API linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run lint
 
 .PHONY: format
 format:

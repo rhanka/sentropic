@@ -2,26 +2,15 @@ import { db } from '../db/client';
 import { sql, eq } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
-import { generateUseCaseList, generateUseCaseDetail } from './context-usecase';
+import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases } from '../db/schema';
+import { companies, folders, useCases, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 
 export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
-
-export interface Job {
-  id: string;
-  type: JobType;
-  data: any;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  error?: string;
-}
 
 export interface CompanyEnrichJobData {
   companyId: string;
@@ -48,6 +37,19 @@ export interface ExecutiveSummaryJobData {
   valueThreshold?: number | null;
   complexityThreshold?: number | null;
   model?: string;
+}
+
+export type JobData = CompanyEnrichJobData | UseCaseListJobData | UseCaseDetailJobData | ExecutiveSummaryJobData;
+
+export interface Job {
+  id: string;
+  type: JobType;
+  data: JobData;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
 }
 
 export class QueueManager {
@@ -96,10 +98,12 @@ export class QueueManager {
 
   async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
     this.cancelAllInProgress = true;
-    for (const [_, controller] of this.jobControllers.entries()) {
+    for (const [, controller] of this.jobControllers.entries()) {
       try {
         controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {}
+      } catch {
+        // Ignore abort errors if controller is already aborted
+      }
     }
     await this.drain();
     this.cancelAllInProgress = false;
@@ -115,7 +119,7 @@ export class QueueManager {
   /**
    * Ajouter un job à la queue
    */
-  async addJob(type: JobType, data: any): Promise<string> {
+  async addJob(type: JobType, data: JobData): Promise<string> {
     if (this.cancelAllInProgress || this.paused) {
       console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
       throw new Error('Queue is paused or cancelling; job not accepted');
@@ -162,14 +166,14 @@ export class QueueManager {
           WHERE status = 'pending' 
           ORDER BY created_at ASC 
           LIMIT ${this.maxConcurrentJobs}
-        `);
+        `) as JobQueueRow[];
 
         if (pendingJobs.length === 0) {
           break;
         }
 
         // Traiter les jobs en parallèle
-        const promises = pendingJobs.map((job: any) => this.processJob(job));
+        const promises = pendingJobs.map((job) => this.processJob(job));
         await Promise.all(promises);
       }
     } finally {
@@ -181,7 +185,7 @@ export class QueueManager {
   /**
    * Traiter un job individuel
    */
-  private async processJob(job: any): Promise<void> {
+  private async processJob(job: JobQueueRow): Promise<void> {
     const jobId = job.id;
     const jobType = job.type as JobType;
     const jobData = JSON.parse(job.data);
@@ -320,7 +324,7 @@ export class QueueManager {
     }
 
     // Créer les cas d'usage en mode generating
-    const draftUseCases = useCaseList.useCases.map((useCaseItem: any) => {
+    const draftUseCases = useCaseList.useCases.map((useCaseItem: UseCaseListItem) => {
       const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
       const useCaseData: UseCaseData = {
         name: title, // Stocker name dans data
@@ -342,7 +346,7 @@ export class QueueManager {
         id: createId(),
         folderId: folderId,
         companyId: companyId || null,
-        data: useCaseData as any, // Drizzle accepte JSONB directement (inclut name et description)
+        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
         // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         process: '',
         technologies: JSON.stringify([]),
@@ -509,7 +513,7 @@ export class QueueManager {
     // Mettre à jour le cas d'usage
     await db.update(useCases)
       .set({
-        data: useCaseData as any, // Drizzle accepte JSONB directement (inclut name et description)
+        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
         // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         domain: useCaseDetail.domain,
         technologies: JSON.stringify(useCaseDetail.technologies),
@@ -595,19 +599,19 @@ export class QueueManager {
   async getJobStatus(jobId: string): Promise<Job | null> {
     const result = await db.get(sql`
       SELECT * FROM job_queue WHERE id = ${jobId}
-    `) as any;
+    `) as JobQueueRow | undefined;
     
     if (!result) return null;
     
     return {
       id: result.id,
       type: result.type as JobType,
-      data: JSON.parse(result.data),
+      data: JSON.parse(result.data) as JobData,
       status: result.status as Job['status'],
-      createdAt: result.created_at,
-      startedAt: result.started_at,
-      completedAt: result.completed_at,
-      error: result.error
+      createdAt: result.createdAt?.toISOString() || result.created_at?.toString() || '',
+      startedAt: result.startedAt || result.started_at || undefined,
+      completedAt: result.completedAt || result.completed_at || undefined,
+      error: result.error || undefined
     };
   }
 
@@ -617,17 +621,17 @@ export class QueueManager {
   async getAllJobs(): Promise<Job[]> {
     const results = await db.all(sql`
       SELECT * FROM job_queue ORDER BY created_at DESC
-    `) as any[];
+    `) as JobQueueRow[];
     
-    return results.map((row: any) => ({
+    return results.map((row) => ({
       id: row.id,
       type: row.type as JobType,
-      data: JSON.parse(row.data),
+      data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
-      createdAt: row.created_at,
-      startedAt: row.started_at,
-      completedAt: row.completed_at,
-      error: row.error
+      createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined
     }));
   }
 }

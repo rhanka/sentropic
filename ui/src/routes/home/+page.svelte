@@ -1,8 +1,6 @@
 <script lang="ts">
   import { companiesStore, currentCompanyId, fetchCompanies } from '$lib/stores/companies';
-  import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
-  import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
-  import { addToast, removeToast } from '$lib/stores/toast';
+  import { addToast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
@@ -35,7 +33,6 @@
     }
     
     isLoading = true;
-    let progressToastId = '';
     
     try {
       // Navigation vers la page des cas d'usage qui gérera la génération

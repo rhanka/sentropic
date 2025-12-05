@@ -1,4 +1,8 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // L'usage de {@html} dans ce fichier passe par renderMarkdownWithRefs()
+  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  
   import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
@@ -7,11 +11,11 @@
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { marked } from 'marked';
   import { refreshManager } from '$lib/stores/refresh';
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -98,7 +102,7 @@
     // Les cas d'usage après le 23ème ont déjà leur page incrémentée via pageOffset
     // Donc pas besoin d'ajustement supplémentaire ici
     return {
-      name: uc.data?.name || uc.name || uc.titre || uc.nom || 'Cas d\'usage',
+      name: uc.data?.name || uc.name || 'Cas d\'usage',
       page: basePage,
       id: uc.id,
       is24thOrLater: index >= 23
@@ -273,55 +277,7 @@
     }
   };
 
-  // Fonction pour créer un lien de référence
-  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
-    const refId = `ref-${num}`;
-    return `<a href="#${refId}" 
-                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-                title="${ref.title.replace(/"/g, '&quot;')}"
-                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-                [${num}]
-              </a>`;
-  };
 
-  // Fonction pour parser les références [1], [2] dans le markdown HTML
-  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!html || !references || references.length === 0) return html;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return html.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
-    });
-  };
-
-  // Fonction pour rendre le markdown en HTML avec parsing des références
-  const renderMarkdown = (text: string | null | undefined, references: Array<{title: string; url: string}> = []): string => {
-    if (!text) return '';
-    let html = marked(text);
-    
-    // Post-traitement pour améliorer le rendu des listes
-    html = html.replace(/<ul>/g, '<ul class="list-disc space-y-2 mb-4" style="padding-left:1.5rem;">');
-    html = html.replace(/<ol>/g, '<ol class="list-decimal space-y-2 mb-4" style="padding-left:1.5rem;">');
-    html = html.replace(/<li>/g, '<li class="mb-1">');
-    
-    // Post-traitement pour améliorer le rendu des titres
-    html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
-    html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
-    
-    return parseReferencesInMarkdown(html, references);
-  };
-
-  const handleFolderChange = async (event: Event) => {
-    const target = event.target as HTMLSelectElement;
-    selectedFolderId = target.value;
-    if (selectedFolderId) {
-      await loadMatrix(selectedFolderId);
-    }
-  };
 
   // Filtrer les cas d'usage par dossier sélectionné
   $: filteredUseCases = selectedFolderId 
@@ -451,18 +407,16 @@
     // Taille de police initiale
     let fontSize = 8; // pt
     const minFontSize = 5; // Réduit de 6 à 5 pour permettre un scaling plus agressif
-    const maxFontSize = 12;
     const baseLineHeight = 1.4;
     const baseParagraphMargin = 0.15; // cm
     const baseTitleMarginBottom = 0.15; // cm (marge sous le titre h3)
     const baseTitlePaddingBottom = 0.1; // cm (padding sous le titre h3)
-    const baseBoxPadding = 0.6; // cm (padding de la boîte)
     
     // Fonction pour vérifier si le contenu déborde
-    const checkOverflow = () => {
+    const checkOverflow = (): boolean => {
       const scaleFactor = fontSize / 8; // Facteur de réduction par rapport à la taille initiale
-      content.style.fontSize = `${fontSize}pt`;
-      content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+      content.style.setProperty('font-size', `${fontSize}pt`, 'important');
+      content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
       // Réduire aussi les marges entre paragraphes
       const paragraphs = content.querySelectorAll('p');
       paragraphs.forEach((p, index) => {
@@ -474,7 +428,7 @@
           pEl.style.setProperty('margin-bottom', `${baseParagraphMargin * scaleFactor}cm`, 'important');
         }
       });
-
+      return content.scrollHeight > content.clientHeight;
     };
     
     // Réduire la taille jusqu'à ce que ça tienne (pas plus agressif : 0.2pt au lieu de 0.1pt)
@@ -488,8 +442,9 @@
     // Appliquer la taille finale avec line-height et marges proportionnels
     const finalFontSize = Math.max(fontSize, minFontSize);
     const scaleFactor = finalFontSize / 8;
-    content.style.fontSize = `${finalFontSize}pt`;
-    content.style.lineHeight = `${baseLineHeight * scaleFactor}`;
+    content.style.setProperty('font-size', `${finalFontSize}pt`, 'important');
+    content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
+    console.log('content.style', content.style);
     // Appliquer les marges réduites aux paragraphes
     const paragraphs = content.querySelectorAll('p');
     paragraphs.forEach((p, index) => {
@@ -542,7 +497,11 @@
         <h3>Synthèse exécutive</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-            {@html renderMarkdown(editedSyntheseExecutive, executiveSummary?.references || [])}
+            {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
+              addListStyles: true,
+              addHeadingStyles: true,
+              listPadding: 1.5
+            })}
           </div>
         </div>
       </div>
@@ -719,6 +678,7 @@
                     <button
                       on:click={() => configOpen = false}
                       class="text-slate-400 hover:text-slate-600"
+                      aria-label="Fermer la configuration"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -739,7 +699,7 @@
                           step="0.1"
                           value={valueThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement)?.value || '';
                             valueThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianValue.toFixed(1)}
@@ -771,7 +731,7 @@
                           step="0.1"
                           value={complexityThreshold ?? ''}
                           on:input={(e) => {
-                            const val = e.target?.value || '';
+                            const val = (e.target as HTMLInputElement)?.value || '';
                             complexityThreshold = val === '' ? null : parseFloat(val);
                           }}
                           placeholder={medianComplexity.toFixed(1)}
@@ -975,13 +935,12 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase?.data?.name || useCase?.name || (useCase as any)?.titre || (useCase as any)?.nom || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || 'Cas d\'usage'}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
-              draft={{}}
             />
         </section>
         {/each}

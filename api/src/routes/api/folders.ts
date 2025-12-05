@@ -84,14 +84,15 @@ const parseMatrix = (value: string | null) => {
   }
 };
 
-const parseExecutiveSummary = (value: string | null) => {
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    return null;
-  }
-};
+// parseExecutiveSummary function (currently unused)
+// const parseExecutiveSummary = (value: string | null) => {
+//   if (!value) return null;
+//   try {
+//     return JSON.parse(value);
+//   } catch (error) {
+//     return null;
+//   }
+// };
 
 foldersRouter.get('/', async (c) => {
   const companyId = c.req.query('company_id');

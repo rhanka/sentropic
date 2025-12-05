@@ -33,6 +33,9 @@
   let span;
   let input;
   
+  // ID unique pour l'input (pour associer le label)
+  let inputId = `editable-input-${changeId || Math.random().toString(36).substr(2, 9)}`;
+  
   // Basculer entre le mode édition et le mode affichage
   const toggleEditing = () => {
     if (disabled) return;
@@ -372,7 +375,7 @@
           newLink.onclick = null;
           
           // Empêcher aussi le comportement via onmousedown (plus tôt dans la chaîne)
-          newLink.onmousedown = (e) => {
+          newLink.onmousedown = () => {
             // Ne pas empêcher complètement, juste marquer le lien
             newLink.__referenceLink = true;
           };
@@ -509,13 +512,16 @@
 </script>
 
 <div class="editable-container" style={markdown ? "width: 100%!important" : ""}>
-  <label>{label}</label>
+  {#if label}
+    <label for={inputId}>{label}</label>
+  {/if}
   {#if !markdown}
     <div class="input-wrapper">
       <span class="size-measure" bind:this={span}></span>
       {#if new RegExp(/\[.*\]/).test(value)}
         <mark>
           <input
+            id={inputId}
             type="text"
             bind:value
             bind:this={input}
@@ -529,6 +535,7 @@
         </mark>
       {:else}
         <input
+          id={inputId}
           type="text"
           bind:value
           bind:this={input}
@@ -600,15 +607,6 @@
   :global(.markdown-wrapper a[href^="#ref-"].reference-link) {
     color: #2563eb !important;
     cursor: pointer !important;
-  }
-  textarea {
-    border: 1px;
-    margin-left: 1rem;
-  }
-
-  textarea:focus {
-    border: 1px solid #ccc;
-    outline: none;
   }
 
   .size-measure {

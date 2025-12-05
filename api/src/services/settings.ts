@@ -1,5 +1,5 @@
 import { db } from '../db/client';
-import { sql, eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 export interface Setting {
   key: string;

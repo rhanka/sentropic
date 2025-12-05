@@ -110,21 +110,22 @@
             {/if}
           </h1>
           {#if folder.description || isEditing}
-            <p class="text-lg text-slate-600 mt-1">
-              {#if isEditing}
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                  <textarea 
-                    class="text-lg text-slate-600 bg-transparent border-b border-slate-300 outline-none w-full"
-                    placeholder="Description du dossier"
-                    bind:value={draft.description}
-                    rows="2"
-                  ></textarea>
-                </div>
-              {:else}
+            {#if isEditing}
+              <div class="text-lg text-slate-600 mt-1">
+                <label for="folder-description-header" class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea 
+                  id="folder-description-header"
+                  class="text-lg text-slate-600 bg-transparent border-b border-slate-300 outline-none w-full"
+                  placeholder="Description du dossier"
+                  bind:value={draft.description}
+                  rows="2"
+                ></textarea>
+              </div>
+            {:else}
+              <p class="text-lg text-slate-600 mt-1">
                 {folder.description}
-              {/if}
-            </p>
+              </p>
+            {/if}
           {/if}
           <p class="text-sm text-slate-500 mt-1">
             ID: {folder.id}
@@ -187,8 +188,9 @@
         <h3 class="font-semibold text-slate-900 mb-2">Description</h3>
         {#if isEditing}
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Description du dossier</label>
+            <label for="folder-description-detail" class="block text-sm font-medium text-slate-700 mb-1">Description du dossier</label>
             <textarea 
+              id="folder-description-detail"
               class="w-full rounded border border-slate-300 p-2 text-sm"
               placeholder="Description détaillée du dossier"
               bind:value={draft.description}

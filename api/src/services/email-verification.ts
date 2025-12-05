@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { emailVerificationCodes } from '../db/schema';
 import { eq, and, gt, desc } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { SignJWT } from 'jose';
 import { env } from '../config/env';
@@ -27,7 +27,6 @@ interface VerifyCodeParams {
 
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
-const CODE_LENGTH = 6;
 
 let mailTransporter: nodemailer.Transporter | null = null;
 let transporterConfigHash: string | null = null;
@@ -53,7 +52,15 @@ function getMailTransporter(): nodemailer.Transporter | null {
   }
 
   try {
-    const transporterConfig: any = {
+    const transporterConfig: {
+      host: string;
+      port: number;
+      secure: boolean;
+      requireTLS: boolean;
+      ignoreTLS: boolean;
+      tls?: { rejectUnauthorized: boolean };
+      auth?: { user: string; pass: string };
+    } = {
       host: env.MAIL_HOST,
       port: env.MAIL_PORT,
       secure: env.MAIL_SECURE, // Use env var (false for maildev, true for production)
@@ -184,12 +191,14 @@ export async function generateEmailVerificationCode(
       await transporter.sendMail(mailOptions);
 
       logger.info({ email: normalizedEmail }, 'Email verification code sent');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorDetails = error instanceof Error 
+        ? { errorCode: (error as { code?: string }).code, errorMessage: error.message }
+        : { errorCode: undefined, errorMessage: String(error) };
       logger.error({ 
         err: error, 
         email: normalizedEmail,
-        errorCode: error.code,
-        errorMessage: error.message,
+        ...errorDetails,
         host: env.MAIL_HOST,
         port: env.MAIL_PORT
       }, 'Failed to send email verification code');

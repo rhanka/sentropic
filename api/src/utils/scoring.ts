@@ -1,5 +1,5 @@
 import type { MatrixConfig } from '../types/matrix';
-import type { ScoreEntry, UseCase, UseCaseData } from '../types/usecase';
+import type { ScoreEntry, UseCaseData } from '../types/usecase';
 
 // Re-export for backward compatibility
 export type { ScoreEntry } from '../types/usecase';

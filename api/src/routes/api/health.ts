@@ -7,7 +7,7 @@ export const healthRouter = new Hono();
 healthRouter.get('/', async (c) => {
   try {
     // Vérifier la connexion à la base de données avec plusieurs tables
-    const [settingsResult, queueResult] = await Promise.all([
+    await Promise.all([
       db.select().from(settings).limit(1),
       db.select().from(jobQueue).limit(1)
     ]);

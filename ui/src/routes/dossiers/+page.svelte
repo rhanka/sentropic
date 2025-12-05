@@ -2,7 +2,7 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { apiPost, apiPut, apiDelete } from '$lib/utils/api';
+  import { apiPost, apiDelete } from '$lib/utils/api';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { refreshManager } from '$lib/stores/refresh';
@@ -129,15 +129,6 @@
     }
   };
 
-  const loadUseCases = async () => {
-    try {
-      const useCases = await fetchUseCases();
-      useCasesStore.set(useCases);
-    } catch (error) {
-      console.error('Failed to refresh use cases:', error);
-    }
-  };
-
   // Refresh léger des cas d'usage - met à jour les statuts et les champs modifiés par l'IA
   const refreshUseCasesStatus = async () => {
     try {
@@ -170,14 +161,6 @@
 
   const getUseCaseCount = (folderId: string) => {
     return $useCasesStore.filter(uc => uc.folderId === folderId).length;
-  };
-
-  const selectFolder = (folderId: string) => {
-    currentFolderId.set(folderId);
-    addToast({
-      type: 'success',
-      message: 'Dossier sélectionné'
-    });
   };
 
   const createFolder = async () => {
@@ -265,8 +248,17 @@
             {@const isGenerating = folder.status === 'generating'}
             {@const useCaseCount = getUseCaseCount(folder.id)}
             {@const canClick = !isGenerating || useCaseCount > 0}
-            <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
-                     on:click={() => canClick ? handleFolderClick(folder.id, folder.status || 'completed') : null}>
+            <article 
+              class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
+              {...(canClick ? { role: 'button', tabindex: 0 } : {})}
+              on:click={() => canClick ? handleFolderClick(folder.id, folder.status || 'completed') : null}
+              on:keydown={(e) => {
+                if (canClick && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleFolderClick(folder.id, folder.status || 'completed');
+                }
+              }}
+            >
               <!-- Header -->
               <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-green-200 bg-green-50 gap-2 rounded-t-lg">
                 <div class="flex-1 min-w-0">

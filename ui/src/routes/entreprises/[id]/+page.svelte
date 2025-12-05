@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchCompanies, fetchCompanyById, updateCompany, deleteCompany, type Company } from '$lib/stores/companies';
+  import { fetchCompanies, fetchCompanyById, deleteCompany, type Company } from '$lib/stores/companies';
   import { goto } from '$app/navigation';
-  import { addToast } from '$lib/stores/toast';
   import { API_BASE_URL } from '$lib/config';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { refreshManager } from '$lib/stores/refresh';
@@ -99,9 +98,10 @@
   const refreshCompanyStatus = async () => {
     if (!company) return;
 
+    const currentCompanyId = company.id;
     try {
       const companies = await fetchCompanies();
-      const updatedCompany = companies.find(c => c.id === company.id);
+      const updatedCompany = companies.find(c => c.id === currentCompanyId);
       if (updatedCompany) {
         company = updatedCompany;
       }

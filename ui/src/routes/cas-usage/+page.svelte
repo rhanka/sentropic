@@ -1,18 +1,21 @@
 <script lang="ts">
-  import { useCasesStore, fetchUseCases, deleteUseCase, detailUseCase } from '$lib/stores/useCases';
+  import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
-  import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
+  import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { refreshManager } from '$lib/stores/refresh';
 
   let isLoading = false;
   let isGenerating = false;
   let matrix: MatrixConfig | null = null;
+
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   // Réactivité pour détecter les changements de statut et gérer l'actualisation
   $: {
@@ -197,6 +200,16 @@
   };
 
 
+  const handleUseCaseClick = (useCaseId: string, status: string) => {
+    // Si le cas d'usage est en cours de génération ou détail, ne pas naviguer
+    if (status === 'generating' || status === 'detailing') {
+      return;
+    }
+    
+    // Naviguer vers la vue détaillée du cas d'usage
+    goto(`/cas-usage/${useCaseId}`);
+  };
+
   const handleDeleteUseCase = async (id: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce cas d\'usage ?')) return;
     
@@ -238,8 +251,17 @@
       {@const isDetailing = useCase.status === 'detailing'}
       {@const isDraft = useCase.status === 'draft'}
       {@const isGenerating = useCase.status === 'generating'}
-      <article class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
-               on:click={() => !(isDetailing || isGenerating) && goto(`/cas-usage/${useCase.id}`)}>
+      {@const canClick = !(isDetailing || isGenerating)}
+      <article 
+        {...(canClick ? { role: 'button', tabindex: 0 } : {})}
+        class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}" 
+        on:click={() => canClick && handleUseCaseClick(useCase.id, useCase.status || 'completed')}
+        on:keydown={(e) => {
+          if (canClick && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handleUseCaseClick(useCase.id, useCase.status || 'completed');
+          }
+        }}>
         <!-- Header -->
         <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-blue-200 bg-blue-50 gap-2 rounded-t-lg">
           <div class="flex-1 min-w-0">
@@ -271,7 +293,7 @@
                   {@const calculatedScores = calculateUseCaseScores(matrix, valueScores, complexityScores)}
                   {@const valueStars = calculatedScores.valueStars}
                 <div class="flex items-center gap-0.5">
-                  {#each Array(5) as _, i}
+                  {#each range(5) as i (i)}
                     {#if i < valueStars}
                       <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
@@ -299,7 +321,7 @@
                   {@const calculatedScores = calculateUseCaseScores(matrix, valueScores, complexityScores)}
                   {@const complexityStars = calculatedScores.complexityStars}
                 <div class="flex items-center gap-0.5">
-                  {#each Array(5) as _, i}
+                  {#each range(5) as i (i)}
                     {#if i < complexityStars}
                       <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

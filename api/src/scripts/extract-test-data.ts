@@ -1,6 +1,5 @@
 import { db } from '../db/client.js';
 import { companies, folders, useCases } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
 
 async function extractTestData() {
   console.log('🔍 Extracting test data from existing database...\n');

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { derived } from 'svelte/store';
   import { page } from '$app/stores';
-  import { _, locale } from 'svelte-i18n';
+  import { _ } from 'svelte-i18n';
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';

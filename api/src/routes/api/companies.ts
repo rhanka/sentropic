@@ -9,36 +9,36 @@ import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 
-// Fonction d'enrichissement asynchrone
-async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
-  try {
-    console.log(`Starting async enrichment for company ${companyId}: ${companyName}`);
-    
-    // Utiliser le service de contexte
-    const enrichedData = await enrichCompany(companyName, model);
-    
-    // Mettre à jour l'entreprise avec les données enrichies
-    await db.update(companies)
-      .set({
-        ...enrichedData,
-        status: 'completed',
-        updatedAt: new Date()
-      })
-      .where(eq(companies.id, companyId));
-    
-    console.log(`✅ Company ${companyId} enriched successfully`);
-  } catch (error) {
-    console.error(`❌ Error enriching company ${companyId}:`, error);
-    
-    // En cas d'erreur, marquer comme draft pour permettre une nouvelle tentative
-    await db.update(companies)
-      .set({ 
-        status: 'draft',
-        updatedAt: new Date()
-      })
-      .where(eq(companies.id, companyId));
-  }
-}
+// Fonction d'enrichissement asynchrone (désactivée, utilisation directe de enrichCompany)
+// async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
+//   try {
+//     console.log(`Starting async enrichment for company ${companyId}: ${companyName}`);
+//     
+//     // Utiliser le service de contexte
+//     const enrichedData = await enrichCompany(companyName, model);
+//     
+//     // Mettre à jour l'entreprise avec les données enrichies
+//     await db.update(companies)
+//       .set({
+//         ...enrichedData,
+//         status: 'completed',
+//         updatedAt: new Date()
+//       })
+//       .where(eq(companies.id, companyId));
+//     
+//     console.log(`✅ Company ${companyId} enriched successfully`);
+//   } catch (error) {
+//     console.error(`❌ Error enriching company ${companyId}:`, error);
+//     
+//     // En cas d'erreur, marquer comme draft pour permettre une nouvelle tentative
+//     await db.update(companies)
+//       .set({ 
+//         status: 'draft',
+//         updatedAt: new Date()
+//       })
+//       .where(eq(companies.id, companyId));
+//   }
+// }
 
 const companyInput = z.object({
   name: z.string().min(1),

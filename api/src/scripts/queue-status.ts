@@ -1,5 +1,5 @@
 import { db } from '../db/client';
-import { jobQueue } from '../db/schema';
+import { jobQueue, type JobQueueRow } from '../db/schema';
 import { sql } from 'drizzle-orm';
 
 async function showQueueStatus() {
@@ -26,8 +26,8 @@ async function showQueueStatus() {
       .limit(10);
     
     console.log('\n🕒 Recent jobs:');
-    recentJobs.forEach((job: any) => {
-      const createdAt = new Date(job.created_at as string).toLocaleString();
+    recentJobs.forEach((job: JobQueueRow) => {
+      const createdAt = job.createdAt ? new Date(job.createdAt).toLocaleString() : 'N/A';
       console.log(`  ${job.id}: ${job.type} (${job.status}) - ${createdAt}`);
     });
     

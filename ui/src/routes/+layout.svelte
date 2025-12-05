@@ -9,7 +9,7 @@
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import '$lib/i18n';
-  import { initializeSession, session, isAuthenticated } from '$lib/stores/session';
+  import { initializeSession, session } from '$lib/stores/session';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 

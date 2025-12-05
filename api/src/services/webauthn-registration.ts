@@ -68,7 +68,7 @@ export async function generateWebAuthnRegistrationOptions(
     .then(rows => rows[0]) : null;
   
   const userVerification = user
-    ? getUserVerificationRequirement(user.role as any)
+    ? getUserVerificationRequirement(user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest')
     : 'preferred';
   
   // Generate a unique challenge first
@@ -164,7 +164,8 @@ export async function verifyWebAuthnRegistration(
     
     const {
       credentialDeviceType,
-      credentialBackedUp,
+      // credentialBackedUp not currently used but may be useful for future device management
+      // credentialBackedUp,
       userVerified,
     } = registrationInfo;
     

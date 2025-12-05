@@ -1,21 +1,25 @@
 <script lang="ts">
-  import { settingsStore } from '$lib/stores/settings';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
-  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
 
-  let draft = get(settingsStore);
-  let openaiModelsText = JSON.stringify(draft.openaiModels, null, 2);
+  interface Prompt {
+    id: string;
+    name: string;
+    description: string;
+    content: string;
+    variables: string[];
+  }
+
   let isResetting = false;
-  let prompts = [];
-  let selectedPrompt = null;
+  let prompts: Prompt[] = [];
+  let selectedPrompt: Prompt | null = null;
   let showPromptEditor = false;
   let promptContent = '';
   let promptName = '';
   let promptDescription = '';
-  let promptVariables = [];
+  let promptVariables: string[] = [];
   
   // Configuration IA
   let aiSettings = {
@@ -44,33 +48,14 @@
 
   const loadPrompts = async () => {
     try {
-      const data = await apiGet<{ prompts: any[] }>('/prompts');
+      const data = await apiGet<{ prompts: Prompt[] }>('/prompts');
       prompts = data.prompts;
     } catch (error) {
       console.error('Erreur lors du chargement des prompts:', error);
     }
   };
 
-  const save = () => {
-    try {
-      draft = {
-        ...draft,
-        openaiModels: JSON.parse(openaiModelsText)
-      };
-      settingsStore.set(draft);
-      addToast({
-        type: 'success',
-        message: 'Paramètres enregistrés avec succès !'
-      });
-    } catch (error) {
-      addToast({
-        type: 'error',
-        message: 'JSON invalide pour les modèles OpenAI.'
-      });
-    }
-  };
-
-  const openPromptEditor = (prompt) => {
+  const openPromptEditor = (prompt: Prompt) => {
     selectedPrompt = prompt;
     promptName = prompt.name;
     promptDescription = prompt.description;
@@ -79,10 +64,10 @@
     showPromptEditor = true;
   };
 
-  const extractVariablesFromContent = (content) => {
+  const extractVariablesFromContent = (content: string): string[] => {
     const matches = content.match(/\{\{([^}]+)\}\}/g);
     if (matches) {
-      return matches.map(match => match.replace(/\{\{|\}\}/g, '')).filter((value, index, self) => self.indexOf(value) === index);
+      return matches.map((match: string) => match.replace(/\{\{|\}\}/g, '')).filter((value: string, index: number, self: string[]) => self.indexOf(value) === index);
     }
     return [];
   };
@@ -92,15 +77,17 @@
   }
 
   const savePrompt = async () => {
+    if (!selectedPrompt) return;
+
     try {
-      const updatedPrompt = {
+      const updatedPrompt: Prompt = {
         ...selectedPrompt,
         content: promptContent,
         variables: promptVariables
       };
 
-      const updatedPrompts = prompts.map(p => 
-        p.id === selectedPrompt.id ? updatedPrompt : p
+      const updatedPrompts = prompts.map((p: Prompt) => 
+        p.id === updatedPrompt.id ? updatedPrompt : p
       );
 
       await apiPut('/prompts', { prompts: updatedPrompts });
@@ -267,7 +254,17 @@
     
     <div class="grid gap-4">
       {#each prompts as prompt}
-        <div class="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 cursor-pointer" on:click={() => openPromptEditor(prompt)}>
+        <div 
+          role="button"
+          tabindex="0"
+          class="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 cursor-pointer" 
+          on:click={() => openPromptEditor(prompt)}
+          on:keydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openPromptEditor(prompt);
+            }
+          }}>
           <div class="flex justify-between items-start">
             <div class="flex-1">
               <h3 class="font-medium text-slate-900">{prompt.name}</h3>
@@ -305,8 +302,9 @@
       <div class="grid gap-6 md:grid-cols-2">
         <!-- Modèle par défaut -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Modèle OpenAI par défaut</label>
+          <label for="ai-default-model" class="block text-sm font-medium text-slate-700 mb-2">Modèle OpenAI par défaut</label>
                   <select 
+                    id="ai-default-model"
                     bind:value={aiSettings.defaultModel}
                     class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -321,8 +319,9 @@
 
         <!-- Concurrence -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Jobs simultanés</label>
+          <label for="ai-concurrency" class="block text-sm font-medium text-slate-700 mb-2">Jobs simultanés</label>
           <input 
+            id="ai-concurrency"
             type="number" 
             bind:value={aiSettings.concurrency}
             min="1" 
@@ -334,8 +333,9 @@
 
         <!-- Intervalle de traitement -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Intervalle de traitement (ms)</label>
+          <label for="ai-processing-interval" class="block text-sm font-medium text-slate-700 mb-2">Intervalle de traitement (ms)</label>
           <input 
+            id="ai-processing-interval"
             type="number" 
             bind:value={aiSettings.processingInterval}
             min="1000" 
@@ -461,6 +461,7 @@
           <h3 class="text-lg font-semibold">Éditer le prompt</h3>
           <button 
             on:click={closePromptEditor}
+            aria-label="Fermer l'éditeur de prompt"
             class="text-gray-400 hover:text-gray-600"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -471,21 +472,21 @@
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2">Nom du prompt</label>
+            <span class="block text-sm font-medium text-slate-700 mb-2">Nom du prompt</span>
             <div class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-600">
               {promptName}
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+            <span class="block text-sm font-medium text-slate-700 mb-2">Description</span>
             <div class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-600">
               {promptDescription}
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2">Variables détectées</label>
+            <span class="block text-sm font-medium text-slate-700 mb-2">Variables détectées</span>
             <div class="flex flex-wrap gap-2">
               {#each promptVariables as variable}
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -499,8 +500,9 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2">Contenu du prompt</label>
+            <label for="prompt-content" class="block text-sm font-medium text-slate-700 mb-2">Contenu du prompt</label>
             <textarea 
+              id="prompt-content"
               bind:value={promptContent}
               class="w-full h-96 px-3 py-2 border border-slate-300 rounded-md font-mono text-sm"
               placeholder="Entrez le contenu du prompt..."

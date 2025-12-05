@@ -1,9 +1,7 @@
-import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { settings } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 
 const settingsSchema = z.object({

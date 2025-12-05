@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { rateLimiter } from 'hono-rate-limiter';
 import { apiRouter } from './routes/api';
@@ -104,13 +103,8 @@ const magicLinkRateLimiter = rateLimiter({
   limit: 3, // 3 magic links per 15 minutes
   standardHeaders: 'draft-7',
   keyGenerator: (c) => {
-    // Rate limit by email if available in request body
-    try {
-      const body = c.req.json() as any;
-      return body?.email || c.req.header('x-forwarded-for') || 'unknown';
-    } catch {
-      return c.req.header('x-forwarded-for') || 'unknown';
-    }
+    // Rate limit by IP (body parsing is async and cannot be used in keyGenerator)
+    return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
   },
 });
 

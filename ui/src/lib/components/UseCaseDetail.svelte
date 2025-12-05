@@ -1,58 +1,24 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // Tous les usages de {@html} dans ce fichier passent par renderMarkdownWithRefs() ou parseReferencesInText()
+  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  
   import References from '$lib/components/References.svelte';
-import EditableInput from '$lib/components/EditableInput.svelte';
-import { calculateUseCaseScores, scoreToStars } from '$lib/utils/scoring';
+  import EditableInput from '$lib/components/EditableInput.svelte';
+  import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { marked } from 'marked';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
-import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph } from '$lib/utils/markdown';
+  import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
 
   export let useCase: any;
   export let matrix: MatrixConfig | null = null;
   export let calculatedScores: any = null;
   export let isEditing: boolean = false;
-  export let draft: any = {};
 
-  // Fonction pour créer un lien de référence
-  const createReferenceLink = (num: string, ref: {title: string; url: string}): string => {
-    const refId = `ref-${num}`;
-    return `<a href="#${refId}" 
-                class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-                title="${ref.title.replace(/"/g, '&quot;')}"
-                onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-                [${num}]
-              </a>`;
-  };
-
-  // Fonction pour parser les références [1], [2] dans le markdown HTML
-  const parseReferencesInMarkdown = (html: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!html || !references || references.length === 0) return html;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return html.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
-    });
-  };
-
-  // Fonction pour parser les références [1], [2] dans un texte simple (pas markdown)
-  const parseReferencesInText = (text: string, references: Array<{title: string; url: string}> = []): string => {
-    if (!text || !references || references.length === 0) return text;
-    
-    // Remplacer les patterns [1], [2], etc par des liens cliquables
-    return text.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        return createReferenceLink(num, references[index]);
-      }
-      return match; // Si la référence n'existe pas, garder le texte original
-    });
-  };
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   // Fonction pour recharger le cas d'usage après sauvegarde (debounced)
   let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -81,6 +47,12 @@ const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'deadline'
 const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
+
+interface ScoreEntry {
+  axisId: string;
+  rating: number;
+  description?: string;
+}
 
 let textBuffers: Record<TextField, string> = {
   description: '',
@@ -142,8 +114,8 @@ const setScoreBuffer = (type: 'value' | 'complexity', axisId: string, value: str
 $: if (useCase?.id) {
   // Extraire les valeurs depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
   const getFieldValue = (field: TextField): string => {
-    // Pour name, description, problem, solution : chercher dans data d'abord
-    if (field === 'name' || field === 'description' || field === 'problem' || field === 'solution') {
+    // Pour description, problem, solution : chercher dans data d'abord
+    if (field === 'description' || field === 'problem' || field === 'solution') {
       return useCase?.data?.[field] || useCase?.[field] || '';
     }
     // Pour les autres champs : chercher dans data puis dans les propriétés directes
@@ -245,13 +217,6 @@ $: listMarkdowns = LIST_FIELDS.reduce<Record<ListField, string>>((acc, field) =>
   return acc;
 }, {} as Record<ListField, string>);
 
-const countLines = (text: string) => text ? text.split(/\r?\n/).length : 0;
-const renderMarkdownWithRefs = (text?: string | null, refs: Array<{title: string; url: string}> = []) => {
-  if (!text) return '';
-  const normalized = normalizeUseCaseMarkdown(text);
-  const html = marked(normalized);
-  return parseReferencesInMarkdown(html, refs);
-};
 const getTextFullData = (field: TextField) => {
   if (!useCase?.id) return null;
   const normalized = normalizeUseCaseMarkdown(textBuffers[field] || '');
@@ -324,23 +289,26 @@ $: complexityStars = calculatedScores?.complexityStars !== undefined
 
   // Fonction pour obtenir le HTML de la description avec références parsées
 $: descriptionHtml = (useCase?.data?.description || useCase?.description)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.description || useCase.description || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.description || useCase.description || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
   
 $: problemHtml = (useCase?.data?.problem || useCase?.problem)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.problem || useCase.problem || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.problem || useCase.problem || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
   
 $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
-  ? parseReferencesInMarkdown(
-      marked(normalizeUseCaseMarkdown(useCase.data?.solution || useCase.solution || '')).replace(/<ul>/g, '<ul class="list-disc space-y-2" style="padding-left:1rem;">'),
-      getReferences()
+  ? renderMarkdownWithRefs(
+      useCase.data?.solution || useCase.solution || '',
+      getReferences(),
+      { addListStyles: true, listPadding: 1.5 }
     )
   : '';
 
@@ -348,27 +316,27 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   const getReferences = () => useCase?.data?.references || useCase?.references || [];
   
   $: parsedBenefits = (useCase?.data?.benefits || useCase?.benefits)
-    ? (useCase.data?.benefits || useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, getReferences()))
+    ? (useCase.data?.benefits || useCase.benefits || []).map((benefit: string) => renderMarkdownWithRefs(benefit, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedMetrics = (useCase?.data?.metrics || useCase?.metrics)
-    ? (useCase.data?.metrics || useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, getReferences()))
+    ? (useCase.data?.metrics || useCase.metrics || []).map((metric: string) => renderMarkdownWithRefs(metric, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedRisks = (useCase?.data?.risks || useCase?.risks)
-    ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, getReferences()))
+    ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedTechnologies = (useCase?.data?.technologies || useCase?.technologies)
-    ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, getReferences()))
+    ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedDataSources = (useCase?.data?.dataSources || useCase?.dataSources)
-    ? (useCase.data?.dataSources || useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, getReferences()))
+    ? (useCase.data?.dataSources || useCase.dataSources || []).map((source: string) => renderMarkdownWithRefs(source, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
-
+  
   $: parsedDataObjects = (useCase?.data?.dataObjects || useCase?.dataObjects)
-    ? (useCase.data?.dataObjects || useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, getReferences()))
+    ? (useCase.data?.dataObjects || useCase.dataObjects || []).map((data: string) => renderMarkdownWithRefs(data, getReferences(), { addListStyles: true, listPadding: 1.5 }))
     : [];
 
   $: parsedNextSteps = (useCase?.data?.nextSteps || useCase?.nextSteps)
@@ -382,7 +350,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, getReferences())
+          description: renderMarkdownWithRefs(description, getReferences(), { addListStyles: true, listPadding: 1.5 })
         };
       })
     : [];
@@ -393,7 +361,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         const description = scoreBuffers[key] !== undefined ? scoreBuffers[key] : (score.description || '');
         return {
           ...score,
-          description: renderMarkdownWithRefs(description, getReferences())
+          description: renderMarkdownWithRefs(description, getReferences(), { addListStyles: true, listPadding: 1.5 })
         };
       })
     : [];
@@ -501,7 +469,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
-              {#each Array(5) as _, i}
+              {#each range(5) as i (i)}
                 <svg class="w-6 h-6 {i < valueStars ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                 </svg>
@@ -526,7 +494,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1">
-              {#each Array(5) as _, i}
+              {#each range(5) as i (i)}
                 {#if i < complexityStars}
                   <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -568,7 +536,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               markdown={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getTextFullData('deadline')}
-              fullDataGetter={() => getTextFullData('deadline')}
+              fullDataGetter={(() => getTextFullData('deadline')) as any}
               changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
               originalValue={textOriginals.deadline || ''}
                   references={getReferences()}
@@ -606,7 +574,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('description')}
-                  fullDataGetter={() => getTextFullData('description')}
+                  fullDataGetter={(() => getTextFullData('description')) as any}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
                   originalValue={textOriginals.description || ''}
                   references={getReferences()}
@@ -643,7 +611,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     markdown={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getTextFullData('problem')}
-                    fullDataGetter={() => getTextFullData('problem')}
+                    fullDataGetter={(() => getTextFullData('problem')) as any}
                     changeId={useCase?.id ? `usecase-problem-${useCase.id}` : ''}
                     originalValue={textOriginals.problem || ''}
                     references={getReferences()}
@@ -678,7 +646,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     markdown={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getTextFullData('solution')}
-                    fullDataGetter={() => getTextFullData('solution')}
+                    fullDataGetter={(() => getTextFullData('solution')) as any}
                     changeId={useCase?.id ? `usecase-solution-${useCase.id}` : ''}
                     originalValue={textOriginals.solution || ''}
                     references={getReferences()}
@@ -722,7 +690,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   forceList={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getListFullData('benefits')}
-                  fullDataGetter={() => getListFullData('benefits')}
+                  fullDataGetter={(() => getListFullData('benefits')) as any}
                   changeId={useCase?.id ? `usecase-benefits-${useCase.id}` : ''}
                   originalValue={arrayToMarkdown(listOriginals.benefits) || ''}
                   references={getReferences()}
@@ -763,7 +731,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     forceList={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getListFullData('risks')}
-                    fullDataGetter={() => getListFullData('risks')}
+                    fullDataGetter={(() => getListFullData('risks')) as any}
                     changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.risks) || ''}
                     references={getReferences()}
@@ -802,7 +770,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     forceList={true}
                     apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                     fullData={getListFullData('metrics')}
-                    fullDataGetter={() => getListFullData('metrics')}
+                    fullDataGetter={(() => getListFullData('metrics')) as any}
                     changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
                     originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
                     references={getReferences()}
@@ -843,7 +811,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   markdown={true}
                   apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                   fullData={getTextFullData('contact')}
-                  fullDataGetter={() => getTextFullData('contact')}
+                  fullDataGetter={(() => getTextFullData('contact')) as any}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
                   originalValue={textOriginals.contact || ''}
                   references={getReferences()}
@@ -889,7 +857,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 forceList={true}
                 apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                 fullData={getListFullData('technologies')}
-                fullDataGetter={() => getListFullData('technologies')}
+                fullDataGetter={(() => getListFullData('technologies')) as any}
                 changeId={useCase?.id ? `usecase-technologies-${useCase.id}` : ''}
                 originalValue={arrayToMarkdown(listOriginals.technologies) || ''}
                 references={getReferences()}
@@ -940,7 +908,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               forceList={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getListFullData('dataSources')}
-              fullDataGetter={() => getListFullData('dataSources')}
+              fullDataGetter={(() => getListFullData('dataSources')) as any}
               changeId={useCase?.id ? `usecase-dataSources-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataSources) || ''}
               references={getReferences()}
@@ -990,7 +958,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               forceList={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
               fullData={getListFullData('dataObjects')}
-              fullDataGetter={() => getListFullData('dataObjects')}
+              fullDataGetter={(() => getListFullData('dataObjects')) as any}
               changeId={useCase?.id ? `usecase-dataObjects-${useCase.id}` : ''}
               originalValue={arrayToMarkdown(listOriginals.dataObjects) || ''}
               references={getReferences()}
@@ -1033,7 +1001,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             forceList={true}
             apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
             fullData={getListFullData('nextSteps')}
-            fullDataGetter={() => getListFullData('nextSteps')}
+            fullDataGetter={(() => getListFullData('nextSteps')) as any}
             changeId={useCase?.id ? `usecase-nextSteps-${useCase.id}` : ''}
             originalValue={arrayToMarkdown(listOriginals.nextSteps) || ''}
             references={getReferences()}
@@ -1071,7 +1039,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {#each matrix.valueAxes as axis}
             {@const allValueScores = useCase?.data?.valueScores || useCase?.valueScores || []}
             {@const score = allValueScores.find((s: any) => s.axisId === axis.id)}
-            {@const parsedScore = parsedValueScores.find((s) => s.axisId === axis.id)}
+            {@const parsedScore = parsedValueScores.find((s: ScoreEntry) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               {@const key = `value-${axis.id}`}
@@ -1081,7 +1049,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   <h5 class="font-medium text-slate-900">{axis.name}</h5>
                   <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
-                      {#each Array(5) as _, i}
+                      {#each range(5) as i (i)}
                         <svg class="w-4 h-4 {i < stars ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                         </svg>
@@ -1100,7 +1068,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       markdown={true}
                       apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                       fullData={getScoreFullData('value', axis.id)}
-                      fullDataGetter={() => getScoreFullData('value', axis.id)}
+                      fullDataGetter={(() => getScoreFullData('value', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-valueScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
                       references={getReferences()}
@@ -1129,7 +1097,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {#each matrix.complexityAxes as axis}
             {@const allComplexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || []}
             {@const score = allComplexityScores.find((s: any) => s.axisId === axis.id)}
-            {@const parsedScore = parsedComplexityScores.find((s) => s.axisId === axis.id)}
+            {@const parsedScore = parsedComplexityScores.find((s: ScoreEntry) => s.axisId === axis.id)}
             {#if score}
               {@const stars = scoreToStars(Number(score.rating))}
               {@const key = `complexity-${axis.id}`}
@@ -1139,7 +1107,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   <h5 class="font-medium text-slate-900">{axis.name}</h5>
                   <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
-                      {#each Array(5) as _, i}
+                      {#each range(5) as i (i)}
                         {#if i < stars}
                           <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -1164,7 +1132,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       markdown={true}
                       apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
                       fullData={getScoreFullData('complexity', axis.id)}
-                      fullDataGetter={() => getScoreFullData('complexity', axis.id)}
+                      fullDataGetter={(() => getScoreFullData('complexity', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-complexityScore-${axis.id}-${useCase.id}` : ''}
                       originalValue={scoreOriginals[key] || ''}
                       references={getReferences()}

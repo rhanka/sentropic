@@ -4,7 +4,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/browser';
 
 /**
  * WebAuthn Client Service
@@ -55,7 +55,7 @@ export async function startWebAuthnRegistration(
   }
   
   try {
-    const credential = await startRegistration(options);
+    const credential = await startRegistration({ optionsJSON: options });
     return credential;
   } catch (error: any) {
     // Handle common error cases
@@ -90,7 +90,7 @@ export async function startWebAuthnAuthentication(
   }
   
   try {
-    const credential = await startAuthentication(options);
+    const credential = await startAuthentication({ optionsJSON: options });
     return credential;
   } catch (error: any) {
     // Handle common error cases
@@ -129,4 +129,3 @@ export function getWebAuthnErrorMessage(error: any): string {
   
   return errorMap[message] || message;
 }
-

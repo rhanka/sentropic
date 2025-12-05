@@ -1,23 +1,26 @@
 <script lang="ts">
-  import { matrixStore } from '$lib/stores/matrix';
-  import { currentFolderId } from '$lib/stores/folders';
+  import { matrixStore, type MatrixAxis, type MatrixConfig } from '$lib/stores/matrix';
+  import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiGet, apiPut } from '$lib/utils/api';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount } from 'svelte';
   import { API_BASE_URL } from '$lib/config';
 
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
   let isLoading = false;
-  let editedConfig = { ...$matrixStore };
-  let originalConfig = { ...$matrixStore };
-  let selectedAxis: any = null;
+  let editedConfig: MatrixConfig = { ...$matrixStore };
+  let originalConfig: MatrixConfig = { ...$matrixStore };
+  let selectedAxis: MatrixAxis | null = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
   let showCreateMatrixDialog = false;
   let showCloseWarning = false;
   let createMatrixType = 'default'; // 'default', 'copy', 'blank'
-  let availableFolders = [];
+  let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
 
   onMount(async () => {
@@ -84,18 +87,21 @@
   };
 
   const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
+    const pointsNum = typeof points === 'string' ? parseFloat(points) : points;
+    if (isNaN(pointsNum)) return;
+    
     if (isValue && editedConfig.valueThresholds) {
       const newThresholds = [...editedConfig.valueThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], points: points };
+        newThresholds[index] = { ...newThresholds[index], points: pointsNum };
         editedConfig = { ...editedConfig, valueThresholds: newThresholds };
       }
     } else if (!isValue && editedConfig.complexityThresholds) {
       const newThresholds = [...editedConfig.complexityThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], points: points };
+        newThresholds[index] = { ...newThresholds[index], points: pointsNum };
         editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
       }
     }
@@ -134,7 +140,7 @@
     // Les modifications sont maintenant gérées par le store unsavedChanges
   };
 
-  const openAxisDescriptions = (axis: any, isValue: boolean) => {
+  const openAxisDescriptions = (axis: MatrixAxis, isValue: boolean) => {
     selectedAxis = axis;
     isValueAxis = isValue;
     showDescriptionsDialog = true;
@@ -175,24 +181,26 @@
 
   // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
 
-  const getLevelDescription = (axis: any, level: number): string => {
-    if (!axis.levelDescriptions) return `Niveau ${level}`;
+  const getLevelDescription = (axis: MatrixAxis | null, level: number): string => {
+    if (!axis || !axis.levelDescriptions) return `Niveau ${level}`;
     
-    const levelDesc = axis.levelDescriptions.find((ld: any) => ld.level === level);
+    const levelDesc = axis.levelDescriptions.find((ld) => ld.level === level);
     return levelDesc?.description || `Niveau ${level}`;
   };
 
   const updateLevelDescription = (levelNum: number, description: string) => {
     if (!selectedAxis) return;
     
+    const currentAxis = selectedAxis;
+    
     if (isValueAxis) {
-      const axisIndex = editedConfig.valueAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      const axisIndex = editedConfig.valueAxes.findIndex((a) => a.name === currentAxis.name);
       if (axisIndex === -1) return;
       
       const newValueAxes = [...editedConfig.valueAxes];
       const currentLevelDescs = [...(newValueAxes[axisIndex].levelDescriptions || [])];
       
-      const levelIndex = currentLevelDescs.findIndex((ld: any) => ld.level === levelNum);
+      const levelIndex = currentLevelDescs.findIndex((ld) => ld.level === levelNum);
       if (levelIndex >= 0) {
         currentLevelDescs[levelIndex] = { ...currentLevelDescs[levelIndex], description };
       } else {
@@ -206,13 +214,13 @@
       
       editedConfig = { ...editedConfig, valueAxes: newValueAxes };
     } else {
-      const axisIndex = editedConfig.complexityAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      const axisIndex = editedConfig.complexityAxes.findIndex((a) => a.name === currentAxis.name);
       if (axisIndex === -1) return;
       
       const newComplexityAxes = [...editedConfig.complexityAxes];
       const currentLevelDescs = [...(newComplexityAxes[axisIndex].levelDescriptions || [])];
       
-      const levelIndex = currentLevelDescs.findIndex((ld: any) => ld.level === levelNum);
+      const levelIndex = currentLevelDescs.findIndex((ld) => ld.level === levelNum);
       if (levelIndex >= 0) {
         currentLevelDescs[levelIndex] = { ...currentLevelDescs[levelIndex], description };
       } else {
@@ -340,10 +348,10 @@
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
-            {#each Array.from({ length: 3 }) as _}
+            {#each range(3) as i (i)}
               <span class="text-yellow-500 text-xl">★</span>
             {/each}
-            {#each Array.from({ length: 2 }) as _}
+            {#each range(2) as i (i)}
               <span class="text-gray-300 text-xl">★</span>
         {/each}
           </h2>
@@ -382,7 +390,7 @@
                       max="3"
                       step="0.5"
                       value={axis.weight}
-                      on:input={(e) => handleValueWeightChange(index, e.target.value)}
+                      on:input={(e) => handleValueWeightChange(index, (e.target as HTMLInputElement).value)}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -411,10 +419,10 @@
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
-            {#each Array.from({ length: 3 }) as _}
+            {#each range(3) as i (i)}
               <span class="text-gray-800 font-bold">X</span>
             {/each}
-            {#each Array.from({ length: 2 }) as _}
+            {#each range(2) as i (i)}
               <span class="text-gray-300 font-bold">X</span>
         {/each}
           </h2>
@@ -453,7 +461,7 @@
                       max="3"
                       step="0.5"
                       value={axis.weight}
-                      on:input={(e) => handleComplexityWeightChange(index, e.target.value)}
+                      on:input={(e) => handleComplexityWeightChange(index, (e.target as HTMLInputElement).value)}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -498,10 +506,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level }) as _}
+                      {#each range(threshold.level) as i (i)}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level }) as _}
+                      {#each range(5 - threshold.level) as i (i)}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
@@ -510,7 +518,7 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handlePointsChange(true, threshold.level, parseInt(e.target.value))}
+                      on:input={(e) => handlePointsChange(true, threshold.level, parseInt((e.target as HTMLInputElement).value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -543,10 +551,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level }) as _}
+                      {#each range(threshold.level) as i (i)}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level }) as _}
+                      {#each range(5 - threshold.level) as i (i)}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
@@ -555,7 +563,7 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handlePointsChange(false, threshold.level, parseInt(e.target.value))}
+                      on:input={(e) => handlePointsChange(false, threshold.level, parseInt((e.target as HTMLInputElement).value))}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -624,25 +632,25 @@
             </tr>
           </thead>
           <tbody>
-            {#each Array.from({ length: 5 }) as _, level}
+            {#each range(5) as level (level)}
               {@const levelNum = level + 1}
               <tr class="border-b">
                 <td class="py-3 align-top">
                   {#if isValueAxis}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum }) as _}
+                      {#each range(levelNum) as i (i)}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum }) as _}
+                      {#each range(5 - levelNum) as i (i)}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
                   {:else}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum }) as _}
+                      {#each range(levelNum) as i (i)}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum }) as _}
+                      {#each range(5 - levelNum) as i (i)}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
