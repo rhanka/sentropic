@@ -42,7 +42,7 @@ analyticsRouter.get('/scatter', async (c) => {
   const items = await hydrateUseCases(rows);
   const mapped = items.map((item) => ({
     id: item.id,
-    name: item.name,
+    name: item.data.name,
     process: item.data.process,
     value_norm: item.totalValueScore ?? 0,
     ease: item.totalComplexityScore ? 100 - item.totalComplexityScore : 0,

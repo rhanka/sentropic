@@ -152,7 +152,7 @@ queueRouter.post('/purge', async (c) => {
         WHERE status IN ('pending','processing')
       `);
       const del = await db.run(sql`DELETE FROM job_queue`);
-      const purgedCount = del.changes ?? 0;
+      const purgedCount = (del as { changes?: number }).changes ?? 0;
       console.log(`🧹 Purged ALL jobs: ${purgedCount}`);
       queueManager.resume();
       return c.json({ success: true, message: `${purgedCount} jobs purgés avec succès (toute la queue)`, purgedCount });

@@ -324,8 +324,9 @@ export class QueueManager {
     }
 
     // Créer les cas d'usage en mode generating
+    // Note: UseCaseListItem n'a que 'titre', pas 'title'
     const draftUseCases = useCaseList.useCases.map((useCaseItem: UseCaseListItem) => {
-      const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
+      const title = useCaseItem.titre || String(useCaseItem);
       const useCaseData: UseCaseData = {
         name: title, // Stocker name dans data
         description: useCaseItem.description || '', // Stocker description dans data
@@ -474,7 +475,7 @@ export class QueueManager {
     
     // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
     const [existingUseCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
-    let existingData: UseCaseData = {};
+    let existingData: Partial<UseCaseData> = {};
     if (existingUseCase?.data) {
       try {
         if (typeof existingUseCase.data === 'object') {
@@ -511,24 +512,11 @@ export class QueueManager {
     };
     
     // Mettre à jour le cas d'usage
+    // Note: Toutes les colonnes métier (prerequisites, deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
+    // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(useCases)
       .set({
-        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
-        // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
-        domain: useCaseDetail.domain,
-        technologies: JSON.stringify(useCaseDetail.technologies),
-        prerequisites: useCaseDetail.prerequisites,
-        deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
-        contact: useCaseDetail.contact,
-        benefits: JSON.stringify(useCaseDetail.benefits),
-        metrics: JSON.stringify(useCaseDetail.metrics),
-        risks: JSON.stringify(useCaseDetail.risks),
-        nextSteps: JSON.stringify(useCaseDetail.nextSteps),
-        dataSources: JSON.stringify(useCaseDetail.dataSources),
-        dataObjects: JSON.stringify(useCaseDetail.dataObjects),
-        references: JSON.stringify(useCaseDetail.references || []),
-        valueScores: JSON.stringify(useCaseDetail.valueScores),
-        complexityScores: JSON.stringify(useCaseDetail.complexityScores),
+        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })
@@ -608,9 +596,10 @@ export class QueueManager {
       type: result.type as JobType,
       data: JSON.parse(result.data) as JobData,
       status: result.status as Job['status'],
-      createdAt: result.createdAt?.toISOString() || result.created_at?.toString() || '',
-      startedAt: result.startedAt || result.started_at || undefined,
-      completedAt: result.completedAt || result.completed_at || undefined,
+      // Note: Drizzle retourne createdAt, startedAt, completedAt (camelCase), pas created_at (snake_case)
+      createdAt: result.createdAt?.toISOString() || '',
+      startedAt: result.startedAt || undefined,
+      completedAt: result.completedAt || undefined,
       error: result.error || undefined
     };
   }

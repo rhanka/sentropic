@@ -176,7 +176,9 @@ export const executeWithTools = async (
   const message = response.choices[0]?.message;
 
   if (message?.tool_calls) {
-    const allSearchResults: SearchResult[] = [];
+    // Note: allSearchResults stocke les résultats de recherche avec leur query associée
+    // Ce n'est pas le type SearchResult[], mais un tableau d'objets contenant query et results
+    const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
     const allExtractResults: ExtractResult[] = [];
 
     // Exécuter toutes les recherches et extractions demandées
