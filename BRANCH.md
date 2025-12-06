@@ -4,8 +4,8 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 11/20 tâches complétées
-- **Current**: Corrections typecheck API - createdAt NOT NULL (complété ✅)
+- **Progress**: 12/20 tâches complétées
+- **Current**: Corrections typecheck API - WebAuthn challengeId (complété ✅)
 - **Next**: Corriger les erreurs typecheck WebAuthn et Session Manager restantes
 
 ## Commits
@@ -21,12 +21,13 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 10**: Fix typecheck API part 1 (sans WebAuthn - reset par utilisateur)
 - [x] **Commit 11**: Feat dashboard folder title multiline et full width
 - [x] **Commit 12**: Fix createdAt NOT NULL - ajout .notNull() à toutes les colonnes et suppression workarounds
+- [x] **Commit 13**: Fix WebAuthn - suppression challengeId des réponses API (non conforme standard)
 
 ## Bilan des vérifications (typecheck + lint)
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 9 erreurs TypeScript (était 28, -19 corrigées ✅)
+- ❌ **typecheck-api** : 7 erreurs TypeScript (était 28, -21 corrigées ✅)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
@@ -44,15 +45,15 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **tools.ts** : Correction type allSearchResults (`Array<{query, results}>` au lieu de `SearchResult[]`)
 - ✅ **nodemailer** : Installation `@types/nodemailer` (types officiels)
 - ✅ **createdAt NOT NULL** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (9 tables) et suppression de 5 workarounds dans le code
+- ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn) et nettoyage des tests
 
-### Erreurs restantes (9 erreurs)
+### Erreurs restantes (7 erreurs)
 
-#### 1. WebAuthn (6 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+#### 1. WebAuthn (5 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
 - ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server`
 - ✅ **createdAt fix** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (erreur register.ts:453 corrigée)
-- `src/routes/auth/login.ts:70` : Property 'challengeId' does not exist (should be 'challenge')
-- `src/routes/auth/register.ts:179` : Property 'challengeId' does not exist (should be 'challenge')
-- `src/routes/auth/register.ts:249,251` : instanceof error et Uint8Array constructor
+- ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn, non nécessaire)
+- `src/routes/auth/register.ts:248,250` : instanceof error et Uint8Array constructor
 - `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
 - `src/services/webauthn-registration.ts:185,187` : instanceof error et Uint8Array constructor
 
@@ -107,13 +108,13 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Ordre de priorité
 
-1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (6 erreurs restantes)
+1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (5 erreurs restantes)
 2. **Typecheck API Session Manager** : Finir les corrections session-manager (2 erreurs)
 3. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
 4. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API WebAuthn** : ~2h (corrections de types, challengeId → challenge, Uint8Array)
+- **Typecheck API WebAuthn** : ~1.5h (corrections de types, Uint8Array, AttestationConveyancePreference)
 - **Typecheck API Session Manager** : ~30min (finir corrections gt() avec timestamps)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)

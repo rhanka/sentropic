@@ -67,7 +67,6 @@ loginRouter.post('/options', async (c) => {
     
     return c.json({ 
       options,
-      challengeId: options.challengeId, // Include challengeId for testing
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
