@@ -10,7 +10,6 @@ import { adminRouter } from './admin';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
-import { testRouter } from './test';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin, requireEditor } from '../../middleware/rbac';
 
@@ -18,7 +17,6 @@ export const apiRouter = new Hono();
 
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
-apiRouter.route('/test', testRouter);
 
 // Editor routes (require editor role or higher)
 apiRouter.use('/companies/*', requireAuth, requireEditor);
