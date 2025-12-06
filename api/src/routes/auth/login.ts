@@ -10,7 +10,7 @@ import { verifyChallenge } from '../../services/challenge-manager';
 import { users } from '../../db/schema';
 import { db } from '../../db/client';
 import { eq } from 'drizzle-orm';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 /**
  * WebAuthn Authentication Routes

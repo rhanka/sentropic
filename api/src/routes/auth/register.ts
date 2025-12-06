@@ -11,7 +11,7 @@ import { db } from '../../db/client';
 import { users, webauthnCredentials } from '../../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { env } from '../../config/env';
-import type { RegistrationResponseJSON } from '@simplewebauthn/types';
+import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { verifyValidationToken } from '../../services/email-verification';
 

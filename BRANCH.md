@@ -25,7 +25,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 14 erreurs TypeScript (était 28, -14 corrigées ✅, mais WebAuthn non modifié)
+- ❌ **typecheck-api** : 10 erreurs TypeScript (était 28, -18 corrigées ✅, dont 4 imports WebAuthn)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
@@ -45,17 +45,14 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 **Note importante** : Les fichiers WebAuthn n'ont PAS été modifiés dans ce commit (reset par l'utilisateur car modifications précédentes avaient cassé la registration).
 
-### Erreurs restantes (14 erreurs)
+### Erreurs restantes (10 erreurs)
 
-#### 1. WebAuthn (11 erreurs) - ⚠️ NON MODIFIÉ
-- `src/routes/auth/login.ts:13` : Cannot find module '@simplewebauthn/types'
-- `src/routes/auth/register.ts:14` : Cannot find module '@simplewebauthn/types'
+#### 1. WebAuthn (7 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+- ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server` (4 erreurs corrigées)
 - `src/routes/auth/register.ts:453` : 'd.createdAt' is possibly 'null'
-- `src/services/webauthn-authentication.ts:10` : Cannot find module '@simplewebauthn/types'
 - `src/services/webauthn-authentication.ts:90` : Types transports incompatibles (string[] vs AuthenticatorTransportFuture[])
 - `src/services/webauthn-authentication.ts:186` (2 erreurs) : Property 'transportsJson' does not exist (2 occurrences)
 - `src/services/webauthn-authentication.ts:203` : Type 'WebAuthnCredential' incompatible (Buffer vs Uint8Array)
-- `src/services/webauthn-registration.ts:9` : Cannot find module '@simplewebauthn/types'
 - `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
 - `src/services/webauthn-registration.ts:185` : instanceof error (credentialID)
 - `src/services/webauthn-registration.ts:187` : No overload matches (Uint8Array constructor)

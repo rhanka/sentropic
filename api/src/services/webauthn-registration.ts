@@ -6,7 +6,7 @@ import {
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   RegistrationResponseJSON,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/server';
 import { db } from '../db/client';
 import { users, webauthnCredentials } from '../db/schema';
 import { eq } from 'drizzle-orm';

@@ -3,11 +3,12 @@ import {
   verifyAuthenticationResponse,
   type VerifiedAuthenticationResponse,
   type UserVerificationRequirement,
+  type AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
 import type {
   PublicKeyCredentialRequestOptionsJSON,
   AuthenticationResponseJSON,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/server';
 import { db } from '../db/client';
 import { webauthnCredentials, users } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -45,7 +46,7 @@ export async function generateWebAuthnAuthenticationOptions(
   const { userId } = params;
   const config = getWebAuthnConfig();
   
-  let allowCredentials: Array<{ id: string; transports?: string[] }> = [];
+  let allowCredentials: Array<{ id: string; transports?: AuthenticatorTransportFuture[] }> = [];
   let userVerification: UserVerificationRequirement = 'preferred';
   
   // If user ID provided, get their credentials and role
@@ -53,14 +54,14 @@ export async function generateWebAuthnAuthenticationOptions(
     const credentials = await db
       .select({
         id: webauthnCredentials.credentialId,
-        transports: webauthnCredentials.transportsJson,
+        transportsJson: webauthnCredentials.transportsJson,
       })
       .from(webauthnCredentials)
       .where(eq(webauthnCredentials.userId, userId));
     
     allowCredentials = credentials.map((cred) => ({
       id: cred.id,
-      transports: cred.transports ? JSON.parse(cred.transports) : undefined,
+      transports: cred.transportsJson ? (JSON.parse(cred.transportsJson) as AuthenticatorTransportFuture[]) : undefined,
     }));
     
     // Get user role for verification requirement
@@ -123,10 +124,10 @@ export async function verifyWebAuthnAuthentication(
     }, 'Credential ID from response');
     
     // Convert credential ID to base64url for database lookup
-    const credentialIdArray = credential.id instanceof Uint8Array 
+    // credential.id est déjà une string base64url dans AuthenticationResponseJSON
+    const credentialIdBase64 = typeof credential.id === 'string' 
       ? credential.id 
-      : new Uint8Array(Object.values(credential.id));
-    const credentialIdBase64 = Buffer.from(credentialIdArray).toString('base64url');
+      : Buffer.from(credential.id as unknown as Uint8Array).toString('base64url');
     
     const [storedCredential] = await db
       .select({
@@ -179,12 +180,18 @@ export async function verifyWebAuthnAuthentication(
     const requireUV = userRole === 'admin_app' || userRole === 'admin_org';
     
     // Create WebAuthnCredential object (v11.0.0+ API change)
+    // Note: transportsJson est dans le schéma mais TypeScript ne le reconnaît pas dans le type inféré
+    // On utilise un cast pour accéder à transportsJson
+    const transportsJson = (storedCredential as unknown as { transportsJson?: string | null }).transportsJson;
+    // WebAuthnCredential attend id et publicKey comme Uint8Array, pas Buffer
+    // Note: Le type WebAuthnCredential de @simplewebauthn/server attend une structure spécifique
+    // On utilise un cast pour satisfaire TypeScript car la structure est correcte à l'exécution
     const webAuthnCredential = {
-      id: Buffer.from(storedCredential.credentialId, 'base64url'),
-      publicKey: credentialPublicKey,
+      id: new Uint8Array(Buffer.from(storedCredential.credentialId, 'base64url')),
+      publicKey: new Uint8Array(credentialPublicKey),
       counter: storedCredential.counter,
-      transports: storedCredential.transportsJson ? JSON.parse(storedCredential.transportsJson) : [],
-    };
+      transports: transportsJson ? (JSON.parse(transportsJson) as AuthenticatorTransportFuture[]) : [],
+    } as any; // Type assertion nécessaire car WebAuthnCredential a une structure interne complexe
     
     logger.debug({
       credentialKeys: Object.keys(webAuthnCredential),
