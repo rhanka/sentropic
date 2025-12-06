@@ -4,9 +4,9 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 9/20 tâches complétées
-- **Current**: Feat 4 complété (édition multiline du titre avec layouts différenciés)
-- **Next**: Retravailler Fix WebAuthn pour login smartphone en localhost dev
+- **Progress**: 10/20 tâches complétées
+- **Current**: Corrections typecheck API part 1 (sans WebAuthn - reset par l'utilisateur)
+- **Next**: Corriger les erreurs typecheck WebAuthn et autres erreurs restantes
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
@@ -18,92 +18,59 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 7**: Feat EditableInput markdown avec bordure orange et hover bord gauche gris
 - [x] **Commit 8**: Feat édition du titre/nom du usecase avec EditableInput
 - [x] **Commit 9**: Feat multiline title editing avec layout 50/50 pour entreprises
-
-## Plan d'évolution des tests
-
-### Tests à implémenter
-
-#### 1. Tests E2E - Édition de titre (multiline)
-**Fichiers concernés** : `e2e/tests/workflow.spec.ts`, `e2e/tests/companies.spec.ts`, `e2e/tests/companies-detail.spec.ts`
-
-**Actions** :
-- Mettre à jour les sélecteurs : `h1 input.editable-input` → `h1 textarea.editable-textarea, h1 input.editable-input`
-- Tester l'édition multiline (retours à la ligne)
-- Vérifier que le textarea s'ajuste automatiquement en hauteur
-
-#### 2. Tests E2E - Matrice (ajout/suppression d'axes, comptage, auto-save)
-**Fichier concerné** : `e2e/tests/matrix.spec.ts`
-
-**Actions** :
-- Ajouter test pour boutons "Ajouter axe de valeur" / "Ajouter axe de complexité"
-- Ajouter test pour boutons de suppression d'axes
-- Vérifier que le comptage se met à jour après modification des seuils
-- Vérifier l'auto-save (attendre 5s après modification)
+- [x] **Commit 10**: Fix typecheck API part 1 (sans WebAuthn - reset par utilisateur)
+- [x] **Commit 11**: Feat dashboard folder title multiline et full width
 
 ## Bilan des vérifications (typecheck + lint)
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 28 erreurs TypeScript (5 erreurs WebAuthn corrigées ✅, mais d'autres erreurs persistent)
+- ❌ **typecheck-api** : 14 erreurs TypeScript (était 28, -14 corrigées ✅, mais WebAuthn non modifié)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
-### Plan de fix
+### Corrections typecheck API part 1 (complétées ✅)
 
-#### 1. Typecheck API (23 erreurs restantes, 5 corrigées ✅)
+#### Corrections effectuées (sans WebAuthn)
+- ✅ **UseCase.name/description** : Utilisation de `data.name`/`data.description` au lieu de `name`/`description` au niveau racine
+- ✅ **queue.ts** : Typage de `del` avec assertion de type
+- ✅ **queue-manager.ts** : 
+  - Suppression colonnes legacy (domain, prerequisites, deadline, etc.) du `.set()` (migration 0008 vers data JSONB)
+  - Correction title vs titre
+  - Correction createdAt/startedAt/completedAt (camelCase au lieu de snake_case)
+  - Correction initialisation UseCaseData (Partial<UseCaseData>)
+- ✅ **session-manager.ts** : Vérification explicite des types SessionPayload au lieu de double assertion (partiellement - 2 erreurs restantes)
+- ✅ **tools.ts** : Correction type allSearchResults (`Array<{query, results}>` au lieu de `SearchResult[]`)
+- ✅ **nodemailer** : Installation `@types/nodemailer` (types officiels)
 
-**Priorité HAUTE - Bloquant pour le CI**
+**Note importante** : Les fichiers WebAuthn n'ont PAS été modifiés dans ce commit (reset par l'utilisateur car modifications précédentes avaient cassé la registration).
 
-##### 1.1. Imports manquants `@simplewebauthn/types` (2 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
-- `src/services/webauthn-authentication.ts:10` - ❌ Reste
-- `src/services/webauthn-registration.ts:9` - ❌ Reste
-- `src/routes/auth/login.ts:13` - ✅ OK (utilise déjà `@simplewebauthn/types`)
-- `src/routes/auth/register.ts:14` - ✅ OK (utilise déjà `@simplewebauthn/types`)
-- **Fix** : Vérifier si `@simplewebauthn/types` est installé, sinon utiliser `@simplewebauthn/server` pour tous les types
-- **Status** : ⚠️ 2 erreurs restantes - Les types JSON (`AuthenticationResponseJSON`, `RegistrationResponseJSON`) nécessitent `@simplewebauthn/types`
+### Erreurs restantes (14 erreurs)
 
-##### 1.2. Types manquants WebAuthn (7 erreurs) - ✅ PARTIELLEMENT CORRIGÉ
-- `UserVerificationRequirement` non défini - ✅ CORRIGÉ (importé depuis `@simplewebauthn/server`)
-- `AttestationConveyancePreference` non défini - ✅ CORRIGÉ (importé depuis `@simplewebauthn/server`)
-- `src/services/webauthn-config.ts` - ✅ CORRIGÉ
-- `src/services/webauthn-authentication.ts:48` - ✅ CORRIGÉ
-- **Erreurs restantes** :
-  - `webauthn-authentication.ts:90` : Types transports incompatibles
-  - `webauthn-authentication.ts:186` : `transportsJson` n'existe pas
-  - `webauthn-authentication.ts:203` : Type `WebAuthnCredential` incompatible
-  - `webauthn-registration.ts:90` : Type `AttestationConveyancePreference` incompatible
-  - `webauthn-registration.ts:185,187` : Erreurs `instanceof` et overload
-- **Status** : ✅ 3 erreurs corrigées, 7 erreurs restantes (types incompatibles)
+#### 1. WebAuthn (11 erreurs) - ⚠️ NON MODIFIÉ
+- `src/routes/auth/login.ts:13` : Cannot find module '@simplewebauthn/types'
+- `src/routes/auth/register.ts:14` : Cannot find module '@simplewebauthn/types'
+- `src/routes/auth/register.ts:453` : 'd.createdAt' is possibly 'null'
+- `src/services/webauthn-authentication.ts:10` : Cannot find module '@simplewebauthn/types'
+- `src/services/webauthn-authentication.ts:90` : Types transports incompatibles (string[] vs AuthenticatorTransportFuture[])
+- `src/services/webauthn-authentication.ts:186` (2 erreurs) : Property 'transportsJson' does not exist (2 occurrences)
+- `src/services/webauthn-authentication.ts:203` : Type 'WebAuthnCredential' incompatible (Buffer vs Uint8Array)
+- `src/services/webauthn-registration.ts:9` : Cannot find module '@simplewebauthn/types'
+- `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
+- `src/services/webauthn-registration.ts:185` : instanceof error (credentialID)
+- `src/services/webauthn-registration.ts:187` : No overload matches (Uint8Array constructor)
 
-##### 1.3. Propriétés manquantes sur UseCase (4 erreurs)
-- `src/routes/api/analytics.ts:45` : `useCase.name` n'existe pas
-- `src/services/executive-summary.ts:92,102,103` : `useCase.name` et `useCase.description` n'existent pas
-- **Fix** : Utiliser `useCase.data.name` et `useCase.data.description` ou adapter le type
+#### 2. Session Manager (2 erreurs)
+- `src/services/session-manager.ts:126` : Conversion JWTPayload to SessionPayload (double assertion nécessaire via unknown)
+- `src/services/session-manager.ts:289` : No overload matches (lt/gt avec timestamps - utiliser gt + sql\`NOW()\`)
 
-##### 1.4. Incohérence titre/name (2 erreurs)
-- `src/services/queue-manager.ts:328` : `title` vs `titre`
-- `src/services/queue-manager.ts:477` : `name` manquant dans `UseCaseData`
-- **Fix** : Normaliser sur `name` partout
+### Plan de fix restant
 
-##### 1.5. Types nodemailer manquants (2 erreurs)
-- `src/services/email-verification.ts:8`
-- `src/services/magic-link.ts:6`
-- **Fix** : Installer `@types/nodemailer` ou créer un `.d.ts`
-
-##### 1.6. Autres erreurs TypeScript (5 erreurs)
-- `src/routes/api/queue.ts:155` : `del` de type `unknown`
-- `src/routes/auth/register.ts:453` : `d.createdAt` possibly null
-- `src/services/queue-manager.ts:518` : `domain` n'existe pas dans le type
-- `src/services/queue-manager.ts:611-613` : `created_at` vs `createdAt` (snake_case vs camelCase)
-- `src/services/session-manager.ts:126,289` : Conversions de types incorrectes
-- `src/services/tools.ts:192` : `query` n'existe pas dans `SearchResult`
-- `src/services/webauthn-authentication.ts:89,185,202` : Types incompatibles pour transports et credentials
-
-#### 2. Typecheck UI (13 erreurs + 5 warnings)
+#### 1. Typecheck UI (13 erreurs + 5 warnings)
 
 **Priorité HAUTE - Bloquant pour le CI**
 
-##### 2.1. Erreurs TypeScript dans matrice (10 erreurs)
+##### 1.1. Erreurs TypeScript dans matrice (10 erreurs)
 - `src/routes/matrice/+page.svelte:22` : `availableFolders` type `any[]` implicite
 - `src/routes/matrice/+page.svelte:193,215` : `points` de type `string | number` au lieu de `number`
 - `src/routes/matrice/+page.svelte:318` : `MatrixAxis` non défini
@@ -115,7 +82,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Utiliser `(e.target as HTMLInputElement).value` avec vérification null
   - Convertir `points` en `number` avec `parseInt()` ou `Number()`
 
-##### 2.2. Warnings Svelte (5 warnings)
+##### 1.2. Warnings Svelte (5 warnings)
 - `EditableInput.svelte:535` : Label non associé à un contrôle (a11y)
 - `EditableInput.svelte:800,809` : Sélecteurs CSS inutilisés
 - `entreprises/+page.svelte:86` : Élément non-interactif avec click (a11y)
@@ -124,11 +91,11 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
   - Supprimer les sélecteurs CSS inutilisés
   - Ajouter `on:keydown` ou transformer en `<button>`
 
-#### 3. Lint UI (25 erreurs)
+#### 2. Lint UI (25 erreurs)
 
 **Priorité MOYENNE - Non bloquant mais à corriger**
 
-##### 3.1. Variables non utilisées (15 erreurs)
+##### 2.1. Variables non utilisées (15 erreurs)
 - `EditableInput.svelte:398` : `e` non utilisé
 - `NavigationGuard.svelte:53,64` : `interceptPush`, `interceptReplace` non utilisés
 - `UseCaseScatterPlot.svelte:1085` : `currentScale` non utilisé
@@ -136,21 +103,22 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - `matrice/+page.svelte:5,613,616,706,709,815,818,860,863,941,947,950,956,959` : Variables `_` et `apiPost` non utilisées
 - **Fix** : Supprimer ou préfixer avec `_` si intentionnel
 
-##### 3.2. Erreurs ESLint/Svelte (10 erreurs)
+##### 2.2. Erreurs ESLint/Svelte (10 erreurs)
 - `EditableInput.svelte:535,800,809` : A11y et CSS (déjà identifiés dans typecheck)
 - `entreprises/+page.svelte:86` : A11y (déjà identifié)
 - `matrice/+page.svelte:318` : `MatrixAxis` non défini (déjà identifié)
-- **Fix** : Voir section 2.2
+- **Fix** : Voir section 1.2
 
 ### Ordre de priorité
 
-1. **Typecheck API** : Corriger les imports WebAuthn et types manquants (bloquant CI)
-2. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
-3. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
-4. **Warnings Svelte** : Améliorer l'accessibilité (non bloquant)
+1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (bloquant CI) - À RETRAVAILLER
+2. **Typecheck API Session Manager** : Finir les corrections session-manager (2 erreurs)
+3. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
+4. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API** : ~2-3h (corrections de types, imports, normalisation)
+- **Typecheck API WebAuthn** : ~2h (corrections de types, imports - À RETRAVAILLER CAR REGISTRATION PÉTÉE)
+- **Typecheck API Session Manager** : ~30min (finir corrections)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)
 - **Total** : ~4h de travail
