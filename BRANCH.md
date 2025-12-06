@@ -44,29 +44,36 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 28 erreurs TypeScript
+- ❌ **typecheck-api** : 28 erreurs TypeScript (5 erreurs WebAuthn corrigées ✅, mais d'autres erreurs persistent)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
 ### Plan de fix
 
-#### 1. Typecheck API (28 erreurs)
+#### 1. Typecheck API (23 erreurs restantes, 5 corrigées ✅)
 
 **Priorité HAUTE - Bloquant pour le CI**
 
-##### 1.1. Imports manquants `@simplewebauthn/types` (5 erreurs)
-- `src/routes/auth/login.ts:13`
-- `src/routes/auth/register.ts:14`
-- `src/services/webauthn-authentication.ts:9`
-- `src/services/webauthn-registration.ts:9`
-- **Fix** : Ajouter `import type { ... } from '@simplewebauthn/types'` ou installer le package
+##### 1.1. Imports manquants `@simplewebauthn/types` (2 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+- `src/services/webauthn-authentication.ts:10` - ❌ Reste
+- `src/services/webauthn-registration.ts:9` - ❌ Reste
+- `src/routes/auth/login.ts:13` - ✅ OK (utilise déjà `@simplewebauthn/types`)
+- `src/routes/auth/register.ts:14` - ✅ OK (utilise déjà `@simplewebauthn/types`)
+- **Fix** : Vérifier si `@simplewebauthn/types` est installé, sinon utiliser `@simplewebauthn/server` pour tous les types
+- **Status** : ⚠️ 2 erreurs restantes - Les types JSON (`AuthenticationResponseJSON`, `RegistrationResponseJSON`) nécessitent `@simplewebauthn/types`
 
-##### 1.2. Types manquants WebAuthn (10 erreurs)
-- `UserVerificationRequirement` non défini (5 occurrences)
-- `AttestationConveyancePreference` non défini (2 occurrences)
-- `src/services/webauthn-config.ts` : lignes 18, 20, 21, 22, 50, 67
-- `src/services/webauthn-authentication.ts:48`
-- **Fix** : Importer depuis `@simplewebauthn/types`
+##### 1.2. Types manquants WebAuthn (7 erreurs) - ✅ PARTIELLEMENT CORRIGÉ
+- `UserVerificationRequirement` non défini - ✅ CORRIGÉ (importé depuis `@simplewebauthn/server`)
+- `AttestationConveyancePreference` non défini - ✅ CORRIGÉ (importé depuis `@simplewebauthn/server`)
+- `src/services/webauthn-config.ts` - ✅ CORRIGÉ
+- `src/services/webauthn-authentication.ts:48` - ✅ CORRIGÉ
+- **Erreurs restantes** :
+  - `webauthn-authentication.ts:90` : Types transports incompatibles
+  - `webauthn-authentication.ts:186` : `transportsJson` n'existe pas
+  - `webauthn-authentication.ts:203` : Type `WebAuthnCredential` incompatible
+  - `webauthn-registration.ts:90` : Type `AttestationConveyancePreference` incompatible
+  - `webauthn-registration.ts:185,187` : Erreurs `instanceof` et overload
+- **Status** : ✅ 3 erreurs corrigées, 7 erreurs restantes (types incompatibles)
 
 ##### 1.3. Propriétés manquantes sur UseCase (4 erreurs)
 - `src/routes/api/analytics.ts:45` : `useCase.name` n'existe pas

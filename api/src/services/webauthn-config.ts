@@ -1,4 +1,8 @@
 import { env } from '../config/env';
+import type {
+  AttestationConveyancePreference,
+  UserVerificationRequirement,
+} from '@simplewebauthn/server';
 
 /**
  * WebAuthn Relying Party Configuration

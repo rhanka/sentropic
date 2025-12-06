@@ -2,6 +2,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
   type VerifiedAuthenticationResponse,
+  type UserVerificationRequirement,
 } from '@simplewebauthn/server';
 import type {
   PublicKeyCredentialRequestOptionsJSON,
