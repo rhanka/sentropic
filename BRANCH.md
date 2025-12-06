@@ -4,9 +4,9 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 10/20 tâches complétées
-- **Current**: Corrections typecheck API part 1 (sans WebAuthn - reset par l'utilisateur)
-- **Next**: Corriger les erreurs typecheck WebAuthn et autres erreurs restantes
+- **Progress**: 11/20 tâches complétées
+- **Current**: Corrections typecheck API - createdAt NOT NULL (complété ✅)
+- **Next**: Corriger les erreurs typecheck WebAuthn et Session Manager restantes
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
@@ -20,18 +20,19 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 9**: Feat multiline title editing avec layout 50/50 pour entreprises
 - [x] **Commit 10**: Fix typecheck API part 1 (sans WebAuthn - reset par utilisateur)
 - [x] **Commit 11**: Feat dashboard folder title multiline et full width
+- [x] **Commit 12**: Fix createdAt NOT NULL - ajout .notNull() à toutes les colonnes et suppression workarounds
 
 ## Bilan des vérifications (typecheck + lint)
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 10 erreurs TypeScript (était 28, -18 corrigées ✅, dont 4 imports WebAuthn)
+- ❌ **typecheck-api** : 9 erreurs TypeScript (était 28, -19 corrigées ✅)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
-### Corrections typecheck API part 1 (complétées ✅)
+### Corrections typecheck API (complétées ✅)
 
-#### Corrections effectuées (sans WebAuthn)
+#### Corrections effectuées
 - ✅ **UseCase.name/description** : Utilisation de `data.name`/`data.description` au lieu de `name`/`description` au niveau racine
 - ✅ **queue.ts** : Typage de `del` avec assertion de type
 - ✅ **queue-manager.ts** : 
@@ -42,20 +43,18 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **session-manager.ts** : Vérification explicite des types SessionPayload au lieu de double assertion (partiellement - 2 erreurs restantes)
 - ✅ **tools.ts** : Correction type allSearchResults (`Array<{query, results}>` au lieu de `SearchResult[]`)
 - ✅ **nodemailer** : Installation `@types/nodemailer` (types officiels)
+- ✅ **createdAt NOT NULL** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (9 tables) et suppression de 5 workarounds dans le code
 
-**Note importante** : Les fichiers WebAuthn n'ont PAS été modifiés dans ce commit (reset par l'utilisateur car modifications précédentes avaient cassé la registration).
+### Erreurs restantes (9 erreurs)
 
-### Erreurs restantes (10 erreurs)
-
-#### 1. WebAuthn (7 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
-- ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server` (4 erreurs corrigées)
-- `src/routes/auth/register.ts:453` : 'd.createdAt' is possibly 'null'
-- `src/services/webauthn-authentication.ts:90` : Types transports incompatibles (string[] vs AuthenticatorTransportFuture[])
-- `src/services/webauthn-authentication.ts:186` (2 erreurs) : Property 'transportsJson' does not exist (2 occurrences)
-- `src/services/webauthn-authentication.ts:203` : Type 'WebAuthnCredential' incompatible (Buffer vs Uint8Array)
+#### 1. WebAuthn (6 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+- ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server`
+- ✅ **createdAt fix** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (erreur register.ts:453 corrigée)
+- `src/routes/auth/login.ts:70` : Property 'challengeId' does not exist (should be 'challenge')
+- `src/routes/auth/register.ts:179` : Property 'challengeId' does not exist (should be 'challenge')
+- `src/routes/auth/register.ts:249,251` : instanceof error et Uint8Array constructor
 - `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
-- `src/services/webauthn-registration.ts:185` : instanceof error (credentialID)
-- `src/services/webauthn-registration.ts:187` : No overload matches (Uint8Array constructor)
+- `src/services/webauthn-registration.ts:185,187` : instanceof error et Uint8Array constructor
 
 #### 2. Session Manager (2 erreurs)
 - `src/services/session-manager.ts:126` : Conversion JWTPayload to SessionPayload (double assertion nécessaire via unknown)
@@ -108,14 +107,14 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Ordre de priorité
 
-1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (bloquant CI) - À RETRAVAILLER
+1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (6 erreurs restantes)
 2. **Typecheck API Session Manager** : Finir les corrections session-manager (2 erreurs)
 3. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
 4. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API WebAuthn** : ~2h (corrections de types, imports - À RETRAVAILLER CAR REGISTRATION PÉTÉE)
-- **Typecheck API Session Manager** : ~30min (finir corrections)
+- **Typecheck API WebAuthn** : ~2h (corrections de types, challengeId → challenge, Uint8Array)
+- **Typecheck API Session Manager** : ~30min (finir corrections gt() avec timestamps)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)
 - **Total** : ~4h de travail

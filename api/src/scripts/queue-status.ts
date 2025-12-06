@@ -27,7 +27,7 @@ async function showQueueStatus() {
     
     console.log('\n🕒 Recent jobs:');
     recentJobs.forEach((job: JobQueueRow) => {
-      const createdAt = job.createdAt ? new Date(job.createdAt).toLocaleString() : 'N/A';
+      const createdAt = new Date(job.createdAt).toLocaleString();
       console.log(`  ${job.id}: ${job.type} (${job.status}) - ${createdAt}`);
     });
     

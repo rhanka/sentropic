@@ -597,7 +597,7 @@ export class QueueManager {
       data: JSON.parse(result.data) as JobData,
       status: result.status as Job['status'],
       // Note: Drizzle retourne createdAt, startedAt, completedAt (camelCase), pas created_at (snake_case)
-      createdAt: result.createdAt?.toISOString() || '',
+      createdAt: result.createdAt.toISOString(),
       startedAt: result.startedAt || undefined,
       completedAt: result.completedAt || undefined,
       error: result.error || undefined
@@ -617,7 +617,7 @@ export class QueueManager {
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
-      createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+      createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,
       error: row.error || undefined

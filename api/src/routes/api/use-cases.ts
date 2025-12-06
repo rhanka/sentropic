@@ -178,7 +178,7 @@ const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
     companyId: row.companyId,
     status: row.status ?? 'completed',
     model: row.model,
-    createdAt: row.createdAt ?? new Date(),
+    createdAt: row.createdAt,
     data: data as UseCaseData,
     totalValueScore: computedScores?.totalValueScore ?? null,
     totalComplexityScore: computedScores?.totalComplexityScore ?? null
@@ -255,7 +255,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
       companyId: row.companyId,
       status: row.status ?? 'completed',
       model: row.model,
-      createdAt: row.createdAt ?? new Date(),
+      createdAt: row.createdAt,
       data: data as UseCaseData,
       totalValueScore: computedScores?.totalValueScore ?? null,
       totalComplexityScore: computedScores?.totalComplexityScore ?? null
