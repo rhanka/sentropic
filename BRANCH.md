@@ -24,6 +24,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 13**: Fix WebAuthn - suppression challengeId des réponses API (non conforme standard)
 - [x] **Commit 14**: Fix WebAuthn - utilisation directe de credentialResponse.id (Base64URLString)
 - [x] **Commit 15**: Feat multiline editing pour noms d'axes valeur/complexité dans matrice
+- [x] **Commit 16**: Fix unifier auto-save matrice et éviter fetch inutile lors modification poids
 
 ## Bilan des vérifications (typecheck + lint)
 

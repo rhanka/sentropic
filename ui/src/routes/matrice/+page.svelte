@@ -22,9 +22,9 @@
   let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
   
-  // Variables pour l'auto-save des seuils
+  // Variables pour l'auto-save de la matrice (seuils, poids, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-  let isSavingThresholds = false;
+  let isSavingMatrix = false;
 
   onMount(async () => {
     await loadMatrix();
@@ -174,6 +174,19 @@
     const newValueAxes = [...editedConfig.valueAxes];
     newValueAxes[index] = { ...newValueAxes[index], weight: newWeight };
     editedConfig = { ...editedConfig, valueAxes: newValueAxes };
+    
+    // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
+    unsavedChangesStore.addChange({
+      id: 'matrix-config-all',
+      component: 'matrix-config',
+      value: editedConfig,
+      saveFunction: saveMatrix
+    });
+    
+    // Programmer la sauvegarde après 5 secondes (auto-save)
+    scheduleMatrixSave();
+    // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
+    // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
   };
   
   const handleComplexityWeightChange = (index: number, weight: string) => {
@@ -183,6 +196,19 @@
     const newComplexityAxes = [...editedConfig.complexityAxes];
     newComplexityAxes[index] = { ...newComplexityAxes[index], weight: newWeight };
     editedConfig = { ...editedConfig, complexityAxes: newComplexityAxes };
+    
+    // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
+    unsavedChangesStore.addChange({
+      id: 'matrix-config-all',
+      component: 'matrix-config',
+      value: editedConfig,
+      saveFunction: saveMatrix
+    });
+    
+    // Programmer la sauvegarde après 5 secondes (auto-save)
+    scheduleMatrixSave();
+    // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
+    // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
   };
 
   const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
@@ -195,16 +221,16 @@
         editedConfig = { ...editedConfig, valueThresholds: newThresholds };
         
         // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
-        // Une seule entrée pour tous les seuils (évite les appels multiples)
+        // Une seule entrée pour toute la config matrice (évite les appels multiples)
         unsavedChangesStore.addChange({
-          id: 'matrix-thresholds-all',
-          component: 'matrix-thresholds',
+          id: 'matrix-config-all',
+          component: 'matrix-config',
           value: editedConfig,
-          saveFunction: saveThresholds
+          saveFunction: saveMatrix
         });
         
         // Programmer la sauvegarde après 5 secondes (auto-save)
-        scheduleThresholdSave();
+        scheduleMatrixSave();
         
         // Recalculer les comptages immédiatement (pour feedback visuel)
         updateCaseCounts();
@@ -217,16 +243,16 @@
         editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
         
         // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
-        // Une seule entrée pour tous les seuils (évite les appels multiples)
+        // Une seule entrée pour toute la config matrice (évite les appels multiples)
         unsavedChangesStore.addChange({
-          id: 'matrix-thresholds-all',
-          component: 'matrix-thresholds',
+          id: 'matrix-config-all',
+          component: 'matrix-config',
           value: editedConfig,
-          saveFunction: saveThresholds
+          saveFunction: saveMatrix
         });
         
         // Programmer la sauvegarde après 5 secondes (auto-save)
-        scheduleThresholdSave();
+        scheduleMatrixSave();
         
         // Recalculer les comptages immédiatement
         updateCaseCounts();
@@ -235,9 +261,10 @@
   };
 
   /**
-   * Programme la sauvegarde des seuils après 5 secondes d'inactivité
+   * Programme la sauvegarde de la matrice après 5 secondes d'inactivité
+   * Utilisé pour les seuils, poids d'axes, et autres modifications
    */
-  const scheduleThresholdSave = () => {
+  const scheduleMatrixSave = () => {
     // Annuler le timeout précédent s'il existe
     if (saveTimeout) {
       clearTimeout(saveTimeout);
@@ -245,28 +272,28 @@
     
     // Programmer la sauvegarde après 5 secondes
     saveTimeout = setTimeout(async () => {
-      await saveThresholds();
+      await saveMatrix();
     }, 5000);
   };
 
   /**
-   * Sauvegarde automatique des seuils modifiés
+   * Sauvegarde automatique de la matrice modifiée
    * Cette fonction est appelée soit :
-   * - Automatiquement après 5 secondes d'inactivité (via scheduleThresholdSave)
+   * - Automatiquement après 5 secondes d'inactivité (via scheduleMatrixSave)
    * - Par NavigationGuard lors de la navigation (via unsavedChangesStore.saveAll)
    */
-  const saveThresholds = async () => {
-    if (!$currentFolderId || isSavingThresholds) return;
+  const saveMatrix = async () => {
+    if (!$currentFolderId || isSavingMatrix) return;
     
-    isSavingThresholds = true;
+    isSavingMatrix = true;
     try {
       await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
       matrixStore.set(editedConfig);
       originalConfig = { ...editedConfig };
       
       // Nettoyer la modification sauvegardée du store
-      // On retire la modification globale des seuils
-      unsavedChangesStore.removeChange('matrix-thresholds-all');
+      // On retire la modification globale de la config matrice
+      unsavedChangesStore.removeChange('matrix-config-all');
       
       // Annuler le timeout d'auto-save s'il existe (car on vient de sauvegarder)
       if (saveTimeout) {
@@ -280,13 +307,13 @@
       // Toast silencieux (pas de notification visible pour auto-save)
       // L'utilisateur verra les comptages mis à jour
     } catch (error) {
-      console.error('Failed to save thresholds:', error);
+      console.error('Failed to save matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde automatique des seuils'
+        message: 'Erreur lors de la sauvegarde automatique de la configuration'
       });
     } finally {
-      isSavingThresholds = false;
+      isSavingMatrix = false;
     }
   };
 
@@ -334,17 +361,16 @@
     
     // Enregistrer la modification dans le store
     unsavedChangesStore.addChange({
-      id: `matrix-axes-all`,
-      component: 'matrix-axes',
+      id: `matrix-config-all`,
+      component: 'matrix-config',
       value: editedConfig,
-      saveFunction: saveThresholds // Réutiliser la même fonction de sauvegarde
+      saveFunction: saveMatrix // Réutiliser la même fonction de sauvegarde
     });
     
     // Programmer la sauvegarde après 5 secondes
-    scheduleThresholdSave();
-    
-    // Recalculer les comptages après ajout d'axe
-    updateCaseCounts();
+    scheduleMatrixSave();
+    // Note: updateCaseCounts() n'est pas appelé ici car l'ajout d'axe ne change pas les comptages
+    // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
     
     addToast({
       type: 'success',
@@ -370,17 +396,16 @@
     
     // Enregistrer la modification dans le store
     unsavedChangesStore.addChange({
-      id: `matrix-axes-all`,
-      component: 'matrix-axes',
+      id: `matrix-config-all`,
+      component: 'matrix-config',
       value: editedConfig,
-      saveFunction: saveThresholds
+      saveFunction: saveMatrix
     });
     
     // Programmer la sauvegarde après 5 secondes
-    scheduleThresholdSave();
-    
-    // Recalculer les comptages après suppression d'axe
-    updateCaseCounts();
+    scheduleMatrixSave();
+    // Note: updateCaseCounts() n'est pas appelé ici car la suppression d'axe ne change pas les comptages
+    // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
     
     addToast({
       type: 'success',
