@@ -68,6 +68,73 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **session-manager.ts:126** : Vérification explicite des types JWTPayload (userId, sessionId, role) au lieu de double assertion
 - ✅ **session-manager.ts:299** : Utilisation de `gt(userSessions.expiresAt, now)` au lieu de `lt(now, userSessions.expiresAt)` (ordre colonne > date, cohérent avec codebase)
 
+### Mauvaises pratiques à corriger : `as unknown as` (double assertion)
+
+**⚠️ Problème** : L'utilisation de `as unknown as Type` est une mauvaise pratique qui contourne le système de types TypeScript. Elle masque des problèmes de typage réels et peut introduire des bugs à l'exécution.
+
+**Occurrences trouvées (5) :**
+
+1. ✅ **`api/src/services/webauthn-authentication.ts:183`** - **CORRIGÉ**
+   ```typescript
+   // AVANT : const transportsJson = (storedCredential as unknown as { transportsJson?: string | null }).transportsJson;
+   // APRÈS : Ajout de transportsJson dans le .select(), plus besoin de cast
+   const transports = storedCredential.transportsJson ? (JSON.parse(storedCredential.transportsJson) as AuthenticatorTransportFuture[]) : [];
+   ```
+   - **Solution appliquée** : Ajout de `transportsJson: webauthnCredentials.transportsJson` dans le `.select()` pour que TypeScript reconnaisse le type
+
+2. **`api/src/routes/api/use-cases.ts:332`**
+   ```typescript
+   data: data as unknown as UseCaseData
+   ```
+   - **Problème** : `data` est `Partial<UseCaseData>` mais Drizzle attend `UseCaseData`
+   - **Solution** : Utiliser un type plus précis ou valider avec Zod avant insertion
+
+3. **`api/src/routes/api/use-cases.ts:387`**
+   ```typescript
+   data: newData as unknown as UseCaseData
+   ```
+   - **Problème** : Même problème que #2 (mise à jour)
+   - **Solution** : Même approche que #2
+
+4. **`api/src/services/queue-manager.ts:350`**
+   ```typescript
+   data: useCaseData as unknown as UseCaseData
+   ```
+   - **Problème** : Même problème que #2 (création via queue)
+   - **Solution** : Même approche que #2
+
+5. **`api/src/services/queue-manager.ts:519`**
+   ```typescript
+   data: useCaseData as unknown as UseCaseData
+   ```
+   - **Problème** : Même problème que #2 (mise à jour via queue)
+   - **Solution** : Même approche que #2
+
+**Note** : Toutes ces occurrences concernent soit :
+- ✅ L'accès à `transportsJson` dans le schéma Drizzle (type inféré incomplet) - **CORRIGÉ**
+- La conversion de `Partial<UseCaseData>` vers `UseCaseData` pour JSONB (4 occurrences restantes)
+
+**Recommandation** : Corriger les occurrences restantes en utilisant des types guards, des validations Zod, ou en corrigeant les types Drizzle si possible.
+
+**Progrès** : 1/5 corrigé (20%)
+
+### Mauvaises pratiques à corriger : `as any` (assertion explicite)
+
+**⚠️ Problème** : L'utilisation de `as any` désactive complètement le système de types TypeScript et est interdite par ESLint.
+
+**Occurrences trouvées (1) :**
+
+1. ✅ **`api/src/services/webauthn-authentication.ts:192`** - **CORRIGÉ**
+   ```typescript
+   // AVANT : } as any; // Type assertion nécessaire car WebAuthnCredential a une structure interne complexe
+   // APRÈS : const webAuthnCredential: WebAuthnCredential = { id: storedCredential.credentialId, ... };
+   ```
+   - **Problème** : ESLint interdit `as any` explicite + structure incorrecte (id était Uint8Array au lieu de string)
+   - **Solution appliquée** : 
+     - Import du type `WebAuthnCredential` depuis `@simplewebauthn/server`
+     - Correction de la structure : `id` est maintenant un `string` (Base64URLString) au lieu d'un `Uint8Array`
+     - Typage explicite : `const webAuthnCredential: WebAuthnCredential` (plus besoin de `as any`)
+
 ### Plan de fix restant
 
 #### 1. Typecheck UI (13 erreurs + 5 warnings)

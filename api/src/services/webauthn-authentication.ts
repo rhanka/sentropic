@@ -4,6 +4,7 @@ import {
   type VerifiedAuthenticationResponse,
   type UserVerificationRequirement,
   type AuthenticatorTransportFuture,
+  type WebAuthnCredential,
 } from '@simplewebauthn/server';
 import type {
   PublicKeyCredentialRequestOptionsJSON,
@@ -135,6 +136,7 @@ export async function verifyWebAuthnAuthentication(
         counter: webauthnCredentials.counter,
         userId: webauthnCredentials.userId,
         uv: webauthnCredentials.uv,
+        transportsJson: webauthnCredentials.transportsJson,
       })
       .from(webauthnCredentials)
       .where(eq(webauthnCredentials.credentialId, credentialIdBase64))
@@ -178,18 +180,18 @@ export async function verifyWebAuthnAuthentication(
     const requireUV = userRole === 'admin_app' || userRole === 'admin_org';
     
     // Create WebAuthnCredential object (v11.0.0+ API change)
-    // Note: transportsJson est dans le schéma mais TypeScript ne le reconnaît pas dans le type inféré
-    // On utilise un cast pour accéder à transportsJson
-    const transportsJson = (storedCredential as unknown as { transportsJson?: string | null }).transportsJson;
-    // WebAuthnCredential attend id et publicKey comme Uint8Array, pas Buffer
-    // Note: Le type WebAuthnCredential de @simplewebauthn/server attend une structure spécifique
-    // On utilise un cast pour satisfaire TypeScript car la structure est correcte à l'exécution
-    const webAuthnCredential = {
-      id: new Uint8Array(Buffer.from(storedCredential.credentialId, 'base64url')),
-      publicKey: new Uint8Array(credentialPublicKey),
+    // transportsJson est maintenant inclus dans le select, plus besoin de cast
+    const transports = storedCredential.transportsJson
+      ? (JSON.parse(storedCredential.transportsJson) as AuthenticatorTransportFuture[])
+      : [];
+    // WebAuthnCredential attend id comme Base64URLString (string) et publicKey comme Uint8Array
+    // storedCredential.credentialId est déjà un string base64url, pas besoin de conversion
+    const webAuthnCredential: WebAuthnCredential = {
+      id: storedCredential.credentialId, // Base64URLString (string)
+      publicKey: new Uint8Array(credentialPublicKey), // Uint8Array
       counter: storedCredential.counter,
-      transports: transportsJson ? (JSON.parse(transportsJson) as AuthenticatorTransportFuture[]) : [],
-    } as any; // Type assertion nécessaire car WebAuthnCredential a une structure interne complexe
+      transports,
+    };
     
     logger.debug({
       credentialKeys: Object.keys(webAuthnCredential),
