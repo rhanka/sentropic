@@ -4,9 +4,9 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 17/20 tâches complétées
-- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI complété (0 erreur, 0 warning) ✅, Fix erreur 500 /queue/jobs ✅
-- **Next**: Corriger lint UI (variables non utilisées)
+- **Progress**: 18/20 tâches complétées
+- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI complété (0 erreur, 0 warning) ✅, Lint UI complété (0 erreur) ✅, Fix erreur 500 /queue/jobs ✅
+- **Next**: Tests et validation finale
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
@@ -29,6 +29,8 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 18**: Fix typecheck - remplacer `as unknown as UseCaseData` par `UseCaseDataJson` (type helper pour JSONB)
 - [x] **Commit 19**: Fix UI warnings Svelte - corriger a11y (label, article) et CSS (sélecteurs dynamiques)
 - [x] **Commit 20**: Fix lint UI - supprimer variables non utilisées (Company, interceptPush/Replace, currentScale)
+- [x] **Commit 21**: Fix lint UI - supprimer apiPost et utiliser range() helper dans matrice (cohérent avec autres fichiers)
+- [x] **Commit 22**: Fix lint UI - supprimer originalPushState/ReplaceState et imports inutilisés dans NavigationGuard
 
 ## Bilan des vérifications (typecheck + lint)
 
@@ -169,34 +171,32 @@ Ce type permet d'éviter `as unknown as` en fournissant un type explicite compat
 - ✅ `EditableInput.svelte:398` : Paramètre `e` préfixé avec `_` (intentionnellement non utilisé)
 - ✅ `entreprises/+page.svelte:86` : Utilisation de `<article>` avec `role="button"` conditionnel (cohérent avec cas-usage/dossiers)
 
-#### 2. Lint UI (25 erreurs)
+#### 2. Lint UI (25 erreurs → 0 erreur) - ✅ COMPLÉTÉ
 
 **Priorité MOYENNE - Non bloquant mais à corriger**
 
-##### 2.1. Variables non utilisées (15 erreurs → 11 erreurs restantes)
+##### 2.1. Variables non utilisées (15 erreurs → 0 erreur) - ✅ COMPLÉTÉ
 
-**Corrections effectuées (4/15) :**
+**Corrections effectuées (6/15) :**
 - ✅ `entreprises/+page.svelte:2` : Supprimé `type Company` de l'import (non utilisé)
 - ✅ `NavigationGuard.svelte:53,64` : Supprimé `interceptPush` et `interceptReplace` (définis mais jamais utilisés)
+- ✅ `NavigationGuard.svelte:50,51` : Supprimé `originalPushState` et `originalReplaceState` (non utilisés après suppression de interceptPush/Replace)
+- ✅ `NavigationGuard.svelte:5` : Supprimé `pushState` et `replaceState` de l'import (non utilisés)
 - ✅ `UseCaseScatterPlot.svelte:1085` : Supprimé `currentScale` (calculé mais jamais utilisé)
 - ✅ `EditableInput.svelte:398` : Déjà corrigé précédemment (paramètre supprimé)
+- ✅ `matrice/+page.svelte:5` : Supprimé `apiPost` de l'import (non utilisé)
+- ✅ `matrice/+page.svelte` : Utilisé `range()` helper et `as i (i)` au lieu de `as _` dans les templates (cohérent avec autres fichiers)
 
-**Restantes (11 erreurs) :**
-- `matrice/+page.svelte:5,613,616,706,709,815,818,860,863,941,947,950,956,959` : Variables `_` et `apiPost` non utilisées
-- **Fix** : Supprimer ou préfixer avec `_` si intentionnel
+##### 2.2. Erreurs ESLint/Svelte (10 erreurs) - ✅ COMPLÉTÉ
 
-##### 2.2. Erreurs ESLint/Svelte (10 erreurs)
-- `EditableInput.svelte:535,800,809` : A11y et CSS (déjà identifiés dans typecheck)
-- `entreprises/+page.svelte:86` : A11y (déjà identifié)
-- `matrice/+page.svelte:318` : `MatrixAxis` non défini (déjà identifié)
-- **Fix** : Voir section 1.2
+**Corrections effectuées :**
+- ✅ `EditableInput.svelte:535,800,809` : A11y et CSS (corrigés dans Commit 19)
+- ✅ `entreprises/+page.svelte:86` : A11y (corrigé dans Commit 19)
+- ✅ `matrice/+page.svelte:318` : `MatrixAxis` non défini (corrigé dans Commit 19)
 
-### Ordre de priorité
+### Bilan final
 
-1. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
-2. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
-
-### Estimation
-- **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
-- **Lint UI** : ~30min (nettoyage variables)
-- **Total** : ~2h de travail
+**Typecheck API** : 0 erreur ✅  
+**Typecheck UI** : 0 erreur, 0 warning ✅  
+**Lint API** : 0 erreur ✅  
+**Lint UI** : 0 erreur ✅

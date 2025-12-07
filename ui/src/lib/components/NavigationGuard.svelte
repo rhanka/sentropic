@@ -2,7 +2,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
-  import { goto, pushState, replaceState } from '$app/navigation';
+  import { goto } from '$app/navigation';
   
   let showWarning = false;
   let pendingNavigation = null;
@@ -46,12 +46,7 @@
       }
     };
     
-    // Intercepter les changements d'URL programmatiques
-    const originalPushState = pushState;
-    const originalReplaceState = replaceState;
-    
-    // Note: interceptPush et interceptReplace étaient définis mais jamais utilisés
-    // Ils étaient prévus pour intercepter les changements de navigation programmatiques
+    // Note: interceptPush et interceptReplace étaient prévus pour intercepter les changements de navigation programmatiques
     // mais la navigation est gérée via handleLinkClick et handleBeforeUnload
     
     // Intercepter les clics sur les boutons de navigation
