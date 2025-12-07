@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { matrixStore } from '$lib/stores/matrix';
-  import { currentFolderId } from '$lib/stores/folders';
+  import { matrixStore, type MatrixAxis } from '$lib/stores/matrix';
+  import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -19,7 +19,7 @@
   let showCreateMatrixDialog = false;
   let showCloseWarning = false;
   let createMatrixType = 'default'; // 'default', 'copy', 'blank'
-  let availableFolders = [];
+  let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
   
   // Variables pour l'auto-save des seuils
@@ -186,11 +186,12 @@
   };
 
   const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
+    const pointsNumber = typeof points === 'string' ? Number(points) : points;
     if (isValue && editedConfig.valueThresholds) {
       const newThresholds = [...editedConfig.valueThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], points: points };
+        newThresholds[index] = { ...newThresholds[index], points: pointsNumber };
         editedConfig = { ...editedConfig, valueThresholds: newThresholds };
         
         // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
@@ -212,7 +213,7 @@
       const newThresholds = [...editedConfig.complexityThresholds];
       const index = newThresholds.findIndex(t => t.level === level);
       if (index !== -1) {
-        newThresholds[index] = { ...newThresholds[index], points: points };
+        newThresholds[index] = { ...newThresholds[index], points: pointsNumber };
         editedConfig = { ...editedConfig, complexityThresholds: newThresholds };
         
         // Enregistrer/modifier la modification globale dans le store pour NavigationGuard
@@ -499,8 +500,8 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const data = await apiGet('/folders/list/with-matrices');
-      availableFolders = data.items.filter((folder: any) => folder.hasMatrix && folder.id !== $currentFolderId);
+      const data = await apiGet<{ items: Folder[] }>('/folders/list/with-matrices');
+      availableFolders = data.items.filter((folder) => folder.hasMatrix && folder.id !== $currentFolderId);
     } catch (error) {
       console.error('Failed to load folders:', error);
     }
@@ -664,7 +665,10 @@
                       max="3"
                       step="0.5"
                       value={axis.weight}
-                      on:input={(e) => handleValueWeightChange(index, e.target.value)}
+                      on:input={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target) handleValueWeightChange(index, target.value);
+                      }}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -759,7 +763,10 @@
                       max="3"
                       step="0.5"
                       value={axis.weight}
-                      on:input={(e) => handleComplexityWeightChange(index, e.target.value)}
+                      on:input={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target) handleComplexityWeightChange(index, target.value);
+                      }}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -828,7 +835,10 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handlePointsChange(true, threshold.level, parseInt(e.target.value))}
+                      on:input={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target) handlePointsChange(true, threshold.level, parseInt(target.value));
+                      }}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>
@@ -873,7 +883,10 @@
                     <input
                       type="number"
                       value={threshold.points}
-                      on:input={(e) => handlePointsChange(false, threshold.level, parseInt(e.target.value))}
+                      on:input={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target) handlePointsChange(false, threshold.level, parseInt(target.value));
+                      }}
                       class="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   </td>

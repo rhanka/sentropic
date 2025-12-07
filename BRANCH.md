@@ -4,9 +4,9 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 14/20 tâches complétées
-- **Current**: Typecheck API complété (0 erreur) ✅
-- **Next**: Corriger les erreurs typecheck UI et lint UI
+- **Progress**: 15/20 tâches complétées
+- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI erreurs corrigées (0 erreur, 5 warnings) ✅
+- **Next**: Corriger les warnings Svelte et lint UI
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
@@ -30,7 +30,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 ### Résultats
 - ✅ **lint-api** : 0 erreur
 - ✅ **typecheck-api** : 0 erreur TypeScript (était 28, -28 corrigées ✅)
-- ❌ **typecheck-ui** : 13 erreurs + 5 warnings
+- ✅ **typecheck-ui** : 0 erreur TypeScript (était 13, -13 corrigées ✅), 5 warnings restants
 - ❌ **lint-ui** : 25 erreurs ESLint
 
 ### Corrections typecheck API (complétées ✅)
@@ -135,23 +135,23 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
      - Correction de la structure : `id` est maintenant un `string` (Base64URLString) au lieu d'un `Uint8Array`
      - Typage explicite : `const webAuthnCredential: WebAuthnCredential` (plus besoin de `as any`)
 
+### Corrections typecheck UI (complétées ✅)
+
+#### Corrections effectuées
+- ✅ **availableFolders** : Typage `Folder[] = []` et import du type `Folder` depuis `$lib/stores/folders`
+- ✅ **MatrixAxis** : Import du type `MatrixAxis` depuis `$lib/stores/matrix`
+- ✅ **points conversion** : Conversion `string | number` → `number` avec `Number()` dans `handlePointsChange`
+- ✅ **e.target typing** : Typage `e.target as HTMLInputElement` avec vérification null pour tous les event handlers
+- ✅ **hasMatrix** : Ajout de `hasMatrix?: boolean` au type `Folder` pour la réponse `/folders/list/with-matrices`
+- ✅ **apiGet typing** : Typage générique `apiGet<{ items: Folder[] }>()` pour la réponse API
+
 ### Plan de fix restant
 
-#### 1. Typecheck UI (13 erreurs + 5 warnings)
+#### 1. Typecheck UI (0 erreur, 5 warnings restants) - ✅ ERREURS CORRIGÉES
 
-**Priorité HAUTE - Bloquant pour le CI**
+**Priorité MOYENNE - Non bloquant**
 
-##### 1.1. Erreurs TypeScript dans matrice (10 erreurs)
-- `src/routes/matrice/+page.svelte:22` : `availableFolders` type `any[]` implicite
-- `src/routes/matrice/+page.svelte:193,215` : `points` de type `string | number` au lieu de `number`
-- `src/routes/matrice/+page.svelte:318` : `MatrixAxis` non défini
-- `src/routes/matrice/+page.svelte:665,758,827,872` : `e.target` possibly null et `value` n'existe pas sur `EventTarget`
-- `src/routes/matrice/+page.svelte:1040` : `availableFolders` type `any[]` implicite
-- **Fix** :
-  - Typer `availableFolders: Folder[] = []`
-  - Importer `MatrixAxis` depuis `src/types/matrix.ts`
-  - Utiliser `(e.target as HTMLInputElement).value` avec vérification null
-  - Convertir `points` en `number` avec `parseInt()` ou `Number()`
+##### 1.1. Warnings Svelte (5 warnings)
 
 ##### 1.2. Warnings Svelte (5 warnings)
 - `EditableInput.svelte:535` : Label non associé à un contrôle (a11y)
