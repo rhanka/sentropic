@@ -29,7 +29,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 5 erreurs TypeScript (était 28, -23 corrigées ✅)
+- ❌ **typecheck-api** : 2 erreurs TypeScript (était 28, -26 corrigées ✅)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
@@ -49,16 +49,18 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **createdAt NOT NULL** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (9 tables) et suppression de 5 workarounds dans le code
 - ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn) et nettoyage des tests
 - ✅ **credentialResponse.id** : Utilisation directe de `credentialResponse.id` (toujours string Base64URLString) dans register.ts et webauthn-authentication.ts
+- ✅ **credentialID/credentialPublicKey** : Utilisation directe dans webauthn-registration.ts
+- ✅ **attestationType** : Conversion 'indirect' → 'none' dans webauthn-registration.ts
 
-### Erreurs restantes (5 erreurs)
+### Erreurs restantes (2 erreurs)
 
-#### 1. WebAuthn (3 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+#### 1. WebAuthn (0 erreur) - ✅ COMPLÉTÉ
 - ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server`
 - ✅ **createdAt fix** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (erreur register.ts:453 corrigée)
 - ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn, non nécessaire)
 - ✅ **credentialResponse.id** : Utilisation directe de `credentialResponse.id` (Base64URLString = string) dans register.ts:248,250 et webauthn-authentication.ts:128,130
-- `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
-- `src/services/webauthn-registration.ts:185,187` : instanceof error et Uint8Array constructor
+- ✅ **credentialID/credentialPublicKey** : Utilisation directe de `credentialID` (string) et `Buffer.from(credentialPublicKey)` (Uint8Array) dans webauthn-registration.ts:185,187
+- ✅ **attestationType** : Conversion de 'indirect' en 'none' dans webauthn-registration.ts:90 (la bibliothèque ne supporte pas 'indirect')
 
 #### 2. Session Manager (2 erreurs)
 - `src/services/session-manager.ts:126` : Conversion JWTPayload to SessionPayload (double assertion nécessaire via unknown)
@@ -111,14 +113,12 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Ordre de priorité
 
-1. **Typecheck API WebAuthn** : Corriger les erreurs WebAuthn (5 erreurs restantes)
-2. **Typecheck API Session Manager** : Finir les corrections session-manager (2 erreurs)
-3. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
-4. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
+1. **Typecheck API Session Manager** : Corriger les erreurs Session Manager (2 erreurs restantes)
+2. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
+3. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API WebAuthn** : ~1h (corrections de types, Uint8Array, AttestationConveyancePreference)
 - **Typecheck API Session Manager** : ~30min (finir corrections gt() avec timestamps)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)
-- **Total** : ~3.5h de travail
+- **Total** : ~2.5h de travail
