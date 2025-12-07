@@ -18,6 +18,9 @@
   export let fullDataGetter = null; // Fonction pour récupérer les données complètes au moment de la sauvegarde
   export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]
+  
+  // Générer un ID unique pour associer le label au contrôle
+  const inputId = `editable-input-${Math.random().toString(36).substr(2, 9)}`;
   export let forceList = false;
   export let multiline = false; // Si true, utilise un textarea au lieu d'un input (pour permettre les retours à la ligne)
   
@@ -395,7 +398,7 @@
           newLink.onclick = null;
           
           // Empêcher aussi le comportement via onmousedown (plus tôt dans la chaîne)
-          newLink.onmousedown = (e) => {
+          newLink.onmousedown = () => {
             // Ne pas empêcher complètement, juste marquer le lien
             newLink.__referenceLink = true;
           };
@@ -532,11 +535,14 @@
 </script>
 
 <div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={multiline && !markdown}>
-  <label>{label}</label>
+  {#if label}
+    <label for={inputId}>{label}</label>
+  {/if}
   {#if !markdown}
     <div class="input-wrapper" class:full-width={multiline}>
       {#if multiline}
         <textarea
+          id={inputId}
           bind:value
           bind:this={textarea}
           class="editable-textarea"
@@ -544,6 +550,7 @@
           class:is-saving={isSaving}
           disabled={disabled}
           rows="1"
+          aria-label={label || undefined}
           on:input={handleInput}
           on:blur={toggleEditing}
         ></textarea>
@@ -552,6 +559,7 @@
         {#if new RegExp(/\[.*\]/).test(value)}
           <mark>
             <input
+              id={inputId}
               type="text"
               bind:value
               bind:this={input}
@@ -559,12 +567,14 @@
               class:has-unsaved-changes={hasUnsavedChanges}
               class:is-saving={isSaving}
               disabled={disabled}
+              aria-label={label || undefined}
               on:input={handleInput}
               on:blur={toggleEditing}
             />
           </mark>
         {:else}
           <input
+            id={inputId}
             type="text"
             bind:value
             bind:this={input}
@@ -572,6 +582,7 @@
             class:has-unsaved-changes={hasUnsavedChanges}
             class:is-saving={isSaving}
             disabled={disabled}
+            aria-label={label || undefined}
             on:input={handleInput}
             on:blur={toggleEditing}
           />
@@ -585,7 +596,7 @@
       {/if}
     </div>
   {:else}
-    <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges}>
+    <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges} role="textbox" aria-label={label || undefined}>
       <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
           <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList}/>
@@ -797,7 +808,9 @@
   }
 
   /* S'assurer que la bordure orange reste visible même quand TipTap a le focus */
-  .markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused) {
+  /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
+  /* svelte-ignore a11y-no-unused-selector */
+  :global(.markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused)) {
     border-left-color: #ffc107 !important;
   }
 
@@ -806,7 +819,9 @@
     background-color: #f8f9fa;
   }
 
-  .markdown-input-wrapper.has-unsaved-changes:hover:has(.ProseMirror-focused) {
+  /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
+  /* svelte-ignore a11y-no-unused-selector */
+  :global(.markdown-input-wrapper.has-unsaved-changes:hover:has(.ProseMirror-focused)) {
     border-left-color: #ffc107 !important;
     background-color: #f8f9fa;
   }

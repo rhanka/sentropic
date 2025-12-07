@@ -4,9 +4,9 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 16/20 tâches complétées
-- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI erreurs corrigées (0 erreur, 5 warnings) ✅, Fix erreur 500 /queue/jobs ✅
-- **Next**: Corriger les warnings Svelte et lint UI
+- **Progress**: 17/20 tâches complétées
+- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI complété (0 erreur, 0 warning) ✅, Fix erreur 500 /queue/jobs ✅
+- **Next**: Corriger lint UI (variables non utilisées)
 
 ## Commits
 - [x] **Commit 1**: Fix 404 sur refresh GitHub Pages - activation du fallback 404.html
@@ -27,6 +27,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 16**: Fix unifier auto-save matrice et éviter fetch inutile lors modification poids
 - [x] **Commit 17**: Fix queue - utiliser Drizzle ORM au lieu de SQL brut pour getAllJobs/getJobStatus (corrige erreur 500)
 - [x] **Commit 18**: Fix typecheck - remplacer `as unknown as UseCaseData` par `UseCaseDataJson` (type helper pour JSONB)
+- [x] **Commit 19**: Fix UI warnings Svelte - corriger a11y (label, article) et CSS (sélecteurs dynamiques)
 
 ## Bilan des vérifications (typecheck + lint)
 
@@ -155,20 +156,17 @@ Ce type permet d'éviter `as unknown as` en fournissant un type explicite compat
 
 ### Plan de fix restant
 
-#### 1. Typecheck UI (0 erreur, 5 warnings restants) - ✅ ERREURS CORRIGÉES
+#### 1. Typecheck UI (0 erreur, 0 warning) - ✅ COMPLÉTÉ
 
 **Priorité MOYENNE - Non bloquant**
 
-##### 1.1. Warnings Svelte (5 warnings)
+##### 1.1. Warnings Svelte (5 warnings) - ✅ CORRIGÉ
 
-##### 1.2. Warnings Svelte (5 warnings)
-- `EditableInput.svelte:535` : Label non associé à un contrôle (a11y)
-- `EditableInput.svelte:800,809` : Sélecteurs CSS inutilisés
-- `entreprises/+page.svelte:86` : Élément non-interactif avec click (a11y)
-- **Fix** : 
-  - Ajouter `for` au label ou utiliser `aria-label`
-  - Supprimer les sélecteurs CSS inutilisés
-  - Ajouter `on:keydown` ou transformer en `<button>`
+**Corrections effectuées :**
+- ✅ `EditableInput.svelte:535` : Label associé au contrôle avec `id` unique et `for`, ajout de `aria-label`
+- ✅ `EditableInput.svelte:800,809` : Sélecteurs CSS utilisant `:global()` pour `.ProseMirror-focused` (dynamique TipTap)
+- ✅ `EditableInput.svelte:398` : Paramètre `e` préfixé avec `_` (intentionnellement non utilisé)
+- ✅ `entreprises/+page.svelte:86` : Utilisation de `<article>` avec `role="button"` conditionnel (cohérent avec cas-usage/dossiers)
 
 #### 2. Lint UI (25 erreurs)
 
