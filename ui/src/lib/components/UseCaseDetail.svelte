@@ -48,6 +48,10 @@ const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies'
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
+// Buffer pour le nom/titre du usecase (texte simple, pas markdown)
+let nameBuffer = '';
+let nameOriginal = '';
+
 interface ScoreEntry {
   axisId: string;
   rating: number;
@@ -154,6 +158,9 @@ $: if (useCase?.id) {
     });
   }
 
+  // Extraire le nom (avec fallback pour rétrocompatibilité)
+  const useCaseName = useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom';
+
   if (useCase.id !== lastUseCaseId) {
     lastUseCaseId = useCase.id;
     textBuffers = { ...normalizedValues };
@@ -162,6 +169,8 @@ $: if (useCase?.id) {
     listOriginals = { ...listValues };
     scoreBuffers = { ...scoreValues };
     scoreOriginals = { ...scoreValues };
+    nameBuffer = useCaseName;
+    nameOriginal = useCaseName;
   } else {
     let changed = false;
     const updatedBuffers = { ...textBuffers };
@@ -176,6 +185,13 @@ $: if (useCase?.id) {
         changed = true;
       }
     });
+    
+    // Mettre à jour le buffer de nom si nécessaire
+    if (useCaseName !== nameOriginal) {
+      nameBuffer = useCaseName;
+      nameOriginal = useCaseName;
+      changed = true;
+    }
 
     LIST_FIELDS.forEach((field) => {
       // Extraire depuis data (avec fallback sur les propriétés directes pour rétrocompatibilité)
@@ -223,6 +239,11 @@ const getTextFullData = (field: TextField) => {
   const cleaned = stripTrailingEmptyParagraph(normalized);
   // Retourner directement le champ au niveau racine (buildUseCaseData construira l'objet data)
   return { [field]: cleaned };
+};
+const getNameFullData = () => {
+  if (!useCase?.id) return null;
+  // Le nom est stocké dans data.name (pas au niveau racine)
+  return { name: nameBuffer || 'Cas d\'usage sans nom' };
 };
 const getListFullData = (field: ListField) => {
   if (!useCase?.id) return null;
@@ -434,23 +455,52 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
     {/if}
 
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div>
-          <h1 class="text-3xl font-semibold">
-            {useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+    <div class="grid grid-cols-12 gap-4 items-center print:grid-cols-1">
+      <!-- Titre sur 2 colonnes (8/12) -->
+      <div class="col-span-8 print:col-span-1 min-w-0">
+        {#if isPrinting}
+          <h1 class="text-3xl font-semibold break-words">
+            {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
           </h1>
-        </div>
-        {#if useCase.model && showActions}
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 no-print">
-            {useCase.model}
-          </span>
+        {:else}
+          <h1 class="text-3xl font-semibold break-words mb-0">
+            <EditableInput
+              label=""
+              value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+              markdown={false}
+              multiline={true}
+              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              fullData={getNameFullData()}
+              fullDataGetter={getNameFullData as any}
+              changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
+              originalValue={nameOriginal || ''}
+              on:change={(e) => {
+                nameBuffer = e.detail.value;
+              }}
+              on:saved={handleFieldSaved}
+            />
+          </h1>
         {/if}
       </div>
       
+      <!-- Badge + Boutons sur 1 colonne (4/12) -->
       {#if showActions}
-        <div class="flex gap-2 no-print">
+        <div class="col-span-4 print:col-span-1 flex items-center justify-end gap-2 no-print">
+          {#if useCase.model}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+              {useCase.model}
+            </span>
+          {/if}
+          <div class="flex gap-2">
           <slot name="actions-view" />
+          </div>
+        </div>
+      {:else if useCase.model}
+        <!-- En mode print, afficher le badge si présent -->
+        <div class="col-span-4 print:col-span-1 flex items-center justify-end">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+            {useCase.model}
+          </span>
         </div>
       {/if}
     </div>

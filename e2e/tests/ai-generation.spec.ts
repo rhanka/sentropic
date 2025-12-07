@@ -71,9 +71,9 @@ test.describe('Génération IA', () => {
     await page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+/, { timeout: 2000 });
     await page.waitForLoadState('networkidle');
     
-    // Vérifier que le titre contient BRP
-    const companyTitle = page.locator('h1').first();
-    await expect(companyTitle).toContainText('BRP');
+    // Vérifier que le titre contient BRP (textarea pour multiline)
+    const companyTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
+    await expect(companyTitle).toHaveValue(/BRP/);
   });
 
   // 2) Génération de cas d'usage depuis l'accueil

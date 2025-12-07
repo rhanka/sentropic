@@ -1081,8 +1081,7 @@
           if (cliques.length === 0) break;
 
           let cliqueImproved = false;
-          // Calculer le scale à partir de labelStandardArea si disponible
-          const currentScale = labelStandardArea ? Math.sqrt(labelStandardArea / LABEL_STANDARD_AREA) : 1.0;
+          // Note: currentScale était calculé mais jamais utilisé dans cette boucle
           for (const clique of cliques) {
             let attemptSucceeded = false;
             for (let attempt = 0; attempt < MAX_CLIQUE_ATTEMPTS; attempt++) {

@@ -10,7 +10,7 @@ import { verifyChallenge } from '../../services/challenge-manager';
 import { users } from '../../db/schema';
 import { db } from '../../db/client';
 import { eq } from 'drizzle-orm';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 /**
  * WebAuthn Authentication Routes
@@ -67,7 +67,6 @@ loginRouter.post('/options', async (c) => {
     
     return c.json({ 
       options,
-      challengeId: options.challengeId, // Include challengeId for testing
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

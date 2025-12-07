@@ -38,10 +38,31 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
     // Mettre à jour uniquement si value change depuis l'extérieur
     // En mode forceList, on désactive le watcher pour éviter les boucles (normalisation uniquement à l'init)
     $: if (editor && value !== lastValue && !forceList) {
+        // Ne pas mettre à jour si l'utilisateur est en train d'éditer
+        // (l'éditeur a le focus, donc le changement vient de l'utilisateur, pas de l'extérieur)
+        if (editor.isFocused) {
+            // Le changement vient de l'utilisateur, on met juste à jour lastValue
+            // pour éviter une boucle, mais on ne réinitialise pas le contenu
+            lastValue = value;
+        } else {
+            // Le changement vient de l'extérieur, on peut mettre à jour le contenu
         const processed = ensureListMarkdown(value);
         if (processed !== lastValue) {
+                // Sauvegarder la position du curseur avant setContent
+                const { from, to } = editor.state.selection;
           editor.commands.setContent(processed);
+                // Restaurer la position du curseur après setContent si possible
+                // (seulement si la position est toujours valide dans le nouveau contenu)
+                try {
+                    const docSize = editor.state.doc.content.size;
+                    if (from <= docSize && to <= docSize) {
+                        editor.commands.setTextSelection({ from, to });
+                    }
+                } catch (e) {
+                    // Si la position n'est plus valide, on laisse TipTap gérer
+                }
           lastValue = processed;
+            }
         }
     }
 

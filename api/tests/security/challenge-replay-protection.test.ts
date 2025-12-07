@@ -36,13 +36,8 @@ describe('Challenge Replay Protection Tests', () => {
         expect(challengeResponse.status).toBe(200);
         const challengeData = await challengeResponse.json();
         
-        if (challengeData.challengeId) {
-          challengeIds.push(challengeData.challengeId);
-        } else if (challengeData.options && challengeData.options.challengeId) {
-          challengeIds.push(challengeData.options.challengeId);
-        } else {
+        // Use challenge string (base64url) as unique identifier
           challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
-        }
         
         await new Promise(resolve => setTimeout(resolve, 200));
       }
@@ -69,13 +64,8 @@ describe('Challenge Replay Protection Tests', () => {
         expect(challengeResponse.status).toBe(200);
         const challengeData = await challengeResponse.json();
         
-        if (challengeData.challengeId) {
-          challengeIds.push(challengeData.challengeId);
-        } else if (challengeData.options && challengeData.options.challengeId) {
-          challengeIds.push(challengeData.options.challengeId);
-        } else {
+        // Use challenge string (base64url) as unique identifier
           challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
-        }
         
         await new Promise(resolve => setTimeout(resolve, 200));
       }

@@ -510,13 +510,14 @@
 {/if}
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
-  <div class="flex items-center">
+  <div class="w-full print-hidden">
     {#if selectedFolderId}
-      <div class="text-3xl font-semibold print-hidden">
+      <h1 class="text-3xl font-semibold mb-0">
         <EditableInput
           label=""
           value={editedFolderName}
           markdown={false}
+          multiline={true}
           apiEndpoint={`/folders/${selectedFolderId}`}
           fullData={{ name: editedFolderName }}
           changeId={`folder-name-${selectedFolderId}`}
@@ -524,9 +525,9 @@
           on:change={(e) => editedFolderName = e.detail.value}
           on:saved={handleFolderNameSaved}
         />
-      </div>
+      </h1>
     {:else}
-      <h1 class="text-3xl font-semibold print-hidden">{selectedFolderName || 'Dashboard'}</h1>
+      <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
     {/if}
   </div>
 

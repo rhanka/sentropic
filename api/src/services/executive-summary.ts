@@ -89,7 +89,7 @@ export async function generateExecutiveSummary(
       const complexity = uc.totalComplexityScore ?? 0;
       return value >= effectiveValueThreshold && complexity <= effectiveComplexityThreshold;
     })
-    .map(uc => uc.name);
+    .map(uc => uc.data.name);
 
   // Formater les cas d'usage pour le prompt
   const useCasesFormatted = useCasesList.map((uc, index) => {
@@ -99,8 +99,8 @@ export async function generateExecutiveSummary(
     const metrics = uc.data.metrics ?? [];
     const technologies = uc.data.technologies ?? [];
 
-    return `Cas d'usage ${index + 1}: ${uc.name}
-Description: ${uc.description || 'Non disponible'}
+    return `Cas d'usage ${index + 1}: ${uc.data.name}
+Description: ${uc.data.description || 'Non disponible'}
 Valeur: ${uc.totalValueScore ?? 0} pts | Complexité: ${uc.totalComplexityScore ?? 0} pts
 Bénéfices: ${benefits.length > 0 ? benefits.join(', ') : 'Non spécifiés'}
 Risques: ${risks.length > 0 ? risks.join(', ') : 'Non spécifiés'}

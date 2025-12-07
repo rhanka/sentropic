@@ -62,6 +62,38 @@ jobs:
         if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
         run: make publish-e2e-image
 
+  typecheck-lint-ui:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    steps:
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+      - name: Setup Docker
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        uses: docker/setup-buildx-action@v3
+      - name: Typecheck UI
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-ui
+      - name: Lint UI
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        run: make lint-ui
+
+  typecheck-lint-api:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    steps:
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+      - name: Setup Docker
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: docker/setup-buildx-action@v3
+      - name: Typecheck API
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-api
+      - name: Lint API
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make lint-api
+
   # Build API Docker image
   build-api:
     runs-on: ubuntu-latest
@@ -110,7 +142,7 @@ jobs:
       - name: Save UI image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make save-ui
-      - name: Unit Test UI
+      - name: Test UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ui
       - name: Upload UI image artifact
@@ -133,7 +165,7 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    needs: [changes, build-api, build-ui, build-e2e, security-sast-sca]
+    needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
@@ -386,6 +418,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4

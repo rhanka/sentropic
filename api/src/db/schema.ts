@@ -12,7 +12,7 @@ export const companies = pgTable('companies', {
   objectives: text('objectives'),
   technologies: text('technologies'),
   status: text('status').default('completed'), // 'draft', 'enriching', 'completed'
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
 });
 
@@ -24,7 +24,7 @@ export const folders = pgTable('folders', {
   matrixConfig: text('matrix_config'),
   executiveSummary: text('executive_summary'), // JSON string with 4 sections: { introduction, analyse, recommandation, synthese_executive }
   status: text('status').default('completed'), // 'generating', 'completed'
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
 });
 
 export const useCases = pgTable('use_cases', {
@@ -36,7 +36,7 @@ export const useCases = pgTable('use_cases', {
   companyId: text('company_id').references(() => companies.id),
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
   model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   
   // === DONNÉES MÉTIER (tout dans JSONB, y compris name, description, et toutes les autres colonnes métier) ===
   // Toutes les colonnes métier (name, description, process, domain, technologies, etc.) ont été migrées vers data JSONB
@@ -63,7 +63,7 @@ export const sessions = pgTable('sessions', {
   provider: text('provider'),
   profile: text('profile'),
   userId: text('user_id'),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   expiresAt: text('expires_at')
 });
 
@@ -74,7 +74,7 @@ export const jobQueue = pgTable('job_queue', {
   data: text('data').notNull(), // JSON string
   result: text('result'), // JSON string
   error: text('error'),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   startedAt: text('started_at'),
   completedAt: text('completed_at')
 });
@@ -86,7 +86,7 @@ export const users = pgTable('users', {
   displayName: text('display_name'),
   role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
   emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
 });
 
@@ -101,7 +101,7 @@ export const webauthnCredentials = pgTable('webauthn_credentials', {
   deviceName: text('device_name').notNull(),
   transportsJson: text('transports_json'), // JSON-encoded array
   uv: boolean('uv').notNull().default(false), // user verification
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: false })
 }, (table) => ({
   userIdIdx: index('webauthn_credentials_user_id_idx').on(table.userId),
@@ -119,7 +119,7 @@ export const userSessions = pgTable('user_sessions', {
   userAgent: text('user_agent'),
   mfaVerified: boolean('mfa_verified').notNull().default(false),
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
 }, (table) => ({
   userIdIdx: index('user_sessions_user_id_idx').on(table.userId),
@@ -146,7 +146,7 @@ export const magicLinks = pgTable('magic_links', {
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for new users
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
 }, (table) => ({
   expiresAtIdx: index('magic_links_expires_at_idx').on(table.expiresAt),
   emailIdx: index('magic_links_email_idx').on(table.email),
@@ -159,7 +159,7 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   verificationToken: text('verification_token').unique(), // Token returned after code verification, used for registration
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
 }, (table) => ({
   expiresAtIdx: index('email_verification_codes_expires_at_idx').on(table.expiresAt),
   emailIdx: index('email_verification_codes_email_idx').on(table.email),

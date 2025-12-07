@@ -2,11 +2,14 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
   type VerifiedAuthenticationResponse,
+  type UserVerificationRequirement,
+  type AuthenticatorTransportFuture,
+  type WebAuthnCredential,
 } from '@simplewebauthn/server';
 import type {
   PublicKeyCredentialRequestOptionsJSON,
   AuthenticationResponseJSON,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/server';
 import { db } from '../db/client';
 import { webauthnCredentials, users } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -44,7 +47,7 @@ export async function generateWebAuthnAuthenticationOptions(
   const { userId } = params;
   const config = getWebAuthnConfig();
   
-  let allowCredentials: Array<{ id: string; transports?: string[] }> = [];
+  let allowCredentials: Array<{ id: string; transports?: AuthenticatorTransportFuture[] }> = [];
   let userVerification: UserVerificationRequirement = 'preferred';
   
   // If user ID provided, get their credentials and role
@@ -52,14 +55,14 @@ export async function generateWebAuthnAuthenticationOptions(
     const credentials = await db
       .select({
         id: webauthnCredentials.credentialId,
-        transports: webauthnCredentials.transportsJson,
+        transportsJson: webauthnCredentials.transportsJson,
       })
       .from(webauthnCredentials)
       .where(eq(webauthnCredentials.userId, userId));
     
     allowCredentials = credentials.map((cred) => ({
       id: cred.id,
-      transports: cred.transports ? JSON.parse(cred.transports) : undefined,
+      transports: cred.transportsJson ? (JSON.parse(cred.transportsJson) as AuthenticatorTransportFuture[]) : undefined,
     }));
     
     // Get user role for verification requirement
@@ -121,11 +124,9 @@ export async function verifyWebAuthnAuthentication(
       credentialId: credential.id,
     }, 'Credential ID from response');
     
-    // Convert credential ID to base64url for database lookup
-    const credentialIdArray = credential.id instanceof Uint8Array 
-      ? credential.id 
-      : new Uint8Array(Object.values(credential.id));
-    const credentialIdBase64 = Buffer.from(credentialIdArray).toString('base64url');
+    // credential.id is always a Base64URLString (string) in AuthenticationResponseJSON
+    // Same as RegistrationResponseJSON.id - see @simplewebauthn/server types
+    const credentialIdBase64 = credential.id;
     
     const [storedCredential] = await db
       .select({
@@ -135,6 +136,7 @@ export async function verifyWebAuthnAuthentication(
         counter: webauthnCredentials.counter,
         userId: webauthnCredentials.userId,
         uv: webauthnCredentials.uv,
+        transportsJson: webauthnCredentials.transportsJson,
       })
       .from(webauthnCredentials)
       .where(eq(webauthnCredentials.credentialId, credentialIdBase64))
@@ -178,11 +180,17 @@ export async function verifyWebAuthnAuthentication(
     const requireUV = userRole === 'admin_app' || userRole === 'admin_org';
     
     // Create WebAuthnCredential object (v11.0.0+ API change)
-    const webAuthnCredential = {
-      id: Buffer.from(storedCredential.credentialId, 'base64url'),
-      publicKey: credentialPublicKey,
+    // transportsJson est maintenant inclus dans le select, plus besoin de cast
+    const transports = storedCredential.transportsJson
+      ? (JSON.parse(storedCredential.transportsJson) as AuthenticatorTransportFuture[])
+      : [];
+    // WebAuthnCredential attend id comme Base64URLString (string) et publicKey comme Uint8Array
+    // storedCredential.credentialId est déjà un string base64url, pas besoin de conversion
+    const webAuthnCredential: WebAuthnCredential = {
+      id: storedCredential.credentialId, // Base64URLString (string)
+      publicKey: new Uint8Array(credentialPublicKey), // Uint8Array
       counter: storedCredential.counter,
-      transports: storedCredential.transportsJson ? JSON.parse(storedCredential.transportsJson) : [],
+      transports,
     };
     
     logger.debug({

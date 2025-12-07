@@ -6,7 +6,7 @@ import {
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   RegistrationResponseJSON,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/server';
 import { db } from '../db/client';
 import { users, webauthnCredentials } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -79,6 +79,12 @@ export async function generateWebAuthnRegistrationOptions(
     ttlSeconds: config.timeout.registration / 1000,
   });
   
+        // generateRegistrationOptions n'accepte pas 'indirect', convertir en 'none'
+        // (AttestationConveyancePreference inclut 'indirect' mais la bibliothèque ne le supporte pas)
+        const attestationType = config.attestation === 'indirect' 
+          ? 'none' 
+          : (config.attestation as 'none' | 'direct' | 'enterprise' | undefined);
+  
         // Generate registration options with our unique challenge
         const options = await generateRegistrationOptions({
           rpName: config.rpName,
@@ -87,7 +93,7 @@ export async function generateWebAuthnRegistrationOptions(
           userDisplayName,
           challenge: challengeRecord.challenge, // Use our unique challenge
           timeout: config.timeout.registration,
-          attestationType: config.attestation,
+          attestationType,
           excludeCredentials: existingCredentials.map((cred) => ({
             id: cred.id,
             transports: cred.transports ? JSON.parse(cred.transports) : [],
@@ -180,17 +186,10 @@ export async function verifyWebAuthnRegistration(
       return { verified: false };
     }
     
-    // Convert credential ID and public key to base64url for storage
-    // credentialID and credentialPublicKey might be Uint8Array-like objects
-    const credentialIdArray = credentialID instanceof Uint8Array 
-      ? credentialID 
-      : new Uint8Array(Object.values(credentialID));
-    const publicKeyArray = credentialPublicKey instanceof Uint8Array 
-      ? credentialPublicKey 
-      : new Uint8Array(Object.values(credentialPublicKey));
-    
-    const credentialIdBase64 = Buffer.from(credentialIdArray).toString('base64url');
-    const publicKeyBase64 = Buffer.from(publicKeyArray).toString('base64url');
+    // credentialID is always a Base64URLString (string) in WebAuthnCredential
+    // credentialPublicKey is always a Uint8Array in WebAuthnCredential
+    const credentialIdBase64 = credentialID; // Already in base64url format
+    const publicKeyBase64 = Buffer.from(credentialPublicKey).toString('base64url');
     
     // Store credential in database
     await db.insert(webauthnCredentials).values({

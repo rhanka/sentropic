@@ -1,6 +1,6 @@
 import { db } from '../db/client';
 import { userSessions, users } from '../db/schema';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { SignJWT, jwtVerify } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
@@ -123,7 +123,17 @@ export async function validateSession(
     // Verify JWT signature and expiration
     const { payload } = await jwtVerify(sessionToken, JWT_SECRET);
     
-    const { userId, sessionId, role } = payload as SessionPayload;
+    // Verify payload structure (userId, sessionId, role are required strings)
+    if (
+      typeof payload.userId !== 'string' ||
+      typeof payload.sessionId !== 'string' ||
+      typeof payload.role !== 'string'
+    ) {
+      logger.warn({ payloadKeys: Object.keys(payload) }, 'Invalid session payload structure');
+      return null;
+    }
+    
+    const { userId, sessionId, role } = payload;
     
     // Check if session exists and is not revoked
     const sessionHash = hashToken(sessionToken);
@@ -286,7 +296,7 @@ export async function listUserSessions(userId: string) {
     .where(
       and(
         eq(userSessions.userId, userId),
-        lt(now, userSessions.expiresAt) // Only active sessions
+        gt(userSessions.expiresAt, now) // expiresAt > now (active sessions)
       )
     );
 }

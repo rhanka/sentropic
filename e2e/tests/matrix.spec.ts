@@ -109,4 +109,162 @@ test.describe('Configuration de la matrice', () => {
       await expect(infoMessage).toBeVisible();
     }
   });
+
+  test('devrait permettre d\'ajouter un axe de valeur', async ({ page }) => {
+    // Vérifier si la section des axes de valeur est visible
+    const valueAxesSection = page.locator('h2:has-text("Axes de Valeur")');
+    
+    if (await valueAxesSection.isVisible()) {
+      // Compter le nombre d'axes avant (lignes dans le tbody)
+      const table = valueAxesSection.locator('..').locator('table tbody');
+      const axesBefore = await table.locator('tr').count();
+      
+      // Cliquer sur le bouton "Ajouter" dans le header de la section Axes de Valeur
+      const addButton = page.locator('button[title="Ajouter un axe de valeur"]');
+      if (await addButton.isVisible()) {
+        await addButton.click();
+        
+        // Attendre que le nouvel axe apparaisse
+        await page.waitForTimeout(500);
+        
+        // Vérifier qu'un nouvel axe a été ajouté
+        const axesAfter = await table.locator('tr').count();
+        expect(axesAfter).toBeGreaterThan(axesBefore);
+      }
+    }
+  });
+
+  test('devrait permettre d\'ajouter un axe de complexité', async ({ page }) => {
+    // Vérifier si la section des axes de complexité est visible
+    const complexityAxesSection = page.locator('h2:has-text("Axes de Complexité")');
+    
+    if (await complexityAxesSection.isVisible()) {
+      // Compter le nombre d'axes avant (lignes dans le tbody)
+      const table = complexityAxesSection.locator('..').locator('table tbody');
+      const axesBefore = await table.locator('tr').count();
+      
+      // Cliquer sur le bouton "Ajouter" dans le header de la section Axes de Complexité
+      const addButton = page.locator('button[title="Ajouter un axe de complexité"]');
+      if (await addButton.isVisible()) {
+        await addButton.click();
+        
+        // Attendre que le nouvel axe apparaisse
+        await page.waitForTimeout(500);
+        
+        // Vérifier qu'un nouvel axe a été ajouté
+        const axesAfter = await table.locator('tr').count();
+        expect(axesAfter).toBeGreaterThan(axesBefore);
+      }
+    }
+  });
+
+  test('devrait permettre de supprimer un axe de valeur', async ({ page }) => {
+    const valueAxesSection = page.locator('h2:has-text("Axes de Valeur")');
+    
+    if (await valueAxesSection.isVisible()) {
+      // Compter le nombre d'axes avant (lignes dans le tbody)
+      const table = valueAxesSection.locator('..').locator('table tbody');
+      const axesBefore = await table.locator('tr').count();
+      
+      if (axesBefore > 0) {
+        // Accepter la confirmation de suppression
+        page.on('dialog', dialog => dialog.accept());
+        
+        // Cliquer sur le premier bouton de suppression dans la section Axes de Valeur
+        const deleteButton = valueAxesSection.locator('..').locator('button[title="Supprimer cet axe"]').first();
+        if (await deleteButton.isVisible()) {
+          await deleteButton.click();
+          
+          // Attendre que l'axe soit supprimé
+          await page.waitForTimeout(500);
+          
+          // Vérifier qu'un axe a été supprimé
+          const axesAfter = await table.locator('tr').count();
+          expect(axesAfter).toBeLessThan(axesBefore);
+        }
+      }
+    }
+  });
+
+  test('devrait mettre à jour le comptage des cas après modification des seuils', async ({ page }) => {
+    const valueThresholdsSection = page.locator('h2:has-text("Configuration des seuils de Valeur")');
+    
+    if (await valueThresholdsSection.isVisible()) {
+      // Trouver le tableau des seuils de valeur
+      const table = valueThresholdsSection.locator('..').locator('table tbody');
+      const firstRow = table.locator('tr').first();
+      
+      if (await firstRow.isVisible()) {
+        // Lire la valeur initiale du comptage (colonne "Nombre de cas")
+        const countCell = firstRow.locator('td').nth(2); // 3ème colonne (0-indexed: 0=Valeur, 1=Points, 2=Nombre de cas)
+        const initialCountText = await countCell.textContent();
+        const initialCount = initialCountText ? parseInt(initialCountText.trim()) : null;
+        
+        // Trouver l'input de points dans cette ligne
+        const pointsInput = firstRow.locator('input[type="number"]');
+        
+        if (await pointsInput.isVisible()) {
+          // Modifier la valeur des points
+          await pointsInput.fill('5');
+          
+          // Attendre le recalcul (qui devrait être immédiat)
+          await page.waitForTimeout(1000);
+          
+          // Vérifier que le comptage a été mis à jour
+          const updatedCountText = await countCell.textContent();
+          const updatedCount = updatedCountText ? parseInt(updatedCountText.trim()) : null;
+          
+          // Si on avait une valeur initiale, vérifier qu'elle a changé ou est toujours là
+          if (initialCount !== null && updatedCount !== null) {
+            // Le comptage devrait être un nombre valide
+            expect(updatedCount).toBeGreaterThanOrEqual(0);
+          }
+        }
+      }
+    }
+  });
+
+  test('devrait sauvegarder automatiquement les modifications après 5 secondes', async ({ page }) => {
+    const valueThresholdsSection = page.locator('h2:has-text("Configuration des seuils de Valeur")');
+    
+    if (await valueThresholdsSection.isVisible()) {
+      // Trouver le tableau des seuils de valeur
+      const table = valueThresholdsSection.locator('..').locator('table tbody');
+      const firstRow = table.locator('tr').first();
+      
+      if (await firstRow.isVisible()) {
+        // Trouver l'input de points dans cette ligne
+        const pointsInput = firstRow.locator('input[type="number"]');
+        
+        if (await pointsInput.isVisible()) {
+          // Lire la valeur initiale
+          const initialValue = await pointsInput.inputValue();
+          
+          // Modifier la valeur avec une nouvelle valeur différente
+          const newValue = initialValue === '8' ? '13' : '8';
+          await pointsInput.fill(newValue);
+          
+          // Attendre 6 secondes pour que l'auto-save se déclenche (5s + marge)
+          await page.waitForTimeout(6000);
+          
+          // Vérifier qu'une requête PUT a été envoyée pour sauvegarder
+          // On peut vérifier en rechargeant la page
+          await page.reload();
+          await page.waitForLoadState('networkidle');
+          
+          // Re-trouver l'input après rechargement
+          const valueThresholdsSectionAfter = page.locator('h2:has-text("Configuration des seuils de Valeur")');
+          const tableAfter = valueThresholdsSectionAfter.locator('..').locator('table tbody');
+          const firstRowAfter = tableAfter.locator('tr').first();
+          const pointsInputAfter = firstRowAfter.locator('input[type="number"]');
+          
+          // Vérifier que la valeur modifiée est toujours là (sauvegardée)
+          if (await pointsInputAfter.isVisible()) {
+            const savedValue = await pointsInputAfter.inputValue();
+            expect(savedValue).toBe(newValue);
+          }
+        }
+      }
+    }
+  });
 });

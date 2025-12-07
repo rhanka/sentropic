@@ -39,10 +39,9 @@ test.describe('Gestion des dossiers', () => {
     if (itemCount > 0) {
       const firstFolder = folderItems.first();
       
-      // Cliquer sur le titre du dossier (évite les conflits avec les boutons)
-      const folderTitle = firstFolder.locator('h2').first();
-      await folderTitle.waitFor({ state: 'visible' });
-      await folderTitle.click();
+      // Cliquer sur l'article entier (la navigation est gérée par handleFolderClick sur l'article)
+      await firstFolder.waitFor({ state: 'visible' });
+      await firstFolder.click();
       
       // Attendre la redirection vers /cas-usage avec timeout
       await page.waitForURL(/\/cas-usage/, { timeout: 2000 });

@@ -1,12 +1,12 @@
 import { db } from '../db/client';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
-import type { UseCaseData } from '../types/usecase';
+import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases, type JobQueueRow } from '../db/schema';
+import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 
@@ -324,8 +324,9 @@ export class QueueManager {
     }
 
     // Créer les cas d'usage en mode generating
+    // Note: UseCaseListItem n'a que 'titre', pas 'title'
     const draftUseCases = useCaseList.useCases.map((useCaseItem: UseCaseListItem) => {
-      const title = useCaseItem.titre || useCaseItem.title || useCaseItem;
+      const title = useCaseItem.titre || String(useCaseItem);
       const useCaseData: UseCaseData = {
         name: title, // Stocker name dans data
         description: useCaseItem.description || '', // Stocker description dans data
@@ -346,7 +347,7 @@ export class QueueManager {
         id: createId(),
         folderId: folderId,
         companyId: companyId || null,
-        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         process: '',
         technologies: JSON.stringify([]),
@@ -474,7 +475,7 @@ export class QueueManager {
     
     // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
     const [existingUseCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
-    let existingData: UseCaseData = {};
+    let existingData: Partial<UseCaseData> = {};
     if (existingUseCase?.data) {
       try {
         if (typeof existingUseCase.data === 'object') {
@@ -511,24 +512,11 @@ export class QueueManager {
     };
     
     // Mettre à jour le cas d'usage
+    // Note: Toutes les colonnes métier (prerequisites, deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
+    // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(useCases)
       .set({
-        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
-        // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
-        domain: useCaseDetail.domain,
-        technologies: JSON.stringify(useCaseDetail.technologies),
-        prerequisites: useCaseDetail.prerequisites,
-        deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
-        contact: useCaseDetail.contact,
-        benefits: JSON.stringify(useCaseDetail.benefits),
-        metrics: JSON.stringify(useCaseDetail.metrics),
-        risks: JSON.stringify(useCaseDetail.risks),
-        nextSteps: JSON.stringify(useCaseDetail.nextSteps),
-        dataSources: JSON.stringify(useCaseDetail.dataSources),
-        dataObjects: JSON.stringify(useCaseDetail.dataObjects),
-        references: JSON.stringify(useCaseDetail.references || []),
-        valueScores: JSON.stringify(useCaseDetail.valueScores),
-        complexityScores: JSON.stringify(useCaseDetail.complexityScores),
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })
@@ -597,21 +585,25 @@ export class QueueManager {
    * Obtenir le statut d'un job
    */
   async getJobStatus(jobId: string): Promise<Job | null> {
-    const result = await db.get(sql`
-      SELECT * FROM job_queue WHERE id = ${jobId}
-    `) as JobQueueRow | undefined;
+    const result = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
     
-    if (!result) return null;
+    if (!result || result.length === 0) return null;
     
+    const row = result[0];
     return {
-      id: result.id,
-      type: result.type as JobType,
-      data: JSON.parse(result.data) as JobData,
-      status: result.status as Job['status'],
-      createdAt: result.createdAt?.toISOString() || result.created_at?.toString() || '',
-      startedAt: result.startedAt || result.started_at || undefined,
-      completedAt: result.completedAt || result.completed_at || undefined,
-      error: result.error || undefined
+      id: row.id,
+      type: row.type as JobType,
+      data: JSON.parse(row.data) as JobData,
+      status: row.status as Job['status'],
+      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
+      createdAt: row.createdAt.toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined
     };
   }
 
@@ -619,16 +611,18 @@ export class QueueManager {
    * Obtenir tous les jobs
    */
   async getAllJobs(): Promise<Job[]> {
-    const results = await db.all(sql`
-      SELECT * FROM job_queue ORDER BY created_at DESC
-    `) as JobQueueRow[];
+    const results = await db
+      .select()
+      .from(jobQueue)
+      .orderBy(desc(jobQueue.createdAt));
     
     return results.map((row) => ({
       id: row.id,
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
-      createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
+      createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,
       error: row.error || undefined

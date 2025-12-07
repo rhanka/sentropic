@@ -375,8 +375,8 @@ up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=tru
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-ui
-up-ui: ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui
+up-ui: ## Start the ui stack in detached mode
+	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui --wait ui
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes

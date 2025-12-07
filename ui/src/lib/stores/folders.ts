@@ -8,6 +8,7 @@ export type Folder = {
   companyId?: string;
   companyName?: string;
   matrixConfig?: any;
+  hasMatrix?: boolean; // Indicates if folder has a matrix configuration
   executiveSummary?: {
     introduction?: string;
     analyse?: string;

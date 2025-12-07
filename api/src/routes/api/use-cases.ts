@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateUseCaseScores, type ScoreEntry } from '../../utils/scoring';
-import type { UseCaseData, UseCase } from '../../types/usecase';
+import type { UseCaseData, UseCase, UseCaseDataJson } from '../../types/usecase';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 // import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
@@ -178,7 +178,7 @@ const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
     companyId: row.companyId,
     status: row.status ?? 'completed',
     model: row.model,
-    createdAt: row.createdAt ?? new Date(),
+    createdAt: row.createdAt,
     data: data as UseCaseData,
     totalValueScore: computedScores?.totalValueScore ?? null,
     totalComplexityScore: computedScores?.totalComplexityScore ?? null
@@ -255,7 +255,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
       companyId: row.companyId,
       status: row.status ?? 'completed',
       model: row.model,
-      createdAt: row.createdAt ?? new Date(),
+      createdAt: row.createdAt,
       data: data as UseCaseData,
       totalValueScore: computedScores?.totalValueScore ?? null,
       totalComplexityScore: computedScores?.totalComplexityScore ?? null
@@ -328,8 +328,8 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
     id,
     folderId: payload.folderId,
     companyId: payload.companyId,
-    // data is Partial<UseCaseData> which is compatible with jsonb - using type assertion for Drizzle
-    data: data as unknown as UseCaseData // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
+    // data est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
+    data: data as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
   });
   const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
   const hydrated = await hydrateUseCase(record);
@@ -383,8 +383,8 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
     .set({
       folderId,
       companyId: payload.companyId ?? record.companyId,
-      // newData is Partial<UseCaseData> which is compatible with jsonb - using type assertion for Drizzle
-      data: newData as unknown as UseCaseData // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
+      // newData est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
+      data: newData as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
     })
     .where(eq(useCases.id, id));
   const [updated] = await db.select().from(useCases).where(eq(useCases.id, id));

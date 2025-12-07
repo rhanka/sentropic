@@ -11,7 +11,7 @@ import { db } from '../../db/client';
 import { users, webauthnCredentials } from '../../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { env } from '../../config/env';
-import type { RegistrationResponseJSON } from '@simplewebauthn/types';
+import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { verifyValidationToken } from '../../services/email-verification';
 
@@ -176,7 +176,6 @@ registerRouter.post('/options', async (c) => {
     return c.json({
       options,
       userId, // Client must send this back with verification (will be used to verify challenge)
-      challengeId: options.challengeId, // Include challengeId for testing
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -245,11 +244,9 @@ registerRouter.post('/verify', async (c) => {
     
     const challenge = clientData.challenge;
     
-    // Extract credential ID before verification to check if it already exists
-    const credentialIdArray = credentialResponse.id instanceof Uint8Array 
-      ? credentialResponse.id 
-      : new Uint8Array(Object.values(credentialResponse.id));
-    const credentialIdBase64 = Buffer.from(credentialIdArray).toString('base64url');
+    // credentialResponse.id is always a Base64URLString (string) in RegistrationResponseJSON
+    // Same as AuthenticationResponseJSON.id - see @simplewebauthn/server types
+    const credentialIdBase64 = credentialResponse.id;
     
     logger.debug({ 
       receivedChallenge: challenge.substring(0, 10) + '...',
