@@ -50,27 +50,9 @@
     const originalPushState = pushState;
     const originalReplaceState = replaceState;
     
-    const interceptPush = (...args) => {
-      if ($unsavedChangesStore.changes.length > 0) {
-        showWarning = true;
-        pendingNavigation = () => {
-          originalPushState(...args);
-        };
-        return;
-      }
-      originalPushState(...args);
-    };
-    
-    const interceptReplace = (...args) => {
-      if ($unsavedChangesStore.changes.length > 0) {
-        showWarning = true;
-        pendingNavigation = () => {
-          originalReplaceState(...args);
-        };
-        return;
-      }
-      originalReplaceState(...args);
-    };
+    // Note: interceptPush et interceptReplace étaient définis mais jamais utilisés
+    // Ils étaient prévus pour intercepter les changements de navigation programmatiques
+    // mais la navigation est gérée via handleLinkClick et handleBeforeUnload
     
     // Intercepter les clics sur les boutons de navigation
     document.addEventListener('click', handleLinkClick);

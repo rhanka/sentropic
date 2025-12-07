@@ -28,6 +28,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 17**: Fix queue - utiliser Drizzle ORM au lieu de SQL brut pour getAllJobs/getJobStatus (corrige erreur 500)
 - [x] **Commit 18**: Fix typecheck - remplacer `as unknown as UseCaseData` par `UseCaseDataJson` (type helper pour JSONB)
 - [x] **Commit 19**: Fix UI warnings Svelte - corriger a11y (label, article) et CSS (sélecteurs dynamiques)
+- [x] **Commit 20**: Fix lint UI - supprimer variables non utilisées (Company, interceptPush/Replace, currentScale)
 
 ## Bilan des vérifications (typecheck + lint)
 
@@ -172,11 +173,15 @@ Ce type permet d'éviter `as unknown as` en fournissant un type explicite compat
 
 **Priorité MOYENNE - Non bloquant mais à corriger**
 
-##### 2.1. Variables non utilisées (15 erreurs)
-- `EditableInput.svelte:398` : `e` non utilisé
-- `NavigationGuard.svelte:53,64` : `interceptPush`, `interceptReplace` non utilisés
-- `UseCaseScatterPlot.svelte:1085` : `currentScale` non utilisé
-- `entreprises/+page.svelte:2` : `Company` non utilisé
+##### 2.1. Variables non utilisées (15 erreurs → 11 erreurs restantes)
+
+**Corrections effectuées (4/15) :**
+- ✅ `entreprises/+page.svelte:2` : Supprimé `type Company` de l'import (non utilisé)
+- ✅ `NavigationGuard.svelte:53,64` : Supprimé `interceptPush` et `interceptReplace` (définis mais jamais utilisés)
+- ✅ `UseCaseScatterPlot.svelte:1085` : Supprimé `currentScale` (calculé mais jamais utilisé)
+- ✅ `EditableInput.svelte:398` : Déjà corrigé précédemment (paramètre supprimé)
+
+**Restantes (11 erreurs) :**
 - `matrice/+page.svelte:5,613,616,706,709,815,818,860,863,941,947,950,956,959` : Variables `_` et `apiPost` non utilisées
 - **Fix** : Supprimer ou préfixer avec `_` si intentionnel
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { companiesStore, fetchCompanies, deleteCompany, type Company } from '$lib/stores/companies';
+  import { companiesStore, fetchCompanies, deleteCompany } from '$lib/stores/companies';
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
   import { refreshManager } from '$lib/stores/refresh';
