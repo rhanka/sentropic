@@ -641,13 +641,15 @@
               {#each editedConfig.valueAxes as axis, index}
                 <tr class="border-t">
                   <td class="px-4 py-3">
-                    <div class="text-sm">
+                    <div class="text-sm w-full">
                       <EditableInput
                         value={axis.name}
                         originalValue={originalConfig.valueAxes[index]?.name || ""}
                         changeId={`value-axis-${index}-name`}
                         apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
+                        multiline={true}
+                        markdown={false}
                         on:change={(e) => updateAxisName(true, index, e.detail.value)}
                         on:saved={() => {
                           originalConfig = { ...editedConfig };
@@ -734,19 +736,21 @@
               {#each editedConfig.complexityAxes as axis, index}
                 <tr class="border-t">
                   <td class="px-4 py-3">
-                    <div class="text-sm">
+                    <div class="text-sm w-full">
                       <EditableInput
                         value={axis.name}
                         originalValue={originalConfig.complexityAxes[index]?.name || ""}
                         changeId={`complexity-axis-${index}-name`}
                         apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
+                        multiline={true}
+                        markdown={false}
                         on:change={(e) => updateAxisName(false, index, e.detail.value)}
                         on:saved={() => {
                           originalConfig = { ...editedConfig };
                         }}
                       />
-  </div>
+                    </div>
                   </td>
                   <td class="px-4 py-3">
                     <input

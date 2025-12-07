@@ -4,8 +4,8 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 12/20 tâches complétées
-- **Current**: Corrections typecheck API - WebAuthn challengeId (complété ✅)
+- **Progress**: 13/20 tâches complétées
+- **Current**: Feat multiline editing pour axes matrice (complété ✅)
 - **Next**: Corriger les erreurs typecheck WebAuthn et Session Manager restantes
 
 ## Commits
@@ -22,6 +22,8 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 11**: Feat dashboard folder title multiline et full width
 - [x] **Commit 12**: Fix createdAt NOT NULL - ajout .notNull() à toutes les colonnes et suppression workarounds
 - [x] **Commit 13**: Fix WebAuthn - suppression challengeId des réponses API (non conforme standard)
+- [x] **Commit 14**: Fix WebAuthn - utilisation directe de credentialResponse.id (Base64URLString)
+- [x] **Commit 15**: Feat multiline editing pour noms d'axes valeur/complexité dans matrice
 
 ## Bilan des vérifications (typecheck + lint)
 
