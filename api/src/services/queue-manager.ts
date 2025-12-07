@@ -1,12 +1,12 @@
 import { db } from '../db/client';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases, type JobQueueRow } from '../db/schema';
+import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 
@@ -585,22 +585,25 @@ export class QueueManager {
    * Obtenir le statut d'un job
    */
   async getJobStatus(jobId: string): Promise<Job | null> {
-    const result = await db.get(sql`
-      SELECT * FROM job_queue WHERE id = ${jobId}
-    `) as JobQueueRow | undefined;
+    const result = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
     
-    if (!result) return null;
+    if (!result || result.length === 0) return null;
     
+    const row = result[0];
     return {
-      id: result.id,
-      type: result.type as JobType,
-      data: JSON.parse(result.data) as JobData,
-      status: result.status as Job['status'],
-      // Note: Drizzle retourne createdAt, startedAt, completedAt (camelCase), pas created_at (snake_case)
-      createdAt: result.createdAt.toISOString(),
-      startedAt: result.startedAt || undefined,
-      completedAt: result.completedAt || undefined,
-      error: result.error || undefined
+      id: row.id,
+      type: row.type as JobType,
+      data: JSON.parse(row.data) as JobData,
+      status: row.status as Job['status'],
+      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
+      createdAt: row.createdAt.toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined
     };
   }
 
@@ -608,15 +611,17 @@ export class QueueManager {
    * Obtenir tous les jobs
    */
   async getAllJobs(): Promise<Job[]> {
-    const results = await db.all(sql`
-      SELECT * FROM job_queue ORDER BY created_at DESC
-    `) as JobQueueRow[];
+    const results = await db
+      .select()
+      .from(jobQueue)
+      .orderBy(desc(jobQueue.createdAt));
     
     return results.map((row) => ({
       id: row.id,
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
+      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,

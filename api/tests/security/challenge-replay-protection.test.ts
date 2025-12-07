@@ -37,7 +37,7 @@ describe('Challenge Replay Protection Tests', () => {
         const challengeData = await challengeResponse.json();
         
         // Use challenge string (base64url) as unique identifier
-        challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
+          challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
         
         await new Promise(resolve => setTimeout(resolve, 200));
       }
@@ -65,7 +65,7 @@ describe('Challenge Replay Protection Tests', () => {
         const challengeData = await challengeResponse.json();
         
         // Use challenge string (base64url) as unique identifier
-        challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
+          challengeIds.push(challengeData.options?.challenge || challengeData.challenge);
         
         await new Promise(resolve => setTimeout(resolve, 200));
       }

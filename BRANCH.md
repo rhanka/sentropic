@@ -4,8 +4,8 @@
 Implémenter les corrections mineures et améliorations identifiées dans TODO.md (lignes 47-101).
 
 ## Status
-- **Progress**: 15/20 tâches complétées
-- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI erreurs corrigées (0 erreur, 5 warnings) ✅
+- **Progress**: 16/20 tâches complétées
+- **Current**: Typecheck API complété (0 erreur) ✅, Typecheck UI erreurs corrigées (0 erreur, 5 warnings) ✅, Fix erreur 500 /queue/jobs ✅
 - **Next**: Corriger les warnings Svelte et lint UI
 
 ## Commits
@@ -25,6 +25,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 14**: Fix WebAuthn - utilisation directe de credentialResponse.id (Base64URLString)
 - [x] **Commit 15**: Feat multiline editing pour noms d'axes valeur/complexité dans matrice
 - [x] **Commit 16**: Fix unifier auto-save matrice et éviter fetch inutile lors modification poids
+- [x] **Commit 17**: Fix queue - utiliser Drizzle ORM au lieu de SQL brut pour getAllJobs/getJobStatus (corrige erreur 500)
 
 ## Bilan des vérifications (typecheck + lint)
 
