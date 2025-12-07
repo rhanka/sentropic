@@ -1,6 +1,6 @@
 import { db } from '../db/client';
 import { userSessions, users } from '../db/schema';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { SignJWT, jwtVerify } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
@@ -296,7 +296,7 @@ export async function listUserSessions(userId: string) {
     .where(
       and(
         eq(userSessions.userId, userId),
-        lt(now, userSessions.expiresAt) // Only active sessions
+        gt(userSessions.expiresAt, now) // expiresAt > now (active sessions)
       )
     );
 }
