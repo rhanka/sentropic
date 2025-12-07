@@ -29,7 +29,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 2 erreurs TypeScript (était 28, -26 corrigées ✅)
+- ❌ **typecheck-api** : 1 erreur TypeScript (était 28, -27 corrigées ✅)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
@@ -51,8 +51,9 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **credentialResponse.id** : Utilisation directe de `credentialResponse.id` (toujours string Base64URLString) dans register.ts et webauthn-authentication.ts
 - ✅ **credentialID/credentialPublicKey** : Utilisation directe dans webauthn-registration.ts
 - ✅ **attestationType** : Conversion 'indirect' → 'none' dans webauthn-registration.ts
+- ✅ **session-manager.ts:126** : Vérification explicite des types JWTPayload au lieu de double assertion
 
-### Erreurs restantes (2 erreurs)
+### Erreurs restantes (1 erreur)
 
 #### 1. WebAuthn (0 erreur) - ✅ COMPLÉTÉ
 - ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server`
@@ -62,8 +63,8 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **credentialID/credentialPublicKey** : Utilisation directe de `credentialID` (string) et `Buffer.from(credentialPublicKey)` (Uint8Array) dans webauthn-registration.ts:185,187
 - ✅ **attestationType** : Conversion de 'indirect' en 'none' dans webauthn-registration.ts:90 (la bibliothèque ne supporte pas 'indirect')
 
-#### 2. Session Manager (2 erreurs)
-- `src/services/session-manager.ts:126` : Conversion JWTPayload to SessionPayload (double assertion nécessaire via unknown)
+#### 2. Session Manager (1 erreur)
+- ✅ **session-manager.ts:126** : Vérification explicite des types JWTPayload (userId, sessionId, role) au lieu de double assertion
 - `src/services/session-manager.ts:289` : No overload matches (lt/gt avec timestamps - utiliser gt + sql\`NOW()\`)
 
 ### Plan de fix restant
@@ -113,12 +114,12 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Ordre de priorité
 
-1. **Typecheck API Session Manager** : Corriger les erreurs Session Manager (2 erreurs restantes)
+1. **Typecheck API Session Manager** : Corriger l'erreur Session Manager restante (1 erreur)
 2. **Typecheck UI** : Corriger les erreurs TypeScript dans matrice (bloquant CI)
 3. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API Session Manager** : ~30min (finir corrections gt() avec timestamps)
+- **Typecheck API Session Manager** : ~15min (corriger gt() avec timestamps)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)
-- **Total** : ~2.5h de travail
+- **Total** : ~2.25h de travail
