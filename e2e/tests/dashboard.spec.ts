@@ -218,8 +218,8 @@ test.describe('Dashboard', () => {
         await folderSelect.selectOption({ index: 0 });
         await page.waitForLoadState('networkidle');
         
-        // Chercher le titre éditable (EditableInput dans le h1)
-        const editableTitle = page.locator('h1 .editable-input, h1 input[type="text"]');
+        // Chercher le titre éditable (EditableInput dans le h1 - multiline avec textarea)
+        const editableTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
         if (await editableTitle.isVisible()) {
           await editableTitle.click();
           await expect(editableTitle).toBeFocused();
