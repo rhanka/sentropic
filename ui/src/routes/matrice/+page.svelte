@@ -2,13 +2,16 @@
   import { matrixStore, type MatrixAxis } from '$lib/stores/matrix';
   import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiGet, apiPut } from '$lib/utils/api';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
+
+  // Helper to create array of indices for iteration
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
@@ -636,10 +639,10 @@
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
-            {#each Array.from({ length: 3 }) as _}
+            {#each range(3) as i (i)}
               <span class="text-yellow-500 text-xl">★</span>
             {/each}
-            {#each Array.from({ length: 2 }) as _}
+            {#each range(2) as i (i)}
               <span class="text-gray-300 text-xl">★</span>
         {/each}
           </h2>
@@ -734,10 +737,10 @@
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
-            {#each Array.from({ length: 3 }) as _}
+            {#each range(3) as i (i)}
               <span class="text-gray-800 font-bold">X</span>
             {/each}
-            {#each Array.from({ length: 2 }) as _}
+            {#each range(2) as i (i)}
               <span class="text-gray-300 font-bold">X</span>
         {/each}
           </h2>
@@ -848,10 +851,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level }) as _}
+                      {#each range(threshold.level) as i (i)}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level }) as _}
+                      {#each range(5 - threshold.level) as i (i)}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
@@ -896,10 +899,10 @@
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
                     <div class="flex">
-                      {#each Array.from({ length: threshold.level }) as _}
+                      {#each range(threshold.level) as i (i)}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - threshold.level }) as _}
+                      {#each range(5 - threshold.level) as i (i)}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
@@ -980,25 +983,25 @@
             </tr>
           </thead>
           <tbody>
-            {#each Array.from({ length: 5 }) as _, level}
+            {#each range(5) as level}
               {@const levelNum = level + 1}
               <tr class="border-b">
                 <td class="py-3 align-top">
                   {#if isValueAxis}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum }) as _}
+                      {#each range(levelNum) as i (i)}
                         <span class="text-yellow-500 text-xl">★</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum }) as _}
+                      {#each range(5 - levelNum) as i (i)}
                         <span class="text-gray-300 text-xl">★</span>
                       {/each}
                     </div>
                   {:else}
                     <div class="flex">
-                      {#each Array.from({ length: levelNum }) as _}
+                      {#each range(levelNum) as i (i)}
                         <span class="text-gray-800 font-bold">X</span>
                       {/each}
-                      {#each Array.from({ length: 5 - levelNum }) as _}
+                      {#each range(5 - levelNum) as i (i)}
                         <span class="text-gray-300 font-bold">X</span>
                       {/each}
                     </div>
