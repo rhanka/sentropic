@@ -27,7 +27,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 
 ### Résultats
 - ✅ **lint-api** : 0 erreur
-- ❌ **typecheck-api** : 7 erreurs TypeScript (était 28, -21 corrigées ✅)
+- ❌ **typecheck-api** : 5 erreurs TypeScript (était 28, -23 corrigées ✅)
 - ❌ **typecheck-ui** : 13 erreurs + 5 warnings
 - ❌ **lint-ui** : 25 erreurs ESLint
 
@@ -46,14 +46,15 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - ✅ **nodemailer** : Installation `@types/nodemailer` (types officiels)
 - ✅ **createdAt NOT NULL** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (9 tables) et suppression de 5 workarounds dans le code
 - ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn) et nettoyage des tests
+- ✅ **credentialResponse.id** : Utilisation directe de `credentialResponse.id` (toujours string Base64URLString) dans register.ts et webauthn-authentication.ts
 
-### Erreurs restantes (7 erreurs)
+### Erreurs restantes (5 erreurs)
 
-#### 1. WebAuthn (5 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
+#### 1. WebAuthn (3 erreurs) - ⚠️ PARTIELLEMENT CORRIGÉ
 - ✅ **Imports corrigés** : Tous les imports `@simplewebauthn/types` remplacés par `@simplewebauthn/server`
 - ✅ **createdAt fix** : Ajout de `.notNull()` à toutes les colonnes `createdAt` (erreur register.ts:453 corrigée)
 - ✅ **challengeId supprimé** : Suppression de `challengeId` des réponses API (non conforme WebAuthn, non nécessaire)
-- `src/routes/auth/register.ts:248,250` : instanceof error et Uint8Array constructor
+- ✅ **credentialResponse.id** : Utilisation directe de `credentialResponse.id` (Base64URLString = string) dans register.ts:248,250 et webauthn-authentication.ts:128,130
 - `src/services/webauthn-registration.ts:90` : Type 'AttestationConveyancePreference' incompatible ('indirect' non supporté)
 - `src/services/webauthn-registration.ts:185,187` : instanceof error et Uint8Array constructor
 
@@ -114,8 +115,8 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 4. **Lint UI** : Nettoyer les variables non utilisées (non bloquant)
 
 ### Estimation
-- **Typecheck API WebAuthn** : ~1.5h (corrections de types, Uint8Array, AttestationConveyancePreference)
+- **Typecheck API WebAuthn** : ~1h (corrections de types, Uint8Array, AttestationConveyancePreference)
 - **Typecheck API Session Manager** : ~30min (finir corrections gt() avec timestamps)
 - **Typecheck UI** : ~1h (typage matrice, corrections event handlers)
 - **Lint UI** : ~30min (nettoyage variables)
-- **Total** : ~4h de travail
+- **Total** : ~3.5h de travail

@@ -123,11 +123,9 @@ export async function verifyWebAuthnAuthentication(
       credentialId: credential.id,
     }, 'Credential ID from response');
     
-    // Convert credential ID to base64url for database lookup
-    // credential.id est déjà une string base64url dans AuthenticationResponseJSON
-    const credentialIdBase64 = typeof credential.id === 'string' 
-      ? credential.id 
-      : Buffer.from(credential.id as unknown as Uint8Array).toString('base64url');
+    // credential.id is always a Base64URLString (string) in AuthenticationResponseJSON
+    // Same as RegistrationResponseJSON.id - see @simplewebauthn/server types
+    const credentialIdBase64 = credential.id;
     
     const [storedCredential] = await db
       .select({

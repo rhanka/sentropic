@@ -244,11 +244,9 @@ registerRouter.post('/verify', async (c) => {
     
     const challenge = clientData.challenge;
     
-    // Extract credential ID before verification to check if it already exists
-    const credentialIdArray = credentialResponse.id instanceof Uint8Array 
-      ? credentialResponse.id 
-      : new Uint8Array(Object.values(credentialResponse.id));
-    const credentialIdBase64 = Buffer.from(credentialIdArray).toString('base64url');
+    // credentialResponse.id is always a Base64URLString (string) in RegistrationResponseJSON
+    // Same as AuthenticationResponseJSON.id - see @simplewebauthn/server types
+    const credentialIdBase64 = credentialResponse.id;
     
     logger.debug({ 
       receivedChallenge: challenge.substring(0, 10) + '...',
