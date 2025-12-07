@@ -4,7 +4,7 @@ import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
-import type { UseCaseData } from '../types/usecase';
+import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
@@ -347,7 +347,7 @@ export class QueueManager {
         id: createId(),
         folderId: folderId,
         companyId: companyId || null,
-        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name et description)
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
         process: '',
         technologies: JSON.stringify([]),
@@ -516,7 +516,7 @@ export class QueueManager {
     // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(useCases)
       .set({
-        data: useCaseData as unknown as UseCaseData, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })

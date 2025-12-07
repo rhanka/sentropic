@@ -48,6 +48,14 @@ export type UseCaseData = {
 };
 
 /**
+ * Type helper pour JSONB compatible avec Drizzle ORM
+ * Permet d'éviter l'utilisation de "as unknown as UseCaseData" en fournissant un type explicite
+ * pour les colonnes JSONB qui acceptent n'importe quelle valeur JSON valide
+ */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type UseCaseDataJson = JsonValue & UseCaseData;
+
+/**
  * Cas d'usage complet avec données hydratées depuis la DB
  * Note: totalValueScore et totalComplexityScore sont calculés dynamiquement
  * Note: name et description sont maintenant dans data JSONB

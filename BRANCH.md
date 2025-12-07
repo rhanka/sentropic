@@ -26,6 +26,7 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
 - [x] **Commit 15**: Feat multiline editing pour noms d'axes valeur/complexité dans matrice
 - [x] **Commit 16**: Fix unifier auto-save matrice et éviter fetch inutile lors modification poids
 - [x] **Commit 17**: Fix queue - utiliser Drizzle ORM au lieu de SQL brut pour getAllJobs/getJobStatus (corrige erreur 500)
+- [x] **Commit 18**: Fix typecheck - remplacer `as unknown as UseCaseData` par `UseCaseDataJson` (type helper pour JSONB)
 
 ## Bilan des vérifications (typecheck + lint)
 
@@ -84,41 +85,46 @@ Implémenter les corrections mineures et améliorations identifiées dans TODO.m
    ```
    - **Solution appliquée** : Ajout de `transportsJson: webauthnCredentials.transportsJson` dans le `.select()` pour que TypeScript reconnaisse le type
 
-2. **`api/src/routes/api/use-cases.ts:332`**
+2. ✅ **`api/src/routes/api/use-cases.ts:332`** - **CORRIGÉ**
    ```typescript
-   data: data as unknown as UseCaseData
+   // AVANT : data: data as unknown as UseCaseData
+   // APRÈS : data: data as UseCaseDataJson
    ```
-   - **Problème** : `data` est `Partial<UseCaseData>` mais Drizzle attend `UseCaseData`
-   - **Solution** : Utiliser un type plus précis ou valider avec Zod avant insertion
+   - **Solution appliquée** : Création du type helper `UseCaseDataJson` dans `api/src/types/usecase.ts` pour compatibilité Drizzle JSONB
 
-3. **`api/src/routes/api/use-cases.ts:387`**
+3. ✅ **`api/src/routes/api/use-cases.ts:387`** - **CORRIGÉ**
    ```typescript
-   data: newData as unknown as UseCaseData
+   // AVANT : data: newData as unknown as UseCaseData
+   // APRÈS : data: newData as UseCaseDataJson
    ```
-   - **Problème** : Même problème que #2 (mise à jour)
-   - **Solution** : Même approche que #2
+   - **Solution appliquée** : Utilisation de `UseCaseDataJson` pour la mise à jour
 
-4. **`api/src/services/queue-manager.ts:350`**
+4. ✅ **`api/src/services/queue-manager.ts:350`** - **CORRIGÉ**
    ```typescript
-   data: useCaseData as unknown as UseCaseData
+   // AVANT : data: useCaseData as unknown as UseCaseData
+   // APRÈS : data: useCaseData as UseCaseDataJson
    ```
-   - **Problème** : Même problème que #2 (création via queue)
-   - **Solution** : Même approche que #2
+   - **Solution appliquée** : Utilisation de `UseCaseDataJson` pour la création via queue
 
-5. **`api/src/services/queue-manager.ts:519`**
+5. ✅ **`api/src/services/queue-manager.ts:519`** - **CORRIGÉ**
    ```typescript
-   data: useCaseData as unknown as UseCaseData
+   // AVANT : data: useCaseData as unknown as UseCaseData
+   // APRÈS : data: useCaseData as UseCaseDataJson
    ```
-   - **Problème** : Même problème que #2 (mise à jour via queue)
-   - **Solution** : Même approche que #2
+   - **Solution appliquée** : Utilisation de `UseCaseDataJson` pour la mise à jour via queue
 
 **Note** : Toutes ces occurrences concernent soit :
 - ✅ L'accès à `transportsJson` dans le schéma Drizzle (type inféré incomplet) - **CORRIGÉ**
-- La conversion de `Partial<UseCaseData>` vers `UseCaseData` pour JSONB (4 occurrences restantes)
+- ✅ La conversion de `Partial<UseCaseData>` vers `UseCaseData` pour JSONB (4 occurrences) - **CORRIGÉ**
 
-**Recommandation** : Corriger les occurrences restantes en utilisant des types guards, des validations Zod, ou en corrigeant les types Drizzle si possible.
+**Solution unifiée** : Création du type helper `UseCaseDataJson` dans `api/src/types/usecase.ts` :
+```typescript
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type UseCaseDataJson = JsonValue & UseCaseData;
+```
+Ce type permet d'éviter `as unknown as` en fournissant un type explicite compatible avec Drizzle JSONB.
 
-**Progrès** : 1/5 corrigé (20%)
+**Progrès** : 5/5 corrigé (100%) ✅
 
 ### Mauvaises pratiques à corriger : `as any` (assertion explicite)
 
