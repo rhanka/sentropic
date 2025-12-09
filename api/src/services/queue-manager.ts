@@ -9,6 +9,7 @@ import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
+import { generateStreamId } from './stream-service';
 
 export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
 
@@ -206,7 +207,7 @@ export class QueueManager {
       // Traiter selon le type
       switch (jobType) {
         case 'company_enrich':
-          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, controller.signal);
+          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, jobId, controller.signal);
           break;
         case 'usecase_list':
           await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
@@ -246,11 +247,16 @@ export class QueueManager {
   /**
    * Worker pour l'enrichissement d'entreprise
    */
-  private async processCompanyEnrich(data: CompanyEnrichJobData, signal?: AbortSignal): Promise<void> {
+  private async processCompanyEnrich(data: CompanyEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
     const { companyId, companyName, model } = data;
     
-    // Enrichir l'entreprise
-    const enrichedData = await enrichCompany(companyName, model, signal);
+    // Générer un streamId pour le streaming
+    // Pour les générations classiques via queue : stream_id = job_id + timestamp
+    const streamId = generateStreamId('company_info', jobId);
+    
+    // Enrichir l'entreprise avec streaming
+    // enrichCompany utilise le streaming si streamId est fourni
+    const enrichedData = await enrichCompany(companyName, model, signal, streamId);
     
     // Sérialiser les champs qui peuvent être des arrays en JSON strings
     const serializedData = {

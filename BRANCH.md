@@ -22,43 +22,115 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [x] Appliquer les migrations (`make db-migrate`)
 - [x] Vérifier le schéma - toutes les tables créées avec succès
 
-### Phase 2 : API Backend - Endpoints de base
+### Phase 2 : API Backend - Architecture streaming et chat
+
+#### Phase 2A - Streaming complet pour génération d'entreprise (POC)
+**Objectif** : Implémenter le streaming complet (OpenAI + DB + NOTIFY) sur un seul cas simple (entreprise) pour valider l'architecture avant généralisation.
+
+**Flux actuel** :
+- `POST /api/v1/companies/ai-enrich` → appelle directement `enrichCompany` (sans queue)
+- Queue `processCompanyEnrich` → appelle `enrichCompany` puis met à jour DB
+
+**Flux cible** :
+- Même comportement final (résultat JSON parsé, DB mise à jour)
+- **+ Streaming** : événements écrits dans `chat_stream_events` pendant l'exécution
+- **+ NOTIFY** : PostgreSQL NOTIFY pour temps réel
+- **+ Queue compatible** : la queue attend toujours le résultat final de `enrichCompany`
+
+**Tâches** :
+- [ ] **2A.1 - Couche OpenAI Streaming** :
+  - Créer `callOpenAIStream` dans `api/src/services/openai.ts` :
+    - Retourne `AsyncIterable<StreamEvent>` où `StreamEvent` = `{ type: 'reasoning_delta' | 'content_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call_result' | 'done', data: any }`
+    - Gère reasoning, content, tool_calls en streaming
+    - Mutualise les valeurs par défaut du modèle (via `settingsService.getAISettings().defaultModel`)
+    - Garde `callOpenAI` pour compatibilité (générations classiques actuelles)
+  
+- [ ] **2A.2 - Service Stream Partagé (base)** :
+  - Créer `api/src/services/stream-service.ts` :
+    - Fonction `writeStreamEvent(streamId, eventType, data, sequence)` :
+      - Écrit dans `chat_stream_events` (avec `message_id=null` pour générations classiques)
+      - PostgreSQL NOTIFY avec payload minimal (`stream_id`, `sequence`)
+      - Gestion des séquences (auto-incrément par `stream_id`)
+    - Fonction `generateStreamId(promptId?, jobId?)` : génère `stream_id` unique
+      - Pour générations classiques : `prompt_id` + timestamp (ou `job_id` si disponible)
+      - Pour chat : `message_id` (sera utilisé plus tard)
+  
+- [ ] **2A.3 - Adapter enrichCompany pour streaming** :
+  - Modifier `api/src/services/context-company.ts` :
+    - `enrichCompany` accepte un paramètre optionnel `streamId?: string`
+    - Utilise `callOpenAIStream` au lieu de `executeWithTools` → `callOpenAI`
+    - **Collecte le résultat final** : agrège tous les `content_delta` pour reconstruire le JSON complet
+    - **Écrit les événements** : appelle `writeStreamEvent` pour chaque événement de streaming
+    - **Retourne le résultat final** : parse le JSON comme avant (compatibilité)
+    - Gère les tool calls (web_search, web_extract) en streaming
+  
+- [ ] **2A.4 - Intégration queue** :
+  - Modifier `queue-manager.ts` → `processCompanyEnrich` :
+    - Génère un `streamId` (ex: `company_enrich_${jobId}_${timestamp}`)
+    - Passe le `streamId` à `enrichCompany`
+    - La queue attend toujours le résultat final (comportement inchangé)
+    - Met à jour la DB comme avant
+  
+- [ ] **2A.5 - Endpoint SSE pour générations classiques** (optionnel pour cette phase) :
+  - Créer `GET /api/v1/stream/:stream_id` (SSE) :
+    - Lecture des événements depuis `chat_stream_events`
+    - Support du paramètre `?since=seq` pour rehydratation
+    - Abonnement PostgreSQL NOTIFY pour temps réel
+  - **Note** : Cet endpoint servira aussi pour le chat plus tard
+
+- [ ] **2A.6 - Tests et validation** :
+  - Test unitaire : `callOpenAIStream` retourne bien un AsyncIterable
+  - Test unitaire : `writeStreamEvent` écrit bien en DB et NOTIFY
+  - Test intégration : `enrichCompany` avec streaming retourne le même résultat qu'avant
+  - Test intégration : événements écrits dans `chat_stream_events` avec `message_id=null`
+  - Test queue : `processCompanyEnrich` fonctionne toujours (résultat final + DB mise à jour)
+  - Test E2E : enrichissement d'entreprise fonctionne (endpoint `/ai-enrich` et via queue)
+
+**Critères de validation Phase 2A** :
+- ✅ Les générations d'entreprise fonctionnent toujours (comportement final identique)
+- ✅ Les événements de streaming sont écrits dans `chat_stream_events`
+- ✅ PostgreSQL NOTIFY fonctionne
+- ✅ La queue continue de fonctionner normalement
+- ✅ Un seul test UAT complet suffit
+
+#### Phase 2B - Généralisation aux autres générations classiques
+- [ ] Adapter `generateUseCaseList` pour utiliser le streaming
+- [ ] Adapter `generateUseCaseDetail` pour utiliser le streaming
+- [ ] Adapter `generateExecutiveSummary` pour utiliser le streaming
+- [ ] Tous utilisent le même `stream-service.ts` (méthodes partagées)
+- [ ] Tests de régression sur tous les cas
+
+#### Phase 2C - Service Chat
+- [ ] Créer `api/src/services/chat-service.ts` :
+  - Gestion des sessions (création, récupération, mise à jour)
+  - Création de messages (user et assistant)
+  - Intégration avec streaming (direct, SANS queue)
+  - Utilisation du modèle par défaut depuis settings
+
+#### Phase 2D - Endpoints Chat
 - [ ] Créer le router `/api/v1/chat` dans `api/src/routes/api/chat.ts`
 - [ ] Implémenter `POST /api/v1/chat/messages` :
   - Création de session si nécessaire
   - Enregistrement du message utilisateur
-  - Appel OpenAI avec streaming
+  - Appel OpenAI streaming (direct, sans queue)
   - Enregistrement du message assistant avec reasoning
-- [ ] Implémenter `GET /api/v1/chat/stream/:message_id` (SSE) :
+- [ ] Implémenter `GET /api/v1/chat/stream/:stream_id` (SSE) :
+  - Réutilise l'endpoint créé en 2A.5 ou crée un endpoint dédié
   - Lecture des événements depuis `chat_stream_events`
   - Support du paramètre `?since=seq` pour rehydratation
-- [ ] Implémenter le tool `update_description` :
-  - Support pour `usecase` uniquement (folder sera ajouté ultérieurement)
-  - Écriture dans `context_modification_history`
-  - Snapshots avant/après dans `chat_contexts`
-  - Feature d'annulation du dernier changement au niveau de l'objet
+  - Abonnement PostgreSQL NOTIFY pour temps réel
 - [ ] Monter le router dans `api/src/routes/api/index.ts`
 - [ ] Mettre à jour OpenAPI (`api/src/openapi/`)
 
-### Phase 3 : Service de streaming et queue
-- [ ] Créer `api/src/services/chat-service.ts` :
-  - Gestion des sessions
-  - Création de messages
-  - Intégration avec OpenAI streaming
-  - Utilisation du modèle par défaut depuis `settingsService.getAISettings().defaultModel` (gpt-4.1-nano par défaut)
-- [ ] Créer `api/src/services/stream-service.ts` :
-  - Écriture dans `chat_stream_events`
-  - PostgreSQL NOTIFY pour temps réel
-  - Agrégation des deltas (reasoning/content)
-- [ ] Intégrer avec la queue existante (`job_queue`) :
-  - Priorité différente pour générations chat
-  - Support de l'annulation via `job_id`
+#### Phase 2E - Tool Service
 - [ ] Créer `api/src/services/tool-service.ts` :
-  - Exécution du tool `update_description`
+  - Exécution du tool `update_description` (usecase uniquement)
   - Validation des modifications
   - Écriture dans `context_modification_history`
+  - Snapshots avant/après dans `chat_contexts`
+  - Feature d'annulation du dernier changement au niveau de l'objet
 
-### Phase 4 : UI SvelteKit - Composants de base
+### Phase 3 : UI SvelteKit - Composants de base
 - [ ] Créer le module `ui/src/lib/chat-stream/` :
   - `createStreamController` (store Svelte pour agrégation)
   - Types d'événements (reasoning_delta, content_delta, tool_call_*, status, error, done)
@@ -78,7 +150,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Gestion des reconnexions
   - Resync depuis la base si perte d'événements
 
-### Phase 5 : Intégration UI dans les vues existantes
+### Phase 4 : Intégration UI dans les vues existantes
 - [ ] Créer un composant popup chat similaire à `QueueMonitor.svelte` :
   - Popup flottant en bas à droite (ou intégré dans le même conteneur que la queue)
   - La queue reste en accordéon dans le même conteneur
@@ -91,7 +163,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [ ] Afficher la vue avant/après (champ description uniquement)
 - [ ] Note : Le parcours folder sera ajouté ultérieurement
 
-### Phase 6 : Tests
+### Phase 5 : Tests
 - [ ] Tests unitaires API :
   - Agrégation SSE (deltas reasoning/content)
   - Application de deltas
@@ -107,7 +179,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Vérification historique visible
   - Test de l'annulation du dernier changement
 
-### Phase 7 : Documentation et finalisation
+### Phase 6 : Documentation et finalisation
 - [ ] Mettre à jour la documentation OpenAPI
 - [ ] Vérifier que tous les tests passent (`make test`)
 - [ ] Vérifier le build (`make build`)
@@ -121,6 +193,38 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - **Interface utilisateur** : Popup flottant similaire à `QueueMonitor.svelte`, avec la queue en accordéon dans le même conteneur
 - **Validation** : Pas de confirmation intermédiaire. Feature d'annulation du dernier changement au niveau de l'objet (à terme à la maille du sous-objet `data.description`)
 
+## Architecture & Incohérences identifiées avec le plan initial
+
+### Incohérences identifiées
+
+1. **Phase 2 vs Phase 3** : Le plan initial met "Service de streaming" en Phase 3, mais la couche streaming doit être prête AVANT les endpoints chat (Phase 2), car ils en dépendent.
+
+2. **Queue pour chat** : Le plan mentionne "Intégrer avec la queue existante" pour le chat, mais **le chat NE passe PAS par la queue** (générations classiques uniquement via queue).
+
+3. **Architecture streaming** : Il faut créer une **couche streaming partagée** qui sert :
+   - Les générations classiques (via queue) - qui deviendront plus transparentes pour tools/réflexion
+   - Le chat (direct, sans queue)
+   - Méthodes partagées pour éviter la duplication
+
+### Approche progressive validée
+
+**Phase 2A - POC sur génération d'entreprise** :
+- Cas le plus simple (pas de tool calls complexes, pas de multi-étapes)
+- Permet de valider l'architecture complète (streaming + DB + NOTIFY + queue)
+- **Un seul test UAT complet** suffit avant généralisation
+- Généralisation ensuite (Phase 2B) aux autres générations classiques
+
+**Gestion de la queue** :
+- La queue continue de fonctionner normalement
+- Elle attend toujours le résultat final de `enrichCompany` (comportement inchangé)
+- Le streaming est transparent : événements écrits pendant l'exécution, résultat final collecté et retourné
+
+**Récupération du résultat final** :
+- `enrichCompany` agrège tous les `content_delta` pour reconstruire le JSON complet
+- Parse le JSON comme avant (compatibilité totale)
+- Retourne le résultat final (comme avant)
+- La queue met à jour la DB avec ce résultat (comportement inchangé)
+
 ## Commits & Progress
 
 - [x] **Phase 1** : Ajout des tables chat dans le schéma Drizzle
@@ -130,9 +234,9 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Vérification : toutes les tables présentes en base
 
 ## Status
-- **Progress**: 1/7 phases complétées
+- **Progress**: 1/6 phases complétées
 - **Current**: Phase 1 terminée ✅
-- **Next**: Phase 2 - API Backend - Endpoints de base
+- **Next**: Phase 2A - Streaming complet pour génération d'entreprise (POC)
 
 ## Scope
 - **API** : Nouveaux endpoints chat, streaming SSE, tools
@@ -147,4 +251,3 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - Modèle de données : `spec/SPEC_CHATBOT.md` lignes 228-426
 - Architecture streaming : `spec/SPEC_CHATBOT.md` lignes 119-138
 - Composants UI : `spec/SPEC_CHATBOT.md` lignes 146-203
-
