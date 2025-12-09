@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const companies = pgTable('companies', {
@@ -172,9 +172,106 @@ export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
+// Chatbot Tables (Lot A)
+export const chatSessions = pgTable('chat_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  primaryContextType: text('primary_context_type'), // 'company' | 'folder' | 'usecase' | 'executive_summary'
+  primaryContextId: text('primary_context_id'),
+  title: text('title'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
+}, (table) => ({
+  userIdIdx: index('chat_sessions_user_id_idx').on(table.userId),
+  primaryContextIdx: index('chat_sessions_primary_context_idx').on(table.primaryContextType, table.primaryContextId),
+}));
+
+export const chatMessages = pgTable('chat_messages', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'assistant' | 'system' | 'tool'
+  content: text('content'), // nullable for tool calls
+  toolCalls: jsonb('tool_calls'), // array of tool calls OpenAI
+  toolCallId: text('tool_call_id'), // ID du tool call si ce message est un résultat d'outil
+  reasoning: text('reasoning'), // Tokens de reasoning (pour modèles avec reasoning)
+  model: text('model'), // Modèle OpenAI utilisé
+  promptId: text('prompt_id'), // ID du prompt utilisé (nullable pour sessions informelles)
+  promptVersionId: text('prompt_version_id'), // Version précise du prompt (nullable pour sessions informelles)
+  sequence: integer('sequence').notNull(), // Ordre du message dans la conversation
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  sessionIdIdx: index('chat_messages_session_id_idx').on(table.sessionId),
+  sequenceIdx: index('chat_messages_sequence_idx').on(table.sessionId, table.sequence),
+  promptVersionIdIdx: index('chat_messages_prompt_version_id_idx').on(table.promptVersionId),
+}));
+
+export const chatContexts = pgTable('chat_contexts', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: 'cascade' }),
+  contextType: text('context_type').notNull(), // 'company' | 'folder' | 'usecase' | 'executive_summary'
+  contextId: text('context_id').notNull(), // ID de l'objet modifié
+  snapshotBefore: jsonb('snapshot_before'), // État de l'objet avant modification
+  snapshotAfter: jsonb('snapshot_after'), // État de l'objet après modification
+  modifications: jsonb('modifications'), // Détail des champs modifiés et leurs valeurs
+  modifiedAt: timestamp('modified_at', { withTimezone: false }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  sessionIdIdx: index('chat_contexts_session_id_idx').on(table.sessionId),
+  contextIdx: index('chat_contexts_context_idx').on(table.contextType, table.contextId),
+  contextTypeIdIdx: index('chat_contexts_context_type_id_idx').on(table.contextType, table.contextId),
+}));
+
+export const chatStreamEvents = pgTable('chat_stream_events', {
+  id: text('id').primaryKey(),
+  messageId: text('message_id').references(() => chatMessages.id, { onDelete: 'cascade' }), // nullable pour appels structurés
+  streamId: text('stream_id').notNull(), // Identifiant du stream
+  eventType: text('event_type').notNull(), // 'content_delta' | 'reasoning_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call_result' | 'status' | 'error' | 'done'
+  data: jsonb('data').notNull(), // Données de l'événement
+  sequence: integer('sequence').notNull(), // Ordre des événements pour ce stream
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  messageIdIdx: index('chat_stream_events_message_id_idx').on(table.messageId),
+  streamIdIdx: index('chat_stream_events_stream_id_idx').on(table.streamId),
+  sequenceIdx: index('chat_stream_events_sequence_idx').on(table.streamId, table.sequence),
+  streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
+}));
+
+export const contextModificationHistory = pgTable('context_modification_history', {
+  id: text('id').primaryKey(),
+  contextType: text('context_type').notNull(), // 'company' | 'folder' | 'usecase' | 'executive_summary'
+  contextId: text('context_id').notNull(), // ID de l'objet modifié
+  sessionId: text('session_id').references(() => chatSessions.id, { onDelete: 'set null' }), // nullable si modification non liée à une session
+  messageId: text('message_id').references(() => chatMessages.id, { onDelete: 'set null' }), // nullable
+  field: text('field').notNull(), // Nom du champ modifié (ex: 'name', 'description', 'data.description')
+  oldValue: jsonb('old_value'), // Ancienne valeur
+  newValue: jsonb('new_value'), // Nouvelle valeur
+  toolCallId: text('tool_call_id'), // ID du tool call si modification via tool
+  promptId: text('prompt_id'), // ID du prompt utilisé (obligatoire pour appels structurés, nullable pour sessions informelles)
+  promptType: text('prompt_type'), // Type de prompt pour les appels structurés (nullable pour sessions informelles)
+  promptVersionId: text('prompt_version_id'), // Version exacte du prompt (obligatoire pour appels structurés, nullable pour sessions informelles)
+  jobId: text('job_id').references(() => jobQueue.id, { onDelete: 'set null' }), // Job de génération (appels structurés)
+  sequence: integer('sequence').notNull(), // Ordre des modifications pour cet objet
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  contextIdx: index('context_modification_history_context_idx').on(table.contextType, table.contextId),
+  sessionIdIdx: index('context_modification_history_session_id_idx').on(table.sessionId),
+  sequenceIdx: index('context_modification_history_sequence_idx').on(table.contextType, table.contextId, table.sequence),
+}));
+
 export type UserRow = typeof users.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type UserSessionRow = typeof userSessions.$inferSelect;
 export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
 export type MagicLinkRow = typeof magicLinks.$inferSelect;
 export type EmailVerificationCodeRow = typeof emailVerificationCodes.$inferSelect;
+export type ChatSessionRow = typeof chatSessions.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type ChatContextRow = typeof chatContexts.$inferSelect;
+export type ChatStreamEventRow = typeof chatStreamEvents.$inferSelect;
+export type ContextModificationHistoryRow = typeof contextModificationHistory.$inferSelect;
