@@ -1,9 +1,3 @@
-# TODO
-
-- [ ] Lot A — Mise à jour ciblée d’un objet (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot B — Tool-calls parallèles et appels structurés (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
 # TODO - Top AI Ideas
 
 ## Check-list de mise en place
@@ -37,6 +31,10 @@
 - [x] Séparer dans la génération la description en: description (plus courte), problème, solution
 - [x] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
+  - [ ] Lot A — Mise à jour ciblée d’un objet (cf. spec/SPEC_CHATBOT.md)
+  - [ ] Lot B — Tool-calls parallèles et appels structurés (cf. spec/SPEC_CHATBOT.md)
+  - [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
+  - [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
