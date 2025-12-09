@@ -1,3 +1,9 @@
+# TODO
+
+- [ ] Lot A — Mise à jour ciblée d’un objet (cf. spec/SPEC_CHATBOT.md)
+- [ ] Lot B — Tool-calls parallèles et appels structurés (cf. spec/SPEC_CHATBOT.md)
+- [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
+- [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
 # TODO - Top AI Ideas
 
 ## Check-list de mise en place
