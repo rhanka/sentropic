@@ -288,7 +288,12 @@ export async function* callOpenAIResponseStream(
     model: selectedModel,
     stream: true,
     input,
-    ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+    // On demande un résumé de reasoning (streamable) par défaut.
+    // Vérifié: n'explose pas avec gpt-4.1-nano (la plateforme ignore/autorise le paramètre).
+    reasoning: {
+      summary: 'auto',
+      ...(reasoningEffort ? { effort: reasoningEffort } : {})
+    } as any,
     ...(responseTools ? { tools: responseTools as any } : {}),
     ...(textConfig ? { text: textConfig as any } : {})
   };
@@ -317,6 +322,16 @@ export async function* callOpenAIResponseStream(
         case 'response.reasoning_text.delta': {
           const delta = (chunk as any).delta as string | undefined;
           if (delta) yield { type: 'reasoning_delta', data: { delta } };
+          break;
+        }
+        case 'response.reasoning_summary_text.delta': {
+          const delta = (chunk as any).delta as string | undefined;
+          if (delta) yield { type: 'reasoning_delta', data: { delta, kind: 'summary' } };
+          break;
+        }
+        case 'response.reasoning_summary_text.done': {
+          const text = (chunk as any).text as string | undefined;
+          if (text) yield { type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } };
           break;
         }
         case 'response.output_text.delta': {
