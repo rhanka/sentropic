@@ -18,6 +18,7 @@ export interface CallOpenAIResponseOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   model?: string;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed';
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   // Shorthand (mode JSON "legacy") — utile pour conserver l'API existante
   responseFormat?: 'json_object';
@@ -235,7 +236,7 @@ export async function* callOpenAIStream(
 export async function* callOpenAIResponseStream(
   options: CallOpenAIResponseOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { messages, model, reasoningEffort, tools, responseFormat, structuredOutput, signal } = options;
+  const { messages, model, reasoningEffort, reasoningSummary, tools, responseFormat, structuredOutput, signal } = options;
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -291,7 +292,7 @@ export async function* callOpenAIResponseStream(
     // On demande un résumé de reasoning (streamable) par défaut.
     // Vérifié: n'explose pas avec gpt-4.1-nano (la plateforme ignore/autorise le paramètre).
     reasoning: {
-      summary: 'auto',
+      summary: reasoningSummary ?? 'auto',
       ...(reasoningEffort ? { effort: reasoningEffort } : {})
     } as any,
     ...(responseTools ? { tools: responseTools as any } : {}),

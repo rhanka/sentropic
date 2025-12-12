@@ -186,6 +186,7 @@ export const enrichCompanyStream = async (
     model,
     tools: [webSearchTool, webExtractTool],
     responseFormat: 'json_object',
+    reasoningSummary: 'detailed',
     signal
   })) {
     if (!event || !event.type) {
@@ -353,6 +354,7 @@ export const enrichCompanyStream = async (
       messages: followUpMessages,
       model,
       responseFormat: 'json_object',
+      reasoningSummary: 'detailed',
       signal
     })) {
       if (!event || !event.type) continue;
