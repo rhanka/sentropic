@@ -1,5 +1,5 @@
 import { executeWithTools } from './tools';
-import { callOpenAIStream, type StreamEvent } from './openai';
+import { callOpenAIResponseStream, type StreamEvent } from './openai';
 import { writeStreamEvent, getNextSequence, generateStreamId } from './stream-service';
 import { searchWeb, extractUrlContent, type SearchResult, type ExtractResult } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
@@ -49,6 +49,8 @@ export const enrichCompany = async (
 ): Promise<CompanyData> => {
   // Si streamId est fourni, utiliser la version streaming
   if (streamId) {
+    // enrichCompanyStream attend : (companyName, streamId, model, signal)
+    // enrichCompany reçoit : (companyName, model, signal, streamId)
     return enrichCompanyStream(companyName, streamId, model, signal);
   }
 
@@ -179,48 +181,61 @@ export const enrichCompanyStream = async (
   let streamDone = false;
 
   // Premier tour : appel avec tools
-  for await (const event of callOpenAIStream({
+  for await (const event of callOpenAIResponseStream({
     messages,
     model,
     tools: [webSearchTool, webExtractTool],
-    toolChoice: "required",
     responseFormat: 'json_object',
     signal
   })) {
+    if (!event || !event.type) {
+      continue;
+    }
+    const data = event.data || {};
+
+    // DEBUG TEMP (à retirer après diagnostic)
+    if (!data || (!data.delta && !data.tool_call_id && event.type !== 'status' && event.type !== 'done')) {
+      console.log('[DEBUG enrichCompanyStream] event', {
+        type: event.type,
+        dataKeys: data ? Object.keys(data) : [],
+        rawEvent: event
+      });
+    }
+
     sequence = await getNextSequence(finalStreamId);
     
     // Écrire l'événement dans la DB
-    await writeStreamEvent(finalStreamId, event.type, event.data, sequence);
+    await writeStreamEvent(finalStreamId, event.type, data, sequence);
 
     // Collecter le contenu pour le résultat final
     if (event.type === 'content_delta') {
-      accumulatedContent += event.data.delta || '';
+      accumulatedContent += data.delta || '';
     }
 
     // Collecter les tool calls
     if (event.type === 'tool_call_start') {
-      const existingIndex = toolCalls.findIndex(tc => tc.id === event.data.tool_call_id);
+      const existingIndex = toolCalls.findIndex(tc => tc.id === data.tool_call_id);
       if (existingIndex === -1) {
         toolCalls.push({
-          id: event.data.tool_call_id,
-          name: event.data.name,
-          args: event.data.args || ''
+          id: data.tool_call_id || '',
+          name: data.name || '',
+          args: data.args || ''
         });
       } else {
         // Mettre à jour le tool call existant
-        toolCalls[existingIndex].name = event.data.name;
-        toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (event.data.args || '');
+        toolCalls[existingIndex].name = data.name || toolCalls[existingIndex].name;
+        toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (data.args || '');
       }
     } else if (event.type === 'tool_call_delta') {
-      const toolCall = toolCalls.find(tc => tc.id === event.data.tool_call_id);
+      const toolCall = toolCalls.find(tc => tc.id === data.tool_call_id);
       if (toolCall) {
-        toolCall.args += event.data.delta || '';
+        toolCall.args += data.delta || '';
       } else {
         // Tool call non encore créé, le créer (cas où on reçoit d'abord un delta)
         toolCalls.push({
-          id: event.data.tool_call_id,
+          id: data.tool_call_id || '',
           name: '',
-          args: event.data.delta || ''
+          args: data.delta || ''
         });
       }
     }
@@ -232,7 +247,7 @@ export const enrichCompanyStream = async (
 
     // Si erreur, arrêter
     if (event.type === 'error') {
-      throw new Error(event.data.message || 'Erreur lors du streaming');
+      throw new Error(data.message || 'Erreur lors du streaming');
     }
   }
 
@@ -334,25 +349,36 @@ export const enrichCompanyStream = async (
     ];
 
     // Deuxième appel (streaming) avec les résultats
-    for await (const event of callOpenAIStream({
+    for await (const event of callOpenAIResponseStream({
       messages: followUpMessages,
       model,
       responseFormat: 'json_object',
       signal
     })) {
+      if (!event || !event.type) continue;
+      const data = event.data || {};
+
+      // DEBUG TEMP (à retirer après diagnostic)
+      if (!data || (!data.delta && !data.tool_call_id && event.type !== 'status' && event.type !== 'done')) {
+        console.log('[DEBUG enrichCompanyStream followUp] event', {
+          type: event.type,
+          dataKeys: data ? Object.keys(data) : [],
+          rawEvent: event
+        });
+      }
       sequence = await getNextSequence(finalStreamId);
       
       // Écrire l'événement dans la DB
-      await writeStreamEvent(finalStreamId, event.type, event.data, sequence);
+      await writeStreamEvent(finalStreamId, event.type, data, sequence);
 
       // Collecter le contenu pour le résultat final
       if (event.type === 'content_delta') {
-        accumulatedContent += event.data.delta || '';
+        accumulatedContent += data.delta || '';
       }
 
       // Si erreur, arrêter
       if (event.type === 'error') {
-        throw new Error(event.data.message || 'Erreur lors du streaming');
+        throw new Error(data.message || 'Erreur lors du streaming');
       }
     }
   }
@@ -367,7 +393,29 @@ export const enrichCompanyStream = async (
   }
 
   try {
-    const parsedData = JSON.parse(accumulatedContent);
+    const cleaned = accumulatedContent
+      .trim()
+      // retirer d'éventuels code fences
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+
+    const tryParse = (s: string) => JSON.parse(s);
+
+    let parsedData: any;
+    try {
+      parsedData = tryParse(cleaned);
+    } catch {
+      // Fallback: extraire le premier objet JSON plausible (au cas où du texte parasite s'ajoute)
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        parsedData = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
+      } else {
+        throw new Error('No JSON object boundaries found');
+      }
+    }
     return parsedData;
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);

@@ -33,6 +33,7 @@
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
   - [ ] Lot A — Mise à jour ciblée d’un objet (cf. spec/SPEC_CHATBOT.md)
   - [ ] Lot B — Tool-calls parallèles et appels structurés (cf. spec/SPEC_CHATBOT.md)
+  - [ ] Lot B2 — Contexte documentaire (ingestion + résumé + consultation) (cf. spec/SPEC_CHATBOT.md)
   - [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
   - [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)

@@ -109,6 +109,13 @@
           - Retry automatique avec correction pour les erreurs récupérables (ex: JSON mal formé)
           - Message d'erreur clair pour l'utilisateur avec suggestion de correction
           - Logging de toutes les erreurs pour analyse et amélioration
+- [ ] **CU-022 : Contexte documentaire attaché aux objets**
+  - Attacher un ou plusieurs documents à une entreprise, un dossier ou un cas d'usage
+  - Formats acceptés : pdf, docx, pptx ; limite 50 Mo ; stockage S3 (MinIO en local)
+  - À l’upload, lancement automatique d’un job de résumé (0,1k token/page, langue configurable, défaut FR) avec prompt versionné
+  - L’IA est notifiée à l’upload pour accusé de réception ; le traitement cas d’usage ne démarre qu’après disponibilité du résumé
+  - Consultation des métadonnées et du résumé ; pas de viewer riche (download/preview simple)
+  - Options de scan (antivirus/Cloudflare/module dédié) à valider durant le dev
 - [ ] Modéliser les données de session live / contexte mgt (objet) / historique
 - [ ] Modéliser le streaming via la lib openai / exposition SSE (websocket optionnelle)
   - [ ] L'IA et ses étapes de raisonnement et appels aux tools doivent être prises en compte à toutes les étapes
@@ -236,6 +243,11 @@ Le modèle de données pour le chatbot permet de :
 - Tracker les modifications d'objets via les sessions
 - Permettre le rejeu de sessions
 - Streamer les réponses en temps réel via PostgreSQL LISTEN/NOTIFY
+
+#### Tables documents contextuels (à ajouter)
+- `context_documents` : id, context_type (company|folder|usecase), context_id, filename, mime_type, size_bytes, storage_key (S3/MinIO), status (`uploaded|processing|ready|failed`), summary, summary_lang, prompt_id/prompt_version_id pour le résumé, created_at/updated_at, version.
+- `context_document_versions` (optionnel) : historique des fichiers/résumés (document_id, version, summary, storage_key, created_at).
+- Traçabilité : events `document_added` / `document_summarized` dans `context_modification_history` (avec prompt_version_id du résumé et job_id du résumé).
 
 ### Diagramme ERD
 
@@ -764,6 +776,13 @@ Les prompts sont stockés dans la table `prompts` (avec historique dans `prompt_
 6. **Notification temps réel** → PostgreSQL NOTIFY → Client via SSE (même mécanisme)
 7. **Historique** → `context_modification_history` pour voir toutes les modifications (appels structurés + sessions)
 
+#### Documents contextuels
+1. **Upload** → POST `/api/documents` (context_type/id, fichier) → stockage S3/MinIO, enregistrement `context_documents` (status=uploaded)
+2. **Résumé auto** → Job queue “document_summary” lancé immédiatement (prompt résumé versionné, 0,1k token/page, langue configurable, défaut FR) → update `context_documents` (status=processing→ready/failed, summary, prompt_version_id, job_id) + event `document_summarized`
+3. **Consultation** → GET `/api/documents?context_type=&context_id=` + GET `/api/documents/:id` (métadonnées + résumé) ; pas de viewer riche (download simple via GET `/api/documents/:id/content` si nécessaire)
+4. **Notifications** → l’IA est notifiée à l’upload pour accusé de réception ; le traitement cas d’usage qui dépend du doc attend le statut ready (résumé disponible)
+5. **Traçabilité** → `context_modification_history` events `document_added` / `document_summarized` avec `prompt_version_id` et `job_id`
+
 ## Étude d’impact technique (ancrage API/UI/DB/queue)
 
 - Base de données :
@@ -773,13 +792,15 @@ Les prompts sont stockés dans la table `prompts` (avec historique dans `prompt_
 
 - Queue :
   - Implémentation existante : `api/src/routes/api/queue.ts`, services queue dans `api/src/services/` (à identifier), table `job_queue` (schema). Intégration : `structured_generation_runs` doit référencer `job_id`. Annulation : PATCH côté queue ou route dédiée.
+  - Documents : job “document_summary” pour le résumé auto, lien `job_id` dans `context_documents`.
 
 - API (Hono) :
   - Nouveau router `api/src/routes/api/chat.ts` (SSE, messages chat, structured runs) à monter dans `api/src/routes/api/index.ts`.
-  - Services : placer la logique dans `api/src/services/` (ex : `chat-service.ts`, `stream-service.ts`, `structured-run-service.ts`), avec usage du client DB `api/src/db/client.ts`.
-  - OpenAPI : mettre à jour `api/src/openapi/` pour les nouveaux endpoints (chat message, stream SSE, structured, cancel).
+  - Routes documents : `api/src/routes/api/documents.ts` (upload/listing/meta/content) + enregistrement dans `index.ts`.
+  - Services : placer la logique dans `api/src/services/` (ex : `chat-service.ts`, `stream-service.ts`, `structured-run-service.ts`, `document-service.ts`), avec usage du client DB `api/src/db/client.ts` et S3/MinIO.
+  - OpenAPI : mettre à jour `api/src/openapi/` pour les endpoints chat + documents (formats pdf/docx/pptx, limite 50 Mo, stockage S3).
   - Middleware : auth/rbac via `api/src/middleware/auth.ts`, `api/src/middleware/rbac.ts`; logger `api/src/logger.ts`.
-  - Config : prompts dans `api/src/config/default-prompts.ts`, env dans `api/src/config/env.ts`.
+  - Config : prompts dans `api/src/config/default-prompts.ts`, env dans `api/src/config/env.ts`, config S3 (MinIO local).
 
 - Backend streaming :
   - SSE handler dédié (nouveau endpoint `/api/chat/stream/:stream_id`), abonnements PG LISTEN/NOTIFY (probablement dans un service).
@@ -788,12 +809,13 @@ Les prompts sont stockés dans la table `prompts` (avec historique dans `prompt_
 - UI (SvelteKit) :
   - Nouveau module `ui/src/lib/chat-stream/` (controller + composants).
   - Intégration pages métier : `ui/src/routes/dossiers/[id]/+page.svelte`, `ui/src/routes/cas-usage/[id]/+page.svelte`, `ui/src/routes/entreprises/[id]/+page.svelte`.
+  - Bloc “Documents” sur les pages objets : upload, liste, statut, résumé (pas de viewer riche), boutons d’action (ingérer, consulter).
   - Réutilisation composants communs (`ui/src/lib/` : badges, listes, theming).
   - Routing : appels API via fetchers existants ou nouveaux utilitaires.
 
 - Tests :
-  - API/Vitest : dossiers `api/tests/api`, `api/tests/ai`, `api/tests/queue` à compléter pour les nouveaux endpoints/flows.
-  - E2E Playwright : `e2e/tests/usecase*.spec.ts`, `folders*.spec.ts`, `executive-summary.spec.ts`, `workflow.spec.ts` à étendre pour le chat/stream/tool-calls.
+  - API/Vitest : dossiers `api/tests/api`, `api/tests/ai`, `api/tests/queue` à compléter pour les nouveaux endpoints/flows (chat + documents + résumé).
+  - E2E Playwright : `e2e/tests/usecase*.spec.ts`, `folders*.spec.ts`, `executive-summary.spec.ts`, `workflow.spec.ts` à étendre pour le chat/stream/tool-calls + parcours d’upload doc + résumé.
 
 ## Lots orientés valeur (workplan livrable)
 
@@ -833,6 +855,23 @@ Les prompts sont stockés dans la table `prompts` (avec historique dans `prompt_
   - Intégration : deux appels structurés en parallèle, annulation d’un, application de l’autre.
   - E2E : lancer 2 générations, suivre statuts, annuler, appliquer.
 - Couverture CU : CU-008, CU-011, CU-019, CU-020 (notif basique), traçabilité CU-002 renforcée.
+
+### Lot B2 — “Contexte documentaire (ingestion + résumé + consultation)”
+- Valeur : attacher des documents aux objets (company/folder/usecase), lancer automatiquement un résumé (0,1k token/page, langue configurable, défaut FR), consulter le résumé et le statut ; ready pour que les prompts métiers utilisent le résumé.
+- Portée fonctionnelle : upload pdf/docx/pptx (≤ 50 Mo), stockage S3/MinIO, résumé obligatoire à l’ingestion, listing par objet, consultation métadonnées/résumé (pas de viewer riche).
+- API :
+  - POST `/api/documents` (upload + context_type/id) ; GET `/api/documents?context_type=&context_id=` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download simple).
+  - Job queue “document_summary” déclenché à l’upload ; statut dans `context_documents` ; events `document_added` / `document_summarized` (avec prompt_version_id, job_id).
+  - Prompt résumé versionné (configurable) ; options de scan à valider (antivirus/Cloudflare/module dédié).
+- UI :
+  - Bloc “Documents” dans les pages objets (dossiers, cas d’usage, entreprises) : upload, liste, statut, résumé.
+  - Intégration légère (pas de viewer riche) ; actions : ingérer, consulter.
+- Données :
+  - Tables `context_documents` (+ option `context_document_versions`) ; liens context_type/id ; summary, summary_lang, storage_key, status.
+  - Traçabilité dans `context_modification_history` (document_added/document_summarized).
+- Tests :
+  - Unit/int : upload → job résumé → statut ready/failed ; respect formats/limite ; traçabilité.
+  - E2E : upload depuis une page objet, voir le statut passer à ready, lire le résumé.
 
 ### Lot C — “Audit, diff et résilience”
 - Valeur : l’utilisateur visualise les diffs, peut rollback, UI intégrée au thème, résilience accrue.

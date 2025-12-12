@@ -13,6 +13,7 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+      - DISABLE_AUTH=${DISABLE_AUTH:-0}
       - MAIL_HOST=${MAIL_HOST:-maildev}
       - MAIL_PORT=${MAIL_PORT:-1025}
       - MAIL_SECURE=${MAIL_SECURE:-false}

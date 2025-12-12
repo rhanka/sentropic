@@ -233,6 +233,28 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Migration appliquée avec succès
   - Vérification : toutes les tables présentes en base
 
+- [x] **Phase 2A.1** : Couche OpenAI Streaming
+  - Créé `callOpenAIStream` dans `openai.ts`
+  - Retourne `AsyncIterable<StreamEvent>`
+  - Gère content_delta, tool_call_start, tool_call_delta, status, error, done
+  - Mutualise les valeurs par défaut du modèle via `settingsService.getAISettings().defaultModel`
+
+- [x] **Phase 2A.2** : Service Stream Partagé
+  - Créé `stream-service.ts` avec `writeStreamEvent`, `generateStreamId`, `getNextSequence`, `readStreamEvents`
+  - Écriture dans `chat_stream_events` avec `message_id=null` pour générations classiques
+  - PostgreSQL NOTIFY pour temps réel (payload minimal)
+
+- [x] **Phase 2A.3** : Adapter enrichCompany pour streaming
+  - Créé `enrichCompanyStream` qui utilise `callOpenAIStream`
+  - Collecte le résultat final (agrège content_delta)
+  - Gère les tool calls (web_search, web_extract) en streaming
+  - Écrit tous les événements dans `chat_stream_events`
+  - `enrichCompany` accepte maintenant `streamId?` optionnel
+
+- [x] **Phase 2A.4** : Intégration queue
+  - Modifié `processCompanyEnrich` pour générer un `streamId` et le passer à `enrichCompany`
+  - La queue attend toujours le résultat final (comportement inchangé)
+
 ## Status
 - **Progress**: 1/6 phases complétées
 - **Current**: Phase 1 terminée ✅
