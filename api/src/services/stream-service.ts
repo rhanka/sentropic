@@ -1,7 +1,7 @@
 import { db, pool } from '../db/client';
 import { chatStreamEvents } from '../db/schema';
 import { createId } from '../utils/id';
-import { sql, eq, desc, and, gt } from 'drizzle-orm';
+import { sql, eq, and, gt } from 'drizzle-orm';
 import type { StreamEventType } from './openai';
 
 /**
@@ -15,7 +15,9 @@ export function generateStreamId(promptId?: string, jobId?: string, messageId?: 
   }
   
   if (jobId) {
-    return `job_${jobId}_${Date.now()}`;
+    // IMPORTANT: streamId déterministe pour les jobs
+    // => permet à l'UI de déduire le streamId depuis jobId (sans polling /streams/active)
+    return `job_${jobId}`;
   }
   
   if (promptId) {
@@ -33,7 +35,7 @@ export function generateStreamId(promptId?: string, jobId?: string, messageId?: 
 export async function writeStreamEvent(
   streamId: string,
   eventType: StreamEventType,
-  data: any,
+  data: unknown,
   sequence: number,
   messageId?: string | null
 ): Promise<void> {
@@ -91,7 +93,7 @@ export async function readStreamEvents(
   messageId: string | null;
   streamId: string;
   eventType: string;
-  data: any;
+  data: unknown;
   sequence: number;
   createdAt: Date;
 }>> {
@@ -114,5 +116,38 @@ export async function readStreamEvents(
     sequence: event.sequence,
     createdAt: event.createdAt
   }));
+}
+
+/**
+ * Liste des stream_ids "actifs" (démarrés mais pas encore terminés).
+ * Utilisé par le widget monitor pour s'abonner à tous les streams en cours.
+ */
+export async function listActiveStreamIds(options?: { sinceMinutes?: number; limit?: number }): Promise<string[]> {
+  const sinceMinutes = options?.sinceMinutes ?? 360; // 6h par défaut
+  const limit = options?.limit ?? 200;
+  const sinceDate = new Date(Date.now() - sinceMinutes * 60_000);
+
+  const rows = (await db.all(sql`
+    SELECT DISTINCT e.stream_id AS "streamId"
+    FROM chat_stream_events e
+    WHERE e.created_at >= ${sinceDate}
+      AND EXISTS (
+        SELECT 1
+        FROM chat_stream_events s
+        WHERE s.stream_id = e.stream_id
+          AND s.event_type = 'status'
+          AND (s.data->>'state') = 'started'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM chat_stream_events d
+        WHERE d.stream_id = e.stream_id
+          AND d.event_type = 'done'
+      )
+    ORDER BY e.stream_id
+    LIMIT ${limit}
+  `)) as Array<{ streamId: string }>;
+
+  return rows.map(r => r.streamId).filter(Boolean);
 }
 

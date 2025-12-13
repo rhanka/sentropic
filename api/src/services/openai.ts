@@ -48,7 +48,7 @@ export type StreamEventType =
 
 export interface StreamEvent {
   type: StreamEventType;
-  data: any;
+  data: unknown;
 }
 
 /**
@@ -137,10 +137,11 @@ export async function* callOpenAIStream(
       // Le reasoning peut être dans delta.reasoning ou dans un champ spécifique
       // Vérifier si le chunk contient des informations de reasoning
       // Note: La structure exacte dépend de la version de l'API OpenAI
-      if ('reasoning' in delta && (delta as any).reasoning) {
+      const reasoning = (delta as unknown as { reasoning?: unknown }).reasoning;
+      if (typeof reasoning === 'string' && reasoning) {
         yield {
           type: 'reasoning_delta',
-          data: { delta: (delta as any).reasoning }
+          data: { delta: reasoning }
         };
       }
 
@@ -247,30 +248,31 @@ export async function* callOpenAIResponseStream(
   // - Si on envoie `role:"assistant"` avec des content parts `type:"input_text"`, l'API renvoie:
   //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
   // => On utilise donc `content` en string pour tous les rôles.
-  const input = messages.map((m) => {
+  const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] = messages.map((m) => {
     const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
-    const content = typeof (m as any).content === 'string' ? (m as any).content : JSON.stringify((m as any).content);
+    const contentRaw = (m as unknown as { content?: unknown }).content;
+    const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
     return { type: 'message', role, content };
-  }) as any;
+  });
 
   // Mapper les tools "Chat Completions" -> "Responses" (format plat)
-  const responseTools = tools
-    ? tools
-        .filter((t) => (t as any)?.type === 'function')
+  const responseTools: OpenAI.Responses.ResponseCreateParamsStreaming['tools'] | undefined = tools
+    ? (tools
+        .filter((t) => t.type === 'function')
         .map((t) => ({
-          type: 'function',
-          name: (t as any).function?.name || '',
-          description: (t as any).function?.description,
-          parameters: (t as any).function?.parameters ?? null,
+          type: 'function' as const,
+          name: t.function?.name || '',
+          description: t.function?.description,
+          parameters: t.function?.parameters ?? null,
           // IMPORTANT: en mode strict, OpenAI exige un sous-ensemble JSON Schema (ex: additionalProperties:false).
           // Pour éviter de "sur-valider" nos tools (web_search/web_extract) à ce stade, on désactive strict.
           strict: false
         }))
-        .filter((t) => !!t.name)
+        .filter((t) => !!t.name) as unknown as OpenAI.Responses.ResponseCreateParamsStreaming['tools'])
     : undefined;
 
   // Structured output via Responses API: text.format
-  const textConfig =
+  const textConfig: OpenAI.Responses.ResponseCreateParamsStreaming['text'] | undefined =
     structuredOutput
       ? {
           format: {
@@ -285,18 +287,20 @@ export async function* callOpenAIResponseStream(
         ? { format: { type: responseFormat } }
         : undefined;
 
+  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] = {
+    summary: reasoningSummary ?? 'auto',
+    ...(reasoningEffort ? { effort: reasoningEffort } : {})
+  };
+
   const requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming = {
     model: selectedModel,
     stream: true,
     input,
     // On demande un résumé de reasoning (streamable) par défaut.
     // Vérifié: n'explose pas avec gpt-4.1-nano (la plateforme ignore/autorise le paramètre).
-    reasoning: {
-      summary: reasoningSummary ?? 'auto',
-      ...(reasoningEffort ? { effort: reasoningEffort } : {})
-    } as any,
-    ...(responseTools ? { tools: responseTools as any } : {}),
-    ...(textConfig ? { text: textConfig as any } : {})
+    reasoning,
+    ...(responseTools ? { tools: responseTools } : {}),
+    ...(textConfig ? { text: textConfig } : {})
   };
 
   try {
@@ -313,7 +317,8 @@ export async function* callOpenAIResponseStream(
         return;
       }
 
-      const type = (chunk as any).type as string | undefined;
+      const record = chunk as unknown as Record<string, unknown>;
+      const type = typeof record.type === 'string' ? record.type : undefined;
       if (!type) continue;
 
       // IMPORTANT:
@@ -321,32 +326,36 @@ export async function* callOpenAIResponseStream(
       //   sinon on concatène les arguments JSON des tool calls (cf. réponse Boeing).
       switch (type) {
         case 'response.reasoning_text.delta': {
-          const delta = (chunk as any).delta as string | undefined;
+          const delta = typeof record.delta === 'string' ? record.delta : undefined;
           if (delta) yield { type: 'reasoning_delta', data: { delta } };
           break;
         }
         case 'response.reasoning_summary_text.delta': {
-          const delta = (chunk as any).delta as string | undefined;
+          const delta = typeof record.delta === 'string' ? record.delta : undefined;
           if (delta) yield { type: 'reasoning_delta', data: { delta, kind: 'summary' } };
           break;
         }
         case 'response.reasoning_summary_text.done': {
-          const text = (chunk as any).text as string | undefined;
+          const text = typeof record.text === 'string' ? record.text : undefined;
           if (text) yield { type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } };
           break;
         }
         case 'response.output_text.delta': {
-          const delta = (chunk as any).delta as string | undefined;
+          const delta = typeof record.delta === 'string' ? record.delta : undefined;
           if (delta) yield { type: 'content_delta', data: { delta } };
           break;
         }
         case 'response.output_item.added': {
-          const item = (chunk as any).item;
+          const item = record.item as unknown;
+          const itemRec = item as Record<string, unknown> | null;
           // Tool call "function_call"
-          if (item?.type === 'function_call') {
-            const toolCallId = item.id || item.call_id || '';
-            const name = item.name || '';
-            const args = item.arguments || '';
+          if (itemRec && itemRec.type === 'function_call') {
+            const toolCallId =
+              (typeof itemRec.id === 'string' && itemRec.id) ||
+              (typeof itemRec.call_id === 'string' && itemRec.call_id) ||
+              '';
+            const name = typeof itemRec.name === 'string' ? itemRec.name : '';
+            const args = typeof itemRec.arguments === 'string' ? itemRec.arguments : '';
             if (toolCallId) {
               toolCallState.set(toolCallId, { started: true, sawDelta: false, name });
             }
@@ -355,8 +364,8 @@ export async function* callOpenAIResponseStream(
           break;
         }
         case 'response.function_call_arguments.delta': {
-          const toolCallId = (chunk as any).item_id as string | undefined;
-          const delta = (chunk as any).delta as string | undefined;
+          const toolCallId = typeof record.item_id === 'string' ? record.item_id : undefined;
+          const delta = typeof record.delta === 'string' ? record.delta : undefined;
           if (!toolCallId || !delta) break;
           const state = toolCallState.get(toolCallId) || { started: false, sawDelta: false };
           state.sawDelta = true;
@@ -365,9 +374,9 @@ export async function* callOpenAIResponseStream(
           break;
         }
         case 'response.function_call_arguments.done': {
-          const toolCallId = (chunk as any).item_id as string | undefined;
-          const name = (chunk as any).name as string | undefined;
-          const args = (chunk as any).arguments as string | undefined;
+          const toolCallId = typeof record.item_id === 'string' ? record.item_id : undefined;
+          const name = typeof record.name === 'string' ? record.name : undefined;
+          const args = typeof record.arguments === 'string' ? record.arguments : undefined;
           if (!toolCallId) break;
           const state = toolCallState.get(toolCallId) || { started: false, sawDelta: false };
           // Fallback: certains flux peuvent ne pas émettre de delta, uniquement "done"
@@ -380,7 +389,10 @@ export async function* callOpenAIResponseStream(
           break;
         }
         case 'response.error': {
-          const message = (chunk as any).error?.message || 'Unknown error';
+          const err = record.error as unknown;
+          const errRec = err as Record<string, unknown> | null;
+          const message =
+            (errRec && typeof errRec.message === 'string' && errRec.message) ? errRec.message : 'Unknown error';
           yield { type: 'error', data: { message } };
           break;
         }

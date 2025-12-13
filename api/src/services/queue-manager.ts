@@ -1,4 +1,4 @@
-import { db } from '../db/client';
+import { db, pool } from '../db/client';
 import { sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
@@ -63,6 +63,26 @@ export class QueueManager {
 
   constructor() {
     this.loadSettings();
+  }
+
+  private async notifyJobEvent(jobId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ job_id: jobId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY job_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyCompanyEvent(companyId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ company_id: companyId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -131,6 +151,7 @@ export class QueueManager {
       INSERT INTO job_queue (id, type, data, status, created_at)
       VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
     `);
+    await this.notifyJobEvent(jobId);
     
     console.log(`📝 Job ${jobId} (${type}) added to queue`);
     
@@ -200,6 +221,7 @@ export class QueueManager {
         SET status = 'processing', started_at = ${new Date()}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
 
       const controller = new AbortController();
       this.jobControllers.set(jobId, controller);
@@ -228,6 +250,7 @@ export class QueueManager {
         SET status = 'completed', completed_at = ${new Date()}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
 
       console.log(`✅ Job ${jobId} completed successfully`);
     } catch (error) {
@@ -239,6 +262,7 @@ export class QueueManager {
         SET status = 'failed', error = ${error instanceof Error ? error.message : 'Unknown error'}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
     } finally {
       this.jobControllers.delete(jobId);
     }
@@ -251,7 +275,7 @@ export class QueueManager {
     const { companyId, companyName, model } = data;
     
     // Générer un streamId pour le streaming
-    // Pour les générations classiques via queue : stream_id = job_id + timestamp
+    // Pour les générations via queue : stream_id déterministe dérivé du jobId (voir stream-service.ts)
     const streamId = generateStreamId('company_info', jobId);
     
     // Enrichir l'entreprise avec streaming
@@ -276,6 +300,8 @@ export class QueueManager {
         updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
+
+    await this.notifyCompanyEvent(companyId);
   }
 
   /**

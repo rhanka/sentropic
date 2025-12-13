@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { db } from '../../db/client';
+import { db, pool } from '../../db/client';
 import { companies, folders, useCases } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
@@ -54,6 +54,16 @@ const companyInput = z.object({
 
 export const companiesRouter = new Hono();
 
+async function notifyCompanyEvent(companyId: string): Promise<void> {
+  const notifyPayload = JSON.stringify({ company_id: companyId });
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+  } finally {
+    client.release();
+  }
+}
+
 companiesRouter.get('/', async (c) => {
   const rows = await db.select().from(companies);
   return c.json({ items: rows });
@@ -64,6 +74,7 @@ companiesRouter.post('/', zValidator('json', companyInput), async (c) => {
   const id = createId();
   await db.insert(companies).values({ id, ...payload });
   const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  await notifyCompanyEvent(id);
   return c.json(company, 201);
 });
 
@@ -81,6 +92,7 @@ companiesRouter.post('/draft', zValidator('json', z.object({
   });
   
   const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  await notifyCompanyEvent(id);
   return c.json(company, 201);
 });
 
@@ -104,6 +116,7 @@ companiesRouter.post('/:id/enrich', async (c) => {
     await db.update(companies)
       .set({ status: 'enriching' })
       .where(eq(companies.id, id));
+    await notifyCompanyEvent(id);
     
     // Ajouter le job à la queue
     const jobId = await queueManager.addJob('company_enrich', {
@@ -147,6 +160,7 @@ companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c
   if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
+  await notifyCompanyEvent(id);
   return c.json(updated[0]);
 });
 
@@ -158,8 +172,8 @@ const aiEnrichInput = z.object({
 
 companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
   try {
-  const { name, model } = c.req.valid('json');
-  const selectedModel = model || 'gpt-4.1-nano';
+    const { name, model } = c.req.valid('json');
+    const selectedModel = model || 'gpt-4.1-nano';
     
     // Utiliser le service de contexte
     const enrichedData = await enrichCompany(name, selectedModel);
@@ -206,6 +220,7 @@ companiesRouter.delete('/:id', async (c) => {
     
     // Supprimer l'entreprise
     await db.delete(companies).where(eq(companies.id, id));
+    await notifyCompanyEvent(id);
     
     return c.body(null, 204);
   } catch (error) {

@@ -11,6 +11,29 @@ export interface CompanyData {
   technologies: string;
 }
 
+function normalizeCompanyField(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function coerceCompanyData(value: unknown): CompanyData {
+  const rec = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
+  return {
+    industry: normalizeCompanyField(rec.industry),
+    size: normalizeCompanyField(rec.size),
+    products: normalizeCompanyField(rec.products),
+    processes: normalizeCompanyField(rec.processes),
+    challenges: normalizeCompanyField(rec.challenges),
+    objectives: normalizeCompanyField(rec.objectives),
+    technologies: normalizeCompanyField(rec.technologies)
+  };
+}
+
 // Configuration métier par défaut
 const industries = {
   industries: [
@@ -75,8 +98,8 @@ export const enrichCompany = async (
   }
 
   try {
-    const parsedData = JSON.parse(content);
-    return parsedData;
+    const parsed = JSON.parse(content) as unknown;
+    return coerceCompanyData(parsed);
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', content);
@@ -134,7 +157,7 @@ export const enrichCompanyStream = async (
 
     const tryParse = (s: string) => JSON.parse(s);
 
-    let parsedData: any;
+    let parsedData: unknown;
     try {
       parsedData = tryParse(cleaned);
     } catch {
@@ -147,7 +170,7 @@ export const enrichCompanyStream = async (
         throw new Error('No JSON object boundaries found');
       }
     }
-    return parsedData;
+    return coerceCompanyData(parsedData);
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', accumulatedContent);

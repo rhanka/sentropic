@@ -304,9 +304,9 @@ export const executeWithToolsStream = async (
   const finalStreamId = streamId || generateStreamId(promptId, jobId, messageId);
 
   // Helper: écrire un StreamEvent normalisé
-  const write = async (eventType: string, data: any) => {
+  const write = async (eventType: StreamEventType, data: unknown) => {
     const seq = await getNextSequence(finalStreamId);
-    await writeStreamEvent(finalStreamId, eventType as any, data, seq);
+    await writeStreamEvent(finalStreamId, eventType, data, seq);
   };
 
   let accumulatedContent = '';

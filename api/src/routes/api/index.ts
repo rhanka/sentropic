@@ -7,6 +7,7 @@ import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
+import { streamsRouter } from './streams';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
@@ -30,6 +31,10 @@ apiRouter.route('/use-cases', useCasesRouter);
 
 apiRouter.use('/analytics/*', requireAuth, requireEditor);
 apiRouter.route('/analytics', analyticsRouter);
+
+// Streaming routes (require editor role or higher)
+apiRouter.use('/streams/*', requireAuth, requireEditor);
+apiRouter.route('/streams', streamsRouter);
 
 // Admin routes (require admin_org or admin_app)
 apiRouter.use('/settings/*', requireAuth, requireAdmin);
