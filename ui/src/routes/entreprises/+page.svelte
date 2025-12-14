@@ -2,35 +2,42 @@
   import { companiesStore, fetchCompanies, deleteCompany } from '$lib/stores/companies';
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
-  import { refreshManager } from '$lib/stores/refresh';
   import { goto } from '$app/navigation';
+  import { streamHub } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
-  // Réactivité pour détecter les changements de statut et gérer l'actualisation
-  $: {
-    const hasEnrichingCompanies = $companiesStore.some(company => company.status === 'enriching');
-    
-    if (hasEnrichingCompanies) {
-      // Démarrer l'actualisation légère si ce n'est pas déjà fait
-      if (!refreshManager.isRefreshActive('companies')) {
-        refreshManager.startCompaniesRefresh(async () => {
-          await loadCompanies();
-        });
-      }
-    } else {
-      // Arrêter l'actualisation si aucun enrichissement n'est en cours
-      refreshManager.stopRefresh('companies');
-    }
-  }
+  const HUB_KEY = 'companiesList';
 
   onMount(async () => {
     await loadCompanies();
-    // Démarrer l'actualisation automatique si nécessaire
-    startAutoRefresh();
+
+    // Abonnement SSE global via streamHub
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type !== 'company_update') return;
+      const companyId: string = evt.companyId;
+      const data: any = evt.data ?? {};
+      if (!companyId) return;
+
+      if (data?.deleted) {
+        companiesStore.update((items) => items.filter(c => c.id !== companyId));
+        return;
+      }
+
+      if (data?.company) {
+        const updated = data.company;
+        companiesStore.update((items) => {
+          const idx = items.findIndex(c => c.id === updated.id);
+          if (idx === -1) return [updated, ...items];
+          const next = [...items];
+          next[idx] = { ...next[idx], ...updated };
+          return next;
+        });
+      }
+    });
   });
 
   onDestroy(() => {
-    // Arrêter tous les refreshes quand on quitte la page
-    refreshManager.stopAllRefreshes();
+    streamHub.delete(HUB_KEY);
   });
 
   const loadCompanies = async () => {
@@ -44,10 +51,6 @@
         message: 'Erreur lors du chargement des entreprises'
       });
     }
-  };
-
-  const startAutoRefresh = () => {
-    // L'auto-refresh est géré par la réactivité ci-dessus
   };
 
   const handleDeleteCompany = async (id: string) => {
@@ -94,7 +97,6 @@
           <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-purple-200 bg-purple-50 gap-2 rounded-t-lg">
             <div class="flex-1 min-w-0">
               <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800">{company.name}</h2>
-              <p class="text-sm text-purple-600 mt-1">Enrichissement en cours...</p>
             </div>
             <button 
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
@@ -106,15 +108,14 @@
               </svg>
             </button>
           </div>
-          <!-- Bouton d'enrichissement centré -->
-          <div class="flex flex-col items-center justify-center h-24 text-center p-3 sm:p-4">
-            <div class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-yellow-100 text-yellow-800 mb-2 whitespace-nowrap">
-              <svg class="w-4 h-4 mr-2 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
-              Enrichissement par IA en cours
-            </div>
-            <p class="text-xs text-slate-500">Veuillez patienter...</p>
+          <!-- Suivi du stream (pas de waiter/spinner) -->
+          <div class="p-3 sm:p-4">
+            <StreamMessage
+              streamId={`company_${company.id}`}
+              status={company.status}
+              maxHistory={6}
+              placeholderTitle="Enrichissement en cours…"
+            />
           </div>
         {:else}
           <!-- Vue normale pour les autres statuts -->

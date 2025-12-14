@@ -9,7 +9,6 @@ import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
-import { generateStreamId } from './stream-service';
 
 export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
 
@@ -275,8 +274,10 @@ export class QueueManager {
     const { companyId, companyName, model } = data;
     
     // Générer un streamId pour le streaming
-    // Pour les générations via queue : stream_id déterministe dérivé du jobId (voir stream-service.ts)
-    const streamId = generateStreamId('company_info', jobId);
+    // IMPORTANT:
+    // Pour l'enrichissement entreprise, on veut pouvoir suivre l'avancement côté UI avec uniquement le companyId
+    // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
+    const streamId = `company_${companyId}`;
     
     // Enrichir l'entreprise avec streaming
     // enrichCompany utilise le streaming si streamId est fourni

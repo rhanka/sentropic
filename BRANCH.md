@@ -233,6 +233,18 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Migration appliquée avec succès
   - Vérification : toutes les tables présentes en base
 
+- [x] **Phase 2A (POC streaming entreprise + UI monitoring)** : Streaming end-to-end + affichage temps réel
+  - **API**
+    - SSE global : `GET /api/v1/streams/sse` (flux unique) + `LISTEN/NOTIFY` (`stream_events`, `job_events`, `company_events`)
+    - `generateStreamId` déterministe pour jobs (`job_<jobId>`) + **enrich entreprise streamId** : `company_<companyId>`
+    - `NOTIFY job_events` (queue) + `NOTIFY company_events` (CRUD + transitions de statut)
+    - Typage “safe” sur `executeWithToolsStream` (`event.data` = `unknown`) pour éviter les régressions TS/ESLint
+  - **UI**
+    - Nouveau composant `StreamMessage` (prop `streamId`) : dernière étape + historique dépliable, deltas cumulés, auto-scroll bas, placeholder sans waiter
+    - `streamHub` : connexion SSE unique + abonnements ciblés (`setStream`, `setJobUpdates`) + cache/replay + agrégation des deltas
+    - `QueueMonitor` : bouton toujours à jour (job_update même replié) + suivi de stream via `StreamMessage`
+    - Liste entreprises : remplacement du waiter en mode `enriching` par `StreamMessage` sur `company_<id>`
+
 - [x] **Phase 2A.1** : Couche OpenAI Streaming
   - Créé `callOpenAIStream` dans `openai.ts`
   - Retourne `AsyncIterable<StreamEvent>`
@@ -256,9 +268,12 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - La queue attend toujours le résultat final (comportement inchangé)
 
 ## Status
-- **Progress**: 1/6 phases complétées
-- **Current**: Phase 1 terminée ✅
-- **Next**: Phase 2A - Streaming complet pour génération d'entreprise (POC)
+- **Progress**: Phase 1 + Phase 2A (POC entreprise) ✅
+- **Current**: Phase 2B - Généralisation aux autres générations classiques
+- **Next**:
+  - Décliner des `streamId` déterministes par entité (ex: `folder_<id>`, `usecase_<id>`) pour les autres jobs
+  - Remplacer les waiters restants par `StreamMessage`
+  - Garder la SSE globale unique + filtrage côté UI (pas de polling)
 
 ## Scope
 - **API** : Nouveaux endpoints chat, streaming SSE, tools

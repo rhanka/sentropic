@@ -1,47 +1,70 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { queueStore, loadJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
+  import { queueStore, loadJobs, updateJob, addJob, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
   import type { JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
   import { apiPost } from '$lib/utils/api';
   import { isAuthenticated } from '$lib/stores/session';
+  import { streamHub } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
-  let refreshInterval: ReturnType<typeof setInterval> | null = null;
   let isVisible = false;
+  let wasVisible = false;
 
   $: hasJobs = $queueStore.jobs.length > 0;
   $: allJobsCompleted = hasJobs && $queueStore.jobs.every(job => job.status === 'completed');
   $: hasFailedJobs = hasJobs && $queueStore.jobs.some(job => job.status === 'failed');
+  $: hasActiveJobs = $queueStore.jobs.some(job => job.status === 'pending' || job.status === 'processing');
+
+  const onJobUpdate = (evt: any) => {
+    if (evt?.type !== 'job_update') return;
+    const data = evt.data ?? {};
+    const job = data?.job;
+    if (!job) return;
+    const exists = $queueStore.jobs.some(j => j.id === job.id);
+    if (exists) updateJob(job.id, job);
+    else addJob(job);
+  };
 
   // Charger les jobs au montage et toutes les 5 secondes (seulement si authentifié)
   onMount(async () => {
     if ($isAuthenticated) {
       await loadJobs();
-      refreshInterval = setInterval(() => {
-        if ($isAuthenticated) {
-          loadJobs();
-        }
-      }, 5000);
     }
   });
 
   // Réagir aux changements d'authentification
-  $: if ($isAuthenticated && !refreshInterval) {
+  $: if ($isAuthenticated) {
     loadJobs();
-    refreshInterval = setInterval(() => {
-      if ($isAuthenticated) {
-        loadJobs();
-      }
-    }, 5000);
-  } else if (!$isAuthenticated && refreshInterval) {
-    clearInterval(refreshInterval);
-    refreshInterval = null;
+  }
+
+  // Abonnement léger permanent aux job_update pour garder l'icône du bouton à jour même panneau replié
+  $: if ($isAuthenticated) {
+    streamHub.setJobUpdates('queueMonitorJobs', onJobUpdate);
+  } else {
+    streamHub.delete('queueMonitorJobs');
+  }
+
+  const openMonitor = async () => {
+    // refresh jobs une seule fois à l'ouverture
+    await loadJobs();
+  };
+
+  const closeMonitor = () => {
+  };
+
+  // N'exécuter open/close que sur changement de visibilité (sinon boucle infinie via updates store)
+  $: if (isVisible !== wasVisible) {
+    wasVisible = isVisible;
+    if (isVisible && $isAuthenticated) {
+      void openMonitor();
+    } else {
+      closeMonitor();
+    }
   }
 
   onDestroy(() => {
-    if (refreshInterval) {
-      clearInterval(refreshInterval);
-    }
+    streamHub.delete('queueMonitor');
   });
 
   const getStatusColor = (status: JobStatus): string => {
@@ -71,6 +94,15 @@
       case 'usecase_detail': return 'Détail cas d\'usage';
       default: return type;
     }
+  };
+
+  const getStreamIdForJob = (job: any): string => {
+    // Pour company_enrich: streamId déterministe basé sur l'entreprise (company_<companyId>)
+    if (job?.type === 'company_enrich' && job?.data?.companyId) {
+      return `company_${job.data.companyId}`;
+    }
+    // Fallback générique: streamId basé sur jobId
+    return `job_${job?.id}`;
   };
 
   const handleCancelJob = async (jobId: string) => {
@@ -152,6 +184,7 @@
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleString('fr-FR');
   };
+
 </script>
 
 {#if hasJobs}
@@ -215,7 +248,7 @@
         {/if}
       </div>
 
-      <div class="overflow-y-auto max-h-80">
+      <div class="overflow-y-scroll max-h-80" style="scrollbar-gutter: stable;">
         {#if $queueStore.jobs.length === 0}
           <div class="p-4 text-center text-gray-500">
             <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,7 +260,7 @@
           {#each $queueStore.jobs as job (job.id)}
             <div class="p-4 border-b border-gray-100 last:border-b-0">
               <div class="flex items-start justify-between">
-                <div class="flex-1">
+                <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 mb-1">
                     <span class="text-lg">{getStatusIcon(job.status)}</span>
                     <span class="font-medium text-sm">{getTypeLabel(job.type)}</span>
@@ -255,6 +288,8 @@
                     </div>
                     <p class="text-xs text-gray-500">Durée: {getJobDuration(job)}</p>
                   {/if}
+                  
+                  <StreamMessage streamId={getStreamIdForJob(job)} status={job.status} maxHistory={10} />
 
                   {#if job.error}
                     <p class="text-xs text-red-600 mt-1 bg-red-50 p-2 rounded">

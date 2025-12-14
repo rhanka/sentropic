@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
 import { callOpenAI, callOpenAIResponseStream } from './openai';
+import type { StreamEventType } from './openai';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
 
@@ -319,9 +320,10 @@ export const executeWithToolsStream = async (
       reasoningSummary,
       signal
     })) {
-      await write(event.type, event.data || {});
-      if (event.type === 'content_delta') accumulatedContent += (event.data?.delta || '');
-      if (event.type === 'error') throw new Error(event.data?.message || 'Erreur lors du streaming');
+      const data = (event.data ?? {}) as Record<string, unknown>;
+      await write(event.type, data);
+      if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
+      if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
     }
     return { streamId: finalStreamId, content: accumulatedContent };
   }
@@ -340,26 +342,29 @@ export const executeWithToolsStream = async (
     reasoningSummary,
     signal
   })) {
-    await write(event.type, event.data || {});
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    await write(event.type, data);
 
-    if (event.type === 'content_delta') accumulatedContent += (event.data?.delta || '');
+    if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
 
     if (event.type === 'tool_call_start') {
-      const toolCallId = event.data?.tool_call_id || '';
+      const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
       const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
       if (existingIndex === -1) {
         toolCalls.push({
           id: toolCallId,
-          name: event.data?.name || '',
-          args: event.data?.args || ''
+          name: typeof data.name === 'string' ? data.name : '',
+          args: typeof data.args === 'string' ? data.args : ''
         });
       } else {
-        toolCalls[existingIndex].name = event.data?.name || toolCalls[existingIndex].name;
-        toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (event.data?.args || '');
+        const nextName = typeof data.name === 'string' ? data.name : '';
+        const nextArgs = typeof data.args === 'string' ? data.args : '';
+        toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
+        toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
       }
     } else if (event.type === 'tool_call_delta') {
-      const toolCallId = event.data?.tool_call_id || '';
-      const delta = event.data?.delta || '';
+      const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+      const delta = typeof data.delta === 'string' ? data.delta : '';
       const toolCall = toolCalls.find(tc => tc.id === toolCallId);
       if (toolCall) {
         toolCall.args += delta;
@@ -368,7 +373,7 @@ export const executeWithToolsStream = async (
       }
     }
 
-    if (event.type === 'error') throw new Error(event.data?.message || 'Erreur lors du streaming');
+    if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
   }
 
   // Si aucun tool call: le contenu est déjà complet
@@ -429,9 +434,10 @@ export const executeWithToolsStream = async (
     reasoningSummary,
     signal
   })) {
-    await write(event.type, event.data || {});
-    if (event.type === 'content_delta') accumulatedContent += (event.data?.delta || '');
-    if (event.type === 'error') throw new Error(event.data?.message || 'Erreur lors du streaming');
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    await write(event.type, data);
+    if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
+    if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
   }
 
   return { streamId: finalStreamId, content: accumulatedContent };
