@@ -242,6 +242,10 @@ export async function* callOpenAIResponseStream(
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
 
+  // Certains modèles (ex: gpt-4.1-nano-*) ne supportent pas `reasoning.summary`.
+  // On désactive complètement `reasoning` pour ces familles afin d'éviter un 400.
+  const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
+
   // Convertir les messages chat en format input du Responses API
   // IMPORTANT:
   // - Le SDK définit `EasyInputMessage` (role user|assistant|system|developer) avec `content` string.
@@ -287,18 +291,19 @@ export async function* callOpenAIResponseStream(
         ? { format: { type: responseFormat } }
         : undefined;
 
-  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] = {
-    summary: reasoningSummary ?? 'auto',
-    ...(reasoningEffort ? { effort: reasoningEffort } : {})
-  };
+  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined =
+    supportsReasoningParams
+      ? {
+          summary: reasoningSummary ?? 'auto',
+          ...(reasoningEffort ? { effort: reasoningEffort } : {})
+        }
+      : undefined;
 
   const requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming = {
     model: selectedModel,
     stream: true,
     input,
-    // On demande un résumé de reasoning (streamable) par défaut.
-    // Vérifié: n'explose pas avec gpt-4.1-nano (la plateforme ignore/autorise le paramètre).
-    reasoning,
+    ...(reasoning ? { reasoning } : {}),
     ...(responseTools ? { tools: responseTools } : {}),
     ...(textConfig ? { text: textConfig } : {})
   };
