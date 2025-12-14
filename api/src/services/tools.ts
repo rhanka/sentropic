@@ -61,6 +61,38 @@ export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+/**
+ * Tool générique: met à jour un ou plusieurs champs de `use_cases.data.*`.
+ * Le mapping DB est pris en charge côté `tool-service.ts`.
+ */
+export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "update_usecase_field",
+    description:
+      "Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data). Utilise des paths dot-notation. Exemple: { useCaseId, updates: [{ path: 'description', value: '...' }] }",
+    parameters: {
+      type: "object",
+      properties: {
+        useCaseId: { type: "string", description: "ID du use case à modifier" },
+        updates: {
+          type: "array",
+          description: "Liste des modifications à appliquer (max 50). path cible use_cases.data.*",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Chemin du champ (ex: description, problem, solution.bullets.0)" },
+              value: { description: "Nouvelle valeur (JSON)" }
+            },
+            required: ["path", "value"]
+          }
+        }
+      },
+      required: ["useCaseId", "updates"]
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

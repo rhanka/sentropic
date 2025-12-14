@@ -123,44 +123,43 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 #### Phase 2E - Tool Service
 - [ ] Créer `api/src/services/tool-service.ts` :
-  - Exécution du tool `update_description` (usecase uniquement)
+  - Exécution d'un tool **générique** `update_usecase_field` (usecase uniquement, champs `use_cases.data.*`)
   - Validation des modifications
   - Écriture dans `context_modification_history`
   - Snapshots avant/après dans `chat_contexts`
   - Feature d'annulation du dernier changement au niveau de l'objet
 
 ### Phase 3 : UI SvelteKit - Composants de base
-- [ ] Créer le module `ui/src/lib/chat-stream/` :
-  - `createStreamController` (store Svelte pour agrégation)
-  - Types d'événements (reasoning_delta, content_delta, tool_call_*, status, error, done)
-- [ ] Créer `ui/src/lib/components/MessageStream.svelte` :
-  - Affichage reasoning en cours
-  - Affichage contenu généré
-  - Support markdown
-- [ ] Créer `ui/src/lib/components/UndoBar.svelte` :
-  - Bouton "Annuler le dernier changement" au niveau de l'objet
-  - Affichage du dernier changement annulable
-  - Utilisation des snapshots pour restaurer l'état précédent
-- [ ] Créer `ui/src/lib/components/ContextBadge.svelte` :
-  - Badge indiquant le contexte (folder/usecase)
-  - Lien vers l'objet
-- [ ] Créer l'intégration SSE :
-  - Abonnement EventSource
-  - Gestion des reconnexions
-  - Resync depuis la base si perte d'événements
+- [ ] **Unifier le widget flottant global (1 seule bulle)** :
+  - Créer `ui/src/lib/components/OperationsWidget.svelte` (ou `FloatingWidget.svelte`)
+    - Contient **la bulle** (bouton fixed) + **le panneau** (drawer)
+    - Header avec switch de vue: **Chat** ↔ **QueueMonitor**
+    - La bulle reflète un état global (jobs en cours/failed + conversations en cours/erreurs)
+  - Remplacer l’injection actuelle de `QueueMonitor` dans `ui/src/routes/+layout.svelte` par ce widget unique
+- [ ] **Refactor QueueMonitor → vue réutilisable** :
+  - Extraire le contenu du panneau dans `QueuePanel.svelte` (sans bulle, sans fixed wrapper)
+  - Réutiliser la logique existante `streamHub.setJobUpdates` pour alimenter l’icône/état, mais gérée par le widget global
+- [ ] **UI Chat (vue dans le widget)** :
+  - Créer `ChatPanel.svelte` (liste sessions + messages + composer)
+  - Streaming: réutiliser `streamHub` + `StreamMessage` (pas de 2ᵉ composant de rendu)
+    - `streamId` = `assistantMessageId`
+    - `StreamMessage` est la brique unique pour afficher l’avancement (reasoning/tools/content) + historique
+- [ ] **Data fetch (non-streaming)** :
+  - `GET /chat/sessions` + `GET /chat/sessions/:id/messages` pour recharger l’historique après refresh
+  - SSE global `/streams/sse` seulement pour les messages en cours / nouveaux events (cache/replay = confort UX)
 
 ### Phase 4 : Intégration UI dans les vues existantes
-- [ ] Créer un composant popup chat similaire à `QueueMonitor.svelte` :
-  - Popup flottant en bas à droite (ou intégré dans le même conteneur que la queue)
-  - La queue reste en accordéon dans le même conteneur
-  - Bouton pour ouvrir/fermer le chat
-- [ ] Intégrer le chat dans `/cas-usage/[id]` :
-  - Affichage du chat pour un use case via le popup
-  - Création de session si nécessaire
-  - Affichage du flux SSE dans le popup
-- [ ] Intégrer `UndoBar` pour annuler le dernier changement
-- [ ] Afficher la vue avant/après (champ description uniquement)
-- [ ] Note : Le parcours folder sera ajouté ultérieurement
+- [ ] **Chat global (pas page-scoped)** :
+  - Le chat doit être disponible **partout** (comme la bulle QueueMonitor)
+  - Ajout d’un sélecteur de contexte (company/folder/usecase) dans le header du widget (optionnel au début)
+- [ ] **ContextBadge** :
+  - Badge indiquant le contexte courant (folder/usecase/company) + lien vers l’objet
+  - Visible dans le header du ChatPanel (et dans les messages si besoin)
+- [ ] **UndoBar** :
+  - Bouton "Annuler" + preview de la dernière modification (via `context_modification_history` + `chat_contexts`)
+  - Option: confirmation humaine pour actions ⚠️
+- [ ] **Avant/Après** :
+  - Afficher diff (JSON patch / champ ciblé) dans le ChatPanel ou une modale
 
 ### Phase 5 : Tests
 - [ ] Tests unitaires API :
@@ -198,11 +197,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 1. **Phase 2 vs Phase 3** : Le plan initial met "Service de streaming" en Phase 3, mais la couche streaming doit être prête AVANT les endpoints chat (Phase 2), car ils en dépendent.
 
-2. **Queue pour chat** : Le plan mentionne "Intégrer avec la queue existante" pour le chat, mais **le chat NE passe PAS par la queue** (générations classiques uniquement via queue).
+2. **Queue pour chat** : le plan initial disait "direct sans queue", mais on a choisi un job `chat_message` pour préparer le scaling (workers dédiés). Le streaming reste en temps réel via `chat_stream_events` + SSE global.
 
-3. **Architecture streaming** : Il faut créer une **couche streaming partagée** qui sert :
+3. **Architecture streaming** : Il faut une **couche streaming partagée** qui sert :
    - Les générations classiques (via queue) - qui deviendront plus transparentes pour tools/réflexion
-   - Le chat (direct, sans queue)
+   - Le chat (via queue `chat_message`, scalable)
    - Méthodes partagées pour éviter la duplication
 
 ### Approche progressive validée
