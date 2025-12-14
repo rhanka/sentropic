@@ -9,8 +9,9 @@ import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
+import { chatService } from './chat-service';
 
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
+export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
 export interface CompanyEnrichJobData {
   companyId: string;
@@ -39,7 +40,19 @@ export interface ExecutiveSummaryJobData {
   model?: string;
 }
 
-export type JobData = CompanyEnrichJobData | UseCaseListJobData | UseCaseDetailJobData | ExecutiveSummaryJobData;
+export interface ChatMessageJobData {
+  userId: string;
+  sessionId: string;
+  assistantMessageId: string;
+  model?: string;
+}
+
+export type JobData =
+  | CompanyEnrichJobData
+  | UseCaseListJobData
+  | UseCaseDetailJobData
+  | ExecutiveSummaryJobData
+  | ChatMessageJobData;
 
 export interface Job {
   id: string;
@@ -258,6 +271,9 @@ export class QueueManager {
           break;
         case 'executive_summary':
           await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
+          break;
+        case 'chat_message':
+          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
@@ -643,6 +659,21 @@ export class QueueManager {
     await this.notifyFolderEvent(folderId);
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
+  }
+
+  /**
+   * Worker chat (réponse assistant)
+   * NOTE: on réutilise la table job_queue (type = chat_message) pour préparer le scaling via workers dédiés.
+   */
+  private async processChatMessage(data: ChatMessageJobData, signal?: AbortSignal): Promise<void> {
+    const { userId, sessionId, assistantMessageId, model } = data;
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model: model ?? null,
+      signal
+    });
   }
 
   /**

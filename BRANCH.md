@@ -101,26 +101,25 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [x] Intégration UI sur les vues dossiers / cas d'usage (SSE, sans polling)
 
 #### Phase 2C - Service Chat
-- [ ] Créer `api/src/services/chat-service.ts` :
+- [x] Créer `api/src/services/chat-service.ts` :
   - Gestion des sessions (création, récupération, mise à jour)
   - Création de messages (user et assistant)
-  - Intégration avec streaming (direct, SANS queue)
+  - Intégration avec streaming (via job `chat_message` en queue pour préparer le scaling / workers dédiés)
   - Utilisation du modèle par défaut depuis settings
 
 #### Phase 2D - Endpoints Chat
-- [ ] Créer le router `/api/v1/chat` dans `api/src/routes/api/chat.ts`
-- [ ] Implémenter `POST /api/v1/chat/messages` :
+- [x] Créer le router `/api/v1/chat` dans `api/src/routes/api/chat.ts`
+- [x] Implémenter `POST /api/v1/chat/messages` :
   - Création de session si nécessaire
   - Enregistrement du message utilisateur
-  - Appel OpenAI streaming (direct, sans queue)
+  - Enfile un job `chat_message` (prépare le scaling / workers dédiés)
   - Enregistrement du message assistant avec reasoning
-- [ ] Implémenter `GET /api/v1/chat/stream/:stream_id` (SSE) :
-  - Réutilise l'endpoint créé en 2A.5 ou crée un endpoint dédié
-  - Lecture des événements depuis `chat_stream_events`
-  - Support du paramètre `?since=seq` pour rehydratation
-  - Abonnement PostgreSQL NOTIFY pour temps réel
-- [ ] Monter le router dans `api/src/routes/api/index.ts`
-- [ ] Mettre à jour OpenAPI (`api/src/openapi/`)
+- [x] Implémenter `GET /api/v1/chat/sessions` et `GET /api/v1/chat/sessions/:id/messages`
+- [x] **Streaming** : pas d'endpoint dédié `GET /api/v1/chat/stream/:stream_id`.
+  - Le client utilise le **SSE global** `GET /api/v1/streams/sse` et filtre par `streamId`
+  - `streamId` du chat = `assistantMessageId` (retourné par `POST /chat/messages`)
+- [x] Monter le router dans `api/src/routes/api/index.ts`
+- [x] Mettre à jour OpenAPI (`api/src/openapi/`) (minimal : endpoints chat)
 
 #### Phase 2E - Tool Service
 - [ ] Créer `api/src/services/tool-service.ts` :
@@ -281,11 +280,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 ## Status
 - **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B ✅
-- **Current**: Phase 2C - Service Chat
+- **Current**: Phase 2E - Tool Service (update_description) + UI chat
 - **Next**:
-  - Implémenter `chat-service` (sessions + messages) en streaming direct (sans queue)
-  - Ajouter les endpoints `/api/v1/chat/*` + OpenAPI
-  - Remplacer les derniers waiters/polling par `StreamMessage` quand pertinent
+  - Implémenter `tool-service` (update_description) + historique `context_modification_history`
+  - UI : composant popup chat + intégration dans `/cas-usage/[id]` + rendu du stream via `StreamMessage`/store dédié
+  - Compléter OpenAPI (`api/src/openapi/`) si on l'active réellement
   - Garder la SSE globale unique + filtrage côté UI (pas de polling)
 
 ## Scope
