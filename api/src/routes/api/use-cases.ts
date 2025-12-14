@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { db } from '../../db/client';
+import { db, pool } from '../../db/client';
 import { folders, useCases } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
@@ -13,6 +13,26 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 // import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+
+async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
+  const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+  } finally {
+    client.release();
+  }
+}
+
+async function notifyFolderEvent(folderId: string): Promise<void> {
+  const notifyPayload = JSON.stringify({ folder_id: folderId });
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
+  } finally {
+    client.release();
+  }
+}
 
 // Récupération des prompts depuis la configuration centralisée (désactivé - non utilisé)
 // const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
@@ -430,6 +450,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
         status: 'generating'
         // createdAt omitted to use defaultNow() in Postgres
       });
+      await notifyFolderEvent(folderId);
     }
     
     // Ajouter le job à la queue
@@ -497,6 +518,7 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
     await db.update(useCases)
       .set({ status: 'detailing' })
       .where(eq(useCases.id, id));
+    await notifyUseCaseEvent(id);
     
     // Extraire le nom depuis data JSONB (avec rétrocompatibilité)
     const useCaseData = useCase.data && typeof useCase.data === 'object' 

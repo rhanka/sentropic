@@ -84,6 +84,26 @@ export class QueueManager {
     }
   }
 
+  private async notifyFolderEvent(folderId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ folder_id: folderId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
   /**
    * Charger les paramètres de configuration
    */
@@ -343,7 +363,8 @@ export class QueueManager {
     }
 
     // Générer la liste de cas d'usage
-    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal);
+    const streamId = `folder_${folderId}`;
+    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal, streamId);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -354,6 +375,7 @@ export class QueueManager {
         })
         .where(eq(folders.id, folderId));
       console.log(`📁 Dossier mis à jour: ${useCaseList.dossier} (ID: ${folderId}, Company: ${companyId || 'Aucune'})`);
+      await this.notifyFolderEvent(folderId);
     }
 
     // Créer les cas d'usage en mode generating
@@ -402,11 +424,15 @@ export class QueueManager {
 
     // Insérer les cas d'usage
     await db.insert(useCases).values(draftUseCases);
+    for (const uc of draftUseCases) {
+      await this.notifyUseCaseEvent(uc.id);
+    }
 
     // Marquer le dossier comme terminé
     await db.update(folders)
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
+    await this.notifyFolderEvent(folderId);
 
     // Auto-déclencher le détail de tous les cas d'usage (sauf si pause/cancel en cours)
     if (this.cancelAllInProgress || this.paused) {
@@ -480,7 +506,8 @@ export class QueueManager {
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal);
+    const streamId = `usecase_${useCaseId}`;
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal, streamId);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
@@ -554,6 +581,7 @@ export class QueueManager {
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));
+    await this.notifyUseCaseEvent(useCaseId);
 
     // Vérifier si tous les use cases du dossier sont complétés
     const allUseCases = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
@@ -571,6 +599,7 @@ export class QueueManager {
         await db.update(folders)
           .set({ status: 'generating' })
           .where(eq(folders.id, folderId));
+        await this.notifyFolderEvent(folderId);
 
         // Ajouter le job de génération de synthèse exécutive
         try {
@@ -603,13 +632,15 @@ export class QueueManager {
       valueThreshold,
       complexityThreshold,
       model,
-      signal
+      signal,
+      streamId: `folder_${folderId}`
     });
 
     // Mettre à jour le statut du dossier à 'completed'
     await db.update(folders)
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
+    await this.notifyFolderEvent(folderId);
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
   }

@@ -81,6 +81,16 @@ function sseCompanyEvent(companyId: string, data: unknown): string {
   return `event: company_update\nid: company:${companyId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function sseFolderEvent(folderId: string, data: unknown): string {
+  const payload = JSON.stringify({ folderId, data });
+  return `event: folder_update\nid: folder:${folderId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseUseCaseEvent(useCaseId: string, data: unknown): string {
+  const payload = JSON.stringify({ useCaseId, data });
+  return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
 // GET /streams/active?since_minutes=360&limit=200
 streamsRouter.get('/active', async (c) => {
   const sinceMinutes = Number(c.req.query('since_minutes') || '360');
@@ -238,6 +248,40 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
+      const emitFolderSnapshot = async (folderId: string) => {
+        try {
+          const row = (await db.get(sql`
+            SELECT *
+            FROM folders
+            WHERE id = ${folderId}
+          `)) as unknown as Record<string, unknown> | undefined;
+          if (!row?.id || typeof row.id !== 'string') {
+            push(sseFolderEvent(folderId, { deleted: true }));
+            return;
+          }
+          push(sseFolderEvent(folderId, { folder: row }));
+        } catch {
+          // ignore
+        }
+      };
+
+      const emitUseCaseSnapshot = async (useCaseId: string) => {
+        try {
+          const row = (await db.get(sql`
+            SELECT *
+            FROM use_cases
+            WHERE id = ${useCaseId}
+          `)) as unknown as Record<string, unknown> | undefined;
+          if (!row?.id || typeof row.id !== 'string') {
+            push(sseUseCaseEvent(useCaseId, { deleted: true }));
+            return;
+          }
+          push(sseUseCaseEvent(useCaseId, { useCase: row }));
+        } catch {
+          // ignore
+        }
+      };
+
       // headers de "connexion"
       push(`: connected\n\n`);
 
@@ -296,6 +340,8 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN stream_events');
           await client.query('UNLISTEN job_events');
           await client.query('UNLISTEN company_events');
+          await client.query('UNLISTEN folder_events');
+          await client.query('UNLISTEN usecase_events');
         } catch {
           // ignore
         } finally {
@@ -334,6 +380,14 @@ streamsRouter.get('/sse', async (c) => {
             if (!companyId || typeof companyId !== 'string') return;
             if (!wantsAllCompaniesEffective && wantedCompanies.size > 0 && !wantedCompanies.has(companyId)) return;
             void emitCompanySnapshot(companyId);
+          } else if (msg.channel === 'folder_events') {
+            const folderId = payload.folder_id;
+            if (!folderId || typeof folderId !== 'string') return;
+            void emitFolderSnapshot(folderId);
+          } else if (msg.channel === 'usecase_events') {
+            const useCaseId = payload.use_case_id;
+            if (!useCaseId || typeof useCaseId !== 'string') return;
+            void emitUseCaseSnapshot(useCaseId);
           }
         } catch {
           // ignore
@@ -344,6 +398,8 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN stream_events');
       await client.query('LISTEN job_events');
       await client.query('LISTEN company_events');
+      await client.query('LISTEN folder_events');
+      await client.query('LISTEN usecase_events');
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {
