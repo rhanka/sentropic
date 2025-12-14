@@ -122,7 +122,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [x] Mettre à jour OpenAPI (`api/src/openapi/`) (minimal : endpoints chat)
 
 #### Phase 2E - Tool Service
-- [ ] Créer `api/src/services/tool-service.ts` :
+- [x] Créer `api/src/services/tool-service.ts` :
   - Exécution d'un tool **générique** `update_usecase_field` (usecase uniquement, champs `use_cases.data.*`)
   - Validation des modifications
   - Écriture dans `context_modification_history`
@@ -130,17 +130,17 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Feature d'annulation du dernier changement au niveau de l'objet
 
 ### Phase 3 : UI SvelteKit - Composants de base
-- [ ] **Unifier le widget flottant global (1 seule bulle)** :
-  - Créer `ui/src/lib/components/OperationsWidget.svelte` (ou `FloatingWidget.svelte`)
+- [x] **Unifier le widget flottant global (1 seule bulle)** :
+  - Créer `ui/src/lib/components/OperationsWidget.svelte`
     - Contient **la bulle** (bouton fixed) + **le panneau** (drawer)
     - Header avec switch de vue: **Chat** ↔ **QueueMonitor**
     - La bulle reflète un état global (jobs en cours/failed + conversations en cours/erreurs)
-  - Remplacer l’injection actuelle de `QueueMonitor` dans `ui/src/routes/+layout.svelte` par ce widget unique
-- [ ] **Refactor QueueMonitor → vue réutilisable** :
-  - Extraire le contenu du panneau dans `QueuePanel.svelte` (sans bulle, sans fixed wrapper)
-  - Réutiliser la logique existante `streamHub.setJobUpdates` pour alimenter l’icône/état, mais gérée par le widget global
+  - Remplacer l’injection de `QueueMonitor` dans `ui/src/routes/+layout.svelte` par ce widget unique
+- [x] **QueueMonitor réutilisé comme panel** (sans requalifier) :
+  - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
+  - Le titre et le bouton poubelle sont déplacés dans le header du widget
 - [ ] **UI Chat (vue dans le widget)** :
-  - Créer `ChatPanel.svelte` (liste sessions + messages + composer)
+  - Créer `ChatPanel.svelte` (liste sessions + messages + composer) — placeholder OK, à compléter
   - Streaming: réutiliser `streamHub` + `StreamMessage` (pas de 2ᵉ composant de rendu)
     - `streamId` = `assistantMessageId`
     - `StreamMessage` est la brique unique pour afficher l’avancement (reasoning/tools/content) + historique
@@ -165,7 +165,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [ ] Tests unitaires API :
   - Agrégation SSE (deltas reasoning/content)
   - Application de deltas
-  - Tool-call `update_description`
+- Tool-call `update_usecase_field`
   - Validation des modifications
 - [ ] Tests d'intégration API :
   - POST message → SSE → update description → lecture DB
@@ -279,11 +279,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 ## Status
 - **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B ✅
-- **Current**: Phase 2E - Tool Service (update_description) + UI chat
+- **Current**: Phase 3 - Widget global Chat/Queue + UI chat
 - **Next**:
-  - Implémenter `tool-service` (update_description) + historique `context_modification_history`
-  - UI : composant popup chat + intégration dans `/cas-usage/[id]` + rendu du stream via `StreamMessage`/store dédié
-  - Compléter OpenAPI (`api/src/openapi/`) si on l'active réellement
+  - UI : compléter `ChatPanel` (sessions/messages/composer) + branchement aux endpoints `/api/v1/chat/*`
+  - UI : afficher le stream chat via `StreamMessage` (streamId = assistantMessageId)
+  - Intégrer le tool `update_usecase_field` dans la boucle chat (tool calling) + UndoBar
   - Garder la SSE globale unique + filtrage côté UI (pas de polling)
 
 ## Scope

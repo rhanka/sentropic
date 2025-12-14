@@ -36,6 +36,10 @@
   - [ ] Lot B2 — Contexte documentaire (ingestion + résumé + consultation) (cf. spec/SPEC_CHATBOT.md)
   - [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
   - [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
+  - [ ] UI: améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
+    - [ ] gérer mobile (panneau plein écran / bottom-sheet)
+    - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
+    - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
