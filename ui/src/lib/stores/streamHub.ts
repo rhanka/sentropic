@@ -5,6 +5,8 @@ import { isAuthenticated } from '$lib/stores/session';
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
   | { type: 'company_update'; companyId: string; data: any }
+  | { type: 'folder_update'; folderId: string; data: any }
+  | { type: 'usecase_update'; useCaseId: string; data: any }
   | { type: string; streamId: string; sequence: number; data: any };
 
 type Subscription = {
@@ -17,6 +19,8 @@ const EVENT_TYPES = [
   // job/company
   'job_update',
   'company_update',
+  'folder_update',
+  'usecase_update',
   // stream events (normalized)
   'status',
   'reasoning_delta',
@@ -37,6 +41,8 @@ class StreamHub {
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
   private lastJobEventById = new Map<string, StreamHubEvent>();
   private lastCompanyEventById = new Map<string, StreamHubEvent>();
+  private lastFolderEventById = new Map<string, StreamHubEvent>();
+  private lastUseCaseEventById = new Map<string, StreamHubEvent>();
   // Historique compact par stream_id (on garde surtout les tool calls + un état courant reasoning/content)
   private streamHistoryById = new Map<string, StreamHubEvent[]>();
   private maxStreamIds = 50;
@@ -48,6 +54,8 @@ class StreamHub {
     try {
       for (const ev of this.lastJobEventById.values()) onEvent(ev);
       for (const ev of this.lastCompanyEventById.values()) onEvent(ev);
+      for (const ev of this.lastFolderEventById.values()) onEvent(ev);
+      for (const ev of this.lastUseCaseEventById.values()) onEvent(ev);
       for (const events of this.streamHistoryById.values()) {
         for (const ev of events) onEvent(ev);
       }
@@ -114,6 +122,12 @@ class StreamHub {
     } else if ((event as any).type === 'company_update') {
       const e = event as any;
       if (e.companyId) this.lastCompanyEventById.set(e.companyId, event);
+    } else if ((event as any).type === 'folder_update') {
+      const e = event as any;
+      if (e.folderId) this.lastFolderEventById.set(e.folderId, event);
+    } else if ((event as any).type === 'usecase_update') {
+      const e = event as any;
+      if (e.useCaseId) this.lastUseCaseEventById.set(e.useCaseId, event);
     } else {
       const e = event as any;
       if (e.streamId) {
@@ -215,6 +229,14 @@ class StreamHub {
         }
         if (type === 'company_update') {
           this.dispatch({ type, companyId: parsed.companyId, data: parsed.data });
+          return;
+        }
+        if (type === 'folder_update') {
+          this.dispatch({ type, folderId: parsed.folderId, data: parsed.data });
+          return;
+        }
+        if (type === 'usecase_update') {
+          this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
           return;
         }
 
