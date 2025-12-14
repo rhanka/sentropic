@@ -94,11 +94,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - ✅ Un seul test UAT complet suffit
 
 #### Phase 2B - Généralisation aux autres générations classiques
-- [ ] Adapter `generateUseCaseList` pour utiliser le streaming
-- [ ] Adapter `generateUseCaseDetail` pour utiliser le streaming
-- [ ] Adapter `generateExecutiveSummary` pour utiliser le streaming
-- [ ] Tous utilisent le même `stream-service.ts` (méthodes partagées)
-- [ ] Tests de régression sur tous les cas
+- [x] Adapter `generateUseCaseList` pour utiliser le streaming
+- [x] Adapter `generateUseCaseDetail` pour utiliser le streaming
+- [x] Adapter `generateExecutiveSummary` pour utiliser le streaming
+- [x] Tous utilisent le même tronc commun (orchestrateur `executeWithToolsStream`) + persistance dans `chat_stream_events`
+- [x] Intégration UI sur les vues dossiers / cas d'usage (SSE, sans polling)
 
 #### Phase 2C - Service Chat
 - [ ] Créer `api/src/services/chat-service.ts` :
@@ -239,11 +239,13 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - `generateStreamId` déterministe pour jobs (`job_<jobId>`) + **enrich entreprise streamId** : `company_<companyId>`
     - `NOTIFY job_events` (queue) + `NOTIFY company_events` (CRUD + transitions de statut)
     - Typage “safe” sur `executeWithToolsStream` (`event.data` = `unknown`) pour éviter les régressions TS/ESLint
+    - Compat OpenAI : désactivation de `reasoning.summary` pour les modèles `gpt-4.1-*` (ex: `gpt-4.1-nano-*`) pour éviter un 400
   - **UI**
     - Nouveau composant `StreamMessage` (prop `streamId`) : dernière étape + historique dépliable, deltas cumulés, auto-scroll bas, placeholder sans waiter
     - `streamHub` : connexion SSE unique + abonnements ciblés (`setStream`, `setJobUpdates`) + cache/replay + agrégation des deltas
     - `QueueMonitor` : bouton toujours à jour (job_update même replié) + suivi de stream via `StreamMessage`
     - Liste entreprises : remplacement du waiter en mode `enriching` par `StreamMessage` sur `company_<id>`
+    - Raffinements `StreamMessage` : chevron sur la ligne du titre + scrollbar discrète (zones scrollables)
 
 - [x] **Phase 2A.1** : Couche OpenAI Streaming
   - Créé `callOpenAIStream` dans `openai.ts`
@@ -267,12 +269,23 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Modifié `processCompanyEnrich` pour générer un `streamId` et le passer à `enrichCompany`
   - La queue attend toujours le résultat final (comportement inchangé)
 
+- [x] **Phase 2B (streaming dossiers + cas d'usage + synthèse)** : Généralisation aux générations classiques
+  - **API**
+    - Jobs : `use_case_list`, `use_case_detail`, `executive_summary` passent par `executeWithToolsStream`
+    - `streamId` déterministes par entité : `folder_<folderId>`, `usecase_<useCaseId>`
+    - Événements temps réel : `NOTIFY folder_events/usecase_events` + SSE `folder_update/usecase_update`
+  - **UI**
+    - Vues `/dossiers` et `/cas-usage` (liste + détail) : suivi via SSE + `StreamMessage` (plus de polling)
+    - Ergonomie cartes : suppression des badges jaunes “Génération…”, `StreamMessage` placé aux bons endroits
+    - Dossiers : masque le compteur “0 cas d’usage” pendant la génération, et “Sélectionné” affiché dans le footer (pas dans le corps)
+
 ## Status
-- **Progress**: Phase 1 + Phase 2A (POC entreprise) ✅
-- **Current**: Phase 2B - Généralisation aux autres générations classiques
+- **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B ✅
+- **Current**: Phase 2C - Service Chat
 - **Next**:
-  - Décliner des `streamId` déterministes par entité (ex: `folder_<id>`, `usecase_<id>`) pour les autres jobs
-  - Remplacer les waiters restants par `StreamMessage`
+  - Implémenter `chat-service` (sessions + messages) en streaming direct (sans queue)
+  - Ajouter les endpoints `/api/v1/chat/*` + OpenAPI
+  - Remplacer les derniers waiters/polling par `StreamMessage` quand pertinent
   - Garder la SSE globale unique + filtrage côté UI (pas de polling)
 
 ## Scope

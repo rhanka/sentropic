@@ -173,22 +173,11 @@
 
 {#if display}
   <div class="w-full max-w-full box-border text-xs text-blue-700 mt-1 bg-blue-50 p-2 rounded">
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex-1 min-w-0">
-        <div class="font-medium break-words">{prefix}: {display.title}</div>
-        {#if display.body}
-          <div
-            class="mt-1 max-h-16 overflow-y-scroll whitespace-pre-wrap break-words text-blue-900/90"
-            style="scrollbar-gutter: stable;"
-            use:scrollToEnd
-          >
-            {display.body}
-          </div>
-        {/if}
-      </div>
+    <div class="flex items-center justify-between gap-2">
+      <div class="font-medium break-words min-w-0">{prefix}: {display.title}</div>
       {#if canExpand}
         <button
-          class="text-blue-700 hover:text-blue-900 p-1 rounded hover:bg-blue-100/70 shrink-0"
+          class="text-blue-700 hover:text-blue-900 p-1 rounded hover:bg-blue-100/70 shrink-0 self-start"
           on:click={() => expanded = !expanded}
           type="button"
           aria-label={expanded ? 'Replier le détail' : 'Déplier le détail'}
@@ -205,6 +194,15 @@
         </button>
       {/if}
     </div>
+    {#if display.body}
+      <div
+        class="mt-1 max-h-16 overflow-y-scroll whitespace-pre-wrap break-words text-blue-900/90 stream-scroll"
+        style="scrollbar-gutter: stable;"
+        use:scrollToEnd
+      >
+        {display.body}
+      </div>
+    {/if}
   </div>
 
   {#if expanded && canExpand}
@@ -216,7 +214,7 @@
             <div class="font-medium">{step.title}</div>
             {#if step.body}
               <div
-                class="mt-0.5 max-h-40 overflow-y-scroll whitespace-pre-wrap break-words text-slate-800"
+                class="mt-0.5 max-h-40 overflow-y-scroll whitespace-pre-wrap break-words text-slate-800 stream-scroll"
                 style="scrollbar-gutter: stable;"
                 use:scrollToEnd
               >
@@ -238,5 +236,29 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* Scrollbar discret (WebKit + Firefox) */
+  .stream-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
+  }
+  .stream-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .stream-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .stream-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(15, 23, 42, 0.22);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .stream-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(15, 23, 42, 0.32);
+  }
+</style>
 
 
