@@ -257,7 +257,7 @@
 <div class="flex flex-col h-full">
 
   <div
-    class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 chat-scroll"
+    class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 slim-scroll"
     style="scrollbar-gutter: stable;"
     bind:this={listEl}
   >
@@ -329,29 +329,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  /* Scrollbar slim (alignée StreamMessage) */
-  .chat-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
-  }
-  .chat-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  .chat-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .chat-scroll::-webkit-scrollbar-thumb {
-    background-color: rgba(15, 23, 42, 0.22);
-    border-radius: 999px;
-    border: 3px solid transparent;
-    background-clip: content-box;
-  }
-  .chat-scroll:hover::-webkit-scrollbar-thumb {
-    background-color: rgba(15, 23, 42, 0.32);
-  }
-</style>
-
-

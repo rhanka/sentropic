@@ -148,6 +148,8 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Optimisation perf: le panneau est **monté une seule fois**, puis on fait **hide/show** (pas de remount → pas d’appels API à chaque ouverture/fermeture)
   - Optimisation perf: switch **Jobs IA ↔ Chat** en hide/show (ChatPanel + QueueMonitor restent montés)
   - Anti-reload: retour depuis “Jobs IA” vers **la même session** ne relance pas `selectSession()` (évite “Chargement du détail…”)
+  - Nettoyage: suppression de `StreamMessageLegacy.svelte` (plus de variant legacy, `StreamMessage` couvre chat + job)
+  - UI: scrollbar **uniformisée** (classe globale `.slim-scroll`) sur ChatPanel + Jobs IA + zones de détail StreamMessage
 - [x] **QueueMonitor réutilisé comme panel** (sans requalifier) :
   - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
   - Le titre et le bouton poubelle sont déplacés dans le header du widget

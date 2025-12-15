@@ -2,7 +2,6 @@
   import { onDestroy } from 'svelte';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import { apiGet } from '$lib/utils/api';
-  import StreamMessageLegacy from '$lib/components/StreamMessageLegacy.svelte';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -12,7 +11,7 @@
   export let placeholderBody: string | undefined = undefined;
 
   // Nouveau: variantes
-  export let variant: 'legacy' | 'chat' | 'job' = 'legacy';
+  export let variant: 'chat' | 'job' = 'job';
   export let finalContent: string | null | undefined = undefined; // chat: contenu final (bulle)
   export let initialEvents:
     | Array<{ eventType: string; data: unknown; sequence: number; createdAt?: string }>
@@ -84,6 +83,10 @@
 
   const isTerminalStatus = (s?: string) => s === 'completed' || s === 'failed' || s === 'done';
 
+  // Limite d'historique: sur les cartes/jobs on veut souvent un historique court,
+  // tandis que sur le chat on garde davantage d'étapes.
+  $: stepLimit = variant === 'job' ? Math.max(1, maxHistory) : 30;
+
   const upsertStep = (title: string, body?: string) => {
     const last = st.steps[st.steps.length - 1];
     if (last && last.title === title) {
@@ -91,7 +94,7 @@
       st.steps = [...st.steps];
       return;
     }
-    st.steps = [...st.steps, { title, body }].slice(-30);
+    st.steps = [...st.steps, { title, body }].slice(-stepLimit);
   };
 
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
@@ -259,9 +262,7 @@
     terminalNotified = false;
   };
 
-  $: if (variant === 'legacy') {
-    unsubscribe();
-  } else if (streamId && streamId !== subscribedTo) {
+  $: if (streamId && streamId !== subscribedTo) {
     unsubscribe();
     reset();
     void subscribe(streamId);
@@ -284,7 +285,7 @@
     (variant === 'job' || !!finalContent);
 
   // Si le parent injecte les events après coup (batch), on les applique sans re-fetch
-  $: if (variant !== 'legacy' && initialEvents && initialEvents !== lastInitialEventsRef) {
+  $: if (initialEvents && initialEvents !== lastInitialEventsRef) {
     lastInitialEventsRef = initialEvents;
     if (initialEvents.length > 0) applyEvents(initialEvents as any);
     detailLoaded = true;
@@ -292,17 +293,7 @@
   }
 </script>
 
-{#if variant === 'legacy'}
-  <StreamMessageLegacy
-    {streamId}
-    {status}
-    {maxHistory}
-    {initiallyExpanded}
-    {placeholderTitle}
-    {placeholderBody}
-  />
-{:else}
-  <div class="w-full max-w-full">
+<div class="w-full max-w-full">
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">Chargement du détail…</div>
@@ -349,7 +340,7 @@
               <li class="text-[11px] text-slate-600">
                 <div class="font-medium text-slate-600">{step.title}</div>
                 {#if step.body}
-                  <div class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto stream-scroll" use:scrollToEnd>
+                  <div class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll" use:scrollToEnd>
                     {step.body}
                   </div>
                 {/if}
@@ -381,7 +372,7 @@
         {#if hasSteps && !hasContent}
           <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
           {#if st.auxText}
-            <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto stream-scroll" use:scrollToEnd>
+            <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
               {st.auxText}
             </div>
           {/if}
@@ -389,6 +380,14 @@
       {/if}
     {:else}
       <!-- job -->
+      {#if !showStartup && !hasSteps && !isTerminalStatus(status) && (placeholderTitle || placeholderBody)}
+        <div class="text-[11px] text-slate-500 mt-0.5">{placeholderTitle ?? 'En cours…'}</div>
+        {#if placeholderBody}
+          <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
+            {placeholderBody}
+          </div>
+        {/if}
+      {/if}
       {#if showStartup}
         <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
           <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,37 +399,11 @@
       {#if hasSteps && !isTerminalStatus(status)}
         <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
         {#if st.auxText}
-          <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto stream-scroll" use:scrollToEnd>
+          <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
             {st.auxText}
           </div>
         {/if}
       {/if}
     {/if}
   </div>
-{/if}
-
-<style>
-  /* Scrollbar discret (WebKit + Firefox) */
-  .stream-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
-  }
-  .stream-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  .stream-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .stream-scroll::-webkit-scrollbar-thumb {
-    background-color: rgba(15, 23, 42, 0.22);
-    border-radius: 999px;
-    border: 3px solid transparent;
-    background-clip: content-box;
-  }
-  .stream-scroll:hover::-webkit-scrollbar-thumb {
-    background-color: rgba(15, 23, 42, 0.32);
-  }
-</style>
-
 

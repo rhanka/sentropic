@@ -113,7 +113,7 @@
 </script>
 
 <!-- QueuePanel : contenu uniquement (header/bulle gérés par ChatWidget) -->
-<div class="overflow-y-scroll h-full" style="scrollbar-gutter: stable;">
+<div class="overflow-y-scroll h-full slim-scroll" style="scrollbar-gutter: stable;">
         {#if $queueStore.jobs.length === 0}
           <div class="p-4 text-center text-gray-500">
             <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
