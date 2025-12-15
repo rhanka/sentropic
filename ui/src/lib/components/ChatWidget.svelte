@@ -12,6 +12,7 @@
   type Tab = 'chat' | 'queue';
   let activeTab: Tab = 'chat';
   let isVisible = false;
+  let hasOpenedOnce = false;
 
   // Header Chat (sessions) piloté par ChatPanel via bindings
   type ChatSession = {
@@ -55,6 +56,11 @@
       chatSessionId = null;
       return;
     }
+    // Important: si on revient sur la même session (après être passé sur Jobs),
+    // ne pas recharger les messages/streams, juste réafficher le panel.
+    if (value === chatSessionId) {
+      return;
+    }
     chatSessionId = value;
     await chatPanelRef?.selectSession?.(value);
   };
@@ -82,9 +88,7 @@
 
   const toggle = async () => {
     isVisible = !isVisible;
-    if (isVisible && $isAuthenticated) {
-      await loadJobs();
-    }
+    if (isVisible) hasOpenedOnce = true;
   };
 
   const close = () => {
@@ -158,9 +162,12 @@
     {/if}
   </button>
 
-  {#if isVisible}
-    <!-- Fenêtre plus haute, ancrée en bas et recouvrant la bulle (bulle cachée pendant ouverture) -->
-    <div class="absolute bottom-0 right-0 w-96 h-[70vh] max-h-[70vh] bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col">
+  {#if hasOpenedOnce}
+    <!-- Fenêtre montée une seule fois, puis hide/show pour éviter remount + appels API -->
+    <div
+      class="absolute bottom-0 right-0 w-96 h-[70vh] max-h-[70vh] bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col"
+      class:hidden={!isVisible}
+    >
       <!-- Header commun (sélecteur unique: sessions + jobs) -->
       <div class="p-3 border-b border-gray-200">
         <div class="flex items-center justify-between gap-2">
@@ -230,16 +237,17 @@
 
       <!-- Contenu (QueueMonitor inchangé hors header) -->
       <div class="flex-1 min-h-0">
-        {#if activeTab === 'queue'}
+        <div class="h-full" class:hidden={activeTab !== 'queue'}>
           <QueueMonitor />
-        {:else}
+        </div>
+        <div class="h-full" class:hidden={activeTab !== 'chat'}>
           <ChatPanel
             bind:this={chatPanelRef}
             bind:sessions={chatSessions}
             bind:sessionId={chatSessionId}
             bind:loadingSessions={chatLoadingSessions}
           />
-        {/if}
+        </div>
       </div>
     </div>
   {/if}

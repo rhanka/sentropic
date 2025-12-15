@@ -145,6 +145,9 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Le statut “montre” se **réinitialise** automatiquement dès qu’il n’y a plus de jobs actifs (fin/purge)
   - Fenêtre plus haute (**~70vh**), ancrée en bas à droite, et **recouvre** l’emplacement de la bulle (bulle cachée pendant l’ouverture)
   - Fix layout: wrapper en `flex flex-col` + content `flex-1 min-h-0` pour conserver le composer visible en bas
+  - Optimisation perf: le panneau est **monté une seule fois**, puis on fait **hide/show** (pas de remount → pas d’appels API à chaque ouverture/fermeture)
+  - Optimisation perf: switch **Jobs IA ↔ Chat** en hide/show (ChatPanel + QueueMonitor restent montés)
+  - Anti-reload: retour depuis “Jobs IA” vers **la même session** ne relance pas `selectSession()` (évite “Chargement du détail…”)
 - [x] **QueueMonitor réutilisé comme panel** (sans requalifier) :
   - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
   - Le titre et le bouton poubelle sont déplacés dans le header du widget
