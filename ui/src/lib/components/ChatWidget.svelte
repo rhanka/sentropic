@@ -13,25 +13,65 @@
   let activeTab: Tab = 'chat';
   let isVisible = false;
 
+  // Header Chat (sessions) piloté par ChatPanel via bindings
+  type ChatSession = {
+    id: string;
+    title?: string | null;
+    primaryContextType?: string | null;
+    primaryContextId?: string | null;
+  };
+  let chatPanelRef: any = null;
+  let chatSessions: ChatSession[] = [];
+  let chatSessionId: string | null = null;
+  let chatLoadingSessions = false;
+  let headerSelection: string = '__new__'; // '__new__' | '__jobs__' | sessionId
+
+  const formatSessionLabel = (s: ChatSession) => {
+    if (s.title) return s.title;
+    if (s.primaryContextType && s.primaryContextId) return `${s.primaryContextType}:${s.primaryContextId}`;
+    return `Session ${s.id.slice(0, 6)}`;
+  };
+
   $: hasJobs = $queueStore.jobs.length > 0;
-  $: allJobsCompleted = hasJobs && $queueStore.jobs.every(job => job.status === 'completed');
-  $: hasFailedJobs = hasJobs && $queueStore.jobs.some(job => job.status === 'failed');
+  $: allJobsCompleted = hasJobs && $queueStore.jobs.every((job) => job.status === 'completed');
+  $: hasFailedJobs = hasJobs && $queueStore.jobs.some((job) => job.status === 'failed');
+
+  $: {
+    if (activeTab === 'queue') headerSelection = '__jobs__';
+    else if (chatSessionId) headerSelection = chatSessionId;
+    else headerSelection = '__new__';
+  }
+
+  const handleHeaderSelectionChange = async (value: string) => {
+    if (value === '__jobs__') {
+      activeTab = 'queue';
+      return;
+    }
+    activeTab = 'chat';
+    if (value === '__new__') {
+      chatPanelRef?.newSession?.();
+      chatSessionId = null;
+      return;
+    }
+    chatSessionId = value;
+    await chatPanelRef?.selectSession?.(value);
+  };
 
   const onJobUpdate = (evt: any) => {
     if (evt?.type !== 'job_update') return;
     const data = evt.data ?? {};
     const job = data?.job;
     if (!job) return;
-    const exists = $queueStore.jobs.some(j => j.id === job.id);
+    const exists = $queueStore.jobs.some((j) => j.id === job.id);
     if (exists) updateJob(job.id, job);
     else addJob(job);
   };
 
   // Abonnement léger permanent aux job_update pour garder l'icône de bulle à jour
   $: if ($isAuthenticated) {
-    streamHub.setJobUpdates('operationsWidgetJobs', onJobUpdate);
+    streamHub.setJobUpdates('chatWidgetJobs', onJobUpdate);
   } else {
-    streamHub.delete('operationsWidgetJobs');
+    streamHub.delete('chatWidgetJobs');
   }
 
   onMount(async () => {
@@ -64,7 +104,7 @@
   };
 
   onDestroy(() => {
-    streamHub.delete('operationsWidgetJobs');
+    streamHub.delete('chatWidgetJobs');
   });
 </script>
 
@@ -73,7 +113,7 @@
   <button
     class="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
     on:click={toggle}
-    title="Opérations IA (Chat & Jobs)"
+    title="Chat / Jobs IA"
   >
     {#if $queueStore.isLoading}
       <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,28 +136,53 @@
 
   {#if isVisible}
     <div class="absolute bottom-16 right-0 w-96 bg-white rounded-lg shadow-xl border border-gray-200 max-h-96 overflow-hidden">
-      <!-- Header commun (switch + boutons) -->
+      <!-- Header commun (sélecteur unique: sessions + jobs) -->
       <div class="p-3 border-b border-gray-200">
         <div class="flex items-center justify-between gap-2">
-          <!-- Switch: inclut le titre minimalement -->
-          <div class="flex items-center rounded-md bg-slate-100 p-0.5">
-            <button
-              class="px-2 py-1 text-xs rounded {activeTab === 'chat' ? 'bg-white shadow text-slate-900' : 'text-slate-600'}"
-              on:click={() => (activeTab = 'chat')}
-              type="button"
-            >
-              Chat
-            </button>
-            <button
-              class="px-2 py-1 text-xs rounded {activeTab === 'queue' ? 'bg-white shadow text-slate-900' : 'text-slate-600'}"
-              on:click={() => (activeTab = 'queue')}
-              type="button"
-            >
-              Jobs IA {#if hasJobs}({$queueStore.jobs.length}){/if}
-            </button>
-          </div>
+          <!-- Session / Jobs -->
+          <select
+            class="w-52 min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+            bind:value={headerSelection}
+            disabled={chatLoadingSessions}
+            on:change={(e) => void handleHeaderSelectionChange((e.currentTarget as HTMLSelectElement).value)}
+            title="Session / Jobs"
+          >
+            <option value="__new__">Nouvelle session</option>
+            {#if chatSessions.length > 0}
+              <optgroup label="Sessions">
+                {#each chatSessions as s (s.id)}
+                  <option value={s.id}>{formatSessionLabel(s)}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            <option value="__jobs__">Jobs IA {hasJobs ? `(${$queueStore.jobs.length})` : ''}</option>
+          </select>
 
           <div class="flex items-center gap-2">
+            {#if activeTab === 'chat'}
+              <button
+                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={() => chatPanelRef?.newSession?.()}
+                title="Nouvelle session"
+                type="button"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+              </button>
+
+              <button
+                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                on:click={() => chatPanelRef?.deleteCurrentSession?.()}
+                title="Supprimer la conversation"
+                type="button"
+                disabled={!chatSessionId}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            {/if}
             {#if activeTab === 'queue'}
               <button
                 class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
@@ -142,10 +207,22 @@
       {#if activeTab === 'queue'}
         <QueueMonitor />
       {:else}
-        <ChatPanel />
+        <ChatPanel
+          bind:this={chatPanelRef}
+          bind:sessions={chatSessions}
+          bind:sessionId={chatSessionId}
+          bind:loadingSessions={chatLoadingSessions}
+        />
       {/if}
     </div>
   {/if}
 </div>
+
+<style>
+  /* Mettre "Jobs IA" en gras dans le sélecteur (support dépend du navigateur, mais OK sur Chromium) */
+  select option[value="__jobs__"] {
+    font-weight: 700;
+  }
+</style>
 
 

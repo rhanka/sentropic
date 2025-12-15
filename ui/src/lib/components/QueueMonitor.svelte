@@ -112,7 +112,7 @@
   };
 </script>
 
-<!-- QueuePanel : contenu uniquement (header/bulle gérés par OperationsWidget) -->
+<!-- QueuePanel : contenu uniquement (header/bulle gérés par ChatWidget) -->
 <div class="overflow-y-scroll max-h-80" style="scrollbar-gutter: stable;">
   {#if $queueStore.jobs.length === 0}
     <div class="p-4 text-center text-gray-500">

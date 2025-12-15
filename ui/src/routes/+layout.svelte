@@ -7,7 +7,7 @@
   import Header from '$lib/components/Header.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
-  import OperationsWidget from '$lib/components/OperationsWidget.svelte';
+  import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
 
@@ -174,5 +174,5 @@
   </main>
   <Toast />
   <NavigationGuard />
-  <OperationsWidget />
+  <ChatWidget />
 </div>
