@@ -58,6 +58,12 @@ export class ChatService {
       .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
   }
 
+  async deleteSession(sessionId: string, userId: string): Promise<void> {
+    const session = await this.getSessionForUser(sessionId, userId);
+    if (!session) throw new Error('Session not found');
+    await db.delete(chatSessions).where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
+  }
+
   async listMessages(sessionId: string, userId: string) {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');

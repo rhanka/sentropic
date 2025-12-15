@@ -29,6 +29,17 @@ chatRouter.get('/sessions/:id/messages', async (c) => {
 });
 
 /**
+ * DELETE /api/v1/chat/sessions/:id
+ * Supprime une session + cascade (messages, contexts, stream events)
+ */
+chatRouter.delete('/sessions/:id', async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+  await chatService.deleteSession(sessionId, user.userId);
+  return c.json({ ok: true });
+});
+
+/**
  * POST /api/v1/chat/messages
  * Crée un message user + un placeholder assistant, puis enfile un job `chat_message`.
  * Le SSE chat est sur streamId == assistantMessageId.
