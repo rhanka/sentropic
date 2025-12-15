@@ -118,6 +118,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - [x] Option C (historique complet tools/reasoning) :
   - API : `GET /api/v1/chat/messages/:id/stream-events` (lecture `chat_stream_events`, `streamId = messageId`)
   - UI : rehydratation des étapes tools/reasoning des derniers messages assistant lors du chargement d'une session
+  - Optimisation : endpoint batch `GET /api/v1/chat/sessions/:id/stream-events` (1 call/session au lieu de N calls/message)
 - [x] **Streaming** : pas d'endpoint dédié `GET /api/v1/chat/stream/:stream_id`.
   - Le client utilise le **SSE global** `GET /api/v1/streams/sse` et filtre par `streamId`
   - `streamId` du chat = `assistantMessageId` (retourné par `POST /chat/messages`)

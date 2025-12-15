@@ -30,6 +30,30 @@ chatRouter.get('/sessions/:id/messages', async (c) => {
 });
 
 /**
+ * GET /api/v1/chat/sessions/:id/stream-events
+ * Optimisation batch (Option C): relecture des events pour les N derniers messages assistant d'une session.
+ */
+chatRouter.get('/sessions/:id/stream-events', async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+
+  const url = new URL(c.req.url);
+  const limitMessagesRaw = url.searchParams.get('limitMessages');
+  const limitEventsRaw = url.searchParams.get('limitEvents');
+  const limitMessages = limitMessagesRaw ? Number(limitMessagesRaw) : undefined;
+  const limitEventsPerMessage = limitEventsRaw ? Number(limitEventsRaw) : undefined;
+
+  const streams = await chatService.listStreamEventsForSession({
+    sessionId,
+    userId: user.userId,
+    limitMessages: Number.isFinite(limitMessages as number) ? (limitMessages as number) : undefined,
+    limitEventsPerMessage: Number.isFinite(limitEventsPerMessage as number) ? (limitEventsPerMessage as number) : undefined
+  });
+
+  return c.json({ sessionId, streams });
+});
+
+/**
  * DELETE /api/v1/chat/sessions/:id
  * Supprime une session + cascade (messages, contexts, stream events)
  */

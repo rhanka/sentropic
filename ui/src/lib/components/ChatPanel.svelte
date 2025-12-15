@@ -181,6 +181,24 @@
     // On ne rehydrate que les messages assistant "finalisés", et on limite pour éviter N requêtes énormes
     const assistants = msgs.filter((m) => m.role === 'assistant' && !!m.content);
     const slice = assistants.slice(-20);
+    // Batch: 1 appel par session
+    try {
+      const res = await apiGet<{ sessionId: string; streams: Array<{ messageId: string; events: StreamEvent[] }> }>(
+        `/chat/sessions/${sessionIdForCall}/stream-events?limitMessages=20&limitEvents=2000`
+      );
+      if (sessionId !== sessionIdForCall) return;
+      const streams = (res as any)?.streams ?? [];
+      for (const item of streams) {
+        const sid = String(item?.messageId ?? '').trim();
+        if (!sid) continue;
+        hydratedStreamIds.add(sid);
+        buildStateFromEvents(sid, (item as any)?.events ?? []);
+      }
+      return;
+    } catch {
+      // fallback: N appels (ancien endpoint)
+    }
+
     for (const m of slice) {
       const sid = m._streamId ?? m.id;
       if (!sid || hydratedStreamIds.has(sid)) continue;
