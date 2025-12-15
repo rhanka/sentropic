@@ -28,6 +28,19 @@ export type CreateChatMessageInput = {
 };
 
 export class ChatService {
+  async getMessageForUser(messageId: string, userId: string) {
+    const [row] = await db
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role
+      })
+      .from(chatMessages)
+      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
+    return row ?? null;
+  }
+
   async getSessionForUser(sessionId: string, userId: string) {
     const [row] = await db
       .select()

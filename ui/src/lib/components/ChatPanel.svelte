@@ -40,6 +40,7 @@
   type StreamStep = { title: string; body?: string };
   type StreamState = {
     startedAtMs: number;
+    endedAtMs?: number | null;
     stepTitle: string;
     auxText: string; // reasoning/tools (gris clair)
     contentText: string; // réponse streamée dans bulle
@@ -53,6 +54,7 @@
   };
 
   let streamStateById = new Map<string, StreamState>();
+  const hydratedStreamIds = new Set<string>();
   let listEl: HTMLDivElement | null = null;
 
   const scrollToEnd = (node: HTMLElement) => {
@@ -100,6 +102,103 @@
     if (state.steps.length > 30) state.steps = state.steps.slice(-30);
   };
 
+  type StreamEvent = {
+    eventType: string;
+    data: any;
+    sequence: number;
+    createdAt?: string;
+  };
+
+  const buildStateFromEvents = (streamId: string, events: StreamEvent[]) => {
+    if (!events.length) return;
+
+    const startedEvent =
+      events.find((e) => e.eventType === 'status' && String(e?.data?.state ?? '') === 'started') ?? events[0];
+    const lastEvent = events[events.length - 1];
+    const startedAtMs = startedEvent?.createdAt ? Date.parse(startedEvent.createdAt) : Date.now();
+    const endedAtMs = lastEvent?.createdAt ? Date.parse(lastEvent.createdAt) : null;
+
+    const existing = streamStateById.get(streamId);
+    const st: StreamState = existing ?? {
+      startedAtMs,
+      endedAtMs,
+      stepTitle: 'Terminé',
+      auxText: '',
+      contentText: '',
+      toolArgsById: {},
+      toolCallIds: new Set<string>(),
+      sawReasoning: false,
+      sawTools: false,
+      sawStarted: false,
+      steps: [],
+      expanded: false
+    };
+
+    st.startedAtMs = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
+    st.endedAtMs = Number.isFinite(endedAtMs as number) ? (endedAtMs as number) : st.endedAtMs ?? null;
+
+    for (const ev of events) {
+      const type = ev.eventType;
+      const data = ev.data ?? {};
+
+      if (type === 'reasoning_delta') {
+        st.sawReasoning = true;
+        const delta = String(data?.delta ?? '');
+        st.auxText = (st.auxText || '') + delta;
+        upsertStep(st, 'Raisonnement', st.auxText);
+      } else if (type === 'tool_call_start') {
+        st.sawTools = true;
+        const name = String(data?.name ?? 'unknown');
+        const toolId = String(data?.tool_call_id ?? '').trim();
+        if (toolId) st.toolCallIds.add(toolId);
+        const args = String(data?.args ?? '').trim();
+        upsertStep(st, `Outil: ${name}`, args || undefined);
+      } else if (type === 'tool_call_delta') {
+        st.sawTools = true;
+        const toolId = String(data?.tool_call_id ?? '').trim() || 'unknown';
+        const delta = String(data?.delta ?? '');
+        if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
+        st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
+        upsertStep(st, `Outil: ${toolId} (args)`, st.toolArgsById[toolId]);
+      } else if (type === 'tool_call_result') {
+        st.sawTools = true;
+        const status = String(data?.result?.status ?? 'unknown');
+        const err = data?.result?.error;
+        upsertStep(st, `Outil: ${err ? 'erreur' : status}`, err ? String(err) : undefined);
+      } else if (type === 'done' || type === 'error') {
+        if (ev.createdAt) {
+          const t = Date.parse(ev.createdAt);
+          if (Number.isFinite(t)) st.endedAtMs = t;
+        }
+      }
+    }
+
+    streamStateById.set(streamId, st);
+    streamStateById = new Map(streamStateById);
+  };
+
+  const hydrateHistoryForMessages = async (sessionIdForCall: string, msgs: LocalMessage[]) => {
+    // On ne rehydrate que les messages assistant "finalisés", et on limite pour éviter N requêtes énormes
+    const assistants = msgs.filter((m) => m.role === 'assistant' && !!m.content);
+    const slice = assistants.slice(-20);
+    for (const m of slice) {
+      const sid = m._streamId ?? m.id;
+      if (!sid || hydratedStreamIds.has(sid)) continue;
+      hydratedStreamIds.add(sid);
+      try {
+        const res = await apiGet<{ messageId: string; streamId: string; events: StreamEvent[] }>(
+          `/chat/messages/${sid}/stream-events?limit=2000`
+        );
+        // Si l'utilisateur a changé de session entre temps, on ignore
+        if (sessionId !== sessionIdForCall) continue;
+        const events = (res as any)?.events ?? [];
+        buildStateFromEvents(sid, events);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   const toggleExpanded = (streamId: string) => {
     const st = streamStateById.get(streamId);
     if (!st) return;
@@ -145,6 +244,7 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined
       }));
+      void hydrateHistoryForMessages(id, messages);
       if (opts?.scrollToBottom) await scrollChatToBottom();
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors du chargement des messages');
@@ -282,6 +382,7 @@
 
       if (type !== 'done' && type !== 'error') return;
 
+      current.endedAtMs = now;
       // Marquer localement + re-fetch pour récupérer le content final
       messages = messages.map((m) =>
         (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: type === 'done' ? 'completed' : 'failed' } : m
@@ -406,7 +507,7 @@
 
               <!-- Chevron uniquement quand on a commencé à streamer la réponse (ou résultat final) -->
               {#if hasSteps && (hasContent || !!m.content)}
-                {@const duration = formatDuration(Date.now() - st.startedAtMs)}
+                {@const duration = formatDuration((st.endedAtMs ?? Date.now()) - st.startedAtMs)}
                 {@const toolsCount = st.toolCallIds.size}
                 <div class="flex items-center justify-between gap-2 mt-0.5">
                   <div class="text-[11px] text-slate-500">

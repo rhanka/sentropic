@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
+import { readStreamEvents } from '../../services/stream-service';
 
 export const chatRouter = new Hono();
 
@@ -37,6 +38,27 @@ chatRouter.delete('/sessions/:id', async (c) => {
   const sessionId = c.req.param('id');
   await chatService.deleteSession(sessionId, user.userId);
   return c.json({ ok: true });
+});
+
+/**
+ * GET /api/v1/chat/messages/:id/stream-events
+ * Relecture des events (option C) pour reconstruire reasoning/tools d'une session.
+ * streamId == messageId pour le chat.
+ */
+chatRouter.get('/messages/:id/stream-events', async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+  const msg = await chatService.getMessageForUser(messageId, user.userId);
+  if (!msg) return c.json({ error: 'Message not found' }, 404);
+
+  const url = new URL(c.req.url);
+  const sinceSequenceRaw = url.searchParams.get('sinceSequence');
+  const limitRaw = url.searchParams.get('limit');
+  const sinceSequence = sinceSequenceRaw ? Number(sinceSequenceRaw) : undefined;
+  const limit = limitRaw ? Number(limitRaw) : 2000;
+
+  const events = await readStreamEvents(messageId, Number.isFinite(sinceSequence as number) ? sinceSequence : undefined, Number.isFinite(limit) ? limit : 2000);
+  return c.json({ messageId, streamId: messageId, events });
 });
 
 /**

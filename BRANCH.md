@@ -115,6 +115,9 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Enfile un job `chat_message` (prépare le scaling / workers dédiés)
   - Enregistrement du message assistant avec reasoning
 - [x] Implémenter `GET /api/v1/chat/sessions` et `GET /api/v1/chat/sessions/:id/messages`
+- [x] Option C (historique complet tools/reasoning) :
+  - API : `GET /api/v1/chat/messages/:id/stream-events` (lecture `chat_stream_events`, `streamId = messageId`)
+  - UI : rehydratation des étapes tools/reasoning des derniers messages assistant lors du chargement d'une session
 - [x] **Streaming** : pas d'endpoint dédié `GET /api/v1/chat/stream/:stream_id`.
   - Le client utilise le **SSE global** `GET /api/v1/streams/sse` et filtre par `streamId`
   - `streamId` du chat = `assistantMessageId` (retourné par `POST /chat/messages`)

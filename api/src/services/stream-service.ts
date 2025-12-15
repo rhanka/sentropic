@@ -87,7 +87,8 @@ export async function getNextSequence(streamId: string): Promise<number> {
  */
 export async function readStreamEvents(
   streamId: string,
-  sinceSequence?: number
+  sinceSequence?: number,
+  limit?: number
 ): Promise<Array<{
   id: string;
   messageId: string | null;
@@ -101,11 +102,12 @@ export async function readStreamEvents(
     ? and(eq(chatStreamEvents.streamId, streamId), gt(chatStreamEvents.sequence, sinceSequence))
     : eq(chatStreamEvents.streamId, streamId);
 
-  const events = await db
+  const q = db
     .select()
     .from(chatStreamEvents)
     .where(conditions)
     .orderBy(chatStreamEvents.sequence);
+  const events = limit ? await q.limit(limit) : await q;
 
   return events.map(event => ({
     id: event.id,
