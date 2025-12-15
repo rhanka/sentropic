@@ -12,7 +12,6 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
 
   let isLoading = false;
-  let isGenerating = false;
   let matrix: MatrixConfig | null = null;
   const HUB_KEY = 'useCasesPage';
 
@@ -126,7 +125,6 @@
   // Polling désactivé: cas d'usage se mettent à jour via SSE (usecase_update)
 
   const startGeneration = async (context: string, createNewFolder: boolean, companyId: string | null) => {
-    isGenerating = true;
     let progressToastId = '';
     
     try {
@@ -171,8 +169,6 @@
         type: 'error',
         message: error instanceof Error ? error.message : 'Erreur lors de la génération'
       });
-    } finally {
-      isGenerating = false;
     }
   };
 

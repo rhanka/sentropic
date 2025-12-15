@@ -52,7 +52,8 @@
     history = next;
   };
 
-  const upsertTail = (step: Step, predicate: (s: Step) => boolean) => {
+  // eslint-disable-next-line no-unused-vars
+  const upsertTail = (step: Step, predicate: (_: Step) => boolean) => {
     const last = history[history.length - 1];
     if (last && predicate(last)) {
       history = [...history.slice(0, -1), step];

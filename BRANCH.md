@@ -131,7 +131,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 ### Phase 3 : UI SvelteKit - Composants de base
 - [x] **Unifier le widget flottant global (1 seule bulle)** :
-  - Créer `ui/src/lib/components/OperationsWidget.svelte`
+  - Créer `ui/src/lib/components/ChatWidget.svelte`
     - Contient **la bulle** (bouton fixed) + **le panneau** (drawer)
     - Header avec switch de vue: **Chat** ↔ **QueueMonitor**
     - La bulle reflète un état global (jobs en cours/failed + conversations en cours/erreurs)
@@ -140,7 +140,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
   - Le titre et le bouton poubelle sont déplacés dans le header du widget
 - [ ] **UI Chat (vue dans le widget)** :
-  - Créer `ChatPanel.svelte` (liste sessions + messages + composer) — placeholder OK, à compléter
+  - [x] `ChatPanel.svelte` : liste sessions + messages + composer (envoi `POST /chat/messages`)
+  - [x] Streaming côté UI : résumé en gris (durée + nb d'outils) + chevron + détail (raisonnement/outils sans résultat), stream du résultat dans la bulle, puis refresh messages au `done/error` (**scroll collé en bas**)
+  - [x] UX: dès `status: started`, afficher un loader "En cours…" dans la zone grise (avant reasoning/outils/réponse)
+  - [x] Déplacer la sélection de session dans le header du widget (`ChatWidget`) + actions **+** (nouvelle session locale) et **🗑️** (supprimer conversation)
+  - [x] API : `DELETE /api/v1/chat/sessions/:id` (cascade DB)
   - Streaming: réutiliser `streamHub` + `StreamMessage` (pas de 2ᵉ composant de rendu)
     - `streamId` = `assistantMessageId`
     - `StreamMessage` est la brique unique pour afficher l’avancement (reasoning/tools/content) + historique
