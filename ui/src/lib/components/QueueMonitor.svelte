@@ -144,7 +144,13 @@
                     <p class="text-xs text-gray-500">Durée: {getJobDuration(job)}</p>
                   {/if}
 
-            <StreamMessage streamId={getStreamIdForJob(job)} status={job.status} maxHistory={10} />
+            <StreamMessage
+              streamId={getStreamIdForJob(job)}
+              status={job.status}
+              variant="job"
+              historySource="stream"
+              historyLimit={2000}
+            />
 
                   {#if job.error}
                     <p class="text-xs text-red-600 mt-1 bg-red-50 p-2 rounded">

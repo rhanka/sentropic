@@ -156,6 +156,23 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - `GET /chat/sessions` + `GET /chat/sessions/:id/messages` pour recharger l’historique après refresh
   - SSE global `/streams/sse` seulement pour les messages en cours / nouveaux events (cache/replay = confort UX)
 
+#### Convergence StreamMessage (Chat vs Jobs) — analyse de rétrofit
+- **Constat** :
+  - Le `ChatPanel` a aujourd'hui **l'ergonomie cible** (zone grise steps, résumé “Raisonnement X, N outils”, chevron + détail).
+  - `StreamMessage.svelte` existe déjà, mais il est plutôt “job progress compact” (étape + historique), et ne porte pas l'UX Chat.
+- **Différences réelles Chat vs Job (faibles)** :
+  - **Chat**: rendu du **résultat** dans une bulle + remplacement par le contenu final quand `done`.
+  - **Jobs**: pas de bulle de réponse (ou pas toujours), mais on veut **la même lecture** des steps (reasoning/tools) + historique.
+  - **Hydratation historique**:
+    - Chat: scopes user/session (endpoints `/chat/*`).
+    - Jobs: scope “streamId” (ex: `job_<id>`, `company_<id>`), nécessite un endpoint générique `/streams/*`.
+- **Plan (5 étapes)** :
+  - (1) Documenter cette convergence (section actuelle).
+  - (2) Remplacer `StreamMessage` par une version unifiée qui reprend l'UX du chat (et garder un backup si besoin).
+  - (3) API: permettre la relecture d'historique par `streamId` (jobs inclus) avec `limit/since`.
+  - (4) Adapter `StreamMessage` au besoin QueueMonitor (variant job: steps + historique, sans bulle chat).
+  - (5) Adapter `QueueMonitor` pour utiliser `StreamMessage` (live SSE + historique API).
+
 ### Phase 4 : Intégration UI dans les vues existantes
 - [ ] **Chat global (pas page-scoped)** :
   - Le chat doit être disponible **partout** (comme la bulle QueueMonitor)

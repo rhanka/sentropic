@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { afterUpdate, onMount, tick } from 'svelte';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
-  import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
   type ChatSession = {
     id: string;
@@ -27,203 +27,63 @@
     _streamId?: string;
   };
 
+  type StreamEvent = { eventType: string; data: any; sequence: number; createdAt?: string };
+
   export let sessions: ChatSession[] = [];
   export let sessionId: string | null = null;
-  let messages: LocalMessage[] = [];
   export let loadingSessions = false;
+
+  let messages: LocalMessage[] = [];
   let loadingMessages = false;
   let sending = false;
   let errorMsg: string | null = null;
   let input = '';
-
-  const subKeysByStreamId = new Map<string, string>();
-  type StreamStep = { title: string; body?: string };
-  type StreamState = {
-    startedAtMs: number;
-    endedAtMs?: number | null;
-    stepTitle: string;
-    auxText: string; // reasoning/tools (gris clair)
-    contentText: string; // réponse streamée dans bulle
-    toolArgsById: Record<string, string>;
-    toolCallIds: Set<string>;
-    sawReasoning: boolean;
-    sawTools: boolean;
-    sawStarted: boolean;
-    steps: StreamStep[]; // historique reasoning/tools (sans résultat)
-    expanded: boolean; // détail étapes
-  };
-
-  let streamStateById = new Map<string, StreamState>();
-  const hydratedStreamIds = new Set<string>();
   let listEl: HTMLDivElement | null = null;
+  let pendingScrollToBottom = false;
+  let scrollToBottomInFlight = false;
 
-  const scrollToEnd = (node: HTMLElement) => {
-    const scroll = () => {
-      try {
-        node.scrollTop = node.scrollHeight;
-      } catch {
-        // ignore
-      }
-    };
-    scroll();
-    const obs = new MutationObserver(scroll);
-    obs.observe(node, { childList: true, subtree: true, characterData: true });
-    return {
-      destroy() {
-        obs.disconnect();
-      }
-    };
+  // Historique batch (Option C): messageId -> events
+  let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  let streamDetailsLoading = false;
+  const terminalRefreshInFlight = new Set<string>();
+
+  const requestScrollToBottom = () => {
+    pendingScrollToBottom = true;
   };
 
-  const scrollChatToBottom = async () => {
+  const scrollChatToBottomStable = async () => {
     await tick();
     if (!listEl) return;
-    try {
-      listEl.scrollTop = listEl.scrollHeight;
-    } catch {
-      // ignore
-    }
-  };
-
-  const formatDuration = (ms: number) => {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const m = Math.floor(s / 60);
-    const ss = String(s % 60).padStart(2, '0');
-    return `${m}m${ss}s`;
-  };
-
-  const upsertStep = (state: StreamState, title: string, body?: string) => {
-    const last = state.steps[state.steps.length - 1];
-    if (last && last.title === title) {
-      last.body = body;
-      return;
-    }
-    state.steps.push({ title, body });
-    if (state.steps.length > 30) state.steps = state.steps.slice(-30);
-  };
-
-  type StreamEvent = {
-    eventType: string;
-    data: any;
-    sequence: number;
-    createdAt?: string;
-  };
-
-  const buildStateFromEvents = (streamId: string, events: StreamEvent[]) => {
-    if (!events.length) return;
-
-    const startedEvent =
-      events.find((e) => e.eventType === 'status' && String(e?.data?.state ?? '') === 'started') ?? events[0];
-    const lastEvent = events[events.length - 1];
-    const startedAtMs = startedEvent?.createdAt ? Date.parse(startedEvent.createdAt) : Date.now();
-    const endedAtMs = lastEvent?.createdAt ? Date.parse(lastEvent.createdAt) : null;
-
-    const existing = streamStateById.get(streamId);
-    const st: StreamState = existing ?? {
-      startedAtMs,
-      endedAtMs,
-      stepTitle: 'Terminé',
-      auxText: '',
-      contentText: '',
-      toolArgsById: {},
-      toolCallIds: new Set<string>(),
-      sawReasoning: false,
-      sawTools: false,
-      sawStarted: false,
-      steps: [],
-      expanded: false
-    };
-
-    st.startedAtMs = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
-    st.endedAtMs = Number.isFinite(endedAtMs as number) ? (endedAtMs as number) : st.endedAtMs ?? null;
-
-    for (const ev of events) {
-      const type = ev.eventType;
-      const data = ev.data ?? {};
-
-      if (type === 'reasoning_delta') {
-        st.sawReasoning = true;
-        const delta = String(data?.delta ?? '');
-        st.auxText = (st.auxText || '') + delta;
-        upsertStep(st, 'Raisonnement', st.auxText);
-      } else if (type === 'tool_call_start') {
-        st.sawTools = true;
-        const name = String(data?.name ?? 'unknown');
-        const toolId = String(data?.tool_call_id ?? '').trim();
-        if (toolId) st.toolCallIds.add(toolId);
-        const args = String(data?.args ?? '').trim();
-        upsertStep(st, `Outil: ${name}`, args || undefined);
-      } else if (type === 'tool_call_delta') {
-        st.sawTools = true;
-        const toolId = String(data?.tool_call_id ?? '').trim() || 'unknown';
-        const delta = String(data?.delta ?? '');
-        if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
-        st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
-        upsertStep(st, `Outil: ${toolId} (args)`, st.toolArgsById[toolId]);
-      } else if (type === 'tool_call_result') {
-        st.sawTools = true;
-        const status = String(data?.result?.status ?? 'unknown');
-        const err = data?.result?.error;
-        upsertStep(st, `Outil: ${err ? 'erreur' : status}`, err ? String(err) : undefined);
-      } else if (type === 'done' || type === 'error') {
-        if (ev.createdAt) {
-          const t = Date.parse(ev.createdAt);
-          if (Number.isFinite(t)) st.endedAtMs = t;
-        }
-      }
-    }
-
-    streamStateById.set(streamId, st);
-    streamStateById = new Map(streamStateById);
-  };
-
-  const hydrateHistoryForMessages = async (sessionIdForCall: string, msgs: LocalMessage[]) => {
-    // On ne rehydrate que les messages assistant "finalisés", et on limite pour éviter N requêtes énormes
-    const assistants = msgs.filter((m) => m.role === 'assistant' && !!m.content);
-    const slice = assistants.slice(-20);
-    // Batch: 1 appel par session
-    try {
-      const res = await apiGet<{ sessionId: string; streams: Array<{ messageId: string; events: StreamEvent[] }> }>(
-        `/chat/sessions/${sessionIdForCall}/stream-events?limitMessages=20&limitEvents=2000`
-      );
-      if (sessionId !== sessionIdForCall) return;
-      const streams = (res as any)?.streams ?? [];
-      for (const item of streams) {
-        const sid = String(item?.messageId ?? '').trim();
-        if (!sid) continue;
-        hydratedStreamIds.add(sid);
-        buildStateFromEvents(sid, (item as any)?.events ?? []);
-      }
-      return;
-    } catch {
-      // fallback: N appels (ancien endpoint)
-    }
-
-    for (const m of slice) {
-      const sid = m._streamId ?? m.id;
-      if (!sid || hydratedStreamIds.has(sid)) continue;
-      hydratedStreamIds.add(sid);
+    // Attendre quelques frames pour les variations de layout (StreamMessage, fonts, etc.)
+    let lastHeight = -1;
+    for (let i = 0; i < 4; i++) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const h = listEl.scrollHeight;
+      if (h === lastHeight) break;
+      lastHeight = h;
       try {
-        const res = await apiGet<{ messageId: string; streamId: string; events: StreamEvent[] }>(
-          `/chat/messages/${sid}/stream-events?limit=2000`
-        );
-        // Si l'utilisateur a changé de session entre temps, on ignore
-        if (sessionId !== sessionIdForCall) continue;
-        const events = (res as any)?.events ?? [];
-        buildStateFromEvents(sid, events);
+        listEl.scrollTop = listEl.scrollHeight;
       } catch {
         // ignore
       }
     }
   };
 
-  const toggleExpanded = (streamId: string) => {
-    const st = streamStateById.get(streamId);
-    if (!st) return;
-    st.expanded = !st.expanded;
-    streamStateById.set(streamId, st);
-    streamStateById = new Map(streamStateById);
-  };
+  // Exécuter le scroll UNIQUEMENT quand on l'a explicitement demandé (load/switch/stream),
+  // pas sur des updates DOM ordinaires (ex: ouverture d'un chevron).
+  afterUpdate(() => {
+    if (!pendingScrollToBottom) return;
+    if (scrollToBottomInFlight) return;
+    pendingScrollToBottom = false;
+    scrollToBottomInFlight = true;
+    void (async () => {
+      try {
+        await scrollChatToBottomStable();
+      } finally {
+        scrollToBottomInFlight = false;
+      }
+    })();
+  });
 
   const formatApiError = (e: unknown, fallback: string) => {
     if (e instanceof ApiError) {
@@ -256,14 +116,37 @@
     try {
       const res = await apiGet<{ sessionId: string; messages: ChatMessage[] }>(`/chat/sessions/${id}/messages`);
       const raw = res.messages ?? [];
-      // Garder un streamId cohérent pour le rendu (chat: streamId == assistantMessageId)
       messages = raw.map((m) => ({
         ...m,
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined
       }));
-      void hydrateHistoryForMessages(id, messages);
-      if (opts?.scrollToBottom) await scrollChatToBottom();
+      if (opts?.scrollToBottom !== false) requestScrollToBottom();
+
+      // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
+      initialEventsByMessageId = new Map();
+      streamDetailsLoading = true;
+      void (async () => {
+        try {
+          const hist = await apiGet<{ sessionId: string; streams: Array<{ messageId: string; events: StreamEvent[] }> }>(
+            `/chat/sessions/${id}/stream-events?limitMessages=20&limitEvents=2000`
+          );
+          if (sessionId !== id) return;
+          const map = new Map<string, StreamEvent[]>();
+          for (const item of (hist as any)?.streams ?? []) {
+            const mid = String(item?.messageId ?? '').trim();
+            if (!mid) continue;
+            map.set(mid, (item as any)?.events ?? []);
+          }
+          initialEventsByMessageId = map;
+        } catch {
+          initialEventsByMessageId = new Map();
+        } finally {
+          if (sessionId === id) streamDetailsLoading = false;
+        }
+      })();
+
+      // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors du chargement des messages');
     } finally {
@@ -273,16 +156,15 @@
 
   export const selectSession = async (id: string) => {
     sessionId = id;
-    // Ouverture/switch session => on va à la fin
     await loadMessages(id, { scrollToBottom: true });
   };
 
   export const newSession = () => {
     sessionId = null;
     messages = [];
+    initialEventsByMessageId = new Map();
     errorMsg = null;
-    // On garde la liste des sessions; la nouvelle session sera créée au 1er envoi
-    void scrollChatToBottom();
+    requestScrollToBottom();
   };
 
   export const deleteCurrentSession = async () => {
@@ -293,130 +175,24 @@
       await apiDelete(`/chat/sessions/${sessionId}`);
       sessionId = null;
       messages = [];
+      initialEventsByMessageId = new Map();
       await loadSessions();
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de la suppression de la session');
     }
   };
 
-  const subscribeToStream = (streamId: string) => {
-    if (subKeysByStreamId.has(streamId)) return;
-    const key = `chatPanel:${streamId}:${Math.random().toString(36).slice(2)}`;
-    subKeysByStreamId.set(streamId, key);
-
-    // Initialiser un état (permet d'afficher l'étape dès qu'on a au moins un signal)
-    if (!streamStateById.has(streamId)) {
-      const now = Date.now();
-      streamStateById.set(streamId, {
-        startedAtMs: now,
-        stepTitle: 'En cours…',
-        auxText: '',
-        contentText: '',
-        toolArgsById: {},
-        toolCallIds: new Set<string>(),
-        sawReasoning: false,
-        sawTools: false,
-        sawStarted: false,
-        steps: [],
-        expanded: false
-      });
-      streamStateById = new Map(streamStateById);
-    }
-
-    streamHub.setStream(key, streamId, async (evt: StreamHubEvent) => {
-      const type = (evt as any)?.type as string;
-      const data = (evt as any)?.data ?? {};
-      const now = Date.now();
-      const current: StreamState =
-        streamStateById.get(streamId) ?? {
-          startedAtMs: now,
-          stepTitle: 'En cours…',
-          auxText: '',
-          contentText: '',
-          toolArgsById: {},
-          toolCallIds: new Set<string>(),
-          sawReasoning: false,
-          sawTools: false,
-          sawStarted: false,
-          steps: [],
-          expanded: false
-        };
-
-      if (type === 'status') {
-        const st = String(data?.state ?? 'unknown');
-        if (st === 'started') {
-          current.sawStarted = true;
-          current.stepTitle = '…';
-        } else {
-          current.stepTitle = `Statut: ${st}`;
-        }
-      } else if (type === 'reasoning_delta') {
-        current.stepTitle = 'Raisonnement';
-        const delta = String(data?.delta ?? '');
-        current.sawReasoning = true;
-        current.sawStarted = false;
-        current.auxText = (current.auxText || '') + delta;
-        upsertStep(current, 'Raisonnement', current.auxText);
-      } else if (type === 'tool_call_start') {
-        const name = String(data?.name ?? 'unknown');
-        current.stepTitle = `Outil: ${name}`;
-        current.sawTools = true;
-        current.sawStarted = false;
-        const toolId = String(data?.tool_call_id ?? '').trim();
-        if (toolId) current.toolCallIds.add(toolId);
-        const args = String(data?.args ?? '').trim();
-        if (args) current.auxText = args;
-        upsertStep(current, `Outil: ${name}`, args || undefined);
-      } else if (type === 'tool_call_delta') {
-        const toolId = String(data?.tool_call_id ?? '').trim() || 'unknown';
-        const delta = String(data?.delta ?? '');
-        current.sawTools = true;
-        current.sawStarted = false;
-        if (toolId && toolId !== 'unknown') current.toolCallIds.add(toolId);
-        current.toolArgsById[toolId] = (current.toolArgsById[toolId] ?? '') + delta;
-        current.stepTitle = 'Outil (args)';
-        current.auxText = current.toolArgsById[toolId];
-        upsertStep(current, `Outil: ${toolId} (args)`, current.auxText);
-      } else if (type === 'tool_call_result') {
-        const st = data?.result?.status ?? 'unknown';
-        const err = data?.result?.error;
-        current.stepTitle = err ? 'Outil: erreur' : `Outil: ${st}`;
-        if (err) current.auxText = String(err);
-        current.sawTools = true;
-        current.sawStarted = false;
-        upsertStep(current, `Outil: ${err ? 'erreur' : st}`, err ? String(err) : undefined);
-      } else if (type === 'content_delta') {
-        current.stepTitle = 'Réponse';
-        const delta = String(data?.delta ?? '');
-        current.sawStarted = false;
-        current.contentText = (current.contentText || '') + delta;
-      }
-
-      streamStateById.set(streamId, current);
-      // trigger re-render
-      streamStateById = new Map(streamStateById);
-
-      await scrollChatToBottom();
-
-      if (type !== 'done' && type !== 'error') return;
-
-      current.endedAtMs = now;
-      // Marquer localement + re-fetch pour récupérer le content final
-      messages = messages.map((m) =>
-        (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: type === 'done' ? 'completed' : 'failed' } : m
-      );
-
-      if (sessionId) await loadMessages(sessionId);
-      // Important: garder le scroll en bas quand le résultat final remplace le stream
-      await scrollChatToBottom();
-
-      // Unsubscribe: on n'a plus besoin du flux une fois terminé
-      const k = subKeysByStreamId.get(streamId);
-      if (k) {
-        streamHub.delete(k);
-        subKeysByStreamId.delete(streamId);
-      }
-    });
+  const handleAssistantTerminal = async (streamId: string, t: 'done' | 'error') => {
+    if (terminalRefreshInFlight.has(streamId)) return;
+    terminalRefreshInFlight.add(streamId);
+    messages = messages.map((m) =>
+      (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' } : m
+    );
+    if (sessionId) await loadMessages(sessionId, { scrollToBottom: true });
+    requestScrollToBottom();
+    // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
+    await tick();
+    terminalRefreshInFlight.delete(streamId);
   };
 
   const sendMessage = async () => {
@@ -440,11 +216,9 @@
       input = '';
       if (res.sessionId && res.sessionId !== sessionId) {
         sessionId = res.sessionId;
-        // refresh sessions list (nouvelle session)
         void loadSessions();
       }
 
-      // Optimistic append (UI instantanée)
       const nowIso = new Date().toISOString();
       const userMsg: LocalMessage = {
         id: res.userMessageId,
@@ -464,10 +238,7 @@
         _streamId: res.streamId
       };
       messages = [...messages, userMsg, assistantMsg];
-
-      // Subscribe au stream pour refresh à la fin
-      subscribeToStream(res.streamId);
-      await scrollChatToBottom();
+      requestScrollToBottom();
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de l’envoi');
     } finally {
@@ -477,16 +248,9 @@
 
   onMount(async () => {
     await loadSessions();
-    // Si le parent a déjà sélectionné une session (ex: retour depuis Jobs IA / réouverture widget),
-    // on recharge son contenu au montage.
     if (sessionId && messages.length === 0) {
       await loadMessages(sessionId, { scrollToBottom: true });
     }
-  });
-
-  onDestroy(() => {
-    for (const key of subKeysByStreamId.values()) streamHub.delete(key);
-    subKeysByStreamId.clear();
   });
 </script>
 
@@ -516,89 +280,20 @@
           </div>
         {:else if m.role === 'assistant'}
           {@const sid = m._streamId ?? m.id}
-          {@const st = streamStateById.get(sid)}
-          {@const hasSteps = !!st && (st.sawReasoning || st.sawTools)}
-          {@const hasContent = !!st?.contentText && st.contentText.trim().length > 0}
-          {@const showStartup = !!st?.sawStarted && !hasContent && !hasSteps}
+          {@const initEvents = initialEventsByMessageId.get(sid)}
+          {@const showDetailWaiter = !!m.content && streamDetailsLoading && initEvents === undefined}
           <div class="flex justify-start">
             <div class="max-w-[85%] w-full">
-
-              <!-- Chevron uniquement quand on a commencé à streamer la réponse (ou résultat final) -->
-              {#if hasSteps && (hasContent || !!m.content)}
-                {@const duration = formatDuration((st.endedAtMs ?? Date.now()) - st.startedAtMs)}
-                {@const toolsCount = st.toolCallIds.size}
-                <div class="flex items-center justify-between gap-2 mt-0.5">
-                  <div class="text-[11px] text-slate-500">
-                    {#if st.sawReasoning}Raisonnement {duration}{/if}
-                    {#if st.sawReasoning && toolsCount > 0}, {/if}
-                    {#if toolsCount > 0}{toolsCount} appel{toolsCount > 1 ? 's' : ''} outil{toolsCount > 1 ? 's' : ''}{/if}
-                  </div>
-                  <button
-                    class="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
-                    type="button"
-                    aria-label={st.expanded ? 'Replier le détail' : 'Déplier le détail'}
-                    on:click={() => toggleExpanded(sid)}
-                  >
-                    <svg
-                      class="w-4 h-4 transition-transform duration-150 {st.expanded ? 'rotate-180' : ''}"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-                {#if st.expanded}
-                  <div class="mt-1 bg-transparent border border-slate-100 rounded p-2">
-                    <ul class="space-y-2">
-                      {#each st.steps as step, i (i)}
-                        <li class="text-[11px] text-slate-600">
-                          <div class="font-medium text-slate-600">{step.title}</div>
-                          {#if step.body}
-                            <div class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto chat-scroll" use:scrollToEnd>
-                              {step.body}
-                            </div>
-                          {/if}
-                        </li>
-                      {/each}
-                    </ul>
-                  </div>
-                {/if}
-              {/if}
-
-              {#if m.content}
-                <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-                  {m.content}
-                </div>
-              {:else}
-                <!-- Si pas de contenu streamé, on n'affiche pas la bulle de réponse.
-                     On montre uniquement l'étape en cours (raisonnement/outils) quand elle existe. -->
-                {#if showStartup}
-                  <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                    <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    <span>En cours…</span>
-                  </div>
-                {/if}
-                {#if hasSteps && !hasContent}
-                  <div class="text-[11px] text-slate-500">
-                    Étape en cours: {st?.stepTitle ?? 'En cours…'}
-                  </div>
-                  {#if st?.auxText}
-                    <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto chat-scroll" use:scrollToEnd>
-                      {st.auxText}
-                    </div>
-                  {/if}
-                {/if}
-
-                {#if hasContent}
-                  <div class="mt-2 rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-                    {st.contentText}
-                  </div>
-                {/if}
-              {/if}
+              <StreamMessage
+                variant="chat"
+                streamId={sid}
+                status={m._localStatus ?? (m.content ? 'completed' : 'processing')}
+                finalContent={m.content ?? null}
+                initialEvents={initEvents}
+                historyPending={showDetailWaiter}
+                onStreamEvent={() => requestScrollToBottom()}
+                onTerminal={(t) => void handleAssistantTerminal(sid, t)}
+              />
             </div>
           </div>
         {/if}

@@ -91,6 +91,25 @@ function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+// GET /streams/events/:streamId?limit=2000&sinceSequence=123
+streamsRouter.get('/events/:streamId', async (c) => {
+  const streamId = c.req.param('streamId');
+  const url = new URL(c.req.url);
+  const limitRaw = url.searchParams.get('limit');
+  const sinceRaw = url.searchParams.get('sinceSequence');
+
+  const limit = limitRaw ? Number(limitRaw) : 2000;
+  const sinceSequence = sinceRaw ? Number(sinceRaw) : undefined;
+
+  const events = await readStreamEvents(
+    streamId,
+    Number.isFinite(sinceSequence as number) ? (sinceSequence as number) : undefined,
+    Number.isFinite(limit) ? limit : 2000
+  );
+
+  return c.json({ streamId, events });
+});
+
 // GET /streams/active?since_minutes=360&limit=200
 streamsRouter.get('/active', async (c) => {
   const sinceMinutes = Number(c.req.query('since_minutes') || '360');
