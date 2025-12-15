@@ -254,7 +254,7 @@
   });
 </script>
 
-<div class="flex flex-col max-h-80">
+<div class="flex flex-col h-full">
 
   <div
     class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 chat-scroll"

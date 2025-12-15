@@ -32,9 +32,11 @@
     return `Session ${s.id.slice(0, 6)}`;
   };
 
-  $: hasJobs = $queueStore.jobs.length > 0;
-  $: allJobsCompleted = hasJobs && $queueStore.jobs.every((job) => job.status === 'completed');
-  $: hasFailedJobs = hasJobs && $queueStore.jobs.some((job) => job.status === 'failed');
+  $: jobsTotal = $queueStore.jobs.length;
+  $: activeJobsCount = $queueStore.jobs.filter((job) => job.status === 'pending' || job.status === 'processing').length;
+  $: hasActiveJobs = activeJobsCount > 0;
+  $: failedJobsCount = $queueStore.jobs.filter((job) => job.status === 'failed').length;
+  $: hasFailedJobs = failedJobsCount > 0;
 
   $: {
     if (activeTab === 'queue') headerSelection = '__jobs__';
@@ -111,31 +113,54 @@
 <div class="queue-monitor fixed bottom-4 right-4 z-50">
   <!-- Bulle unique (commune Chat/Queue) -->
   <button
-    class="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
+    class="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
+    class:opacity-0={isVisible}
+    class:pointer-events-none={isVisible}
     on:click={toggle}
     title="Chat / Jobs IA"
   >
+    <!-- Icône principale: chat (toujours visible) -->
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <!-- Bulle + queue (style “chat”) -->
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+        d="M2.25 12.76c0 1.6.63 3.13 1.76 4.26v3.22c0 .62.75.93 1.19.49l2.4-2.4c.37.08.74.12 1.11.12h6.2c3.31 0 6-2.69 6-6s-2.69-6-6-6h-6.2c-3.31 0-6 2.69-6 6z"
+      />
+      <!-- Ellipsis -->
+      <circle cx="9" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+
+    <!-- Badge: loading (petit spinner) -->
     {#if $queueStore.isLoading}
-      <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-      </svg>
+      <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
+        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+      </span>
+    {:else if hasActiveJobs}
+      <!-- Badge: jobs en cours => montre -->
+      <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow" title={`${activeJobsCount} job(s) en cours`}>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </span>
     {:else if hasFailedJobs}
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M6 18L18 6M6 6l12 12"></path>
-      </svg>
-    {:else if allJobsCompleted && hasJobs}
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M5 13l4 4L19 7"></path>
-      </svg>
-    {:else}
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
+      <!-- Badge: au moins un job en échec -->
+      <span class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow" title={`${failedJobsCount} job(s) en échec`}>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </span>
     {/if}
   </button>
 
   {#if isVisible}
-    <div class="absolute bottom-16 right-0 w-96 bg-white rounded-lg shadow-xl border border-gray-200 max-h-96 overflow-hidden">
+    <!-- Fenêtre plus haute, ancrée en bas et recouvrant la bulle (bulle cachée pendant ouverture) -->
+    <div class="absolute bottom-0 right-0 w-96 h-[70vh] max-h-[70vh] bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col">
       <!-- Header commun (sélecteur unique: sessions + jobs) -->
       <div class="p-3 border-b border-gray-200">
         <div class="flex items-center justify-between gap-2">
@@ -155,7 +180,7 @@
                 {/each}
               </optgroup>
             {/if}
-            <option value="__jobs__">Jobs IA {hasJobs ? `(${$queueStore.jobs.length})` : ''}</option>
+            <option value="__jobs__">Jobs IA {jobsTotal ? `(${jobsTotal})` : ''}</option>
           </select>
 
           <div class="flex items-center gap-2">
@@ -204,16 +229,18 @@
       </div>
 
       <!-- Contenu (QueueMonitor inchangé hors header) -->
-      {#if activeTab === 'queue'}
-        <QueueMonitor />
-      {:else}
-        <ChatPanel
-          bind:this={chatPanelRef}
-          bind:sessions={chatSessions}
-          bind:sessionId={chatSessionId}
-          bind:loadingSessions={chatLoadingSessions}
-        />
-      {/if}
+      <div class="flex-1 min-h-0">
+        {#if activeTab === 'queue'}
+          <QueueMonitor />
+        {:else}
+          <ChatPanel
+            bind:this={chatPanelRef}
+            bind:sessions={chatSessions}
+            bind:sessionId={chatSessionId}
+            bind:loadingSessions={chatLoadingSessions}
+          />
+        {/if}
+      </div>
     </div>
   {/if}
 </div>

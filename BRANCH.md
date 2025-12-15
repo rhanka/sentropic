@@ -140,10 +140,15 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Header avec switch de vue: **Chat** ↔ **QueueMonitor**
     - La bulle reflète un état global (jobs en cours/failed + conversations en cours/erreurs)
   - Remplacer l’injection de `QueueMonitor` dans `ui/src/routes/+layout.svelte` par ce widget unique
+- [x] **Ergonomie de la bulle & du panneau (itérations)** :
+  - Bulle = **icône chat** (toujours visible), avec **badge montre** si jobs IA actifs (`pending/processing`)
+  - Le statut “montre” se **réinitialise** automatiquement dès qu’il n’y a plus de jobs actifs (fin/purge)
+  - Fenêtre plus haute (**~70vh**), ancrée en bas à droite, et **recouvre** l’emplacement de la bulle (bulle cachée pendant l’ouverture)
+  - Fix layout: wrapper en `flex flex-col` + content `flex-1 min-h-0` pour conserver le composer visible en bas
 - [x] **QueueMonitor réutilisé comme panel** (sans requalifier) :
   - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
   - Le titre et le bouton poubelle sont déplacés dans le header du widget
-- [ ] **UI Chat (vue dans le widget)** :
+- [x] **UI Chat (vue dans le widget)** :
   - [x] `ChatPanel.svelte` : liste sessions + messages + composer (envoi `POST /chat/messages`)
   - [x] Streaming côté UI : résumé en gris (durée + nb d'outils) + chevron + détail (raisonnement/outils sans résultat), stream du résultat dans la bulle, puis refresh messages au `done/error` (**scroll collé en bas**)
   - [x] UX: dès `status: started`, afficher un loader "En cours…" dans la zone grise (avant reasoning/outils/réponse)
@@ -152,7 +157,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Streaming: réutiliser `streamHub` + `StreamMessage` (pas de 2ᵉ composant de rendu)
     - `streamId` = `assistantMessageId`
     - `StreamMessage` est la brique unique pour afficher l’avancement (reasoning/tools/content) + historique
-- [ ] **Data fetch (non-streaming)** :
+- [x] **Data fetch (non-streaming)** :
   - `GET /chat/sessions` + `GET /chat/sessions/:id/messages` pour recharger l’historique après refresh
   - SSE global `/streams/sse` seulement pour les messages en cours / nouveaux events (cache/replay = confort UX)
 
@@ -167,11 +172,11 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Chat: scopes user/session (endpoints `/chat/*`).
     - Jobs: scope “streamId” (ex: `job_<id>`, `company_<id>`), nécessite un endpoint générique `/streams/*`.
 - **Plan (5 étapes)** :
-  - (1) Documenter cette convergence (section actuelle).
-  - (2) Remplacer `StreamMessage` par une version unifiée qui reprend l'UX du chat (et garder un backup si besoin).
-  - (3) API: permettre la relecture d'historique par `streamId` (jobs inclus) avec `limit/since`.
-  - (4) Adapter `StreamMessage` au besoin QueueMonitor (variant job: steps + historique, sans bulle chat).
-  - (5) Adapter `QueueMonitor` pour utiliser `StreamMessage` (live SSE + historique API).
+  - [x] (1) Documenter cette convergence (section actuelle).
+  - [x] (2) Remplacer `StreamMessage` par une version unifiée qui reprend l'UX du chat (backup: `StreamMessageLegacy.svelte`).
+  - [x] (3) API: permettre la relecture d'historique par `streamId` (jobs inclus) avec `limit/since` (`GET /api/v1/streams/events/:streamId`).
+  - [x] (4) Adapter `StreamMessage` au besoin QueueMonitor (variant `job`: steps + historique, sans bulle chat).
+  - [x] (5) Adapter `QueueMonitor` pour utiliser `StreamMessage` (live SSE + historique API via `historySource="stream"`).
 
 ### Phase 4 : Intégration UI dans les vues existantes
 - [ ] **Chat global (pas page-scoped)** :
