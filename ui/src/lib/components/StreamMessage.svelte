@@ -277,12 +277,15 @@
   $: showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalContent;
   $: toolsCount = st.toolCallIds.size;
   $: durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
+  // "Chargement du détail…" est un waiter UX pour le chat (détail tools/reasoning d'un message déjà finalisé),
+  // mais il n'a pas de sens pour les jobs (sinon on voit le waiter pendant les états pending).
   $: showDetailLoader =
+    variant === 'chat' &&
     (historyPending || detailLoading) &&
     !detailLoaded &&
     !hasSteps &&
     !showStartup &&
-    (variant === 'job' || !!finalContent);
+    !!finalContent;
 
   // Si le parent injecte les events après coup (batch), on les applique sans re-fetch
   $: if (initialEvents && initialEvents !== lastInitialEventsRef) {

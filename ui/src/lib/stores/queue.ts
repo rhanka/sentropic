@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'chat_message';
+export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
 export interface Job {
   id: string;

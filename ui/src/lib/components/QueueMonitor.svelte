@@ -43,6 +43,7 @@
       case 'company_enrich': return 'Enrichissement entreprise';
       case 'usecase_list': return 'Génération cas d\'usage';
       case 'usecase_detail': return 'Détail cas d\'usage';
+      case 'executive_summary': return 'Synthèse exécutive';
       default: return type;
     }
   };
@@ -51,6 +52,21 @@
     // Pour company_enrich: streamId déterministe basé sur l'entreprise (company_<companyId>)
     if (job?.type === 'company_enrich' && job?.data?.companyId) {
       return `company_${job.data.companyId}`;
+    }
+    // Pour usecase_list: streamId déterministe basé sur le dossier (folder_<folderId>)
+    if (job?.type === 'usecase_list' && (job?.data?.folderId || job?.data?.folder_id)) {
+      const folderId = job.data.folderId ?? job.data.folder_id;
+      return `folder_${folderId}`;
+    }
+    // Pour usecase_detail: streamId déterministe basé sur le cas (usecase_<useCaseId>)
+    if (job?.type === 'usecase_detail' && (job?.data?.useCaseId || job?.data?.use_case_id)) {
+      const useCaseId = job.data.useCaseId ?? job.data.use_case_id;
+      return `usecase_${useCaseId}`;
+    }
+    // Pour executive_summary: streamId déterministe basé sur le dossier (folder_<folderId>)
+    if (job?.type === 'executive_summary' && (job?.data?.folderId || job?.data?.folder_id)) {
+      const folderId = job.data.folderId ?? job.data.folder_id;
+      return `folder_${folderId}`;
     }
     // Fallback générique: streamId basé sur jobId
     return `job_${job?.id}`;
@@ -122,7 +138,7 @@
             <p>Aucun job en cours</p>
           </div>
         {:else}
-          {#each $queueStore.jobs as job (job.id)}
+          {#each $queueStore.jobs as job (`${job.id}-${job.status}-${job.completedAt || ''}`)}
             <div class="p-4 border-b border-gray-100 last:border-b-0">
               <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0">

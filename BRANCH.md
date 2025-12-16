@@ -150,6 +150,8 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Anti-reload: retour depuis “Jobs IA” vers **la même session** ne relance pas `selectSession()` (évite “Chargement du détail…”)
   - Nettoyage: suppression de `StreamMessageLegacy.svelte` (plus de variant legacy, `StreamMessage` couvre chat + job)
   - UI: scrollbar **uniformisée** (classe globale `.slim-scroll`) sur ChatPanel + Jobs IA + zones de détail StreamMessage
+  - Fix réactivité: clé composite dans `{#each}` de QueueMonitor (`${job.id}-${job.status}-${job.completedAt || ''}`) pour forcer la mise à jour de l'UI quand le status change (Svelte recrée les blocs DOM)
+  - Fix UX: correction de `showDetailLoader` dans StreamMessage pour exclure les jobs (évite d'afficher "Chargement du détail..." pour les jobs pending)
 - [x] **QueueMonitor réutilisé comme panel** (sans requalifier) :
   - `QueueMonitor` conserve le contenu existant, mais **sans bulle/wrapper fixed/header**
   - Le titre et le bouton poubelle sont déplacés dans le header du widget
