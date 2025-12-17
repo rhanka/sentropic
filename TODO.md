@@ -43,6 +43,7 @@
     - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
     - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
     - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
+    - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage) 
     - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
     - [ ] Tests : Unit/int/E2E pour upload → job résumé → statut ready/failed
     - **Couverture CU** : CU-022

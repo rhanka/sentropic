@@ -25,7 +25,7 @@ version:
 	@echo "UI_VERSION: $(UI_VERSION)"
 
 cloc:
-	@cloc --vcs=git --exclude-content=".*package.*json"
+	@cloc --vcs=git --exclude-content='.*package.*json' --not-match-f='.*_snapshot\.json$$'
 
 # -----------------------------------------------------------------------------
 # Installation & Build

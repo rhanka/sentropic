@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { useCases, folders, companies } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { executeWithTools, executeWithToolsStream } from './tools';
+import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
 import { hydrateUseCases } from '../routes/api/use-cases';
@@ -152,28 +152,18 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
 
-  // Appeler OpenAI
-  let content = '';
-  if (streamId) {
-    const result = await executeWithToolsStream(prompt, {
-      model: selectedModel,
-      useWebSearch: true,
-      responseFormat: 'json_object',
-      reasoningSummary: 'auto',
-      promptId: 'executive_summary',
-      streamId,
-      signal
-    });
-    content = result.content || '';
-  } else {
-  const response = await executeWithTools(prompt, {
+  // Appeler OpenAI (toujours avec streaming)
+  const finalStreamId = streamId || `executive_summary_${folderId}_${Date.now()}`;
+  const result = await executeWithToolsStream(prompt, {
     model: selectedModel,
     useWebSearch: true,
     responseFormat: 'json_object',
+    reasoningSummary: 'auto',
+    promptId: 'executive_summary',
+    streamId: finalStreamId,
     signal
   });
-    content = response.choices[0]?.message?.content || '';
-  }
+  const content = result.content || '';
 
   if (!content) throw new Error('No response from AI');
 

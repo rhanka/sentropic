@@ -1,4 +1,4 @@
-import { executeWithTools, executeWithToolsStream } from './tools';
+import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 
 export interface CompanyData {
@@ -73,7 +73,7 @@ export const enrichCompany = async (
     return enrichCompanyStream(companyName, streamId, model, signal);
   }
 
-  // Sinon, utiliser l'ancienne méthode (non-streaming) pour compatibilité
+  // Utiliser executeWithToolsStream même sans streamId (générer un streamId temporaire)
   const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
   
   if (!companyInfoPrompt) {
@@ -85,14 +85,17 @@ export const enrichCompany = async (
     .replace('{{company_name}}', companyName)
     .replace('{{industries}}', industriesList);
 
-  const response = await executeWithTools(prompt, { 
+  const finalStreamId = streamId || `company_enrich_${Date.now()}`;
+  const { content } = await executeWithToolsStream(prompt, {
     model: model || 'gpt-4.1-nano', 
     useWebSearch: true,
     responseFormat: 'json_object',
+    reasoningSummary: 'auto',
+    promptId: 'company_info',
+    streamId: finalStreamId,
     signal
   });
 
-  const content = response.choices[0]?.message?.content;
   if (!content) {
     throw new Error('Aucune réponse reçue de l\'IA');
   }

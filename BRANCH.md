@@ -1,13 +1,15 @@
 # Feature: Lot A — Mise à jour ciblée d'un objet (Chatbot)
 
+> **Référence** : Spécification complète dans `spec/SPEC_CHATBOT.md` (source de vérité). Ce document (`BRANCH.md`) suit l'implémentation du Lot A.
+
 ## Objective
 Implémenter la fonctionnalité de base du chatbot permettant à l'IA de proposer et d'appliquer une amélioration ciblée sur un use case existant avec reasoning en temps réel et traçabilité complète. Le parcours folder sera ajouté ultérieurement.
 
 **Valeur métier** : Démonstration client dès le premier incrément. L'IA propose et applique une amélioration ciblée sur un objet métier existant avec reasoning temps réel et traçabilité.
 
-**Portée fonctionnelle** : Mise à jour de `use_cases.data.description` uniquement pour cette première itération (le parcours folder sera ajouté ultérieurement).
+**Portée fonctionnelle** : Mise à jour de `use_cases.data.*` via tool `update_usecase_field` (use case uniquement). Extension aux autres objets (folder, company, executive_summary) prévue dans les Lots suivants.
 
-**Couverture CU** : CU-001, CU-003, CU-004 (minimal), CU-002 (basique), CU-010, CU-016
+**Couverture CU** : CU-001 (use case), CU-002 (partiel), CU-003, CU-004, CU-005 (use case), CU-010 (partiel), CU-015 (partiel), CU-016 (partiel), CU-019 (partiel), CU-020 (partiel), CU-021 (partiel)
 
 ## Plan / Todo
 
@@ -258,11 +260,12 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Instructions explicites pour regrouper les URLs dans un seul appel `web_extract` (évite les appels multiples)
   - Alternative : inclure le contexte dans les messages de conversation (moins recommandé)
 
-- [x] **4.6 - Tests et validation** :
-  - Test manuel : sur `/cas-usage/[id]`, demander une modification du use case et vérifier que le tool est appelé
-  - Vérifier que les modifications sont bien écrites en DB (`use_cases.data`)
-  - Vérifier que l'historique est créé (`context_modification_history`, `chat_contexts`)
-  - Vérifier que le modèle continue la conversation après l'exécution du tool
+- [x] **4.6 - Tests et validation (manuels)** :
+  - [x] Test manuel : sur `/cas-usage/[id]`, demander une modification du use case et vérifier que le tool est appelé
+  - [x] Vérifier que les modifications sont bien écrites en DB (`use_cases.data`)
+  - [x] Vérifier que l'historique est créé (`context_modification_history`, `chat_contexts`)
+  - [x] Vérifier que le modèle continue la conversation après l'exécution du tool
+  - **Note** : Tests automatisés détaillés dans Phase 5
 
 **Critères de validation Phase 4** :
 - ✅ Le contexte est automatiquement détecté depuis la route
@@ -273,20 +276,244 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - ✅ L'historique des modifications est tracé
 
 ### Phase 5 : Tests
-- [ ] Tests unitaires API :
-  - Agrégation SSE (deltas reasoning/content)
-  - Application de deltas
-- Tool-call `update_usecase_field`
-  - Validation des modifications
-- [ ] Tests d'intégration API :
-  - POST message → SSE → update description → lecture DB
-  - Vérification `context_modification_history`
-  - Vérification snapshots dans `chat_contexts`
-- [ ] Tests E2E Playwright :
-  - Parcours "demande d'amélioration" sur un use case puis annulation
-  - Vérification description mise à jour
-  - Vérification historique visible
-  - Test de l'annulation du dernier changement
+
+> **Référence** : Stratégie de test définie dans `.cursor/rules/testing.mdc` (pyramide : 70% unit, 20% intégration, 10% E2E)
+
+#### 5.0 - Vérifications préliminaires (Typecheck & Lint) ✅
+
+> **Note** : Avant de commencer les tests fonctionnels, s'assurer que le code compile et respecte les règles de lint.
+
+- [x] **Typecheck API** :
+  - [x] `make typecheck-api` : Vérifier que TypeScript compile sans erreurs
+  - [x] Corriger toutes les erreurs de type avant de continuer
+  - Corrections effectuées :
+    - Fix type `currentMessages` pour accepter `role: 'tool'` dans `chat-service.ts`
+    - Suppression des imports `executeWithTools` obsolètes dans `context-company.ts` et `executive-summary.ts`
+
+- [x] **Typecheck UI** :
+  - [x] `make typecheck-ui` : Vérifier que SvelteKit compile sans erreurs
+  - [x] Aucune erreur de type (0 errors, 0 warnings)
+
+- [x] **Lint API** :
+  - [x] `make lint-api` : Vérifier que le code API respecte les règles ESLint
+  - [x] Corriger tous les warnings/erreurs de lint avant de continuer
+  - Corrections effectuées :
+    - `maxIterations` changé en `const` dans `chat-service.ts`
+    - Variable `streamDone` supprimée (non utilisée) dans `chat-service.ts`
+    - Variable `nextData` supprimée (non utilisée) dans `tool-service.ts`
+    - Fonction `setAtPath` supprimée (non utilisée) dans `tool-service.ts`
+    - Import `callOpenAI` non utilisé supprimé dans `tools.ts`
+
+- [x] **Lint UI** :
+  - [x] `make lint-ui` : Vérifier que le code UI respecte les règles ESLint/Svelte
+  - [x] Aucune erreur de lint
+
+**Commandes** :
+- `make typecheck-api`
+- `make typecheck-ui`
+- `make lint-api`
+- `make lint-ui`
+
+#### 5.1 - Tests unitaires API (70% de la couverture)
+
+> **Note** : Dans ce projet, les tests unitaires testent soit des **fonctions pures** (sans dépendances), soit des **services isolés** (logique métier d'un service, même s'ils utilisent DB SQLite de test). La distinction clé : **pas d'endpoints HTTP** (`app` de Hono). Les services qui utilisent la DB SQLite de test sont considérés comme unitaires s'ils testent la logique métier isolée (ex: `session-manager.test.ts`, `challenge-manager.test.ts`).
+
+**Fichiers à créer** : `api/tests/unit/stream-service.test.ts`, `api/tests/unit/tool-service.test.ts`
+
+- [ ] **Stream Service** (`api/tests/unit/stream-service.test.ts`) :
+  - [ ] Setup : `beforeEach`/`afterEach` pour cleanup DB SQLite de test
+  - [ ] `writeStreamEvent()` : écriture dans `chat_stream_events` avec séquence correcte (DB SQLite de test)
+  - [ ] `writeStreamEvent()` : PostgreSQL NOTIFY avec payload minimal (mock `pool.query` ou test manuel)
+  - [ ] `getNextSequence()` : incrémentation séquentielle par `stream_id` (DB SQLite de test)
+  - [ ] `readStreamEvents()` : lecture avec filtres `sinceSequence` et `limit` (DB SQLite de test)
+  - [ ] `generateStreamId()` : génération déterministe pour différents contextes (fonction pure)
+  - [ ] Gestion des séquences : unicité, ordre strict, déduplication (DB SQLite de test)
+
+- [ ] **Tool Service** (`api/tests/unit/tool-service.test.ts`) :
+  - [ ] Setup : `beforeEach` → créer use case de test en DB SQLite, `afterEach` → cleanup
+  - [ ] `readUseCase()` : lecture depuis DB avec validation `useCaseId` (DB SQLite de test)
+  - [ ] `updateUseCaseFields()` : validation des arguments (useCaseId, updates array) - fonction pure
+  - [ ] `updateUseCaseFields()` : validation sécurité (useCaseId correspond au contexte) - fonction pure
+  - [ ] `updateUseCaseFields()` : utilisation de `jsonb_set` pour mises à jour partielles (DB SQLite de test)
+  - [ ] `updateUseCaseFields()` : écriture dans `context_modification_history` (DB SQLite de test)
+  - [ ] `updateUseCaseFields()` : snapshots avant/après dans `chat_contexts` (DB SQLite de test)
+  - [ ] `updateUseCaseFields()` : PostgreSQL NOTIFY `usecase_update` (mock `pool.query`)
+  - [ ] Gestion des erreurs : paths invalides, valeurs invalides, limites (max 50 updates)
+
+- [ ] **Tools (web_extract)** (`api/tests/unit/tools.test.ts`) :
+  - [ ] `extractUrlContent()` : appel avec une seule URL (compatibilité, mock Tavily API)
+  - [ ] `extractUrlContent()` : appel avec array d'URLs (un seul appel Tavily, mock Tavily API)
+  - [ ] `extractUrlContent()` : parsing correct de `raw_content` depuis `results[]` (mock Tavily response)
+  - [ ] `extractUrlContent()` : gestion erreur HTTP (mock fetch avec `resp.ok = false`)
+  - [ ] `extractUrlContent()` : gestion contenu vide (warning log, retour structure correcte)
+  - [ ] Validation array vide dans `executeWithToolsStream` : rejet avec erreur claire (mock tool call avec `{"urls":[]}`)
+
+- [ ] **Utilitaires purs** (si fonctions utilitaires créées) :
+  - [ ] Fonctions de parsing/formatage : tests sans DB (fonctions pures)
+  - [ ] Fonctions de validation : tests sans DB (fonctions pures)
+
+> **Note sur Chat Service et OpenAI Service** : `chat-service.ts` et `openai.ts` contiennent de la logique qui nécessite des appels OpenAI réels ou des mocks complexes. Ces services seront testés en **intégration** via les endpoints HTTP (`api/tests/api/chat.test.ts`, `api/tests/ai/chat-tools.test.ts`) plutôt qu'en unitaire.
+
+**Commandes** :
+- `make test-api SCOPE=tests/unit/stream-service.test.ts`
+- `make test-api SCOPE=tests/unit/tool-service.test.ts`
+- `make test-api SCOPE=tests/unit/tools.test.ts`
+
+#### 5.2 - Tests d'intégration API (20% de la couverture)
+
+> **Note** : Les tests d'intégration testent les **endpoints HTTP complets** avec `app` de Hono. Ils utilisent DB SQLite de test et testent le flux complet : requête HTTP → authentification → service → DB → réponse HTTP. Utiliser `createAuthenticatedUser()` et `authenticatedRequest()` depuis `api/tests/utils/auth-helper.ts`. Pattern : `beforeEach` pour créer user, `afterEach` pour `cleanupAuthData()`.
+
+**Fichiers à créer** : `api/tests/api/chat.test.ts`, `api/tests/api/streams.test.ts`, `api/tests/ai/chat-tools.test.ts`
+
+> **Note sur Chat Service** : `chat-service.ts` contient à la fois de la logique métier (création sessions/messages) ET de la génération IA (appels OpenAI). Les tests de logique métier pure peuvent être unitaires (DB SQLite), mais `runAssistantGeneration()` avec appels OpenAI réels sera testé en intégration (endpoints HTTP).
+
+- [ ] **Endpoints Chat** (`api/tests/api/chat.test.ts`) :
+  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
+  - [ ] `POST /api/v1/chat/messages` : création session si nécessaire (via `authenticatedRequest`)
+  - [ ] `POST /api/v1/chat/messages` : enregistrement message user
+  - [ ] `POST /api/v1/chat/messages` : job `chat_message` enfilé en queue
+  - [ ] `POST /api/v1/chat/messages` : retour `sessionId`, `userMessageId`, `assistantMessageId`, `streamId`
+  - [ ] `GET /api/v1/chat/sessions` : liste sessions pour user (filtrée par user_id)
+  - [ ] `GET /api/v1/chat/sessions/:id` : récupération session avec messages (vérifier user_id)
+  - [ ] `GET /api/v1/chat/sessions/:id/messages` : liste messages ordonnée
+  - [ ] `GET /api/v1/chat/sessions/:id/stream-events` : batch events pour session
+  - [ ] `GET /api/v1/chat/messages/:id/stream-events` : events pour message
+  - [ ] `DELETE /api/v1/chat/sessions/:id` : suppression avec cascade
+  - [ ] Validation : contexte automatique depuis `primaryContextType`/`primaryContextId` (dans body POST)
+  - [ ] Validation : erreurs (session non trouvée → 404, user non autorisé → 403, pas d'auth → 401)
+
+- [ ] **Endpoints Streams** (`api/tests/api/streams.test.ts`) :
+  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
+  - [ ] `GET /api/v1/streams/sse` : connexion SSE avec filtrage par `streamId` (query param)
+  - [ ] `GET /api/v1/streams/sse` : réception événements en temps réel (NOTIFY) - mock EventSource ou test manuel
+  - [ ] `GET /api/v1/streams/events/:streamId` : historique avec `limit` et `sinceSequence` (via `authenticatedRequest`)
+  - [ ] Validation : événements `reasoning_delta`, `content_delta`, `tool_call_*`, `done`, `error`
+  - [ ] Validation : ordre séquentiel, déduplication
+  - [ ] Validation : 401 sans authentification
+
+- [ ] **Tool Calls Intégration** (`api/tests/ai/chat-tools.test.ts`) :
+  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, créer use case de test via endpoint, `afterEach` → `cleanupAuthData()`
+  - [ ] Parcours complet : `POST /api/v1/chat/messages` avec `primaryContextType: 'usecase'` → job enfilé → tool call `read_usecase` → résultat dans stream
+  - [ ] Parcours complet : `POST /api/v1/chat/messages` → tool call `update_usecase_field` → DB mise à jour (vérifier `use_cases.data` via `GET /api/v1/use-cases/:id`)
+  - [ ] Parcours complet : `POST /api/v1/chat/messages` → tool call `web_search` → résultats dans stream (mock Tavily API si nécessaire pour éviter coûts)
+  - [ ] Parcours complet : `POST /api/v1/chat/messages` → tool call `web_extract` (array URLs) → contenus extraits (mock Tavily API, vérifier un seul appel Tavily pour plusieurs URLs)
+  - [ ] Validation `web_extract` array vide : tool call avec `{"urls":[]}` → erreur claire dans stream (pas d'appel Tavily)
+  - [ ] Vérification : `context_modification_history` créé avec bonnes valeurs (lecture DB directe via `db.select()`)
+  - [ ] Vérification : `chat_contexts` avec snapshots avant/après (lecture DB directe)
+  - [ ] Vérification : `chat_stream_events` contient tous les événements (reasoning, content, tools) - lecture via `GET /api/v1/streams/events/:streamId`
+  - [ ] Vérification : `use_cases.data` mis à jour avec `jsonb_set` (partiel, vérifier que seuls les champs modifiés changent) - lecture via endpoint
+  - [ ] Vérification : PostgreSQL NOTIFY `usecase_update` émis (test manuel ou vérification via SSE si applicable)
+  - [ ] Validation sécurité : `useCaseId` doit correspondre au contexte de session (test avec `useCaseId` différent → erreur 403/400)
+  - [ ] Validation : boucle itérative (plusieurs rounds de tool calls) - test avec prompt demandant plusieurs modifications
+  - [ ] Validation : continuation conversation après tool call (envoyer un 2e message via `POST /api/v1/chat/messages`, vérifier historique via `GET /api/v1/chat/sessions/:id/messages`)
+
+- [ ] **Générations classiques avec executeWithToolsStream** (`api/tests/ai/classic-generations.test.ts`) :
+  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, créer dossier/use case de test, `afterEach` → `cleanupAuthData()`
+  - [ ] `generateUseCaseList` : génération avec streaming (vérifier `executeWithToolsStream` utilisé, pas `executeWithTools`)
+  - [ ] `generateUseCaseDetail` : génération avec streaming (vérifier streamId déterministe `usecase_<id>`)
+  - [ ] `generateExecutiveSummary` : génération avec streaming (vérifier streamId déterministe `folder_<id>`)
+  - [ ] `enrichCompany` : génération avec streaming (vérifier streamId déterministe `company_<id>`)
+  - [ ] Validation : tous les événements écrits dans `chat_stream_events` avec `message_id=null` (générations classiques)
+  - [ ] Validation : `web_extract` avec array d'URLs → un seul appel Tavily (mock Tavily API, vérifier nombre d'appels)
+  - [ ] Validation : `web_extract` avec array vide → erreur claire (pas d'appel Tavily, erreur dans stream)
+
+**Commandes** :
+- `make test-api SCOPE=tests/api/chat.test.ts`
+- `make test-api SCOPE=tests/api/streams.test.ts`
+- `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts`
+- `make test-api-ai SCOPE=tests/ai/classic-generations.test.ts`
+
+#### 5.3 - Tests E2E Playwright (10% de la couverture)
+
+> **Note** : Les tests E2E testent les composants Svelte via l'UI réelle. Pas d'auth explicite (utilisent l'auth réelle de l'app). Pattern : `test.describe()` pour grouper, `test()` pour chaque scénario. Utiliser `page.goto()`, `page.locator()`, `expect().toBeVisible()`.
+
+**Fichier à créer** : `e2e/tests/chat.spec.ts`
+
+- [ ] **Parcours Chat de base** :
+  - [ ] Ouvrir ChatWidget depuis n'importe quelle page
+  - [ ] Créer une nouvelle session
+  - [ ] Envoyer un message utilisateur
+  - [ ] Vérifier affichage reasoning en streaming (si disponible)
+  - [ ] Vérifier affichage réponse assistant
+  - [ ] Vérifier scroll automatique en bas
+  - [ ] Fermer et rouvrir le widget : session conservée
+
+- [ ] **Parcours Tool Call sur Use Case** :
+  - [ ] Naviguer vers `/cas-usage/[id]` (use case existant)
+  - [ ] Ouvrir ChatWidget (clic sur bulle chat en bas à droite)
+  - [ ] Vérifier que le contexte est détecté (pas de sélecteur visible)
+  - [ ] Envoyer message : "Reformule le problème en bullet points"
+  - [ ] Vérifier affichage reasoning en streaming (si disponible)
+  - [ ] Vérifier tool `read_usecase` appelé (dans détail dépliable de `StreamMessage`)
+  - [ ] Vérifier tool `update_usecase_field` appelé (dans détail dépliable)
+  - [ ] Vérifier modification appliquée en DB (refresh page, vérifier contenu)
+  - [ ] Vérifier historique visible dans `StreamMessage` (accordéon déplié)
+  - [ ] Vérifier refresh automatique UI après modification (SSE, pas besoin de refresh)
+
+- [ ] **Parcours Tool Call Web** :
+  - [ ] Naviguer vers `/cas-usage/[id]` avec références (use case avec `data.references` rempli)
+  - [ ] Ouvrir ChatWidget
+  - [ ] Envoyer message : "Analyse les références en détail"
+  - [ ] Vérifier tool `read_usecase` appelé (dans détail dépliable)
+  - [ ] Vérifier tool `web_extract` appelé avec array d'URLs (un seul appel, vérifier dans détail)
+  - [ ] Vérifier contenus extraits affichés dans réponse assistant (texte visible)
+  - [ ] Cas sans références : use case sans `data.references` → vérifier que `web_extract` n'est pas appelé avec array vide (ou erreur claire si appelé)
+
+- [ ] **Parcours Multi-sessions** :
+  - [ ] Créer plusieurs sessions pour le même use case
+  - [ ] Basculer entre sessions
+  - [ ] Vérifier messages conservés par session
+  - [ ] Supprimer une session
+  - [ ] Vérifier autres sessions intactes
+
+- [ ] **Parcours QueueMonitor intégré** :
+  - [ ] Basculer Chat ↔ Jobs IA dans ChatWidget
+  - [ ] Vérifier jobs affichés avec streaming
+  - [ ] Vérifier `StreamMessage` pour jobs (variant `job`)
+  - [ ] Vérifier historique stream pour jobs
+
+- [ ] **Gestion erreurs** :
+  - [ ] Message avec erreur OpenAI : vérifier affichage erreur
+  - [ ] Tool call avec arguments invalides : vérifier message d'erreur
+  - [ ] Tool call avec `useCaseId` ne correspondant pas au contexte : vérifier rejet
+  - [ ] Tool call `web_extract` avec array vide : vérifier erreur claire affichée (pas d'erreur 400 Tavily)
+
+**Commande** :
+- `make test-e2e E2E_test=tests/chat.spec.ts`
+
+#### 5.4 - Tests UI (unitaires SvelteKit - stores et utilitaires uniquement)
+
+> **Note** : Les tests UI testent uniquement les **stores** et **utilitaires**, pas les composants Svelte. Les composants (`ChatWidget`, `ChatPanel`, `StreamMessage`) sont testés en E2E uniquement. Utiliser `mockFetchJsonOnce()` depuis `ui/tests/test-setup.ts` pour mocker les appels API.
+
+**Fichiers à créer** : `ui/tests/stores/streamHub.test.ts`, `ui/tests/utils/stream.test.ts` (si utilitaires spécifiques)
+
+- [ ] **streamHub Store** (`ui/tests/stores/streamHub.test.ts`) :
+  - [ ] Connexion SSE (mock EventSource)
+  - [ ] Agrégation deltas (reasoning/content)
+  - [ ] Cache/replay des événements
+  - [ ] Abonnements ciblés par `streamId`
+  - [ ] Gestion des erreurs de connexion
+
+- [ ] **Utilitaires stream** (`ui/tests/utils/stream.test.ts`) (si utilitaires créés) :
+  - [ ] Parsing des événements SSE
+  - [ ] Formatage des données stream
+  - [ ] Helpers de transformation
+
+**Commandes** :
+- `make test-ui SCOPE=tests/stores/streamHub.test.ts`
+- `make test-ui SCOPE=tests/utils/stream.test.ts` (si applicable)
+
+#### 5.5 - Critères de validation Phase 5
+
+- [x] **Prérequis** : Typecheck et lint passent (`make typecheck-api`, `make typecheck-ui`, `make lint-api`, `make lint-ui`) ✅
+- [ ] Tous les tests unitaires passent (`make test-api-unit`, `make test-ui-unit`)
+- [ ] Tous les tests d'intégration passent (`make test-api`, `make test-api-ai`)
+- [ ] Tous les tests E2E passent (`make test-e2e`)
+- [ ] Couverture minimale : 70% unit, 20% intégration, 10% E2E (selon pyramide)
+- [ ] Tests isolés et répétables
+- [ ] Pas de dépendances externes pour tests unitaires (mocks)
+- [ ] Tests d'intégration avec DB SQLite de test
+- [ ] Tests E2E avec Docker Compose complet
 
 ### Phase 6 : UndoBar (après validation des tests)
 - [ ] **UndoBar** :
@@ -395,14 +622,35 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Dossiers : masque le compteur “0 cas d’usage” pendant la génération, et “Sélectionné” affiché dans le footer (pas dans le corps)
 
 ## Status
-- **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B + Phase 2E (Tool Service défini) + Phase 3 (Widget global Chat/Queue + UI chat) ✅
-- **Current**: Phase 4 - Intégration tool call dans le chat
+- **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B + Phase 2C + Phase 2D + Phase 2E (Tool Service) + Phase 3 (Widget global Chat/Queue + UI chat) + Phase 4 (Intégration tool call) ✅
+- **Current**: Phase 5 - Tests (unitaires, intégration, E2E)
 - **Next**:
-  - UI : Détection automatique du contexte depuis la route (Phase 4.1)
-  - API : Passage du tool à OpenAI et gestion des tool calls (Phase 4.2-4.5)
-  - Tests : Phase 5 (unitaires, intégration, E2E)
+  - Tests : Phase 5 (détaillée ci-dessous)
   - UndoBar : Phase 6 (après validation des tests)
   - Documentation : Phase 7
+
+## Résumé des modifications depuis main
+
+**31 commits** avec **8152 insertions** et **908 suppressions** sur **42 fichiers**.
+
+**Principales fonctionnalités implémentées** :
+- ✅ Architecture streaming complète (OpenAI → DB → NOTIFY → SSE)
+- ✅ Service chat avec sessions et messages
+- ✅ Tools : `read_usecase`, `update_usecase_field`, `web_search`, `web_extract`
+- ✅ UI : ChatWidget unifié (Chat + QueueMonitor), ChatPanel, StreamMessage
+- ✅ Détection automatique du contexte depuis la route
+- ✅ Historique complet (stream-events, modification history, snapshots)
+- ✅ Refresh automatique UI après modifications (SSE events)
+
+**Fichiers principaux créés/modifiés** :
+- `api/src/services/chat-service.ts` (530 lignes)
+- `api/src/services/stream-service.ts` (155 lignes)
+- `api/src/services/tool-service.ts` (246 lignes)
+- `api/src/services/tools.ts` (376 lignes modifiées)
+- `ui/src/lib/components/ChatWidget.svelte` (263 lignes)
+- `ui/src/lib/components/ChatPanel.svelte` (380 lignes)
+- `ui/src/lib/components/StreamMessage.svelte` (412 lignes)
+- `ui/src/lib/stores/streamHub.ts` (268 lignes)
 
 ## Scope
 - **API** : Nouveaux endpoints chat, streaming SSE, tools
@@ -412,8 +660,9 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 - **CI** : Vérification que les tests passent dans GitHub Actions
 
 ## Références
-- Spécification complète : `spec/SPEC_CHATBOT.md`
-- Lot A détaillé : `spec/SPEC_CHATBOT.md` lignes 800-818
-- Modèle de données : `spec/SPEC_CHATBOT.md` lignes 228-426
-- Architecture streaming : `spec/SPEC_CHATBOT.md` lignes 119-138
-- Composants UI : `spec/SPEC_CHATBOT.md` lignes 146-203
+- **Spécification complète** : `spec/SPEC_CHATBOT.md` (source de vérité pour les Lots A, B, C, D, E)
+- **Stratégie de test** : `.cursor/rules/testing.mdc` (pyramide : 70% unit, 20% intégration, 10% E2E)
+- **Lot A détaillé** : `spec/SPEC_CHATBOT.md` lignes 703-723
+- **Modèle de données** : `spec/SPEC_CHATBOT.md` lignes 185-571
+- **Architecture streaming** : `spec/SPEC_CHATBOT.md` lignes 120-138
+- **Composants UI** : `spec/SPEC_CHATBOT.md` lignes 149-160

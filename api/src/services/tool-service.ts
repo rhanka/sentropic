@@ -58,24 +58,7 @@ function getAtPath(root: unknown, segments: string[]): unknown {
   return cur;
 }
 
-function setAtPath(root: unknown, segments: string[], value: unknown): unknown {
-  if (segments.length === 0) return value;
-  const [head, ...tail] = segments;
-  const idx = Number(head);
-
-  // array index
-  if (Number.isInteger(idx)) {
-    const arr = Array.isArray(root) ? [...root] : [];
-    const current = arr[idx];
-    arr[idx] = tail.length === 0 ? value : setAtPath(current, tail, value);
-    return arr;
-  }
-
-  const obj = (root && typeof root === 'object' && !Array.isArray(root)) ? ({ ...(root as Record<string, unknown>) }) : {};
-  const current = (obj as Record<string, unknown>)[head];
-  (obj as Record<string, unknown>)[head] = tail.length === 0 ? value : setAtPath(current, tail, value);
-  return obj;
-}
+// setAtPath supprimé : on utilise maintenant jsonb_set directement dans SQL pour les mises à jour partielles
 
 async function getNextModificationSequence(contextType: string, contextId: string): Promise<number> {
   const result = await db
@@ -126,7 +109,6 @@ export class ToolService {
     // `use_cases.data` est directement l'objet métier (pas de wrapper "data")
     const originalData = (row.data ?? {}) as unknown;
     const beforeData = deepClone(originalData) as unknown;
-    let nextData = deepClone(originalData) as unknown;
 
     const applied: Array<{ path: string; oldValue: unknown; newValue: unknown }> = [];
 

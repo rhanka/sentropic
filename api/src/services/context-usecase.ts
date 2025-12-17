@@ -1,4 +1,4 @@
-import { executeWithTools, executeWithToolsStream } from './tools';
+import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import type { MatrixConfig } from '../types/matrix';
 
@@ -90,42 +90,25 @@ export const generateUseCaseList = async (
     .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
     .replace('{{use_case_count}}', String(defaultUseCaseCount));
 
-  if (streamId) {
-    const { content } = await executeWithToolsStream(prompt, {
-      model,
-      useWebSearch: true,
-      responseFormat: 'json_object',
-      reasoningSummary: 'auto',
-      promptId: 'use_case_list',
-      streamId,
-      signal
-    });
-    if (!content) throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
-    try {
-      return parseJsonLenient<UseCaseList>(content);
-    } catch (e) {
-      console.error('Erreur de parsing JSON pour la liste:', e);
-      console.error('Contenu reçu:', content);
-      throw new Error('Erreur lors du parsing de la réponse de l\'IA pour la liste');
-    }
-  }
-
-  const response = await executeWithTools(prompt, { 
-    model: model || 'gpt-4.1-nano', 
+  // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
+  const finalStreamId = streamId || `usecase_list_${Date.now()}`;
+  
+  const { content } = await executeWithToolsStream(prompt, {
+    model,
     useWebSearch: true,
     responseFormat: 'json_object',
+    reasoningSummary: 'auto',
+    promptId: 'use_case_list',
+    streamId: finalStreamId,
     signal
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
-  }
-
+  
+  if (!content) throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
+  
   try {
     return parseJsonLenient<UseCaseList>(content);
-  } catch (parseError) {
-    console.error('Erreur de parsing JSON pour la liste:', parseError);
+  } catch (e) {
+    console.error('Erreur de parsing JSON pour la liste:', e);
     console.error('Contenu reçu:', content);
     throw new Error('Erreur lors du parsing de la réponse de l\'IA pour la liste');
   }
@@ -155,45 +138,25 @@ export const generateUseCaseDetail = async (
     .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
 
-  if (streamId) {
-    const { content } = await executeWithToolsStream(prompt, {
-      model,
-      useWebSearch: true,
-      responseFormat: 'json_object',
-      reasoningSummary: 'auto',
-      promptId: 'use_case_detail',
-      streamId,
-      signal
-    });
-    if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCase}`);
-    try {
-      return parseJsonLenient<UseCaseDetail>(content);
-    } catch (e) {
-      console.error('Erreur de parsing JSON pour le détail:', e);
-      console.error('Contenu reçu (premiers 500 chars):', content.substring(0, 500));
-      console.error('Contenu reçu (derniers 500 chars):', content.substring(Math.max(0, content.length - 500)));
-      console.error('Longueur du contenu:', content.length);
-      console.error('Type de contenu:', typeof content);
-      throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${useCase}`);
-    }
-  }
-
-  const response = await executeWithTools(prompt, { 
-    model: model || 'gpt-4.1-nano', 
+  // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
+  const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
+  
+  const { content } = await executeWithToolsStream(prompt, {
+    model,
     useWebSearch: true,
     responseFormat: 'json_object',
+    reasoningSummary: 'auto',
+    promptId: 'use_case_detail',
+    streamId: finalStreamId,
     signal
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCase}`);
-  }
-
+  
+  if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCase}`);
+  
   try {
     return parseJsonLenient<UseCaseDetail>(content);
-  } catch (parseError) {
-    console.error('Erreur de parsing JSON pour le détail:', parseError);
+  } catch (e) {
+    console.error('Erreur de parsing JSON pour le détail:', e);
     console.error('Contenu reçu (premiers 500 chars):', content.substring(0, 500));
     console.error('Contenu reçu (derniers 500 chars):', content.substring(Math.max(0, content.length - 500)));
     console.error('Longueur du contenu:', content.length);

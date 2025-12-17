@@ -319,8 +319,11 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
     
     // Boucle itérative pour gérer plusieurs rounds de tool calls
-    let currentMessages = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
-    let maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
+    let currentMessages: Array<
+      | { role: 'system' | 'user' | 'assistant'; content: string }
+      | { role: 'tool'; content: string; tool_call_id: string }
+    > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
+    const maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
     let iteration = 0;
 
     while (iteration < maxIterations) {
@@ -328,8 +331,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
-
-      let streamDone = false;
 
       for await (const event of callOpenAIResponseStream({
         model: options.model || assistantRow.model || undefined,
@@ -374,9 +375,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
           } else {
             toolCalls.push({ id: toolCallId, name: '', args: delta });
           }
-        } else if (eventType === 'done' || eventType === 'error') {
-          streamDone = true;
         }
+        // Note: eventType 'done' ou 'error' est géré ailleurs
       }
 
       // Si aucun tool call, on termine

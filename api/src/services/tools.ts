@@ -1,6 +1,6 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAI, callOpenAIResponseStream } from './openai';
+import { callOpenAIResponseStream } from './openai';
 import type { StreamEventType } from './openai';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
