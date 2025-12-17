@@ -205,10 +205,16 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Retourner la structure `use_cases.data` complète
   - [x] **4.2.2 - Passer les tools à OpenAI** :
     - Dans `chat-service.ts` → `runAssistantGeneration()`, récupérer le contexte depuis la session (`primaryContextType`, `primaryContextId`)
-    - Importer `readUseCaseTool` et `updateUseCaseFieldTool` depuis `tools.ts`
-    - Conditionner le passage des tools : ne passer `tools: [readUseCaseTool, updateUseCaseFieldTool]` que si `primaryContextType === 'usecase'`
+    - Importer `readUseCaseTool`, `updateUseCaseFieldTool`, `webSearchTool` et `webExtractTool` depuis `tools.ts`
+    - Conditionner le passage des tools : ne passer `tools: [readUseCaseTool, updateUseCaseFieldTool, webSearchTool, webExtractTool]` que si `primaryContextType === 'usecase'`
     - Passer les tools à `callOpenAIResponseStream()` dans les options
     - Enrichir le system prompt avec le contexte usecase pour guider l'IA
+  - [x] **4.2.3 - Intégration des tools web (web_search, web_extract)** :
+    - `web_search` : Recherche d'informations récentes sur le web pour trouver de nouvelles URLs ou obtenir des résumés
+    - `web_extract` : Extraction du contenu complet d'une ou plusieurs URLs existantes (références du use case)
+    - Correction du parsing de la réponse Tavily : utiliser `raw_content` au lieu de `markdown`/`content` dans la structure `results[]`
+    - Support de l'appel groupé : `web_extract` accepte un array d'URLs pour extraire plusieurs URLs en un seul appel
+    - Workflow guidé dans le system prompt : lire le use case → extraire les URLs depuis `data.references` → appeler `web_extract` une seule fois avec toutes les URLs
 - [x] **4.3 - API : Gestion des tool calls dans le stream** :
   - Dans `runAssistantGeneration()`, gérer les événements `tool_call_start`, `tool_call_delta`, `done`
   - Pour `tool_call_start` : initialiser un objet pour stocker les arguments du tool call
@@ -233,14 +239,26 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
         - `toolCallId` pour la traçabilité
       - Écrire l'événement `tool_call_result` dans le stream
       - Construire le résultat au format OpenAI (message `role: 'tool'`)
+    - **Pour `web_search`** :
+      - Parser les arguments accumulés (`query`)
+      - Appeler `searchWeb()` depuis `tools.ts` (API Tavily)
+      - Écrire l'événement `tool_call_result` dans le stream avec les résultats de recherche
+      - Construire le résultat au format OpenAI (message `role: 'tool'`)
+    - **Pour `web_extract`** :
+      - Parser les arguments accumulés (`urls` - array d'URLs)
+      - Appeler `extractUrlContent()` pour chaque URL (en parallèle via `Promise.all`)
+      - Écrire l'événement `tool_call_result` dans le stream avec les contenus extraits
+      - Construire le résultat au format OpenAI (message `role: 'tool'`)
   - Ajouter tous les résultats des tools à la conversation pour continuer le stream dans le round suivant
 - [x] **4.5 - API : Transmission du contexte au modèle** :
   - Enrichir le `systemPrompt` dans `runAssistantGeneration()` pour inclure le contexte :
     - Si `primaryContextType === 'usecase'` : "Tu travailles sur le use case {primaryContextId}. Tu peux utiliser le tool `read_usecase` pour lire son état actuel, puis `update_usecase_field` pour modifier ses champs."
-    - Adapter pour les autres contextes si nécessaire
+    - Ajout des tools web : `web_search` pour rechercher de nouvelles informations, `web_extract` pour extraire le contenu des références existantes
+    - Workflow guidé pour l'analyse des références : lire le use case → extraire URLs depuis `data.references` → appeler `web_extract` une seule fois avec toutes les URLs
+    - Instructions explicites pour regrouper les URLs dans un seul appel `web_extract` (évite les appels multiples)
   - Alternative : inclure le contexte dans les messages de conversation (moins recommandé)
 
-- [ ] **4.6 - Tests et validation** :
+- [x] **4.6 - Tests et validation** :
   - Test manuel : sur `/cas-usage/[id]`, demander une modification du use case et vérifier que le tool est appelé
   - Vérifier que les modifications sont bien écrites en DB (`use_cases.data`)
   - Vérifier que l'historique est créé (`context_modification_history`, `chat_contexts`)

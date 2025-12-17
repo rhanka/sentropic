@@ -44,7 +44,7 @@ export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
     name: "web_extract",
-    description: "Extract and retrieve the full content of one or more web page URLs. Use this tool to get detailed content from URLs found during web search or provided directly. You can extract multiple URLs in a single call for efficiency.",
+    description: "Extract and retrieve the full content of one or more existing web page URLs. Use this tool when the user asks for details about references (URLs already present in the use case) or when you need to analyze the full content of specific URLs. CRITICAL: If you need to extract multiple URLs (e.g., 9 URLs from references), you MUST pass ALL of them in a SINGLE call using the `urls` array parameter. NEVER make separate calls for each URL. Example: if you have 9 URLs, call once with `{\"urls\": [\"url1\", \"url2\", ..., \"url9\"]}` instead of calling 9 times with one URL each.",
     parameters: {
       type: "object",
       properties: {
@@ -53,7 +53,7 @@ export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           items: {
             type: "string"
           },
-          description: "Array of URLs to extract content from. Can be a single URL or multiple URLs."
+          description: "Array of URLs to extract content from. MUST contain ALL URLs you need to extract in a single call. Example: if you have 9 URLs, pass all 9 in this array: [\"url1\", \"url2\", ..., \"url9\"]. Do NOT make separate calls for each URL."
         }
       },
       required: ["urls"]
@@ -127,6 +127,17 @@ interface TavilySearchResponse {
 interface TavilyExtractResponse {
   markdown?: string;
   content?: string;
+  // Tavily retourne un objet avec 'results' (array) et autres champs
+  results?: Array<{
+    url: string;
+    title?: string;
+    raw_content?: string;  // Le contenu est dans 'raw_content', pas 'markdown' ni 'content'
+    markdown?: string;
+    content?: string;
+  }>;
+  failed_results?: unknown[];
+  response_time?: number;
+  request_id?: string;
 }
 
 export const searchWeb = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
@@ -161,8 +172,6 @@ export const extractUrlContent = async (
   url: string,
   signal?: AbortSignal
 ): Promise<ExtractResult> => {
-  console.log(`🔍 Tavily extract called with query: "${url}"`);
-
   if (signal?.aborted) throw new Error("AbortError");
 
   const resp = await fetch("https://api.tavily.com/extract", {
@@ -172,18 +181,40 @@ export const extractUrlContent = async (
       "Authorization": `Bearer ${TAVILY_API_KEY}`
     },
     body: JSON.stringify({
-      url,
+      urls: [url],  // Tavily API attend 'urls' (array) même pour une seule URL
       format: "markdown",      // "markdown" | "text"
       extract_depth: "advanced" // "basic" | "advanced"
     }),
     signal
   });
 
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`❌ Tavily extract failed for ${url}: ${resp.status} ${resp.statusText} - ${errorText}`);
+    throw new Error(`Tavily extract failed: ${resp.status} ${resp.statusText}`);
+  }
+
   const data = (await resp.json()) as TavilyExtractResponse;
+  
+  // Tavily retourne un objet avec 'results' (array de résultats)
+  let content = "";
+  if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+    // Chercher le résultat correspondant à cette URL
+    const result = data.results.find((r) => r.url === url) || data.results[0];
+    // Tavily retourne le contenu dans 'raw_content' (pas 'markdown' ni 'content')
+    content = result.raw_content ?? result.markdown ?? result.content ?? "";
+  } else {
+    // Fallback: format objet simple (si pas de results array)
+    content = data.markdown ?? data.content ?? "";
+  }
+
+  if (content.length === 0) {
+    console.warn(`⚠️ Tavily returned empty content for ${url}`);
+  }
 
   return {
     url,
-    content: data.markdown ?? data.content ?? ""
+    content
   };
 };
 
