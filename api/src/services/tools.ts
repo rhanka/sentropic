@@ -10,7 +10,7 @@ const TAVILY_API_KEY = env.TAVILY_API_KEY;
 
 // Prompts d'orchestration web tools (DOIVENT rester identiques entre non-streaming et streaming)
 const WEB_TOOLS_SYSTEM_PROMPT =
-  "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes.";
+  "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes. CRITICAL: Si tu dois extraire plusieurs URLs avec web_extract, tu DOIS passer TOUTES les URLs dans un seul appel en utilisant le paramètre urls (array). NE FAIS JAMAIS plusieurs appels séparés pour chaque URL. Exemple: si tu as 9 URLs, appelle une fois avec {\"urls\": [\"url1\", \"url2\", ..., \"url9\"]} au lieu d'appeler 9 fois avec une URL chacune. Ne JAMAIS appeler web_extract avec un array vide: JAMAIS web_extract avec {\"urls\":[]}.";
 
 const WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT =
   "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs.";
@@ -169,10 +169,12 @@ export interface ExtractResult {
 }
 
 export const extractUrlContent = async (
-  url: string,
+  urls: string | string[],
   signal?: AbortSignal
-): Promise<ExtractResult> => {
+): Promise<ExtractResult | ExtractResult[]> => {
   if (signal?.aborted) throw new Error("AbortError");
+
+  const urlArray = Array.isArray(urls) ? urls : [urls];
 
   const resp = await fetch("https://api.tavily.com/extract", {
     method: "POST",
@@ -181,7 +183,7 @@ export const extractUrlContent = async (
       "Authorization": `Bearer ${TAVILY_API_KEY}`
     },
     body: JSON.stringify({
-      urls: [url],  // Tavily API attend 'urls' (array) même pour une seule URL
+      urls: urlArray,  // Tavily API accepte un array d'URLs - un seul appel pour toutes les URLs
       format: "markdown",      // "markdown" | "text"
       extract_depth: "advanced" // "basic" | "advanced"
     }),
@@ -190,43 +192,65 @@ export const extractUrlContent = async (
 
   if (!resp.ok) {
     const errorText = await resp.text();
-    console.error(`❌ Tavily extract failed for ${url}: ${resp.status} ${resp.statusText} - ${errorText}`);
+    const urlsStr = Array.isArray(urls) ? urls.join(', ') : urls;
+    console.error(`❌ Tavily extract failed for ${urlsStr}: ${resp.status} ${resp.statusText} - ${errorText}`);
     throw new Error(`Tavily extract failed: ${resp.status} ${resp.statusText}`);
   }
 
   const data = (await resp.json()) as TavilyExtractResponse;
   
   // Tavily retourne un objet avec 'results' (array de résultats)
-  let content = "";
   if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-    // Chercher le résultat correspondant à cette URL
-    const result = data.results.find((r) => r.url === url) || data.results[0];
-    // Tavily retourne le contenu dans 'raw_content' (pas 'markdown' ni 'content')
-    content = result.raw_content ?? result.markdown ?? result.content ?? "";
+    if (Array.isArray(urls)) {
+      // Retourner un array de résultats pour un array d'URLs
+      const results: ExtractResult[] = urlArray.map((url, i) => {
+        const result = data.results!.find((r) => r.url === url) || data.results![i] || data.results![0];
+        const content = result.raw_content ?? result.markdown ?? result.content ?? "";
+        if (content.length === 0) {
+          console.warn(`⚠️ Tavily returned empty content for ${url}`);
+        }
+        return {
+          url,
+          content
+        };
+      });
+      return results;
+    } else {
+      // Retourner un seul résultat pour une seule URL (compatibilité)
+      const result = data.results.find((r) => r.url === urls) || data.results[0];
+      const content = result.raw_content ?? result.markdown ?? result.content ?? "";
+      if (content.length === 0) {
+        console.warn(`⚠️ Tavily returned empty content for ${urls}`);
+      }
+      return {
+        url: urls,
+        content
+      };
+    }
   } else {
     // Fallback: format objet simple (si pas de results array)
-    content = data.markdown ?? data.content ?? "";
+    const content = data.markdown ?? data.content ?? "";
+    if (Array.isArray(urls)) {
+      // Si array d'URLs mais pas de results, retourner un array avec le contenu pour la première URL
+      return urlArray.map((url, i) => ({
+        url,
+        content: i === 0 ? content : ""
+      }));
+    } else {
+      return {
+        url: urls,
+        content
+      };
+    }
   }
-
-  if (content.length === 0) {
-    console.warn(`⚠️ Tavily returned empty content for ${url}`);
-  }
-
-  return {
-    url,
-    content
-  };
 };
 
 
-export interface ExecuteWithToolsOptions {
+export interface ExecuteWithToolsStreamOptions {
   model?: string;
   useWebSearch?: boolean;
   responseFormat?: 'json_object';
   signal?: AbortSignal;
-}
-
-export interface ExecuteWithToolsStreamOptions extends ExecuteWithToolsOptions {
   /**
    * ID du stream à utiliser (si non fourni, généré à partir des champs ci-dessous).
    */
@@ -245,124 +269,7 @@ export interface ExecuteWithToolsStreamResult {
   content: string;
 }
 
-/**
- * Orchestrateur pour exécuter des prompts avec ou sans outils
- */
-export const executeWithTools = async (
-  prompt: string, 
-  options: ExecuteWithToolsOptions = {}
-): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const { model = 'gpt-4.1-nano', useWebSearch = false, responseFormat, signal } = options;
-
-  console.log(`🤖 Using model: ${model}${useWebSearch ? ' with web search' : ''}`);
-
-  if (!useWebSearch) {
-    // Appel simple sans outils
-    return await callOpenAI({
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model,
-      responseFormat,
-      signal
-    });
-  }
-
-  // Appel avec recherche web et extraction d'URL
-  // Premier appel pour déclencher la recherche et/ou l'extraction
-  const response = await callOpenAI({
-    messages: [
-      {
-        role: "system",
-        content: WEB_TOOLS_SYSTEM_PROMPT
-      },
-      {
-        role: "user",
-        content: prompt
-      }
-    ],
-    model,
-    tools: [webSearchTool, webExtractTool],
-    toolChoice: "required",
-    responseFormat,
-    signal
-  });
-
-  const message = response.choices[0]?.message;
-
-  if (message?.tool_calls) {
-    // Note: allSearchResults stocke les résultats de recherche avec leur query associée
-    // Ce n'est pas le type SearchResult[], mais un tableau d'objets contenant query et results
-    const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
-    const allExtractResults: ExtractResult[] = [];
-
-    // Exécuter toutes les recherches et extractions demandées
-    for (const toolCall of message.tool_calls) {
-      if (signal?.aborted) {
-        throw new Error('AbortError');
-      }
-      if (toolCall.type === 'function') {
-        if (toolCall.function.name === 'web_search') {
-          const args = JSON.parse(toolCall.function.arguments);
-          const searchResults = await searchWeb(args.query, signal);
-          allSearchResults.push({
-            query: args.query,
-            results: searchResults
-          });
-        } else if (toolCall.function.name === 'web_extract') {
-          const args = JSON.parse(toolCall.function.arguments);
-          const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls];
-          // Extraire toutes les URLs en parallèle
-          const extractPromises = urls.map((url: string) => extractUrlContent(url, signal));
-          const extractResults = await Promise.all(extractPromises);
-          allExtractResults.push(...extractResults);
-        }
-      }
-    }
-
-    // Construire le message avec les résultats
-    let resultsMessage = '';
-    if (allSearchResults.length > 0) {
-      resultsMessage += `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\n`;
-    }
-    if (allExtractResults.length > 0) {
-      resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
-    }
-    resultsMessage += WEB_TOOLS_RESULTS_SUFFIX;
-
-    // Deuxième appel avec les résultats de recherche et d'extraction
-    const followUpResponse = await callOpenAI({
-      messages: [
-        {
-          role: "system",
-          content: WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT
-        },
-        {
-          role: "user",
-          content: prompt
-        },
-        {
-          role: "assistant",
-          content: WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT
-        },
-        {
-          role: "user",
-          content: resultsMessage
-        }
-      ],
-      model,
-      responseFormat,
-      signal
-    });
-
-    return followUpResponse;
-  }
-
-  return response;
-};
+// executeWithTools a été supprimé - utiliser executeWithToolsStream à la place
 
 /**
  * Orchestrateur streaming équivalent à executeWithTools
@@ -480,10 +387,24 @@ export const executeWithToolsStream = async (
       } else if (toolCall.name === 'web_extract') {
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
         const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
-        const extractPromises = urls.map((url: string) => extractUrlContent(url, signal));
-        const extractResults = await Promise.all(extractPromises);
-        allExtractResults.push(...extractResults);
-        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: extractResults } });
+        
+        // Validation : rejeter les appels avec array vide
+        if (urls.length === 0) {
+          await write('tool_call_result', {
+            tool_call_id: toolCall.id,
+            result: {
+              status: 'error',
+              error: 'web_extract requires at least one URL. No URLs provided in the urls array.'
+            }
+          });
+          continue; // Passer au tool call suivant
+        }
+        
+        // Appel unique avec toutes les URLs (un seul appel Tavily au lieu de N appels)
+        const extractResults = await extractUrlContent(urls, signal);
+        const resultsArray = Array.isArray(extractResults) ? extractResults : [extractResults];
+        allExtractResults.push(...resultsArray);
+        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
       }
     } catch (error) {
       await write('tool_call_result', {
