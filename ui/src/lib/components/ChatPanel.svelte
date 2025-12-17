@@ -1,5 +1,6 @@
 <script lang="ts">
   import { afterUpdate, onMount, tick } from 'svelte';
+  import { page } from '$app/stores';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
 
@@ -47,8 +48,42 @@
   let streamDetailsLoading = false;
   const terminalRefreshInFlight = new Set<string>();
 
+  /**
+   * Détecte le contexte depuis la route actuelle
+   * Retourne { primaryContextType, primaryContextId } ou null si pas de contexte
+   */
+  const detectContextFromRoute = (): { primaryContextType: string; primaryContextId: string } | null => {
+    const routeId = $page.route.id;
+    const params = $page.params;
+
+    // /cas-usage/[id] → usecase
+    if (routeId === '/cas-usage/[id]' && params.id) {
+      return { primaryContextType: 'usecase', primaryContextId: params.id };
+    }
+
+    // /dossiers/[id] → folder
+    if (routeId === '/dossiers/[id]' && params.id) {
+      return { primaryContextType: 'folder', primaryContextId: params.id };
+    }
+
+    // /entreprises/[id] → company
+    if (routeId === '/entreprises/[id]' && params.id) {
+      return { primaryContextType: 'company', primaryContextId: params.id };
+    }
+
+    // Pas de contexte détecté
+    return null;
+  };
+
   const requestScrollToBottom = () => {
     pendingScrollToBottom = true;
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendMessage();
+    }
   };
 
   const scrollChatToBottomStable = async () => {
@@ -202,16 +237,35 @@
     sending = true;
     errorMsg = null;
     try {
+      // Détecter le contexte depuis la route
+      const context = detectContextFromRoute();
+
+      // Construire le payload avec le contexte si disponible
+      const payload: {
+        sessionId?: string;
+        content: string;
+        primaryContextType?: string;
+        primaryContextId?: string;
+      } = {
+        content: text
+      };
+
+      if (sessionId) {
+        payload.sessionId = sessionId;
+      }
+
+      if (context) {
+        payload.primaryContextType = context.primaryContextType;
+        payload.primaryContextId = context.primaryContextId;
+      }
+
       const res = await apiPost<{
         sessionId: string;
         userMessageId: string;
         assistantMessageId: string;
         streamId: string;
         jobId: string;
-      }>(
-        '/chat/messages',
-        sessionId ? { sessionId, content: text } : { content: text }
-      );
+      }>('/chat/messages', payload);
 
       input = '';
       if (res.sessionId && res.sessionId !== sessionId) {
@@ -308,12 +362,7 @@
         rows="1"
         bind:value={input}
         placeholder="Écrire un message…"
-        on:keydown={(e) => {
-          if ((e as KeyboardEvent).key === 'Enter' && !(e as KeyboardEvent).shiftKey) {
-            e.preventDefault();
-            void sendMessage();
-          }
-        }}
+        on:keydown={handleKeyDown}
       ></textarea>
       <button
         class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"

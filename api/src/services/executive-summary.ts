@@ -166,12 +166,12 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     });
     content = result.content || '';
   } else {
-    const response = await executeWithTools(prompt, {
-      model: selectedModel,
-      useWebSearch: true,
-      responseFormat: 'json_object',
-      signal
-    });
+  const response = await executeWithTools(prompt, {
+    model: selectedModel,
+    useWebSearch: true,
+    responseFormat: 'json_object',
+    signal
+  });
     content = response.choices[0]?.message?.content || '';
   }
 

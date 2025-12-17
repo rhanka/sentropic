@@ -172,8 +172,8 @@ const aiEnrichInput = z.object({
 
 companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
   try {
-    const { name, model } = c.req.valid('json');
-    const selectedModel = model || 'gpt-4.1-nano';
+  const { name, model } = c.req.valid('json');
+  const selectedModel = model || 'gpt-4.1-nano';
     
     // Utiliser le service de contexte
     const enrichedData = await enrichCompany(name, selectedModel);

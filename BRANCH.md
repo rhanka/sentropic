@@ -165,8 +165,12 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - `streamId` = `assistantMessageId`
     - `StreamMessage` est la brique unique pour afficher l’avancement (reasoning/tools/content) + historique
 - [x] **Data fetch (non-streaming)** :
-  - `GET /chat/sessions` + `GET /chat/sessions/:id/messages` pour recharger l’historique après refresh
+  - `GET /chat/sessions` + `GET /chat/sessions/:id/messages` pour recharger l'historique après refresh
   - SSE global `/streams/sse` seulement pour les messages en cours / nouveaux events (cache/replay = confort UX)
+- [x] **Chat global (pas page-scoped)** :
+  - Le chat est disponible **partout** (ChatWidget disponible via `+layout.svelte`)
+  - Le contexte est automatiquement détecté depuis l'URL (route + id le cas échéant), pas besoin de sélecteur UI dédié
+  - Le diff (Avant/Après) sera implémenté dans le Lot D
 
 #### Convergence StreamMessage (Chat vs Jobs) — analyse de rétrofit
 - **Constat** :
@@ -185,18 +189,70 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - [x] (4) Adapter `StreamMessage` au besoin QueueMonitor (variant `job`: steps + historique, sans bulle chat).
   - [x] (5) Adapter `QueueMonitor` pour utiliser `StreamMessage` (live SSE + historique API via `historySource="stream"`).
 
-### Phase 4 : Intégration UI dans les vues existantes
-- [ ] **Chat global (pas page-scoped)** :
-  - Le chat doit être disponible **partout** (comme la bulle QueueMonitor)
-  - Ajout d’un sélecteur de contexte (company/folder/usecase) dans le header du widget (optionnel au début)
-- [ ] **ContextBadge** :
-  - Badge indiquant le contexte courant (folder/usecase/company) + lien vers l’objet
-  - Visible dans le header du ChatPanel (et dans les messages si besoin)
-- [ ] **UndoBar** :
-  - Bouton "Annuler" + preview de la dernière modification (via `context_modification_history` + `chat_contexts`)
-  - Option: confirmation humaine pour actions ⚠️
-- [ ] **Avant/Après** :
-  - Afficher diff (JSON patch / champ ciblé) dans le ChatPanel ou une modale
+### Phase 4 : Intégration tool call dans le chat
+- [x] **4.1 - UI : Détection automatique du contexte depuis la route** :
+  - Dans `ChatPanel.svelte`, détecter la route actuelle via `$page.route.id` et `$page.params`
+  - Mapper les routes aux contextes :
+    - `/cas-usage/[id]` → `primaryContextType: 'usecase'`, `primaryContextId: $page.params.id`
+    - `/dossiers/[id]` → `primaryContextType: 'folder'`, `primaryContextId: $page.params.id`
+    - `/entreprises/[id]` → `primaryContextType: 'company'`, `primaryContextId: $page.params.id`
+  - Modifier `sendMessage()` pour inclure `primaryContextType` et `primaryContextId` dans l'appel `POST /chat/messages`
+  - Gérer le cas où on n'est pas sur une route avec contexte (pas de tool disponible)
+- [ ] **4.2 - API : Passage des tools à OpenAI** :
+  - [x] **4.2.1 - Créer le tool `read_usecase`** :
+    - Créer `readUseCaseTool` dans `tools.ts` (paramètre `useCaseId`, retourne le use case complet)
+    - Créer `readUseCase()` dans `tool-service.ts` pour lire le use case depuis la DB
+    - Retourner la structure `use_cases.data` complète
+  - [x] **4.2.2 - Passer les tools à OpenAI** :
+    - Dans `chat-service.ts` → `runAssistantGeneration()`, récupérer le contexte depuis la session (`primaryContextType`, `primaryContextId`)
+    - Importer `readUseCaseTool` et `updateUseCaseFieldTool` depuis `tools.ts`
+    - Conditionner le passage des tools : ne passer `tools: [readUseCaseTool, updateUseCaseFieldTool]` que si `primaryContextType === 'usecase'`
+    - Passer les tools à `callOpenAIResponseStream()` dans les options
+    - Enrichir le system prompt avec le contexte usecase pour guider l'IA
+- [x] **4.3 - API : Gestion des tool calls dans le stream** :
+  - Dans `runAssistantGeneration()`, gérer les événements `tool_call_start`, `tool_call_delta`, `done`
+  - Pour `tool_call_start` : initialiser un objet pour stocker les arguments du tool call
+  - Pour `tool_call_delta` : accumuler les arguments JSON (comme pour `content_delta`)
+  - Boucle itérative pour gérer plusieurs rounds de tool calls (max 10 itérations)
+  - Collecter tous les tool calls avant de les exécuter
+- [x] **4.4 - API : Exécution des tools** :
+  - Après avoir collecté tous les tool calls dans un round, exécuter chaque tool :
+    - **Pour `read_usecase`** :
+      - Parser les arguments accumulés (`useCaseId`)
+      - Vérifier que `useCaseId` correspond au `primaryContextId` de la session (sécurité)
+      - Appeler `toolService.readUseCase()` avec `useCaseId`
+      - Écrire l'événement `tool_call_result` dans le stream
+      - Construire le résultat au format OpenAI (message `role: 'tool'` avec le use case complet)
+    - **Pour `update_usecase_field`** :
+      - Parser les arguments accumulés (`useCaseId`, `updates`)
+      - Vérifier que `useCaseId` correspond au `primaryContextId` de la session (sécurité)
+      - Appeler `toolService.updateUseCaseFields()` avec :
+        - `useCaseId` depuis les arguments
+        - `updates` depuis les arguments
+        - `sessionId` et `assistantMessageId` pour l'historique
+        - `toolCallId` pour la traçabilité
+      - Écrire l'événement `tool_call_result` dans le stream
+      - Construire le résultat au format OpenAI (message `role: 'tool'`)
+  - Ajouter tous les résultats des tools à la conversation pour continuer le stream dans le round suivant
+- [x] **4.5 - API : Transmission du contexte au modèle** :
+  - Enrichir le `systemPrompt` dans `runAssistantGeneration()` pour inclure le contexte :
+    - Si `primaryContextType === 'usecase'` : "Tu travailles sur le use case {primaryContextId}. Tu peux utiliser le tool `read_usecase` pour lire son état actuel, puis `update_usecase_field` pour modifier ses champs."
+    - Adapter pour les autres contextes si nécessaire
+  - Alternative : inclure le contexte dans les messages de conversation (moins recommandé)
+
+- [ ] **4.6 - Tests et validation** :
+  - Test manuel : sur `/cas-usage/[id]`, demander une modification du use case et vérifier que le tool est appelé
+  - Vérifier que les modifications sont bien écrites en DB (`use_cases.data`)
+  - Vérifier que l'historique est créé (`context_modification_history`, `chat_contexts`)
+  - Vérifier que le modèle continue la conversation après l'exécution du tool
+
+**Critères de validation Phase 4** :
+- ✅ Le contexte est automatiquement détecté depuis la route
+- ✅ Le tool est passé à OpenAI uniquement quand le contexte est `usecase`
+- ✅ Les tool calls sont gérés dans le stream
+- ✅ Le tool est exécuté et les modifications sont appliquées en DB
+- ✅ Le modèle continue la conversation après l'exécution du tool
+- ✅ L'historique des modifications est tracé
 
 ### Phase 5 : Tests
 - [ ] Tests unitaires API :
@@ -214,7 +270,13 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - Vérification historique visible
   - Test de l'annulation du dernier changement
 
-### Phase 6 : Documentation et finalisation
+### Phase 6 : UndoBar (après validation des tests)
+- [ ] **UndoBar** :
+  - Bouton "Annuler" + preview de la dernière modification (via `context_modification_history` + `chat_contexts`)
+  - Option: confirmation humaine pour actions ⚠️
+  - **Note** : À implémenter après validation complète des tests (Phase 5) pour garantir la stabilité de l'annulation
+
+### Phase 7 : Documentation et finalisation
 - [ ] Mettre à jour la documentation OpenAPI
 - [ ] Vérifier que tous les tests passent (`make test`)
 - [ ] Vérifier le build (`make build`)
@@ -315,13 +377,14 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
     - Dossiers : masque le compteur “0 cas d’usage” pendant la génération, et “Sélectionné” affiché dans le footer (pas dans le corps)
 
 ## Status
-- **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B ✅
-- **Current**: Phase 3 - Widget global Chat/Queue + UI chat
+- **Progress**: Phase 1 + Phase 2A (POC entreprise) + Phase 2B + Phase 2E (Tool Service défini) + Phase 3 (Widget global Chat/Queue + UI chat) ✅
+- **Current**: Phase 4 - Intégration tool call dans le chat
 - **Next**:
-  - UI : compléter `ChatPanel` (sessions/messages/composer) + branchement aux endpoints `/api/v1/chat/*`
-  - UI : afficher le stream chat via `StreamMessage` (streamId = assistantMessageId)
-  - Intégrer le tool `update_usecase_field` dans la boucle chat (tool calling) + UndoBar
-  - Garder la SSE globale unique + filtrage côté UI (pas de polling)
+  - UI : Détection automatique du contexte depuis la route (Phase 4.1)
+  - API : Passage du tool à OpenAI et gestion des tool calls (Phase 4.2-4.5)
+  - Tests : Phase 5 (unitaires, intégration, E2E)
+  - UndoBar : Phase 6 (après validation des tests)
+  - Documentation : Phase 7
 
 ## Scope
 - **API** : Nouveaux endpoints chat, streaming SSE, tools

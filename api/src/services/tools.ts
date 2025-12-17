@@ -62,6 +62,26 @@ export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
+ * Tool pour lire un use case complet.
+ * Retourne la structure `use_cases.data` complète.
+ */
+export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "read_usecase",
+    description:
+      "Lit le contenu complet d'un use case (structure use_cases.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications.",
+    parameters: {
+      type: "object",
+      properties: {
+        useCaseId: { type: "string", description: "ID du use case à lire" }
+      },
+      required: ["useCaseId"]
+    }
+  }
+};
+
+/**
  * Tool générique: met à jour un ou plusieurs champs de `use_cases.data.*`.
  * Le mapping DB est pris en charge côté `tool-service.ts`.
  */
@@ -70,7 +90,7 @@ export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool 
   function: {
     name: "update_usecase_field",
     description:
-      "Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data). Utilise des paths dot-notation. Exemple: { useCaseId, updates: [{ path: 'description', value: '...' }] }",
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
     parameters: {
       type: "object",
       properties: {

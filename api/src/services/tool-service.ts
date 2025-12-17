@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from '../db/client';
+import { db, pool } from '../db/client';
 import { chatContexts, contextModificationHistory, useCases } from '../db/schema';
 import { createId } from '../utils/id';
 
@@ -89,7 +89,27 @@ async function getNextModificationSequence(contextType: string, contextId: strin
 
 export class ToolService {
   /**
-   * Tool générique: met à jour un ou plusieurs champs d’un use case.
+   * Tool pour lire un use case complet.
+   * Retourne la structure `use_cases.data` complète.
+   */
+  async readUseCase(useCaseId: string): Promise<{
+    useCaseId: string;
+    data: unknown;
+  }> {
+    if (!useCaseId) throw new Error('useCaseId is required');
+
+    const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    if (!row) throw new Error('Use case not found');
+
+    // Retourner la structure data complète
+    return {
+      useCaseId,
+      data: row.data ?? {}
+    };
+  }
+
+  /**
+   * Tool générique: met à jour un ou plusieurs champs d'un use case.
    * Cible principale: `use_cases.data.*` (JSONB).
    */
   async updateUseCaseFields(input: UpdateUseCaseFieldsInput): Promise<{
@@ -110,6 +130,10 @@ export class ToolService {
 
     const applied: Array<{ path: string; oldValue: unknown; newValue: unknown }> = [];
 
+    // Construire les updates partiels avec jsonb_set pour ne modifier que les champs spécifiés
+    const pathSegmentsList: string[][] = [];
+    const valuesList: unknown[] = [];
+    
     for (const u of input.updates) {
       const fullPath = normalizeDataPath(u.path);
       const segments = getPathSegments(fullPath);
@@ -118,16 +142,45 @@ export class ToolService {
       const dataSegments = segments.slice(1);
       if (dataSegments.length === 0) throw new Error('Refusing to overwrite entire data object');
 
-      const oldValue = getAtPath(nextData, dataSegments);
-      nextData = setAtPath(nextData, dataSegments, u.value);
-      const newValue = getAtPath(nextData, dataSegments);
-
-      applied.push({ path: fullPath, oldValue, newValue });
+      // Récupérer l'ancienne valeur pour l'historique
+      const oldValue = getAtPath(originalData, dataSegments);
+      
+      pathSegmentsList.push(dataSegments);
+      valuesList.push(u.value);
+      
+      applied.push({ path: fullPath, oldValue, newValue: u.value });
     }
 
-    // En DB: on met à jour use_cases.data
-    const finalData = nextData;
-    await db.update(useCases).set({ data: finalData as unknown }).where(eq(useCases.id, input.useCaseId));
+    // Construire la requête SQL avec jsonb_set chaînés pour ne modifier que les champs spécifiés
+    // jsonb_set(target, path, new_value, create_missing)
+    let updateExpression = `COALESCE("data", '{}'::jsonb)`;
+    for (let i = 0; i < pathSegmentsList.length; i++) {
+      const pathSegments = pathSegmentsList[i];
+      const value = valuesList[i];
+      // Construire le path PostgreSQL pour jsonb_set (ex: '{problem}' ou '{solution,bullets,0}')
+      // Les segments sont déjà des strings, on les joint avec des virgules
+      const jsonbPath = `{${pathSegments.join(',')}}`;
+      const valueJson = JSON.stringify(value).replace(/'/g, "''"); // Échapper les quotes pour SQL
+      updateExpression = `jsonb_set(${updateExpression}, '${jsonbPath}'::text[], '${valueJson}'::jsonb, true)`;
+    }
+
+    // En DB: on met à jour uniquement les champs spécifiés via jsonb_set (requête SQL raw)
+    const client = await pool.connect();
+    try {
+      await client.query(
+        `UPDATE use_cases SET "data" = ${updateExpression} WHERE id = $1`,
+        [input.useCaseId]
+      );
+    } finally {
+      client.release();
+    }
+    
+    // Récupérer les données finales pour l'historique (après update)
+    const [updatedRow] = await db.select().from(useCases).where(eq(useCases.id, input.useCaseId));
+    const finalData = (updatedRow?.data ?? {}) as unknown;
+
+    // Émettre un événement usecase_update pour rafraîchir l'UI en temps réel
+    await this.notifyUseCaseEvent(input.useCaseId);
 
     // Historique + snapshot (si sessionId fourni)
     const sessionId = input.sessionId ?? null;
@@ -172,6 +225,19 @@ export class ToolService {
     }
 
     return { useCaseId: input.useCaseId, applied };
+  }
+
+  /**
+   * Émet un événement usecase_update via NOTIFY PostgreSQL pour rafraîchir l'UI en temps réel
+   */
+  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
   }
 }
 
