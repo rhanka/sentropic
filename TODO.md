@@ -43,7 +43,13 @@
     - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
     - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
     - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
-    - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage) 
+    - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage)
+    - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
+    - [ ] Entreprise >> Organisation
+      - [ ] Renommer entreprise(s) / company.ies en organisation / organizations en profondeur (modèle de donnée, api, écrans).
+      - [ ] En profiter pour migrer vers data les données de l'entreprise
+      - [ ] Ajouter les références à la génération
+      - [ ] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
     - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
     - [ ] Tests : Unit/int/E2E pour upload → job résumé → statut ready/failed
     - **Couverture CU** : CU-022
