@@ -366,19 +366,18 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 > **Note sur Chat Service** : `chat-service.ts` contient à la fois de la logique métier (création sessions/messages) ET de la génération IA (appels OpenAI). Les tests de logique métier pure peuvent être unitaires (DB SQLite), mais `runAssistantGeneration()` avec appels OpenAI réels sera testé en intégration (endpoints HTTP).
 
-- [ ] **Endpoints Chat** (`api/tests/api/chat.test.ts`) :
-  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
-  - [ ] `POST /api/v1/chat/messages` : création session si nécessaire (via `authenticatedRequest`)
-  - [ ] `POST /api/v1/chat/messages` : enregistrement message user
-  - [ ] `POST /api/v1/chat/messages` : job `chat_message` enfilé en queue
-  - [ ] `POST /api/v1/chat/messages` : retour `sessionId`, `userMessageId`, `assistantMessageId`, `streamId`
-  - [ ] `GET /api/v1/chat/sessions` : liste sessions pour user (filtrée par user_id)
-  - [ ] `GET /api/v1/chat/sessions/:id` : récupération session avec messages (vérifier user_id)
-  - [ ] `GET /api/v1/chat/sessions/:id/messages` : liste messages ordonnée
-  - [ ] `GET /api/v1/chat/sessions/:id/stream-events` : batch events pour session
-  - [ ] `GET /api/v1/chat/messages/:id/stream-events` : events pour message
-  - [ ] `DELETE /api/v1/chat/sessions/:id` : suppression avec cascade
-  - [ ] Validation : contexte automatique depuis `primaryContextType`/`primaryContextId` (dans body POST)
+- [x] **Endpoints Chat** (`api/tests/api/chat.test.ts`) ✅ :
+  - [x] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
+  - [x] `POST /api/v1/chat/messages` : création session si nécessaire (via `authenticatedRequest`)
+  - [x] `POST /api/v1/chat/messages` : enregistrement message user
+  - [x] `POST /api/v1/chat/messages` : job `chat_message` enfilé en queue
+  - [x] `POST /api/v1/chat/messages` : retour `sessionId`, `userMessageId`, `assistantMessageId`, `streamId`
+  - [x] `GET /api/v1/chat/sessions` : liste sessions pour user (filtrée par user_id)
+  - [x] `GET /api/v1/chat/sessions/:id/messages` : liste messages ordonnée
+  - [x] `GET /api/v1/chat/sessions/:id/stream-events` : batch events pour session
+  - [x] `GET /api/v1/chat/messages/:id/stream-events` : events pour message
+  - [x] `DELETE /api/v1/chat/sessions/:id` : suppression avec cascade
+  - [x] Validation : contexte automatique depuis `primaryContextType`/`primaryContextId` (dans body POST)
   - [ ] Validation : erreurs (session non trouvée → 404, user non autorisé → 403, pas d'auth → 401)
 
 - [ ] **Endpoints Streams** (`api/tests/api/streams.test.ts`) :
@@ -406,15 +405,29 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - [ ] Validation : boucle itérative (plusieurs rounds de tool calls) - test avec prompt demandant plusieurs modifications
   - [ ] Validation : continuation conversation après tool call (envoyer un 2e message via `POST /api/v1/chat/messages`, vérifier historique via `GET /api/v1/chat/sessions/:id/messages`)
 
-- [ ] **Générations classiques avec executeWithToolsStream** (`api/tests/ai/classic-generations.test.ts`) :
-  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, créer dossier/use case de test, `afterEach` → `cleanupAuthData()`
-  - [ ] `generateUseCaseList` : génération avec streaming (vérifier `executeWithToolsStream` utilisé, pas `executeWithTools`)
-  - [ ] `generateUseCaseDetail` : génération avec streaming (vérifier streamId déterministe `usecase_<id>`)
-  - [ ] `generateExecutiveSummary` : génération avec streaming (vérifier streamId déterministe `folder_<id>`)
-  - [ ] `enrichCompany` : génération avec streaming (vérifier streamId déterministe `company_<id>`)
-  - [ ] Validation : tous les événements écrits dans `chat_stream_events` avec `message_id=null` (générations classiques)
-  - [ ] Validation : `web_extract` avec array d'URLs → un seul appel Tavily (mock Tavily API, vérifier nombre d'appels)
-  - [ ] Validation : `web_extract` avec array vide → erreur claire (pas d'appel Tavily, erreur dans stream)
+- [x] **Chat AI complet** (`api/tests/ai/chat-sync.test.ts`) ✅ :
+  - [x] Setup : `beforeEach` → `createAuthenticatedUser('editor')` + cleanup, `afterEach` → `cleanupAuthData()`
+  - [x] Génération assistant response avec IA (test simple, timeout 15s, max 10 tentatives * 1s)
+  - [x] Génération avec tool calls (`read_usecase`) dans contexte usecase
+  - [x] Validation `web_extract` : pas d'appel avec array vide (test avec prompt simple)
+  - [x] Maintien contexte conversation : plusieurs messages dans même session
+  - [x] Vérification contenu final : message assistant mis à jour en DB après complétion job
+  - [x] Vérification stream events : structure correcte après génération
+
+- [ ] **Générations classiques - Mise à jour tests existants** :
+  - [x] Vérifier que les services utilisent bien `executeWithToolsStream` (pas `executeWithTools`) ✅
+    - [x] `executive-summary.ts` : utilise `executeWithToolsStream` avec `streamId` optionnel
+    - [x] `context-usecase.ts` : utilise `executeWithToolsStream`
+    - [x] `context-company.ts` : utilise `executeWithToolsStream`
+  - [ ] **Ajouter vérifications dans tests existants** :
+    - [ ] `api/tests/ai/executive-summary-sync.test.ts` : vérifier que les événements sont écrits dans `chat_stream_events` après génération
+      - [ ] Vérifier `streamId` déterministe : `job_<jobId>` (via `generateStreamId` avec `jobId`)
+      - [ ] Vérifier `message_id=null` pour générations classiques
+      - [ ] Vérifier présence d'événements `content_delta`, `done` (et `tool_call_*` si `web_extract`/`web_search` utilisés)
+    - [ ] `api/tests/ai/usecase-generation-*.test.ts` : ajouter vérifications `chat_stream_events`
+    - [ ] `api/tests/ai/company-enrichment-sync.test.ts` : ajouter vérifications `chat_stream_events`
+  - [x] Validation : `web_extract` avec array d'URLs → un seul appel Tavily ✅ (testé dans `tools.test.ts`)
+  - [x] Validation : `web_extract` avec array vide → erreur claire ✅ (testé dans `chat-sync.test.ts`)
 
 **Commandes** :
 - `make test-api SCOPE=tests/api/chat.test.ts`
