@@ -11,11 +11,11 @@ test.describe('Génération IA', () => {
   // 1) Génération d'entreprise (enrichissement IA) via l'UI
   test('devrait générer une entreprise via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Cliquer sur le bouton Ajouter
     await page.click('button:has-text("Ajouter")');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Remplir le nom de l'entreprise (BRP - déjà modifié par l'utilisateur)
     const titleEl = page.locator('h1').first();
@@ -34,7 +34,7 @@ test.describe('Génération IA', () => {
     
     // Vérifier la redirection vers /entreprises
     await page.waitForURL('/entreprises', { timeout: 1000 });
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Attendre la fin de l'enrichissement (le statut n'est plus "enriching")
     // D'abord vérifier qu'une carte BRP en enrichissement existe
@@ -59,7 +59,7 @@ test.describe('Génération IA', () => {
       await page.waitForTimeout(3000); // Attendre 3 secondes avant de réessayer
       attempts++;
       await page.reload(); // Recharger pour voir les mises à jour de statut
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
     
     if (!companyCard) {
@@ -69,7 +69,7 @@ test.describe('Génération IA', () => {
     // Cliquer sur la carte pour voir les détails
     await companyCard.click();
     await page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+/, { timeout: 2000 });
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le titre contient BRP (textarea pour multiline)
     const companyTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
@@ -83,7 +83,7 @@ test.describe('Génération IA', () => {
     // Aller à l'accueil
     await page.goto('/');
     debug(`Après goto / - URL: ${page.url()}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     const pageTitle = await page.title();
     debug(`Page chargée, titre: ${pageTitle}`);
     
@@ -103,7 +103,7 @@ test.describe('Génération IA', () => {
     await commencerLink.click();
     await page.waitForURL('/home', { timeout: 2000 });
     debug(`Après clic - URL: ${page.url()}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     debug('Page /home chargée');
     
     // Vérifier à nouveau la session
@@ -175,7 +175,7 @@ test.describe('Génération IA', () => {
     debug('Attente redirection vers /dossiers...');
     await page.waitForURL('/dossiers', { timeout: 2000 });
     debug(`Redirection réussie vers /dossiers, URL: ${page.url()}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     debug('Page /dossiers chargée');
     
     // Vérifier que la carte contenant Delpharm est en status "generating"
@@ -239,7 +239,7 @@ test.describe('Génération IA', () => {
     
     // Vérifier la redirection vers /cas-usage
     await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier le titre "Cas d'usage"
     await expect(page.locator('h1')).toContainText('Cas d\'usage');
@@ -338,7 +338,7 @@ test.describe('Génération IA', () => {
     // Cliquer sur le premier cas d'usage
     await firstUseCaseCard.click();
     await page.waitForURL(/\/cas-usage\/[a-zA-Z0-9-]+/, { timeout: 1000 });
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier la section Références
     const referencesSection = page.locator('text=Références').first();

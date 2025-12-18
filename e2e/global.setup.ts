@@ -308,7 +308,21 @@ async function enrollOrLogin(page: Page, client: any, authenticatorId: string) {
   // Vérifier que la session est valide en navigant vers une page protégée
   debug('Step 6: Verifying session is valid...');
   await page.goto(`${BASE_URL}/entreprises`);
-  await page.waitForLoadState('networkidle');
+  // Attendre que la page soit chargée (domcontentloaded) au lieu de networkidle
+  // car la connexion SSE empêche networkidle de se déclencher
+  await page.waitForLoadState('domcontentloaded');
+  // Attendre un élément spécifique de la page pour confirmer qu'elle est bien chargée
+  try {
+    await page.waitForSelector('h1', { timeout: 5000 });
+  } catch (e) {
+    // Si h1 n'est pas trouvé, vérifier si on est redirigé vers login
+    const currentUrl = page.url();
+    if (currentUrl.includes('/auth/login')) {
+      throw new Error('Registration failed - session is not valid (redirected to login)');
+    }
+    // Sinon, on considère que la page est chargée même sans h1
+    debug('⚠️ h1 not found but page loaded');
+  }
   const protectedUrl = page.url();
   debug(`After protected page verification - URL: ${protectedUrl}`);
   

@@ -24,13 +24,13 @@ test.describe('Gestion des dossiers', () => {
   });
 
   test('devrait afficher la liste des dossiers', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     // Vérifier le titre h1 comme assertion minimale
     await expect(page.locator('h1')).toContainText('Dossiers');
   });
 
   test('devrait permettre de cliquer sur un dossier et afficher les cas d\'usage', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher un dossier cliquable (pas en génération ou avec cas d'usage)
     const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
@@ -56,7 +56,7 @@ test.describe('Gestion des dossiers', () => {
   });
 
   test('devrait afficher les informations des dossiers', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'il y a des informations sur les dossiers
     const folderInfo = page.locator('text=Nom, text=Description, text=Créé, text=Modifié');
@@ -67,7 +67,7 @@ test.describe('Gestion des dossiers', () => {
   });
 
   test('devrait permettre de supprimer un dossier', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher un bouton de suppression
     const deleteButtons = page.locator('button:has-text("Supprimer"), button[title="Supprimer"]');
@@ -81,7 +81,7 @@ test.describe('Gestion des dossiers', () => {
       });
       
       await deleteButtons.first().click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
   });
 });

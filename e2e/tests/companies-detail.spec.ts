@@ -4,7 +4,7 @@ test.describe('Détail des entreprises', () => {
   test('devrait afficher la page de détail d\'une entreprise', async ({ page }) => {
     // D'abord aller à la liste des entreprises
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher une entreprise cliquable (pas en enrichissement)
     const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
@@ -35,7 +35,7 @@ test.describe('Détail des entreprises', () => {
 
   test('devrait afficher les informations détaillées de l\'entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
     
@@ -43,7 +43,7 @@ test.describe('Détail des entreprises', () => {
     if (itemCount > 0) {
       const firstCompany = companyItems.first();
       await firstCompany.click({ force: true });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Vérifier les informations de base
       await expect(page.locator('h1')).toBeVisible();
@@ -57,7 +57,7 @@ test.describe('Détail des entreprises', () => {
 
   test('devrait afficher les cas d\'usage liés à l\'entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
     
@@ -65,7 +65,7 @@ test.describe('Détail des entreprises', () => {
     if (itemCount > 0) {
       const firstCompany = companyItems.first();
       await firstCompany.click({ force: true });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Chercher des éléments liés aux cas d'usage
       const useCaseElements = page.locator('text=Cas d\'usage, text=Use cases, .use-case');
@@ -78,7 +78,7 @@ test.describe('Détail des entreprises', () => {
 
   test('devrait permettre de générer des cas d\'usage depuis l\'entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
     
@@ -86,7 +86,7 @@ test.describe('Détail des entreprises', () => {
     if (itemCount > 0) {
       const firstCompany = companyItems.first();
       await firstCompany.click({ force: true });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Chercher un bouton de génération
       const generateButton = page.locator('button:has-text("Générer"), button:has-text("IA"), button:has-text("Generate")');
@@ -96,7 +96,7 @@ test.describe('Détail des entreprises', () => {
         
         // Vérifier qu'une action de génération est lancée
         // (peut être une redirection ou un formulaire)
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
       }
     }
   });

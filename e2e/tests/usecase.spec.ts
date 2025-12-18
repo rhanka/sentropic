@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Gestion des cas d\'usage', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page des cas d\'usage', async ({ page }) => {
@@ -14,7 +14,7 @@ test.describe('Gestion des cas d\'usage', () => {
   test('devrait afficher la liste des cas d\'usage', async ({ page }) => {
     // Aller à la page des cas d'usage
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Attendre que la page se charge complètement
     await page.waitForSelector('h1:has-text("Cas d\'usage")', { timeout: 2000 });
@@ -79,7 +79,7 @@ test.describe('Gestion des cas d\'usage', () => {
         await firstCard.click();
         
         // Attendre la redirection
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier qu'on est sur une page de détail
         const currentUrl = page.url();

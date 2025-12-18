@@ -8,8 +8,8 @@ test.describe('Gestion des entreprises', () => {
   test('devrait afficher la page des entreprises', async ({ page }) => {
     await page.goto('/entreprises');
     
-    // Vérifier que la page se charge
-    await page.waitForLoadState('networkidle');
+    // Vérifier que la page se charge (domcontentloaded au lieu de networkidle car SSE empêche networkidle)
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier le titre
     await expect(page.locator('h1')).toContainText('Entreprises');
@@ -20,7 +20,7 @@ test.describe('Gestion des entreprises', () => {
 
   test('devrait permettre de créer une entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Cliquer sur le bouton d'ajout et attendre la page de création
     await page.click('button:has-text("Ajouter")');
@@ -84,7 +84,7 @@ test.describe('Gestion des entreprises', () => {
 
   test('devrait afficher le bouton d\'enrichissement IA', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Aller à la page de création
     await page.click('button:has-text("Ajouter")');
@@ -102,7 +102,7 @@ test.describe('Gestion des entreprises', () => {
 
   test('devrait permettre de supprimer une entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Créer une entreprise d'abord (comme sur main)
     await page.click('button:has-text("Ajouter")');
@@ -132,13 +132,13 @@ test.describe('Gestion des entreprises', () => {
 
     // Vérifier que l'entreprise a disparu de la liste UI
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('text=Company to Delete')).toHaveCount(0);
   });
 
   test('devrait permettre de cliquer sur une entreprise pour voir ses détails', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher une entreprise cliquable (pas en enrichissement)
     const companyItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
@@ -164,7 +164,7 @@ test.describe('Gestion des entreprises', () => {
 
   test('devrait afficher les informations enrichies par l\'IA', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Créer une entreprise et lancer l'enrichissement IA depuis la page New
     await page.click('button:has-text("Ajouter")');
@@ -180,7 +180,7 @@ test.describe('Gestion des entreprises', () => {
 
   test('devrait gérer les erreurs lors de la création d\'entreprise', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers la page de création sans renseigner de nom
     await page.click('button:has-text("Ajouter")');

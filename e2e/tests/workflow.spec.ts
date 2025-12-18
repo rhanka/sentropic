@@ -4,7 +4,7 @@ test.describe('Workflow métier complet', () => {
   test('devrait exécuter le workflow complet : entreprise → génération → dossiers → cas d\'usage → dashboard', async ({ page }) => {
     // Étape 1: Créer une entreprise
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Cliquer sur le bouton d'ajout (redirige vers /entreprises/new)
     await page.click('button:has-text("Ajouter")');
@@ -32,7 +32,7 @@ test.describe('Workflow métier complet', () => {
     
     // Étape 3: Aller dans les dossiers pour voir l'avancement
     await page.goto('/dossiers');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'on est sur la page des dossiers
     await expect(page.locator('h1')).toContainText('Dossiers');
@@ -65,7 +65,7 @@ test.describe('Workflow métier complet', () => {
     
     // Étape 5: Aller au dashboard pour voir les métriques
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'on est sur le dashboard (le dashboard affiche maintenant le titre du dossier)
     // Le titre est dans un div avec classe "text-3xl font-semibold" ou un h1
@@ -138,7 +138,7 @@ test.describe('Workflow métier complet', () => {
   test('devrait mettre à jour les métriques du dashboard en temps réel', async ({ page }) => {
     // Aller au dashboard
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que les métriques sont présentes
     const totalMetric = page.locator('text=Total').locator('..').locator('p.text-2xl');

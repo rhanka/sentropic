@@ -198,7 +198,7 @@ export const extractUrlContent = async (
   }
 
   const data = (await resp.json()) as TavilyExtractResponse;
-  
+
   // Tavily retourne un objet avec 'results' (array de résultats)
   if (data.results && Array.isArray(data.results) && data.results.length > 0) {
     if (Array.isArray(urls)) {
@@ -209,8 +209,8 @@ export const extractUrlContent = async (
         if (content.length === 0) {
           console.warn(`⚠️ Tavily returned empty content for ${url}`);
         }
-        return {
-          url,
+  return {
+    url,
           content
         };
       });
@@ -251,7 +251,7 @@ export interface ExecuteWithToolsStreamOptions {
   useWebSearch?: boolean;
   responseFormat?: 'json_object';
   signal?: AbortSignal;
-  /**
+/**
    * ID du stream à utiliser (si non fourni, généré à partir des champs ci-dessous).
    */
   streamId?: string;
@@ -277,7 +277,7 @@ export interface ExecuteWithToolsStreamResult {
  * - Écrit les événements dans chat_stream_events via stream-service.
  */
 export const executeWithToolsStream = async (
-  prompt: string,
+  prompt: string, 
   options: ExecuteWithToolsStreamOptions = {}
 ): Promise<ExecuteWithToolsStreamResult> => {
   const {
@@ -372,8 +372,8 @@ export const executeWithToolsStream = async (
   }
 
   // Exécuter les tools (hors OpenAI) + streamer les résultats via tool_call_result
-  const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
-  const allExtractResults: ExtractResult[] = [];
+    const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
+    const allExtractResults: ExtractResult[] = [];
 
   for (const toolCall of toolCalls) {
     if (signal?.aborted) throw new Error('AbortError');
@@ -381,7 +381,7 @@ export const executeWithToolsStream = async (
       const args = JSON.parse(toolCall.args || '{}');
       if (toolCall.name === 'web_search') {
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
-        const searchResults = await searchWeb(args.query, signal);
+          const searchResults = await searchWeb(args.query, signal);
         allSearchResults.push({ query: args.query, results: searchResults });
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: searchResults } });
       } else if (toolCall.name === 'web_extract') {
@@ -405,38 +405,38 @@ export const executeWithToolsStream = async (
         const resultsArray = Array.isArray(extractResults) ? extractResults : [extractResults];
         allExtractResults.push(...resultsArray);
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
-      }
+        }
     } catch (error) {
       await write('tool_call_result', {
         tool_call_id: toolCall.id,
         result: { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       });
     }
-  }
+    }
 
   // Construire resultsMessage (identique à executeWithTools)
-  let resultsMessage = '';
-  if (allSearchResults.length > 0) {
-    resultsMessage += `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\n`;
-  }
-  if (allExtractResults.length > 0) {
-    resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
-  }
+    let resultsMessage = '';
+    if (allSearchResults.length > 0) {
+      resultsMessage += `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\n`;
+    }
+    if (allExtractResults.length > 0) {
+      resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
+    }
   resultsMessage += WEB_TOOLS_RESULTS_SUFFIX;
 
   // 2e appel (streaming) avec les résultats — identique à executeWithTools
   accumulatedContent = '';
   for await (const event of callOpenAIResponseStream({
-    messages: [
+      messages: [
       { role: 'system', content: WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT },
       { role: 'user', content: prompt },
       { role: 'assistant', content: WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT },
       { role: 'user', content: resultsMessage }
-    ],
-    model,
-    responseFormat,
+      ],
+      model,
+      responseFormat,
     reasoningSummary,
-    signal
+      signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;
     await write(event.type, data);

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page dashboard', async ({ page }) => {
@@ -65,7 +65,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier si la section "Synthèse exécutive" est visible
         const executiveSummarySection = page.locator('h2:has-text("Synthèse exécutive")');
@@ -89,7 +89,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher les références [1], [2], etc.
         const references = page.locator('a[href^="#ref-"], a:has-text(/^\\[\\d+\\]$/)');
@@ -104,7 +104,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher le bouton "Générer la synthèse"
         const generateButton = page.locator('button:has-text("Générer la synthèse"), button:has-text("Générer")');
@@ -118,7 +118,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher le bouton de régénération (icône de rafraîchissement)
         const regenerateButton = page.locator('button[title="Régénérer la synthèse exécutive"]');
@@ -132,7 +132,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Cliquer sur "Générer" si disponible
         const generateButton = page.locator('button:has-text("Générer la synthèse")');
@@ -150,7 +150,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher une section éditable (EditableInput)
         const editableSection = page.locator('.editable-input, [contenteditable="true"]').first();
@@ -166,7 +166,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher le bouton imprimer
         const printButton = page.locator('button[title="Imprimer ou exporter le rapport en PDF"], button:has(svg)').first();
@@ -184,7 +184,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         const printButton = page.locator('button[title="Imprimer ou exporter le rapport en PDF"]');
         if (await printButton.isVisible()) {
@@ -216,7 +216,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher le titre éditable (EditableInput dans le h1 - multiline avec textarea)
         const editableTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -231,7 +231,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         const scatterPlotContainer = page.locator('.report-scatter-plot-container');
         if (await scatterPlotContainer.isVisible()) {
@@ -251,7 +251,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher la carte "Gains rapides" (quadrant ROI)
         const roiQuadrant = page.locator('text=Gains rapides, .bg-green-50');
@@ -265,7 +265,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher le bouton de configuration (icône ⚙️)
         const configButton = page.locator('button[title="Configuration du quadrant ROI"], button:has(svg)').first();
@@ -283,7 +283,7 @@ test.describe('Dashboard', () => {
       const folderSelect = page.locator('#folder-select');
       if (await folderSelect.isVisible()) {
         await folderSelect.selectOption({ index: 0 });
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Ouvrir l'accordéon de configuration
         const configButton = page.locator('button[title="Configuration du quadrant ROI"]');

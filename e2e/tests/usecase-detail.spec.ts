@@ -4,7 +4,7 @@ test.describe('Détail des cas d\'usage', () => {
   test('devrait afficher la page de détail d\'un cas d\'usage', async ({ page }) => {
     // D'abord aller à la liste des cas d'usage
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher un cas d'usage cliquable
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -20,7 +20,7 @@ test.describe('Détail des cas d\'usage', () => {
         await firstCard.click();
         
         // Attendre la redirection
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier qu'on est sur une page de détail
         const currentUrl = page.url();
@@ -36,7 +36,7 @@ test.describe('Détail des cas d\'usage', () => {
     // Simuler l'accès direct à une page de détail (si on connaît un ID)
     // Pour ce test, on va d'abord naviguer depuis la liste
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -46,7 +46,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier les éléments de détail
         await expect(page.locator('h1, h2')).toBeVisible();
@@ -60,7 +60,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait permettre de modifier un cas d\'usage', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -70,7 +70,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher un bouton de modification
         const editButton = page.locator('button:has-text("Modifier"), button[title="Modifier"]');
@@ -87,7 +87,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait permettre de supprimer un cas d\'usage depuis la page de détail', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -97,7 +97,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Chercher un bouton de suppression
         const deleteButton = page.locator('button:has-text("Supprimer"), button[title="Supprimer"]');
@@ -113,7 +113,7 @@ test.describe('Détail des cas d\'usage', () => {
           await deleteButton.click();
           
           // Vérifier qu'on est redirigé vers la liste
-          await page.waitForLoadState('networkidle');
+          await page.waitForLoadState('domcontentloaded');
           await expect(page).toHaveURL('/cas-usage');
         }
       }
@@ -122,7 +122,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait afficher les scores de valeur et complexité en détail', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -132,7 +132,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier la présence d'éléments liés aux scores
         const valueElements = page.locator('text=Valeur, text=value, text=★');
@@ -148,7 +148,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait afficher les sections Problème et Solution', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -158,7 +158,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier la section Problème (orange)
         const problemSection = page.locator('div.bg-orange-100.text-orange-800:has-text("Problème")');
@@ -198,7 +198,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait permettre d\'éditer problem et solution', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -208,7 +208,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Éditer le problème si la section est visible
         const problemSection = page.locator('div.bg-orange-100:has-text("Problème")');
@@ -232,7 +232,7 @@ test.describe('Détail des cas d\'usage', () => {
             
             // Recharger la page pour vérifier la sauvegarde
             await page.reload();
-            await page.waitForLoadState('networkidle');
+            await page.waitForLoadState('domcontentloaded');
             
             // Vérifier que le problème est sauvegardé (chercher dans le contenu de la page)
             const problemTextContainer = problemSection.locator('..');
@@ -261,7 +261,7 @@ test.describe('Détail des cas d\'usage', () => {
             
             // Recharger la page pour vérifier la sauvegarde
             await page.reload();
-            await page.waitForLoadState('networkidle');
+            await page.waitForLoadState('domcontentloaded');
             
             // Vérifier que la solution est sauvegardée (chercher dans le contenu de la page)
             const solutionTextContainer = solutionSection.locator('..');
@@ -275,7 +275,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait gérer les cas d\'usage en cours de génération', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const generatingCards = page.locator('article.opacity-60.cursor-not-allowed');
     
@@ -292,7 +292,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait afficher le contenu du cas d\'usage en mode impression (une seule page)', async ({ page }) => {
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     
@@ -302,7 +302,7 @@ test.describe('Détail des cas d\'usage', () => {
       
       if (!isGenerating) {
         await firstCard.click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Activer le mode impression via CSS media query
         await page.emulateMedia({ media: 'print' });
