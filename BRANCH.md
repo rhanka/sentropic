@@ -380,14 +380,14 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - [x] Validation : contexte automatique depuis `primaryContextType`/`primaryContextId` (dans body POST)
   - [ ] Validation : erreurs (session non trouvée → 404, user non autorisé → 403, pas d'auth → 401)
 
-- [ ] **Endpoints Streams** (`api/tests/api/streams.test.ts`) :
-  - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
-  - [ ] `GET /api/v1/streams/sse` : connexion SSE avec filtrage par `streamId` (query param)
-  - [ ] `GET /api/v1/streams/sse` : réception événements en temps réel (NOTIFY) - mock EventSource ou test manuel
-  - [ ] `GET /api/v1/streams/events/:streamId` : historique avec `limit` et `sinceSequence` (via `authenticatedRequest`)
-  - [ ] Validation : événements `reasoning_delta`, `content_delta`, `tool_call_*`, `done`, `error`
-  - [ ] Validation : ordre séquentiel, déduplication
-  - [ ] Validation : 401 sans authentification
+- [x] **Endpoints Streams** (`api/tests/api/streams.test.ts`) ✅ :
+  - [x] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
+  - [ ] `GET /api/v1/streams/sse` : connexion SSE avec filtrage par `streamId` (query param) - Note: Complexe à tester (nécessite mock EventSource), testé manuellement
+  - [ ] `GET /api/v1/streams/sse` : réception événements en temps réel (NOTIFY) - Note: Testé manuellement
+  - [x] `GET /api/v1/streams/events/:streamId` : historique avec `limit` et `sinceSequence` (via `authenticatedRequest`) ✅
+  - [x] Validation : événements `reasoning_delta`, `content_delta`, `tool_call_*`, `done`, `error` ✅
+  - [x] Validation : ordre séquentiel, déduplication ✅
+  - [x] Validation : 401 sans authentification ✅
 
 - [ ] **Tool Calls Intégration** (`api/tests/ai/chat-tools.test.ts`) :
   - [ ] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, créer use case de test via endpoint, `afterEach` → `cleanupAuthData()`
