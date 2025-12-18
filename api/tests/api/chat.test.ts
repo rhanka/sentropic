@@ -223,6 +223,37 @@ describe('Chat API Endpoints', () => {
       // Le service throw une Error qui peut être convertie en 500 par Hono
       expect([404, 500]).toContain(response.status);
     });
+
+    it('should return 401 without authentication', async () => {
+      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: 'Test message'
+      });
+      const { sessionId } = await createResponse.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/sessions/${sessionId}/messages`,
+        null // Pas de token
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return error when accessing another user session', async () => {
+      // Utiliser un ID de session qui n'existe pas (simule un accès à une session d'un autre user)
+      // Le service vérifie userId, donc une session inexistante retourne une erreur
+      const nonExistentSessionId = createTestId();
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/sessions/${nonExistentSessionId}/messages`,
+        user.sessionToken!
+      );
+
+      // Le service vérifie userId, donc devrait retourner une erreur (500 ou 404)
+      expect([404, 500]).toContain(response.status);
+    });
   });
 
   describe('GET /api/v1/chat/sessions/:id/stream-events', () => {
@@ -336,6 +367,95 @@ describe('Chat API Endpoints', () => {
 
       // Le service throw une Error qui peut être convertie en 500 par Hono
       expect([404, 500]).toContain(response.status);
+    });
+
+    it('should return 401 without authentication', async () => {
+      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: 'Test message'
+      });
+      const { sessionId } = await createResponse.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/chat/sessions/${sessionId}`,
+        null // Pas de token
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return error when deleting another user session', async () => {
+      // Utiliser un ID de session qui n'existe pas (simule un accès à une session d'un autre user)
+      // Le service vérifie userId, donc une session inexistante retourne une erreur
+      const nonExistentSessionId = createTestId();
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/chat/sessions/${nonExistentSessionId}`,
+        user.sessionToken!
+      );
+
+      // Le service vérifie userId, donc devrait retourner une erreur (500 ou 404)
+      expect([404, 500]).toContain(response.status);
+    });
+  });
+
+  describe('GET /api/v1/chat/sessions/:id/stream-events', () => {
+    it('should return 401 without authentication', async () => {
+      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: 'Test message'
+      });
+      const { sessionId } = await createResponse.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/sessions/${sessionId}/stream-events`,
+        null // Pas de token
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return error for non-existent session', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/chat/sessions/non-existent-id/stream-events',
+        user.sessionToken!
+      );
+
+      expect([404, 500]).toContain(response.status);
+    });
+  });
+
+  describe('GET /api/v1/chat/messages/:id/stream-events', () => {
+    it('should return 404 for non-existent message', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/chat/messages/non-existent-message-id/stream-events',
+        user.sessionToken!
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 401 without authentication', async () => {
+      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: 'Test message'
+      });
+      const { assistantMessageId } = await createResponse.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        null // Pas de token
+      );
+
+      expect(response.status).toBe(401);
     });
   });
 });

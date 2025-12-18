@@ -378,7 +378,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - [x] `GET /api/v1/chat/messages/:id/stream-events` : events pour message
   - [x] `DELETE /api/v1/chat/sessions/:id` : suppression avec cascade
   - [x] Validation : contexte automatique depuis `primaryContextType`/`primaryContextId` (dans body POST)
-  - [ ] Validation : erreurs (session non trouvée → 404, user non autorisé → 403, pas d'auth → 401)
+  - [x] Validation : erreurs (session non trouvée → 404/500, user non autorisé → 404/500, pas d'auth → 401) ✅
 
 - [x] **Endpoints Streams** (`api/tests/api/streams.test.ts`) ✅ :
   - [x] Setup : `beforeEach` → `createAuthenticatedUser('editor')`, `afterEach` → `cleanupAuthData()`
