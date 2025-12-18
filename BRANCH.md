@@ -449,86 +449,12 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 **Non régressions et évolution des tests existants** :
 
-- [x] **`e2e/tests/companies.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/entreprises` (connexion SSE empêche `networkidle`)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/companies.spec.ts`
-
-- [x] **`e2e/tests/companies-detail.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` pour `/entreprises`
-  - [x] Aucune correction nécessaire
-
-- [x] **`e2e/tests/error-handling.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` pour `/entreprises`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/error-handling.spec.ts`
-
-- [x] **`e2e/tests/workflow.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` pour `/entreprises`
-  - [x] Aucune correction nécessaire
-
-- [x] **`e2e/tests/i18n.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/` et `/entreprises` (connexion SSE)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/i18n.spec.ts`
-
-- [x] **`e2e/tests/ai-generation.spec.ts`** ⚠️ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour toutes les pages (connexion SSE)
-  - [ ] Tests échouent pour raisons non liées à `networkidle` (logique des tests à corriger)
-
-- [x] **`e2e/tests/app.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/app.spec.ts` (5 passed)
-
-- [x] **`e2e/tests/auth-devices.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/auth-devices.spec.ts` (3 passed)
-
-- [x] **`e2e/tests/auth-routes.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/auth/login`, `/auth/register` et routes inexistantes (3 occurrences)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/auth-routes.spec.ts` (3 passed)
-
-- [x] **`e2e/tests/auth-simple.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/auth-simple.spec.ts` (8 passed)
-
-- [x] **`e2e/tests/auth-webauthn.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` (5 occurrences)
-  - [x] Correction test "devrait afficher le support d'authentification" : ajout `waitFor()` pour attendre `onMount()` de Svelte
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/auth-webauthn.spec.ts` (10 passed)
-
-- [x] **`e2e/tests/auth-workflow.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/auth-workflow.spec.ts` (11 passed)
-
-- [x] **`e2e/tests/dashboard.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas d'accès à `/entreprises`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/dashboard.spec.ts` (17 passed, 3 skipped)
-
-- [x] **`e2e/tests/executive-summary.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/executive-summary.spec.ts` (6 passed)
-
-- [x] **`e2e/tests/folders.spec.ts`** ✅ :
-  - [x] Déjà OK : utilise `domcontentloaded` partout, pas de `networkidle`
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/folders.spec.ts` (6 passed)
-
-- [x] **`e2e/tests/matrix.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/matrice` (2 occurrences)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/matrix.spec.ts` (14 passed)
-
-- [x] **`e2e/tests/settings.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/parametres` (3 occurrences)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/settings.spec.ts` (9 passed, 2 skipped)
-
-- [x] **`e2e/tests/usecase.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/cas-usage` (3 occurrences)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/usecase.spec.ts` (10 passed)
-
-- [x] **`e2e/tests/usecase-detail.spec.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` pour `/cas-usage` et pages de détail (20 occurrences)
-  - [x] Tests passent : `make test-e2e E2E_SPEC=tests/usecase-detail.spec.ts` (9 passed)
-
-- [x] **`e2e/global.setup.ts`** ✅ :
-  - [x] Correction `networkidle` → `domcontentloaded` + sélecteur pour `/entreprises` (connexion SSE)
-  - [x] Setup fonctionne correctement
+- [x] Correction `networkidle` → `domcontentloaded` (régression: connexion SSE empêche `networkidle`) 
+- [x] **`e2e/tests/ai-generation.spec.ts`** ✅ :
+  - [x] Correction textes obsolètes : "Enrichissement en cours..." → "En cours…", "Génération..." → "En cours…"
+  - [x] Test 1 (enrichissement entreprise) : ✅ passe
+  - [x] Test 2 (génération cas d'usage) : adapté pour attendre présence "cas d'usage" dans la carte
+  - [x] **Régression SSE corrigée** : `emitUseCaseSnapshot` utilise maintenant `hydrateUseCase` pour retourner camelCase (`folderId`) au lieu de snake_case (`folder_id`) : evolution vers SSE "En cours..."
 
 **Fichier à créer** : `e2e/tests/chat.spec.ts`
 

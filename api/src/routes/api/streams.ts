@@ -2,7 +2,10 @@ import { Hono } from 'hono';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Notification } from 'pg';
+import { hydrateUseCase } from './use-cases';
+import { useCases } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -286,16 +289,14 @@ streamsRouter.get('/sse', async (c) => {
 
       const emitUseCaseSnapshot = async (useCaseId: string) => {
         try {
-          const row = (await db.get(sql`
-            SELECT *
-            FROM use_cases
-            WHERE id = ${useCaseId}
-          `)) as unknown as Record<string, unknown> | undefined;
+          const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
           if (!row?.id || typeof row.id !== 'string') {
             push(sseUseCaseEvent(useCaseId, { deleted: true }));
             return;
           }
-          push(sseUseCaseEvent(useCaseId, { useCase: row }));
+          // Utiliser hydrateUseCase pour avoir la même structure que GET /use-cases (camelCase)
+          const hydrated = await hydrateUseCase(row);
+          push(sseUseCaseEvent(useCaseId, { useCase: hydrated }));
         } catch {
           // ignore
         }

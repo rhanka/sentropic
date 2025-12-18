@@ -73,7 +73,7 @@ const useCaseInput = z.object({
 
 type UseCaseInput = z.infer<typeof useCaseInput>;
 
-type SerializedUseCase = typeof useCases.$inferSelect;
+export type SerializedUseCase = typeof useCases.$inferSelect;
 
 // Type pour rétrocompatibilité avec les anciennes colonnes (avant migration 0008)
 // Permet l'accès aux propriétés qui peuvent encore exister dans certains backups
@@ -110,7 +110,7 @@ const parseJson = <T>(value: string | null): T | undefined => {
  * Extrait les données de data JSONB et des colonnes temporaires (rétrocompatibilité)
  * Calcule les scores dynamiquement à partir de la matrice du dossier
  */
-const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
+export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
   // Récupérer la matrice du dossier pour calculer les scores
   const [folder] = await db.select().from(folders).where(eq(folders.id, row.folderId));
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
