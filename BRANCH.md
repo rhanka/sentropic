@@ -414,18 +414,27 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
   - [x] Vérification contenu final : message assistant mis à jour en DB après complétion job
   - [x] Vérification stream events : structure correcte après génération
 
-- [ ] **Générations classiques - Mise à jour tests existants** :
+  - [x] **Générations classiques - Mise à jour tests existants** ✅ :
   - [x] Vérifier que les services utilisent bien `executeWithToolsStream` (pas `executeWithTools`) ✅
     - [x] `executive-summary.ts` : utilise `executeWithToolsStream` avec `streamId` optionnel
     - [x] `context-usecase.ts` : utilise `executeWithToolsStream`
     - [x] `context-company.ts` : utilise `executeWithToolsStream`
-  - [ ] **Ajouter vérifications dans tests existants** :
-    - [ ] `api/tests/ai/executive-summary-sync.test.ts` : vérifier que les événements sont écrits dans `chat_stream_events` après génération
-      - [ ] Vérifier `streamId` déterministe : `job_<jobId>` (via `generateStreamId` avec `jobId`)
-      - [ ] Vérifier `message_id=null` pour générations classiques
-      - [ ] Vérifier présence d'événements `content_delta`, `done` (et `tool_call_*` si `web_extract`/`web_search` utilisés)
-    - [ ] `api/tests/ai/usecase-generation-*.test.ts` : ajouter vérifications `chat_stream_events`
-    - [ ] `api/tests/ai/company-enrichment-sync.test.ts` : ajouter vérifications `chat_stream_events`
+  - [x] **Ajouter vérifications dans tests existants** :
+    - [x] `api/tests/ai/executive-summary-sync.test.ts` : vérifier que les événements sont écrits dans `chat_stream_events` après génération ✅
+      - [x] Vérifier `streamId` déterministe : `folder_<folderId>` (passé explicitement dans `processExecutiveSummary`)
+      - [x] Vérifier `message_id=null` pour générations classiques
+      - [x] Vérifier présence d'événements `content_delta`, `done` (et éventuellement `tool_call_*` si `web_extract`/`web_search` utilisés)
+    - [x] `api/tests/ai/usecase-generation-async.test.ts` : ajout vérifications `chat_stream_events` ✅
+      - [x] Vérification `streamId = folder_<folderId>` pour usecase-list
+      - [x] Vérification `streamId = usecase_<useCaseId>` pour usecase-detail
+      - [x] Vérification `message_id=null` pour générations classiques
+      - [x] Vérification présence d'événements `content_delta`, `done`
+      - Note : `usecase-generation-sync.test.ts` ne fait que démarrer la génération, pas de vérification possible
+    - [x] `api/tests/ai/company-enrichment-sync.test.ts` : ajout vérifications `chat_stream_events` ✅
+      - [x] Nouveau test utilisant `/api/v1/companies/:id/enrich` (asynchrone avec `streamId = company_<companyId>`)
+      - [x] Vérification `message_id=null` pour générations classiques
+      - [x] Vérification présence d'événements `content_delta`, `done`
+      - Note : `/api/v1/companies/ai-enrich` (synchrone) génère un `streamId` temporaire, difficile à tester
   - [x] Validation : `web_extract` avec array d'URLs → un seul appel Tavily ✅ (testé dans `tools.test.ts`)
   - [x] Validation : `web_extract` avec array vide → erreur claire ✅ (testé dans `chat-sync.test.ts`)
 
