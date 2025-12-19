@@ -450,11 +450,7 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 **Non régressions et évolution des tests existants** :
 
 - [x] Correction `networkidle` → `domcontentloaded` (régression: connexion SSE empêche `networkidle`) 
-- [x] **`e2e/tests/ai-generation.spec.ts`** ✅ :
-  - [x] Correction textes obsolètes : "Enrichissement en cours..." → "En cours…", "Génération..." → "En cours…"
-  - [x] Test 1 (enrichissement entreprise) : ✅ passe
-  - [x] Test 2 (génération cas d'usage) : adapté pour attendre présence "cas d'usage" dans la carte
-  - [x] **Régression SSE corrigée** : `emitUseCaseSnapshot` utilise maintenant `hydrateUseCase` pour retourner camelCase (`folderId`) au lieu de snake_case (`folder_id`) : evolution vers SSE "En cours..."
+- [x] **`e2e/tests/ai-generation.spec.ts`** ✅ : corrections suite au changement de workflow (SSE sur cartes)
 
 **Fichier à créer** : `e2e/tests/chat.spec.ts`
 

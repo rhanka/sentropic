@@ -38,17 +38,17 @@ test.describe('Génération IA', () => {
     
     // Attendre la fin de l'enrichissement (le statut n'est plus "enriching")
     // D'abord vérifier qu'une carte BRP en enrichissement existe
-    const companyCardEnriching = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'Enrichissement en cours...' }).first();
+    const companyCardEnriching = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'En cours…' }).first();
     await expect(companyCardEnriching).toBeVisible({ timeout: 1000 });
     
-    // Attendre qu'une carte BRP sans "Enrichissement en cours..." apparaisse (enrichissement terminé)
+    // Attendre qu'une carte BRP sans "En cours…" apparaisse (enrichissement terminé)
     // Utiliser une boucle pour vérifier toutes les 3 secondes jusqu'à 30 secondes (10 tentatives)
     let companyCard;
     let attempts = 0;
     const maxAttempts = 10; // 10 tentatives * 3 secondes = 30 sec max
     
     while (attempts < maxAttempts) {
-      const availableCards = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasNotText: 'Enrichissement en cours...' });
+      const availableCards = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasNotText: 'En cours…' });
       const count = await availableCards.count();
       
       if (count > 0) {
@@ -173,48 +173,70 @@ test.describe('Génération IA', () => {
     
     // Vérifier la redirection vers /dossiers (comportement après génération avec nouveau dossier)
     debug('Attente redirection vers /dossiers...');
-    await page.waitForURL('/dossiers', { timeout: 2000 });
+    await page.waitForURL('/dossiers', { timeout: 1000 });
     debug(`Redirection réussie vers /dossiers, URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
     debug('Page /dossiers chargée');
     
-    // Vérifier que la carte contenant Delpharm est en status "generating"
-    debug('Recherche de la carte dossier Delpharm en génération...');
-    const folderCardWithCompanyGenerating = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' }).filter({ hasText: 'Génération' }).first();
-    await expect(folderCardWithCompanyGenerating).toBeVisible({ timeout: 1000 });
-    await expect(folderCardWithCompanyGenerating.locator('text=Génération...')).toBeVisible();
-    debug('✅ Carte dossier Delpharm en génération trouvée');
+    // Attendre 100ms pour l'affichage initial de Svelte
+    await page.waitForTimeout(100);
     
-    // Attendre qu'une carte Company sans "Génération..." apparaisse (génération terminée)
+    // Attendre qu'une carte Delpharm sans "En cours…" apparaisse avec des cas d'usage > 0 (génération terminée)
+    // Note: "En cours…" disparaît vite (remplacé par raisonnement/appels outils), mais le nombre de cas d'usage n'apparaît qu'après ~20 secondes
     // Utiliser une boucle pour vérifier toutes les 3 secondes jusqu'à 30 secondes (10 tentatives)
     let folderCardWithCompany;
     let folderAttempts = 0;
-    const maxFolderAttempts = 15; // 15 tentatives * 3 secondes = 45 sec max
+    const maxFolderAttempts = 10; // 10 tentatives * 3 secondes = 30 sec max
     
     debug('Attente de la fin de génération du dossier Delpharm...');
+    
+    // Vérifier immédiatement si la carte Delpharm existe (avant la boucle)
+    const initialDelpharmCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' });
+    const initialDelpharmCount = await initialDelpharmCards.count();
+    debug(`Vérification initiale: ${initialDelpharmCount} carte(s) Delpharm trouvée(s)`);
+    
     while (folderAttempts < maxFolderAttempts) {
-      // D'abord, voir toutes les cartes Delpharm pour debug
+      // Chercher toutes les cartes Delpharm
       const allDelpharmCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' });
       const allDelpharmCount = await allDelpharmCards.count();
       debug(`Tentative ${folderAttempts + 1}/${maxFolderAttempts}: ${allDelpharmCount} carte(s) Delpharm trouvée(s)`);
       
       if (allDelpharmCount > 0) {
-        // Afficher le texte de toutes les cartes Delpharm
-        for (let i = 0; i < allDelpharmCount; i++) {
-          const cardText = await allDelpharmCards.nth(i).textContent();
-          debug(`Carte Delpharm ${i + 1}: "${cardText?.substring(0, 100)}..."`);
+        // Filtrer les cartes sans "En cours…"
+        const availableCards = allDelpharmCards.filter({ hasNotText: 'En cours…' });
+        const count = await availableCards.count();
+        debug(`Cartes Delpharm sans "En cours…": ${count}`);
+        
+        if (count > 0) {
+          // Prendre la première carte qui a des cas d'usage > 0
+          for (let i = 0; i < count; i++) {
+            const candidateCard = availableCards.nth(i);
+            
+            // Chercher spécifiquement l'élément span qui contient l'icône dossier (SVG) et le texte "cas d'usage"
+            // Le span a la structure: <span class="flex items-center gap-1 whitespace-nowrap"><svg>...</svg> {useCaseCount} cas d'usage</span>
+            // On cherche le span qui contient à la fois un SVG et le texte "cas d'usage"
+            const useCaseCountElement = candidateCard.locator('span:has(svg):has-text("cas d\'usage")');
+            const useCaseCountExists = await useCaseCountElement.count() > 0;
+            
+            if (useCaseCountExists) {
+              const useCaseCountText = await useCaseCountElement.textContent();
+              // Extraire le nombre depuis le texte du span (format: "3 cas d'usage")
+              const useCaseMatch = useCaseCountText?.match(/(\d+)\s+cas\s+d'usage/);
+              const useCaseCount = useCaseMatch ? parseInt(useCaseMatch[1], 10) : 0;
+              
+              if (useCaseCount > 0) {
+                folderCardWithCompany = candidateCard;
+                debug(`✅ Carte dossier Delpharm terminée avec ${useCaseCount} cas d'usage trouvée`);
+                break;
+              }
+            }
+          }
+          if (folderCardWithCompany) {
+            break;
+          } else {
+            debug(`⏳ Cartes trouvées mais pas encore de cas d'usage (icône dossier non trouvée ou compteur = 0)`);
+          }
         }
-      }
-      
-      const availableCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' }).filter({ hasNotText: 'Génération...' });
-      const count = await availableCards.count();
-      debug(`Cartes Delpharm sans "Génération...": ${count}`);
-      
-      if (count > 0) {
-        folderCardWithCompany = availableCards.first();
-        const cardText = await folderCardWithCompany.textContent();
-        debug(`✅ Carte dossier Delpharm terminée trouvée: "${cardText?.substring(0, 100)}..."`);
-        break;
       }
       
       await page.waitForTimeout(3000); // Attendre 3 secondes avant de réessayer (la page se met à jour automatiquement)
@@ -234,45 +256,21 @@ test.describe('Génération IA', () => {
       throw new Error('La génération du dossier Delpharm n\'a pas terminé dans les délais (30 secondes)');
     }
     
-    // Cliquer sur le dossier
-    await folderCardWithCompany.click();
-    
-    // Vérifier la redirection vers /cas-usage
-    await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
+    // Cliquer sur la carte et attendre la navigation
+    await Promise.all([
+      page.waitForURL(/\/cas-usage/, { timeout: 2000 }),
+      folderCardWithCompany.click()
+    ]);
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier le titre "Cas d'usage"
     await expect(page.locator('h1')).toContainText('Cas d\'usage');
     
     // Étape 1: Attendre qu'au moins une carte de cas d'usage apparaisse (même en génération)
-    // Pour s'assurer que les cas d'usage sont chargés depuis l'API
+    // Playwright attend automatiquement jusqu'à ce que l'élément soit visible (timeout 5s pour l'appel API)
     debug('Étape 1: Attente de l\'apparition des cartes de cas d\'usage...');
-    let anyCardVisible = false;
-    let loadingAttempts = 0;
-    const maxLoadingAttempts = 3; // 3 tentatives * 1.5 secondes = 4.5 sec max pour le chargement initial
-    
-    while (loadingAttempts < maxLoadingAttempts) {
-      const allCards = page.locator('.grid.gap-4 > article');
-      const cardCount = await allCards.count();
-      debug(`Tentative ${loadingAttempts + 1}/${maxLoadingAttempts}: ${cardCount} carte(s) de cas d'usage trouvée(s)`);
-      
-      if (cardCount > 0) {
-        // Afficher le texte de toutes les cartes pour debug
-        const allCardsText = await allCards.allTextContents();
-        debug(`Textes des cartes trouvées: ${JSON.stringify(allCardsText.map(t => t.substring(0, 80) + '...'))}`);
-        anyCardVisible = true;
-        break;
-      }
-      
-      await page.waitForTimeout(1500); // Attendre 1.5 secondes avant de réessayer (la page se met à jour automatiquement)
-      loadingAttempts++;
-      debug(`Attente de la mise à jour automatique (tentative ${loadingAttempts}/${maxLoadingAttempts})...`);
-    }
-    
-    if (!anyCardVisible) {
-      debug('ERROR: Aucune carte de cas d\'usage trouvée sur la page');
-      throw new Error('Aucun cas d\'usage n\'est apparu sur la page dans les délais (4.5 secondes)');
-    }
+    const allCards = page.locator('.grid.gap-4 > article');
+    await expect(allCards.first()).toBeVisible({ timeout: 5000 });
     debug('✅ Au moins une carte de cas d\'usage est visible');
     
     // Étape 2: Attendre la fin de génération du premier cas d'usage (pas en génération)
@@ -294,8 +292,8 @@ test.describe('Génération IA', () => {
           const cardText = await card.textContent();
           const hasGenerating = await card.filter({ hasText: 'Génération en cours' }).count() > 0;
           const hasDetailing = await card.filter({ hasText: 'Détail en cours' }).count() > 0;
-          const hasGeneratingDots = await card.filter({ hasText: 'Génération...' }).count() > 0;
-          debug(`Carte ${i + 1}: génération=${hasGenerating}, détail=${hasDetailing}, génération...=${hasGeneratingDots}`);
+          const hasEnCours = await card.filter({ hasText: 'En cours…' }).count() > 0;
+          debug(`Carte ${i + 1}: génération=${hasGenerating}, détail=${hasDetailing}, en cours…=${hasEnCours}`);
           debug(`Texte: "${cardText?.substring(0, 120)}..."`);
         }
       }
@@ -324,13 +322,13 @@ test.describe('Génération IA', () => {
       if (allCardsCount > 0) {
         const allCardsText = await allCards.allTextContents();
         debug(`ERROR: Textes de toutes les cartes: ${JSON.stringify(allCardsText)}`);
-        // Vérifier aussi avec les points de suspension
-        const generatingCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Génération en cours...' });
+        // Vérifier aussi avec les textes possibles
+        const generatingCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Génération en cours' });
         const generatingCount = await generatingCards.count();
-        debug(`ERROR: Cartes avec "Génération en cours...": ${generatingCount}`);
-        const generatingDotsCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Génération...' });
-        const generatingDotsCount = await generatingDotsCards.count();
-        debug(`ERROR: Cartes avec "Génération...": ${generatingDotsCount}`);
+        debug(`ERROR: Cartes avec "Génération en cours": ${generatingCount}`);
+        const enCoursCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'En cours…' });
+        const enCoursCount = await enCoursCards.count();
+        debug(`ERROR: Cartes avec "En cours…": ${enCoursCount}`);
       }
       throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (45 secondes)');
     }
