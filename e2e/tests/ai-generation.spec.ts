@@ -277,7 +277,8 @@ test.describe('Génération IA', () => {
     debug('Étape 2: Attente de la fin de génération d\'un cas d\'usage...');
     let firstUseCaseCard;
     let attempts = 0;
-    const maxAttempts = 20; // 20 tentatives * 3 secondes = 60 sec max
+    // CI can be significantly slower for AI generation; allow up to ~3 minutes.
+    const maxAttempts = 60; // 60 tentatives * 3 secondes = 180 sec max
     
     while (attempts < maxAttempts) {
       // D'abord, voir toutes les cartes pour debug
@@ -331,7 +332,7 @@ test.describe('Génération IA', () => {
         const completedCount = await completedCards.count();
         debug(`ERROR: Cartes terminées (avec "Cliquez pour voir les détails"): ${completedCount}`);
       }
-      throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (60 secondes)');
+      throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (180 secondes)');
     }
     
     // Cliquer sur le premier cas d'usage
