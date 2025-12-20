@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
-test.setTimeout(30_000); // CI can be slower; keep E2E stable
+test.setTimeout(90_000); // CI can be slower; keep E2E stable
 
 test.describe('Chat', () => {
   const assistantBubble = (page: any) =>
@@ -13,17 +13,17 @@ test.describe('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Attendre que la page soit chargée (Svelte est réactif, timeout 1s)
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
     
     // Ouvrir le ChatWidget (bouton en bas à droite)
     const chatButton = page.locator('button[title="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible (le panneau remplace la bulle)
     // Le panneau a une classe spécifique et contient le textarea (Svelte est réactif, timeout 1s)
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
-    await expect(composer).toBeVisible({ timeout: 1000 });
+    await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Envoyer un message avec une demande de réponse spécifique pour vérifier la réponse
     const expectedResponse = 'OK';
@@ -35,12 +35,12 @@ test.describe('Chat', () => {
     // Attendre que le message utilisateur apparaisse dans la liste (fond sombre, aligné à droite)
     // Svelte est réactif, le message apparaît immédiatement (timeout 1s)
     const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
-    await expect(userMessage).toBeVisible({ timeout: 1000 });
+    await expect(userMessage).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse avec le texte spécifique demandé
     // On cherche directement le texte "OK" dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
-    await expect(assistantResponse).toBeVisible({ timeout: 15_000 });
+    await expect(assistantResponse).toBeVisible({ timeout: 30_000 });
   });
 
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
@@ -51,17 +51,17 @@ test.describe('Chat', () => {
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[title="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
     // Attendre que le panneau soit visible
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
-    await expect(composer).toBeVisible({ timeout: 1000 });
+    await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Basculer vers Jobs IA via le sélecteur dans le header
     // Le select contient "Nouvelle session", les sessions existantes, et "Jobs IA"
     const headerSelect = page.locator('select[title="Session / Jobs"]');
-    await expect(headerSelect).toBeVisible({ timeout: 1000 });
+    await expect(headerSelect).toBeVisible({ timeout: 5000 });
     
     // Sélectionner l'option Jobs IA par sa valeur
     await headerSelect.selectOption({ value: '__jobs__' });
@@ -84,12 +84,12 @@ test.describe('Chat', () => {
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[title="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
-    await expect(composer).toBeVisible({ timeout: 1000 });
+    await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
     const message1 = `Réponds brièvement (test E2E)`;
@@ -99,11 +99,11 @@ test.describe('Chat', () => {
     
     // Attendre que le message utilisateur apparaisse
     const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
-    await expect(userMessage1).toBeVisible({ timeout: 1000 });
+    await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'un message assistant apparaisse (placeholder streaming ou contenu final)
     const assistantWrappers = page.locator('div.flex.justify-start');
-    await expect.poll(async () => await assistantWrappers.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+    await expect.poll(async () => await assistantWrappers.count(), { timeout: 30_000 }).toBeGreaterThan(0);
     
     // Envoyer un deuxième message dans la même session avec une autre réponse spécifique
     const message2 = `Deuxième message (test E2E)`;
@@ -113,13 +113,13 @@ test.describe('Chat', () => {
     
     // Vérifier que les deux messages utilisateur sont visibles
     const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
-    await expect(userMessage2).toBeVisible({ timeout: 1000 });
+    await expect(userMessage2).toBeVisible({ timeout: 5000 });
     
     // Le point clé: le 2e message n'a pas effacé le 1er (session/conversation conservée)
     await expect(userMessage1).toBeVisible({ timeout: 5_000 });
 
     // Attendre qu'au moins un message assistant soit visible après le 2e envoi
-    await expect.poll(async () => await assistantWrappers.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+    await expect.poll(async () => await assistantWrappers.count(), { timeout: 30_000 }).toBeGreaterThan(0);
   });
 
   test('devrait conserver la session après fermeture et réouverture du widget', async ({ page }) => {

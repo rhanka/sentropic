@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+
+// These flows depend on AI + async background jobs; CI can be slower.
+test.setTimeout(4 * 60_000);
 import { debug, setupDebugBuffer } from '../helpers/debug';
 
 // Setup debug buffer to display on test failure
@@ -375,22 +378,22 @@ test.describe('Génération IA', () => {
     // Test 1: read_usecase
     debug('Test Chat: read_usecase');
     const chatButton = page.locator('button[title="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
-    await expect(composer).toBeVisible({ timeout: 1000 });
+    await expect(composer).toBeVisible({ timeout: 5000 });
     
     const message1 = 'Quel est le nom de ce cas d\'usage ?';
     await composer.fill(message1);
     await composer.press('Enter');
     
     const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
-    await expect(userMessage1).toBeVisible({ timeout: 1000 });
+    await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse1 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse1).toBeVisible({ timeout: 8000 });
+    await expect(assistantResponse1).toBeVisible({ timeout: 30_000 });
     
     // Test 2: update_usecase_field
     debug('Test Chat: update_usecase_field');
@@ -400,12 +403,12 @@ test.describe('Génération IA', () => {
     await composer.press('Enter');
     
     const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
-    await expect(userMessage2).toBeVisible({ timeout: 1000 });
+    await expect(userMessage2).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call update_usecase_field)
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse2 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse2).toBeVisible({ timeout: 8000 });
+    await expect(assistantResponse2).toBeVisible({ timeout: 30_000 });
     
     // Vérifier que la modification apparaît en direct via SSE (pas de refresh)
     // Note: la modification peut prendre quelques secondes via SSE, on attend jusqu'à 5s
@@ -419,11 +422,11 @@ test.describe('Génération IA', () => {
     await composer.press('Enter');
     
     const userMessage3 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message3 }).first();
-    await expect(userMessage3).toBeVisible({ timeout: 1000 });
+    await expect(userMessage3).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call web_extract)
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse3 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse3).toBeVisible({ timeout: 8000 });
+    await expect(assistantResponse3).toBeVisible({ timeout: 30_000 });
   });
 });
