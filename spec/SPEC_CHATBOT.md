@@ -693,14 +693,15 @@ const replay = await replayChatSession('session-789');
   - [x] Détection automatique du contexte depuis la route
   - [ ] Bloc "Documents" sur les pages objets (prévu Lot B)
 
-- [ ] **Tests** :
-  - [ ] Tests unitaires API (agrégation SSE, tool calls)
-  - [ ] Tests d'intégration API
-  - [ ] Tests E2E Playwright (chat/stream/tool-calls)
+- [x] **Tests** :
+  - [x] Tests unitaires API (agrégation SSE, tool calls)
+  - [x] Tests d'intégration API (endpoints chat, streams, tool calls)
+  - [x] Tests unitaires UI (`streamHub` store)
+  - [x] Tests E2E Playwright (chat/stream/tool-calls)
 
 ## Lots orientés valeur (workplan livrable)
 
-### Lot A — "Mise à jour ciblée d'un objet" ✅ Fonctionnellement fini
+### Lot A — "Mise à jour ciblée d'un objet" ✅ Terminé (fonctionnel + tests)
 
 **Valeur** : Démonstration client dès le premier incrément. L'IA propose et applique une amélioration ciblée sur un objet métier existant avec reasoning temps réel et traçabilité.
 
@@ -714,10 +715,12 @@ const replay = await replayChatSession('session-789');
 - [x] Détection automatique du contexte depuis la route
 - [x] Données : `chat_stream_events` rempli (reasoning/content/tools), `context_modification_history` écrit pour l'update, snapshots dans `chat_contexts`
 - [x] Refresh automatique de l'UI après modification (SSE events)
+- [x] Tests unitaires API (`stream-service`, `tool-service`, `tools`)
+- [x] Tests d'intégration API (endpoints chat, streams, tool calls)
+- [x] Tests unitaires UI (`streamHub` store)
+- [x] Tests E2E Playwright (chat, tool calls, génération IA)
 
 **À venir** :
-- [ ] Tests unitaires et d'intégration
-- [ ] Tests E2E Playwright
 - [ ] Extension aux autres objets (folder, company, executive_summary)
 
 **Couverture CU** : CU-001 (use case), CU-002 (partiel), CU-003, CU-004, CU-005 (use case), CU-010 (partiel), CU-015 (partiel), CU-016 (partiel), CU-019 (partiel), CU-020 (partiel), CU-021 (partiel)
@@ -752,6 +755,7 @@ const replay = await replayChatSession('session-789');
 - [ ] Endpoint POST `/api/structured/:prompt_id` pour appels structurés dédiés
 - [ ] Annulation via queue (PATCH `/api/structured/:run_id/cancel`)
 - [ ] Multi-contexte dans une session (plusieurs objets)
+- [ ] **UndoBar** : Bouton "Annuler" + preview de la dernière modification (via `context_modification_history` + `chat_contexts`), option confirmation humaine pour actions ⚠️
 - [ ] Tests : Unit/int/E2E pour appels structurés parallèles, annulation
 
 ### Lot D — "Audit, diff et résilience"
