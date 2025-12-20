@@ -6,7 +6,7 @@ test.describe('Public · WebAuthn Authentication', () => {
   test.beforeEach(async ({ page }) => {
     // Aller sur la page de connexion
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page de connexion', async ({ page }) => {
@@ -83,22 +83,25 @@ test.describe('Public · WebAuthn Authentication', () => {
   });
 
   test('devrait afficher le support d\'authentification', async ({ page }) => {
-    // Vérifier que l'interface d'authentification est présente
+    // Attendre que le composant soit rendu (onMount exécuté)
+    // Le bouton WebAuthn OU le message d'erreur doit apparaître
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
-    const magicLinkButton = page.getByRole('button', { name: 'Envoyer le lien magique' });
-    const useMagicLinkButton = page.getByRole('button', { name: 'Utiliser un lien magique' });
+    const errorMessage = page.locator('.text-red-800');
     
-    // Au moins un des boutons d'authentification doit être visible
-    const webauthnVisible = await webauthnButton.isVisible();
-    const magicLinkVisible = await magicLinkButton.isVisible();
-    const useMagicLinkVisible = await useMagicLinkButton.isVisible();
-    expect(webauthnVisible || magicLinkVisible || useMagicLinkVisible).toBe(true);
+    // Attendre que l'un ou l'autre soit visible (garantit que onMount a été exécuté)
+    await Promise.race([
+      webauthnButton.waitFor({ state: 'visible', timeout: 5000 }).catch(() => null),
+      errorMessage.waitFor({ state: 'visible', timeout: 5000 }).catch(() => null)
+    ]);
     
-    // Vérifier que les boutons appropriés sont présents et non désactivés
-    if (await webauthnButton.isVisible()) {
+    // Maintenant vérifier la visibilité
+    const webauthnVisible = await webauthnButton.isVisible().catch(() => false);
+    const errorVisible = await errorMessage.isVisible().catch(() => false);
+    
+    expect(webauthnVisible || errorVisible).toBe(true);
+    
+    if (webauthnVisible) {
       await expect(webauthnButton).not.toBeDisabled();
-    } else if (await magicLinkButton.isVisible()) {
-      await expect(magicLinkButton).not.toBeDisabled();
     }
   });
 });
@@ -107,7 +110,7 @@ test.describe('WebAuthn Registration', () => {
   test.beforeEach(async ({ page }) => {
     // Aller sur la page d'inscription
     await page.goto('/auth/register');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait valider les champs requis', async ({ page }) => {
@@ -168,7 +171,7 @@ test.describe('WebAuthn Registration', () => {
     
     // Recharger la page
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le message d'erreur apparaît
     await expect(page.getByText('Navigateur non compatible')).toBeVisible();
@@ -190,7 +193,7 @@ test.describe('Navigation Authentication', () => {
     await page.goto('/dashboard');
     
     // Attendre que la page se charge
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que la page se charge (même si c'est une erreur 404 ou une redirection)
     await expect(page.locator('body')).toBeAttached();

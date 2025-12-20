@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Configuration de la matrice', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/matrice');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page de configuration de la matrice', async ({ page }) => {
@@ -250,7 +250,7 @@ test.describe('Configuration de la matrice', () => {
           // Vérifier qu'une requête PUT a été envoyée pour sauvegarder
           // On peut vérifier en rechargeant la page
           await page.reload();
-          await page.waitForLoadState('networkidle');
+          await page.waitForLoadState('domcontentloaded');
           
           // Re-trouver l'input après rechargement
           const valueThresholdsSectionAfter = page.locator('h2:has-text("Configuration des seuils de Valeur")');

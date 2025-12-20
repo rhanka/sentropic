@@ -13,7 +13,7 @@ async function ensureMagicLinkMode(page: Page) {
   const canToggleToMagicLink = await useMagicLinkButton.isVisible({ timeout: 1000 }).catch(() => false);
   if (canToggleToMagicLink) {
     await useMagicLinkButton.click();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   } else {
     const webauthnVisible = await webauthnButton.isVisible({ timeout: 1000 }).catch(() => false);
     if (!webauthnVisible) {
@@ -41,7 +41,7 @@ test.describe('Public · WebAuthn Complete Authentication Workflow', () => {
     
     // Aller sur la page d'accueil
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que les éléments d'authentification sont présents
     const loginLink = page.getByRole('link', { name: 'Connexion' });
@@ -64,7 +64,7 @@ test.describe('Public · WebAuthn Complete Authentication Workflow', () => {
     
     // Étape 1: Aller sur la page d'inscription
     await page.goto('/auth/register');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que la page d'inscription se charge
     await expect(page.getByRole('heading', { name: 'Créer un compte' })).toBeVisible();
@@ -119,7 +119,7 @@ test.describe('Public · WebAuthn Complete Authentication Workflow', () => {
     
     // Essayer d'accéder à une page protégée
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Attendre un peu pour que l'erreur apparaisse
     await page.waitForTimeout(2000);
@@ -137,7 +137,7 @@ test.describe('WebAuthn Integration with Application', () => {
   test('devrait intégrer l\'authentification avec l\'application principale', async ({ page }) => {
     // Aller sur la page d'accueil
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que la page se charge
     await expect(page.locator('body')).toBeAttached();
@@ -207,7 +207,7 @@ test.describe('WebAuthn Security Features', () => {
 
   test('devrait gérer les tentatives de connexion multiples', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn (pas de champ email)
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
@@ -287,7 +287,7 @@ test.describe('WebAuthn Security Features', () => {
 test.describe('WebAuthn Error Recovery', () => {
   test('devrait récupérer des erreurs de WebAuthn', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });
@@ -319,7 +319,7 @@ test.describe('WebAuthn Error Recovery', () => {
 
   test('devrait permettre la récupération après une erreur', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Selon WORKFLOW_AUTH.md, la page login n'affiche que le bouton WebAuthn
     const webauthnButton = page.getByRole('button', { name: 'Se connecter avec WebAuthn' });

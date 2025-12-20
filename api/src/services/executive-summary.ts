@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { useCases, folders, companies } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { executeWithTools } from './tools';
+import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
 import { hydrateUseCases } from '../routes/api/use-cases';
@@ -22,6 +22,7 @@ export interface GenerateExecutiveSummaryOptions {
   complexityThreshold?: number | null;
   model?: string;
   signal?: AbortSignal;
+  streamId?: string;
 }
 
 export interface ExecutiveSummaryResult {
@@ -46,7 +47,7 @@ export interface ExecutiveSummaryResult {
 export async function generateExecutiveSummary(
   options: GenerateExecutiveSummaryOptions
 ): Promise<ExecutiveSummaryResult> {
-  const { folderId, valueThreshold, complexityThreshold, model, signal } = options;
+  const { folderId, valueThreshold, complexityThreshold, model, signal, streamId } = options;
 
   // Récupérer le dossier
   const [folder] = await db.select({
@@ -151,23 +152,41 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
 
-  // Appeler OpenAI
-  const response = await executeWithTools(prompt, {
+  // Appeler OpenAI (toujours avec streaming)
+  const finalStreamId = streamId || `executive_summary_${folderId}_${Date.now()}`;
+  const result = await executeWithToolsStream(prompt, {
     model: selectedModel,
     useWebSearch: true,
     responseFormat: 'json_object',
+    reasoningSummary: 'auto',
+    promptId: 'executive_summary',
+    streamId: finalStreamId,
     signal
   });
+  const content = result.content || '';
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('No response from AI');
-  }
+  if (!content) throw new Error('No response from AI');
 
   // Parser le JSON
   let executiveSummary;
   try {
-    executiveSummary = JSON.parse(content);
+    const cleaned = content
+      .trim()
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    try {
+      executiveSummary = JSON.parse(cleaned);
+    } catch {
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        executiveSummary = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      } else {
+        throw new Error('No JSON object boundaries found');
+      }
+    }
   } catch (parseError) {
     console.error('Error parsing AI response JSON:', parseError);
     throw new Error(`Invalid JSON response from AI: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);

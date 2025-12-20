@@ -1,10 +1,117 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAI } from './openai';
+import { callOpenAIResponseStream } from './openai';
+import type { StreamEventType } from './openai';
 import type OpenAI from 'openai';
+import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
 
 // Fonction pour Tavily Search
 const TAVILY_API_KEY = env.TAVILY_API_KEY;
+
+// Prompts d'orchestration web tools (DOIVENT rester identiques entre non-streaming et streaming)
+const WEB_TOOLS_SYSTEM_PROMPT =
+  "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes. CRITICAL: Si tu dois extraire plusieurs URLs avec web_extract, tu DOIS passer TOUTES les URLs dans un seul appel en utilisant le paramètre urls (array). NE FAIS JAMAIS plusieurs appels séparés pour chaque URL. Exemple: si tu as 9 URLs, appelle une fois avec {\"urls\": [\"url1\", \"url2\", ..., \"url9\"]} au lieu d'appeler 9 fois avec une URL chacune. Ne JAMAIS appeler web_extract avec un array vide: JAMAIS web_extract avec {\"urls\":[]}.";
+
+const WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT =
+  "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs.";
+
+const WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT =
+  "Je vais rechercher et extraire des informations récentes pour vous.";
+
+const WEB_TOOLS_RESULTS_SUFFIX =
+  "Réponds à la question originale en utilisant ces informations récentes.";
+
+// Tools (définition unique)
+export const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description: "Tavily Search API for real-time web search. Use this tool to search for current information on the web.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query to find relevant information"
+        }
+      },
+      required: ["query"]
+    }
+  }
+};
+
+export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "web_extract",
+    description: "Extract and retrieve the full content of one or more existing web page URLs. Use this tool when the user asks for details about references (URLs already present in the use case) or when you need to analyze the full content of specific URLs. CRITICAL: If you need to extract multiple URLs (e.g., 9 URLs from references), you MUST pass ALL of them in a SINGLE call using the `urls` array parameter. NEVER make separate calls for each URL. Example: if you have 9 URLs, call once with `{\"urls\": [\"url1\", \"url2\", ..., \"url9\"]}` instead of calling 9 times with one URL each.",
+    parameters: {
+      type: "object",
+      properties: {
+        urls: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Array of URLs to extract content from. MUST contain ALL URLs you need to extract in a single call. Example: if you have 9 URLs, pass all 9 in this array: [\"url1\", \"url2\", ..., \"url9\"]. Do NOT make separate calls for each URL."
+        }
+      },
+      required: ["urls"]
+    }
+  }
+};
+
+/**
+ * Tool pour lire un use case complet.
+ * Retourne la structure `use_cases.data` complète.
+ */
+export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "read_usecase",
+    description:
+      "Lit le contenu complet d'un use case (structure use_cases.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications.",
+    parameters: {
+      type: "object",
+      properties: {
+        useCaseId: { type: "string", description: "ID du use case à lire" }
+      },
+      required: ["useCaseId"]
+    }
+  }
+};
+
+/**
+ * Tool générique: met à jour un ou plusieurs champs de `use_cases.data.*`.
+ * Le mapping DB est pris en charge côté `tool-service.ts`.
+ */
+export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "update_usecase_field",
+    description:
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
+    parameters: {
+      type: "object",
+      properties: {
+        useCaseId: { type: "string", description: "ID du use case à modifier" },
+        updates: {
+          type: "array",
+          description: "Liste des modifications à appliquer (max 50). path cible use_cases.data.*",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Chemin du champ (ex: description, problem, solution.bullets.0)" },
+              value: { description: "Nouvelle valeur (JSON)" }
+            },
+            required: ["path", "value"]
+          }
+        }
+      },
+      required: ["useCaseId", "updates"]
+    }
+  }
+};
 
 export interface SearchResult {
   title: string;
@@ -20,6 +127,17 @@ interface TavilySearchResponse {
 interface TavilyExtractResponse {
   markdown?: string;
   content?: string;
+  // Tavily retourne un objet avec 'results' (array) et autres champs
+  results?: Array<{
+    url: string;
+    title?: string;
+    raw_content?: string;  // Le contenu est dans 'raw_content', pas 'markdown' ni 'content'
+    markdown?: string;
+    content?: string;
+  }>;
+  failed_results?: unknown[];
+  response_time?: number;
+  request_id?: string;
 }
 
 export const searchWeb = async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
@@ -51,12 +169,12 @@ export interface ExtractResult {
 }
 
 export const extractUrlContent = async (
-  url: string,
+  urls: string | string[],
   signal?: AbortSignal
-): Promise<ExtractResult> => {
-  console.log(`🔍 Tavily extract called with query: "${url}"`);
-
+): Promise<ExtractResult | ExtractResult[]> => {
   if (signal?.aborted) throw new Error("AbortError");
+
+  const urlArray = Array.isArray(urls) ? urls : [urls];
 
   const resp = await fetch("https://api.tavily.com/extract", {
     method: "POST",
@@ -65,147 +183,238 @@ export const extractUrlContent = async (
       "Authorization": `Bearer ${TAVILY_API_KEY}`
     },
     body: JSON.stringify({
-      url,
+      urls: urlArray,  // Tavily API accepte un array d'URLs - un seul appel pour toutes les URLs
       format: "markdown",      // "markdown" | "text"
       extract_depth: "advanced" // "basic" | "advanced"
     }),
     signal
   });
 
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    const urlsStr = Array.isArray(urls) ? urls.join(', ') : urls;
+    console.error(`❌ Tavily extract failed for ${urlsStr}: ${resp.status} ${resp.statusText} - ${errorText}`);
+    throw new Error(`Tavily extract failed: ${resp.status} ${resp.statusText}`);
+  }
+
   const data = (await resp.json()) as TavilyExtractResponse;
 
+  // Tavily retourne un objet avec 'results' (array de résultats)
+  if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+    if (Array.isArray(urls)) {
+      // Retourner un array de résultats pour un array d'URLs
+      const results: ExtractResult[] = urlArray.map((url, i) => {
+        const result = data.results!.find((r) => r.url === url) || data.results![i] || data.results![0];
+        const content = result.raw_content ?? result.markdown ?? result.content ?? "";
+        if (content.length === 0) {
+          console.warn(`⚠️ Tavily returned empty content for ${url}`);
+        }
   return {
     url,
-    content: data.markdown ?? data.content ?? ""
-  };
+          content
+        };
+      });
+      return results;
+    } else {
+      // Retourner un seul résultat pour une seule URL (compatibilité)
+      const result = data.results.find((r) => r.url === urls) || data.results[0];
+      const content = result.raw_content ?? result.markdown ?? result.content ?? "";
+      if (content.length === 0) {
+        console.warn(`⚠️ Tavily returned empty content for ${urls}`);
+      }
+      return {
+        url: urls,
+        content
+      };
+    }
+  } else {
+    // Fallback: format objet simple (si pas de results array)
+    const content = data.markdown ?? data.content ?? "";
+    if (Array.isArray(urls)) {
+      // Si array d'URLs mais pas de results, retourner un array avec le contenu pour la première URL
+      return urlArray.map((url, i) => ({
+        url,
+        content: i === 0 ? content : ""
+      }));
+    } else {
+      return {
+        url: urls,
+        content
+      };
+    }
+  }
 };
 
 
-export interface ExecuteWithToolsOptions {
+export interface ExecuteWithToolsStreamOptions {
   model?: string;
   useWebSearch?: boolean;
   responseFormat?: 'json_object';
   signal?: AbortSignal;
+/**
+   * ID du stream à utiliser (si non fourni, généré à partir des champs ci-dessous).
+   */
+  streamId?: string;
+  promptId?: string;
+  jobId?: string;
+  messageId?: string;
+  /**
+   * Résumé de reasoning (Responses API). Default: auto
+   */
+  reasoningSummary?: 'auto' | 'concise' | 'detailed';
 }
 
-/**
- * Orchestrateur pour exécuter des prompts avec ou sans outils
- */
-export const executeWithTools = async (
-  prompt: string, 
-  options: ExecuteWithToolsOptions = {}
-): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
-  const { model = 'gpt-4.1-nano', useWebSearch = false, responseFormat, signal } = options;
+export interface ExecuteWithToolsStreamResult {
+  streamId: string;
+  content: string;
+}
 
-  console.log(`🤖 Using model: ${model}${useWebSearch ? ' with web search' : ''}`);
+// executeWithTools a été supprimé - utiliser executeWithToolsStream à la place
+
+/**
+ * Orchestrateur streaming équivalent à executeWithTools
+ * - Réutilise EXACTEMENT les mêmes prompts d'orchestration que la version non-streaming.
+ * - Écrit les événements dans chat_stream_events via stream-service.
+ */
+export const executeWithToolsStream = async (
+  prompt: string, 
+  options: ExecuteWithToolsStreamOptions = {}
+): Promise<ExecuteWithToolsStreamResult> => {
+  const {
+    model = 'gpt-4.1-nano',
+    useWebSearch = false,
+    responseFormat,
+    reasoningSummary,
+    streamId,
+    promptId,
+    jobId,
+    messageId,
+    signal
+  } = options;
+
+  const finalStreamId = streamId || generateStreamId(promptId, jobId, messageId);
+
+  // Helper: écrire un StreamEvent normalisé
+  const write = async (eventType: StreamEventType, data: unknown) => {
+    const seq = await getNextSequence(finalStreamId);
+    await writeStreamEvent(finalStreamId, eventType, data, seq);
+  };
+
+  let accumulatedContent = '';
 
   if (!useWebSearch) {
-    // Appel simple sans outils
-    return await callOpenAI({
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
+    for await (const event of callOpenAIResponseStream({
+      messages: [{ role: 'user', content: prompt }],
       model,
       responseFormat,
+      reasoningSummary,
       signal
-    });
+    })) {
+      const data = (event.data ?? {}) as Record<string, unknown>;
+      await write(event.type, data);
+      if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
+      if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
+    }
+    return { streamId: finalStreamId, content: accumulatedContent };
   }
 
-  // Appel avec recherche web et extraction d'URL
-  const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "web_search",
-      description: "Tavily Search API for real-time web search. Use this tool to search for current information on the web.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { 
-            type: "string", 
-            description: "The search query to find relevant information" 
-          }
-        },
-        required: ["query"]
-      }
-    }
-  };
+  // 1er appel (streaming) pour déclencher tools
+  const toolCalls: Array<{ id: string; name: string; args: string }> = [];
 
-  const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: "function",
-    function: {
-      name: "web_extract",
-      description: "Extract and retrieve the full content of one or more web page URLs. Use this tool to get detailed content from URLs found during web search or provided directly. You can extract multiple URLs in a single call for efficiency.",
-      parameters: {
-        type: "object",
-        properties: {
-          urls: { 
-            type: "array",
-            items: {
-              type: "string"
-            },
-            description: "Array of URLs to extract content from. Can be a single URL or multiple URLs." 
-          }
-        },
-        required: ["urls"]
-      }
-    }
-  };
-
-  // Premier appel pour déclencher la recherche et/ou l'extraction
-  const response = await callOpenAI({
+  for await (const event of callOpenAIResponseStream({
     messages: [
-      {
-        role: "system",
-        content: "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes."
-      },
-      {
-        role: "user",
-        content: prompt
-      }
+      { role: 'system', content: WEB_TOOLS_SYSTEM_PROMPT },
+      { role: 'user', content: prompt }
     ],
     model,
     tools: [webSearchTool, webExtractTool],
-    toolChoice: "required",
     responseFormat,
+    reasoningSummary,
     signal
-  });
+  })) {
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    await write(event.type, data);
 
-  const message = response.choices[0]?.message;
+    if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
 
-  if (message?.tool_calls) {
-    // Note: allSearchResults stocke les résultats de recherche avec leur query associée
-    // Ce n'est pas le type SearchResult[], mais un tableau d'objets contenant query et results
-    const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
-    const allExtractResults: ExtractResult[] = [];
-
-    // Exécuter toutes les recherches et extractions demandées
-    for (const toolCall of message.tool_calls) {
-      if (signal?.aborted) {
-        throw new Error('AbortError');
+    if (event.type === 'tool_call_start') {
+      const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+      const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
+      if (existingIndex === -1) {
+        toolCalls.push({
+          id: toolCallId,
+          name: typeof data.name === 'string' ? data.name : '',
+          args: typeof data.args === 'string' ? data.args : ''
+        });
+      } else {
+        const nextName = typeof data.name === 'string' ? data.name : '';
+        const nextArgs = typeof data.args === 'string' ? data.args : '';
+        toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
+        toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
       }
-      if (toolCall.type === 'function') {
-        if (toolCall.function.name === 'web_search') {
-          const args = JSON.parse(toolCall.function.arguments);
-          const searchResults = await searchWeb(args.query, signal);
-          allSearchResults.push({
-            query: args.query,
-            results: searchResults
-          });
-        } else if (toolCall.function.name === 'web_extract') {
-          const args = JSON.parse(toolCall.function.arguments);
-          const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls];
-          // Extraire toutes les URLs en parallèle
-          const extractPromises = urls.map((url: string) => extractUrlContent(url, signal));
-          const extractResults = await Promise.all(extractPromises);
-          allExtractResults.push(...extractResults);
-        }
+    } else if (event.type === 'tool_call_delta') {
+      const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+      const delta = typeof data.delta === 'string' ? data.delta : '';
+      const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+      if (toolCall) {
+        toolCall.args += delta;
+      } else {
+        toolCalls.push({ id: toolCallId, name: '', args: delta });
       }
     }
 
-    // Construire le message avec les résultats
+    if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
+  }
+
+  // Si aucun tool call: le contenu est déjà complet
+  if (toolCalls.length === 0) {
+    return { streamId: finalStreamId, content: accumulatedContent };
+  }
+
+  // Exécuter les tools (hors OpenAI) + streamer les résultats via tool_call_result
+    const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
+    const allExtractResults: ExtractResult[] = [];
+
+  for (const toolCall of toolCalls) {
+    if (signal?.aborted) throw new Error('AbortError');
+    try {
+      const args = JSON.parse(toolCall.args || '{}');
+      if (toolCall.name === 'web_search') {
+        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
+          const searchResults = await searchWeb(args.query, signal);
+        allSearchResults.push({ query: args.query, results: searchResults });
+        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: searchResults } });
+      } else if (toolCall.name === 'web_extract') {
+        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
+        const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
+        
+        // Validation : rejeter les appels avec array vide
+        if (urls.length === 0) {
+          await write('tool_call_result', {
+            tool_call_id: toolCall.id,
+            result: {
+              status: 'error',
+              error: 'web_extract requires at least one URL. No URLs provided in the urls array.'
+            }
+          });
+          continue; // Passer au tool call suivant
+        }
+        
+        // Appel unique avec toutes les URLs (un seul appel Tavily au lieu de N appels)
+        const extractResults = await extractUrlContent(urls, signal);
+        const resultsArray = Array.isArray(extractResults) ? extractResults : [extractResults];
+        allExtractResults.push(...resultsArray);
+        await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
+        }
+    } catch (error) {
+      await write('tool_call_result', {
+        tool_call_id: toolCall.id,
+        result: { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
+      });
+    }
+    }
+
+  // Construire resultsMessage (identique à executeWithTools)
     let resultsMessage = '';
     if (allSearchResults.length > 0) {
       resultsMessage += `Voici les résultats de recherche web:\n${JSON.stringify(allSearchResults, null, 2)}\n\n`;
@@ -213,35 +422,27 @@ export const executeWithTools = async (
     if (allExtractResults.length > 0) {
       resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
     }
-    resultsMessage += 'Réponds à la question originale en utilisant ces informations récentes.';
+  resultsMessage += WEB_TOOLS_RESULTS_SUFFIX;
 
-    // Deuxième appel avec les résultats de recherche et d'extraction
-    const followUpResponse = await callOpenAI({
+  // 2e appel (streaming) avec les résultats — identique à executeWithTools
+  accumulatedContent = '';
+  for await (const event of callOpenAIResponseStream({
       messages: [
-        {
-          role: "system",
-          content: "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs."
-        },
-        {
-          role: "user",
-          content: prompt
-        },
-        {
-          role: "assistant",
-          content: "Je vais rechercher et extraire des informations récentes pour vous."
-        },
-        {
-          role: "user",
-          content: resultsMessage
-        }
+      { role: 'system', content: WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT },
+      { role: 'user', content: resultsMessage }
       ],
       model,
       responseFormat,
+    reasoningSummary,
       signal
-    });
-
-    return followUpResponse;
+  })) {
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    await write(event.type, data);
+    if (event.type === 'content_delta') accumulatedContent += (typeof data.delta === 'string' ? data.delta : '');
+    if (event.type === 'error') throw new Error(typeof data.message === 'string' ? data.message : 'Erreur lors du streaming');
   }
 
-  return response;
+  return { streamId: finalStreamId, content: accumulatedContent };
 };

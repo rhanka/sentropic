@@ -19,7 +19,7 @@
     "test:api": "vitest run tests/api",
     "test:endpoints": "vitest run tests/api",
     "test:limit": "vitest run tests/limit",
-    "test:ai": "vitest run tests/ai/*-sync.test.ts && vitest run tests/ai/*-async.test.ts",
+    "test:ai": "vitest run tests/ai",
     "test:queue": "vitest run tests/queue",
     "test:security": "vitest run tests/security",
     "test:unit": "vitest run tests/unit",

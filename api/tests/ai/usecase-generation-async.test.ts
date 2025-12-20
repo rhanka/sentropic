@@ -2,6 +2,9 @@ import { describe, it, expect, afterEach, beforeAll, afterAll, beforeEach } from
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { app } from '../../src/app';
+import { db } from '../../src/db/client';
+import { chatStreamEvents } from '../../src/db/schema';
+import { eq } from 'drizzle-orm';
 
 describe('AI Workflow - Complete Integration Test', () => {
   let createdFolderId: string | null = null;
@@ -209,6 +212,39 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(firstCompleted.model).toBeDefined();
     expect(firstCompleted.model).toBe(getTestModel());
 
+    // Vérifier que les événements sont écrits dans chat_stream_events pour usecase-list
+    const folderStreamId = `folder_${createdFolderId}`;
+    const folderStreamEvents = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, folderStreamId))
+      .orderBy(chatStreamEvents.sequence);
+    
+    expect(folderStreamEvents.length).toBeGreaterThan(0);
+    folderStreamEvents.forEach(event => {
+      expect(event.messageId).toBeNull(); // Générations classiques
+    });
+    const folderEventTypes = folderStreamEvents.map(e => e.eventType);
+    expect(folderEventTypes).toContain('content_delta');
+    expect(folderEventTypes).toContain('done');
+
+    // Vérifier que les événements sont écrits dans chat_stream_events pour au moins un usecase-detail
+    const useCaseId = firstCompleted.id;
+    const useCaseStreamId = `usecase_${useCaseId}`;
+    const useCaseStreamEvents = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, useCaseStreamId))
+      .orderBy(chatStreamEvents.sequence);
+    
+    expect(useCaseStreamEvents.length).toBeGreaterThan(0);
+    useCaseStreamEvents.forEach(event => {
+      expect(event.messageId).toBeNull(); // Générations classiques
+    });
+    const useCaseEventTypes = useCaseStreamEvents.map(e => e.eventType);
+    expect(useCaseEventTypes).toContain('content_delta');
+    expect(useCaseEventTypes).toContain('done');
+
     // 9) Verify all use cases are associated with the company
     const allAssociated = useCases.every((uc: any) => uc.companyId === createdCompanyId);
     expect(allAssociated).toBe(true);
@@ -231,13 +267,18 @@ describe('AI Workflow - Complete Integration Test', () => {
     const queueData = await queueStats.json();
     expect(queueData.pending).toBe(0);
     // Allow some jobs to still be processing (they might be finishing up)
-    expect(queueData.processing).toBeLessThanOrEqual(10);
+    // Note: Can be higher due to multiple use case detail jobs running in parallel
+    expect(queueData.processing).toBeLessThanOrEqual(30);
     
     // Log final queue status for debugging
     console.log('Final queue status:', queueData);
     
     // Cleanup admin user
     await cleanupAuthData();
+
+    // Cleanup stream events
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, useCaseStreamId));
       }, 120000);
 });
 

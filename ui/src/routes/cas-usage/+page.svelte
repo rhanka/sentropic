@@ -8,33 +8,15 @@
   import { onMount, onDestroy } from 'svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { refreshManager } from '$lib/stores/refresh';
+  import { streamHub } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
   let isLoading = false;
-  let isGenerating = false;
   let matrix: MatrixConfig | null = null;
+  const HUB_KEY = 'useCasesPage';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-
-  // Réactivité pour détecter les changements de statut et gérer l'actualisation
-  $: {
-    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
-      useCase.status === 'generating' || useCase.status === 'detailing'
-    );
-    
-    if (hasGeneratingUseCases) {
-      // Démarrer l'actualisation légère si ce n'est pas déjà fait
-      if (!refreshManager.isRefreshActive('useCases')) {
-        refreshManager.startUseCasesRefresh(async () => {
-          await refreshUseCasesStatus();
-        });
-      }
-    } else {
-      // Arrêter l'actualisation si aucune génération n'est en cours
-      refreshManager.stopRefresh('useCases');
-    }
-  }
 
   // Réactivité pour recharger les cas d'usage quand le dossier change
   $: if ($currentFolderId) {
@@ -67,13 +49,41 @@
       await loadUseCases();
     }
 
-    // Démarrer l'actualisation automatique si nécessaire
-    startAutoRefresh();
+    // SSE: usecase_update + folder_update (pour matrixConfig)
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type === 'usecase_update') {
+        const useCaseId: string = evt.useCaseId;
+        const data: any = evt.data ?? {};
+        if (!useCaseId) return;
+        if (data?.deleted) {
+          useCasesStore.update((items) => items.filter(uc => uc.id !== useCaseId));
+          return;
+        }
+        if (data?.useCase) {
+          const updated = data.useCase;
+          useCasesStore.update((items) => {
+            const idx = items.findIndex(uc => uc.id === updated.id);
+            if (idx === -1) return [updated, ...items];
+            const next = [...items];
+            next[idx] = { ...next[idx], ...updated };
+            return next;
+          });
+        }
+        return;
+      }
+      if (evt?.type === 'folder_update') {
+        const folderId: string = evt.folderId;
+        const data: any = evt.data ?? {};
+        if (!folderId || folderId !== $currentFolderId) return;
+        if (data?.folder?.matrixConfig) {
+          matrix = data.folder.matrixConfig;
+        }
+      }
+    });
   });
 
   onDestroy(() => {
-    // Arrêter tous les refreshes quand on quitte la page
-    refreshManager.stopAllRefreshes();
+    streamHub.delete(HUB_KEY);
   });
 
   const loadUseCases = async () => {
@@ -112,44 +122,9 @@
     }
   };
 
-  // Refresh léger des cas d'usage - met à jour les données complètes
-  const refreshUseCasesStatus = async () => {
-    try {
-      const useCases = await fetchUseCases($currentFolderId || undefined);
-      
-      // Mettre à jour complètement les cas d'usage pour avoir les données les plus récentes
-      useCasesStore.set(useCases);
-      
-      // Recharger la matrice si nécessaire
-      if ($currentFolderId && !matrix) {
-        try {
-          const folder = await apiGet(`/folders/${$currentFolderId}`);
-          matrix = folder.matrixConfig;
-        } catch (err) {
-          console.error('Failed to load matrix during refresh:', err);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to refresh use cases status:', error);
-    }
-  };
-
-  const startAutoRefresh = () => {
-    // Vérifier s'il y a des cas d'usage en génération
-    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
-      useCase.status === 'generating' || useCase.status === 'detailing'
-    );
-
-    if (hasGeneratingUseCases) {
-      // Démarrer l'actualisation légère des cas d'usage
-      refreshManager.startUseCasesRefresh(async () => {
-        await refreshUseCasesStatus();
-      });
-    }
-  };
+  // Polling désactivé: cas d'usage se mettent à jour via SSE (usecase_update)
 
   const startGeneration = async (context: string, createNewFolder: boolean, companyId: string | null) => {
-    isGenerating = true;
     let progressToastId = '';
     
     try {
@@ -194,8 +169,6 @@
         type: 'error',
         message: error instanceof Error ? error.message : 'Erreur lors de la génération'
       });
-    } finally {
-      isGenerating = false;
     }
   };
 
@@ -233,14 +206,7 @@
 <section class="space-y-6">
   <h1 class="text-3xl font-semibold">Cas d'usage</h1>
   
-  {#if isGenerating}
-    <div class="rounded border border-blue-200 bg-blue-50 p-4">
-      <div class="flex items-center gap-3">
-        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-        <p class="text-sm text-blue-700 font-medium">Génération en cours... Veuillez patienter</p>
-      </div>
-    </div>
-  {:else if isLoading}
+  {#if isLoading}
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
       <p class="text-sm text-blue-700">Chargement des cas d'usage...</p>
     </div>
@@ -283,6 +249,9 @@
           {#if useCase?.data?.description || useCase?.description}
             <p class="text-sm text-slate-600 line-clamp-2 mb-3">{useCase?.data?.description || useCase?.description || ''}</p>
           {/if}
+          {#if isDetailing || isGenerating}
+            <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={6} />
+          {:else}
           <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
             <div class="flex items-center gap-1 flex-wrap">
               <span class="whitespace-nowrap">Valeur:</span>
@@ -341,6 +310,7 @@
               {/if}
             </div>
           </div>
+          {/if}
         </div>
         
         <!-- Footer -->
@@ -370,12 +340,7 @@
                 Détail en cours
               </span>
             {:else if isGenerating}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                <svg class="w-3 h-3 mr-1 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                Génération...
-              </span>
+              <!-- badge supprimé (streamMessage affiche le suivi) -->
             {:else if isDraft}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
                 Brouillon

@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail';
+export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
 export interface Job {
   id: string;
@@ -74,7 +74,7 @@ export const deleteJob = async (jobId: string): Promise<void> => {
 export const loadJobs = async () => {
   queueStore.update(state => ({ ...state, isLoading: true }));
   try {
-    const jobs = await fetchAllJobs();
+    const jobs = (await fetchAllJobs()).filter((j) => j?.type !== 'chat_message');
     queueStore.update(state => ({
       ...state,
       jobs,
@@ -88,6 +88,7 @@ export const loadJobs = async () => {
 };
 
 export const addJob = (job: Job) => {
+  if (job?.type === 'chat_message') return;
   queueStore.update(state => ({
     ...state,
     jobs: [job, ...state.jobs]
@@ -95,6 +96,7 @@ export const addJob = (job: Job) => {
 };
 
 export const updateJob = (jobId: string, updates: Partial<Job>) => {
+  if ((updates as any)?.type === 'chat_message') return;
   queueStore.update(state => ({
     ...state,
     jobs: state.jobs.map(job => 

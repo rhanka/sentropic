@@ -1,9 +1,3 @@
-# TODO
-
-- [ ] Lot A — Mise à jour ciblée d’un objet (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot B — Tool-calls parallèles et appels structurés (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot C — Audit, diff et résilience (cf. spec/SPEC_CHATBOT.md)
-- [ ] Lot D — Robustesse + option voix (cf. spec/SPEC_CHATBOT.md)
 # TODO - Top AI Ideas
 
 ## Check-list de mise en place
@@ -37,6 +31,77 @@
 - [x] Séparer dans la génération la description en: description (plus courte), problème, solution
 - [x] Fixer les cibles make pour linting et de typecheck puis les appliqur progressivement, cible par cible en faisant un plan
 - [ ] Implémenter un chatbot pour interagir avec le cas d'usage, ou bin le rapport exécutif, ou encore l'entreprise
+  - [x] **Lot A — Mise à jour ciblée d'un objet** ✅ Fonctionnellement fini (cf. spec/SPEC_CHATBOT.md)
+    - [x] API : POST `/api/v1/chat/messages` + SSE global
+    - [x] Tools : `read_usecase`, `update_usecase_field`, `web_search`, `web_extract`
+    - [x] UI : `ChatWidget`, `ChatPanel`, `StreamMessage`
+    - [x] Détection automatique du contexte depuis la route
+    - [ ] Tests unitaires et d'intégration
+    - [ ] Tests E2E Playwright
+    - [ ] Extension aux autres objets (folder, company, executive_summary)
+  - [ ] **Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
+    - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
+    - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
+    - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
+    - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage)
+    - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
+    - [ ] Entreprise >> Organisation
+      - [ ] Renommer entreprise(s) / company.ies en organisation / organizations en profondeur (modèle de donnée, api, écrans).
+      - [ ] En profiter pour migrer vers data les données de l'entreprise
+      - [ ] Ajouter les références à la génération
+      - [ ] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
+    - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
+    - [ ] Tests : Unit/int/E2E pour upload → job résumé → statut ready/failed
+    - **Couverture CU** : CU-022
+  - [ ] **Lot C — Tool-calls parallèles et appels structurés** (cf. spec/SPEC_CHATBOT.md - source de vérité)
+    - [x] Tool calls parallèles fonctionnels (boucle itérative dans `runAssistantGeneration`)
+    - [x] Affichage des tool calls dans `StreamMessage` (accordéon par tool_call_id)
+    - [x] Générations classiques streamées via `chat_stream_events` (message_id null)
+    - [ ] Table `structured_generation_runs` pour traçabilité complète
+    - [ ] Tables `prompts`/`prompt_versions` pour versioning des prompts
+    - [ ] Endpoint POST `/api/structured/:prompt_id` pour appels structurés dédiés
+    - [ ] Annulation via queue (PATCH `/api/structured/:run_id/cancel`)
+    - [ ] Multi-contexte dans une session (plusieurs objets)
+    - [ ] Tests : Unit/int/E2E pour appels structurés parallèles, annulation
+    - **Couverture CU** : CU-008 (finalisation), CU-011 (annulation), CU-012 (multi-contexte), CU-019 (annulation queue)
+  - [ ] **Lot D — Audit, diff et résilience** (cf. spec/SPEC_CHATBOT.md - source de vérité)
+    - [x] Snapshots `snapshot_before` et `snapshot_after` dans `chat_contexts` (infrastructure prête)
+    - [x] Resync SSE fonctionnel (via `historySource` et endpoints batch)
+    - [ ] Composant `DiffViewer` pour afficher les différences avant/après
+    - [ ] Rollback via snapshots (API + UI)
+    - [ ] Onglet "Historique" dans les vues objets (folder, use case, company)
+    - [ ] Liste des sessions ayant modifié l'objet
+    - [ ] Preview des modifications avant application (diff visuel)
+    - [ ] Confirmation explicite avant d'appliquer une modification (bouton "Appliquer")
+    - [ ] Gestion du contexte long (limite tokens, résumé automatique)
+    - [ ] Tests : Unit/int/E2E pour diff/rollback, reprise SSE
+    - **Couverture CU** : CU-011 (rollback), CU-016 (onglet Historique), CU-017 (contexte long), CU-018 (validation/confirmation)
+  - [ ] **Lot E — Robustesse + fonctionnalités avancées** (cf. spec/SPEC_CHATBOT.md - source de vérité)
+    - [ ] Switch de modèle dans les sessions (UI + API)
+    - [ ] Approfondissement avec modèle supérieur
+    - [ ] Création d'objets via chat (tools)
+    - [ ] Suggestions et recommandations (IA proactive)
+    - [ ] Export et partage (JSON, Markdown, PDF)
+    - [ ] Feedback utilisateur (👍/👎) sur les suggestions
+    - [ ] Retry automatique avec correction pour erreurs récupérables
+    - [ ] Extension voix : stub `audio_chunk` (type d'événement) côté SSE
+    - [ ] Tests : Unit/int/E2E couvrant un flux complet (chat + structured + tool-calls + rollback)
+    - **Couverture CU** : CU-006 (switch modèle), CU-007 (approfondissement), CU-009 (création objets), CU-013 (suggestions), CU-014 (export/partage), CU-017 (contexte long), CU-020 (feedback), CU-021 (gestion erreurs améliorée)
+  
+  > **Note** : La spécification complète des Lots est définie dans `spec/SPEC_CHATBOT.md` (source de vérité). Cette section TODO est un résumé pour suivi rapide.
+- [ ] améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
+  - [ ] gérer mobile (panneau plein écran / bottom-sheet)
+  - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
+  - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
+- [ ] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
+- [ ] Utiliser une lib d'icones digne de ce nom
+- [ ] Ajouter GPT 5.2
+- [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
+- [ ] Choisir le modele GPT par prompt
+- [ ] chat / json
+  - [ ] ajouter le rendu de résultat des tools et l'historiser
+  - [ ] gérer le streaming json (sortie de réponse, entree et sortie de tool même si ce dernier est en bloc) avec la complexité cf spec/MARKDOWN_STREAMING.md
+- [ ] Ajouter une fonction de validation des droits utilisateurs, avec un des profils. Ce profil doit permettre d'avoir accès à toutes les fonctions sans limite d'usage. Mais il n'a accès qu'à ses propres
 - [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle

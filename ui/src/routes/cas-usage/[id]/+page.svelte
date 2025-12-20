@@ -8,36 +8,45 @@
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { refreshManager } from '$lib/stores/refresh';
+  import { streamHub } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
   let useCase: any = undefined;
   let error = '';
   let matrix: MatrixConfig | null = null;
   let calculatedScores: any = null;
+  let hubKey: string | null = null;
 
   $: useCaseId = $page.params.id;
 
-  // Réactivité pour détecter les changements de statut et gérer l'actualisation
-  $: if (useCase) {
-    const isGenerating = useCase.status === 'generating' || useCase.status === 'detailing';
-    
-    if (isGenerating) {
-      // Démarrer l'actualisation légère si ce n'est pas déjà fait
-      if (!refreshManager.isRefreshActive(`useCase-${useCase.id}`)) {
-        refreshManager.startUseCaseDetailRefresh(useCase.id, async () => {
-          await refreshUseCaseStatus();
-        });
-      }
-    } else {
-      // Arrêter l'actualisation si la génération est terminée
-      refreshManager.stopRefresh(`useCase-${useCase.id}`);
-    }
-  }
-
   onMount(() => {
     loadUseCase();
-    // Démarrer l'actualisation automatique si le cas d'usage est en génération
-    startAutoRefresh();
+    // SSE: usecase_update (+ folder_update pour la matrice)
+    if (hubKey) streamHub.delete(hubKey);
+    hubKey = `useCaseDetail:${useCaseId}`;
+    streamHub.set(hubKey, (evt: any) => {
+      if (evt?.type === 'usecase_update') {
+        const id: string = evt.useCaseId;
+        const data: any = evt.data ?? {};
+        if (!id || id !== useCaseId) return;
+        if (data?.deleted) return;
+        if (data?.useCase) {
+          useCase = { ...(useCase || {}), ...data.useCase };
+          useCasesStore.update(items => items.map(uc => uc.id === useCaseId ? useCase : uc));
+          void loadMatrixAndCalculateScores();
+        }
+        return;
+      }
+      if (evt?.type === 'folder_update') {
+        const folderId: string = evt.folderId;
+        const data: any = evt.data ?? {};
+        if (!useCase?.folderId || folderId !== useCase.folderId) return;
+        if (data?.folder?.matrixConfig) {
+          matrix = data.folder.matrixConfig;
+          void loadMatrixAndCalculateScores();
+        }
+      }
+    });
     
     // Force display of all sections when printing
     const handleBeforePrint = () => {
@@ -84,8 +93,7 @@
   });
 
   onDestroy(() => {
-    // Arrêter tous les refreshes quand on quitte la page
-    refreshManager.stopAllRefreshes();
+    if (hubKey) streamHub.delete(hubKey);
   });
 
   const loadUseCase = async () => {
@@ -117,24 +125,7 @@
     }
   };
 
-  // Refresh léger du cas d'usage - met à jour seulement les champs qui changent
-  const refreshUseCaseStatus = async () => {
-    try {
-      const updatedUseCase = await apiGet(`/use-cases/${useCaseId}`);
-      
-      // Mettre à jour seulement les champs qui changent (status, etc.)
-      if (useCase) {
-        useCase = { ...useCase, ...updatedUseCase };
-        
-        // Mettre à jour le store
-        useCasesStore.update(items => 
-          items.map(uc => uc.id === useCaseId ? useCase : uc)
-        );
-      }
-    } catch (error) {
-      console.error('Failed to refresh use case status:', error);
-    }
-  };
+  // Polling désactivé: mise à jour via SSE (usecase_update)
 
   const handleDelete = async () => {
     if (!useCase || !confirm('Êtes-vous sûr de vouloir supprimer ce cas d\'usage ?')) return;
@@ -181,15 +172,7 @@
     }
   };
 
-  const startAutoRefresh = () => {
-    // Vérifier si le cas d'usage est en génération
-    if (useCase && (useCase.status === 'generating' || useCase.status === 'detailing' || useCase.status === 'pending')) {
-      // Démarrer l'actualisation légère pour ce cas d'usage spécifique
-      refreshManager.startUseCaseDetailRefresh(useCase.id, async () => {
-        await refreshUseCaseStatus();
-      });
-    }
-  };
+  // startAutoRefresh supprimé (SSE)
 </script>
 
 <section class="space-y-6">
@@ -200,6 +183,9 @@
   {/if}
 
   {#if useCase}
+  {#if useCase.status === 'generating' || useCase.status === 'detailing'}
+    <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={10} />
+  {/if}
     <UseCaseDetail
       {useCase}
       {matrix}

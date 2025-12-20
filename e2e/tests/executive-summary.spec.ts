@@ -3,14 +3,14 @@ import { test, expect } from '@playwright/test';
 test.describe('Executive Summary', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher les sections executive summary dans l\'ordre correct', async ({ page }) => {
     const folderSelect = page.locator('#folder-select');
     if (await folderSelect.isVisible()) {
       await folderSelect.selectOption({ index: 0 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Vérifier l'ordre: Synthèse exécutive → Introduction → Analyse → Recommandations
       const executiveSummaryTitle = page.locator('h2:has-text("Synthèse exécutive")');
@@ -43,7 +43,7 @@ test.describe('Executive Summary', () => {
     const folderSelect = page.locator('#folder-select');
     if (await folderSelect.isVisible()) {
       await folderSelect.selectOption({ index: 0 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Étape 1: Générer si pas encore généré
       const generateButton = page.locator('button:has-text("Générer la synthèse")');
@@ -81,7 +81,7 @@ test.describe('Executive Summary', () => {
           
           // Vérifier que la modification est sauvegardée (recharger la page)
           await page.reload();
-          await page.waitForLoadState('networkidle');
+          await page.waitForLoadState('domcontentloaded');
           
           // Vérifier que le contenu modifié est présent (si applicable)
           const bodyText = await page.locator('body').textContent();
@@ -167,7 +167,7 @@ test.describe('Executive Summary', () => {
     const folderSelect = page.locator('#folder-select');
     if (await folderSelect.isVisible()) {
       await folderSelect.selectOption({ index: 0 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const executiveSummarySection = page.locator('h2:has-text("Synthèse exécutive")');
       if (await executiveSummarySection.isVisible()) {
@@ -217,7 +217,7 @@ test.describe('Executive Summary', () => {
     const folderSelect = page.locator('#folder-select');
     if (await folderSelect.isVisible()) {
       await folderSelect.selectOption({ index: 0 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const executiveSummarySection = page.locator('h2:has-text("Synthèse exécutive")');
       if (await executiveSummarySection.isVisible()) {
@@ -247,7 +247,7 @@ test.describe('Executive Summary', () => {
     const folderSelect = page.locator('#folder-select');
     if (await folderSelect.isVisible()) {
       await folderSelect.selectOption({ index: 0 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       await page.emulateMedia({ media: 'print' });
       await page.waitForTimeout(500);

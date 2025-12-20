@@ -3,7 +3,7 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, useCases } from '../../src/db/schema';
+import { folders, useCases, chatStreamEvents } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Executive Summary Generation - AI', () => {
@@ -115,8 +115,31 @@ describe('Executive Summary Generation - AI', () => {
       expect(stored).toHaveProperty('recommandation');
       expect(stored).toHaveProperty('synthese_executive');
 
+      // Vérifier que les événements sont écrits dans chat_stream_events
+      const streamId = `folder_${folderId}`;
+      const streamEvents = await db
+        .select()
+        .from(chatStreamEvents)
+        .where(eq(chatStreamEvents.streamId, streamId))
+        .orderBy(chatStreamEvents.sequence);
+      
+      expect(streamEvents.length).toBeGreaterThan(0);
+      // Vérifier message_id=null pour générations classiques
+      streamEvents.forEach(event => {
+        expect(event.messageId).toBeNull();
+      });
+      // Vérifier présence d'événements content_delta et done
+      const eventTypes = streamEvents.map(e => e.eventType);
+      expect(eventTypes).toContain('content_delta');
+      expect(eventTypes).toContain('done');
+      // Événements tool_call_* possibles si web_extract/web_search utilisés
+      const hasToolCalls = eventTypes.some(et => et.startsWith('tool_call_'));
+      // Si web_extract est utilisé, vérifier qu'il n'y a pas d'appel avec array vide
+      // (déjà testé dans tools.test.ts et chat-sync.test.ts)
+
       // Cleanup
       await cleanupAuthData(); // Cleanup admin user
+      await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
       await db.delete(useCases).where(eq(useCases.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
     }, 300000); // 5 minutes timeout for AI generation
@@ -180,8 +203,25 @@ describe('Executive Summary Generation - AI', () => {
 
       expect(jobCompleted).toBe(true);
 
+      // Vérifier que les événements sont écrits dans chat_stream_events
+      const streamId = `folder_${folderId}`;
+      const streamEvents = await db
+        .select()
+        .from(chatStreamEvents)
+        .where(eq(chatStreamEvents.streamId, streamId))
+        .orderBy(chatStreamEvents.sequence);
+      
+      expect(streamEvents.length).toBeGreaterThan(0);
+      streamEvents.forEach(event => {
+        expect(event.messageId).toBeNull();
+      });
+      const eventTypes = streamEvents.map(e => e.eventType);
+      expect(eventTypes).toContain('content_delta');
+      expect(eventTypes).toContain('done');
+
       // Cleanup
       await cleanupAuthData(); // Cleanup admin user
+      await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
       await db.delete(useCases).where(eq(useCases.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
     }, 300000); // 5 minutes timeout for AI generation

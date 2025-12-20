@@ -5,12 +5,13 @@
   import { goto } from '$app/navigation';
   import { API_BASE_URL } from '$lib/config';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { refreshManager } from '$lib/stores/refresh';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
+  import { streamHub } from '$lib/stores/streamHub';
 
   let company: Company | null = null;
   let error = '';
   let lastLoadedId: string | null = null; // évite les rechargements en boucle
+  let hubKey: string | null = null;
 
   // Helper pour transformer les sauts de ligne simples en doubles (pour markdown)
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
@@ -30,28 +31,27 @@
     objectives: fixMarkdownLineBreaks(company.objectives)
   } : {};
 
-  // Réactivité pour détecter les changements de statut et gérer l'actualisation
-  $: if (company) {
-    const isEnriching = company.status === 'enriching';
-
-    if (isEnriching) {
-      if (!refreshManager.isRefreshActive(`company-${company.id}`)) {
-        refreshManager.startCompanyDetailRefresh(company.id, async () => {
-          await refreshCompanyStatus();
-        });
-      }
-    } else {
-      refreshManager.stopRefresh(`company-${company.id}`);
+  const subscribeCompany = (companyId: string) => {
+    if (hubKey) streamHub.delete(hubKey);
+    hubKey = `companyDetail:${companyId}`;
+    streamHub.set(hubKey, (evt: any) => {
+      if (evt?.type !== 'company_update') return;
+      const id: string = evt.companyId;
+      const data: any = evt.data ?? {};
+      if (!id || id !== companyId) return;
+      if (data?.deleted) return;
+      if (data?.company) {
+        company = { ...(company || ({} as any)), ...data.company };
     }
-  }
+    });
+  };
 
   onMount(async () => {
     await loadCompany();
-    startAutoRefresh();
   });
 
   onDestroy(() => {
-    refreshManager.stopAllRefreshes();
+    if (hubKey) streamHub.delete(hubKey);
   });
 
   // Recharger lorsque l'identifiant d'URL change, sans boucle
@@ -68,6 +68,7 @@
       lastLoadedId = companyId;
       // Chargement direct par ID (plus fiable juste après création)
       company = await fetchCompanyById(companyId);
+      subscribeCompany(companyId);
       error = '';
       // Reset unsaved changes after loading company data
       unsavedChangesStore.reset();
@@ -76,6 +77,7 @@
       await new Promise((r) => setTimeout(r, 300));
       try {
         company = await fetchCompanyById(companyId);
+        subscribeCompany(companyId);
         error = '';
         return;
       } catch (secondErr) {
@@ -95,24 +97,7 @@
     }
   };
 
-  const refreshCompanyStatus = async () => {
-    if (!company) return;
-
-    const currentCompanyId = company.id;
-    try {
-      const companies = await fetchCompanies();
-      const updatedCompany = companies.find(c => c.id === currentCompanyId);
-      if (updatedCompany) {
-        company = updatedCompany;
-      }
-    } catch (err) {
-      // ignore soft refresh errors
-    }
-  };
-
-  const startAutoRefresh = () => {
-    // L'auto-refresh est géré par la réactivité ci-dessus
-  };
+  // NB: plus de refreshCompanyStatus/startAutoRefresh, remplacés par SSE company_update (streamHub)
 
   const handleFieldUpdate = (field: string, value: string) => {
     if (!company) return;

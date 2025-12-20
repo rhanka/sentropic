@@ -1,4 +1,4 @@
-import { db } from '../db/client';
+import { db, pool } from '../db/client';
 import { sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
@@ -9,8 +9,9 @@ import { validateScores, fixScores } from '../utils/score-validation';
 import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
+import { chatService } from './chat-service';
 
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary';
+export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
 export interface CompanyEnrichJobData {
   companyId: string;
@@ -39,7 +40,19 @@ export interface ExecutiveSummaryJobData {
   model?: string;
 }
 
-export type JobData = CompanyEnrichJobData | UseCaseListJobData | UseCaseDetailJobData | ExecutiveSummaryJobData;
+export interface ChatMessageJobData {
+  userId: string;
+  sessionId: string;
+  assistantMessageId: string;
+  model?: string;
+}
+
+export type JobData =
+  | CompanyEnrichJobData
+  | UseCaseListJobData
+  | UseCaseDetailJobData
+  | ExecutiveSummaryJobData
+  | ChatMessageJobData;
 
 export interface Job {
   id: string;
@@ -62,6 +75,46 @@ export class QueueManager {
 
   constructor() {
     this.loadSettings();
+  }
+
+  private async notifyJobEvent(jobId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ job_id: jobId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY job_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyCompanyEvent(companyId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ company_id: companyId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyFolderEvent(folderId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ folder_id: folderId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -130,6 +183,7 @@ export class QueueManager {
       INSERT INTO job_queue (id, type, data, status, created_at)
       VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
     `);
+    await this.notifyJobEvent(jobId);
     
     console.log(`📝 Job ${jobId} (${type}) added to queue`);
     
@@ -199,6 +253,7 @@ export class QueueManager {
         SET status = 'processing', started_at = ${new Date()}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
 
       const controller = new AbortController();
       this.jobControllers.set(jobId, controller);
@@ -206,7 +261,7 @@ export class QueueManager {
       // Traiter selon le type
       switch (jobType) {
         case 'company_enrich':
-          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, controller.signal);
+          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, jobId, controller.signal);
           break;
         case 'usecase_list':
           await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
@@ -216,6 +271,9 @@ export class QueueManager {
           break;
         case 'executive_summary':
           await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
+          break;
+        case 'chat_message':
+          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
@@ -227,6 +285,7 @@ export class QueueManager {
         SET status = 'completed', completed_at = ${new Date()}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
 
       console.log(`✅ Job ${jobId} completed successfully`);
     } catch (error) {
@@ -238,6 +297,7 @@ export class QueueManager {
         SET status = 'failed', error = ${error instanceof Error ? error.message : 'Unknown error'}
         WHERE id = ${jobId}
       `);
+      await this.notifyJobEvent(jobId);
     } finally {
       this.jobControllers.delete(jobId);
     }
@@ -246,11 +306,18 @@ export class QueueManager {
   /**
    * Worker pour l'enrichissement d'entreprise
    */
-  private async processCompanyEnrich(data: CompanyEnrichJobData, signal?: AbortSignal): Promise<void> {
+  private async processCompanyEnrich(data: CompanyEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
     const { companyId, companyName, model } = data;
     
-    // Enrichir l'entreprise
-    const enrichedData = await enrichCompany(companyName, model, signal);
+    // Générer un streamId pour le streaming
+    // IMPORTANT:
+    // Pour l'enrichissement entreprise, on veut pouvoir suivre l'avancement côté UI avec uniquement le companyId
+    // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
+    const streamId = `company_${companyId}`;
+    
+    // Enrichir l'entreprise avec streaming
+    // enrichCompany utilise le streaming si streamId est fourni
+    const enrichedData = await enrichCompany(companyName, model, signal, streamId);
     
     // Sérialiser les champs qui peuvent être des arrays en JSON strings
     const serializedData = {
@@ -270,6 +337,8 @@ export class QueueManager {
         updatedAt: new Date()
       })
       .where(eq(companies.id, companyId));
+
+    await this.notifyCompanyEvent(companyId);
   }
 
   /**
@@ -310,7 +379,8 @@ export class QueueManager {
     }
 
     // Générer la liste de cas d'usage
-    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal);
+    const streamId = `folder_${folderId}`;
+    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal, streamId);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -321,6 +391,7 @@ export class QueueManager {
         })
         .where(eq(folders.id, folderId));
       console.log(`📁 Dossier mis à jour: ${useCaseList.dossier} (ID: ${folderId}, Company: ${companyId || 'Aucune'})`);
+      await this.notifyFolderEvent(folderId);
     }
 
     // Créer les cas d'usage en mode generating
@@ -369,11 +440,15 @@ export class QueueManager {
 
     // Insérer les cas d'usage
     await db.insert(useCases).values(draftUseCases);
+    for (const uc of draftUseCases) {
+      await this.notifyUseCaseEvent(uc.id);
+    }
 
     // Marquer le dossier comme terminé
     await db.update(folders)
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
+    await this.notifyFolderEvent(folderId);
 
     // Auto-déclencher le détail de tous les cas d'usage (sauf si pause/cancel en cours)
     if (this.cancelAllInProgress || this.paused) {
@@ -447,7 +522,8 @@ export class QueueManager {
     const context = folder.description || '';
     
     // Générer le détail
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal);
+    const streamId = `usecase_${useCaseId}`;
+    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal, streamId);
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
@@ -521,6 +597,7 @@ export class QueueManager {
         status: 'completed'
       })
       .where(eq(useCases.id, useCaseId));
+    await this.notifyUseCaseEvent(useCaseId);
 
     // Vérifier si tous les use cases du dossier sont complétés
     const allUseCases = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
@@ -538,6 +615,7 @@ export class QueueManager {
         await db.update(folders)
           .set({ status: 'generating' })
           .where(eq(folders.id, folderId));
+        await this.notifyFolderEvent(folderId);
 
         // Ajouter le job de génération de synthèse exécutive
         try {
@@ -570,15 +648,32 @@ export class QueueManager {
       valueThreshold,
       complexityThreshold,
       model,
-      signal
+      signal,
+      streamId: `folder_${folderId}`
     });
 
     // Mettre à jour le statut du dossier à 'completed'
     await db.update(folders)
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
+    await this.notifyFolderEvent(folderId);
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
+  }
+
+  /**
+   * Worker chat (réponse assistant)
+   * NOTE: on réutilise la table job_queue (type = chat_message) pour préparer le scaling via workers dédiés.
+   */
+  private async processChatMessage(data: ChatMessageJobData, signal?: AbortSignal): Promise<void> {
+    const { userId, sessionId, assistantMessageId, model } = data;
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model: model ?? null,
+      signal
+    });
   }
 
   /**

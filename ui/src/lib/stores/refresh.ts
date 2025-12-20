@@ -99,23 +99,11 @@ export class RefreshManager {
 
   // Actualiser les entreprises toutes les 2 secondes s'il y en a en enrichissement
   startCompaniesRefresh(callback: () => Promise<void>) {
+    // Désactivé: la mise à jour des entreprises passe désormais par SSE (company_update).
+    // On garde la méthode pour compat rétro, mais sans polling.
     const key = 'companies';
-    
-    // Arrêter l'intervalle existant s'il y en a un
     this.stopRefresh(key);
-    
-    const interval = setInterval(async () => {
-      if (!this.isActive) return;
-      
-      try {
-        await this.runCallbackIfAuthenticated(callback);
-      } catch (error) {
-        console.error('Error during companies refresh:', error);
-      }
-    }, 2000);
-    
-    this.intervals.set(key, interval);
-    console.log('🔄 Started companies refresh interval');
+    console.log('ℹ️ Companies refresh disabled (SSE enabled)');
   }
 
   // Actualiser un cas d'usage spécifique toutes les 2 secondes s'il est en génération
@@ -142,23 +130,10 @@ export class RefreshManager {
 
   // Actualiser une entreprise spécifique toutes les 2 secondes si elle est en enrichissement
   startCompanyDetailRefresh(companyId: string, callback: () => Promise<void>) {
+    // Désactivé: la mise à jour d'une entreprise passe désormais par SSE (company_update).
     const key = `company-${companyId}`;
-    
-    // Arrêter l'intervalle existant s'il y en a un
     this.stopRefresh(key);
-    
-    const interval = setInterval(async () => {
-      if (!this.isActive) return;
-      
-      try {
-        await this.runCallbackIfAuthenticated(callback);
-      } catch (error) {
-        console.error(`Error during company ${companyId} refresh:`, error);
-      }
-    }, 2000);
-    
-    this.intervals.set(key, interval);
-    console.log(`🔄 Started company detail refresh for ${companyId}`);
+    console.log(`ℹ️ Company detail refresh disabled (SSE enabled) for ${companyId}`);
   }
 
   // Arrêter un refresh spécifique

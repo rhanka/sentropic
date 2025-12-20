@@ -7,7 +7,7 @@ test.describe('Internationalisation (i18n)', () => {
 
   test('devrait afficher les textes en français par défaut', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que les textes français sont présents
     const frenchTexts = page.locator('text=Accueil, text=Dossiers, text=Entreprises, text=Configuration métier, text=Cas d\'usage, text=Matrice, text=Dashboard, text=Design, text=Données, text=Paramètres');
@@ -19,7 +19,7 @@ test.describe('Internationalisation (i18n)', () => {
 
   test('devrait afficher les textes en anglais après changement', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Changer vers l'anglais
     const languageSelect = page.locator('select, [data-testid="language-select"]');
@@ -44,7 +44,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait persister le choix de langue entre les pages', async ({ page }) => {
     // Changer la langue sur la page d'accueil
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     
@@ -57,7 +57,7 @@ test.describe('Internationalisation (i18n)', () => {
         
         // Naviguer vers une autre page
         await page.goto('/entreprises');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que la langue est toujours en anglais
         const englishText = page.locator('text=Companies, text=Add, text=Name, text=Sector');
@@ -72,7 +72,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait traduire les messages d\'erreur', async ({ page }) => {
     // Changer vers l'anglais
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     
@@ -85,7 +85,7 @@ test.describe('Internationalisation (i18n)', () => {
         
         // Aller sur une page qui peut générer des erreurs
         await page.goto('/entreprises');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Essayer de créer une entreprise sans nom pour générer une erreur
         await page.click('button:has-text("Add")');
@@ -104,7 +104,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait traduire les formulaires', async ({ page }) => {
     // Changer vers l'anglais
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     
@@ -117,7 +117,7 @@ test.describe('Internationalisation (i18n)', () => {
         
         // Aller sur la page des entreprises
         await page.goto('/entreprises');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Ouvrir le formulaire d'ajout
         await page.click('button:has-text("Add")');
@@ -135,7 +135,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait traduire les boutons d\'action', async ({ page }) => {
     // Changer vers l'anglais
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     
@@ -148,7 +148,7 @@ test.describe('Internationalisation (i18n)', () => {
         
         // Aller sur la page des entreprises
         await page.goto('/entreprises');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que les boutons sont en anglais
         const englishButtons = page.locator('button:has-text("Add"), button:has-text("Edit"), button:has-text("Delete"), button:has-text("Save")');
@@ -163,7 +163,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait traduire les messages de statut', async ({ page }) => {
     // Changer vers l'anglais
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     
@@ -191,7 +191,7 @@ test.describe('Internationalisation (i18n)', () => {
   test('devrait gérer les textes manquants gracieusement', async ({ page }) => {
     // Simuler une clé de traduction manquante en changeant la langue vers une langue non supportée
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     const languageSelect = page.locator('select, [data-testid="language-select"]');
     

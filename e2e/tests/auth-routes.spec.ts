@@ -11,7 +11,7 @@ test.describe('Public · Authentication Routes Access', () => {
     expect(response?.status()).toBe(200);
     
     // Vérifier que la page se charge
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le body est présent
     await expect(page.locator('body')).toBeAttached();
@@ -32,7 +32,7 @@ test.describe('Public · Authentication Routes Access', () => {
     expect(response?.status()).toBe(200);
     
     // Vérifier que la page se charge
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le body est présent
     await expect(page.locator('body')).toBeAttached();
@@ -54,7 +54,7 @@ test.describe('Public · Authentication Routes Access', () => {
     expect([200, 404]).toContain(response?.status());
     
     // Vérifier que la page se charge
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le body est présent
     await expect(page.locator('body')).toBeAttached();

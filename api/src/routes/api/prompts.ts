@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { executeWithTools } from '../../services/tools';
+import { executeWithToolsStream } from '../../services/tools';
 import { defaultPrompts } from '../../config/default-prompts';
 
 const promptsRouter = new Hono();
@@ -59,11 +59,19 @@ promptsRouter.post('/test-tavily', async (c) => {
       }, 400);
     }
 
-    const result = await executeWithTools(question, { useWebSearch: true });
+    const streamId = `prompt_test_${Date.now()}`;
+    const result = await executeWithToolsStream(question, {
+      useWebSearch: true,
+      streamId,
+      reasoningSummary: 'auto'
+    });
     
     return c.json({ 
       success: true, 
-      result: result 
+      result: {
+        content: result.content,
+        streamId: result.streamId
+      }
     });
   } catch (error) {
     console.error('Error testing Tavily:', error);

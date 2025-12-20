@@ -10,7 +10,7 @@ test.describe('Application principale', () => {
     await page.goto('/');
     
     // Attendre que la page se charge
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Prendre une capture d'écran pour debug
     await page.screenshot({ path: 'debug-homepage.png' });

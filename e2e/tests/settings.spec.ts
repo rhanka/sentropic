@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Page Paramètres', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/parametres');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page des paramètres', async ({ page }) => {
@@ -43,7 +43,7 @@ test.describe('Page Paramètres', () => {
       await saveButton.click();
       
       // Vérifier qu'une action de sauvegarde est lancée
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
   });
 
@@ -92,7 +92,7 @@ test.describe('Page Paramètres', () => {
       });
       
       await resetButton.click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
   });
 

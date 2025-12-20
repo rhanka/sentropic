@@ -55,7 +55,7 @@ Format: JSON
 
 IMPORTANT: 
 - Génère le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
 - Base-toi sur des exemples concrets et des technologies actuelles
 - Génère le titre et la description pour chaque cas d'usage
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
@@ -176,13 +176,13 @@ La réponse doit impérativement contenir tous les éléments suivants au format
 
 OBLIGATOIRE:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur ce type de cas d'usage. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
 - Base-toi sur des exemples concrets (références issues du web_search), des technologies actuelles et des retours d'expérience réels
 - Consolide la description au regard des nouvelles informations identifiées dans la réflexion et les recherches
 - Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références en utilisant [1], [2], [3]... en bonne articulation avec problem et solution
 - Tous les champs non numériques (description, problem, solution, chaque items des bénéfices et mesures de succès, risques, prochaines étapes et descriptions des valeur et complexités) doivent être formattée en markdown, avec mises en exergue en gras des éléments importants
 - Les champs description, problem et solution doivent être formattés en markdown, potentiellement multilignes (listes à puces) pour une meilleure lisibilité
-- Le problème doit être évaluée le plus profondément au regard du contexte (de l'entreprise et du cas d'usage si fourni), prenant en compte des données récentes (entreprise et/ou secteur/processus métier) via web_search et potentiellement web_extract
+- Le problème doit être évaluée le plus profondément au regard du contexte (de l'entreprise et du cas d'usage si fourni), prenant en compte des données récentes (entreprise et/ou secteur/processus métier) via web_search et si besoin web_extract (avec des URL valide uniquement)
 - La solution solution doit prendre en compte ls informations fournies si une entreprise est fournie, et une recherche de solutions potentielles avec référence doit permettre de fiabiliser l'évaluation de complexité, le cas échénat via web_search et potentiellement web_extract
 - Bénéfices mesures de succès doivent être basés sur un véritable rationnel et citation vers références
 - Les références du web_search pertinentes sont incluses dans la section "references" (pas de référence fictive, et les liens sont vérifiés)
@@ -221,7 +221,7 @@ Pour chaque cas d'usage, les informations suivantes sont disponibles:
 
 IMPORTANT:
 - La liste des cas d'usage prioritaires (top cas) sont fournis ci-dessus - utilise-les comme référence principale pour les recommandations
-- Utilise web_extract (mais pas web_search) si tu souhaites parcourir certaines références clés citées dans les top cas et approfondir ton discours
+- Utilise web_extract (mais pas web_search) uniquement en cas de besoin, avec des URLs valides uniquement. Si les cas d'usage n'ont pas de références ou si tu n'as pas d'URLs valides à extraire, n'utilise pas cet outil.
 - Fais une analyse stratégique globale de l'ensemble des cas d'usage
 - Identifie les tendances, opportunités et défis communs
 - Mets l'accent sur les cas d'usage prioritaires dans l'analyse et les recommandations

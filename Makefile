@@ -25,7 +25,7 @@ version:
 	@echo "UI_VERSION: $(UI_VERSION)"
 
 cloc:
-	@cloc --vcs=git --exclude-content=".*package.*json"
+	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$'
 
 # -----------------------------------------------------------------------------
 # Installation & Build
@@ -458,6 +458,18 @@ db-inspect: up ## Inspect database directly via postgres container (query databa
 		UNION ALL \
 		SELECT 'user_sessions', COUNT(*) FROM user_sessions;"
 
+.PHONY: db-query
+db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT * FROM companies")
+	@if [ -z "$(QUERY)" ]; then \
+		echo "❌ Error: QUERY parameter is required"; \
+		echo "Usage: make db-query QUERY=\"SELECT * FROM companies\""; \
+		exit 1; \
+	fi
+	@echo "📊 Executing query:"
+	@echo "$(QUERY)"
+	@echo ""
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
+
 .PHONY: db-inspect-usecases
 db-inspect-usecases: up ## Inspect use cases and folders relationship
 	@echo "📊 Use Cases Details:"
@@ -757,7 +769,7 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	  TEST_TYPE="$*"; \
 	  if [ -n "$$SCOPE" ]; then \
 	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE"; \
-	    npm run test:$$TEST_TYPE -- "$$SCOPE"; \
+	    npx vitest run "$$SCOPE"; \
 	  else \
 	    echo "▶ Running all $$TEST_TYPE tests"; \
 	    npm run test:$$TEST_TYPE; \

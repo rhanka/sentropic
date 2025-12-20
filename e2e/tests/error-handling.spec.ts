@@ -9,7 +9,7 @@ test.describe('Gestion des erreurs', () => {
 
   test('devrait gérer les erreurs de validation des formulaires', async ({ page }) => {
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers /new et vérifier que le bouton Créer est désactivé sans nom
     await page.click('button:has-text("Ajouter")');
@@ -49,7 +49,7 @@ test.describe('Gestion des erreurs', () => {
     });
     
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Essayer de supprimer une entreprise
     const deleteButtons = page.locator('button:has-text("Supprimer")');
@@ -88,7 +88,7 @@ test.describe('Gestion des erreurs', () => {
     });
     
     await page.goto('/entreprises');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher un bouton de réessai
     const retryButtons = page.locator('button:has-text("Réessayer"), button:has-text("Retry"), button:has-text("Relancer")');

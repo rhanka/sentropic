@@ -46,7 +46,17 @@ export async function apiRequest<T = any>(
     }));
     
     // Use message field first (REST API standard), fallback to error field
-    const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+    const rawMessage = (errorData as any)?.message ?? (errorData as any)?.error ?? `HTTP ${response.status}: ${response.statusText}`;
+    const errorMessage =
+      typeof rawMessage === 'string'
+        ? rawMessage
+        : (() => {
+            try {
+              return JSON.stringify(rawMessage);
+            } catch {
+              return String(rawMessage);
+            }
+          })();
     
     throw new ApiError(errorMessage, response.status, errorData);
   }

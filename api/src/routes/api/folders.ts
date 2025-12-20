@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { db } from '../../db/client';
+import { db, pool } from '../../db/client';
 import { folders, companies } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { eq, desc } from 'drizzle-orm';
@@ -74,6 +74,16 @@ const folderInput = z.object({
 });
 
 export const foldersRouter = new Hono();
+
+async function notifyFolderEvent(folderId: string): Promise<void> {
+  const notifyPayload = JSON.stringify({ folder_id: folderId });
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
+  } finally {
+    client.release();
+  }
+}
 
 const parseMatrix = (value: string | null) => {
   if (!value) return null;
@@ -149,6 +159,7 @@ foldersRouter.post('/', zValidator('json', folderInput), async (c) => {
     matrixConfig: JSON.stringify(matrixToUse)
   });
   const [folder] = await db.select().from(folders).where(eq(folders.id, id));
+  await notifyFolderEvent(id);
   return c.json({
     ...folder,
     matrixConfig: parseMatrix(folder.matrixConfig ?? null)
@@ -212,6 +223,7 @@ foldersRouter.put('/:id', zValidator('json', folderInput.partial()), async (c) =
     return c.json({ message: 'Not found' }, 404);
   }
   const folder = updated[0];
+  await notifyFolderEvent(id);
   
   // Parser executiveSummary si présent
   let parsedExecutiveSummary = null;
@@ -235,6 +247,7 @@ foldersRouter.put('/:id', zValidator('json', folderInput.partial()), async (c) =
 foldersRouter.delete('/:id', async (c) => {
   const id = c.req.param('id');
   await db.delete(folders).where(eq(folders.id, id));
+  await notifyFolderEvent(id);
   return c.body(null, 204);
 });
 

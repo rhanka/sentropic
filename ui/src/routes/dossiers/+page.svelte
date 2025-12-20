@@ -5,48 +5,63 @@
   import { apiPost, apiDelete } from '$lib/utils/api';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
-  import { refreshManager } from '$lib/stores/refresh';
+  import { streamHub } from '$lib/stores/streamHub';
+  import StreamMessage from '$lib/components/StreamMessage.svelte';
 
   let showCreate = false;
   let name = '';
   let description = '';
   let isLoading = false;
-
-  // Réactivité pour détecter les changements de statut et gérer l'actualisation
-  $: {
-    const hasGeneratingFolders = $foldersStore.some(folder => folder.status === 'generating');
-    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
-      useCase.status === 'generating' || useCase.status === 'detailing'
-    );
-    
-    if (hasGeneratingFolders || hasGeneratingUseCases) {
-      // Démarrer l'actualisation légère si ce n'est pas déjà fait
-      if (!refreshManager.isRefreshActive('folders')) {
-        refreshManager.startFoldersRefresh(async () => {
-          await refreshFolderStatus();
-        });
-      }
-      if (!refreshManager.isRefreshActive('useCases')) {
-        refreshManager.startUseCasesRefresh(async () => {
-          await refreshUseCasesStatus();
-        });
-      }
-    } else {
-      // Arrêter l'actualisation si aucune génération n'est en cours
-      refreshManager.stopRefresh('folders');
-      refreshManager.stopRefresh('useCases');
-    }
-  }
+  const HUB_KEY = 'foldersPage';
 
   onMount(async () => {
     await loadFolders();
-    // Démarrer l'actualisation automatique si nécessaire
-    startAutoRefresh();
+    // SSE: folder_update + usecase_update
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type === 'folder_update') {
+        const folderId: string = evt.folderId;
+        const data: any = evt.data ?? {};
+        if (!folderId) return;
+        if (data?.deleted) {
+          foldersStore.update((items) => items.filter(f => f.id !== folderId));
+          return;
+        }
+        if (data?.folder) {
+          const updated = data.folder;
+          foldersStore.update((items) => {
+            const idx = items.findIndex(f => f.id === updated.id);
+            if (idx === -1) return [updated, ...items];
+            const next = [...items];
+            next[idx] = { ...next[idx], ...updated };
+            return next;
+          });
+        }
+        return;
+      }
+      if (evt?.type === 'usecase_update') {
+        const useCaseId: string = evt.useCaseId;
+        const data: any = evt.data ?? {};
+        if (!useCaseId) return;
+        if (data?.deleted) {
+          useCasesStore.update((items) => items.filter(uc => uc.id !== useCaseId));
+          return;
+        }
+        if (data?.useCase) {
+          const updated = data.useCase;
+          useCasesStore.update((items) => {
+            const idx = items.findIndex(uc => uc.id === updated.id);
+            if (idx === -1) return [updated, ...items];
+            const next = [...items];
+            next[idx] = { ...next[idx], ...updated };
+            return next;
+          });
+        }
+      }
+    });
   });
 
   onDestroy(() => {
-    // Arrêter tous les refreshes quand on quitte la page
-    refreshManager.stopAllRefreshes();
+    streamHub.delete(HUB_KEY);
   });
 
   const loadFolders = async () => {
@@ -87,70 +102,13 @@
     }
   };
 
-  // Refresh léger - met à jour les statuts et les champs modifiés par l'IA (nom, description)
-  const refreshFolderStatus = async () => {
-    try {
-      const folders = await fetchFolders();
-      
-      // Mettre à jour les champs qui peuvent changer (status, name, description)
-      foldersStore.update(items => 
-        items.map(item => {
-          const updated = folders.find(f => f.id === item.id);
-          return updated ? { 
-            ...item, 
-            status: updated.status,
-            name: updated.name,
-            description: updated.description
-          } : item;
-        })
-      );
-    } catch (error) {
-      console.error('Failed to refresh folder status:', error);
-    }
-  };
-
-  const startAutoRefresh = () => {
-    // Vérifier s'il y a des dossiers en génération
-    const hasGeneratingFolders = $foldersStore.some(folder => folder.status === 'generating');
-    const hasGeneratingUseCases = $useCasesStore.some(useCase => 
-      useCase.status === 'generating' || useCase.status === 'detailing'
-    );
-
-    if (hasGeneratingFolders || hasGeneratingUseCases) {
-      // Démarrer l'actualisation légère des dossiers (pas de clignotement)
-      refreshManager.startFoldersRefresh(async () => {
-        await refreshFolderStatus();
-      });
-      
-      // Démarrer l'actualisation légère des cas d'usage
-      refreshManager.startUseCasesRefresh(async () => {
-        await refreshUseCasesStatus();
-      });
-    }
-  };
-
-  // Refresh léger des cas d'usage - met à jour les statuts et les champs modifiés par l'IA
-  const refreshUseCasesStatus = async () => {
-    try {
-      const useCases = await fetchUseCases();
-      
-      // Mettre à jour complètement les cas d'usage pour avoir les données les plus récentes
-      // (inclut les nouveaux cas d'usage générés)
-      useCasesStore.set(useCases);
-    } catch (error) {
-      console.error('Failed to refresh use cases status:', error);
-    }
-  };
+  // Polling désactivé: dossiers/cas d'usage se mettent à jour via SSE (folder_update/usecase_update)
 
   const handleFolderClick = (folderId: string, folderStatus: string) => {
     // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
     if (folderStatus === 'generating') {
       const folderUseCases = $useCasesStore.filter(uc => uc.folderId === folderId);
       if (folderUseCases.length === 0) {
-        addToast({
-          type: 'info',
-          message: 'Génération en cours, veuillez patienter...'
-        });
         return;
       }
     }
@@ -301,33 +259,34 @@
                   <p class="text-sm text-slate-600 line-clamp-2 mb-3">{folder.description}</p>
                 {/if}
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
+                  {#if !(isGenerating && useCaseCount === 0)}
                   <span class="flex items-center gap-1 whitespace-nowrap">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     {useCaseCount} cas d'usage
                   </span>
+                  {/if}
                   <div class="flex items-center gap-2 flex-wrap">
-                    {#if isGenerating && useCaseCount === 0}
-                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                        <svg class="w-3 h-3 mr-1 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                        Génération...
-                      </span>
-                    {:else if $currentFolderId === folder.id}
-                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
-                        Sélectionné
-                      </span>
-                    {/if}
+                    <!-- badge "Sélectionné" supprimé (affiché dans le footer) -->
                   </div>
                 </div>
+
+                {#if isGenerating && useCaseCount === 0}
+                  <div class="mt-2">
+                    <StreamMessage streamId={`folder_${folder.id}`} status={folder.status} maxHistory={6} />
+                  </div>
+                {/if}
               </div>
               
               <!-- Footer -->
               <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
                 <span class="text-xs text-slate-400 whitespace-nowrap">
+                  {#if $currentFolderId === folder.id}
+                    Sélectionné
+                  {:else}
                   Cliquez pour sélectionner
+                  {/if}
                 </span>
                 <div class="flex items-center gap-2 flex-wrap">
                   {#if folder.companyName}

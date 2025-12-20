@@ -20,7 +20,7 @@ test.describe('Public · WebAuthn Device Management', () => {
     await page.goto('/auth/devices');
     
     // Attendre que la page se charge et que les requêtes API soient terminées
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Attendre la réponse de l'API de session (qui devrait retourner 401/403)
     await page.waitForResponse(
@@ -42,7 +42,7 @@ test.describe('Public · WebAuthn Device Management', () => {
 test.describe('Authentifié · WebAuthn Device Management', () => {
   test('devrait afficher Mes Appareils quand connecté', async ({ page }) => {
     await page.goto('/auth/devices');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'on n'est pas redirigé vers login
     const currentUrl = page.url();
