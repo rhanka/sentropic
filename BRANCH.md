@@ -496,17 +496,15 @@ Implémenter la fonctionnalité de base du chatbot permettant à l'IA de propose
 
 **Fichiers à créer** : `ui/tests/stores/streamHub.test.ts`, `ui/tests/utils/stream.test.ts` (si utilitaires spécifiques)
 
-- [ ] **streamHub Store** (`ui/tests/stores/streamHub.test.ts`) :
-  - [ ] Connexion SSE (mock EventSource)
-  - [ ] Agrégation deltas (reasoning/content)
-  - [ ] Cache/replay des événements
-  - [ ] Abonnements ciblés par `streamId`
-  - [ ] Gestion des erreurs de connexion
-
-- [ ] **Utilitaires stream** (`ui/tests/utils/stream.test.ts`) (si utilitaires créés) :
-  - [ ] Parsing des événements SSE
-  - [ ] Formatage des données stream
-  - [ ] Helpers de transformation
+- [x] **streamHub Store** (`ui/tests/stores/streamHub.test.ts`) :
+  - [x] Connexion SSE (mock EventSource) ✅
+  - [x] Agrégation deltas (reasoning/content) ✅
+  - [x] Cache/replay des événements ✅
+  - [x] Abonnements ciblés par `streamId` ✅
+  - [x] Gestion des erreurs de connexion ✅
+  - [x] Filtrage par type (job_update) ✅
+  - [x] Support des événements usecase_update, folder_update, company_update ✅
+  - [x] Support des événements tool_call ✅
 
 **Commandes** :
 - `make test-ui SCOPE=tests/stores/streamHub.test.ts`
