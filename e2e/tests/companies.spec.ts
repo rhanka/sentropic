@@ -112,23 +112,26 @@ test.describe('Gestion des entreprises', () => {
     await page.waitForTimeout(75);
     const createBtn2 = page.locator('button[title="Créer"], button:has-text("Créer")');
     await expect(createBtn2).toBeVisible();
+    await expect(createBtn2).toBeEnabled();
     await createBtn2.scrollIntoViewIfNeeded();
     await createBtn2.hover();
-    await createBtn2.click({ force: true });
-    await createBtn2.press('Enter');
-    await Promise.race([
-      page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+$/, { timeout: 2000 }),
-      page.locator('button:has-text("Création...")').first().waitFor({ state: 'visible', timeout: 2000 })
+    await Promise.all([
+      page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+$/, { timeout: 10_000 }),
+      createBtn2.click()
     ]);
-    await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/);
+    await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+
+    // Ensure we are on the detail page and UI is hydrated before interacting
+    const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
+    await expect(detailNameInput).toHaveValue('Company to Delete', { timeout: 5000 });
 
     // Supprimer via l'UI: cliquer sur le bouton Supprimer et confirmer
     page.on('dialog', dialog => dialog.accept());
     const deleteBtn = page.locator('button:has-text("Supprimer")').first();
-    await expect(deleteBtn).toBeVisible();
+    await expect(deleteBtn).toBeVisible({ timeout: 10_000 });
     await deleteBtn.click();
     // Attendre la redirection
-    await page.waitForURL(/\/entreprises$/);
+    await page.waitForURL(/\/entreprises$/, { timeout: 10_000 });
 
     // Vérifier que l'entreprise a disparu de la liste UI
     await page.goto('/entreprises');
