@@ -31,9 +31,9 @@ test.describe('Public · Authentication - Basic Tests', () => {
     // Attendre que le contenu soit visible (SvelteKit doit hydrater)
     await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible({ timeout: 1000 });
     
-    // Vérifier que le titre contient "Connexion"
-    const bodyText = await page.locator('body').textContent();
-    expect(bodyText).toContain('Connexion');
+    // Vérifier que le titre contient "Connexion" (éviter body.textContent qui peut capturer du HTML/JS avant hydratation)
+    const loginHeading = page.getByRole('heading', { name: /Connexion/i }).first();
+    await expect(loginHeading).toBeVisible({ timeout: 5000 });
     
     // Page d'inscription
     await page.goto('/auth/register');
@@ -43,8 +43,8 @@ test.describe('Public · Authentication - Basic Tests', () => {
     await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible({ timeout: 1000 });
     
     // Vérifier que le titre contient "Créer un compte"
-    const registerBodyText = await page.locator('body').textContent();
-    expect(registerBodyText).toContain('Créer un compte');
+    const registerHeading = page.getByRole('heading', { name: /Créer un compte/i }).first();
+    await expect(registerHeading).toBeVisible({ timeout: 5000 });
   });
 
   test('devrait gérer la navigation entre les pages', async ({ page }) => {
@@ -62,9 +62,8 @@ test.describe('Public · Authentication - Basic Tests', () => {
     // Vérifier que la page se charge
     await expect(page.locator('body')).toBeAttached();
     
-    // Vérifier que les liens de navigation sont présents
-    const bodyText = await page.locator('body').textContent();
-    expect(bodyText).toContain('Connexion');
+    // Vérifier que les liens de navigation sont présents (attendre un signal UI stable)
+    await expect(page.getByRole('link', { name: /Connexion/i }).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('devrait gérer les pages protégées', async ({ page }) => {

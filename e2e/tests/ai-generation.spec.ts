@@ -125,8 +125,10 @@ test.describe('Génération IA', () => {
     // Sélectionner l'entreprise contenant Delpharm
     // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
     debug('Recherche du select entreprise...');
-    const companySelect = page.getByLabel('Entreprise (optionnel)');
-    await expect(companySelect).toBeVisible({ timeout: 5000 }); // Augmenter à 5s pour le chargement des entreprises
+    // Note: on the /home page the "label" is a <span> inside a <label> without for/id,
+    // so Playwright getByLabel() is not reliable here. Target the select inside that label.
+    const companySelect = page.locator('label:has-text("Entreprise (optionnel)") select');
+    await expect(companySelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading companies
     debug('Select trouvé');
     
     // Afficher toutes les options disponibles pour debug
