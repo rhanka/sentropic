@@ -28,6 +28,9 @@ test.describe('Public · Authentication - Basic Tests', () => {
     await page.goto('/auth/login');
     await page.waitForLoadState('domcontentloaded');
     
+    // Attendre que le contenu soit visible (SvelteKit doit hydrater)
+    await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible({ timeout: 1000 });
+    
     // Vérifier que le titre contient "Connexion"
     const bodyText = await page.locator('body').textContent();
     expect(bodyText).toContain('Connexion');
@@ -35,6 +38,9 @@ test.describe('Public · Authentication - Basic Tests', () => {
     // Page d'inscription
     await page.goto('/auth/register');
     await page.waitForLoadState('domcontentloaded');
+    
+    // Attendre que le contenu soit visible (SvelteKit doit hydrater)
+    await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible({ timeout: 1000 });
     
     // Vérifier que le titre contient "Créer un compte"
     const registerBodyText = await page.locator('body').textContent();

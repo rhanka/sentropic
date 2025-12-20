@@ -25,7 +25,7 @@ test.describe('Workflow métier complet', () => {
     
     // Étape 2: Générer des cas d'usage
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'on est sur la page des cas d'usage
     await expect(page.locator('h1')).toContainText('Cas d\'usage');
@@ -46,7 +46,7 @@ test.describe('Workflow métier complet', () => {
       await firstFolder.click();
       
       // Attendre la redirection vers les cas d'usage
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Vérifier qu'on voit les cas d'usage
       await expect(page.locator('h1')).toContainText('Cas d\'usage');
@@ -87,7 +87,7 @@ test.describe('Workflow métier complet', () => {
   test('devrait gérer la génération asynchrone des cas d\'usage', async ({ page }) => {
     // Aller directement aux cas d'usage
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Vérifier les différents statuts possibles
     const statusElements = page.locator('.inline-flex.items-center.px-2.py-1.rounded-full');
@@ -110,7 +110,7 @@ test.describe('Workflow métier complet', () => {
   test('devrait permettre de voir les détails d\'un cas d\'usage', async ({ page }) => {
     // Aller aux cas d'usage
     await page.goto('/cas-usage');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Chercher un cas d'usage cliquable (pas en génération)
     const useCaseCards = page.locator('article, .use-case-card, [data-testid="use-case-card"]');
@@ -126,7 +126,7 @@ test.describe('Workflow métier complet', () => {
         await firstCard.click();
         
         // Attendre la redirection vers la page de détail
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         
         // Vérifier qu'on est sur une page de détail (URL contient un ID)
         const currentUrl = page.url();

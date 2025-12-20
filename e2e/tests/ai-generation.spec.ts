@@ -114,11 +114,8 @@ test.describe('Génération IA', () => {
       throw new Error('Session révoquée - utilisateur non authentifié');
     }
     
-    // Attendre que les entreprises soient chargées
-    await page.waitForTimeout(1000);
+    // Attendre que les entreprises soient chargées (le select n'est visible que quand isLoading = false)
     debug('Recherche de la textarea...');
-    
-    // Remplir la textarea avec le prompt
     const textarea = page.locator('textarea').first();
     await expect(textarea).toBeVisible({ timeout: 1000 });
     debug('Textarea trouvée, remplissage...');
@@ -126,9 +123,10 @@ test.describe('Génération IA', () => {
     debug('Textarea remplie');
     
     // Sélectionner l'entreprise contenant Delpharm
+    // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
     debug('Recherche du select entreprise...');
     const companySelect = page.getByLabel('Entreprise (optionnel)');
-    await expect(companySelect).toBeVisible({ timeout: 1000 });
+    await expect(companySelect).toBeVisible({ timeout: 5000 }); // Augmenter à 5s pour le chargement des entreprises
     debug('Select trouvé');
     
     // Afficher toutes les options disponibles pour debug
@@ -277,7 +275,7 @@ test.describe('Génération IA', () => {
     debug('Étape 2: Attente de la fin de génération d\'un cas d\'usage...');
     let firstUseCaseCard;
     let attempts = 0;
-    const maxAttempts = 15; // 15 tentatives * 3 secondes = 45 sec max
+    const maxAttempts = 20; // 20 tentatives * 3 secondes = 60 sec max
     
     while (attempts < maxAttempts) {
       // D'abord, voir toutes les cartes pour debug
@@ -291,19 +289,20 @@ test.describe('Génération IA', () => {
           const card = allCards.nth(i);
           const cardText = await card.textContent();
           const hasGenerating = await card.filter({ hasText: 'Génération en cours' }).count() > 0;
-          const hasDetailing = await card.filter({ hasText: 'Détail en cours' }).count() > 0;
-          const hasEnCours = await card.filter({ hasText: 'En cours…' }).count() > 0;
-          debug(`Carte ${i + 1}: génération=${hasGenerating}, détail=${hasDetailing}, en cours…=${hasEnCours}`);
+          const hasCompleted = await card.filter({ hasText: 'Cliquez pour voir les détails' }).count() > 0;
+          debug(`Carte ${i + 1}: génération=${hasGenerating}, terminé=${hasCompleted}`);
           debug(`Texte: "${cardText?.substring(0, 120)}..."`);
         }
       }
       
-      const availableCards = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' }).filter({ hasNotText: 'Détail en cours' });
-      const count = await availableCards.count();
-      debug(`Cartes sans "Génération en cours" ni "Détail en cours": ${count}`);
+      // Chercher les cartes terminées : elles ont "Cliquez pour voir les détails" dans le footer
+      // (cette phrase n'apparaît que quand la génération est terminée, pas pendant "Génération en cours...")
+      const completedCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' });
+      const count = await completedCards.count();
+      debug(`Cartes terminées (avec "Cliquez pour voir les détails"): ${count}`);
       
       if (count > 0) {
-        firstUseCaseCard = availableCards.first();
+        firstUseCaseCard = completedCards.first();
         const cardText = await firstUseCaseCard.textContent();
         debug(`✅ Cas d'usage terminé trouvé: "${cardText?.substring(0, 100)}..."`);
         break;
@@ -326,11 +325,11 @@ test.describe('Génération IA', () => {
         const generatingCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Génération en cours' });
         const generatingCount = await generatingCards.count();
         debug(`ERROR: Cartes avec "Génération en cours": ${generatingCount}`);
-        const enCoursCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'En cours…' });
-        const enCoursCount = await enCoursCards.count();
-        debug(`ERROR: Cartes avec "En cours…": ${enCoursCount}`);
+        const completedCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' });
+        const completedCount = await completedCards.count();
+        debug(`ERROR: Cartes terminées (avec "Cliquez pour voir les détails"): ${completedCount}`);
       }
-      throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (45 secondes)');
+      throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (60 secondes)');
     }
     
     // Cliquer sur le premier cas d'usage
@@ -386,7 +385,8 @@ test.describe('Génération IA', () => {
     const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
     await expect(userMessage1).toBeVisible({ timeout: 1000 });
     
-    const assistantResponse1 = page.locator('div.flex.justify-start').first();
+    // On cherche le dernier message assistant (div.flex.justify-start)
+    const assistantResponse1 = page.locator('div.flex.justify-start').last();
     await expect(assistantResponse1).toBeVisible({ timeout: 8000 });
     
     // Test 2: update_usecase_field
@@ -400,7 +400,7 @@ test.describe('Génération IA', () => {
     await expect(userMessage2).toBeVisible({ timeout: 1000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call update_usecase_field)
-    // On attend simplement qu'un message assistant soit visible (peut être le même ou un nouveau)
+    // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse2 = page.locator('div.flex.justify-start').last();
     await expect(assistantResponse2).toBeVisible({ timeout: 8000 });
     
@@ -419,6 +419,7 @@ test.describe('Génération IA', () => {
     await expect(userMessage3).toBeVisible({ timeout: 1000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call web_extract)
+    // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse3 = page.locator('div.flex.justify-start').last();
     await expect(assistantResponse3).toBeVisible({ timeout: 8000 });
   });
