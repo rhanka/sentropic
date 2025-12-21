@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import { validateSession } from '../services/session-manager';
 import { logger } from '../logger';
+import { ensureWorkspaceForUser } from '../services/workspace-service';
 
 /**
  * Authentication Middleware
@@ -14,6 +15,7 @@ export interface AuthUser {
   userId: string;
   sessionId: string;
   role: string;
+  workspaceId: string;
 }
 
 // Extend Hono context with user info
@@ -55,10 +57,12 @@ export async function requireAuth(c: Context, next: Next) {
     }
     
     // Attach user info to context
+    const { workspaceId } = await ensureWorkspaceForUser(session.userId);
     c.set('user', {
       userId: session.userId,
       sessionId: session.sessionId,
       role: session.role,
+      workspaceId,
     });
     
     await next();
@@ -85,10 +89,12 @@ export async function optionalAuth(c: Context, next: Next) {
       
       if (session) {
         // Attach user info to context
+        const { workspaceId } = await ensureWorkspaceForUser(session.userId);
         c.set('user', {
           userId: session.userId,
           sessionId: session.sessionId,
           role: session.role,
+          workspaceId,
         });
       }
     }

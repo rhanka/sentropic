@@ -11,6 +11,7 @@ import { users } from '../../db/schema';
 import { db } from '../../db/client';
 import { eq } from 'drizzle-orm';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 /**
  * WebAuthn Authentication Routes
@@ -134,6 +135,8 @@ loginRouter.post('/verify', async (c) => {
         displayName: users.displayName,
         role: users.role,
         emailVerified: users.emailVerified,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
       })
       .from(users)
       .where(eq(users.id, result.userId))
@@ -152,11 +155,27 @@ loginRouter.post('/verify', async (c) => {
         message: 'Your email must be verified before you can log in. Please check your email for the verification link.'
       }, 403);
     }
+
+    // Ensure workspace exists for this user (idempotent)
+    await ensureWorkspaceForUser(user.id);
+
+    // Compute effective role (approval expired => guest read-only)
+    const status = user.accountStatus ?? 'active';
+    const due = user.approvalDueAt ?? null;
+    const now = new Date();
+
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      return c.json({ error: 'Account disabled' }, 403);
+    }
+
+    let effectiveRole: string = user.role;
+    if (status === 'approval_expired_readonly') effectiveRole = 'guest';
+    if (status === 'pending_admin_approval' && due && now > due) effectiveRole = 'guest';
     
     // Create session for user
     const { sessionToken, refreshToken, expiresAt } = await createSession(
       user.id,
-      user.role,
+      effectiveRole,
       {
         name: deviceName,
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),

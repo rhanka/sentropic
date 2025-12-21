@@ -225,7 +225,9 @@ export async function verifyMagicLink(
         id: crypto.randomUUID(),
         email: normalizedLinkEmail,
         displayName,
-        role: 'guest', // Default role
+        role: 'editor',
+        accountStatus: 'pending_admin_approval',
+        approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         createdAt: new Date(),
         updatedAt: new Date(),
       })

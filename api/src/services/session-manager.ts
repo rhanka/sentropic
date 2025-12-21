@@ -159,8 +159,7 @@ export async function validateSession(
       return null;
     }
     
-    // Security: Verify that user's email is verified
-    // This prevents using sessions created before email verification requirement
+    // Security: verify user status (emailVerified + admin approval rules)
     const [user] = await db
       .select({ emailVerified: users.emailVerified })
       .from(users)
@@ -171,6 +170,39 @@ export async function validateSession(
       logger.warn({ userId, sessionId }, 'Session validation failed - email not verified');
       return null;
     }
+
+    // Compute effective role based on account status/approval window
+    const [userAuth] = await db
+      .select({
+        role: users.role,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!userAuth) return null;
+
+    const status = userAuth.accountStatus ?? 'active';
+    const now = new Date();
+
+    // Blocked statuses
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      logger.warn({ userId, sessionId, status }, 'Session validation failed - account disabled');
+      return null;
+    }
+
+    let effectiveRole = (userAuth.role ?? role) as string;
+
+    if (status === 'approval_expired_readonly') {
+      effectiveRole = 'guest';
+    } else if (status === 'pending_admin_approval') {
+      const due = userAuth.approvalDueAt;
+      if (due && now > due) {
+        effectiveRole = 'guest';
+      }
+    }
     
     // Update last activity
     await db
@@ -178,7 +210,7 @@ export async function validateSession(
       .set({ lastActivityAt: new Date() })
       .where(eq(userSessions.id, sessionId));
     
-    return { userId, sessionId, role };
+    return { userId, sessionId, role: effectiveRole };
   } catch (error) {
     logger.debug({ err: error }, 'Invalid session token');
     return null;

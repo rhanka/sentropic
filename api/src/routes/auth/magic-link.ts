@@ -11,6 +11,7 @@ import { env } from '../../config/env';
 import { db } from '../../db/client';
 import { users, webauthnCredentials } from '../../db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 /**
  * Magic Link Authentication Routes
@@ -92,6 +93,8 @@ magicLinkRouter.post('/verify', async (c) => {
         displayName: users.displayName,
         role: users.role,
         emailVerified: users.emailVerified,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
       })
       .from(users)
       .where(eq(users.id, result.userId))
@@ -101,6 +104,21 @@ magicLinkRouter.post('/verify', async (c) => {
       logger.error({ userId: result.userId }, 'User not found during magic link verification');
       return c.json({ error: 'User not found' }, 500);
     }
+
+    await ensureWorkspaceForUser(user.id);
+
+    // Compute effective role (approval expired => guest read-only)
+    const status = user.accountStatus ?? 'active';
+    const due = user.approvalDueAt ?? null;
+    const now = new Date();
+
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      return c.json({ error: 'Account disabled' }, 403);
+    }
+
+    let effectiveRole: string = user.role;
+    if (status === 'approval_expired_readonly') effectiveRole = 'guest';
+    if (status === 'pending_admin_approval' && due && now > due) effectiveRole = 'guest';
     
     // Note: verifyMagicLink already marks emailVerified: true
     // Now we need to check if there's a new device waiting to be activated
@@ -138,7 +156,7 @@ magicLinkRouter.post('/verify', async (c) => {
       // Create session
       const { sessionToken, refreshToken, expiresAt } = await createSession(
         user.id,
-        user.role,
+        effectiveRole,
         {
           name: 'Magic Link - Device Activation',
           ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
@@ -186,7 +204,7 @@ magicLinkRouter.post('/verify', async (c) => {
     // Create temporary session to allow device registration
     const { sessionToken, refreshToken, expiresAt } = await createSession(
       user.id,
-      user.role,
+      effectiveRole,
       {
         name: 'Magic Link - Device Registration',
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),

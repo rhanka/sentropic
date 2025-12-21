@@ -14,6 +14,7 @@ import { env } from '../../config/env';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { verifyValidationToken } from '../../services/email-verification';
+import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 /**
  * WebAuthn Registration Routes
@@ -125,7 +126,7 @@ registerRouter.post('/options', async (c) => {
       }
     } else {
       // Determine user role for new user
-      userRole = 'guest';
+      userRole = 'editor';
       if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
         const existingAdmins = await db
           .select({ id: users.id })
@@ -285,6 +286,8 @@ registerRouter.post('/verify', async (c) => {
         role: users.role,
         emailVerified: users.emailVerified,
         displayName: users.displayName,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
       })
       .from(users)
       .where(eq(users.email, normalizedEmail))
@@ -292,10 +295,14 @@ registerRouter.post('/verify', async (c) => {
     
     let userId: string;
     let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest';
+    let accountStatus: string | null = null;
+    let approvalDueAt: Date | null = null;
     
     if (user) {
       userId = user.id;
       userRole = user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest';
+      accountStatus = user.accountStatus ?? null;
+      approvalDueAt = user.approvalDueAt ?? null;
       
       // Verify challenge was for the correct user (or update if tempUserId matches)
       if (userId !== tempUserId) {
@@ -319,7 +326,7 @@ registerRouter.post('/verify', async (c) => {
     } else {
       // Create new user with email verified, using tempUserId from options
       userId = tempUserId; // Reuse the userId from options/challenge
-      userRole = 'guest';
+      userRole = 'editor';
       
       if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
         const existingAdmins = await db
@@ -334,11 +341,22 @@ registerRouter.post('/verify', async (c) => {
       }
       
       const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
+
+      if (userRole === 'admin_app') {
+        accountStatus = 'active';
+        approvalDueAt = null;
+      } else {
+        accountStatus = 'pending_admin_approval';
+        approvalDueAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      }
+
       await db.insert(users).values({
         id: userId,
         email: normalizedEmail,
         displayName: defaultDisplayName,
         role: userRole,
+        accountStatus,
+        approvalDueAt,
         emailVerified: true, // Email verified via code
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -346,6 +364,9 @@ registerRouter.post('/verify', async (c) => {
       
       logger.info({ userId, email: normalizedEmail }, 'New user created with verified email');
     }
+
+    // Ensure workspace exists for this user (idempotent)
+    await ensureWorkspaceForUser(userId);
     
     // Verify registration and create device
     const result = await verifyWebAuthnRegistration({
@@ -374,9 +395,14 @@ registerRouter.post('/verify', async (c) => {
     const isFirstDevice = otherDevices.length === 0;
     
     // Create session (always for new registration flow)
+    // Effective role for session (approval expired => guest read-only)
+    let effectiveRole: string = userRole;
+    if (accountStatus === 'approval_expired_readonly') effectiveRole = 'guest';
+    if (accountStatus === 'pending_admin_approval' && approvalDueAt && new Date() > approvalDueAt) effectiveRole = 'guest';
+
     const session = await createSession(
       userId,
-      userRole,
+      effectiveRole,
       {
         name: deviceName,
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
