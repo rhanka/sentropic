@@ -9,6 +9,7 @@ import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
+import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 
 // Fonction d'enrichissement asynchrone (désactivée, utilisation directe de enrichCompany)
 // async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
@@ -66,8 +67,17 @@ async function notifyCompanyEvent(companyId: string): Promise<void> {
 }
 
 companiesRouter.get('/', async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
-  const rows = await db.select().from(companies).where(eq(companies.workspaceId, workspaceId));
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
+  const rows = await db.select().from(companies).where(eq(companies.workspaceId, targetWorkspaceId));
   return c.json({ items: rows });
 });
 
@@ -156,12 +166,21 @@ companiesRouter.post('/:id/enrich', requireEditor, async (c) => {
 });
 
 companiesRouter.get('/:id', async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
   const id = c.req.param('id');
   const [company] = await db
     .select()
     .from(companies)
-    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, targetWorkspaceId)));
   if (!company) {
     return c.json({ message: 'Not found' }, 404);
   }

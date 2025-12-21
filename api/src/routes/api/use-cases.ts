@@ -14,6 +14,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
+import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 
 async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
@@ -329,11 +330,20 @@ const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial
 export const useCasesRouter = new Hono();
 
 useCasesRouter.get('/', async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
   const folderId = c.req.query('folder_id');
   const rows = folderId
-    ? await db.select().from(useCases).where(and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId)))
-    : await db.select().from(useCases).where(eq(useCases.workspaceId, workspaceId));
+    ? await db.select().from(useCases).where(and(eq(useCases.workspaceId, targetWorkspaceId), eq(useCases.folderId, folderId)))
+    : await db.select().from(useCases).where(eq(useCases.workspaceId, targetWorkspaceId));
   const hydrated = await Promise.all(rows.map(row => hydrateUseCase(row)));
   return c.json({ items: hydrated });
 });
@@ -383,12 +393,21 @@ useCasesRouter.post('/', requireEditor, zValidator('json', useCaseInput), async 
 });
 
 useCasesRouter.get('/:id', async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
   const id = c.req.param('id');
   const [record] = await db
     .select()
     .from(useCases)
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, targetWorkspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }

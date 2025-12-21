@@ -95,74 +95,23 @@ adminRouter.get('/users', async (c) => {
   return c.json({ items: rows });
 });
 
-async function assertWorkspaceReadableByAdmin(workspaceId: string): Promise<void> {
-  if (workspaceId === ADMIN_WORKSPACE_ID) return;
-  const [ws] = await db
-    .select({ id: workspaces.id })
+adminRouter.get('/workspaces', async (c) => {
+  // Admin workspace + all workspaces that are explicitly shared with admin
+  const rows = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      shareWithAdmin: workspaces.shareWithAdmin,
+      ownerUserId: workspaces.ownerUserId,
+    })
     .from(workspaces)
-    .where(and(eq(workspaces.id, workspaceId), eq(workspaces.shareWithAdmin, true)))
-    .limit(1);
-  if (!ws) throw new Error('Workspace not accessible');
-}
+    .where(
+      // keep it simple: either admin workspace or shareWithAdmin=true
+      sql`${workspaces.id} = ${ADMIN_WORKSPACE_ID} OR ${workspaces.shareWithAdmin} = true`
+    )
+    .orderBy(desc(workspaces.createdAt));
 
-adminRouter.get('/workspaces/:id', async (c) => {
-  try {
-    const workspaceId = c.req.param('id');
-    await assertWorkspaceReadableByAdmin(workspaceId);
-    const [ws] = await db
-      .select({
-        id: workspaces.id,
-        name: workspaces.name,
-        shareWithAdmin: workspaces.shareWithAdmin,
-        ownerUserId: workspaces.ownerUserId,
-        createdAt: workspaces.createdAt,
-        updatedAt: workspaces.updatedAt,
-      })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .limit(1);
-    if (!ws) return c.json({ message: 'Not found' }, 404);
-    return c.json({ workspace: ws });
-  } catch (e) {
-    return c.json({ message: 'Not found' }, 404);
-  }
-});
-
-adminRouter.get('/workspaces/:id/companies', async (c) => {
-  try {
-    const workspaceId = c.req.param('id');
-    await assertWorkspaceReadableByAdmin(workspaceId);
-    const rows = await db.select().from(companies).where(eq(companies.workspaceId, workspaceId));
-    return c.json({ items: rows });
-  } catch (e) {
-    return c.json({ message: 'Not found' }, 404);
-  }
-});
-
-adminRouter.get('/workspaces/:id/folders', async (c) => {
-  try {
-    const workspaceId = c.req.param('id');
-    await assertWorkspaceReadableByAdmin(workspaceId);
-    const rows = await db.select().from(folders).where(eq(folders.workspaceId, workspaceId)).orderBy(desc(folders.createdAt));
-    return c.json({ items: rows });
-  } catch (e) {
-    return c.json({ message: 'Not found' }, 404);
-  }
-});
-
-adminRouter.get('/workspaces/:id/use-cases', async (c) => {
-  try {
-    const workspaceId = c.req.param('id');
-    await assertWorkspaceReadableByAdmin(workspaceId);
-    const folderId = c.req.query('folder_id');
-    const where = folderId
-      ? and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId))
-      : eq(useCases.workspaceId, workspaceId);
-    const rows = await db.select().from(useCases).where(where).orderBy(desc(useCases.createdAt));
-    return c.json({ items: rows });
-  } catch (e) {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  return c.json({ items: rows });
 });
 
 const approveSchema = z.object({
