@@ -3,14 +3,36 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders } from '../../src/db/schema';
+import { folders, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Analytics API', () => {
   let user: any;
+  let workspaceId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+
+    // Ensure the authenticated user has a private workspace for scoping tests
+    const [ws] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.ownerUserId, user.id))
+      .limit(1);
+
+    if (ws) {
+      workspaceId = ws.id;
+    } else {
+      workspaceId = crypto.randomUUID();
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        ownerUserId: user.id,
+        name: `Test Workspace ${createTestId()}`,
+        shareWithAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
   });
 
   afterEach(async () => {
@@ -19,21 +41,53 @@ describe('Analytics API', () => {
 
   describe('GET /analytics/summary', () => {
     it('should get analytics summary', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/analytics/summary?folder_id=test-folder-id', user.sessionToken!);
+      const folderId = createTestId();
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId,
+        name: `Test Folder ${createTestId()}`,
+        description: 'Test folder',
+        status: 'completed',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/analytics/summary?folder_id=${folderId}`,
+        user.sessionToken!
+      );
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toBeDefined();
+
+      await db.delete(folders).where(eq(folders.id, folderId));
     });
   });
 
   describe('GET /analytics/scatter', () => {
     it('should get analytics scatter data', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/analytics/scatter?folder_id=test-folder-id', user.sessionToken!);
+      const folderId = createTestId();
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId,
+        name: `Test Folder ${createTestId()}`,
+        description: 'Test folder',
+        status: 'completed',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/analytics/scatter?folder_id=${folderId}`,
+        user.sessionToken!
+      );
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toBeDefined();
+
+      await db.delete(folders).where(eq(folders.id, folderId));
     });
   });
 
@@ -56,6 +110,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Empty folder',
         status: 'completed',
@@ -122,6 +177,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',
@@ -155,6 +211,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',
@@ -199,6 +256,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',

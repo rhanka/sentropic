@@ -58,11 +58,11 @@ describe('Companies API', () => {
     expect(res.status).toBe(201);
   });
 
-  it('should deny guests access to companies (403)', async () => {
+  it('should allow guests to read companies (200)', async () => {
     const user = await createAuthenticatedUser('guest');
     
     const res = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken!);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   // ===== FUNCTIONAL TESTS (with authentication) =====

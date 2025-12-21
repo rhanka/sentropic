@@ -3,18 +3,41 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, useCases, chatStreamEvents } from '../../src/db/schema';
+import { folders, useCases, chatStreamEvents, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Executive Summary Generation - AI', () => {
   let user: any;
+  let workspaceId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+
+    // Ensure the authenticated user has a private workspace for scoping tests
+    const [ws] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.ownerUserId, user.id))
+      .limit(1);
+
+    if (ws) {
+      workspaceId = ws.id;
+    } else {
+      workspaceId = crypto.randomUUID();
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        ownerUserId: user.id,
+        name: `Test Workspace ${createTestId()}`,
+        shareWithAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
   });
 
   afterEach(async () => {
     await cleanupAuthData();
+    await db.delete(workspaces).where(eq(workspaces.ownerUserId, user.id));
   });
 
   // Helper function to create a test folder with use cases
@@ -24,6 +47,7 @@ describe('Executive Summary Generation - AI', () => {
     // Create folder
     await db.insert(folders).values({
       id: folderId,
+      workspaceId,
       name: `Test Folder ${createTestId()}`,
       description: 'Test folder for executive summary',
       status: 'completed',
@@ -40,6 +64,7 @@ describe('Executive Summary Generation - AI', () => {
     for (const uc of useCasesData) {
       await db.insert(useCases).values({
         id: createTestId(),
+        workspaceId,
         folderId,
         data: {
           name: uc.name,
