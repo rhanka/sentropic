@@ -44,4 +44,12 @@ const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 
-export const env: AppEnv = envSchema.parse(process.env);
+export const env: AppEnv = (() => {
+  const parsed = envSchema.parse(process.env);
+  // Tests execute a lot of auth requests quickly; default to disabling auth rate limiting in test env
+  // unless explicitly overridden.
+  if (parsed.NODE_ENV === 'test' && !parsed.DISABLE_RATE_LIMIT) {
+    return { ...parsed, DISABLE_RATE_LIMIT: 'true' };
+  }
+  return parsed;
+})();
