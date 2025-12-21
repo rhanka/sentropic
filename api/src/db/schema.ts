@@ -213,6 +213,10 @@ export const chatSessions = pgTable('chat_sessions', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Workspace scope for this chat session.
+  // - For regular users: their own workspace (set at session creation)
+  // - For admin_app: can be a shared workspace (read-only) or Admin Workspace
+  workspaceId: text('workspace_id').references(() => workspaces.id),
   primaryContextType: text('primary_context_type'), // 'company' | 'folder' | 'usecase' | 'executive_summary'
   primaryContextId: text('primary_context_id'),
   title: text('title'),
@@ -221,6 +225,7 @@ export const chatSessions = pgTable('chat_sessions', {
 }, (table) => ({
   userIdIdx: index('chat_sessions_user_id_idx').on(table.userId),
   primaryContextIdx: index('chat_sessions_primary_context_idx').on(table.primaryContextType, table.primaryContextId),
+  workspaceIdIdx: index('chat_sessions_workspace_id_idx').on(table.workspaceId),
 }));
 
 export const chatMessages = pgTable('chat_messages', {

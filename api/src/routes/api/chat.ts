@@ -4,6 +4,7 @@ import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
+import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 
 export const chatRouter = new Hono();
 
@@ -11,6 +12,7 @@ const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
   model: z.string().optional(),
+  workspace_id: z.string().optional(),
   primaryContextType: z.enum(['company', 'folder', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
@@ -94,11 +96,24 @@ chatRouter.post('/messages', zValidator('json', createMessageInput), async (c) =
   const user = c.get('user');
   const body = c.req.valid('json');
 
+  // Workspace scope for chat: admin_app can target a shared workspace (read-only), otherwise own workspace.
+  let targetWorkspaceId = user.workspaceId as string;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user: { role: user.role, workspaceId: user.workspaceId },
+      requested: (body as any)?.workspace_id
+    });
+  } catch {
+    // opaque
+    return c.json({ message: 'Not found' }, 404);
+  }
+
   const created = await chatService.createUserMessageWithAssistantPlaceholder({
     userId: user.userId,
     sessionId: body.sessionId ?? null,
     content: body.content,
     model: body.model ?? null,
+    workspaceId: targetWorkspaceId,
     primaryContextType: body.primaryContextType ?? null,
     primaryContextId: body.primaryContextId ?? null,
     sessionTitle: body.sessionTitle ?? null

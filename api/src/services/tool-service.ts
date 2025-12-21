@@ -75,13 +75,17 @@ export class ToolService {
    * Tool pour lire un use case complet.
    * Retourne la structure `use_cases.data` complète.
    */
-  async readUseCase(useCaseId: string): Promise<{
+  async readUseCase(useCaseId: string, opts?: { workspaceId?: string | null }): Promise<{
     useCaseId: string;
     data: unknown;
   }> {
     if (!useCaseId) throw new Error('useCaseId is required');
 
-    const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, workspaceId))
+      : eq(useCases.id, useCaseId);
+    const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
     // Retourner la structure data complète
@@ -95,7 +99,7 @@ export class ToolService {
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
    * Cible principale: `use_cases.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput): Promise<{
+  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null }): Promise<{
     useCaseId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
@@ -103,7 +107,11 @@ export class ToolService {
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
-    const [row] = await db.select().from(useCases).where(eq(useCases.id, input.useCaseId));
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(useCases.id, input.useCaseId), eq(useCases.workspaceId, workspaceId))
+      : eq(useCases.id, input.useCaseId);
+    const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
     // `use_cases.data` est directement l'objet métier (pas de wrapper "data")
@@ -158,7 +166,7 @@ export class ToolService {
     }
     
     // Récupérer les données finales pour l'historique (après update)
-    const [updatedRow] = await db.select().from(useCases).where(eq(useCases.id, input.useCaseId));
+    const [updatedRow] = await db.select().from(useCases).where(where);
     const finalData = (updatedRow?.data ?? {}) as unknown;
 
     // Émettre un événement usecase_update pour rafraîchir l'UI en temps réel

@@ -7,6 +7,7 @@ import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import { readUseCaseTool, updateUseCaseFieldTool, webSearchTool, webExtractTool, searchWeb, extractUrlContent } from './tools';
 import { toolService } from './tool-service';
+import { ensureWorkspaceForUser } from './workspace-service';
 
 export type ChatContextType = 'company' | 'folder' | 'usecase' | 'executive_summary';
 
@@ -14,6 +15,7 @@ export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type CreateChatSessionInput = {
   userId: string;
+  workspaceId?: string | null;
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
   title?: string | null;
@@ -22,6 +24,7 @@ export type CreateChatSessionInput = {
 export type CreateChatMessageInput = {
   userId: string;
   sessionId?: string | null;
+  workspaceId?: string | null;
   content: string;
   model?: string | null;
   primaryContextType?: ChatContextType | null;
@@ -56,6 +59,7 @@ export class ChatService {
     await db.insert(chatSessions).values({
       id: sessionId,
       userId: input.userId,
+      workspaceId: input.workspaceId ?? null,
       primaryContextType: input.primaryContextType ?? null,
       primaryContextId: input.primaryContextId ?? null,
       title: input.title ?? null,
@@ -166,11 +170,14 @@ export class ChatService {
     streamId: string;
     model: string;
   }> {
+    const desiredWorkspaceId = input.workspaceId ?? null;
+    const existing = input.sessionId ? await this.getSessionForUser(input.sessionId, input.userId) : null;
     const sessionId =
-      input.sessionId && (await this.getSessionForUser(input.sessionId, input.userId))
-        ? input.sessionId
+      existing && (existing as any)?.id && ((existing as any)?.workspaceId ?? null) === desiredWorkspaceId
+        ? existing.id
         : (await this.createSession({
             userId: input.userId,
+            workspaceId: desiredWorkspaceId,
             primaryContextType: input.primaryContextType ?? null,
             primaryContextId: input.primaryContextId ?? null,
             title: input.sessionTitle ?? null
@@ -247,6 +254,10 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
+    const ownerWs = await ensureWorkspaceForUser(options.userId);
+    const sessionWorkspaceId = (session as any)?.workspaceId ?? ownerWs.workspaceId;
+    const readOnly = sessionWorkspaceId !== ownerWs.workspaceId;
+
     // Charger messages (sans inclure le placeholder assistant)
     const messages = await db
       .select()
@@ -270,9 +281,15 @@ export class ChatService {
     const primaryContextId = session.primaryContextId;
 
     // Préparer les tools : seulement si le contexte est 'usecase'
-    const tools = primaryContextType === 'usecase' 
-      ? [readUseCaseTool, updateUseCaseFieldTool, webSearchTool, webExtractTool]
-      : undefined;
+    const tools =
+      primaryContextType === 'usecase'
+        ? [
+            readUseCaseTool,
+            ...(readOnly ? [] : [updateUseCaseFieldTool]),
+            webSearchTool,
+            webExtractTool
+          ]
+        : undefined;
 
     // Enrichir le system prompt avec le contexte si disponible
     let systemPrompt = "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.";
@@ -283,13 +300,13 @@ Tu travailles sur le use case ${primaryContextId}. Tu peux répondre aux questio
 
 Tools disponibles :
 - \`read_usecase\` : Lit l'état actuel du use case
-- \`update_usecase_field\` : Met à jour des champs du use case (modifications appliquées directement en DB)
+- \`update_usecase_field\` : Met à jour des champs du use case (modifications appliquées directement en DB)${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`web_search\` : Recherche d'informations récentes sur le web pour trouver de nouvelles URLs ou obtenir des résumés. Utilise ce tool quand tu dois chercher de nouvelles informations ou URLs pertinentes.
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes. CRITIQUE : Utilise ce tool quand l'utilisateur demande des détails sur les références (URLs déjà présentes dans le use case). Si tu dois extraire plusieurs URLs (par exemple 9 URLs), tu DOIS toutes les passer dans UN SEUL appel avec le paramètre \`urls\` en array. NE FAIS JAMAIS plusieurs appels séparés (un par URL). Exemple : si tu as 9 URLs, appelle une seule fois avec \`{"urls": ["url1", "url2", ..., "url9"]}\` au lieu de faire 9 appels séparés.
 
 Quand l'utilisateur demande explicitement de modifier, reformuler ou mettre à jour des champs du use case (par exemple : "reformuler le problème", "mettre en bullet points", "modifier la description"), tu DOIS utiliser les tools disponibles :
 1. D'abord utiliser \`read_usecase\` pour lire l'état actuel du use case
-2. Ensuite utiliser \`update_usecase_field\` pour appliquer directement les modifications demandées
+2. Ensuite utiliser \`update_usecase_field\` pour appliquer directement les modifications demandées${readOnly ? ' (si disponible; sinon, propose une suggestion sans modifier en DB)' : ''}
 
 Les modifications sont appliquées immédiatement en base de données via les tools. Ne réponds pas simplement dans le texte quand il s'agit de modifier le use case, utilise les tools pour effectuer les modifications réelles.
 
@@ -399,7 +416,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
               throw new Error('Security: useCaseId does not match session context');
             }
-            const readResult = await toolService.readUseCase(args.useCaseId);
+            const readResult = await toolService.readUseCase(args.useCaseId, { workspaceId: sessionWorkspaceId });
             result = readResult;
             await writeStreamEvent(
               options.assistantMessageId,
@@ -410,6 +427,9 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             );
             streamSeq += 1;
           } else if (toolCall.name === 'update_usecase_field') {
+            if (readOnly) {
+              throw new Error('Read-only workspace: update_usecase_field is disabled');
+            }
             // Vérifier la sécurité : useCaseId doit correspondre au contexte
             if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
               throw new Error('Security: useCaseId does not match session context');
@@ -419,7 +439,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
               updates: args.updates || [],
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
-              toolCallId: toolCall.id
+              toolCallId: toolCall.id,
+              workspaceId: sessionWorkspaceId
             });
             result = updateResult;
             await writeStreamEvent(

@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
   type ChatSession = {
     id: string;
@@ -246,6 +247,7 @@
         content: string;
         primaryContextType?: string;
         primaryContextId?: string;
+        workspace_id?: string;
       } = {
         content: text
       };
@@ -258,6 +260,8 @@
         payload.primaryContextType = context.primaryContextType;
         payload.primaryContextId = context.primaryContextId;
       }
+      const scoped = getScopedWorkspaceIdForAdmin();
+      if (scoped) payload.workspace_id = scoped;
 
       const res = await apiPost<{
         sessionId: string;
