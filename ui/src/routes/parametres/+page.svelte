@@ -87,7 +87,7 @@
     try {
       await deactivateAccount();
       addToast({ type: 'success', message: 'Compte désactivé. Veuillez vous reconnecter.' });
-      goto('/auth/login');
+      await session.logout();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur désactivation' });
     } finally {
@@ -101,7 +101,7 @@
     try {
       await deleteAccount();
       addToast({ type: 'success', message: 'Compte supprimé.' });
-      goto('/');
+      await session.logout();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur suppression' });
     } finally {

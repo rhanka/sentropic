@@ -27,7 +27,7 @@ describe('Admin approval API', () => {
     expect(Array.isArray(data.items)).toBe(true);
   });
 
-  it('should allow admin_app to approve a pending user and revoke sessions', async () => {
+  it('should allow admin_app to approve a pending user without revoking sessions', async () => {
     const admin = await createAuthenticatedUser('admin_app');
     const u = await createAuthenticatedUser('editor');
 
@@ -52,7 +52,7 @@ describe('Admin approval API', () => {
     expect(updated.approvedByUserId).toBe(admin.id);
 
     const sessions = await db.select().from(userSessions).where(eq(userSessions.userId, u.id));
-    expect(sessions.length).toBe(0);
+    expect(sessions.length).toBeGreaterThan(0);
   });
 
   it('should allow admin_app to disable and reactivate a user', async () => {

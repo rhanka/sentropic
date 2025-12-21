@@ -52,7 +52,7 @@ app.use('*', async (c, next) => {
   if (method === 'OPTIONS') {
     if (origin && isOriginAllowed(origin, allowedOrigins)) {
       c.header('Access-Control-Allow-Origin', origin);
-      c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+      c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
       c.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
       c.header('Access-Control-Allow-Credentials', 'true');
       c.header('Access-Control-Max-Age', '86400');

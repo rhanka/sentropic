@@ -10,6 +10,11 @@
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
+  import { companiesStore, currentCompanyId } from '$lib/stores/companies';
+  import { foldersStore, currentFolderId } from '$lib/stores/folders';
+  import { useCasesStore } from '$lib/stores/useCases';
+  import { queueStore } from '$lib/stores/queue';
+  import { me } from '$lib/stores/me';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 
@@ -126,6 +131,23 @@
   onMount(async () => {
     await initializeSession();
   });
+
+  // Clear all user-scoped stores when the authenticated user changes (incl. logout),
+  // to prevent cross-account data "bleed" in the UI.
+  let lastUserId: string | null = null;
+  $: {
+    const currentUserId = $session.user?.id ?? null;
+    if (currentUserId !== lastUserId) {
+      companiesStore.set([]);
+      currentCompanyId.set(null);
+      foldersStore.set([]);
+      currentFolderId.set(null);
+      useCasesStore.set([]);
+      queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
+      me.set({ loading: false, data: null, error: null });
+      lastUserId = currentUserId;
+    }
+  }
 
   // Nettoyer les timers lors du démontage
   onDestroy(() => {

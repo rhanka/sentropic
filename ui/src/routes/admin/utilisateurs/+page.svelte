@@ -35,6 +35,7 @@
   let statusFilter: AccountStatus | '' = 'pending_admin_approval';
   let roleOnApprove: Role = 'editor';
   let items: AdminUserRow[] = [];
+  let activeItems: AdminUserRow[] = [];
 
   const isAdminApp = () => $session.user?.role === 'admin_app';
 
@@ -42,8 +43,12 @@
     loading = true;
     try {
       const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
-      const data = await apiGet<{ items: AdminUserRow[] }>(`/admin/users${qs}`);
+      const [data, active] = await Promise.all([
+        apiGet<{ items: AdminUserRow[] }>(`/admin/users${qs}`),
+        statusFilter === 'active' ? Promise.resolve<{ items: AdminUserRow[] }>({ items: [] }) : apiGet<{ items: AdminUserRow[] }>(`/admin/users?status=active`)
+      ]);
       items = data.items;
+      activeItems = statusFilter === 'active' ? data.items : active.items;
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur de chargement admin' });
     } finally {
@@ -175,6 +180,47 @@
         </div>
       {/if}
     </div>
+
+    {#if statusFilter !== 'active'}
+      <div class="rounded border border-slate-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-800">Utilisateurs actifs</h2>
+          <span class="text-xs text-slate-500">{activeItems.length} actif(s)</span>
+        </div>
+        {#if loading}
+          <div class="text-sm text-slate-600">Chargement…</div>
+        {:else if activeItems.length === 0}
+          <div class="text-sm text-slate-600">Aucun utilisateur actif.</div>
+        {:else}
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="border-b border-slate-200 text-left text-slate-600">
+                  <th class="py-2 pr-3">Email</th>
+                  <th class="py-2 pr-3">Nom</th>
+                  <th class="py-2 pr-3">Role</th>
+                  <th class="py-2 pr-3">Email OK</th>
+                  <th class="py-2 pr-3">Workspace</th>
+                  <th class="py-2 pr-3">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each activeItems as u}
+                  <tr class="border-b border-slate-100">
+                    <td class="py-2 pr-3">{u.email ?? '—'}</td>
+                    <td class="py-2 pr-3">{u.displayName ?? '—'}</td>
+                    <td class="py-2 pr-3">{u.role}</td>
+                    <td class="py-2 pr-3">{u.emailVerified ? 'oui' : 'non'}</td>
+                    <td class="py-2 pr-3">{u.workspaceName ?? u.workspaceId ?? '—'}</td>
+                    <td class="py-2 pr-3">{u.shareWithAdmin ? 'oui' : 'non'}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
 

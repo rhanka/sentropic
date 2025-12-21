@@ -124,9 +124,6 @@ adminRouter.post('/users/:id/approve', zValidator('json', approveSchema), async 
     })
     .where(eq(users.id, userId));
 
-  // Force re-login for immediate privilege update
-  await db.delete(userSessions).where(eq(userSessions.userId, userId));
-
   return c.json({ success: true });
 });
 
@@ -179,7 +176,5 @@ adminRouter.post('/users/:id/reactivate', async (c) => {
       updatedAt: now,
     })
     .where(eq(users.id, userId));
-
-  await db.delete(userSessions).where(eq(userSessions.userId, userId));
   return c.json({ success: true });
 });

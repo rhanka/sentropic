@@ -65,6 +65,30 @@ describe('Companies API', () => {
     expect(res.status).toBe(200);
   });
 
+  it('should isolate companies by workspace (no cross-tenant access, even for admin_app by default)', async () => {
+    const suffix = createTestId();
+    const userA = await createAuthenticatedUser('editor', `editor-a-${suffix}@example.com`);
+    const userB = await createAuthenticatedUser('editor', `editor-b-${suffix}@example.com`);
+    const admin = await createAuthenticatedUser('admin_app', `admin-${suffix}@example.com`);
+
+    // Create company in userA workspace
+    const companyData = {
+      name: `Tenant Company ${createTestId()}`,
+      industry: testCompanies.valid.industry,
+    };
+    const createRes = await authenticatedRequest(app, 'POST', '/api/v1/companies', userA.sessionToken!, companyData);
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+
+    // userB cannot access userA company
+    const getB = await authenticatedRequest(app, 'GET', `/api/v1/companies/${created.id}`, userB.sessionToken!);
+    expect(getB.status).toBe(404);
+
+    // admin_app cannot access userA company unless explicit sharing is implemented for that resource
+    const getAdmin = await authenticatedRequest(app, 'GET', `/api/v1/companies/${created.id}`, admin.sessionToken!);
+    expect(getAdmin.status).toBe(404);
+  });
+
   // ===== FUNCTIONAL TESTS (with authentication) =====
   it('should create a company with authentication', async () => {
     const user = await createAuthenticatedUser('editor');
