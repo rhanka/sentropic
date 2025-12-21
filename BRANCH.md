@@ -17,17 +17,18 @@ Define and implement an onboarding and authorization model where:
 - [x] Admin approval APIs (approve/reactivate/disable/list users) + audit fields.
 - [x] User self-service APIs (`/me`: workspace privacy, deactivate, delete account).
 - [x] Test updates: unit/api/ai tests adjusted to tenancy + new onboarding rules.
-- [ ] UI: Settings (workspace privacy, account deactivate/delete), Admin panel (approvals).
+- [x] UI: Settings (workspace privacy, account deactivate/delete), Admin panel (approvals).
+- [x] UI: ChatWidget "Jobs IA" (queue monitor in user environment) + purge "mes jobs".
 - [ ] E2E tests for tenancy boundaries + approval expiry downgrade (guest) + blocking if email not verified.
 
 ## Commits & Progress
 - [ ] **Commit set**: docs + tooling + db + auth + api + tests (see `git log`)
 
 ## Status
-- **Progress**: backend ✅ / UI ⏳
-- **Current**: Backend implemented (workspaces + approval), including `/api/v1/admin/users/*` and `/api/v1/me/*`; tests passing locally.
+- **Progress**: backend ✅ / UI ✅ / E2E ⏳
+- **Current**: Workspaces + approval + queue tenancy implemented, including `/api/v1/admin/users/*`, `/api/v1/me/*`, `/api/v1/queue/*` (workspace-scoped) + UI surfaces.
 - **Next**:
-  - UI screens + flows (trial banner, pending approval, expired downgrade to guest)
-  - Account suppression UX (confirmations) + E2E tests
+  - Fixes & evols (see TODOs / issues list in chat)
+  - E2E tests for tenancy boundaries + onboarding edge-cases
 
 

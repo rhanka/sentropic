@@ -3,7 +3,7 @@
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
-  import { isAuthenticated } from '$lib/stores/session';
+  import { isAuthenticated, session } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
@@ -95,8 +95,22 @@
     isVisible = false;
   };
 
-  const handleDeleteAllJobs = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS les jobs ? Cette action est irréversible.')) {
+  const handlePurgeMyJobs = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS vos jobs IA ? Cette action est irréversible.')) {
+      return;
+    }
+    try {
+      const result = await apiPost('/queue/purge-mine', { status: 'all' });
+      addToast({ type: 'success', message: result.message });
+      await loadJobs();
+    } catch (error) {
+      console.error('Failed to purge my jobs:', error);
+      addToast({ type: 'error', message: 'Erreur lors de la suppression de vos jobs' });
+    }
+  };
+
+  const handlePurgeAllJobsGlobal = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS les jobs (global) ? Cette action est irréversible.')) {
       return;
     }
     try {
@@ -104,8 +118,8 @@
       addToast({ type: 'success', message: result.message });
       await loadJobs();
     } catch (error) {
-      console.error('Failed to delete all jobs:', error);
-      addToast({ type: 'error', message: 'Erreur lors de la suppression de tous les jobs' });
+      console.error('Failed to purge ALL jobs (global):', error);
+      addToast({ type: 'error', message: 'Erreur lors de la suppression de tous les jobs (global)' });
     }
   };
 
@@ -218,13 +232,24 @@
             {#if activeTab === 'queue'}
               <button
                 class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                on:click={handleDeleteAllJobs}
-                title="Supprimer tous les jobs"
+                on:click={handlePurgeMyJobs}
+                title="Supprimer tous mes jobs"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                 </svg>
               </button>
+              {#if $session.user?.role === 'admin_app'}
+                <button
+                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  on:click={handlePurgeAllJobsGlobal}
+                  title="Supprimer tous les jobs (global)"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12h12"></path>
+                  </svg>
+                </button>
+              {/if}
             {/if}
             <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label="Fermer">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -6,7 +6,7 @@ import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
+import { companies, folders, useCases, jobQueue, ADMIN_WORKSPACE_ID, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -59,6 +59,7 @@ export interface Job {
   type: JobType;
   data: JobData;
   status: 'pending' | 'processing' | 'completed' | 'failed';
+  workspaceId?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -162,6 +163,51 @@ export class QueueManager {
     this.cancelAllInProgress = false;
   }
 
+  /**
+   * Best-effort: cancel any in-flight jobs for a specific workspace.
+   * This prevents leakage/cost when a user purges their own job history.
+   */
+  async cancelProcessingForWorkspace(workspaceId: string, reason: string = 'purge-mine'): Promise<void> {
+    // Mark DB rows as failed first (best-effort) so other readers see them as cancelled.
+    let processingIds: string[] = [];
+    try {
+      const rows = (await db.all(sql`
+        SELECT id FROM job_queue
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `)) as Array<{ id: string }>;
+      processingIds = rows.map((r) => r.id);
+    } catch (e) {
+      console.warn('⚠️ Failed to load processing jobs for workspace cancellation:', e);
+    }
+
+    if (processingIds.length === 0) return;
+
+    try {
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ${`Job cancelled by ${reason}`}
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `);
+    } catch (e) {
+      // ignore
+    }
+
+    for (const jobId of processingIds) {
+      const controller = this.jobControllers.get(jobId);
+      if (!controller) continue;
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore
+      }
+      try {
+        await this.notifyJobEvent(jobId);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   async drain(timeoutMs: number = 10000): Promise<void> {
     const start = Date.now();
     while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
@@ -172,16 +218,17 @@ export class QueueManager {
   /**
    * Ajouter un job à la queue
    */
-  async addJob(type: JobType, data: JobData): Promise<string> {
+  async addJob(type: JobType, data: JobData, opts?: { workspaceId?: string }): Promise<string> {
     if (this.cancelAllInProgress || this.paused) {
       console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
       throw new Error('Queue is paused or cancelling; job not accepted');
     }
     const jobId = createId();
+    const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
     
     await db.run(sql`
-      INSERT INTO job_queue (id, type, data, status, created_at)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
+      INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
+      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()}, ${workspaceId})
     `);
     await this.notifyJobEvent(jobId);
     
@@ -246,6 +293,18 @@ export class QueueManager {
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
+
+      // Safety: the job may have been purged between SELECT and processing start.
+      // If it no longer exists (or is no longer pending), don't execute any expensive work.
+      const [current] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, jobId))
+        .limit(1);
+      if (!current || current.status !== 'pending') {
+        console.log(`⏭️ Skipping job ${jobId}: missing or not pending (likely purged)`);
+        return;
+      }
       
       // Marquer comme en cours
       await db.run(sql`
@@ -477,7 +536,7 @@ export class QueueManager {
             useCaseName: useCaseName,
             folderId: folderId,
             model: selectedModel
-          });
+          }, { workspaceId });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
         }
@@ -645,7 +704,7 @@ export class QueueManager {
           await this.addJob('executive_summary', {
             folderId,
             model: selectedModel
-          });
+          }, { workspaceId: folder.workspaceId });
           console.log(`📝 Job executive_summary ajouté pour le dossier ${folderId}`);
         } catch (error) {
           console.error(`❌ Erreur lors de l'ajout du job executive_summary:`, error);
@@ -717,6 +776,7 @@ export class QueueManager {
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,
@@ -728,10 +788,11 @@ export class QueueManager {
   /**
    * Obtenir tous les jobs
    */
-  async getAllJobs(): Promise<Job[]> {
+  async getAllJobs(opts?: { workspaceId?: string }): Promise<Job[]> {
     const results = await db
       .select()
       .from(jobQueue)
+      .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
       .orderBy(desc(jobQueue.createdAt));
     
     return results.map((row) => ({
@@ -739,6 +800,7 @@ export class QueueManager {
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,

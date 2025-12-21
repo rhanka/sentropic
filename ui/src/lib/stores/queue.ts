@@ -67,7 +67,7 @@ export const retryJob = async (jobId: string): Promise<void> => {
 };
 
 export const deleteJob = async (jobId: string): Promise<void> => {
-  await apiDelete(`/queue/jobs/${jobId}/delete`);
+  await apiDelete(`/queue/jobs/${jobId}`);
 };
 
 // Actions du store
