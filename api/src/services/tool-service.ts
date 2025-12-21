@@ -40,6 +40,32 @@ function deepClone<T>(obj: T): T {
   return obj === undefined ? obj : (JSON.parse(JSON.stringify(obj)) as T);
 }
 
+function coerceMarkdownList(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const items = value
+    .map((v) => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object' && 'key' in (v as any)) return String((v as any).key ?? '');
+      return '';
+    })
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (items.length === 0) return null;
+  return items.map((s) => `- ${s}`).join('\n');
+}
+
+function coerceToolUpdateValue(pathSegments: string[], value: unknown): unknown {
+  // Guard: certains champs UI sont des strings markdown (pas des arrays d'objets).
+  if (pathSegments.length === 1) {
+    const field = pathSegments[0];
+    if (field === 'problem' || field === 'solution' || field === 'description') {
+      const asList = coerceMarkdownList(value);
+      if (asList) return asList;
+    }
+  }
+  return value;
+}
+
 function getAtPath(root: unknown, segments: string[]): unknown {
   let cur: unknown = root;
   for (const seg of segments) {
@@ -134,11 +160,12 @@ export class ToolService {
 
       // Récupérer l'ancienne valeur pour l'historique
       const oldValue = getAtPath(originalData, dataSegments);
+      const coercedValue = coerceToolUpdateValue(dataSegments, u.value);
       
       pathSegmentsList.push(dataSegments);
-      valuesList.push(u.value);
+      valuesList.push(coercedValue);
       
-      applied.push({ path: fullPath, oldValue, newValue: u.value });
+      applied.push({ path: fullPath, oldValue, newValue: coercedValue });
     }
 
     // Construire la requête SQL avec jsonb_set chaînés pour ne modifier que les champs spécifiés
