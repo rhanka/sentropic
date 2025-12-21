@@ -375,7 +375,7 @@
     <div class="rounded border border-slate-200 bg-white p-6">
       <p class="text-sm text-slate-600">Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.</p>
     </div>
-  {:else
+  {:else}
   
   <!-- Section Gestion des Prompts -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
