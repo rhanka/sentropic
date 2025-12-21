@@ -7,6 +7,8 @@
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
+  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
 
   let showCreate = false;
   let name = '';
@@ -58,6 +60,17 @@
         }
       }
     });
+
+    // Reload on admin workspace scope change
+    let lastScope = $adminWorkspaceScope.selectedId;
+    const unsub = adminWorkspaceScope.subscribe((s) => {
+      if (s.selectedId !== lastScope) {
+        lastScope = s.selectedId;
+        currentFolderId.set(null);
+        void loadFolders();
+      }
+    });
+    return () => unsub();
   });
 
   onDestroy(() => {
@@ -190,11 +203,18 @@
 </script>
 
 <section class="space-y-6">
+  {#if $adminReadOnlyScope}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Mode admin — workspace partagé : <b>lecture seule</b> (création / suppression désactivées).
+    </div>
+  {/if}
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Dossiers</h1>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => (showCreate = true)}>
-      Nouveau dossier
-    </button>
+    {#if !$adminReadOnlyScope}
+      <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => (showCreate = true)}>
+        Nouveau dossier
+      </button>
+    {/if}
   </div>
       {#if isLoading}
         <div class="rounded border border-blue-200 bg-blue-50 p-4">
@@ -241,15 +261,17 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                     </svg>
                   </button>
-                  <button 
-                    class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                    on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
-                    title="Supprimer"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                  </button>
+                  {#if !$adminReadOnlyScope}
+                    <button 
+                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
+                      title="Supprimer"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  {/if}
                 </div>
               </div>
               

@@ -10,6 +10,9 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
+  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -42,6 +45,10 @@
     if (shouldGenerate && context) {
       // Nettoyer l'URL pour éviter la regénération
       goto('/cas-usage', { replaceState: true });
+      if ($adminReadOnlyScope) {
+        addToast({ type: 'warning', message: 'Mode lecture seule (workspace partagé) : génération désactivée.' });
+        return;
+      }
       // Lancer la génération
       await startGeneration(context, createNewFolder, companyId);
     } else if ($currentFolderId) {
@@ -80,6 +87,17 @@
         }
       }
     });
+
+    // Reload on admin workspace scope change
+    let lastScope = $adminWorkspaceScope.selectedId;
+    const unsub = adminWorkspaceScope.subscribe((s) => {
+      if (s.selectedId !== lastScope) {
+        lastScope = s.selectedId;
+        currentFolderId.set(null);
+        void loadUseCases();
+      }
+    });
+    return () => unsub();
   });
 
   onDestroy(() => {
@@ -97,7 +115,9 @@
       // Charger la matrice si on a un dossier sélectionné
       if ($currentFolderId) {
         try {
-          const folder = await apiGet(`/folders/${$currentFolderId}`);
+          const scoped = getScopedWorkspaceIdForAdmin();
+          const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+          const folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
           matrix = folder.matrixConfig;
         } catch (err) {
           console.error('Failed to load matrix:', err);
@@ -204,6 +224,11 @@
 </script>
 
 <section class="space-y-6">
+  {#if $adminReadOnlyScope}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Mode admin — workspace partagé : <b>lecture seule</b> (suppression / génération désactivées).
+    </div>
+  {/if}
   <h1 class="text-3xl font-semibold">Cas d'usage</h1>
   
   {#if isLoading}
@@ -233,15 +258,17 @@
           <div class="flex-1 min-w-0">
             <h2 class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}">{useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}</h2>
           </div>
-          <button 
-            class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-            on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
-            title="Supprimer"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-          </button>
+          {#if !$adminReadOnlyScope}
+            <button 
+              class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
+              title="Supprimer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          {/if}
         </div>
         
         <!-- Body -->

@@ -5,6 +5,8 @@
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';
+  import { adminWorkspaceScope, loadAdminWorkspaces, setAdminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
+  import { onMount } from 'svelte';
 
   let showUserMenu = false;
 
@@ -50,6 +52,12 @@
       return key;
     }
   };
+
+  onMount(() => {
+    if ($isAuthenticated && $session.user?.role === 'admin_app') {
+      void loadAdminWorkspaces();
+    }
+  });
 </script>
 
 <header class="border-b border-slate-200 bg-white">
@@ -75,6 +83,22 @@
       {/if}
     </nav>
     <div class="flex items-center gap-3">
+      {#if $isAuthenticated && $session.user?.role === 'admin_app'}
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+          Workspace:
+          <select
+            class="rounded border border-slate-200 px-2 py-1 text-sm"
+            bind:value={$adminWorkspaceScope.selectedId}
+            on:change={(e) => setAdminWorkspaceScope((e.currentTarget as HTMLSelectElement).value)}
+            title="Contexte de lecture (admin)"
+          >
+            <option value={ADMIN_WORKSPACE_ID}>Admin Workspace</option>
+            {#each $adminWorkspaceScope.items.filter((w) => w.id !== ADMIN_WORKSPACE_ID) as ws (ws.id)}
+              <option value={ws.id}>{ws.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <select class="rounded border border-slate-200 px-2 py-1 text-sm" on:change={onLocaleChange}>
         <option value="fr">FR</option>
         <option value="en">EN</option>

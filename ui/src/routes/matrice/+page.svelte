@@ -9,6 +9,8 @@
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
+  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -52,7 +54,9 @@
 
     isLoading = true;
     try {
-      const folder = await apiGet(`/folders/${$currentFolderId}`);
+      const scoped = getScopedWorkspaceIdForAdmin();
+      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+      const folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
       
       if (folder.matrixConfig) {
         const matrix = typeof folder.matrixConfig === 'string' 
@@ -286,6 +290,7 @@
    * - Par NavigationGuard lors de la navigation (via unsavedChangesStore.saveAll)
    */
   const saveMatrix = async () => {
+    if ($adminReadOnlyScope) return;
     if (!$currentFolderId || isSavingMatrix) return;
     
     isSavingMatrix = true;
@@ -321,6 +326,10 @@
   };
 
   const saveChanges = async () => {
+    if ($adminReadOnlyScope) {
+      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      return;
+    }
     if (!$currentFolderId) return;
     
     try {
@@ -456,6 +465,12 @@
   };
 
   const handleCloseWarningSave = async () => {
+    if ($adminReadOnlyScope) {
+      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      showCloseWarning = false;
+      showDescriptionsDialog = false;
+      return;
+    }
     try {
       await unsavedChangesStore.saveAll();
       showCloseWarning = false;
@@ -528,7 +543,9 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const data = await apiGet<{ items: Folder[] }>('/folders/list/with-matrices');
+      const scoped = getScopedWorkspaceIdForAdmin();
+      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+      const data = await apiGet<{ items: Folder[] }>(`/folders/list/with-matrices${qs}`);
       availableFolders = data.items.filter((folder) => folder.hasMatrix && folder.id !== $currentFolderId);
     } catch (error) {
       console.error('Failed to load folders:', error);
@@ -536,6 +553,10 @@
   };
 
   const createNewMatrix = async () => {
+    if ($adminReadOnlyScope) {
+      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      return;
+    }
     console.log('createNewMatrix called, currentFolderId:', $currentFolderId);
     if (!$currentFolderId) {
       console.log('No currentFolderId, returning');
@@ -552,7 +573,9 @@
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
-        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix`);
+        const scoped = getScopedWorkspaceIdForAdmin();
+        const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix${qs}`);
       } else if (createMatrixType === 'blank') {
         // Évaluation vierge
         matrixToUse = {
@@ -594,6 +617,12 @@
 
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
+
+  {#if $adminReadOnlyScope}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
+      Mode admin — workspace partagé : <b>lecture seule</b> (édition désactivée).
+    </div>
+  {/if}
   
   {#if $currentFolderId}
     <p class="text-gray-600 -mt-4 mb-6">

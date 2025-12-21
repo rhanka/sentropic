@@ -16,6 +16,7 @@
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
+  import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 
@@ -136,9 +137,15 @@
   // Clear all user-scoped stores when the authenticated user changes (incl. logout),
   // to prevent cross-account data "bleed" in the UI.
   let lastUserId: string | null = null;
+  let lastAdminScope: string | null = null;
   $: {
     const currentUserId = $session.user?.id ?? null;
-    if (currentUserId !== lastUserId) {
+    const currentScope =
+      $session.user?.role === 'admin_app'
+        ? ($adminWorkspaceScope.selectedId ?? ADMIN_WORKSPACE_ID)
+        : null;
+
+    if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
       streamHub.reset();
       companiesStore.set([]);
       currentCompanyId.set(null);
@@ -148,6 +155,7 @@
       queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
       me.set({ loading: false, data: null, error: null });
       lastUserId = currentUserId;
+      lastAdminScope = currentScope;
     }
   }
 

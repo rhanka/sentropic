@@ -29,15 +29,20 @@ export const companiesStore = writable<Company[]>([]);
 export const currentCompanyId = writable<string | null>(null);
 
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
 // Fonctions API
 export const fetchCompanies = async (): Promise<Company[]> => {
-  const data = await apiGet<{ items: Company[] }>('/companies');
+  const scoped = getScopedWorkspaceIdForAdmin();
+  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+  const data = await apiGet<{ items: Company[] }>(`/companies${qs}`);
   return data.items;
 };
 
 export const fetchCompanyById = async (id: string): Promise<Company> => {
-  return await apiGet<Company>(`/companies/${id}`);
+  const scoped = getScopedWorkspaceIdForAdmin();
+  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+  return await apiGet<Company>(`/companies/${id}${qs}`);
 };
 
 export const createCompany = async (company: Omit<Company, 'id'>): Promise<Company> => {

@@ -10,6 +10,7 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
   let useCase: any = undefined;
   let error = '';
@@ -99,7 +100,9 @@
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      useCase = await apiGet(`/use-cases/${useCaseId}`);
+      const scoped = getScopedWorkspaceIdForAdmin();
+      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+      useCase = await apiGet(`/use-cases/${useCaseId}${qs}`);
       
       // Mettre à jour le store avec les données fraîches
       useCasesStore.update(items => 
@@ -145,7 +148,9 @@
     
     try {
       // Charger la matrice depuis le dossier
-      const folder = await apiGet(`/folders/${useCase.folderId}`);
+      const scoped = getScopedWorkspaceIdForAdmin();
+      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+      const folder = await apiGet(`/folders/${useCase.folderId}${qs}`);
       matrix = folder.matrixConfig;
       
       // Extraire les scores depuis data (avec fallback rétrocompatibilité)

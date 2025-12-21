@@ -1,6 +1,15 @@
 import { API_BASE_URL } from '$lib/config';
-import { get } from 'svelte/store';
 import { isAuthenticated } from '$lib/stores/session';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+
+function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => void }): T {
+  let value!: T;
+  const unsub = store.subscribe((v: T) => {
+    value = v;
+  });
+  unsub();
+  return value;
+}
 
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
@@ -216,7 +225,7 @@ class StreamHub {
 
   private async ensureConnected() {
     // pas d'auth => pas de SSE
-    if (!get(isAuthenticated)) {
+    if (!getStoreValue(isAuthenticated)) {
       this.close();
       return;
     }
@@ -228,6 +237,8 @@ class StreamHub {
     }
 
     const urlObj = new URL(`${API_BASE_URL}/streams/sse`);
+    const scoped = getScopedWorkspaceIdForAdmin();
+    if (scoped) urlObj.searchParams.set('workspace_id', scoped);
     // Opt-in stream events: pass only the streamIds that are actually subscribed.
     // This prevents the server from streaming chat_stream_events globally.
     const streamIds = new Set<string>();

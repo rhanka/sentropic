@@ -53,12 +53,15 @@ export type UseCase = {
 export const useCasesStore = writable<UseCase[]>([]);
 
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
 // Fonctions API
 export const fetchUseCases = async (folderId?: string): Promise<UseCase[]> => {
-  const url = folderId 
-    ? `/use-cases?folder_id=${folderId}`
-    : '/use-cases';
+  const scoped = getScopedWorkspaceIdForAdmin();
+  const qsScope = scoped ? `workspace_id=${encodeURIComponent(scoped)}` : '';
+  const qsFolder = folderId ? `folder_id=${encodeURIComponent(folderId)}` : '';
+  const qs = [qsFolder, qsScope].filter(Boolean).join('&');
+  const url = qs ? `/use-cases?${qs}` : '/use-cases';
   
   const data = await apiGet<{ items: UseCase[] }>(url);
   return data.items;
