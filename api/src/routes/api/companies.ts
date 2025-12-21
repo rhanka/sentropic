@@ -3,11 +3,12 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db, pool } from '../../db/client';
 import { companies, folders, useCases } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichCompany } from '../../services/context-company';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { requireEditor } from '../../middleware/rbac';
 
 // Fonction d'enrichissement asynchrone (désactivée, utilisation directe de enrichCompany)
 // async function enrichCompanyAsync(companyId: string, companyName: string, model: string = 'gpt-4.1-nano') {
@@ -65,39 +66,50 @@ async function notifyCompanyEvent(companyId: string): Promise<void> {
 }
 
 companiesRouter.get('/', async (c) => {
-  const rows = await db.select().from(companies);
+  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const rows = await db.select().from(companies).where(eq(companies.workspaceId, workspaceId));
   return c.json({ items: rows });
 });
 
-companiesRouter.post('/', zValidator('json', companyInput), async (c) => {
+companiesRouter.post('/', requireEditor, zValidator('json', companyInput), async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
-  await db.insert(companies).values({ id, ...payload });
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  await db.insert(companies).values({ id, workspaceId, ...payload });
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   await notifyCompanyEvent(id);
   return c.json(company, 201);
 });
 
 // POST /api/v1/companies/draft - Créer une entreprise en mode brouillon
-companiesRouter.post('/draft', zValidator('json', z.object({
+companiesRouter.post('/draft', requireEditor, zValidator('json', z.object({
   name: z.string().min(1)
 })), async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const { name } = c.req.valid('json');
   const id = createId();
   
   await db.insert(companies).values({
     id,
+    workspaceId,
     name,
     status: 'draft'
   });
   
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   await notifyCompanyEvent(id);
   return c.json(company, 201);
 });
 
 // POST /api/v1/companies/:id/enrich - Enrichir une entreprise de manière asynchrone
-companiesRouter.post('/:id/enrich', async (c) => {
+companiesRouter.post('/:id/enrich', requireEditor, async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
   
@@ -107,7 +119,10 @@ companiesRouter.post('/:id/enrich', async (c) => {
   
   try {
     // Récupérer l'entreprise
-    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
     if (!company) {
       return c.json({ message: 'Entreprise non trouvée' }, 404);
     }
@@ -115,7 +130,7 @@ companiesRouter.post('/:id/enrich', async (c) => {
     // Mettre à jour le statut à "enriching"
     await db.update(companies)
       .set({ status: 'enriching' })
-      .where(eq(companies.id, id));
+      .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
     await notifyCompanyEvent(id);
     
     // Ajouter le job à la queue
@@ -141,21 +156,26 @@ companiesRouter.post('/:id/enrich', async (c) => {
 });
 
 companiesRouter.get('/:id', async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) {
     return c.json({ message: 'Not found' }, 404);
   }
   return c.json(company);
 });
 
-companiesRouter.put('/:id', zValidator('json', companyInput.partial()), async (c) => {
+companiesRouter.put('/:id', requireEditor, zValidator('json', companyInput.partial()), async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
   const updated = await db
     .update(companies)
     .set(payload)
-    .where(eq(companies.id, id))
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)))
     .returning();
   if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
@@ -170,7 +190,7 @@ const aiEnrichInput = z.object({
   model: z.string().optional()
 });
 
-companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) => {
+companiesRouter.post('/ai-enrich', requireEditor, zValidator('json', aiEnrichInput), async (c) => {
   try {
   const { name, model } = c.req.valid('json');
   const selectedModel = model || 'gpt-4.1-nano';
@@ -192,19 +212,29 @@ companiesRouter.post('/ai-enrich', zValidator('json', aiEnrichInput), async (c) 
 });
 
 // DELETE /api/v1/companies/:id - Supprimer une entreprise
-companiesRouter.delete('/:id', async (c) => {
+companiesRouter.delete('/:id', requireEditor, async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   
   try {
     // Vérifier que l'entreprise existe
-    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
     if (!company) {
       return c.json({ message: 'Entreprise non trouvée' }, 404);
     }
     
     // Vérifier s'il y a des dépendances
-    const relatedFolders = await db.select().from(folders).where(eq(folders.companyId, id));
-    const relatedUseCases = await db.select().from(useCases).where(eq(useCases.companyId, id));
+    const relatedFolders = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.companyId, id), eq(folders.workspaceId, workspaceId)));
+    const relatedUseCases = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.companyId, id), eq(useCases.workspaceId, workspaceId)));
     
     // Si des dépendances existent, retourner une erreur 409 (Conflict)
     if (relatedFolders.length > 0 || relatedUseCases.length > 0) {
@@ -219,7 +249,7 @@ companiesRouter.delete('/:id', async (c) => {
     }
     
     // Supprimer l'entreprise
-    await db.delete(companies).where(eq(companies.id, id));
+    await db.delete(companies).where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
     await notifyCompanyEvent(id);
     
     return c.body(null, 204);

@@ -7,6 +7,7 @@ import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
+import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { chatRouter } from './chat';
 import promptsRouter from './prompts';
@@ -21,17 +22,21 @@ export const apiRouter = new Hono();
 apiRouter.route('/health', healthRouter);
 
 // Editor routes (require editor role or higher)
-apiRouter.use('/companies/*', requireAuth, requireEditor);
+apiRouter.use('/companies/*', requireAuth);
 apiRouter.route('/companies', companiesRouter);
 
-apiRouter.use('/folders/*', requireAuth, requireEditor);
+apiRouter.use('/folders/*', requireAuth);
 apiRouter.route('/folders', foldersRouter);
 
-apiRouter.use('/use-cases/*', requireAuth, requireEditor);
+apiRouter.use('/use-cases/*', requireAuth);
 apiRouter.route('/use-cases', useCasesRouter);
 
-apiRouter.use('/analytics/*', requireAuth, requireEditor);
+apiRouter.use('/analytics/*', requireAuth);
 apiRouter.route('/analytics', analyticsRouter);
+
+// User self-service routes
+apiRouter.use('/me/*', requireAuth);
+apiRouter.route('/me', meRouter);
 
 // Streaming routes (require editor role or higher)
 apiRouter.use('/streams/*', requireAuth, requireEditor);

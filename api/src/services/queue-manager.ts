@@ -1,5 +1,5 @@
 import { db, pool } from '../db/client';
-import { sql, eq, desc } from 'drizzle-orm';
+import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
@@ -346,6 +346,16 @@ export class QueueManager {
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, input, companyId, model } = data;
+
+    const [folder] = await db
+      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (!folder) {
+      throw new Error('Folder not found');
+    }
+    const workspaceId = folder.workspaceId;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -355,7 +365,10 @@ export class QueueManager {
     let companyInfo = '';
     if (companyId) {
       try {
-        const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId)));
         if (company) {
           companyInfo = JSON.stringify({
             name: company.name,
@@ -416,6 +429,7 @@ export class QueueManager {
       };
       return {
         id: createId(),
+        workspaceId,
         folderId: folderId,
         companyId: companyId || null,
         data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
@@ -550,7 +564,10 @@ export class QueueManager {
     }
     
     // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
-    const [existingUseCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    const [existingUseCase] = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
     let existingData: Partial<UseCaseData> = {};
     if (existingUseCase?.data) {
       try {
@@ -596,16 +613,22 @@ export class QueueManager {
         model: selectedModel,
         status: 'completed'
       })
-      .where(eq(useCases.id, useCaseId));
+      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
     await this.notifyUseCaseEvent(useCaseId);
 
     // Vérifier si tous les use cases du dossier sont complétés
-    const allUseCases = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+    const allUseCases = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, folder.workspaceId)));
     const allCompleted = allUseCases.length > 0 && allUseCases.every(uc => uc.status === 'completed');
 
     if (allCompleted) {
       // Vérifier si une synthèse exécutive existe déjà
-      const [currentFolder] = await db.select().from(folders).where(eq(folders.id, folderId));
+      const [currentFolder] = await db
+        .select()
+        .from(folders)
+        .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
       const hasExecutiveSummary = currentFolder?.executiveSummary;
 
       if (!hasExecutiveSummary) {
@@ -614,7 +637,7 @@ export class QueueManager {
         // Mettre à jour le statut du dossier
         await db.update(folders)
           .set({ status: 'generating' })
-          .where(eq(folders.id, folderId));
+          .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
         await this.notifyFolderEvent(folderId);
 
         // Ajouter le job de génération de synthèse exécutive

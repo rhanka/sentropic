@@ -9,21 +9,25 @@ Define and implement an onboarding and authorization model where:
 - users can deactivate or permanently delete their account (immediate data deletion).
 
 ## Plan / Todo
-- [ ] Write spec: `spec/SPEC_ADMIN_USERS.md` (source of truth for this feature).
-- [ ] Align existing RBAC model (roles) with new account status/approval rules.
-- [ ] Data model proposal (workspaces + ownership / sharing flags) + migration plan.
-- [ ] API surface proposal (me/workspace/admin approval endpoints) + security constraints.
-- [ ] UI proposal (Settings: workspace, privacy, account; Admin panel: approvals).
-- [ ] Test plan (unit/integration/e2e) focusing on tenancy boundaries (IDOR) and approval expiry.
+- [x] Write spec: `spec/SPEC_ADMIN_USERS.md` (source of truth for this feature).
+- [x] Align RBAC with account-status rules (trial + approval window).
+- [x] Data model: `workspaces` + `workspace_id` scoping (private-by-default).
+- [x] Migrations: add workspaces + backfill via default Admin Workspace.
+- [x] API enforcement: systematic workspace scoping (anti-IDOR) across main resources.
+- [x] Admin approval APIs (approve/reactivate/disable/list users) + audit fields.
+- [x] User self-service APIs (`/me`: workspace privacy, deactivate, delete account).
+- [x] Test updates: unit/api/ai tests adjusted to tenancy + new onboarding rules.
+- [ ] UI: Settings (workspace privacy, account deactivate/delete), Admin panel (approvals).
+- [ ] E2E tests for tenancy boundaries + approval expiry downgrade (guest) + blocking if email not verified.
 
 ## Commits & Progress
-- [ ] **Commit 1**: docs(spec): add SPEC_ADMIN_USERS.md
-- [ ] **Commit 2**: docs: update TODO.md (check item + reference)
-- [ ] **Commit 3+**: (implementation to follow after spec approval)
+- [ ] **Commit set**: docs + tooling + db + auth + api + tests (see `git log`)
 
 ## Status
-- **Progress**: 0/?
-- **Current**: Writing spec
-- **Next**: Validate open questions (exact meaning of "unlimited usage profile", admin scope expectations, migration strategy for existing shared data)
+- **Progress**: backend ✅ / UI ⏳
+- **Current**: Backend implemented (workspaces + approval), including `/api/v1/admin/users/*` and `/api/v1/me/*`; tests passing locally.
+- **Next**:
+  - UI screens + flows (trial banner, pending approval, expired downgrade to guest)
+  - Account suppression UX (confirmations) + E2E tests
 
 
