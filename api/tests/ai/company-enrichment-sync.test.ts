@@ -111,10 +111,10 @@ describe('Company Enrichment - Sync', () => {
     const adminUser = await createAuthenticatedUser('admin_app');
     let jobCompleted = false;
     let attempts = 0;
-    const maxAttempts = 15; // 15 * 1s = 15s max
+    const maxAttempts = 60; // up to ~120s (async enrichment can be slow depending on external calls)
 
     while (!jobCompleted && attempts < maxAttempts) {
-      await sleep(1000);
+      await sleep(2000);
 
       const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
       expect(jobsRes.status).toBe(200);
@@ -151,5 +151,5 @@ describe('Company Enrichment - Sync', () => {
     await cleanupAuthData(); // Cleanup admin user
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
     await db.delete(companies).where(eq(companies.id, companyId));
-  }, 20000); // 20 seconds timeout
+  }, 120000); // 2 minutes timeout
 });
