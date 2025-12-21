@@ -423,7 +423,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',
-              { tool_call_id: toolCall.id, result },
+              // Normaliser pour l'UI: toujours fournir result.status
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as any) } },
               streamSeq,
               options.assistantMessageId
             );
@@ -448,7 +449,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',
-              { tool_call_id: toolCall.id, result },
+              // Normaliser pour l'UI: toujours fournir result.status
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as any) } },
               streamSeq,
               options.assistantMessageId
             );

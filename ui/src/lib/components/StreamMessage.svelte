@@ -32,6 +32,7 @@
     auxText: string;
     contentText: string;
     toolArgsById: Record<string, string>;
+    toolNameById: Record<string, string>;
     toolCallIds: Set<string>;
     sawReasoning: boolean;
     sawTools: boolean;
@@ -48,6 +49,7 @@
     auxText: '',
     contentText: '',
     toolArgsById: {},
+    toolNameById: {},
     toolCallIds: new Set<string>(),
     sawReasoning: false,
     sawTools: false,
@@ -128,6 +130,7 @@
       st.stepTitle = `Outil: ${name}`;
       const toolId = String(data?.tool_call_id ?? '').trim();
       if (toolId) st.toolCallIds.add(toolId);
+      if (toolId && name && name !== 'unknown') st.toolNameById[toolId] = name;
       const args = String(data?.args ?? '').trim();
       if (args) st.auxText = args;
       upsertStep(`Outil: ${name}`, args || undefined);
@@ -138,17 +141,21 @@
       const delta = String(data?.delta ?? '');
       if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
       st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
-      st.stepTitle = 'Outil (args)';
+      const toolName = st.toolNameById[toolId];
+      st.stepTitle = toolName ? `Outil: ${toolName} (args)` : 'Outil (args)';
       st.auxText = st.toolArgsById[toolId];
-      upsertStep(`Outil: ${toolId} (args)`, st.auxText);
+      upsertStep(`Outil: ${toolName || toolId} (args)`, st.auxText);
     } else if (eventType === 'tool_call_result') {
       st.sawTools = true;
       st.sawStarted = false;
-      const status = String(data?.result?.status ?? 'unknown');
+      const status = String(data?.result?.status ?? (data?.result ? 'completed' : 'unknown'));
       const err = data?.result?.error;
-      st.stepTitle = err ? 'Outil: erreur' : `Outil: ${status}`;
+      const toolId = String(data?.tool_call_id ?? '').trim();
+      const toolName = toolId ? st.toolNameById[toolId] : undefined;
+      const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
+      st.stepTitle = `Outil: ${label}`;
       if (err) st.auxText = String(err);
-      upsertStep(`Outil: ${err ? 'erreur' : status}`, err ? String(err) : undefined);
+      upsertStep(`Outil: ${label}`, err ? String(err) : undefined);
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepTitle = 'Réponse';
@@ -166,7 +173,7 @@
       applyEvent(ev.eventType, ev.data, ev.sequence, ev.createdAt);
     }
     // trigger rerender for Set/Record updates
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, steps: [...st.steps] };
+    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, toolNameById: { ...st.toolNameById }, steps: [...st.steps] };
   };
 
   const hydrateHistory = async () => {
@@ -248,6 +255,7 @@
       auxText: '',
       contentText: '',
       toolArgsById: {},
+      toolNameById: {},
       toolCallIds: new Set<string>(),
       sawReasoning: false,
       sawTools: false,
