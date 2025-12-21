@@ -65,6 +65,14 @@
           >{translate(item.label)}</a
         >
       {/each}
+      {#if $isAuthenticated && $session.user?.role === 'admin_app'}
+        <a
+          href="/admin/utilisateurs"
+          class:active-link={$currentPath.startsWith('/admin')}
+          class="rounded px-2 py-1 transition text-slate-600 hover:bg-slate-100"
+          >{translate('nav.admin')}</a
+        >
+      {/if}
     </nav>
     <div class="flex items-center gap-3">
       <select class="rounded border border-slate-200 px-2 py-1 text-sm" on:change={onLocaleChange}>

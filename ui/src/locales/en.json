@@ -8,6 +8,7 @@
     "matrix": "Evaluation",
     "dashboard": "Dashboard",
     "data": "Data",
-    "settings": "Settings"
+    "settings": "Settings",
+    "admin": "Admin"
   }
 }
