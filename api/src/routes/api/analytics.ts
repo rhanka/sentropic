@@ -116,7 +116,7 @@ analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', exe
       valueThreshold: value_threshold,
       complexityThreshold: complexity_threshold,
       model: selectedModel
-    });
+    }, { workspaceId });
 
     return c.json({
       success: true,

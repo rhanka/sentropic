@@ -95,6 +95,10 @@ export const jobQueue = pgTable('job_queue', {
   id: text('id').primaryKey(),
   type: text('type').notNull(), // 'use_case_list' | 'use_case_detail'
   status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'completed' | 'failed'
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   data: text('data').notNull(), // JSON string
   result: text('result'), // JSON string
   error: text('error'),

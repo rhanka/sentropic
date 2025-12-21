@@ -109,7 +109,7 @@ chatRouter.post('/messages', zValidator('json', createMessageInput), async (c) =
     sessionId: created.sessionId,
     assistantMessageId: created.assistantMessageId,
     model: created.model
-  });
+  }, { workspaceId: user.workspaceId });
 
   return c.json({
     sessionId: created.sessionId,

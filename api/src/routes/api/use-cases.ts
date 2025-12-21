@@ -528,7 +528,7 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
       input,
       companyId: company_id,
       model: selectedModel
-    });
+    }, { workspaceId });
     
     return c.json({
       success: true,
@@ -609,7 +609,7 @@ useCasesRouter.post('/:id/detail', requireEditor, zValidator('json', detailInput
       useCaseName,
       folderId: useCase.folderId,
       model: selectedModel
-    });
+    }, { workspaceId });
     
     return c.json({
       success: true,

@@ -138,7 +138,7 @@ companiesRouter.post('/:id/enrich', requireEditor, async (c) => {
       companyId: id,
       companyName: company.name,
       model: selectedModel
-    });
+    }, { workspaceId });
     
     return c.json({ 
       success: true, 

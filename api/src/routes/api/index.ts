@@ -63,5 +63,7 @@ apiRouter.route('/ai-settings', aiSettingsRouter);
 apiRouter.use('/admin/*', requireAuth, requireRole('admin_app'));
 apiRouter.route('/admin', adminRouter);
 
-apiRouter.use('/queue/*', requireAuth, requireRole('admin_app'));
+// Queue monitoring is workspace-scoped and available to authenticated users.
+// Destructive actions remain admin-only at the router level.
+apiRouter.use('/queue/*', requireAuth);
 apiRouter.route('/queue', queueRouter);
