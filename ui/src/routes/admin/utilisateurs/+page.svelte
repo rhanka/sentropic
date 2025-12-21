@@ -171,6 +171,15 @@
                       <button class="rounded bg-rose-600 px-2 py-1 text-white" on:click={() => disable(u.id)}>
                         Disable
                       </button>
+                      {#if u.workspaceId && u.shareWithAdmin}
+                        <a
+                          class="rounded bg-slate-900 px-2 py-1 text-white"
+                          href={`/admin/workspaces/${u.workspaceId}`}
+                          title="Ouvrir ce workspace (partagé)"
+                        >
+                          Voir workspace
+                        </a>
+                      {/if}
                     </div>
                   </td>
                 </tr>
