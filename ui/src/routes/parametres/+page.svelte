@@ -6,6 +6,13 @@
   import { get } from 'svelte/store';
   import { session } from '$lib/stores/session';
   import { deactivateAccount, deleteAccount, loadMe, me, updateMe } from '$lib/stores/me';
+  import {
+    adminWorkspaceScope,
+    loadAdminWorkspaces,
+    setAdminWorkspaceScope,
+    ADMIN_WORKSPACE_ID,
+    adminReadOnlyScope
+  } from '$lib/stores/adminWorkspaceScope';
 
   interface Prompt {
     id: string;
@@ -45,6 +52,9 @@
 
   onMount(async () => {
     await loadMe();
+    if (isAdminApp()) {
+      void loadAdminWorkspaces();
+    }
     if (isAdmin()) {
     await loadPrompts();
     await loadAISettings();
@@ -55,6 +65,11 @@
   const isAdmin = () => {
     const s = get(session);
     return s.user?.role === 'admin_app' || s.user?.role === 'admin_org';
+  };
+
+  const isAdminApp = () => {
+    const s = get(session);
+    return s.user?.role === 'admin_app';
   };
 
   let savingWorkspace = false;
@@ -340,6 +355,29 @@
         <div class="rounded border border-slate-200 p-4">
           <h3 class="font-medium">Workspace</h3>
           <div class="mt-3 space-y-3">
+            {#if $session.user?.role === 'admin_app'}
+              <label class="block text-sm">
+                <div class="text-slate-600">Contexte admin (lecture)</div>
+                <select
+                  class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
+                  bind:value={$adminWorkspaceScope.selectedId}
+                  on:change={(e) => setAdminWorkspaceScope((e.currentTarget as HTMLSelectElement).value)}
+                >
+                  <option value={ADMIN_WORKSPACE_ID}>Admin Workspace</option>
+                  {#each $adminWorkspaceScope.items.filter((w) => w.id !== ADMIN_WORKSPACE_ID) as ws (ws.id)}
+                    <option value={ws.id}>
+                      {(ws.ownerEmail || ws.ownerUserId || '—') + ' — ' + (ws.name || ws.id)}
+                    </option>
+                  {/each}
+                </select>
+                {#if $adminReadOnlyScope}
+                  <p class="mt-2 text-xs text-amber-700">
+                    Workspace partagé : <b>lecture seule</b> (actions destructives désactivées).
+                  </p>
+                {/if}
+              </label>
+              <div class="border-t border-slate-100 pt-3"></div>
+            {/if}
             <label class="block text-sm">
               <div class="text-slate-600">Nom</div>
               <input class="mt-1 w-full rounded border border-slate-200 px-3 py-2" bind:value={workspaceName} />

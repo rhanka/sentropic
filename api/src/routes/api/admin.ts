@@ -103,8 +103,10 @@ adminRouter.get('/workspaces', async (c) => {
       name: workspaces.name,
       shareWithAdmin: workspaces.shareWithAdmin,
       ownerUserId: workspaces.ownerUserId,
+      ownerEmail: users.email,
     })
     .from(workspaces)
+    .leftJoin(users, eq(workspaces.ownerUserId, users.id))
     .where(
       // keep it simple: either admin workspace or shareWithAdmin=true
       sql`${workspaces.id} = ${ADMIN_WORKSPACE_ID} OR ${workspaces.shareWithAdmin} = true`

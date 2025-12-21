@@ -46,6 +46,7 @@ const EVENT_TYPES = [
 class StreamHub {
   private subs = new Map<string, Subscription>();
   private es: EventSource | null = null;
+  private currentUrl: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
   private lastJobEventById = new Map<string, StreamHubEvent>();
@@ -135,6 +136,7 @@ class StreamHub {
       this.es.close();
       this.es = null;
     }
+    this.currentUrl = null;
   }
 
   private dispatch(event: StreamHubEvent) {
@@ -247,10 +249,11 @@ class StreamHub {
     }
     for (const id of streamIds) urlObj.searchParams.append('streamIds', id);
     const url = urlObj.toString();
-    if (this.es) return;
+    if (this.es && this.currentUrl === url) return;
 
     this.close();
     this.es = new EventSource(url, { withCredentials: true } as any);
+    this.currentUrl = url;
 
     const handle = (type: string, raw: MessageEvent) => {
       try {

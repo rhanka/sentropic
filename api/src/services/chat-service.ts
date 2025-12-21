@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { chatMessages, chatSessions, chatStreamEvents } from '../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -256,7 +256,9 @@ export class ChatService {
 
     const ownerWs = await ensureWorkspaceForUser(options.userId);
     const sessionWorkspaceId = (session as any)?.workspaceId ?? ownerWs.workspaceId;
-    const readOnly = sessionWorkspaceId !== ownerWs.workspaceId;
+    // Read-only mode when the chat session is scoped to a different workspace,
+    // except for the Admin Workspace (admin_app only can target it via API).
+    const readOnly = sessionWorkspaceId !== ownerWs.workspaceId && sessionWorkspaceId !== ADMIN_WORKSPACE_ID;
 
     // Charger messages (sans inclure le placeholder assistant)
     const messages = await db

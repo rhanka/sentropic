@@ -11,6 +11,7 @@ export type AdminWorkspace = {
   name: string;
   shareWithAdmin: boolean;
   ownerUserId: string | null;
+  ownerEmail?: string | null;
 };
 
 type State = {
@@ -57,7 +58,17 @@ export async function loadAdminWorkspaces(): Promise<void> {
     const data = await res.json();
     if (!res.ok) throw new Error(data?.message ?? data?.error ?? `HTTP ${res.status}`);
     const items = Array.isArray(data?.items) ? (data.items as AdminWorkspace[]) : [];
-    adminWorkspaceScope.update((st) => ({ ...st, loading: false, items, error: null }));
+    adminWorkspaceScope.update((st) => {
+      const selectedId = st.selectedId || ADMIN_WORKSPACE_ID;
+      const allowed = selectedId === ADMIN_WORKSPACE_ID || items.some((w) => w.id === selectedId);
+      return {
+        ...st,
+        loading: false,
+        items,
+        selectedId: allowed ? selectedId : ADMIN_WORKSPACE_ID,
+        error: null
+      };
+    });
   } catch (e: any) {
     adminWorkspaceScope.update((st) => ({ ...st, loading: false, error: e?.message ?? 'Erreur chargement workspaces' }));
   }
