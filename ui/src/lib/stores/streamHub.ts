@@ -48,6 +48,20 @@ class StreamHub {
   private maxStreamIds = 50;
   private maxEventsPerStream = 50;
 
+  /**
+   * Clear all cached/replayed events and close the current SSE connection.
+   * Useful on logout / user switch to prevent cross-account "ghost" updates.
+   */
+  reset() {
+    this.lastJobEventById.clear();
+    this.lastCompanyEventById.clear();
+    this.lastFolderEventById.clear();
+    this.lastUseCaseEventById.clear();
+    this.streamHistoryById.clear();
+    this.close();
+    this.scheduleReconnect();
+  }
+
   set(key: string, onEvent: (event: StreamHubEvent) => void) {
     this.subs.set(key, { onEvent });
     // Replay immédiat du cache vers ce subscriber

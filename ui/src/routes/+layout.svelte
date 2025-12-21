@@ -15,6 +15,7 @@
   import { useCasesStore } from '$lib/stores/useCases';
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
+  import { streamHub } from '$lib/stores/streamHub';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 
@@ -138,6 +139,7 @@
   $: {
     const currentUserId = $session.user?.id ?? null;
     if (currentUserId !== lastUserId) {
+      streamHub.reset();
       companiesStore.set([]);
       currentCompanyId.set(null);
       foldersStore.set([]);
