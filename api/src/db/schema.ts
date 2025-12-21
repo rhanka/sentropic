@@ -1,8 +1,24 @@
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+// Workspace constants (keep stable IDs for migrations/backfills)
+export const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+export const workspaces = pgTable('workspaces', {
+  id: text('id').primaryKey(),
+  ownerUserId: text('owner_user_id').unique(), // nullable is allowed; unique permits multiple NULLs in Postgres
+  name: text('name').notNull(),
+  shareWithAdmin: boolean('share_with_admin').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
 export const companies = pgTable('companies', {
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
   industry: text('industry'),
   size: text('size'),
@@ -18,6 +34,10 @@ export const companies = pgTable('companies', {
 
 export const folders = pgTable('folders', {
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
   description: text('description'),
   companyId: text('company_id').references(() => companies.id),
@@ -30,6 +50,10 @@ export const folders = pgTable('folders', {
 export const useCases = pgTable('use_cases', {
   // === GESTION D'ÉTAT ===
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   folderId: text('folder_id')
     .notNull()
     .references(() => folders.id, { onDelete: 'cascade' }),
@@ -85,6 +109,12 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   displayName: text('display_name'),
   role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
+  accountStatus: text('account_status').notNull().default('active'),
+  approvalDueAt: timestamp('approval_due_at', { withTimezone: false }),
+  approvedAt: timestamp('approved_at', { withTimezone: false }),
+  approvedByUserId: text('approved_by_user_id').references(() => users.id),
+  disabledAt: timestamp('disabled_at', { withTimezone: false }),
+  disabledReason: text('disabled_reason'),
   emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
@@ -172,6 +202,7 @@ export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
+export type WorkspaceRow = typeof workspaces.$inferSelect;
 // Chatbot Tables (Lot A)
 export const chatSessions = pgTable('chat_sessions', {
   id: text('id').primaryKey(),
