@@ -1,9 +1,0 @@
-services:
-  api:
-    # Maintenance mode: keep container running so we can `make exec-api CMD="..."`
-    # without triggering `npm install && db:migrate` startup loop.
-    command: sh -lc "sleep infinity"
-    healthcheck:
-      disable: true
-
-

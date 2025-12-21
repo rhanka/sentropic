@@ -426,13 +426,6 @@ exec-api-sh: ## Open a shell in the running api container
 	fi
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh
 
-.PHONY: up-api-maint
-up-api-maint: ## Start api in maintenance mode (no db:migrate) to allow make exec-api debugging
-	@echo "🚀 Starting postgres + api (maintenance mode)..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.maint.yml up -d postgres --wait
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.maint.yml up -d --build api
-	@echo "✅ api is running in maintenance mode. Use: make exec-api CMD=\"...\""
-
 # -----------------------------------------------------------------------------
 # Database helpers
 # Workflow: 1) Modify schema.ts → 2) make db-generate → 3) make db-migrate → 4) commit schema + migrations
@@ -549,8 +542,13 @@ db-backup: backup-dir up ## Backup local database to file
 	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/app-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL="$$DATABASE_URL" postgres:16-alpine sh -c " \
-		pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -lc "\
+		if [ -n \"$$DATABASE_URL\" ]; then \
+			pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump; \
+		else \
+			export PGPASSWORD=\"app\"; \
+			pg_dump -h localhost -U app -d app -F c -f /backups/app-$${TIMESTAMP}.dump; \
+		fi" && \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod

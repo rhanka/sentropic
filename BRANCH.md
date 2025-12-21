@@ -31,4 +31,7 @@ Define and implement an onboarding and authorization model where:
   - Fixes & evols (see TODOs / issues list in chat)
   - E2E tests for tenancy boundaries + onboarding edge-cases
 
+## Recent fixes
+- `make db-backup` fixed in dev (runs `pg_dump` via TCP as `app/app`, avoids peer/root role issues).
+
 
