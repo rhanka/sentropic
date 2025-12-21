@@ -227,7 +227,15 @@ class StreamHub {
       return;
     }
 
-    const url = `${API_BASE_URL}/streams/sse`;
+    const urlObj = new URL(`${API_BASE_URL}/streams/sse`);
+    // Opt-in stream events: pass only the streamIds that are actually subscribed.
+    // This prevents the server from streaming chat_stream_events globally.
+    const streamIds = new Set<string>();
+    for (const sub of this.subs.values()) {
+      if (sub.streamId) streamIds.add(sub.streamId);
+    }
+    for (const id of streamIds) urlObj.searchParams.append('streamIds', id);
+    const url = urlObj.toString();
     if (this.es) return;
 
     this.close();

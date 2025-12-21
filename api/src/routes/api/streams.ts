@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { useCases } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, companies, folders, jobQueue, useCases, workspaces } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -94,6 +94,24 @@ function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+async function resolveTargetWorkspaceId(c: any, url: URL): Promise<string> {
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  const requested = url.searchParams.get('workspace_id');
+
+  if (!requested) return user.workspaceId;
+  if (user?.role !== 'admin_app') return user.workspaceId;
+  if (requested === ADMIN_WORKSPACE_ID) return requested;
+
+  const [ws] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.id, requested), eq(workspaces.shareWithAdmin, true)))
+    .limit(1);
+
+  if (!ws) throw new Error('Workspace not accessible');
+  return requested;
+}
+
 // GET /streams/events/:streamId?limit=2000&sinceSequence=123
 streamsRouter.get('/events/:streamId', async (c) => {
   const streamId = c.req.param('streamId');
@@ -127,6 +145,9 @@ streamsRouter.get('/active', async (c) => {
 // GET /streams/sse?streamIds=a&streamIds=b&cursor=base64url(json)
 streamsRouter.get('/sse', async (c) => {
   const url = new URL(c.req.url);
+  const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
+  const targetWorkspaceId = await resolveTargetWorkspaceId(c, url);
+
   const streamIds = parseStreamIds(url);
   const jobIds = parseJobIds(url);
   const companyIds = parseCompanyIds(url);
@@ -136,7 +157,7 @@ streamsRouter.get('/sse', async (c) => {
   const wantsAllCompanies = companiesScope === 'all';
 
   // Sans paramétrage => streamer tout (companies + stream events; jobs seulement si admin).
-  const wantsAllStreams = streamIds.length === 0;
+  const wantsAllStreams = streamIds.length === 0; // legacy name; stream events are now opt-in via streamIds
   const wantsAllCompaniesEffective = wantsAllCompanies || companyIds.length === 0;
   const wantsAllJobsEffective = wantsAllJobs || jobIds.length === 0;
 
@@ -145,8 +166,8 @@ streamsRouter.get('/sse', async (c) => {
   if (companyIds.length > 500) return c.json({ message: 'Trop de companyIds (max 500)' }, 400);
 
   // Protection: job updates sont sensibles → admin_app requis
-  const user = c.get('user') as { role?: string } | undefined;
-  const canStreamJobs = user?.role === 'admin_app';
+  // With tenancy: allow all authenticated users to stream their own workspace jobs.
+  const canStreamJobs = true;
 
   const cursor = parseCursor(url.searchParams.get('cursor'));
   const wanted = new Set(streamIds);
@@ -163,6 +184,7 @@ streamsRouter.get('/sse', async (c) => {
     start: async (controller) => {
       const draining = new Map<string, boolean>();
       const pending = new Map<string, boolean>();
+      const streamAllowedCache = new Map<string, boolean>();
 
       const push = (text: string) => controller.enqueue(encoder.encode(text));
       const heartbeat = setInterval(() => {
@@ -174,13 +196,68 @@ streamsRouter.get('/sse', async (c) => {
       }, 25_000);
 
       const drainStream = async (streamId: string) => {
-        if (!wantsAllStreams && !wanted.has(streamId)) return;
+        // Stream events are opt-in (must provide streamIds)
+        if (wantsAllStreams) return;
+        if (!wanted.has(streamId)) return;
         if (draining.get(streamId)) {
           pending.set(streamId, true);
           return;
         }
         draining.set(streamId, true);
         try {
+          const allowedCached = streamAllowedCache.get(streamId);
+          let allowed = allowedCached;
+          if (allowed === undefined) {
+            allowed = await (async () => {
+              if (streamId.startsWith('company_')) {
+                const id = streamId.slice('company_'.length);
+                const [r] = await db
+                  .select({ id: companies.id })
+                  .from(companies)
+                  .where(and(eq(companies.id, id), eq(companies.workspaceId, targetWorkspaceId)))
+                  .limit(1);
+                return !!r;
+              }
+              if (streamId.startsWith('folder_')) {
+                const id = streamId.slice('folder_'.length);
+                const [r] = await db
+                  .select({ id: folders.id })
+                  .from(folders)
+                  .where(and(eq(folders.id, id), eq(folders.workspaceId, targetWorkspaceId)))
+                  .limit(1);
+                return !!r;
+              }
+              if (streamId.startsWith('usecase_')) {
+                const id = streamId.slice('usecase_'.length);
+                const [r] = await db
+                  .select({ id: useCases.id })
+                  .from(useCases)
+                  .where(and(eq(useCases.id, id), eq(useCases.workspaceId, targetWorkspaceId)))
+                  .limit(1);
+                return !!r;
+              }
+              if (streamId.startsWith('job_')) {
+                const id = streamId.slice('job_'.length);
+                const [r] = await db
+                  .select({ id: jobQueue.id })
+                  .from(jobQueue)
+                  .where(and(eq(jobQueue.id, id), eq(jobQueue.workspaceId, targetWorkspaceId)))
+                  .limit(1);
+                return !!r;
+              }
+              // Chat stream: streamId == assistantMessageId
+              const [r] = await db
+                .select({ id: chatMessages.id })
+                .from(chatMessages)
+                .leftJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+                .where(and(eq(chatMessages.id, streamId), eq(chatSessions.userId, user.userId)))
+                .limit(1);
+              return !!r;
+            })();
+            streamAllowedCache.set(streamId, allowed);
+          }
+          if (!allowed) return;
+
           const events = await readStreamEvents(streamId, lastSeq[streamId] ?? 0);
           for (const ev of events) {
             lastSeq[streamId] = ev.sequence;
@@ -231,12 +308,9 @@ streamsRouter.get('/sse', async (c) => {
           const row = (await db.get(sql`
             SELECT id, type, data, status, created_at AS "createdAt", started_at AS "startedAt", completed_at AS "completedAt", error
             FROM job_queue
-            WHERE id = ${jobId}
+            WHERE id = ${jobId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as JobSnapshotRow | undefined;
-          if (!row?.id) {
-            push(sseJobEvent(jobId, { deleted: true }));
-            return;
-          }
+          if (!row?.id) return;
           const parsed = {
             id: row.id,
             type: row.type,
@@ -258,12 +332,9 @@ streamsRouter.get('/sse', async (c) => {
           const row = (await db.get(sql`
             SELECT *
             FROM companies
-            WHERE id = ${companyId}
+            WHERE id = ${companyId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
-          if (!row?.id || typeof row.id !== 'string') {
-            push(sseCompanyEvent(companyId, { deleted: true }));
-            return;
-          }
+          if (!row?.id || typeof row.id !== 'string') return;
           push(sseCompanyEvent(companyId, { company: row }));
         } catch {
           // ignore
@@ -275,12 +346,9 @@ streamsRouter.get('/sse', async (c) => {
           const row = (await db.get(sql`
             SELECT *
             FROM folders
-            WHERE id = ${folderId}
+            WHERE id = ${folderId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
-          if (!row?.id || typeof row.id !== 'string') {
-            push(sseFolderEvent(folderId, { deleted: true }));
-            return;
-          }
+          if (!row?.id || typeof row.id !== 'string') return;
           push(sseFolderEvent(folderId, { folder: row }));
         } catch {
           // ignore
@@ -289,11 +357,11 @@ streamsRouter.get('/sse', async (c) => {
 
       const emitUseCaseSnapshot = async (useCaseId: string) => {
         try {
-          const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
-          if (!row?.id || typeof row.id !== 'string') {
-            push(sseUseCaseEvent(useCaseId, { deleted: true }));
-            return;
-          }
+          const [row] = await db
+            .select()
+            .from(useCases)
+            .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, targetWorkspaceId)));
+          if (!row?.id || typeof row.id !== 'string') return;
           // Utiliser hydrateUseCase pour avoir la même structure que GET /use-cases (camelCase)
           const hydrated = await hydrateUseCase(row);
           push(sseUseCaseEvent(useCaseId, { useCase: hydrated }));
@@ -307,26 +375,27 @@ streamsRouter.get('/sse', async (c) => {
 
       // Burst initial (sans paramétrage): pour QueueMonitor, envoyer un snapshot des jobs actifs
       // + le dernier event stream par job, afin d'avoir quelque chose à afficher immédiatement.
-      if (canStreamJobs && wantsAllStreams && wantsAllJobsEffective) {
+      if (canStreamJobs && wantsAllJobsEffective) {
         try {
           const activeJobs = (await db.all(sql`
             SELECT id
             FROM job_queue
             WHERE status IN ('pending', 'processing')
+              AND workspace_id = ${targetWorkspaceId}
             ORDER BY created_at DESC
             LIMIT 50
           `)) as Array<{ id: string }>;
           for (const j of activeJobs) {
             if (!j?.id) continue;
             await emitJobSnapshot(j.id);
-            await emitLatestStreamEvent(`job_${j.id}`);
+            // stream events are opt-in via streamIds, so we don't auto-emit job stream events here
           }
         } catch {
           // ignore
         }
       }
 
-      // rattrapage initial uniquement si streamIds explicitement fournis (compat)
+      // rattrapage initial uniquement si streamIds explicitement fournis
       if (!wantsAllStreams) {
         for (const id of streamIds) {
           await drainStream(id);
@@ -379,16 +448,12 @@ streamsRouter.get('/sse', async (c) => {
           if (!msg.payload) return;
           const payload = JSON.parse(msg.payload) as Record<string, unknown>;
           if (msg.channel === 'stream_events') {
+            // Stream events are opt-in: ignore unless streamIds explicitly provided.
+            if (wantsAllStreams) return;
             const streamId = payload.stream_id;
             if (!streamId || typeof streamId !== 'string') return;
-            if (!wantsAllStreams) {
-              if (!wanted.has(streamId)) return;
-              void drainStream(streamId);
-              return;
-            }
-            const seq = Number(payload.sequence);
-            if (!Number.isFinite(seq)) return;
-            void emitSingleStreamEvent(streamId, seq);
+            if (!wanted.has(streamId)) return;
+            void drainStream(streamId);
           } else if (msg.channel === 'job_events') {
             const jobId = payload.job_id;
             if (!jobId || typeof jobId !== 'string') return;
@@ -415,11 +480,13 @@ streamsRouter.get('/sse', async (c) => {
       };
 
       client.on('notification', onNotification);
-      await client.query('LISTEN stream_events');
       await client.query('LISTEN job_events');
       await client.query('LISTEN company_events');
       await client.query('LISTEN folder_events');
       await client.query('LISTEN usecase_events');
+      if (!wantsAllStreams) {
+        await client.query('LISTEN stream_events');
+      }
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {
