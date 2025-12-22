@@ -3,8 +3,9 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, useCases, chatStreamEvents, workspaces } from '../../src/db/schema';
+import { folders, useCases, chatStreamEvents } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 
 describe('Executive Summary Generation - AI', () => {
   let user: any;
@@ -12,32 +13,12 @@ describe('Executive Summary Generation - AI', () => {
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
-
-    // Ensure the authenticated user has a private workspace for scoping tests
-    const [ws] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.ownerUserId, user.id))
-      .limit(1);
-
-    if (ws) {
-      workspaceId = ws.id;
-    } else {
-      workspaceId = crypto.randomUUID();
-      await db.insert(workspaces).values({
-        id: workspaceId,
-        ownerUserId: user.id,
-        name: `Test Workspace ${createTestId()}`,
-        shareWithAdmin: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
+    // Ensure workspace exists for direct DB inserts (tenancy)
+    workspaceId = (await ensureWorkspaceForUser(user.id)).workspaceId;
   });
 
   afterEach(async () => {
     await cleanupAuthData();
-    await db.delete(workspaces).where(eq(workspaces.ownerUserId, user.id));
   });
 
   // Helper function to create a test folder with use cases
@@ -104,7 +85,6 @@ describe('Executive Summary Generation - AI', () => {
       expect(data.status).toBe('generating');
 
       // Attendre la complétion du job
-      const adminUser = await createAuthenticatedUser('admin_app');
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 30; // 5 minutes max
@@ -112,11 +92,10 @@ describe('Executive Summary Generation - AI', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(10000); // Wait 10 seconds between checks
 
-        // Vérifier le statut du job
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        const job = jobs.find((j: any) => j.id === data.jobId);
+        // Queue is workspace-scoped: read the job directly with the owner's token.
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -134,7 +113,7 @@ describe('Executive Summary Generation - AI', () => {
         .where(eq(folders.id, folderId));
       
       expect(folder?.executiveSummary).toBeDefined();
-      const stored = JSON.parse(folder!.executiveSummary);
+      const stored = JSON.parse(String(folder?.executiveSummary));
       expect(stored).toHaveProperty('introduction');
       expect(stored).toHaveProperty('analyse');
       expect(stored).toHaveProperty('recommandation');
@@ -194,16 +173,12 @@ describe('Executive Summary Generation - AI', () => {
       expect(data.status).toBe('generating');
 
       // Vérifier que les seuils personnalisés sont passés au job
-      const adminUser = await createAuthenticatedUser('admin_app');
       await sleep(1000); // Attendre que le job soit créé
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      const job = jobs.find((j: any) => j.id === data.jobId);
-      
-      expect(job).toBeDefined();
-      expect(job.data.valueThreshold).toBe(50);
-      expect(job.data.complexityThreshold).toBe(40);
+      const jobRes0 = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+      expect(jobRes0.status).toBe(200);
+      const job0 = await jobRes0.json();
+      expect(job0.data.valueThreshold).toBe(50);
+      expect(job0.data.complexityThreshold).toBe(40);
 
       // Attendre la complétion du job
       let jobCompleted = false;
@@ -213,10 +188,9 @@ describe('Executive Summary Generation - AI', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(10000); // Wait 10 seconds between checks
 
-        const jobsRes2 = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes2.status).toBe(200);
-        const jobs2 = await jobsRes2.json();
-        const job2 = jobs2.find((j: any) => j.id === data.jobId);
+        const jobRes2 = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+        expect(jobRes2.status).toBe(200);
+        const job2 = await jobRes2.json();
 
         if (job2 && (job2.status === 'completed' || job2.status === 'failed')) {
           jobCompleted = true;

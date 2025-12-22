@@ -26,12 +26,10 @@ Define and implement an onboarding and authorization model where:
   - `api/tests/api/me.test.ts`: couvrir `DELETE /me` quand le workspace est référencé par:
     - `chat_sessions.workspace_id` (sessions admin scopées sur le workspace user)
     - `chat_generation_traces.workspace_id`
-  - `api/tests/api/admin-approval.test.ts` ou fichier dédié: couvrir `DELETE /admin/users/:id` avec le même scénario (régression 500 FK).
+  - `api/tests/api/admin-users.test.ts`: mutualisé (1 test) pour `GET /admin/users`, approve/disable/reactivate + `DELETE /admin/users/:id` (incluant la régression 500 FK).
+  - `api/tests/api/streams.test.ts`: inclut le test “SSE tenancy” (pas de leak cross-workspace).
 - **Créer**:
-  - `api/tests/api/admin-user-delete.test.ts`:
-    - refuse suppression si user non désactivé
-    - suppression OK si user désactivé
-    - suppression OK même si `chat_sessions.workspace_id` / `chat_generation_traces.workspace_id` pointent sur le workspace supprimé (détachement `NULL`)
+  - (fait) `api/tests/api/admin-users.test.ts` (remplace `admin-approval` + `admin-user-delete` en un seul test).
 
 ### UI (Vitest)
 - **Pas de tests composants Svelte en place** (on a surtout stores/utils). Donc pas de “unit tests UI” à ajouter pour les confirmations `confirm()`.

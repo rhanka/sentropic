@@ -133,24 +133,19 @@ describe('Analytics API', () => {
       expect(data.folder_id).toBe(folderId);
 
       // Attendre que le job échoue (validation asynchrone)
-      const adminUser = await createAuthenticatedUser('admin_app');
-      let jobStatus = 'processing';
+      let jobStatus: string = 'pending';
       let attempts = 0;
       const maxAttempts = 10;
 
-      while (jobStatus === 'processing' && attempts < maxAttempts) {
+      while ((jobStatus === 'pending' || jobStatus === 'processing') && attempts < maxAttempts) {
         await sleep(2000);
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        const job = jobs.find((j: any) => j.id === data.jobId);
-        
-        if (job) {
-          jobStatus = job.status;
-          if (job.status === 'failed') {
-            expect(job.error).toContain('No use cases found');
-            break;
-          }
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
+        jobStatus = job.status;
+        if (job.status === 'failed') {
+          expect(job.error).toContain('No use cases found');
+          break;
         }
         attempts++;
       }
@@ -158,7 +153,6 @@ describe('Analytics API', () => {
       expect(jobStatus).toBe('failed');
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
 
@@ -235,20 +229,14 @@ describe('Analytics API', () => {
       expect(data.jobId).toBeDefined();
 
       // Vérifier que les seuils sont passés au job (via queue)
-      const adminUser = await createAuthenticatedUser('admin_app');
       await sleep(1000); // Attendre que le job soit créé
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      const job = jobs.find((j: any) => j.id === data.jobId);
-      
-      if (job) {
-        expect(job.data.valueThreshold).toBe(50);
-        expect(job.data.complexityThreshold).toBe(40);
-      }
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
+      expect(job.data.valueThreshold).toBe(50);
+      expect(job.data.complexityThreshold).toBe(40);
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
 
@@ -276,19 +264,13 @@ describe('Analytics API', () => {
       expect(data.jobId).toBeDefined();
 
       // Vérifier que le modèle par défaut est utilisé (via queue)
-      const adminUser = await createAuthenticatedUser('admin_app');
       await sleep(1000); // Attendre que le job soit créé
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      const job = jobs.find((j: any) => j.id === data.jobId);
-      
-      if (job) {
-        expect(job.data.model).toBeDefined();
-      }
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
+      expect(job.data.model).toBeDefined();
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
   });

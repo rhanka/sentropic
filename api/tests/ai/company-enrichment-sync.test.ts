@@ -108,19 +108,17 @@ describe('Company Enrichment - Sync', () => {
     expect(enrichResult.jobId).toBeDefined();
 
     // Attendre la complétion du job
-    const adminUser = await createAuthenticatedUser('admin_app');
     let jobCompleted = false;
     let attempts = 0;
-    const maxAttempts = 60; // up to ~120s (async enrichment can be slow depending on external calls)
+    const maxAttempts = 18; // 18 * 1s = 18s max (reste < timeout test: 20s)
 
     while (!jobCompleted && attempts < maxAttempts) {
-      await sleep(2000);
+      await sleep(1000);
 
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      expect(Array.isArray(jobs)).toBe(true);
-      const job = jobs.find((j: any) => j.id === enrichResult.jobId);
+      // Queue is workspace-scoped: read the job directly with the owner's token.
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${enrichResult.jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
 
       if (job && (job.status === 'completed' || job.status === 'failed')) {
         jobCompleted = true;
@@ -148,8 +146,7 @@ describe('Company Enrichment - Sync', () => {
     expect(eventTypes).toContain('done');
 
     // Cleanup
-    await cleanupAuthData(); // Cleanup admin user
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
     await db.delete(companies).where(eq(companies.id, companyId));
-  }, 120000); // 2 minutes timeout
+  }, 20000); // 20 seconds timeout
 });

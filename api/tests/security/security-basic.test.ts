@@ -83,7 +83,7 @@ describe('Basic Security Tests', () => {
              
              // Check that CORS headers are present
              expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
-             expect(headers.get('Access-Control-Allow-Methods')).toBe('GET,POST,PUT,DELETE,OPTIONS');
+             expect(headers.get('Access-Control-Allow-Methods')).toBe('GET,POST,PUT,PATCH,DELETE,OPTIONS');
              expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type,Authorization');
              expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');
            });

@@ -51,11 +51,10 @@ describe('Chat AI - Tool Calls Integration', () => {
     while (attempts < maxAttempts) {
       await sleep(1000); // 1 second between checks
       
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      expect(Array.isArray(jobs)).toBe(true);
-      const job = jobs.find((j: any) => j.id === jobId);
+      // Queue is workspace-scoped: read the job directly with the owner's token.
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
       
       if (job && (job.status === 'completed' || job.status === 'failed')) {
         expect(job.status).toBe('completed');
@@ -190,10 +189,12 @@ describe('Chat AI - Tool Calls Integration', () => {
       const adminUser = await createAuthenticatedUser('admin_app');
       
       // Ajouter des références au use case pour déclencher web_extract
+      const currentRow = (await db.select().from(useCases).where(eq(useCases.id, useCaseId)))[0];
+      const currentData = (currentRow?.data ?? {}) as any;
       await db.update(useCases)
         .set({
           data: {
-            ...(await db.select().from(useCases).where(eq(useCases.id, useCaseId)))[0].data,
+            ...currentData,
             references: [
               { url: 'https://example.com/article1', title: 'Article 1' },
               { url: 'https://example.com/article2', title: 'Article 2' }
@@ -269,9 +270,8 @@ describe('Chat AI - Tool Calls Integration', () => {
         // Si le job réussit, c'est que l'IA n'a pas tenté de modifier le mauvais use case (acceptable)
       } catch {
         // Si le job échoue, vérifier que c'est à cause de la sécurité
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        const jobs = await jobsRes.json();
-        const job = jobs.find((j: any) => j.id === jobId);
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
+        const job = await jobRes.json();
         if (job?.status === 'failed') {
           expect(job.error).toContain('Security');
         }

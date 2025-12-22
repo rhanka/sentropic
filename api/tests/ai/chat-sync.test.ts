@@ -37,7 +37,6 @@ describe('Chat AI - Complete Integration', () => {
       expect(assistantMessageId).toBeDefined();
 
       // Attendre la complétion du job (max 10s: 10 tentatives * 1s)
-      const adminUser = await createAuthenticatedUser('admin_app');
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 10;
@@ -45,12 +44,10 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(1000); // Wait 1 second between checks
 
-        // Vérifier le statut du job
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        expect(Array.isArray(jobs)).toBe(true);
-        const job = jobs.find((j: any) => j.id === jobId);
+        // Queue is workspace-scoped: read the job directly with the owner's token.
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -70,8 +67,8 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg.role).toBe('assistant');
-      expect(assistantMsg.content).toBeDefined();
-      expect(assistantMsg.content.length).toBeGreaterThan(0);
+      expect(assistantMsg.content).toBeTruthy();
+      expect(String(assistantMsg.content).length).toBeGreaterThan(0);
     }, 15000); // 15 seconds timeout for AI generation
 
     it('should generate response with tool calls', async () => {
@@ -105,7 +102,6 @@ describe('Chat AI - Complete Integration', () => {
       const { jobId, assistantMessageId } = chatData;
 
       // Attendre la complétion du job
-      const adminUser = await createAuthenticatedUser('admin_app');
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 30;
@@ -113,11 +109,9 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(10000);
 
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        expect(Array.isArray(jobs)).toBe(true);
-        const job = jobs.find((j: any) => j.id === jobId);
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -157,7 +151,6 @@ describe('Chat AI - Complete Integration', () => {
       const { jobId, assistantMessageId } = chatData;
 
       // Attendre la complétion du job
-      const adminUser = await createAuthenticatedUser('admin_app');
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 30;
@@ -165,11 +158,9 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(10000);
 
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        expect(Array.isArray(jobs)).toBe(true);
-        const job = jobs.find((j: any) => j.id === jobId);
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -189,16 +180,14 @@ describe('Chat AI - Complete Integration', () => {
         .where(eq(chatMessages.id, assistantMessageId));
 
       expect(assistantMsg).toBeDefined();
-      expect(assistantMsg.content).toBeDefined();
-      expect(assistantMsg.content.length).toBeGreaterThan(0);
+      expect(assistantMsg.content).toBeTruthy();
+      expect(String(assistantMsg.content).length).toBeGreaterThan(0);
 
       // Cleanup admin user
       await cleanupAuthData();
     }, 300000);
 
     it('should maintain conversation context across multiple messages', async () => {
-      const adminUser = await createAuthenticatedUser('admin_app');
-      
       // Premier message simple
       const firstResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
         content: 'My name is Bob',
@@ -214,11 +203,9 @@ describe('Chat AI - Complete Integration', () => {
 
       while (!firstJobCompleted && attempts < maxAttempts) {
         await sleep(1000);
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        expect(Array.isArray(jobs)).toBe(true);
-        const job = jobs.find((j: any) => j.id === firstJobId);
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${firstJobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           firstJobCompleted = true;
           expect(job.status).toBe('completed');
@@ -243,11 +230,9 @@ describe('Chat AI - Complete Integration', () => {
 
       while (!secondJobCompleted && attempts < maxAttempts) {
         await sleep(1000);
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        expect(Array.isArray(jobs)).toBe(true);
-        const job = jobs.find((j: any) => j.id === secondJobId);
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${secondJobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           secondJobCompleted = true;
           expect(job.status).toBe('completed');
@@ -264,8 +249,8 @@ describe('Chat AI - Complete Integration', () => {
         .where(eq(chatMessages.id, assistantMessageId));
 
       expect(assistantMsg).toBeDefined();
-      expect(assistantMsg.content).toBeDefined();
-      expect(assistantMsg.content.toLowerCase()).toMatch(/bob/i);
+      expect(assistantMsg.content).toBeTruthy();
+      expect(String(assistantMsg.content).toLowerCase()).toMatch(/bob/i);
 
       // Cleanup admin user
       await cleanupAuthData();

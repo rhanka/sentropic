@@ -5,12 +5,16 @@ import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
 import { folders, useCases } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 
 describe('Executive Summary - Automatic Generation', () => {
   let user: any;
+  let workspaceId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+    // Ensure workspace exists for direct DB inserts (tenancy)
+    workspaceId = (await ensureWorkspaceForUser(user.id)).workspaceId;
   });
 
   beforeAll(async () => {
@@ -85,9 +89,7 @@ describe('Executive Summary - Automatic Generation', () => {
     await sleep(5000);
 
     // 5. Check that an executive_summary job was created (or already completed)
-    // Create admin user for queue jobs access
-    const adminUser = await createAuthenticatedUser('admin_app');
-    const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+    const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
     expect(jobsRes.status).toBe(200);
     const jobs = await jobsRes.json();
     const executiveSummaryJobs = jobs.filter((j: any) => 
@@ -118,7 +120,6 @@ describe('Executive Summary - Automatic Generation', () => {
 
     // 5. Cleanup
     await authenticatedRequest(app, 'DELETE', `/api/v1/folders/${folderId}`, user.sessionToken!);
-    await cleanupAuthData(); // Cleanup admin user
   }, 300000); // 5 minutes timeout
 
   it('should not trigger executive summary if one already exists', async () => {
@@ -126,6 +127,7 @@ describe('Executive Summary - Automatic Generation', () => {
     const folderId = createTestId();
     await db.insert(folders).values({
       id: folderId,
+      workspaceId,
       name: `Test Folder Existing Summary ${createTestId()}`,
       description: 'Test folder with existing summary',
       status: 'completed',
@@ -145,6 +147,7 @@ describe('Executive Summary - Automatic Generation', () => {
     const useCaseId = createTestId();
     await db.insert(useCases).values({
       id: useCaseId,
+      workspaceId,
       folderId,
       data: {
         name: 'Test Use Case',
@@ -158,9 +161,7 @@ describe('Executive Summary - Automatic Generation', () => {
     // 3. Simulate processing a use case detail (which would normally trigger the check)
     // Since all use cases are already completed, this should NOT create a new executive_summary job
     // We'll check by looking at the queue before and after
-    // Create admin user for queue jobs access
-    const adminUser = await createAuthenticatedUser('admin_app');
-    const jobsBeforeRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+    const jobsBeforeRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
     const jobsBefore = await jobsBeforeRes.json();
     const executiveSummaryJobsBefore = jobsBefore.filter((j: any) => 
       j.type === 'executive_summary' && 
@@ -171,7 +172,7 @@ describe('Executive Summary - Automatic Generation', () => {
     await sleep(2000);
 
     // 4. Check that NO new executive_summary job was created
-    const jobsAfterRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
+    const jobsAfterRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
     const jobsAfter = await jobsAfterRes.json();
     const executiveSummaryJobsAfter = jobsAfter.filter((j: any) => 
       j.type === 'executive_summary' && 
