@@ -282,6 +282,35 @@ export const chatStreamEvents = pgTable('chat_stream_events', {
   streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
 }));
 
+// Chat tracing (debug/audit): store the exact OpenAI payloads + tool calls per iteration.
+// Retention is enforced via periodic purge (7 days by default).
+export const chatGenerationTraces = pgTable('chat_generation_traces', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: 'cascade' }),
+  assistantMessageId: text('assistant_message_id')
+    .notNull()
+    .references(() => chatMessages.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').references(() => workspaces.id),
+  phase: text('phase').notNull(), // 'pass1' | 'pass2'
+  iteration: integer('iteration').notNull(), // within phase
+  model: text('model'),
+  toolChoice: text('tool_choice'),
+  tools: jsonb('tools'), // array of tool metadata (names etc.)
+  openaiMessages: jsonb('openai_messages').notNull(), // exact messages payload sent to OpenAI
+  toolCalls: jsonb('tool_calls'), // executed tool calls for this iteration (args + results)
+  meta: jsonb('meta'), // sizes, truncation flags, timings
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  sessionIdIdx: index('chat_generation_traces_session_id_idx').on(table.sessionId),
+  assistantMessageIdIdx: index('chat_generation_traces_assistant_message_id_idx').on(table.assistantMessageId),
+  createdAtIdx: index('chat_generation_traces_created_at_idx').on(table.createdAt),
+}));
+
 export const contextModificationHistory = pgTable('context_modification_history', {
   id: text('id').primaryKey(),
   contextType: text('context_type').notNull(), // 'company' | 'folder' | 'usecase' | 'executive_summary'
@@ -314,4 +343,5 @@ export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type ChatContextRow = typeof chatContexts.$inferSelect;
 export type ChatStreamEventRow = typeof chatStreamEvents.$inferSelect;
+export type ChatGenerationTraceRow = typeof chatGenerationTraces.$inferSelect;
 export type ContextModificationHistoryRow = typeof contextModificationHistory.$inferSelect;

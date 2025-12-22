@@ -8,6 +8,8 @@ import { settingsService } from './settings';
 import { readUseCaseTool, updateUseCaseFieldTool, webSearchTool, webExtractTool, searchWeb, extractUrlContent } from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
+import { env } from '../config/env';
+import { writeChatGenerationTrace } from './chat-trace';
 
 export type ChatContextType = 'company' | 'folder' | 'usecase' | 'executive_summary';
 
@@ -365,7 +367,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
     let sawAnyContent = false;
     let sawAnyDone = false;
     let lastErrorMessage: string | null = null;
-    const executedTools: Array<{ name: string; result: unknown }> = [];
+    const executedTools: Array<{ toolCallId: string; name: string; args: unknown; result: unknown }> = [];
     
     // État pour tracker les tool calls en cours
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
@@ -377,6 +379,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
     > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
     const maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
     let iteration = 0;
+    let previousResponseId: string | null = null;
+    let pendingResponsesRawInput: unknown[] | null = null;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -385,12 +389,44 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
       sawAnyDone = false;
 
+      // Trace: exact payload sent to OpenAI (per iteration)
+      await writeChatGenerationTrace({
+        enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+        sessionId: options.sessionId,
+        assistantMessageId: options.assistantMessageId,
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        phase: 'pass1',
+        iteration,
+        model: options.model || assistantRow.model || null,
+        toolChoice: 'auto',
+        // IMPORTANT: tracer les tools au complet (description + schema) pour debug.
+        tools: tools ?? null,
+        openaiMessages: {
+          kind: 'responses_call',
+          messages: currentMessages,
+          previous_response_id: previousResponseId,
+          raw_input: pendingResponsesRawInput
+        },
+        toolCalls: null,
+        meta: {
+          primaryContextType,
+          primaryContextId,
+          readOnly,
+          maxIterations,
+          callSite: 'ChatService.runAssistantGeneration/pass1/beforeOpenAI',
+          openaiApi: 'responses'
+        }
+      });
+
       for await (const event of callOpenAIResponseStream({
         model: options.model || assistantRow.model || undefined,
         messages: currentMessages,
         tools,
         // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
         reasoningSummary: 'detailed',
+        previousResponseId: previousResponseId ?? undefined,
+        rawInput: pendingResponsesRawInput ?? undefined,
         signal: options.signal
       })) {
         const eventType = event.type as StreamEventType;
@@ -411,6 +447,12 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 
         await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
         streamSeq += 1;
+
+        // Capture Responses API response_id for proper continuation
+        if (eventType === 'status') {
+          const responseId = typeof (data as any)?.response_id === 'string' ? ((data as any).response_id as string) : '';
+          if (responseId) previousResponseId = responseId;
+        }
 
         if (eventType === 'content_delta') {
           const delta = typeof data.delta === 'string' ? data.delta : '';
@@ -448,6 +490,8 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
         }
         // Note: eventType 'done' est volontairement retardé (voir plus haut)
       }
+      // rawInput consommé pour ce tour (si présent)
+      pendingResponsesRawInput = null;
 
       // Si aucun tool call, on termine
       if (toolCalls.length === 0) {
@@ -456,6 +500,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
+      const responseToolOutputs: any[] = [];
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
@@ -469,7 +514,10 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
               throw new Error('Security: useCaseId does not match session context');
             }
-            const readResult = await toolService.readUseCase(args.useCaseId, { workspaceId: sessionWorkspaceId });
+            const readResult = await toolService.readUseCase(args.useCaseId, {
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
             result = readResult;
             await writeStreamEvent(
               options.assistantMessageId,
@@ -551,13 +599,20 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
           }
 
           // Garder une trace pour un éventuel 2e pass "rédaction-only"
-          executedTools.push({ name: toolCall.name, result });
+          executedTools.push({ toolCallId: toolCall.id, name: toolCall.name, args, result });
 
           // Ajouter le résultat au format OpenAI pour continuer le stream
           toolResults.push({
             role: 'tool',
             content: JSON.stringify(result),
             tool_call_id: toolCall.id
+          });
+
+          // Responses API native continuation: function_call_output attached to call_id
+          responseToolOutputs.push({
+            type: 'function_call_output',
+            call_id: toolCall.id,
+            output: JSON.stringify(result)
           });
         } catch (error) {
           const errorResult = {
@@ -577,16 +632,62 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             content: JSON.stringify(errorResult),
             tool_call_id: toolCall.id
           });
-          executedTools.push({ name: toolCall.name || 'unknown_tool', result: errorResult });
+          responseToolOutputs.push({
+            type: 'function_call_output',
+            call_id: toolCall.id,
+            output: JSON.stringify(errorResult)
+          });
+          executedTools.push({
+            toolCallId: toolCall.id,
+            name: toolCall.name || 'unknown_tool',
+            args: toolCall.args ? (() => { try { return JSON.parse(toolCall.args); } catch { return toolCall.args; } })() : undefined,
+            result: errorResult
+          });
         }
       }
 
-      // Ajouter les résultats des tools à la conversation pour continuer
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant', content: contentParts.join('') },
-        ...toolResults
-      ];
+      // Trace: executed tool calls for this iteration (args/results)
+      await writeChatGenerationTrace({
+        enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+        sessionId: options.sessionId,
+        assistantMessageId: options.assistantMessageId,
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        phase: 'pass1',
+        iteration,
+        model: options.model || assistantRow.model || null,
+        toolChoice: 'auto',
+        tools: tools ?? null,
+        openaiMessages: {
+          kind: 'executed_tools',
+          messages: currentMessages,
+          previous_response_id: previousResponseId,
+          responses_input_tool_outputs: responseToolOutputs
+        },
+        toolCalls: toolCalls.map((tc) => {
+          const found = executedTools.find((x) => x.toolCallId === tc.id);
+          return {
+            id: tc.id,
+            name: tc.name,
+            args: found?.args ?? (tc.args ? (() => { try { return JSON.parse(tc.args); } catch { return tc.args; } })() : undefined),
+            result: found?.result
+          };
+        }),
+        meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
+      });
+
+      // OPTION 1 (Responses API): on CONTINUE via previous_response_id + function_call_output
+      // -> pas d'injection tool->user JSON, pas de "role:tool" dans messages.
+      // On laisse `previousResponseId` alimenter l'appel suivant.
+      // Pour l'historique local côté modèle, on n'ajoute l'assistant que si non vide.
+      const assistantText = contentParts.join('');
+      if (assistantText.trim()) {
+        currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
+      }
+
+      // Appel suivant: on enverra `responseToolOutputs` via rawInput, rattaché à previous_response_id.
+      // NOTE: on n'envoie PAS de "nudge" ici: on teste d'abord le pattern doc-compatible.
+      pendingResponsesRawInput = responseToolOutputs;
     }
 
     // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.
@@ -620,6 +721,22 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       lastErrorMessage = null;
 
       try {
+        await writeChatGenerationTrace({
+          enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+          sessionId: options.sessionId,
+          assistantMessageId: options.assistantMessageId,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          phase: 'pass2',
+          iteration: 1,
+          model: options.model || assistantRow.model || null,
+          toolChoice: 'none',
+          tools: null,
+          openaiMessages: pass2Messages,
+          toolCalls: null,
+          meta: { kind: 'pass2_prompt', callSite: 'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi: 'responses' }
+        });
+
         for await (const event of callOpenAIResponseStream({
           model: options.model || assistantRow.model || undefined,
           messages: pass2Messages,

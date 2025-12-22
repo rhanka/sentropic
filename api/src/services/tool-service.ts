@@ -101,9 +101,13 @@ export class ToolService {
    * Tool pour lire un use case complet.
    * Retourne la structure `use_cases.data` complète.
    */
-  async readUseCase(useCaseId: string, opts?: { workspaceId?: string | null }): Promise<{
+  async readUseCase(
+    useCaseId: string,
+    opts?: { workspaceId?: string | null; select?: string[] | null }
+  ): Promise<{
     useCaseId: string;
     data: unknown;
+    selected?: string[] | null;
   }> {
     if (!useCaseId) throw new Error('useCaseId is required');
 
@@ -114,10 +118,29 @@ export class ToolService {
     const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
-    // Retourner la structure data complète
+    const data = (row.data ?? {}) as any;
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+
+    // Si select est fourni: ne renvoyer qu'un sous-ensemble de data (réduit tokens)
+    if (select && select.length > 0) {
+      const out: Record<string, unknown> = {};
+      for (const key of select) {
+        const k = String(key).trim();
+        if (!k) continue;
+        // Sélection simple (top-level) seulement pour l'instant.
+        // Si on veut du dot-notation plus tard, on pourra l'ajouter sans casser l'API.
+        if (Object.prototype.hasOwnProperty.call(data, k)) {
+          out[k] = data[k];
+        }
+      }
+      return { useCaseId, data: out, selected: select };
+    }
+
+    // Retourner la structure data complète (par défaut)
     return {
       useCaseId,
-      data: row.data ?? {}
+      data,
+      selected: null
     };
   }
 

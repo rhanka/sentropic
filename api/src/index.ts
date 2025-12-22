@@ -5,6 +5,7 @@ import { ensureIndexes } from './db/ensure-indexes';
 import { purgeExpiredAuthData } from './services/challenge-purge';
 import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
+import { runChatTracePurge } from './services/chat-trace-sweep';
 
 const port = env.PORT;
 
@@ -57,6 +58,16 @@ if (process.env.NODE_ENV !== 'test') {
       logger.error({ err: error }, 'Admin approval sweep failed');
     });
   }, 15 * 60 * 1000); // every 15 minutes
+
+  // Chat trace purge (retention > 7 days). Run once at boot, then daily.
+  try {
+    await runChatTracePurge();
+  } catch {
+    // already logged inside
+  }
+  setInterval(() => {
+    void runChatTracePurge();
+  }, 24 * 60 * 60 * 1000);
 }
 
 const [{ serve }, { app }] = await Promise.all([

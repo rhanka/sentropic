@@ -4,6 +4,10 @@ services:
       - ./api:/app
       - api_node_modules:/app/node_modules
     command: sh -c "npm install && npm run db:migrate && npm run dev"
+    environment:
+      # Chat tracing (dev: enabled by default)
+      - CHAT_TRACE_ENABLED=${CHAT_TRACE_ENABLED:-true}
+      - CHAT_TRACE_RETENTION_DAYS=${CHAT_TRACE_RETENTION_DAYS:-7}
 
   ui:
     volumes:

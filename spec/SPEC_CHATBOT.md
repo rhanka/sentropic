@@ -117,6 +117,23 @@
           - [ ] Upload avec résumé automatique (0,1k token/page)
           - [ ] Consultation des métadonnées et du résumé
 
+## Admin scoped chat (Chat-1 + read-only)
+
+Décision (liée au modèle workspaces / partage admin) :
+
+- L’admin **reste propriétaire** de ses sessions (pas d’accès à l’historique chat de l’utilisateur).
+- Quand l’admin est **scopé** sur un workspace utilisateur **partagé** (`shareWithAdmin=true`) :
+  - le chat peut **lire** les données du workspace (ex: `read_usecase`, lecture des références),
+  - le chat doit être **read-only** pour les écritures (ex: `update_usecase_field` interdit).
+
+Implémentation attendue :
+
+- Stocker le scope dans `chat_sessions.workspace_id`.
+- Le serveur calcule un flag `readOnly` selon :
+  - user role
+  - workspace scope courant
+  - `shareWithAdmin` du workspace cible
+
 ## Streaming OpenAI → DB → NOTIFY → SSE
 
 - [x] Transport : appel OpenAI en streaming côté API/worker (Hono). Chaque chunk est écrit dans `chat_stream_events` puis un `NOTIFY` (payload minimal : `stream_id`, `sequence`, éventuellement `event_type`) signale la nouveauté. L'UI SvelteKit (SPA statique) consomme un endpoint SSE global `GET /api/v1/streams/sse` qui est abonné aux NOTIFY PG ; pas de forward direct OpenAI → SSE. Websocket optionnelle plus tard, SSE par défaut.
@@ -143,6 +160,36 @@ Règles :
 - `status.started` dès ouverture de flux, `done` ou `error` clôture.
 - Tool calls : `tool_call_start` puis zéro ou plusieurs `tool_call_delta`, puis `tool_call_result`.
 - Les deltas reasoning/content sont alternables, l’UI agrège.
+
+## Chat tracing (debug) — 7 jours (20–30 lignes)
+
+Objectif : debug des problèmes “agents” (boucles d’outils, payloads mal construits, perte de contexte) en stockant **le payload exact envoyé à OpenAI** et les tool calls exécutés.
+
+Activation (env) :
+- `CHAT_TRACE_ENABLED=true|false`
+- `CHAT_TRACE_RETENTION_DAYS=7` (défaut 7)
+
+Stockage (DB) :
+- Table `chat_generation_traces` :
+  - identifiants: `session_id`, `assistant_message_id`, `user_id`, `workspace_id`
+  - `phase` (`pass1`/`pass2`), `iteration`, `model`, `tool_choice`
+  - `tools` (**définitions complètes**: description + schema)
+  - `openai_messages` / `input` (**payload exact**) + `previous_response_id` quand applicable
+  - `tool_calls` (args + results)
+  - `meta` (callSite, flags readOnly, etc.)
+
+Purge :
+- sweep 1x au démarrage puis toutes les 24h
+- suppression des traces plus anciennes que `CHAT_TRACE_RETENTION_DAYS`
+
+SQL utile :
+
+```sql
+SELECT phase, iteration, model, tool_choice, created_at
+FROM chat_generation_traces
+WHERE assistant_message_id = '<messageId>'
+ORDER BY created_at ASC;
+```
 
 ## Composants UI & Streaming (SvelteKit)
 

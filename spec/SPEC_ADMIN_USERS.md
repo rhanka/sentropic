@@ -1,6 +1,6 @@
 # SPEC: Admin approval + private workspaces (user namespace)
 
-Status: Draft
+Status: Draft (updated with latest decisions and chat fixes)
 
 ## Context
 The app currently has a minimal role-based access control (RBAC) model with roles:
@@ -15,6 +15,12 @@ This spec introduces:
 - **user workspaces** with strict data isolation,
 - **admin visibility** that is disabled by default (only possible when user shares),
 - **self-service account deactivation and deletion** (immediate data deletion on delete).
+
+In addition (recent decisions / fixes):
+- **Admin workspace switcher (A1/A2)**: admins can switch scope to a shared user workspace in UI, with **read-only** access.
+- **Chat scoping (Chat-1 + read-only)**: chat sessions are owned by the admin, but can be scoped to a shared workspace in read-only mode.
+- **Queue tenancy**: jobs are segregated by workspace; users can monitor and purge their own jobs.
+- **Chat tracing (dev/debug)**: store the exact OpenAI payload + tool calls to debug loops and malformed payloads (see `spec/SPEC_CHATBOT.md`).
 
 ## Goals
 - New users can use the product immediately after enrollment (trial window).
@@ -90,12 +96,19 @@ Add `workspaceId` (FK to `workspaces.id`) to:
 - `companies`
 - `folders`
 - `use_cases`
-- (recommended) chatbot tables: `chat_sessions`, `chat_contexts`, `context_modification_history` and any other table where object IDs are referenced
+- `job_queue` (queue tenancy; user can only see their own jobs by default)
+- chatbot tables:
+  - `chat_sessions.workspace_id` (used to scope assistant behavior and read-only mode)
+  - (recommended) `chat_contexts`, `context_modification_history` and any other table where object IDs are referenced
 
 **Access rule**
 - All CRUD on business objects must filter by `workspaceId = currentUser.workspaceId`.
 - Role `admin_*` does not bypass workspace filters by default.
 - Admin access to user objects is only allowed if `workspaces.shareWithAdmin = true` (or a more granular model, see below).
+
+**Queue rule**
+- Jobs are visible to the owning workspace only (`job_queue.workspace_id = current workspace`).
+- Users must be able to purge their own jobs (workspace-scoped purge).
 
 ### 4) Share-with-admin semantics
 Default: `shareWithAdmin = false`.
@@ -160,6 +173,9 @@ User triggers permanent deletion:
 - cascade delete workspace and all owned objects
 - revoke all sessions
 
+UI requirement:
+- After `DELETE /me` or `POST /me/deactivate`, the UI must **log out immediately** (clear session and redirect), even if the API invalidated the session server-side.
+
 This must be immediate and irreversible (no recycle bin).
 
 ## API surface (proposal)
@@ -169,6 +185,7 @@ This must be immediate and irreversible (no recycle bin).
   - returns user info, account status, approval deadline, workspace meta, share flag, effective role
 - `PATCH /api/v1/me`
   - update `displayName` (and other safe profile fields)
+  - update workspace metadata (name) and sharing flag (shareWithAdmin) if exposed under `/me` (implementation choice)
 - `POST /api/v1/me/deactivate`
   - self-deactivate + revoke sessions
 - `POST /api/v1/me/reactivate`
@@ -189,6 +206,13 @@ This must be immediate and irreversible (no recycle bin).
 - `GET /api/v1/admin/users/:userId/workspace` (metadata only)
 - `GET /api/v1/admin/users/:userId/objects/*` (only if workspace is shared; read-only)
 
+Workspace switcher support:
+- `GET /api/v1/admin/workspaces`
+  - list workspaces that are either:
+    - admin workspace, or
+    - shared by their owner (`shareWithAdmin=true`)
+  - includes labels (owner email + workspace name) for UI selector.
+
 ### Error contract (important for UI)
 Return structured errors so UI can present the right state:
 - `ACCOUNT_DISABLED`
@@ -208,6 +232,13 @@ Split global admin settings from user settings:
   - rename workspace
   - privacy: toggle "Share my workspace with admin"
   - (optional) export data
+
+- **Admin workspace scope (admin_app only)**
+  - location: **Settings > Workspace** (not in the global header)
+  - selector label: show **owner email** + workspace name (avoid ambiguous "My Workspace")
+  - selecting a user workspace switches the admin scope for:
+    - dashboard, companies, folders, use cases, matrix pages
+  - access mode: **read-only** when scoped to a user workspace (A1/A2)
 
 ### Admin panel
 Add a dedicated admin view (visible only for `admin_app`) to:
@@ -250,4 +281,32 @@ Recommended approach:
 3. (Resolved) User self-reactivation is allowed.
 4. (Resolved) Share-with-admin is **workspace-wide** (Option A). Per-object is future work.
 5. (Resolved direction) Existing global data should be locked down; user data must be private-by-default (via workspace scoping and a system/legacy workspace).
+
+## Chat / AI / Streaming (additional spec section)
+
+### Admin chat when scoped to a shared workspace (Chat-1 + read-only)
+
+Decision:
+- Admin keeps ownership of their chat sessions (no access to user's chat history).
+- When the admin scopes to a shared user workspace, the assistant:
+  - acts **on that workspace** for reads (e.g. read_usecase / read references),
+  - is **read-only** for writes (e.g. `update_usecase_field` must be disabled).
+
+Implementation notes:
+- Store `chat_sessions.workspace_id`.
+- Server must compute `readOnly` based on:
+  - current user role
+  - selected workspace scope
+  - `shareWithAdmin` flag for the target workspace
+
+### Streaming & SSE tenancy
+
+Requirements:
+- SSE must not leak cross-workspace events.
+- Prefer a single stable SSE connection in UI; avoid resets/reconnect loops.
+- Queue monitor should not trigger massive history replays by default (load history on demand / for active jobs only).
+
+### Debuggability (chat tracing)
+
+See `spec/SPEC_CHATBOT.md` (section Chat tracing).
 

@@ -20,6 +20,16 @@ export interface CallOpenAIResponseOptions {
   reasoningEffort?: 'low' | 'medium' | 'high';
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
+  /**
+   * Responses API: permet de "continuer" une réponse précédente (tool call -> tool output -> continuation).
+   * Si fourni, `rawInput` doit contenir uniquement les items additionnels (ex: function_call_output).
+   */
+  previousResponseId?: string;
+  /**
+   * Overrides `messages` conversion for Responses API. Use to send tool outputs properly:
+   * [{ type:'function_call_output', call_id:'...', output:'...' }, ...]
+   */
+  rawInput?: unknown[];
   // Shorthand (mode JSON "legacy") — utile pour conserver l'API existante
   responseFormat?: 'json_object';
   // Structured Outputs (préféré): JSON Schema strict (subset) supporté par OpenAI
@@ -237,7 +247,7 @@ export async function* callOpenAIStream(
 export async function* callOpenAIResponseStream(
   options: CallOpenAIResponseOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { messages, model, reasoningEffort, reasoningSummary, tools, responseFormat, structuredOutput, signal } = options;
+  const { messages, model, reasoningEffort, reasoningSummary, tools, responseFormat, structuredOutput, signal, previousResponseId, rawInput } = options;
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -252,12 +262,14 @@ export async function* callOpenAIResponseStream(
   // - Si on envoie `role:"assistant"` avec des content parts `type:"input_text"`, l'API renvoie:
   //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
   // => On utilise donc `content` en string pour tous les rôles.
-  const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] = messages.map((m) => {
-    const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
-    const contentRaw = (m as unknown as { content?: unknown }).content;
-    const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
-    return { type: 'message', role, content };
-  });
+  const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] = (rawInput && rawInput.length > 0)
+    ? (rawInput as any)
+    : messages.map((m) => {
+        const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
+        const contentRaw = (m as unknown as { content?: unknown }).content;
+        const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
+        return { type: 'message', role, content };
+      });
 
   // Mapper les tools "Chat Completions" -> "Responses" (format plat)
   const responseTools: OpenAI.Responses.ResponseCreateParamsStreaming['tools'] | undefined = tools
@@ -303,6 +315,7 @@ export async function* callOpenAIResponseStream(
     model: selectedModel,
     stream: true,
     input,
+    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(responseTools ? { tools: responseTools } : {}),
     ...(textConfig ? { text: textConfig } : {})
@@ -315,6 +328,9 @@ export async function* callOpenAIResponseStream(
 
     // Suivre les tool calls par item_id (Responses API)
     const toolCallState = new Map<string, { started: boolean; sawDelta: boolean; name?: string }>();
+    // Responses API: `function_call_output` doit cibler `call_id` (souvent "call_..."), pas forcément `item.id`.
+    // On maintient un mapping item_id -> public_tool_call_id (call_id si disponible).
+    const itemIdToCallId = new Map<string, string>();
 
     for await (const chunk of stream) {
       if (signal?.aborted) {
@@ -330,6 +346,17 @@ export async function* callOpenAIResponseStream(
       // - Ne jamais traiter `chunk.delta` comme du texte final sans vérifier `type`,
       //   sinon on concatène les arguments JSON des tool calls (cf. réponse Boeing).
       switch (type) {
+        case 'response.created': {
+          // Expose response_id for orchestration (previous_response_id continuation)
+          const response = (record as any).response;
+          const responseId =
+            (response && typeof response.id === 'string' && response.id) ||
+            (typeof (record as any).response_id === 'string' && (record as any).response_id) ||
+            (typeof (record as any).id === 'string' && (record as any).id) ||
+            '';
+          if (responseId) yield { type: 'status', data: { state: 'response_created', response_id: responseId } };
+          break;
+        }
         case 'response.reasoning_text.delta': {
           const delta = typeof record.delta === 'string' ? record.delta : undefined;
           if (delta) yield { type: 'reasoning_delta', data: { delta } };
@@ -355,23 +382,25 @@ export async function* callOpenAIResponseStream(
           const itemRec = item as Record<string, unknown> | null;
           // Tool call "function_call"
           if (itemRec && itemRec.type === 'function_call') {
-            const toolCallId =
-              (typeof itemRec.id === 'string' && itemRec.id) ||
-              (typeof itemRec.call_id === 'string' && itemRec.call_id) ||
-              '';
+            const itemId = (typeof itemRec.id === 'string' && itemRec.id) ? itemRec.id : '';
+            const callId = (typeof itemRec.call_id === 'string' && itemRec.call_id) ? itemRec.call_id : '';
+            // Public id used throughout our system: prefer call_id (required for function_call_output).
+            const toolCallId = callId || itemId || '';
             const name = typeof itemRec.name === 'string' ? itemRec.name : '';
             const args = typeof itemRec.arguments === 'string' ? itemRec.arguments : '';
-            if (toolCallId) {
-              toolCallState.set(toolCallId, { started: true, sawDelta: false, name });
+            if (itemId && toolCallId) {
+              itemIdToCallId.set(itemId, toolCallId);
             }
+            if (toolCallId) toolCallState.set(toolCallId, { started: true, sawDelta: false, name });
             yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args } };
           }
           break;
         }
         case 'response.function_call_arguments.delta': {
-          const toolCallId = typeof record.item_id === 'string' ? record.item_id : undefined;
+          const itemId = typeof record.item_id === 'string' ? record.item_id : undefined;
           const delta = typeof record.delta === 'string' ? record.delta : undefined;
-          if (!toolCallId || !delta) break;
+          if (!itemId || !delta) break;
+          const toolCallId = itemIdToCallId.get(itemId) || itemId;
           const state = toolCallState.get(toolCallId) || { started: false, sawDelta: false };
           state.sawDelta = true;
           toolCallState.set(toolCallId, state);
@@ -379,10 +408,11 @@ export async function* callOpenAIResponseStream(
           break;
         }
         case 'response.function_call_arguments.done': {
-          const toolCallId = typeof record.item_id === 'string' ? record.item_id : undefined;
+          const itemId = typeof record.item_id === 'string' ? record.item_id : undefined;
           const name = typeof record.name === 'string' ? record.name : undefined;
           const args = typeof record.arguments === 'string' ? record.arguments : undefined;
-          if (!toolCallId) break;
+          if (!itemId) break;
+          const toolCallId = itemIdToCallId.get(itemId) || itemId;
           const state = toolCallState.get(toolCallId) || { started: false, sawDelta: false };
           // Fallback: certains flux peuvent ne pas émettre de delta, uniquement "done"
           if (!state.started) {

@@ -34,4 +34,12 @@ Define and implement an onboarding and authorization model where:
 ## Recent fixes
 - `make db-backup` fixed in dev (runs `pg_dump` via TCP as `app/app`, avoids peer/root role issues).
 
+- **Major chat bugfix (tool loops + missing final response)**:
+  - **Root cause**: Responses API tool outputs were being re-injected as pseudo “user JSON messages”, losing the tool-output semantics and causing repeated `read_usecase` loops and sometimes no actionable final response.
+  - **Fix**:
+    - **Responses API orchestration**: switch to proper continuation using `previous_response_id` + `function_call_output` with correct `call_id` mapping (fixes 400 `No tool output found for function call call_...`).
+    - **Tracing**: add OpenAI payload tracing (`chat_generation_traces`) including full tool definitions (description + schema), tool calls (args/results), and call-sites to debug orchestrator behavior.
+    - **read_usecase**: add `select` option to scope returned fields (reduce tokens/noise and help prevent tool-call loops).
+    - **Docs**: documented in `spec/SPEC_CHATBOT.md` (Chat tracing section).
+
 

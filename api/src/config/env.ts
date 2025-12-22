@@ -39,7 +39,12 @@ const envSchema = z.object({
   // Admin Configuration
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration
-  DISABLE_RATE_LIMIT: z.string().optional()
+  DISABLE_RATE_LIMIT: z.string().optional(),
+
+  // Chat tracing (debug / audit)
+  // Store OpenAI payloads + tool calls for troubleshooting loops.
+  CHAT_TRACE_ENABLED: z.string().optional(),
+  CHAT_TRACE_RETENTION_DAYS: z.coerce.number().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -50,6 +55,10 @@ export const env: AppEnv = (() => {
   // unless explicitly overridden.
   if (parsed.NODE_ENV === 'test' && !parsed.DISABLE_RATE_LIMIT) {
     return { ...parsed, DISABLE_RATE_LIMIT: 'true' };
+  }
+  // Defaults for chat tracing
+  if (!parsed.CHAT_TRACE_RETENTION_DAYS) {
+    return { ...parsed, CHAT_TRACE_RETENTION_DAYS: 7 };
   }
   return parsed;
 })();
