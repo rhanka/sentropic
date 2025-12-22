@@ -50,6 +50,7 @@
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
   const terminalRefreshInFlight = new Set<string>();
+  const jobPollInFlight = new Set<string>();
 
   /**
    * Détecte le contexte depuis la route actuelle
@@ -236,6 +237,45 @@
     terminalRefreshInFlight.delete(streamId);
   };
 
+  const pollJobUntilTerminal = async (jobId: string, streamId: string, opts?: { timeoutMs?: number }) => {
+    if (!jobId || !streamId) return;
+    if (jobPollInFlight.has(jobId)) return;
+    jobPollInFlight.add(jobId);
+    const timeoutMs = opts?.timeoutMs ?? 60_000;
+    const startedAt = Date.now();
+    try {
+      // Petit délai: si SSE marche, on évite de poller tout de suite
+      await new Promise((r) => setTimeout(r, 750));
+
+      while (Date.now() - startedAt < timeoutMs) {
+        // Si entre-temps le message a été hydraté (contenu final) ou marqué terminal, on stop
+        const current = messages.find((m) => (m._streamId ?? m.id) === streamId);
+        if (!current) return;
+        if (current.content && current.content.trim().length > 0) return;
+        if (current._localStatus === 'completed' || current._localStatus === 'failed') return;
+
+        // Queue: endpoint user-scopé
+        const job = await apiGet<{ status?: string }>(`/queue/jobs/${encodeURIComponent(jobId)}`);
+        const status = String((job as any)?.status ?? 'unknown');
+
+        if (status === 'completed') {
+          await handleAssistantTerminal(streamId, 'done');
+          return;
+        }
+        if (status === 'failed') {
+          await handleAssistantTerminal(streamId, 'error');
+          return;
+        }
+        // pending/processing
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    } catch {
+      // ignore (fallback best-effort)
+    } finally {
+      jobPollInFlight.delete(jobId);
+    }
+  };
+
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -303,6 +343,10 @@
       messages = [...messages, userMsg, assistantMsg];
       followBottom = true;
       scheduleScrollToBottom({ force: true });
+
+      // Fallback: si SSE rate les events (connection pas prête), on rattrape via polling queue.
+      // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
+      void pollJobUntilTerminal(res.jobId, assistantMsg._streamId ?? assistantMsg.id, { timeoutMs: 90_000 });
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de l’envoi');
     } finally {
@@ -354,6 +398,7 @@
                 streamId={sid}
                 status={m._localStatus ?? (m.content ? 'completed' : 'processing')}
                 finalContent={m.content ?? null}
+                historySource="stream"
                 initialEvents={initEvents}
                 historyPending={showDetailWaiter}
                 onStreamEvent={() => scheduleScrollToBottom()}
