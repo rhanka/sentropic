@@ -146,14 +146,20 @@
         : null;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
-      streamHub.reset();
+      // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
+      // On nettoie uniquement les caches côté UI.
+      streamHub.clearCaches();
       companiesStore.set([]);
       currentCompanyId.set(null);
       foldersStore.set([]);
       currentFolderId.set(null);
       useCasesStore.set([]);
       queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
-      me.set({ loading: false, data: null, error: null });
+      // `me` représente le profil de l'utilisateur courant (pas le scope admin).
+      // On ne le vide que si l'utilisateur change.
+      if (currentUserId !== lastUserId) {
+        me.set({ loading: false, data: null, error: null });
+      }
       lastUserId = currentUserId;
       lastAdminScope = currentScope;
     }

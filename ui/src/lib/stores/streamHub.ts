@@ -72,6 +72,18 @@ class StreamHub {
     this.scheduleReconnect();
   }
 
+  /**
+   * Clear caches without closing SSE.
+   * Useful when switching UI scope while keeping a single SSE connection stable.
+   */
+  clearCaches() {
+    this.lastJobEventById.clear();
+    this.lastCompanyEventById.clear();
+    this.lastFolderEventById.clear();
+    this.lastUseCaseEventById.clear();
+    this.streamHistoryById.clear();
+  }
+
   set(key: string, onEvent: (event: StreamHubEvent) => void) {
     this.subs.set(key, { onEvent });
     // Replay immédiat du cache vers ce subscriber
@@ -241,13 +253,6 @@ class StreamHub {
     const urlObj = new URL(`${API_BASE_URL}/streams/sse`);
     const scoped = getScopedWorkspaceIdForAdmin();
     if (scoped) urlObj.searchParams.set('workspace_id', scoped);
-    // Opt-in stream events: pass only the streamIds that are actually subscribed.
-    // This prevents the server from streaming chat_stream_events globally.
-    const streamIds = new Set<string>();
-    for (const sub of this.subs.values()) {
-      if (sub.streamId) streamIds.add(sub.streamId);
-    }
-    for (const id of streamIds) urlObj.searchParams.append('streamIds', id);
     const url = urlObj.toString();
     if (this.es && this.currentUrl === url) return;
 
