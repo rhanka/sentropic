@@ -3,7 +3,18 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import { ADMIN_WORKSPACE_ID, companies, folders, useCases, userSessions, users, workspaces } from '../../db/schema';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  chatGenerationTraces,
+  chatSessions,
+  chatStreamEvents,
+  contextModificationHistory,
+  emailVerificationCodes,
+  jobQueue,
+  magicLinks,
+  webauthnChallenges,
+  webauthnCredentials
+} from '../../db/schema';
 
 export const adminRouter = new Hono();
 
@@ -162,6 +173,17 @@ adminRouter.post('/users/:id/disable', zValidator('json', disableSchema), async 
     return c.json({ error: 'Cannot disable self' }, 400);
   }
 
+  // Safety: never allow disabling platform/org admins.
+  const [target] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'admin_app' || target.role === 'admin_org') {
+    return c.json({ error: 'Cannot disable admin users' }, 400);
+  }
+
   await db
     .update(users)
     .set({
@@ -197,5 +219,114 @@ adminRouter.post('/users/:id/reactivate', async (c) => {
       updatedAt: now,
     })
     .where(eq(users.id, userId));
+  return c.json({ success: true });
+});
+
+/**
+ * DELETE /admin/users/:id
+ * Immediate suppression: delete user + workspace + all owned data.
+ * Safety: user must be disabled first.
+ */
+adminRouter.delete('/users/:id', async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('id');
+
+  if (userId === admin.userId) {
+    return c.json({ error: 'Cannot delete self' }, 400);
+  }
+
+  const [target] = await db
+    .select({ id: users.id, role: users.role, email: users.email, accountStatus: users.accountStatus })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'admin_app' || target.role === 'admin_org') {
+    return c.json({ error: 'Cannot delete admin users' }, 400);
+  }
+  if (target.accountStatus !== 'disabled_by_admin' && target.accountStatus !== 'disabled_by_user') {
+    return c.json({ error: 'User must be disabled before deletion' }, 400);
+  }
+
+  // Workspace owned by the user (should be 1:1)
+  const [ws] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.ownerUserId, userId))
+    .limit(1);
+  const workspaceId = ws?.id ?? null;
+
+  await db.transaction(async (tx) => {
+    if (workspaceId) {
+      // IMPORTANT: A workspace can be referenced by:
+      // - chat_sessions.workspace_id (including admin-owned sessions scoped to this workspace)
+      // - chat_generation_traces.workspace_id
+      // The FK is NO ACTION, so we must detach these references before deleting the workspace.
+      await tx.update(chatSessions).set({ workspaceId: null }).where(eq(chatSessions.workspaceId, workspaceId));
+      await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
+
+      // Collect object IDs for stream cleanup + history cleanup
+      const companyRows = await tx.select({ id: companies.id }).from(companies).where(eq(companies.workspaceId, workspaceId));
+      const folderRows = await tx.select({ id: folders.id }).from(folders).where(eq(folders.workspaceId, workspaceId));
+      const useCaseRows = await tx.select({ id: useCases.id }).from(useCases).where(eq(useCases.workspaceId, workspaceId));
+
+      const companyIds = companyRows.map((r) => r.id);
+      const folderIds = folderRows.map((r) => r.id);
+      const useCaseIds = useCaseRows.map((r) => r.id);
+
+      // Stream events for structured generations (company_/folder_/usecase_)
+      const streamIds: string[] = [];
+      for (const id of companyIds) streamIds.push(`company_${id}`);
+      for (const id of folderIds) streamIds.push(`folder_${id}`);
+      for (const id of useCaseIds) streamIds.push(`usecase_${id}`);
+      if (streamIds.length) {
+        await tx.delete(chatStreamEvents).where(inArray(chatStreamEvents.streamId, streamIds));
+      }
+
+      // Context modification history linked to these objects
+      if (companyIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(and(eq(contextModificationHistory.contextType, 'company'), inArray(contextModificationHistory.contextId, companyIds)));
+      }
+      if (folderIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(and(eq(contextModificationHistory.contextType, 'folder'), inArray(contextModificationHistory.contextId, folderIds)));
+      }
+      if (useCaseIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(and(eq(contextModificationHistory.contextType, 'usecase'), inArray(contextModificationHistory.contextId, useCaseIds)));
+      }
+
+      // Delete business objects (workspace scoped)
+      await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+      await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
+      await tx.delete(companies).where(eq(companies.workspaceId, workspaceId));
+      await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
+
+      // Delete workspace
+      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    }
+
+    // Auth artifacts
+    await tx.delete(userSessions).where(eq(userSessions.userId, userId));
+    await tx.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, userId));
+    await tx.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, userId));
+
+    // Email/magic link artifacts (best effort)
+    if (target.email) {
+      await tx.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, target.email));
+      await tx.delete(magicLinks).where(eq(magicLinks.email, target.email));
+    }
+
+    // Delete chat sessions (cascade deletes chat_messages/contexts; stream events with messageId also cascade)
+    await tx.delete(chatSessions).where(eq(chatSessions.userId, userId));
+
+    // Finally delete user
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+
   return c.json({ success: true });
 });

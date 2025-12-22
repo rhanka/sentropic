@@ -13,6 +13,7 @@
     ADMIN_WORKSPACE_ID,
     adminReadOnlyScope
   } from '$lib/stores/adminWorkspaceScope';
+  import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
 
   interface Prompt {
     id: string;
@@ -72,6 +73,11 @@
     return s.user?.role === 'admin_app';
   };
 
+  const onAdminScopeChange = (e: Event) => {
+    const v = (e.currentTarget as HTMLSelectElement | null)?.value;
+    if (v) setAdminWorkspaceScope(v);
+  };
+
   let savingWorkspace = false;
   let deleting = false;
   let deactivating = false;
@@ -87,7 +93,7 @@
     if (!$me.data?.workspace) return;
     savingWorkspace = true;
     try {
-      await updateMe({ workspaceName, shareWithAdmin });
+      await updateMe(isAdmin() ? { workspaceName } : { workspaceName, shareWithAdmin });
       addToast({ type: 'success', message: 'Paramètres du workspace enregistrés' });
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur enregistrement workspace' });
@@ -361,7 +367,7 @@
                 <select
                   class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
                   bind:value={$adminWorkspaceScope.selectedId}
-                  on:change={(e) => setAdminWorkspaceScope((e.currentTarget as HTMLSelectElement).value)}
+                  on:change={onAdminScopeChange}
                 >
                   <option value={ADMIN_WORKSPACE_ID}>Admin Workspace</option>
                   {#each $adminWorkspaceScope.items.filter((w) => w.id !== ADMIN_WORKSPACE_ID) as ws (ws.id)}
@@ -382,10 +388,12 @@
               <div class="text-slate-600">Nom</div>
               <input class="mt-1 w-full rounded border border-slate-200 px-3 py-2" bind:value={workspaceName} />
             </label>
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" class="h-4 w-4" bind:checked={shareWithAdmin} />
-              <span>Partager mon workspace avec l’administrateur</span>
-            </label>
+            {#if !isAdmin()}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" class="h-4 w-4" bind:checked={shareWithAdmin} />
+                <span>Partager mon workspace avec l’administrateur</span>
+              </label>
+            {/if}
             <div class="flex gap-2">
               <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white" on:click={saveWorkspace} disabled={savingWorkspace}>
                 Enregistrer
@@ -592,6 +600,11 @@
       </button>
     </div>
   </div>
+
+  {#if isAdminApp()}
+    <!-- Interface admin (utilisateurs) - intégrée dans Paramètres -->
+    <AdminUsersPanel embeddedTitle="Admin · Utilisateurs (approbations)" />
+  {/if}
 
   <!-- Section Administration -->
   <div class="rounded border border-red-200 bg-red-50 p-6">

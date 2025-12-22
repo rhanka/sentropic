@@ -19,6 +19,29 @@ Define and implement an onboarding and authorization model where:
 - [x] Test updates: unit/api/ai tests adjusted to tenancy + new onboarding rules.
 - [x] UI: Settings (workspace privacy, account deactivate/delete), Admin panel (approvals).
 - [x] UI: ChatWidget "Jobs IA" (queue monitor in user environment) + purge "mes jobs".
+
+## Tests — plan d’action (API / UI / E2E)
+### API (Vitest)
+- **Mettre à jour**:
+  - `api/tests/api/me.test.ts`: couvrir `DELETE /me` quand le workspace est référencé par:
+    - `chat_sessions.workspace_id` (sessions admin scopées sur le workspace user)
+    - `chat_generation_traces.workspace_id`
+  - `api/tests/api/admin-approval.test.ts` ou fichier dédié: couvrir `DELETE /admin/users/:id` avec le même scénario (régression 500 FK).
+- **Créer**:
+  - `api/tests/api/admin-user-delete.test.ts`:
+    - refuse suppression si user non désactivé
+    - suppression OK si user désactivé
+    - suppression OK même si `chat_sessions.workspace_id` / `chat_generation_traces.workspace_id` pointent sur le workspace supprimé (détachement `NULL`)
+
+### UI (Vitest)
+- **Pas de tests composants Svelte en place** (on a surtout stores/utils). Donc pas de “unit tests UI” à ajouter pour les confirmations `confirm()`.
+
+### E2E (Playwright)
+- **Mettre à jour**:
+  - `e2e/tests/settings.spec.ts`: scénarios admin dans Paramètres (disable + delete user, confirmations).
+- **Créer (optionnel si tu veux isoler)**:
+  - `e2e/tests/admin-users.spec.ts`: suite dédiée “admin users” (disable/delete + garde-fous: self/admin non supprimables).
+
 - [ ] E2E tests for tenancy boundaries + approval expiry downgrade (guest) + blocking if email not verified.
 
 ## Commits & Progress
@@ -33,6 +56,15 @@ Define and implement an onboarding and authorization model where:
 
 ## Recent fixes
 - `make db-backup` fixed in dev (runs `pg_dump` via TCP as `app/app`, avoids peer/root role issues).
+
+- **Admin UI confirmations**:
+  - Disable user: simple confirmation (no "reason" input).
+  - Delete user: simple confirmation (no typed "DELETE").
+
+- **Fix 500 on user deletion (FK chat_sessions.workspace_id)**:
+  - Detach `chat_sessions.workspace_id` and `chat_generation_traces.workspace_id` (set to `NULL`) before deleting a workspace in:
+    - `DELETE /api/v1/admin/users/:id`
+    - `DELETE /api/v1/me`
 
 - **Major chat bugfix (tool loops + missing final response)**:
   - **Root cause**: Responses API tool outputs were being re-injected as pseudo “user JSON messages”, losing the tool-output semantics and causing repeated `read_usecase` loops and sometimes no actionable final response.

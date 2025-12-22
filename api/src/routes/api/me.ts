@@ -4,6 +4,7 @@ import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import {
   chatSessions,
+  chatGenerationTraces,
   chatStreamEvents,
   companies,
   contextModificationHistory,
@@ -184,11 +185,18 @@ meRouter.delete('/', async (c) => {
       await tx.delete(magicLinks).where(eq(magicLinks.email, u.email));
     }
 
+    // IMPORTANT: This workspace can be referenced by:
+    // - chat_sessions.workspace_id (including admin-owned sessions scoped to this workspace)
+    // - chat_generation_traces.workspace_id
+    // The FK is NO ACTION, so we must detach these references before deleting the workspace.
+    await tx.update(chatSessions).set({ workspaceId: null }).where(eq(chatSessions.workspaceId, workspaceId));
+    await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
+
+    // Delete chat sessions owned by this user (cascade deletes chat_messages/contexts)
+    await tx.delete(chatSessions).where(eq(chatSessions.userId, userId));
+
     // Delete workspace owned by this user
     await tx.delete(workspaces).where(and(eq(workspaces.id, workspaceId), eq(workspaces.ownerUserId, userId)));
-
-    // Delete chat sessions (cascade deletes chat_messages/contexts; stream events with messageId also cascade)
-    await tx.delete(chatSessions).where(eq(chatSessions.userId, userId));
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
