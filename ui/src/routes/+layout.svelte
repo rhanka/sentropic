@@ -38,7 +38,6 @@
     '/dashboard',
     '/dashboard-tmp',
     '/parametres',
-    '/admin',
     '/auth/devices'
   ];
 
@@ -54,8 +53,7 @@
     if (
       path.startsWith('/entreprises/') || 
       path.startsWith('/dossiers/') || 
-      path.startsWith('/cas-usage/') ||
-      path.startsWith('/admin/')
+      path.startsWith('/cas-usage/')
     ) {
       return true;
     }
