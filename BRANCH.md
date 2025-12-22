@@ -39,18 +39,20 @@ Define and implement an onboarding and authorization model where:
   - `e2e/tests/settings.spec.ts`: scénarios admin dans Paramètres (disable + delete user, confirmations).
 - **Créer (optionnel si tu veux isoler)**:
   - `e2e/tests/admin-users.spec.ts`: suite dédiée “admin users” (disable/delete + garde-fous: self/admin non supprimables).
-
-- [ ] E2E tests for tenancy boundaries + approval expiry downgrade (guest) + blocking if email not verified.
+- **Stabilisé**:
+  - `e2e/tests/chat.spec.ts`: exécution séquentielle + attentes API déterministes (anti-flaky).
+  - `e2e/tests/ai-generation.spec.ts`: polling déterministe via `GET /queue/jobs/:id` + `GET /use-cases?folder_id=...` (anti-flaky SSE/UI).
 
 ## Commits & Progress
-- [ ] **Commit set**: docs + tooling + db + auth + api + tests (see `git log`)
+- [x] `3e06bc7` fix(chat): fallback polling queue quand SSE rate un message + e2e stable
+- [x] `9e9b6c1` test(e2e): stabilise ai-generation via polling queue/api (anti-SSE flake)
 
 ## Status
-- **Progress**: backend ✅ / UI ✅ / E2E ⏳
+- **Progress**: backend ✅ / UI ✅ / E2E ✅ (chat + ai-generation)
 - **Current**: Workspaces + approval + queue tenancy implemented, including `/api/v1/admin/users/*`, `/api/v1/me/*`, `/api/v1/queue/*` (workspace-scoped) + UI surfaces.
 - **Next**:
   - Fixes & evols (see TODOs / issues list in chat)
-  - E2E tests for tenancy boundaries + onboarding edge-cases
+  - E2E tenancy boundaries + onboarding edge-cases (approval expiry downgrade, email not verified, etc.)
 
 ## Recent fixes
 - `make db-backup` fixed in dev (runs `pg_dump` via TCP as `app/app`, avoids peer/root role issues).
