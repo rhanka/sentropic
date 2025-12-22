@@ -65,6 +65,12 @@
     await chatPanelRef?.selectSession?.(value);
   };
 
+  const onHeaderSelectionChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target?.value ?? '__new__';
+    void handleHeaderSelectionChange(value);
+  };
+
   const onJobUpdate = (evt: any) => {
     if (evt?.type !== 'job_update') return;
     const data = evt.data ?? {};
@@ -190,7 +196,7 @@
             class="w-52 min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs"
             bind:value={headerSelection}
             disabled={chatLoadingSessions}
-            on:change={(e) => void handleHeaderSelectionChange((e.currentTarget as HTMLSelectElement).value)}
+            on:change={onHeaderSelectionChange}
             title="Session / Jobs"
           >
             <option value="__new__">Nouvelle session</option>
@@ -262,9 +268,11 @@
 
       <!-- Contenu (QueueMonitor inchangé hors header) -->
       <div class="flex-1 min-h-0">
-        <div class="h-full" class:hidden={activeTab !== 'queue'}>
-          <QueueMonitor />
-        </div>
+        {#if activeTab === 'queue'}
+          <div class="h-full">
+            <QueueMonitor />
+          </div>
+        {/if}
         <div class="h-full" class:hidden={activeTab !== 'chat'}>
           <ChatPanel
             bind:this={chatPanelRef}

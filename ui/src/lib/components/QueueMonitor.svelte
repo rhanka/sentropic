@@ -6,6 +6,9 @@
   import { isAuthenticated } from '$lib/stores/session';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
 
+  // Détails par job (éviter N relectures d’historique au montage)
+  let expandedJobId: string | null = null;
+
   // Charger les jobs au montage et toutes les 5 secondes (seulement si authentifié)
   onMount(async () => {
     if ($isAuthenticated) {
@@ -160,13 +163,16 @@
                     <p class="text-xs text-gray-500">Durée: {getJobDuration(job)}</p>
                   {/if}
 
-            <StreamMessage
-              streamId={getStreamIdForJob(job)}
-              status={job.status}
-              variant="job"
-              historySource="stream"
-              historyLimit={2000}
-            />
+            {#if job.status === 'pending' || job.status === 'processing' || expandedJobId === job.id}
+              <StreamMessage
+                streamId={getStreamIdForJob(job)}
+                status={job.status}
+                variant="job"
+                historySource={expandedJobId === job.id ? 'stream' : 'none'}
+                historyLimit={expandedJobId === job.id ? 200 : 0}
+                maxHistory={6}
+              />
+            {/if}
 
                   {#if job.error}
                     <p class="text-xs text-red-600 mt-1 bg-red-50 p-2 rounded">
@@ -176,6 +182,27 @@
                 </div>
 
                 <div class="flex gap-1 ml-2">
+                  {#if (job.status === 'completed' || job.status === 'failed') && expandedJobId !== job.id}
+                    <button
+                      class="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded"
+                      on:click={() => (expandedJobId = job.id)}
+                      title="Voir le détail (historique)"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m-6 4h6m-6 4h6m-6 4h6" />
+                      </svg>
+                    </button>
+                  {:else if expandedJobId === job.id}
+                    <button
+                      class="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded"
+                      on:click={() => (expandedJobId = null)}
+                      title="Masquer le détail"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </button>
+                  {/if}
                   {#if job.status === 'pending' || job.status === 'processing'}
                     <button
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
