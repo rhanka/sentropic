@@ -459,11 +459,20 @@ streamsRouter.get('/sse', async (c) => {
             const seq = Number(payload.sequence);
             if (Number.isFinite(seq)) {
               // Fast path: emit the notified event only (no drain, no history replay).
+              // IMPORTANT: if we (re)connect mid-stream, we may have missed earlier events (including 'done').
+              // In that case, do a catch-up drain once to avoid "stuck" UIs.
               void (async () => {
                 const allowed = await isStreamAllowed(streamId);
                 if (!allowed) return;
-                await emitSingleStreamEvent(streamId, seq);
-                lastSeq[streamId] = Math.max(lastSeq[streamId] ?? 0, seq);
+                const prev = Number.isFinite(lastSeq[streamId]) ? (lastSeq[streamId] as number) : 0;
+                if (seq <= prev) return;
+                if (seq === prev + 1 && prev > 0) {
+                  await emitSingleStreamEvent(streamId, seq);
+                  lastSeq[streamId] = seq;
+                  return;
+                }
+                // Gap detected (or first seen): catch up by draining from lastSeq (or 0).
+                void drainStream(streamId);
               })();
               return;
             }
