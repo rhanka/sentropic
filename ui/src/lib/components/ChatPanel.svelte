@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { afterUpdate, onMount, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
@@ -41,8 +41,10 @@
   let errorMsg: string | null = null;
   let input = '';
   let listEl: HTMLDivElement | null = null;
-  let pendingScrollToBottom = false;
-  let scrollToBottomInFlight = false;
+  let followBottom = true;
+  let scrollScheduled = false;
+  let scrollForcePending = false;
+  const BOTTOM_THRESHOLD_PX = 96;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -76,8 +78,27 @@
     return null;
   };
 
-  const requestScrollToBottom = () => {
-    pendingScrollToBottom = true;
+  const isNearBottom = (): boolean => {
+    if (!listEl) return true;
+    const remaining = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+    return remaining < BOTTOM_THRESHOLD_PX;
+  };
+
+  const scheduleScrollToBottom = (opts?: { force?: boolean }) => {
+    if (opts?.force) scrollForcePending = true;
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+      scrollScheduled = false;
+      const force = scrollForcePending;
+      scrollForcePending = false;
+      if (!force && !followBottom) return;
+      void scrollChatToBottomStable();
+    });
+  };
+
+  const onListScroll = () => {
+    followBottom = isNearBottom();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -104,22 +125,6 @@
       }
     }
   };
-
-  // Exécuter le scroll UNIQUEMENT quand on l'a explicitement demandé (load/switch/stream),
-  // pas sur des updates DOM ordinaires (ex: ouverture d'un chevron).
-  afterUpdate(() => {
-    if (!pendingScrollToBottom) return;
-    if (scrollToBottomInFlight) return;
-    pendingScrollToBottom = false;
-    scrollToBottomInFlight = true;
-    void (async () => {
-      try {
-        await scrollChatToBottomStable();
-      } finally {
-        scrollToBottomInFlight = false;
-      }
-    })();
-  });
 
   const formatApiError = (e: unknown, fallback: string) => {
     if (e instanceof ApiError) {
@@ -157,7 +162,7 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined
       }));
-      if (opts?.scrollToBottom !== false) requestScrollToBottom();
+      if (opts?.scrollToBottom !== false) scheduleScrollToBottom({ force: true });
 
       // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
       initialEventsByMessageId = new Map();
@@ -200,7 +205,7 @@
     messages = [];
     initialEventsByMessageId = new Map();
     errorMsg = null;
-    requestScrollToBottom();
+    scheduleScrollToBottom({ force: true });
   };
 
   export const deleteCurrentSession = async () => {
@@ -225,7 +230,7 @@
       (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' } : m
     );
     if (sessionId) await loadMessages(sessionId, { scrollToBottom: true });
-    requestScrollToBottom();
+    scheduleScrollToBottom({ force: true });
     // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
     await tick();
     terminalRefreshInFlight.delete(streamId);
@@ -296,7 +301,8 @@
         _streamId: res.streamId
       };
       messages = [...messages, userMsg, assistantMsg];
-      requestScrollToBottom();
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de l’envoi');
     } finally {
@@ -318,6 +324,7 @@
     class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 slim-scroll"
     style="scrollbar-gutter: stable;"
     bind:this={listEl}
+    on:scroll={onListScroll}
   >
     {#if errorMsg}
       <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
@@ -349,7 +356,7 @@
                 finalContent={m.content ?? null}
                 initialEvents={initEvents}
                 historyPending={showDetailWaiter}
-                onStreamEvent={() => requestScrollToBottom()}
+                onStreamEvent={() => scheduleScrollToBottom()}
                 onTerminal={(t) => void handleAssistantTerminal(sid, t)}
               />
             </div>
