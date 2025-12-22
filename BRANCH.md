@@ -55,6 +55,10 @@ Define and implement an onboarding and authorization model where:
 ## Recent fixes
 - `make db-backup` fixed in dev (runs `pg_dump` via TCP as `app/app`, avoids peer/root role issues).
 
+- **Queue scheduling (anti-starvation)**:
+  - `QueueManager.processJobs()` ne traite plus par “batch bloquant”: la concurrence est remplie **au fil de l’eau** (on attend la fin d’un job, puis on reprend un autre).
+  - Priorité: `chat_message` puis `usecase_list`, puis le reste (FIFO), pour éviter que des gros jobs (`company_enrich`, `usecase_detail`, …) ne bloquent le chat.
+
 - **Admin UI confirmations**:
   - Disable user: simple confirmation (no "reason" input).
   - Delete user: simple confirmation (no typed "DELETE").

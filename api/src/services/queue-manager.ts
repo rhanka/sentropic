@@ -259,23 +259,52 @@ export class QueueManager {
     console.log('🚀 Starting job processing...');
 
     try {
+      const inFlight = new Set<Promise<void>>();
+
+      const pickPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
+        if (limit <= 0) return [];
+        // Priority: chat > usecase_list > others, then FIFO by created_at.
+        // This avoids chat starvation when long jobs (usecase_detail/executive_summary) are running.
+        return (await db.all(sql`
+          SELECT * FROM job_queue
+          WHERE status = 'pending'
+          ORDER BY
+            CASE type
+              WHEN 'chat_message' THEN 0
+              WHEN 'usecase_list' THEN 1
+              ELSE 2
+            END,
+            created_at ASC
+          LIMIT ${limit}
+        `)) as JobQueueRow[];
+      };
+
       while (!this.paused) {
         if (this.cancelAllInProgress) break;
-        // Récupérer les jobs en attente
-        const pendingJobs = await db.all(sql`
-          SELECT * FROM job_queue 
-          WHERE status = 'pending' 
-          ORDER BY created_at ASC 
-          LIMIT ${this.maxConcurrentJobs}
-        `) as JobQueueRow[];
 
-        if (pendingJobs.length === 0) {
-          break;
+        // Fill available slots continuously (don't wait for a whole batch to finish).
+        const slots = Math.max(0, this.maxConcurrentJobs - inFlight.size);
+        if (slots > 0) {
+          const pendingJobs = await pickPendingJobs(slots);
+          for (const job of pendingJobs) {
+            let p: Promise<void>;
+            p = this.processJob(job).finally(() => {
+              inFlight.delete(p);
+            });
+            inFlight.add(p);
+          }
         }
 
-        // Traiter les jobs en parallèle
-        const promises = pendingJobs.map((job) => this.processJob(job));
-        await Promise.all(promises);
+        // If nothing is running and nothing is pending, we're done.
+        if (inFlight.size === 0) {
+          const more = await pickPendingJobs(1);
+          if (more.length === 0) break;
+          // else loop will pick it next iteration
+          continue;
+        }
+
+        // Wait for at least one job to finish, then continue filling.
+        await Promise.race(inFlight);
       }
     } finally {
       this.isProcessing = false;
