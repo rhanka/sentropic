@@ -99,9 +99,11 @@ chatRouter.post('/messages', zValidator('json', createMessageInput), async (c) =
   // Workspace scope for chat: admin_app can target a shared workspace (read-only), otherwise own workspace.
   let targetWorkspaceId = user.workspaceId as string;
   try {
+    const requestedRaw = (body as Record<string, unknown>)['workspace_id'];
+    const requestedWorkspaceId = typeof requestedRaw === 'string' ? requestedRaw : undefined;
     targetWorkspaceId = await resolveReadableWorkspaceId({
       user: { role: user.role, workspaceId: user.workspaceId },
-      requested: (body as any)?.workspace_id
+      requested: requestedWorkspaceId
     });
   } catch {
     // opaque

@@ -59,6 +59,14 @@ Define and implement an onboarding and authorization model where:
   - `QueueManager.processJobs()` ne traite plus par “batch bloquant”: la concurrence est remplie **au fil de l’eau** (on attend la fin d’un job, puis on reprend un autre).
   - Priorité: `chat_message` puis `usecase_list`, puis le reste (FIFO), pour éviter que des gros jobs (`company_enrich`, `usecase_detail`, …) ne bloquent le chat.
 
+- **Qualité (Make targets)**:
+  - `make typecheck` ✅ (UI + API)
+  - `make lint` ✅ (UI + API)
+
+- **UI: suppression des routes admin (doublon)**:
+  - Suppression du lien **Admin** dans le header.
+  - Suppression complète de `ui/src/routes/admin/` (la gestion users admin est dans **Paramètres**).
+
 - **Admin UI confirmations**:
   - Disable user: simple confirmation (no "reason" input).
   - Delete user: simple confirmation (no typed "DELETE").
@@ -75,5 +83,9 @@ Define and implement an onboarding and authorization model where:
     - **Tracing**: add OpenAI payload tracing (`chat_generation_traces`) including full tool definitions (description + schema), tool calls (args/results), and call-sites to debug orchestrator behavior.
     - **read_usecase**: add `select` option to scope returned fields (reduce tokens/noise and help prevent tool-call loops).
     - **Docs**: documented in `spec/SPEC_CHATBOT.md` (Chat tracing section).
+
+## Reste à faire (court)
+- UAT manuel: valider les flows Chat + Génération IA avec `gpt-4.1-nano` (focus “workspace + chat”).
+- Re-run E2E complet quand tu valides côté UAT (objectif: zéro fail/flaky).
 
 

@@ -16,8 +16,10 @@
   let isLoading = false;
   const HUB_KEY = 'foldersPage';
 
-  onMount(async () => {
-    await loadFolders();
+  onMount(() => {
+    void (async () => {
+      await loadFolders();
+    })();
     // SSE: folder_update + usecase_update
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type === 'folder_update') {

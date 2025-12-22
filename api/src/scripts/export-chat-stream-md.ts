@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 type DbEventRow = {
   sequence: number;
   eventType: string;
-  data: any;
+  data: unknown;
   createdAt: string;
 };
 
@@ -16,10 +16,10 @@ type DbTraceRow = {
   iteration: number;
   model: string | null;
   toolChoice: string | null;
-  tools: any;
-  openaiMessages: any;
-  toolCalls: any;
-  meta: any;
+  tools: unknown;
+  openaiMessages: unknown;
+  toolCalls: unknown;
+  meta: unknown;
 };
 
 function mustGetEnv(name: string): string {
@@ -44,6 +44,10 @@ function jsonPretty(value: unknown): string {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
 function fenceJson(value: unknown): string {
   return `\n\`\`\`json\n${jsonPretty(value)}\n\`\`\`\n`;
 }
@@ -56,7 +60,8 @@ function summarizeTools(events: DbEventRow[]): Array<{ name: string; n: number }
   const counts = new Map<string, number>();
   for (const ev of events) {
     if (ev.eventType !== 'tool_call_start') continue;
-    const name = String(ev.data?.name ?? 'unknown');
+    const data = asRecord(ev.data);
+    const name = String(data.name ?? 'unknown');
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]
@@ -114,7 +119,7 @@ async function main() {
   `,
         [msg.sessionId, msg.messageSeq - 1]
       )
-    : { rows: [] as any[] };
+    : { rows: [] as unknown[] };
   const prevUser = prevUserRes.rows[0] as { id: string; content: string } | undefined;
 
   const evRes = await client.query(
@@ -130,12 +135,15 @@ async function main() {
   `,
     [streamId]
   );
-  const events: DbEventRow[] = evRes.rows.map((r: any) => ({
-    sequence: Number(r.sequence),
-    eventType: String(r.eventType),
-    data: r.data,
-    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt)
-  }));
+  const events: DbEventRow[] = (evRes.rows as unknown[]).map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      sequence: Number(r.sequence),
+      eventType: String(r.eventType),
+      data: r.data,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt)
+    };
+  });
 
   const traceRes = await client.query(
     `
@@ -155,17 +163,20 @@ async function main() {
   `,
     [streamId]
   );
-  const traces: DbTraceRow[] = traceRes.rows.map((r: any) => ({
-    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-    phase: String(r.phase),
-    iteration: Number(r.iteration),
-    model: r.model ?? null,
-    toolChoice: r.toolChoice ?? null,
-    tools: r.tools,
-    openaiMessages: r.openaiMessages,
-    toolCalls: r.toolCalls,
-    meta: r.meta
-  }));
+  const traces: DbTraceRow[] = (traceRes.rows as unknown[]).map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+      phase: String(r.phase),
+      iteration: Number(r.iteration),
+      model: (r.model as string | null | undefined) ?? null,
+      toolChoice: (r.toolChoice as string | null | undefined) ?? null,
+      tools: r.tools,
+      openaiMessages: r.openaiMessages,
+      toolCalls: r.toolCalls,
+      meta: r.meta
+    };
+  });
 
   await client.end();
 
@@ -181,26 +192,29 @@ async function main() {
 
   for (const ev of events) {
     if (ev.eventType === 'tool_call_start') {
-      const id = String(ev.data?.tool_call_id ?? '').trim();
+      const data = asRecord(ev.data);
+      const id = String(data.tool_call_id ?? '').trim();
       if (!id) continue;
       const entry = toolMeta.get(id) ?? { id, argsText: '' };
-      entry.name = String(ev.data?.name ?? entry.name ?? 'unknown');
+      entry.name = String(data.name ?? entry.name ?? 'unknown');
       entry.startSeq = entry.startSeq ?? ev.sequence;
       entry.startAt = entry.startAt ?? ev.createdAt;
-      const args = String(ev.data?.args ?? '');
+      const args = String(data.args ?? '');
       if (args) entry.argsText += args;
       toolMeta.set(id, entry);
     } else if (ev.eventType === 'tool_call_delta') {
-      const id = String(ev.data?.tool_call_id ?? '').trim();
+      const data = asRecord(ev.data);
+      const id = String(data.tool_call_id ?? '').trim();
       if (!id) continue;
       const entry = toolMeta.get(id) ?? { id, argsText: '' };
-      entry.argsText += String(ev.data?.delta ?? '');
+      entry.argsText += String(data.delta ?? '');
       toolMeta.set(id, entry);
     } else if (ev.eventType === 'tool_call_result') {
-      const id = String(ev.data?.tool_call_id ?? '').trim();
+      const data = asRecord(ev.data);
+      const id = String(data.tool_call_id ?? '').trim();
       if (!id) continue;
       const entry = toolMeta.get(id) ?? { id, argsText: '' };
-      entry.result = ev.data?.result ?? ev.data;
+      entry.result = data.result ?? ev.data;
       entry.resultSeq = ev.sequence;
       entry.resultAt = ev.createdAt;
       toolMeta.set(id, entry);
@@ -248,7 +262,7 @@ async function main() {
 
   for (const ev of events) {
     if (ev.eventType === 'reasoning_delta') {
-      const delta = String(ev.data?.delta ?? '');
+      const delta = String(asRecord(ev.data).delta ?? '');
       if (!bufReason) bufReason = { seqStart: ev.sequence, atStart: ev.createdAt, lastSeq: ev.sequence, lastAt: ev.createdAt, text: '' };
       bufReason.text += delta;
       bufReason.lastSeq = ev.sequence;
@@ -256,7 +270,7 @@ async function main() {
       continue;
     }
     if (ev.eventType === 'content_delta') {
-      const delta = String(ev.data?.delta ?? '');
+      const delta = String(asRecord(ev.data).delta ?? '');
       if (!bufContent) bufContent = { seqStart: ev.sequence, atStart: ev.createdAt, lastSeq: ev.sequence, lastAt: ev.createdAt, text: '' };
       bufContent.text += delta;
       bufContent.lastSeq = ev.sequence;
@@ -273,7 +287,8 @@ async function main() {
       continue;
     }
     if (ev.eventType === 'tool_call_result') {
-      const toolCallId = String(ev.data?.tool_call_id ?? '').trim();
+      const data = asRecord(ev.data);
+      const toolCallId = String(data.tool_call_id ?? '').trim();
       if (toolCallId && !emittedTools.has(toolCallId)) {
         const meta = toolMeta.get(toolCallId);
         steps.push({
@@ -285,7 +300,7 @@ async function main() {
           startAt: meta?.startAt,
           resultAt: meta?.resultAt,
           args: safeJsonParse(meta?.argsText ?? ''),
-          result: meta?.result ?? ev.data?.result ?? ev.data
+          result: meta?.result ?? data.result ?? ev.data
         });
         emittedTools.add(toolCallId);
       }
@@ -341,14 +356,15 @@ async function main() {
     lines.push('');
     for (let i = 0; i < traces.length; i++) {
       const t = traces[i];
+      const meta = asRecord(t.meta);
       lines.push(`### Trace ${i + 1}`);
       lines.push(`- **at**: ${t.createdAt}`);
       lines.push(`- **phase**: \`${t.phase}\``);
       lines.push(`- **iteration**: ${t.iteration}`);
       lines.push(`- **model**: ${t.model ?? '(null)'}`);
       lines.push(`- **toolChoice**: ${t.toolChoice ?? '(null)'}`);
-      lines.push(`- **callSite**: \`${String(t.meta?.callSite ?? '(unknown)')}\``);
-      lines.push(`- **openaiApi**: \`${String(t.meta?.openaiApi ?? '(unknown)')}\``);
+      lines.push(`- **callSite**: \`${String(meta.callSite ?? '(unknown)')}\``);
+      lines.push(`- **openaiApi**: \`${String(meta.openaiApi ?? '(unknown)')}\``);
       lines.push('');
       lines.push('**tools (exposés)**:');
       lines.push(fenceJson(t.tools ?? null));

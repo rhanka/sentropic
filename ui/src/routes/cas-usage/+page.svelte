@@ -26,35 +26,37 @@
     loadUseCases();
   }
 
-  onMount(async () => {
-    // Vérifier si on doit générer
-    const urlParams = new URLSearchParams($page.url.search);
-    const shouldGenerate = urlParams.get('generate') === 'true';
-    const context = urlParams.get('context');
-    const createNewFolder = urlParams.get('createNewFolder') === 'true';
-    const companyId = urlParams.get('companyId');
-    const folderId = urlParams.get('folder');
+  onMount(() => {
+    void (async () => {
+      // Vérifier si on doit générer
+      const urlParams = new URLSearchParams($page.url.search);
+      const shouldGenerate = urlParams.get('generate') === 'true';
+      const context = urlParams.get('context');
+      const createNewFolder = urlParams.get('createNewFolder') === 'true';
+      const companyId = urlParams.get('companyId');
+      const folderId = urlParams.get('folder');
 
-    // Si un dossier spécifique est demandé, le sélectionner
-    if (folderId) {
-      currentFolderId.set(folderId);
-      // Nettoyer l'URL
-      goto('/cas-usage', { replaceState: true });
-    }
-
-    if (shouldGenerate && context) {
-      // Nettoyer l'URL pour éviter la regénération
-      goto('/cas-usage', { replaceState: true });
-      if ($adminReadOnlyScope) {
-        addToast({ type: 'warning', message: 'Mode lecture seule (workspace partagé) : génération désactivée.' });
-        return;
+      // Si un dossier spécifique est demandé, le sélectionner
+      if (folderId) {
+        currentFolderId.set(folderId);
+        // Nettoyer l'URL
+        goto('/cas-usage', { replaceState: true });
       }
-      // Lancer la génération
-      await startGeneration(context, createNewFolder, companyId);
-    } else if ($currentFolderId) {
-      // Charger les cas existants seulement si un dossier est sélectionné
-      await loadUseCases();
-    }
+
+      if (shouldGenerate && context) {
+        // Nettoyer l'URL pour éviter la regénération
+        goto('/cas-usage', { replaceState: true });
+        if ($adminReadOnlyScope) {
+          addToast({ type: 'warning', message: 'Mode lecture seule (workspace partagé) : génération désactivée.' });
+          return;
+        }
+        // Lancer la génération
+        await startGeneration(context, createNewFolder, companyId);
+      } else if ($currentFolderId) {
+        // Charger les cas existants seulement si un dossier est sélectionné
+        await loadUseCases();
+      }
+    })();
 
     // SSE: usecase_update + folder_update (pour matrixConfig)
     streamHub.set(HUB_KEY, (evt: any) => {

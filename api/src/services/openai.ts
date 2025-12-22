@@ -263,7 +263,7 @@ export async function* callOpenAIResponseStream(
   //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
   // => On utilise donc `content` en string pour tous les rôles.
   const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] = (rawInput && rawInput.length > 0)
-    ? (rawInput as any)
+    ? (rawInput as OpenAI.Responses.ResponseCreateParamsStreaming['input'])
     : messages.map((m) => {
         const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
         const contentRaw = (m as unknown as { content?: unknown }).content;
@@ -348,11 +348,11 @@ export async function* callOpenAIResponseStream(
       switch (type) {
         case 'response.created': {
           // Expose response_id for orchestration (previous_response_id continuation)
-          const response = (record as any).response;
+          const response = (record as Record<string, unknown>).response as Record<string, unknown> | undefined;
           const responseId =
             (response && typeof response.id === 'string' && response.id) ||
-            (typeof (record as any).response_id === 'string' && (record as any).response_id) ||
-            (typeof (record as any).id === 'string' && (record as any).id) ||
+            (typeof (record as Record<string, unknown>).response_id === 'string' && ((record as Record<string, unknown>).response_id as string)) ||
+            (typeof (record as Record<string, unknown>).id === 'string' && ((record as Record<string, unknown>).id as string)) ||
             '';
           if (responseId) yield { type: 'status', data: { state: 'response_created', response_id: responseId } };
           break;

@@ -110,10 +110,12 @@
     };
   });
 
-  onMount(async () => {
+  onMount(() => {
     loadConfig();
+    void (async () => {
     await loadData();
     startAutoRefresh();
+    })();
 
     // Reload on admin workspace scope change
     let lastScope = $adminWorkspaceScope.selectedId;

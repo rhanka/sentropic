@@ -203,9 +203,14 @@ export class ChatService {
   }> {
     const desiredWorkspaceId = input.workspaceId ?? null;
     const existing = input.sessionId ? await this.getSessionForUser(input.sessionId, input.userId) : null;
+    const existingId = existing && typeof (existing as { id?: unknown }).id === 'string' ? (existing as { id: string }).id : null;
+    const existingWorkspaceId =
+      existing && typeof (existing as { workspaceId?: unknown }).workspaceId === 'string'
+        ? ((existing as { workspaceId: string }).workspaceId as string)
+        : null;
     const sessionId =
-      existing && (existing as any)?.id && ((existing as any)?.workspaceId ?? null) === desiredWorkspaceId
-        ? existing.id
+      existingId && existingWorkspaceId === desiredWorkspaceId
+        ? existingId
         : (await this.createSession({
             userId: input.userId,
             workspaceId: desiredWorkspaceId,
@@ -286,7 +291,10 @@ export class ChatService {
     if (!session) throw new Error('Session not found');
 
     const ownerWs = await ensureWorkspaceForUser(options.userId);
-    const sessionWorkspaceId = (session as any)?.workspaceId ?? ownerWs.workspaceId;
+    const sessionWorkspaceId =
+      session && typeof (session as { workspaceId?: unknown }).workspaceId === 'string'
+        ? ((session as { workspaceId: string }).workspaceId as string)
+        : ownerWs.workspaceId;
     // Read-only mode when the chat session is scoped to a different workspace,
     // except for the Admin Workspace (admin_app only can target it via API).
     const readOnly = sessionWorkspaceId !== ownerWs.workspaceId && sessionWorkspaceId !== ADMIN_WORKSPACE_ID;
@@ -364,8 +372,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
     let streamSeq = await getNextSequence(options.assistantMessageId);
     const contentParts: string[] = [];
     const reasoningParts: string[] = [];
-    let sawAnyContent = false;
-    let sawAnyDone = false;
     let lastErrorMessage: string | null = null;
     const executedTools: Array<{ toolCallId: string; name: string; args: unknown; result: unknown }> = [];
     
@@ -387,7 +393,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
-      sawAnyDone = false;
 
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
@@ -434,11 +439,11 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
         // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
         // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
         if (eventType === 'done') {
-          sawAnyDone = true;
           continue;
         }
         if (eventType === 'error') {
-          lastErrorMessage = typeof (data as any)?.message === 'string' ? ((data as any).message as string) : 'Unknown error';
+          const msg = (data as Record<string, unknown>).message;
+          lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
           await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
           streamSeq += 1;
           // on laisse le flux se terminer / throw; le catch global gère
@@ -450,7 +455,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 
         // Capture Responses API response_id for proper continuation
         if (eventType === 'status') {
-          const responseId = typeof (data as any)?.response_id === 'string' ? ((data as any).response_id as string) : '';
+          const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
           if (responseId) previousResponseId = responseId;
         }
 
@@ -458,7 +463,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
           const delta = typeof data.delta === 'string' ? data.delta : '';
           if (delta) {
             contentParts.push(delta);
-            sawAnyContent = true;
           }
         } else if (eventType === 'reasoning_delta') {
           const delta = typeof data.delta === 'string' ? data.delta : '';
@@ -500,7 +504,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
-      const responseToolOutputs: any[] = [];
+      const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
@@ -523,7 +527,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
               options.assistantMessageId,
               'tool_call_result',
               // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as any) } },
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
               streamSeq,
               options.assistantMessageId
             );
@@ -549,7 +553,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
               options.assistantMessageId,
               'tool_call_result',
               // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as any) } },
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
               streamSeq,
               options.assistantMessageId
             );
@@ -717,7 +721,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       // Réinitialiser buffers pour le contenu final
       contentParts.length = 0;
       reasoningParts.length = 0;
-      sawAnyDone = false;
       lastErrorMessage = null;
 
       try {
@@ -748,11 +751,11 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
           const eventType = event.type as StreamEventType;
           const data = (event.data ?? {}) as Record<string, unknown>;
           if (eventType === 'done') {
-            sawAnyDone = true;
             continue;
           }
           if (eventType === 'error') {
-            lastErrorMessage = typeof (data as any)?.message === 'string' ? ((data as any).message as string) : 'Unknown error';
+            const msg = (data as Record<string, unknown>).message;
+            lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
             await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
             streamSeq += 1;
             continue;
@@ -764,7 +767,6 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             const delta = typeof data.delta === 'string' ? data.delta : '';
             if (delta) {
               contentParts.push(delta);
-              sawAnyContent = true;
             }
           } else if (eventType === 'reasoning_delta') {
             const delta = typeof data.delta === 'string' ? data.delta : '';

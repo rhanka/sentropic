@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Workspace constants (keep stable IDs for migrations/backfills)
@@ -116,13 +116,19 @@ export const users = pgTable('users', {
   accountStatus: text('account_status').notNull().default('active'),
   approvalDueAt: timestamp('approval_due_at', { withTimezone: false }),
   approvedAt: timestamp('approved_at', { withTimezone: false }),
-  approvedByUserId: text('approved_by_user_id').references(() => users.id),
+  // Self-FK: define via table callback below to avoid TS self-referential initializer inference issues.
+  approvedByUserId: text('approved_by_user_id'),
   disabledAt: timestamp('disabled_at', { withTimezone: false }),
   disabledReason: text('disabled_reason'),
   emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  approvedByUserIdFk: foreignKey({
+    columns: [table.approvedByUserId],
+    foreignColumns: [table.id],
+  }),
+}));
 
 export const webauthnCredentials = pgTable('webauthn_credentials', {
   id: text('id').primaryKey(),

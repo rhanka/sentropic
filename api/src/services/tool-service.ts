@@ -45,7 +45,7 @@ function coerceMarkdownList(value: unknown): string | null {
   const items = value
     .map((v) => {
       if (typeof v === 'string') return v;
-      if (v && typeof v === 'object' && 'key' in (v as any)) return String((v as any).key ?? '');
+      if (v && typeof v === 'object' && 'key' in (v as Record<string, unknown>)) return String((v as Record<string, unknown>).key ?? '');
       return '';
     })
     .map((s) => s.trim())
@@ -118,7 +118,7 @@ export class ToolService {
     const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
-    const data = (row.data ?? {}) as any;
+    const data = (row.data ?? {}) as Record<string, unknown>;
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
 
     // Si select est fourni: ne renvoyer qu'un sous-ensemble de data (réduit tokens)

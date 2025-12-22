@@ -219,7 +219,7 @@ export async function verifyMagicLink(
     
     const normalizedLinkEmail = link.email.toLowerCase();
     const displayName = deriveDisplayNameFromEmail(normalizedLinkEmail);
-    const [newUser] = await db
+    const inserted = await db
       .insert(users)
       .values({
         id: crypto.randomUUID(),
@@ -232,6 +232,16 @@ export async function verifyMagicLink(
         updatedAt: new Date(),
       })
       .returning();
+
+    // compat: drizzle-orm return type can be inferred as array or QueryResult depending on adapter typings
+    const rows =
+      inserted && typeof inserted === 'object' && 'rows' in inserted
+        ? (inserted as { rows?: unknown[] }).rows
+        : undefined;
+    const newUser = (Array.isArray(inserted) ? inserted[0] : (Array.isArray(rows) ? rows[0] : undefined)) as
+      | (typeof users.$inferSelect)
+      | undefined;
+    if (!newUser?.id) throw new Error('Failed to create user from magic link');
     
     // Update magic link with userId and mark as used
     await db

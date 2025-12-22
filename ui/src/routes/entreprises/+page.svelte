@@ -10,8 +10,10 @@
 
   const HUB_KEY = 'companiesList';
 
-  onMount(async () => {
-    await loadCompanies();
+  onMount(() => {
+    void (async () => {
+      await loadCompanies();
+    })();
 
     // Abonnement SSE global via streamHub
     streamHub.set(HUB_KEY, (evt: any) => {

@@ -1,4 +1,4 @@
-import { and, lt } from 'drizzle-orm';
+import { lt } from 'drizzle-orm';
 import { db } from '../db/client';
 import { chatGenerationTraces } from '../db/schema';
 import { createId } from '../utils/id';
@@ -29,6 +29,8 @@ export async function writeChatGenerationTrace(input: {
 }): Promise<void> {
   if (!input.enabled) return;
 
+  type TraceInsert = typeof chatGenerationTraces.$inferInsert;
+
   await db.insert(chatGenerationTraces).values({
     id: createId(),
     sessionId: input.sessionId,
@@ -39,10 +41,10 @@ export async function writeChatGenerationTrace(input: {
     iteration: input.iteration,
     model: input.model ?? null,
     toolChoice: input.toolChoice ?? null,
-    tools: (input.tools ?? null) as any,
-    openaiMessages: input.openaiMessages as any,
-    toolCalls: (input.toolCalls ?? null) as any,
-    meta: (input.meta ?? null) as any,
+    tools: (input.tools ?? null) as TraceInsert['tools'],
+    openaiMessages: input.openaiMessages as TraceInsert['openaiMessages'],
+    toolCalls: (input.toolCalls ?? null) as TraceInsert['toolCalls'],
+    meta: (input.meta ?? null) as TraceInsert['meta'],
     createdAt: new Date()
   });
 }

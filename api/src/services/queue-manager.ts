@@ -287,8 +287,7 @@ export class QueueManager {
         if (slots > 0) {
           const pendingJobs = await pickPendingJobs(slots);
           for (const job of pendingJobs) {
-            let p: Promise<void>;
-            p = this.processJob(job).finally(() => {
+            const p = this.processJob(job).finally(() => {
               inFlight.delete(p);
             });
             inFlight.add(p);

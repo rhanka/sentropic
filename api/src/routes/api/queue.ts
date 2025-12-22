@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { queueManager } from '../../services/queue-manager';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
@@ -8,7 +8,7 @@ import { and, eq } from 'drizzle-orm';
 
 const queueRouter = new Hono();
 
-async function resolveTargetWorkspaceId(c: any): Promise<string> {
+async function resolveTargetWorkspaceId(c: Context): Promise<string> {
   const { role, workspaceId } = c.get('user') as { role: string; workspaceId: string };
   const requested = c.req.query('workspace_id');
 

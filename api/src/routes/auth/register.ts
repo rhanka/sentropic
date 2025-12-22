@@ -444,6 +444,8 @@ registerRouter.post('/verify', async (c) => {
           displayName: users.displayName,
           role: users.role,
           emailVerified: users.emailVerified,
+          accountStatus: users.accountStatus,
+          approvalDueAt: users.approvalDueAt,
         })
         .from(users)
         .where(eq(users.id, userId))

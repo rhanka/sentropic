@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
@@ -94,7 +94,7 @@ function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
-async function resolveTargetWorkspaceId(c: any, url: URL): Promise<string> {
+async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const requested = url.searchParams.get('workspace_id');
 
@@ -285,22 +285,6 @@ streamsRouter.get('/sse', async (c) => {
             WHERE stream_id = ${streamId} AND sequence = ${sequence}
           `)) as unknown as StreamEventRow | undefined;
           if (!row?.streamId || !row?.eventType) return;
-          push(sseEvent({ eventType: row.eventType, streamId: row.streamId, sequence: row.sequence, data: row.data }));
-        } catch {
-          // ignore
-        }
-      };
-
-      const emitLatestStreamEvent = async (streamId: string) => {
-        try {
-          const row = (await db.get(sql`
-            SELECT stream_id AS "streamId", event_type AS "eventType", data, sequence
-            FROM chat_stream_events
-            WHERE stream_id = ${streamId}
-            ORDER BY sequence DESC
-            LIMIT 1
-          `)) as unknown as StreamEventRow | undefined;
-          if (!row?.streamId || !row?.eventType || !Number.isFinite(row.sequence)) return;
           push(sseEvent({ eventType: row.eventType, streamId: row.streamId, sequence: row.sequence, data: row.data }));
         } catch {
           // ignore
