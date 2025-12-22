@@ -111,8 +111,8 @@
       const state = String(data?.state ?? 'unknown');
       if (state === 'started') {
         st.sawStarted = true;
-        // Ne pas afficher "..." (peu informatif). On garde un libellé stable.
-        st.stepTitle = 'En cours…';
+        // Option B: libellé explicite pour la phase de démarrage
+        st.stepTitle = 'Préparation…';
         st.startedAtMs = ts;
       } else {
         st.stepTitle = `Statut: ${state}`;

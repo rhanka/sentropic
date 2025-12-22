@@ -33,6 +33,35 @@ export type CreateChatMessageInput = {
 };
 
 export class ChatService {
+  private safeTruncate(text: string, maxLen: number): string {
+    if (!text) return '';
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen) + '\n…(tronqué)…';
+  }
+
+  private safeJson(value: unknown, maxLen: number): string {
+    try {
+      const raw = typeof value === 'string' ? value : JSON.stringify(value);
+      return this.safeTruncate(raw, maxLen);
+    } catch {
+      return this.safeTruncate(String(value), maxLen);
+    }
+  }
+
+  private buildToolDigest(executed: Array<{ name: string; result: unknown }>): string {
+    if (!executed.length) return '(aucun outil exécuté)';
+    // On limite agressivement pour éviter des prompts énormes (ex: web_extract).
+    const parts: string[] = [];
+    const maxPerTool = 4000;
+    const maxTotal = 12000;
+    for (const t of executed) {
+      const block = `- ${t.name}:\n${this.safeJson(t.result, maxPerTool)}`;
+      parts.push(block);
+      if (parts.join('\n\n').length > maxTotal) break;
+    }
+    return this.safeTruncate(parts.join('\n\n'), maxTotal);
+  }
+
   async getMessageForUser(messageId: string, userId: string) {
     const [row] = await db
       .select({
@@ -333,6 +362,10 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
     let streamSeq = await getNextSequence(options.assistantMessageId);
     const contentParts: string[] = [];
     const reasoningParts: string[] = [];
+    let sawAnyContent = false;
+    let sawAnyDone = false;
+    let lastErrorMessage: string | null = null;
+    const executedTools: Array<{ name: string; result: unknown }> = [];
     
     // État pour tracker les tool calls en cours
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
@@ -350,6 +383,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
+      sawAnyDone = false;
 
       for await (const event of callOpenAIResponseStream({
         model: options.model || assistantRow.model || undefined,
@@ -361,12 +395,29 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       })) {
         const eventType = event.type as StreamEventType;
         const data = (event.data ?? {}) as Record<string, unknown>;
+        // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
+        // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
+        if (eventType === 'done') {
+          sawAnyDone = true;
+          continue;
+        }
+        if (eventType === 'error') {
+          lastErrorMessage = typeof (data as any)?.message === 'string' ? ((data as any).message as string) : 'Unknown error';
+          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+          // on laisse le flux se terminer / throw; le catch global gère
+          continue;
+        }
+
         await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
         streamSeq += 1;
 
         if (eventType === 'content_delta') {
           const delta = typeof data.delta === 'string' ? data.delta : '';
-          if (delta) contentParts.push(delta);
+          if (delta) {
+            contentParts.push(delta);
+            sawAnyContent = true;
+          }
         } else if (eventType === 'reasoning_delta') {
           const delta = typeof data.delta === 'string' ? data.delta : '';
           if (delta) reasoningParts.push(delta);
@@ -395,7 +446,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             toolCalls.push({ id: toolCallId, name: '', args: delta });
           }
         }
-        // Note: eventType 'done' ou 'error' est géré ailleurs
+        // Note: eventType 'done' est volontairement retardé (voir plus haut)
       }
 
       // Si aucun tool call, on termine
@@ -499,6 +550,9 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             throw new Error(`Unknown tool: ${toolCall.name}`);
           }
 
+          // Garder une trace pour un éventuel 2e pass "rédaction-only"
+          executedTools.push({ name: toolCall.name, result });
+
           // Ajouter le résultat au format OpenAI pour continuer le stream
           toolResults.push({
             role: 'tool',
@@ -523,6 +577,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
             content: JSON.stringify(errorResult),
             tool_call_id: toolCall.id
           });
+          executedTools.push({ name: toolCall.name || 'unknown_tool', result: errorResult });
         }
       }
 
@@ -533,6 +588,99 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
         ...toolResults
       ];
     }
+
+    // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.
+    // Si le 2e pass échoue => on marque une erreur (et on laisse le job échouer).
+    if (!contentParts.join('').trim()) {
+      const lastUserMessage = [...conversation].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const digest = this.buildToolDigest(executedTools);
+      const pass2System =
+        systemPrompt +
+        `\n\nIMPORTANT: Tu dois maintenant produire une réponse finale à l'utilisateur.\n` +
+        `- Tu n'as pas le droit d'appeler d'outil (tools désactivés).\n` +
+        `- Tu dois répondre en français, de manière concise et actionnable.\n` +
+        `- Si une information manque, dis-le explicitement.\n`;
+
+      const pass2Messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: pass2System },
+        ...conversation,
+        {
+          role: 'user',
+          content:
+            `Demande utilisateur: ${lastUserMessage}\n\n` +
+            `Résultats disponibles (outils déjà exécutés):\n${digest}\n\n` +
+            `Rédige maintenant la réponse finale.`
+        }
+      ];
+
+      // Réinitialiser buffers pour le contenu final
+      contentParts.length = 0;
+      reasoningParts.length = 0;
+      sawAnyDone = false;
+      lastErrorMessage = null;
+
+      try {
+        for await (const event of callOpenAIResponseStream({
+          model: options.model || assistantRow.model || undefined,
+          messages: pass2Messages,
+          tools: undefined,
+          toolChoice: 'none',
+          reasoningSummary: 'detailed',
+          signal: options.signal
+        })) {
+          const eventType = event.type as StreamEventType;
+          const data = (event.data ?? {}) as Record<string, unknown>;
+          if (eventType === 'done') {
+            sawAnyDone = true;
+            continue;
+          }
+          if (eventType === 'error') {
+            lastErrorMessage = typeof (data as any)?.message === 'string' ? ((data as any).message as string) : 'Unknown error';
+            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+            continue;
+          }
+          // On stream les deltas pass2 sur le même streamId
+          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+          if (eventType === 'content_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) {
+              contentParts.push(delta);
+              sawAnyContent = true;
+            }
+          } else if (eventType === 'reasoning_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) reasoningParts.push(delta);
+          }
+        }
+      } catch (e) {
+        const message =
+          lastErrorMessage ||
+          (e instanceof Error ? e.message : 'Second pass failed');
+        // Marquer une erreur explicite côté stream
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'error',
+          { message },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        throw e;
+      }
+
+      if (!contentParts.join('').trim()) {
+        const message = 'Second pass produced no content';
+        await writeStreamEvent(options.assistantMessageId, 'error', { message }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        throw new Error(message);
+      }
+    }
+
+    // Un seul terminal: done à la toute fin
+    await writeStreamEvent(options.assistantMessageId, 'done', {}, streamSeq, options.assistantMessageId);
+    streamSeq += 1;
 
     await db
       .update(chatMessages)
