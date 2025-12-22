@@ -6,9 +6,9 @@ DOCKER_COMPOSE  ?= docker compose
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 
-export API_VERSION    ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= top-ai-ideas-api
 export UI_IMAGE_NAME  ?= top-ai-ideas-ui
 export E2E_IMAGE_NAME ?= top-ai-ideas-e2e
@@ -286,7 +286,7 @@ run-e2e:
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
 	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps -e E2E_SPEC e2e sh -lc ' \
 	  if [ -n "$$E2E_SPEC" ]; then \
 	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
 	    npx playwright test "$$E2E_SPEC"; \

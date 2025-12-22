@@ -132,6 +132,53 @@ export async function waitForVerificationCode(
 }
 
 /**
+ * Extract magic link token from email content.
+ * Looks for `token=...` in either text or HTML.
+ */
+export function extractMagicLinkToken(email: MaildevEmail): string | null {
+  const haystacks = [email.text ?? '', email.html ?? ''];
+  for (const content of haystacks) {
+    const match = content.match(/(?:\?|&|amp;)token=([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Wait for an email to arrive and extract magic link token.
+ */
+export async function waitForMagicLinkToken(
+  recipientEmail: string,
+  timeoutMs: number = 30_000,
+  pollIntervalMs: number = 1000
+): Promise<string> {
+  const startTime = Date.now();
+  console.log(`[Maildev] Waiting for magic link token for ${recipientEmail} (timeout: ${timeoutMs}ms)`);
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const email = await getLatestEmailForRecipient(recipientEmail);
+      if (email) {
+        console.log(`[Maildev] Found email for ${recipientEmail}, subject: ${email.subject}`);
+        const token = extractMagicLinkToken(email);
+        if (token) {
+          console.log(`[Maildev] Magic link token extracted (prefix): ${token.slice(0, 8)}...`);
+          return token;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[Maildev] Error in waitForMagicLinkToken: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(`Timeout waiting for magic link token email to ${recipientEmail}`);
+}
+
+/**
  * Delete all emails from Maildev
  */
 export async function deleteAllEmails(): Promise<void> {
