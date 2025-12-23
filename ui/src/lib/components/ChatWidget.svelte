@@ -5,6 +5,7 @@
   import { addToast } from '$lib/stores/toast';
   import { isAuthenticated, session } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
+  import { MessageCircle, Loader2, Clock, X, Plus, Trash2, Minus } from '@lucide/svelte';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -144,40 +145,22 @@
     title="Chat / Jobs IA"
   >
     <!-- Icône principale: chat (toujours visible) -->
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <!-- Bulle + queue (style “chat”) -->
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="1.5"
-        d="M2.25 12.76c0 1.6.63 3.13 1.76 4.26v3.22c0 .62.75.93 1.19.49l2.4-2.4c.37.08.74.12 1.11.12h6.2c3.31 0 6-2.69 6-6s-2.69-6-6-6h-6.2c-3.31 0-6 2.69-6 6z"
-      />
-      <!-- Ellipsis -->
-      <circle cx="9" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="12.75" r="0.9" fill="currentColor" stroke="none" />
-    </svg>
+    <MessageCircle class="w-6 h-6" aria-hidden="true" />
 
     <!-- Badge: loading (petit spinner) -->
     {#if $queueStore.isLoading}
       <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
-        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-        </svg>
+        <Loader2 class="w-3 h-3 animate-spin" />
       </span>
     {:else if hasActiveJobs}
       <!-- Badge: jobs en cours => montre -->
       <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow" title={`${activeJobsCount} job(s) en cours`}>
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
+        <Clock class="w-3 h-3" aria-hidden="true" />
       </span>
     {:else if hasFailedJobs}
       <!-- Badge: au moins un job en échec -->
       <span class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow" title={`${failedJobsCount} job(s) en échec`}>
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
+        <X class="w-3 h-3" aria-hidden="true" />
       </span>
     {/if}
   </button>
@@ -218,9 +201,7 @@
                 title="Nouvelle session"
                 type="button"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                </svg>
+                <Plus class="w-4 h-4" />
               </button>
 
               <button
@@ -230,9 +211,7 @@
                 type="button"
                 disabled={!chatSessionId}
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
+                <Trash2 class="w-4 h-4" />
               </button>
             {/if}
             {#if activeTab === 'queue'}
@@ -241,9 +220,7 @@
                 on:click={handlePurgeMyJobs}
                 title="Supprimer tous mes jobs"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
+                <Trash2 class="w-4 h-4" />
               </button>
               {#if $session.user?.role === 'admin_app'}
                 <button
@@ -251,16 +228,12 @@
                   on:click={handlePurgeAllJobsGlobal}
                   title="Supprimer tous les jobs (global)"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12h12"></path>
-                  </svg>
+                  <Minus class="w-4 h-4" />
                 </button>
               {/if}
             {/if}
             <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label="Fermer">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
+              <X class="w-5 h-5" />
             </button>
           </div>
         </div>
