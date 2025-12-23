@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { ExternalLink } from '@lucide/svelte';
+  
   export let references: Array<{title: string; url: string}> = [];
   export let referencesScaleFactor: number = 1; // Facteur de réduction pour impression (> 10 refs)
   
@@ -43,15 +45,10 @@
           class="text-slate-500 font-medium mt-0.5 flex-shrink-0"
           style={scale < 1 ? `font-size: inherit !important; line-height: inherit !important;` : ''}
         >{index + 1}.</span>
-        <svg 
+        <ExternalLink 
           class="text-green-500 mt-0.5 flex-shrink-0" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
           style={scale < 1 ? `width: ${scale * 1}em !important; height: ${scale * 1}em !important;` : 'width: 1em; height: 1em;'}
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-        </svg>
+        />
         <a 
           href={ref.url} 
           target="_blank" 

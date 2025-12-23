@@ -11,6 +11,7 @@
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X } from '@lucide/svelte';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -632,9 +633,7 @@
   
   <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8">
     <div class="flex">
-      <svg class="h-6 w-6 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
+      <Info class="h-6 w-6 text-blue-500 mr-2" />
       <div>
         <p class="mb-2">
           Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.
@@ -668,21 +667,21 @@
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
-            {#each range(3) as i (i)}
-              <span class="text-yellow-500 text-xl">★</span>
-            {/each}
-            {#each range(2) as i (i)}
-              <span class="text-gray-300 text-xl">★</span>
-        {/each}
+            <div class="flex items-center gap-1 ml-1">
+              {#each range(3) as i (i)}
+                <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
+              {/each}
+              {#each range(2) as i (i)}
+                <Star class="w-5 h-5 text-gray-300" />
+              {/each}
+            </div>
           </h2>
           <button
             on:click={() => addAxis(true)}
             class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
             title="Ajouter un axe de valeur"
           >
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-            </svg>
+            <Plus class="w-4 h-4 mr-1" />
             Ajouter
           </button>
         </div>
@@ -737,10 +736,7 @@
                       title="Voir les niveaux"
                       aria-label="Voir les niveaux de {axis.name}"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
+                      <Eye class="w-4 h-4" />
         </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
@@ -748,9 +744,7 @@
                         title="Supprimer cet axe"
                         aria-label="Supprimer {axis.name}"
                       >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
+                        <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -766,21 +760,21 @@
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
-            {#each range(3) as i (i)}
-              <span class="text-gray-800 font-bold">X</span>
-            {/each}
-            {#each range(2) as i (i)}
-              <span class="text-gray-300 font-bold">X</span>
-        {/each}
+            <div class="flex items-center gap-1 ml-1">
+              {#each range(3) as i (i)}
+                <X class="w-5 h-5 text-white" />
+              {/each}
+              {#each range(2) as i (i)}
+                <X class="w-5 h-5 text-gray-400" />
+              {/each}
+            </div>
           </h2>
           <button
             on:click={() => addAxis(false)}
             class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
             title="Ajouter un axe de complexité"
           >
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-            </svg>
+            <Plus class="w-4 h-4 mr-1" />
             Ajouter
           </button>
         </div>
@@ -835,10 +829,7 @@
                       title="Voir les niveaux"
                       aria-label="Voir les niveaux de {axis.name}"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
+                      <Eye class="w-4 h-4" />
         </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
@@ -846,9 +837,7 @@
                         title="Supprimer cet axe"
                         aria-label="Supprimer {axis.name}"
                       >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
+                        <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -879,12 +868,12 @@
               {#each editedConfig.valueThresholds as threshold}
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
-                    <div class="flex">
+                    <div class="flex items-center gap-1">
                       {#each range(threshold.level) as i (i)}
-                        <span class="text-yellow-500 text-xl">★</span>
+                        <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
                       {/each}
                       {#each range(5 - threshold.level) as i (i)}
-                        <span class="text-gray-300 text-xl">★</span>
+                        <Star class="w-5 h-5 text-gray-300" />
                       {/each}
                     </div>
                   </td>
@@ -927,12 +916,12 @@
               {#each editedConfig.complexityThresholds as threshold}
                 <tr class="border-t">
                   <td class="px-4 py-3 font-medium">
-                    <div class="flex">
+                    <div class="flex items-center gap-1">
                       {#each range(threshold.level) as i (i)}
-                        <span class="text-gray-800 font-bold">X</span>
+                        <X class="w-5 h-5 text-gray-800" />
                       {/each}
                       {#each range(5 - threshold.level) as i (i)}
-                        <span class="text-gray-300 font-bold">X</span>
+                        <X class="w-5 h-5 text-gray-300" />
                       {/each}
                     </div>
                   </td>
@@ -960,9 +949,7 @@
     
     <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-8">
       <div class="flex">
-        <svg class="h-6 w-6 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-        </svg>
+        <AlertTriangle class="h-6 w-6 text-yellow-500 mr-2" />
         <p>
           Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.
         </p>
@@ -974,18 +961,14 @@
         on:click={openCreateMatrixDialog}
         class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
       >
-        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-        </svg>
+        <Plus class="mr-2 h-4 w-4" />
         Créer une nouvelle matrice
       </button>
       <button 
         on:click={saveChanges}
         class="bg-navy hover:bg-navy/90 text-white px-4 py-2 rounded flex items-center"
       >
-        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
-        </svg>
+        <Upload class="mr-2 h-4 w-4" />
         Enregistrer la configuration
       </button>
     </div>
@@ -1017,21 +1000,21 @@
               <tr class="border-b">
                 <td class="py-3 align-top">
                   {#if isValueAxis}
-                    <div class="flex">
+                    <div class="flex items-center gap-1">
                       {#each range(levelNum) as i (i)}
-                        <span class="text-yellow-500 text-xl">★</span>
+                        <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
                       {/each}
                       {#each range(5 - levelNum) as i (i)}
-                        <span class="text-gray-300 text-xl">★</span>
+                        <Star class="w-5 h-5 text-gray-300" />
                       {/each}
                     </div>
                   {:else}
-                    <div class="flex">
+                    <div class="flex items-center gap-1">
                       {#each range(levelNum) as i (i)}
-                        <span class="text-gray-800 font-bold">X</span>
+                        <X class="w-5 h-5 text-gray-800" />
                       {/each}
                       {#each range(5 - levelNum) as i (i)}
-                        <span class="text-gray-300 font-bold">X</span>
+                        <X class="w-5 h-5 text-gray-300" />
                       {/each}
                     </div>
                   {/if}
@@ -1159,9 +1142,7 @@
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg max-w-md w-full mx-4 p-6">
       <div class="flex items-center mb-4">
-        <svg class="w-6 h-6 text-yellow-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-        </svg>
+        <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />
         <h3 class="text-lg font-semibold text-gray-900">
           Modifications non sauvegardées
         </h3>

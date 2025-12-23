@@ -9,6 +9,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { FileText, Trash2 } from '@lucide/svelte';
 
   let showCreate = false;
   let name = '';
@@ -245,33 +246,13 @@
                   <h2 class="text-lg sm:text-xl font-medium truncate {canClick ? 'text-green-800 group-hover:text-green-900 transition-colors' : 'text-slate-400'}">{folder.name}</h2>
                 </div>
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <button 
-                    class="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
-                    on:click|stopPropagation={() => goto(`/cas-usage?folder=${folder.id}`)}
-                    title="Voir les cas d'usage"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                  </button>
-                  <button 
-                    class="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded"
-                    on:click|stopPropagation={() => goto(`/matrice`)}
-                    title="Voir la matrice"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                    </svg>
-                  </button>
                   {#if !$adminReadOnlyScope}
                     <button 
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
                       title="Supprimer"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                      </svg>
+                      <Trash2 class="w-4 h-4" />
                     </button>
                   {/if}
                 </div>
@@ -285,9 +266,7 @@
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
                   {#if !(isGenerating && useCaseCount === 0)}
                   <span class="flex items-center gap-1 whitespace-nowrap">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
+                    <FileText class="w-4 h-4 flex-shrink-0" />
                     {useCaseCount} cas d'usage
                   </span>
                   {/if}

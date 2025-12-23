@@ -4,6 +4,7 @@
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { Send } from '@lucide/svelte';
 
   type ChatSession = {
     id: string;
@@ -427,9 +428,7 @@
         type="button"
         aria-label="Envoyer"
       >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l11-11m0 0l-3 20-8-9-9-8 20-3z" />
-        </svg>
+        <Send class="w-4 h-4" />
       </button>
     </div>
   </div>

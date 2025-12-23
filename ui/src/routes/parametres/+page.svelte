@@ -14,6 +14,7 @@
     adminReadOnlyScope
   } from '$lib/stores/adminWorkspaceScope';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
+  import { Edit, X } from '@lucide/svelte';
 
   interface Prompt {
     id: string;
@@ -455,9 +456,7 @@
                 {/each}
               </div>
             </div>
-            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-            </svg>
+            <Edit class="w-5 h-5 text-slate-400" />
           </div>
         </div>
       {/each}
@@ -649,9 +648,7 @@
             aria-label="Fermer l'éditeur de prompt"
             class="text-gray-400 hover:text-gray-600"
           >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
+            <X class="w-6 h-6" />
           </button>
         </div>
 
