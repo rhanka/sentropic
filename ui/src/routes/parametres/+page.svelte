@@ -486,6 +486,8 @@
                     class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="gpt-5">GPT-5</option>
+                    <option value="gpt-5.2">GPT-5.2</option>
+                    <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
                     <option value="gpt-5-mini">GPT-5 Mini</option>
                     <option value="gpt-5-nano">GPT-5 Nano</option>
                     <option value="gpt-4.1">GPT-4.1</option>
