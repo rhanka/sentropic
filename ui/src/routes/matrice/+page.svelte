@@ -668,12 +668,12 @@
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Valeur</span>
             <div class="flex items-center gap-1 ml-1">
-              {#each range(3) as i (i)}
+            {#each range(3) as i (i)}
                 <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
-              {/each}
-              {#each range(2) as i (i)}
+            {/each}
+            {#each range(2) as i (i)}
                 <Star class="w-5 h-5 text-gray-300" />
-              {/each}
+        {/each}
             </div>
           </h2>
           <button
@@ -761,12 +761,12 @@
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
             <div class="flex items-center gap-1 ml-1">
-              {#each range(3) as i (i)}
+            {#each range(3) as i (i)}
                 <X class="w-5 h-5 text-white" />
-              {/each}
-              {#each range(2) as i (i)}
+            {/each}
+            {#each range(2) as i (i)}
                 <X class="w-5 h-5 text-gray-400" />
-              {/each}
+        {/each}
             </div>
           </h2>
           <button
