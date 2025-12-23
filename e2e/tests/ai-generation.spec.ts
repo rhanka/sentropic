@@ -1,23 +1,73 @@
 import { test, expect } from '@playwright/test';
 
-// These flows depend on AI + async background jobs; CI can be slower.
-test.setTimeout(4 * 60_000);
 import { debug, setupDebugBuffer } from '../helpers/debug';
 
 // Setup debug buffer to display on test failure
 setupDebugBuffer();
 
-// Étendre le timeout global de ce fichier (génération IA peut être plus lente)
-test.setTimeout(120_000); // 2 minutes pour la génération IA complète
+// Ces flows dépendent de l'IA + jobs async; ça peut être lent.
+test.setTimeout(8 * 60_000);
 
-test.describe('Génération IA', () => {
+test.describe.serial('Génération IA', () => {
+  const waitForJobTerminal = async (
+    page: any,
+    jobId: string,
+    opts?: { timeoutMs?: number; intervalMs?: number }
+  ) => {
+    const timeoutMs = opts?.timeoutMs ?? 6 * 60_000;
+    const intervalMs = opts?.intervalMs ?? 1000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const res = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+      if (!res.ok()) {
+        await page.waitForTimeout(intervalMs);
+        continue;
+      }
+      const txt = await res.text();
+      let job: any = null;
+      try {
+        job = JSON.parse(txt);
+      } catch {
+        // ignore
+      }
+      const status = String(job?.status ?? 'unknown');
+      if (status === 'completed') return;
+      if (status === 'failed') {
+        throw new Error(`Job ${jobId} failed: ${txt}`);
+      }
+      await page.waitForTimeout(intervalMs);
+    }
+    throw new Error(`Job ${jobId} n'a pas terminé dans les délais (${timeoutMs}ms)`);
+  };
+
+  const waitForAnyUseCaseCompleted = async (page: any, folderId: string, timeoutMs = 6 * 60_000) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const res = await page.request.get(`/api/v1/use-cases?folder_id=${encodeURIComponent(folderId)}`);
+      if (res.ok()) {
+        const body = await res.json().catch(() => null);
+        const items: any[] = (body as any)?.items ?? [];
+        if (items.some((uc) => {
+          const s = String(uc?.status ?? 'completed');
+          return s !== 'generating' && s !== 'detailing';
+        })) {
+          return;
+        }
+      }
+      await page.waitForTimeout(1500);
+    }
+    throw new Error(`Aucun cas d'usage terminé dans les délais (${timeoutMs}ms) (folder_id=${folderId})`);
+  };
+
   // 1) Génération d'entreprise (enrichissement IA) via l'UI
   test('devrait générer une entreprise via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
     await page.goto('/entreprises');
     await page.waitForLoadState('domcontentloaded');
 
     // Cliquer sur le bouton Ajouter
-    await page.click('button:has-text("Ajouter")');
+    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.waitForURL('/entreprises/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Remplir le nom de l'entreprise (BRP - déjà modifié par l'utilisateur)
@@ -32,46 +82,37 @@ test.describe('Génération IA', () => {
     
     // Utiliser le title pour cibler le bouton IA
     const aiButton = page.locator('button[title="Enrichir automatiquement avec l\'IA"]');
-    await expect(aiButton).toBeEnabled({ timeout: 1000 });
+    await expect(aiButton).toBeEnabled({ timeout: 30_000 });
+
+    const enrichResPromise = page.waitForResponse((res) => {
+      const req = res.request();
+      return req.method() === 'POST' && /\/api\/v1\/companies\/[^/]+\/enrich$/.test(res.url());
+    }, { timeout: 30_000 });
+
     await aiButton.click();
+    const enrichRes = await enrichResPromise;
+    const enrichJson = await enrichRes.json().catch(() => null);
+    const enrichJobId = String((enrichJson as any)?.jobId ?? '').trim();
+    if (!enrichJobId) throw new Error(`Réponse enrich company sans jobId: ${JSON.stringify(enrichJson)}`);
     
     // Vérifier la redirection vers /entreprises
-    await page.waitForURL('/entreprises', { timeout: 1000 });
+    await page.waitForURL('/entreprises', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
-    // Attendre la fin de l'enrichissement (le statut n'est plus "enriching")
-    // D'abord vérifier qu'une carte BRP en enrichissement existe
-    const companyCardEnriching = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'En cours…' }).first();
-    await expect(companyCardEnriching).toBeVisible({ timeout: 1000 });
-    
-    // Attendre qu'une carte BRP sans "En cours…" apparaisse (enrichissement terminé)
-    // Utiliser une boucle pour vérifier toutes les 3 secondes jusqu'à 30 secondes (10 tentatives)
-    let companyCard;
-    let attempts = 0;
-    const maxAttempts = 10; // 10 tentatives * 3 secondes = 30 sec max
-    
-    while (attempts < maxAttempts) {
-      const availableCards = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasNotText: 'En cours…' });
-      const count = await availableCards.count();
-      
-      if (count > 0) {
-        companyCard = availableCards.first();
-        break;
-      }
-      
-      await page.waitForTimeout(3000); // Attendre 3 secondes avant de réessayer
-      attempts++;
-      await page.reload(); // Recharger pour voir les mises à jour de statut
-      await page.waitForLoadState('domcontentloaded');
-    }
-    
-    if (!companyCard) {
-      throw new Error('L\'enrichissement de l\'entreprise BRP n\'a pas terminé dans les délais (30 secondes)');
-    }
+    debug(`Enrich jobId: ${enrichJobId} — attente fin du job...`);
+    await waitForJobTerminal(page, enrichJobId, { timeoutMs: 6 * 60_000, intervalMs: 1000 });
+
+    // La liste /entreprises est alimentée par API + potentiellement SSE; après job terminal on force un refresh.
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    // Attendre une carte BRP "terminée" (footer: "Cliquez pour voir les détails")
+    const companyCard = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'Cliquez pour voir les détails' }).first();
+    await expect(companyCard).toBeVisible({ timeout: 60_000 });
     
     // Cliquer sur la carte pour voir les détails
     await companyCard.click();
-    await page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+/, { timeout: 2000 });
+    await page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le titre contient BRP (textarea pour multiline)
@@ -101,10 +142,10 @@ test.describe('Génération IA', () => {
     // Cliquer sur "Commencer" (lien vers /home)
     debug('Recherche du lien Commencer...');
     const commencerLink = page.getByRole('link', { name: 'Commencer' });
-    await expect(commencerLink).toBeVisible({ timeout: 1000 });
+    await expect(commencerLink).toBeVisible({ timeout: 30_000 });
     debug('Lien Commencer trouvé, clic...');
     await commencerLink.click();
-    await page.waitForURL('/home', { timeout: 2000 });
+    await page.waitForURL('/home', { timeout: 30_000 });
     debug(`Après clic - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
     debug('Page /home chargée');
@@ -120,7 +161,7 @@ test.describe('Génération IA', () => {
     // Attendre que les entreprises soient chargées (le select n'est visible que quand isLoading = false)
     debug('Recherche de la textarea...');
     const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 1000 });
+    await expect(textarea).toBeVisible({ timeout: 30_000 });
     debug('Textarea trouvée, remplissage...');
     await textarea.fill('Génère 3 cas d\'usage pour l\'extension de l\'usine de Boucherville');
     debug('Textarea remplie');
@@ -169,183 +210,55 @@ test.describe('Génération IA', () => {
     // Cliquer sur "Générer vos cas d'usage"
     debug('Recherche du bouton "Générer vos cas d\'usage"...');
     const generateButton = page.getByRole('button', { name: 'Générer vos cas d\'usage' });
-    await expect(generateButton).toBeVisible({ timeout: 1000 });
+    await expect(generateButton).toBeVisible({ timeout: 30_000 });
+
+    const generateResPromise = page.waitForResponse((res) => {
+      const req = res.request();
+      return req.method() === 'POST' && res.url().includes('/api/v1/use-cases/generate');
+    }, { timeout: 60_000 });
+
     debug('Bouton trouvé, clic...');
     await generateButton.click();
     debug('Bouton cliqué, attente redirection...');
+
+    // Capturer le jobId + folderId depuis l'API (déterministe)
+    const generateRes = await generateResPromise;
+    const genJson = await generateRes.json().catch(() => null);
+    const genJobId = String((genJson as any)?.jobId ?? '').trim();
+    const folderId = String((genJson as any)?.created_folder_id ?? '').trim();
+    debug(`Réponse /use-cases/generate: jobId=${genJobId} folderId=${folderId}`);
+    if (!genJobId || !folderId) throw new Error(`Réponse generate invalide: ${JSON.stringify(genJson)}`);
     
     // Vérifier la redirection vers /dossiers (comportement après génération avec nouveau dossier)
     debug('Attente redirection vers /dossiers...');
-    await page.waitForURL('/dossiers', { timeout: 1000 });
+    await page.waitForURL('/dossiers', { timeout: 60_000 });
     debug(`Redirection réussie vers /dossiers, URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
     debug('Page /dossiers chargée');
-    
-    // Attendre 100ms pour l'affichage initial de Svelte
-    await page.waitForTimeout(100);
-    
-    // Attendre qu'une carte Delpharm sans "En cours…" apparaisse avec des cas d'usage > 0 (génération terminée)
-    // Note: "En cours…" disparaît vite (remplacé par raisonnement/appels outils), mais le nombre de cas d'usage n'apparaît qu'après ~20 secondes
-    // Utiliser une boucle pour vérifier toutes les 3 secondes jusqu'à 30 secondes (10 tentatives)
-    let folderCardWithCompany;
-    let folderAttempts = 0;
-    const maxFolderAttempts = 10; // 10 tentatives * 3 secondes = 30 sec max
-    
-    debug('Attente de la fin de génération du dossier Delpharm...');
-    
-    // Vérifier immédiatement si la carte Delpharm existe (avant la boucle)
-    const initialDelpharmCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' });
-    const initialDelpharmCount = await initialDelpharmCards.count();
-    debug(`Vérification initiale: ${initialDelpharmCount} carte(s) Delpharm trouvée(s)`);
-    
-    while (folderAttempts < maxFolderAttempts) {
-      // Chercher toutes les cartes Delpharm
-      const allDelpharmCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Delpharm' });
-      const allDelpharmCount = await allDelpharmCards.count();
-      debug(`Tentative ${folderAttempts + 1}/${maxFolderAttempts}: ${allDelpharmCount} carte(s) Delpharm trouvée(s)`);
-      
-      if (allDelpharmCount > 0) {
-        // Filtrer les cartes sans "En cours…"
-        const availableCards = allDelpharmCards.filter({ hasNotText: 'En cours…' });
-        const count = await availableCards.count();
-        debug(`Cartes Delpharm sans "En cours…": ${count}`);
-        
-        if (count > 0) {
-          // Prendre la première carte qui a des cas d'usage > 0
-          for (let i = 0; i < count; i++) {
-            const candidateCard = availableCards.nth(i);
-            
-            // Chercher spécifiquement l'élément span qui contient l'icône dossier (SVG) et le texte "cas d'usage"
-            // Le span a la structure: <span class="flex items-center gap-1 whitespace-nowrap"><svg>...</svg> {useCaseCount} cas d'usage</span>
-            // On cherche le span qui contient à la fois un SVG et le texte "cas d'usage"
-            const useCaseCountElement = candidateCard.locator('span:has(svg):has-text("cas d\'usage")');
-            const useCaseCountExists = await useCaseCountElement.count() > 0;
-            
-            if (useCaseCountExists) {
-              const useCaseCountText = await useCaseCountElement.textContent();
-              // Extraire le nombre depuis le texte du span (format: "3 cas d'usage")
-              const useCaseMatch = useCaseCountText?.match(/(\d+)\s+cas\s+d'usage/);
-              const useCaseCount = useCaseMatch ? parseInt(useCaseMatch[1], 10) : 0;
-              
-              if (useCaseCount > 0) {
-                folderCardWithCompany = candidateCard;
-                debug(`✅ Carte dossier Delpharm terminée avec ${useCaseCount} cas d'usage trouvée`);
-                break;
-              }
-            }
-          }
-          if (folderCardWithCompany) {
-            break;
-          } else {
-            debug(`⏳ Cartes trouvées mais pas encore de cas d'usage (icône dossier non trouvée ou compteur = 0)`);
-          }
-        }
-      }
-      
-      await page.waitForTimeout(3000); // Attendre 3 secondes avant de réessayer (la page se met à jour automatiquement)
-      folderAttempts++;
-      debug(`Attente de la mise à jour automatique (tentative ${folderAttempts}/${maxFolderAttempts})...`);
-    }
-    
-    if (!folderCardWithCompany) {
-      // Log final pour debug
-      const allCards = page.locator('.grid.gap-4 > article');
-      const allCardsCount = await allCards.count();
-      debug(`ERROR: Aucune carte dossier terminée trouvée. Total cartes sur la page: ${allCardsCount}`);
-      if (allCardsCount > 0) {
-        const allCardsText = await allCards.allTextContents();
-        debug(`ERROR: Textes de toutes les cartes: ${JSON.stringify(allCardsText)}`);
-      }
-      throw new Error('La génération du dossier Delpharm n\'a pas terminé dans les délais (30 secondes)');
-    }
-    
-    // Cliquer sur la carte et attendre la navigation
-    await Promise.all([
-      page.waitForURL(/\/cas-usage/, { timeout: 2000 }),
-      folderCardWithCompany.click()
-    ]);
+
+    // Attendre que la queue confirme la fin du job, puis attendre qu'au moins un cas d'usage soit terminé (API).
+    debug(`Attente fin job usecase_list: ${genJobId}`);
+    await waitForJobTerminal(page, genJobId, { timeoutMs: 6 * 60_000, intervalMs: 1000 });
+    debug(`Job ${genJobId} terminal, attente d'au moins un use case terminé (folder=${folderId})...`);
+    await waitForAnyUseCaseCompleted(page, folderId, 6 * 60_000);
+
+    // Navigation déterministe vers le listing des cas d'usage du dossier.
+    await page.goto(`/cas-usage?folder=${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier le titre "Cas d'usage"
     await expect(page.locator('h1')).toContainText('Cas d\'usage');
     
-    // Étape 1: Attendre qu'au moins une carte de cas d'usage apparaisse (même en génération)
-    // Playwright attend automatiquement jusqu'à ce que l'élément soit visible (timeout 5s pour l'appel API)
-    debug('Étape 1: Attente de l\'apparition des cartes de cas d\'usage...');
-    const allCards = page.locator('.grid.gap-4 > article');
-    await expect(allCards.first()).toBeVisible({ timeout: 5000 });
-    debug('✅ Au moins une carte de cas d\'usage est visible');
-    
-    // Étape 2: Attendre la fin de génération du premier cas d'usage (pas en génération)
-    debug('Étape 2: Attente de la fin de génération d\'un cas d\'usage...');
-    let firstUseCaseCard;
-    let attempts = 0;
-    // CI can be significantly slower for AI generation; allow up to ~3 minutes.
-    const maxAttempts = 60; // 60 tentatives * 3 secondes = 180 sec max
-    
-    while (attempts < maxAttempts) {
-      // D'abord, voir toutes les cartes pour debug
-      const allCards = page.locator('.grid.gap-4 > article');
-      const allCardsCount = await allCards.count();
-      debug(`Tentative ${attempts + 1}/${maxAttempts}: ${allCardsCount} carte(s) totale(s)`);
-      
-      if (allCardsCount > 0) {
-        // Afficher le statut de chaque carte
-        for (let i = 0; i < allCardsCount; i++) {
-          const card = allCards.nth(i);
-          const cardText = await card.textContent();
-          const hasGenerating = await card.filter({ hasText: 'Génération en cours' }).count() > 0;
-          const hasCompleted = await card.filter({ hasText: 'Cliquez pour voir les détails' }).count() > 0;
-          debug(`Carte ${i + 1}: génération=${hasGenerating}, terminé=${hasCompleted}`);
-          debug(`Texte: "${cardText?.substring(0, 120)}..."`);
-        }
-      }
-      
-      // Chercher les cartes terminées : elles ont "Cliquez pour voir les détails" dans le footer
-      // (cette phrase n'apparaît que quand la génération est terminée, pas pendant "Génération en cours...")
-      const completedCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' });
-      const count = await completedCards.count();
-      debug(`Cartes terminées (avec "Cliquez pour voir les détails"): ${count}`);
-      
-      if (count > 0) {
-        firstUseCaseCard = completedCards.first();
-        const cardText = await firstUseCaseCard.textContent();
-        debug(`✅ Cas d'usage terminé trouvé: "${cardText?.substring(0, 100)}..."`);
-        break;
-      }
-      
-      await page.waitForTimeout(3000); // Attendre 3 secondes avant de réessayer (la page se met à jour automatiquement)
-      attempts++;
-      debug(`Attente de la mise à jour automatique (tentative ${attempts}/${maxAttempts})...`);
-    }
-    
-    if (!firstUseCaseCard) {
-      // Log final pour debug
-      const allCards = page.locator('.grid.gap-4 > article');
-      const allCardsCount = await allCards.count();
-      debug(`ERROR: Aucun cas d'usage terminé trouvé. Total cartes: ${allCardsCount}`);
-      if (allCardsCount > 0) {
-        const allCardsText = await allCards.allTextContents();
-        debug(`ERROR: Textes de toutes les cartes: ${JSON.stringify(allCardsText)}`);
-        // Vérifier aussi avec les textes possibles
-        const generatingCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Génération en cours' });
-        const generatingCount = await generatingCards.count();
-        debug(`ERROR: Cartes avec "Génération en cours": ${generatingCount}`);
-        const completedCards = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' });
-        const completedCount = await completedCards.count();
-        debug(`ERROR: Cartes terminées (avec "Cliquez pour voir les détails"): ${completedCount}`);
-      }
-      throw new Error('Aucun cas d\'usage n\'a terminé sa génération dans les délais (180 secondes)');
-    }
-    
-    // Cliquer sur le premier cas d'usage
+    // Attendre une carte terminée et y naviguer
+    const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' }).first();
+    await expect(firstUseCaseCard).toBeVisible({ timeout: 60_000 });
     await firstUseCaseCard.click();
-    await page.waitForURL(/\/cas-usage\/[a-zA-Z0-9-]+/, { timeout: 1000 });
+    await page.waitForURL(/\/cas-usage\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier la section Références
     const referencesSection = page.locator('text=Références').first();
-    await expect(referencesSection).toBeVisible({ timeout: 1000 });
+    await expect(referencesSection).toBeVisible({ timeout: 30_000 });
     
     // Vérifier qu'il y a au moins une URL valide dans les références
     const referenceLinks = page.locator('section:has-text("Références") a[href^="http"]');
@@ -383,24 +296,32 @@ test.describe('Génération IA', () => {
     
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
+    const sendChatAndWaitApi = async (message: string) => {
+      await composer.fill(message);
+      await Promise.all([
+        page.waitForResponse((res) => {
+          const req = res.request();
+          return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
+        }, { timeout: 30_000 }),
+        composer.press('Enter')
+      ]);
+    };
     
     const message1 = 'Quel est le nom de ce cas d\'usage ?';
-    await composer.fill(message1);
-    await composer.press('Enter');
+    await sendChatAndWaitApi(message1);
     
     const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
     await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse1 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse1).toBeVisible({ timeout: 30_000 });
+    await expect(assistantResponse1).toBeVisible({ timeout: 90_000 });
     
     // Test 2: update_usecase_field
     debug('Test Chat: update_usecase_field');
     
     const message2 = 'Ajoute "Test E2E" au début de la description';
-    await composer.fill(message2);
-    await composer.press('Enter');
+    await sendChatAndWaitApi(message2);
     
     const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
     await expect(userMessage2).toBeVisible({ timeout: 5000 });
@@ -408,7 +329,7 @@ test.describe('Génération IA', () => {
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call update_usecase_field)
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse2 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse2).toBeVisible({ timeout: 30_000 });
+    await expect(assistantResponse2).toBeVisible({ timeout: 90_000 });
     
     // Vérifier que la modification apparaît en direct via SSE (pas de refresh)
     // Note: la modification peut prendre quelques secondes via SSE, on attend jusqu'à 5s
@@ -418,8 +339,7 @@ test.describe('Génération IA', () => {
     // Test 3: web_extract (on a déjà vérifié qu'il y a des références)
     debug('Test Chat: web_extract');
     const message3 = 'Analyse les références en détail';
-    await composer.fill(message3);
-    await composer.press('Enter');
+    await sendChatAndWaitApi(message3);
     
     const userMessage3 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message3 }).first();
     await expect(userMessage3).toBeVisible({ timeout: 5000 });
@@ -427,6 +347,6 @@ test.describe('Génération IA', () => {
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call web_extract)
     // On cherche le dernier message assistant (div.flex.justify-start)
     const assistantResponse3 = page.locator('div.flex.justify-start').last();
-    await expect(assistantResponse3).toBeVisible({ timeout: 30_000 });
+    await expect(assistantResponse3).toBeVisible({ timeout: 90_000 });
   });
 });

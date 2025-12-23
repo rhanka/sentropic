@@ -40,6 +40,32 @@ function deepClone<T>(obj: T): T {
   return obj === undefined ? obj : (JSON.parse(JSON.stringify(obj)) as T);
 }
 
+function coerceMarkdownList(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const items = value
+    .map((v) => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object' && 'key' in (v as Record<string, unknown>)) return String((v as Record<string, unknown>).key ?? '');
+      return '';
+    })
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (items.length === 0) return null;
+  return items.map((s) => `- ${s}`).join('\n');
+}
+
+function coerceToolUpdateValue(pathSegments: string[], value: unknown): unknown {
+  // Guard: certains champs UI sont des strings markdown (pas des arrays d'objets).
+  if (pathSegments.length === 1) {
+    const field = pathSegments[0];
+    if (field === 'problem' || field === 'solution' || field === 'description') {
+      const asList = coerceMarkdownList(value);
+      if (asList) return asList;
+    }
+  }
+  return value;
+}
+
 function getAtPath(root: unknown, segments: string[]): unknown {
   let cur: unknown = root;
   for (const seg of segments) {
@@ -75,19 +101,46 @@ export class ToolService {
    * Tool pour lire un use case complet.
    * Retourne la structure `use_cases.data` complète.
    */
-  async readUseCase(useCaseId: string): Promise<{
+  async readUseCase(
+    useCaseId: string,
+    opts?: { workspaceId?: string | null; select?: string[] | null }
+  ): Promise<{
     useCaseId: string;
     data: unknown;
+    selected?: string[] | null;
   }> {
     if (!useCaseId) throw new Error('useCaseId is required');
 
-    const [row] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, workspaceId))
+      : eq(useCases.id, useCaseId);
+    const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
-    // Retourner la structure data complète
+    const data = (row.data ?? {}) as Record<string, unknown>;
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+
+    // Si select est fourni: ne renvoyer qu'un sous-ensemble de data (réduit tokens)
+    if (select && select.length > 0) {
+      const out: Record<string, unknown> = {};
+      for (const key of select) {
+        const k = String(key).trim();
+        if (!k) continue;
+        // Sélection simple (top-level) seulement pour l'instant.
+        // Si on veut du dot-notation plus tard, on pourra l'ajouter sans casser l'API.
+        if (Object.prototype.hasOwnProperty.call(data, k)) {
+          out[k] = data[k];
+        }
+      }
+      return { useCaseId, data: out, selected: select };
+    }
+
+    // Retourner la structure data complète (par défaut)
     return {
       useCaseId,
-      data: row.data ?? {}
+      data,
+      selected: null
     };
   }
 
@@ -95,7 +148,7 @@ export class ToolService {
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
    * Cible principale: `use_cases.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput): Promise<{
+  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null }): Promise<{
     useCaseId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
@@ -103,7 +156,11 @@ export class ToolService {
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
-    const [row] = await db.select().from(useCases).where(eq(useCases.id, input.useCaseId));
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(useCases.id, input.useCaseId), eq(useCases.workspaceId, workspaceId))
+      : eq(useCases.id, input.useCaseId);
+    const [row] = await db.select().from(useCases).where(where);
     if (!row) throw new Error('Use case not found');
 
     // `use_cases.data` est directement l'objet métier (pas de wrapper "data")
@@ -126,11 +183,12 @@ export class ToolService {
 
       // Récupérer l'ancienne valeur pour l'historique
       const oldValue = getAtPath(originalData, dataSegments);
+      const coercedValue = coerceToolUpdateValue(dataSegments, u.value);
       
       pathSegmentsList.push(dataSegments);
-      valuesList.push(u.value);
+      valuesList.push(coercedValue);
       
-      applied.push({ path: fullPath, oldValue, newValue: u.value });
+      applied.push({ path: fullPath, oldValue, newValue: coercedValue });
     }
 
     // Construire la requête SQL avec jsonb_set chaînés pour ne modifier que les champs spécifiés
@@ -158,7 +216,7 @@ export class ToolService {
     }
     
     // Récupérer les données finales pour l'historique (après update)
-    const [updatedRow] = await db.select().from(useCases).where(eq(useCases.id, input.useCaseId));
+    const [updatedRow] = await db.select().from(useCases).where(where);
     const finalData = (updatedRow?.data ?? {}) as unknown;
 
     // Émettre un événement usecase_update pour rafraîchir l'UI en temps réel

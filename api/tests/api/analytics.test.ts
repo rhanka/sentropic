@@ -3,14 +3,36 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders } from '../../src/db/schema';
+import { folders, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 describe('Analytics API', () => {
   let user: any;
+  let workspaceId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+
+    // Ensure the authenticated user has a private workspace for scoping tests
+    const [ws] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.ownerUserId, user.id))
+      .limit(1);
+
+    if (ws) {
+      workspaceId = ws.id;
+    } else {
+      workspaceId = crypto.randomUUID();
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        ownerUserId: user.id,
+        name: `Test Workspace ${createTestId()}`,
+        shareWithAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
   });
 
   afterEach(async () => {
@@ -19,21 +41,53 @@ describe('Analytics API', () => {
 
   describe('GET /analytics/summary', () => {
     it('should get analytics summary', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/analytics/summary?folder_id=test-folder-id', user.sessionToken!);
+      const folderId = createTestId();
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId,
+        name: `Test Folder ${createTestId()}`,
+        description: 'Test folder',
+        status: 'completed',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/analytics/summary?folder_id=${folderId}`,
+        user.sessionToken!
+      );
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toBeDefined();
+
+      await db.delete(folders).where(eq(folders.id, folderId));
     });
   });
 
   describe('GET /analytics/scatter', () => {
     it('should get analytics scatter data', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/analytics/scatter?folder_id=test-folder-id', user.sessionToken!);
+      const folderId = createTestId();
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId,
+        name: `Test Folder ${createTestId()}`,
+        description: 'Test folder',
+        status: 'completed',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/analytics/scatter?folder_id=${folderId}`,
+        user.sessionToken!
+      );
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toBeDefined();
+
+      await db.delete(folders).where(eq(folders.id, folderId));
     });
   });
 
@@ -56,6 +110,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Empty folder',
         status: 'completed',
@@ -78,24 +133,19 @@ describe('Analytics API', () => {
       expect(data.folder_id).toBe(folderId);
 
       // Attendre que le job échoue (validation asynchrone)
-      const adminUser = await createAuthenticatedUser('admin_app');
-      let jobStatus = 'processing';
+      let jobStatus: string = 'pending';
       let attempts = 0;
       const maxAttempts = 10;
 
-      while (jobStatus === 'processing' && attempts < maxAttempts) {
+      while ((jobStatus === 'pending' || jobStatus === 'processing') && attempts < maxAttempts) {
         await sleep(2000);
-        const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-        expect(jobsRes.status).toBe(200);
-        const jobs = await jobsRes.json();
-        const job = jobs.find((j: any) => j.id === data.jobId);
-        
-        if (job) {
-          jobStatus = job.status;
-          if (job.status === 'failed') {
-            expect(job.error).toContain('No use cases found');
-            break;
-          }
+        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+        expect(jobRes.status).toBe(200);
+        const job = await jobRes.json();
+        jobStatus = job.status;
+        if (job.status === 'failed') {
+          expect(job.error).toContain('No use cases found');
+          break;
         }
         attempts++;
       }
@@ -103,7 +153,6 @@ describe('Analytics API', () => {
       expect(jobStatus).toBe('failed');
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
 
@@ -122,6 +171,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',
@@ -155,6 +205,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',
@@ -178,20 +229,14 @@ describe('Analytics API', () => {
       expect(data.jobId).toBeDefined();
 
       // Vérifier que les seuils sont passés au job (via queue)
-      const adminUser = await createAuthenticatedUser('admin_app');
       await sleep(1000); // Attendre que le job soit créé
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      const job = jobs.find((j: any) => j.id === data.jobId);
-      
-      if (job) {
-        expect(job.data.valueThreshold).toBe(50);
-        expect(job.data.complexityThreshold).toBe(40);
-      }
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
+      expect(job.data.valueThreshold).toBe(50);
+      expect(job.data.complexityThreshold).toBe(40);
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
 
@@ -199,6 +244,7 @@ describe('Analytics API', () => {
       const folderId = createTestId();
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder',
         status: 'completed',
@@ -218,19 +264,13 @@ describe('Analytics API', () => {
       expect(data.jobId).toBeDefined();
 
       // Vérifier que le modèle par défaut est utilisé (via queue)
-      const adminUser = await createAuthenticatedUser('admin_app');
       await sleep(1000); // Attendre que le job soit créé
-      const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', adminUser.sessionToken!);
-      expect(jobsRes.status).toBe(200);
-      const jobs = await jobsRes.json();
-      const job = jobs.find((j: any) => j.id === data.jobId);
-      
-      if (job) {
-        expect(job.data.model).toBeDefined();
-      }
+      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${data.jobId}`, user.sessionToken!);
+      expect(jobRes.status).toBe(200);
+      const job = await jobRes.json();
+      expect(job.data.model).toBeDefined();
 
       // Cleanup
-      await cleanupAuthData(); // Cleanup admin user
       await db.delete(folders).where(eq(folders.id, folderId));
     });
   });

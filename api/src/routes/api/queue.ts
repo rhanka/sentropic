@@ -1,14 +1,46 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { queueManager } from '../../services/queue-manager';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
+import { requireRole } from '../../middleware/rbac';
+import { ADMIN_WORKSPACE_ID, workspaces } from '../../db/schema';
+import { and, eq } from 'drizzle-orm';
 
 const queueRouter = new Hono();
+
+async function resolveTargetWorkspaceId(c: Context): Promise<string> {
+  const { role, workspaceId } = c.get('user') as { role: string; workspaceId: string };
+  const requested = c.req.query('workspace_id');
+
+  // Default: always own workspace
+  if (!requested) return workspaceId;
+
+  // Only admin_app can request another workspace
+  if (role !== 'admin_app') return workspaceId;
+
+  // Admin workspace always allowed
+  if (requested === ADMIN_WORKSPACE_ID) return requested;
+
+  // Only allowed if the target workspace is explicitly shared with admin
+  const [ws] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.id, requested), eq(workspaces.shareWithAdmin, true)))
+    .limit(1);
+
+  if (!ws) {
+    // keep it opaque
+    throw new Error('Workspace not accessible');
+  }
+
+  return requested;
+}
 
 // GET /queue/jobs - Récupérer tous les jobs
 queueRouter.get('/jobs', async (c) => {
   try {
-    const jobs = await queueManager.getAllJobs();
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
+    const jobs = await queueManager.getAllJobs({ workspaceId: targetWorkspaceId });
     return c.json(jobs);
   } catch (error) {
     console.error('Error fetching jobs:', error);
@@ -20,9 +52,14 @@ queueRouter.get('/jobs', async (c) => {
 queueRouter.get('/jobs/:id', async (c) => {
   try {
     const jobId = c.req.param('id');
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
     const job = await queueManager.getJobStatus(jobId);
     
     if (!job) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+
+    if (job.workspaceId && job.workspaceId !== targetWorkspaceId) {
       return c.json({ message: 'Job not found' }, 404);
     }
     
@@ -67,7 +104,11 @@ queueRouter.post('/jobs/:id/retry', async (c) => {
     }
     
     // Créer un nouveau job avec les mêmes données
-    const newJobId = await queueManager.addJob(originalJob.type, originalJob.data);
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
+    if (originalJob.workspaceId && originalJob.workspaceId !== targetWorkspaceId) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+    const newJobId = await queueManager.addJob(originalJob.type, originalJob.data, { workspaceId: targetWorkspaceId });
     
     return c.json({ 
       success: true, 
@@ -83,14 +124,18 @@ queueRouter.post('/jobs/:id/retry', async (c) => {
 // DELETE /queue/jobs/:id - Supprimer un job
 queueRouter.delete('/jobs/:id', async (c) => {
   try {
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
     const id = c.req.param('id');
     const job = await queueManager.getJobStatus(id);
     if (!job) {
       return c.json({ message: 'Job not found' }, 404);
     }
+    if (job.workspaceId && job.workspaceId !== targetWorkspaceId) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
     // Supprimer le job de la base de données
     await db.run(sql`
-      DELETE FROM job_queue WHERE id = ${id}
+      DELETE FROM job_queue WHERE id = ${id} AND workspace_id = ${targetWorkspaceId}
     `);
     return c.json({ success: true, message: 'Job deleted successfully' });
   } catch (error) {
@@ -102,7 +147,8 @@ queueRouter.delete('/jobs/:id', async (c) => {
 // GET /queue/stats - Statistiques de la queue
 queueRouter.get('/stats', async (c) => {
   try {
-    const jobs = await queueManager.getAllJobs();
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
+    const jobs = await queueManager.getAllJobs({ workspaceId: targetWorkspaceId });
     
     const stats = {
       total: jobs.length,
@@ -125,8 +171,9 @@ queueRouter.get('/stats', async (c) => {
 });
 
 // POST /queue/purge - Purger les jobs
-queueRouter.post('/purge', async (c) => {
+queueRouter.post('/purge', requireRole('admin_app'), async (c) => {
   try {
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
     const { status } = await c.req.json().catch(() => ({ status: 'pending' }));
     // Mettre en pause pour empêcher de nouveaux départs
     queueManager.pause();
@@ -149,9 +196,9 @@ queueRouter.post('/purge', async (c) => {
       await db.run(sql`
         UPDATE job_queue
         SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = 'Job cancelled by purge'
-        WHERE status IN ('pending','processing')
+        WHERE status IN ('pending','processing') AND workspace_id = ${targetWorkspaceId}
       `);
-      const del = await db.run(sql`DELETE FROM job_queue`);
+      const del = await db.run(sql`DELETE FROM job_queue WHERE workspace_id = ${targetWorkspaceId}`);
       const purgedCount = (del as { changes?: number }).changes ?? 0;
       console.log(`🧹 Purged ALL jobs: ${purgedCount}`);
       queueManager.resume();
@@ -178,7 +225,7 @@ queueRouter.post('/purge', async (c) => {
     
     for (const job of jobsToPurge) {
       await db.run(sql`
-        DELETE FROM job_queue WHERE id = ${job.id}
+        DELETE FROM job_queue WHERE id = ${job.id} AND workspace_id = ${targetWorkspaceId}
       `);
     }
     
@@ -204,8 +251,41 @@ queueRouter.post('/purge', async (c) => {
   }
 });
 
+// POST /queue/purge-mine - Purger les jobs du workspace courant (utilisateur)
+queueRouter.post('/purge-mine', async (c) => {
+  try {
+    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { status } = await c.req.json().catch(() => ({ status: 'all' as string }));
+
+    // Best-effort: cancel in-flight jobs for this workspace only.
+    await queueManager.cancelProcessingForWorkspace(workspaceId, 'purge-mine');
+
+    if (status === 'force' || status === 'all') {
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = 'Job cancelled by purge-mine'
+        WHERE status IN ('pending','processing') AND workspace_id = ${workspaceId}
+      `);
+      const del = await db.run(sql`DELETE FROM job_queue WHERE workspace_id = ${workspaceId}`);
+      const purgedCount = (del as { changes?: number }).changes ?? 0;
+      return c.json({ success: true, message: `${purgedCount} jobs purgés (mes jobs)`, purgedCount });
+    }
+
+    // Purge by status for current workspace
+    const del = await db.run(sql`
+      DELETE FROM job_queue
+      WHERE workspace_id = ${workspaceId} AND status = ${status}
+    `);
+    const purgedCount = (del as { changes?: number }).changes ?? 0;
+    return c.json({ success: true, message: `${purgedCount} jobs purgés (statut: ${status})`, purgedCount });
+  } catch (error) {
+    console.error('Error purging my queue:', error);
+    return c.json({ message: 'Failed to purge my queue' }, 500);
+  }
+});
+
 // POST /queue/pause - Mettre en pause le traitement
-queueRouter.post('/pause', async (c) => {
+queueRouter.post('/pause', requireRole('admin_app'), async (c) => {
   try {
     queueManager.pause();
     return c.json({ success: true });
@@ -216,7 +296,7 @@ queueRouter.post('/pause', async (c) => {
 });
 
 // POST /queue/resume - Reprendre le traitement
-queueRouter.post('/resume', async (c) => {
+queueRouter.post('/resume', requireRole('admin_app'), async (c) => {
   try {
     queueManager.resume();
     return c.json({ success: true });
@@ -227,7 +307,7 @@ queueRouter.post('/resume', async (c) => {
 });
 
 // POST /queue/cancel-all - Annuler tous les jobs en cours
-queueRouter.post('/cancel-all', async (c) => {
+queueRouter.post('/cancel-all', requireRole('admin_app'), async (c) => {
   try {
     await queueManager.cancelAllProcessing('manual-cancel');
     return c.json({ success: true });

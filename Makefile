@@ -4,11 +4,11 @@ SHELL := /bin/bash
 
 DOCKER_COMPOSE  ?= docker compose
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
-COMPOSE_RUN_API := $(DOCKER_COMPOSE) run --rm api
+COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 
-export API_VERSION    ?= $(shell echo "api/src api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= top-ai-ideas-api
 export UI_IMAGE_NAME  ?= top-ai-ideas-ui
 export E2E_IMAGE_NAME ?= top-ai-ideas-e2e
@@ -286,7 +286,7 @@ run-e2e:
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
 	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm -e E2E_SPEC e2e sh -lc ' \
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps -e E2E_SPEC e2e sh -lc ' \
 	  if [ -n "$$E2E_SPEC" ]; then \
 	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
 	    npx playwright test "$$E2E_SPEC"; \
@@ -406,6 +406,26 @@ sh-ui:
 sh-api:
 	$(COMPOSE_RUN_API) sh
 
+.PHONY: exec-api
+exec-api: ## Exec a command in the running api container: make exec-api CMD="node -v"
+	@if [ -z "$$CMD" ]; then \
+		echo "Usage: make exec-api CMD=\"<command>\""; \
+		exit 2; \
+	fi
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
+		echo "api container is not running. Start it first (e.g. make up / make dev / make up-api-test)."; \
+		exit 1; \
+	fi
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "$$CMD"
+
+.PHONY: exec-api-sh
+exec-api-sh: ## Open a shell in the running api container
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
+		echo "api container is not running. Start it first (e.g. make up / make dev / make up-api-test)."; \
+		exit 1; \
+	fi
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh
+
 # -----------------------------------------------------------------------------
 # Database helpers
 # Workflow: 1) Modify schema.ts → 2) make db-generate → 3) make db-migrate → 4) commit schema + migrations
@@ -470,6 +490,20 @@ db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT *
 	@echo ""
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
 
+.PHONY: db-query-postgres-only
+db-query-postgres-only: ## Execute a custom SQL query using postgres only (no api/ui) (usage: make db-query-postgres-only QUERY="...")
+	@if [ -z "$(QUERY)" ]; then \
+		echo "❌ Error: QUERY parameter is required"; \
+		echo "Usage: make db-query-postgres-only QUERY=\"SELECT * FROM companies\""; \
+		exit 1; \
+	fi
+	@echo "🚀 Ensuring PostgreSQL is running..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
+	@echo "📊 Executing query (postgres only):"
+	@echo "$(QUERY)"
+	@echo ""
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
+
 .PHONY: db-inspect-usecases
 db-inspect-usecases: up ## Inspect use cases and folders relationship
 	@echo "📊 Use Cases Details:"
@@ -508,8 +542,13 @@ db-backup: backup-dir up ## Backup local database to file
 	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/app-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL="$$DATABASE_URL" postgres:16-alpine sh -c " \
-		pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -lc "\
+		if [ -n \"$$DATABASE_URL\" ]; then \
+			pg_dump \"$$DATABASE_URL\" -F c -f /backups/app-$${TIMESTAMP}.dump; \
+		else \
+			export PGPASSWORD=\"app\"; \
+			pg_dump -h localhost -U app -d app -F c -f /backups/app-$${TIMESTAMP}.dump; \
+		fi" && \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
@@ -572,6 +611,35 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 		WHERE table_schema = 'public' \
 		AND table_name IN ('users', 'user_sessions', 'webauthn_credentials', 'webauthn_challenges', 'magic_links') \
 		ORDER BY table_name;" || echo "  (WebAuthn tables not found - will be created by migrations)"
+
+.PHONY: db-restore-postgres-only
+db-restore-postgres-only: ## Restore backup to local database without starting api/ui [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=prod-2025-12-20T14-54-47.dump)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No backups found"; \
+		exit 1; \
+	fi
+	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
+	@echo "This action is DESTRUCTIVE and will remove:"
+	@echo "  - All local companies, folders, use cases"
+	@echo "  - All local users and sessions"
+	@echo "  - All local settings and configuration"
+	@echo ""
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
+	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting PostgreSQL service..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
+	@echo "🔄 Restoring backup to local database..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml cp data/backup/$(BACKUP_FILE) postgres:/tmp/restore.dump
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
+		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
+	@echo "✅ Restore completed."
 
 .PHONY: db-fresh
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database

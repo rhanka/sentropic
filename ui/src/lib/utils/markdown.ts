@@ -34,11 +34,35 @@ export interface RenderMarkdownOptions {
  * - Ajoute un saut de ligne supplémentaire entre les paragraphes
  * - Idempotent : appliquer plusieurs fois ne change pas le résultat
  */
-export function normalizeUseCaseMarkdown(text: string | null | undefined): string {
-  if (!text) return '';
+export function normalizeUseCaseMarkdown(text: unknown): string {
+  if (text === null || text === undefined) return '';
+
+  // Certaines données (ex: tool update foireux) peuvent arriver sous forme de liste
+  // ex: [{ key: "..." }, ...] → convertir en bullet list markdown.
+  if (Array.isArray(text)) {
+    const items = text
+      .map((v) => {
+        if (typeof v === 'string') return v;
+        if (v && typeof v === 'object' && 'key' in (v as any)) return String((v as any).key ?? '');
+        try {
+          return JSON.stringify(v);
+        } catch {
+          return String(v);
+        }
+      })
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return arrayToMarkdown(items);
+  }
+
+  if (typeof text !== 'string') {
+    text = String(text);
+  }
+  const input = (text as string).trim();
+  if (!input) return '';
 
   // Normaliser les retours Windows/ancien format
-  let normalized = text.replace(/\r\n/g, '\n');
+  let normalized = input.replace(/\r\n/g, '\n');
 
   // Convertir les puces unicode en listes Markdown
   normalized = normalized.replace(BULLET_PATTERN, '$1- ');

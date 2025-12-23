@@ -3,8 +3,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { folders, useCases } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { companies, folders, useCases } from '../../db/schema';
+import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateUseCaseScores, type ScoreEntry } from '../../utils/scoring';
@@ -13,6 +13,8 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 // import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { requireEditor } from '../../middleware/rbac';
+import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 
 async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
@@ -112,7 +114,10 @@ const parseJson = <T>(value: string | null): T | undefined => {
  */
 export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
   // Récupérer la matrice du dossier pour calculer les scores
-  const [folder] = await db.select().from(folders).where(eq(folders.id, row.folderId));
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.id, row.folderId), eq(folders.workspaceId, row.workspaceId)));
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
   
   // Extraire data JSONB (peut être vide {} pour les anciens enregistrements)
@@ -209,12 +214,15 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
  * Hydrate plusieurs use cases en une fois (optimisé pour les listes)
  */
 export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCase[]> => {
+  const workspaceId = rows[0]?.workspaceId;
   // Récupérer tous les dossiers uniques pour éviter les requêtes multiples
   const folderIds = [...new Set(rows.map(r => r.folderId))];
   const foldersMap = new Map<string, typeof folders.$inferSelect>();
   
   for (const folderId of folderIds) {
-    const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
+    const [folder] = workspaceId
+      ? await db.select().from(folders).where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+      : await db.select().from(folders).where(eq(folders.id, folderId));
     if (folder) {
       foldersMap.set(folderId, folder);
     }
@@ -322,20 +330,44 @@ const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial
 export const useCasesRouter = new Hono();
 
 useCasesRouter.get('/', async (c) => {
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
   const folderId = c.req.query('folder_id');
   const rows = folderId
-    ? await db.select().from(useCases).where(eq(useCases.folderId, folderId))
-    : await db.select().from(useCases);
+    ? await db.select().from(useCases).where(and(eq(useCases.workspaceId, targetWorkspaceId), eq(useCases.folderId, folderId)))
+    : await db.select().from(useCases).where(eq(useCases.workspaceId, targetWorkspaceId));
   const hydrated = await Promise.all(rows.map(row => hydrateUseCase(row)));
   return c.json({ items: hydrated });
 });
 
-useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
+useCasesRouter.post('/', requireEditor, zValidator('json', useCaseInput), async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
-  const [folder] = await db.select().from(folders).where(eq(folders.id, payload.folderId));
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.id, payload.folderId), eq(folders.workspaceId, workspaceId)));
   if (!folder) {
     return c.json({ message: 'Folder not found' }, 404);
   }
+
+  if (payload.companyId) {
+    const [company] = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+      .limit(1);
+    if (!company) return c.json({ message: 'Company not found' }, 404);
+  }
+
   const id = createId();
   const data = buildUseCaseData(payload);
   
@@ -346,19 +378,36 @@ useCasesRouter.post('/', zValidator('json', useCaseInput), async (c) => {
   
   await db.insert(useCases).values({
     id,
+    workspaceId,
     folderId: payload.folderId,
     companyId: payload.companyId,
     // data est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
     data: data as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
   });
-  const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
+  const [record] = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   const hydrated = await hydrateUseCase(record);
   return c.json(hydrated, 201);
 });
 
 useCasesRouter.get('/:id', async (c) => {
+  const user = c.get('user') as { role?: string; workspaceId: string };
+  let targetWorkspaceId = user.workspaceId;
+  try {
+    targetWorkspaceId = await resolveReadableWorkspaceId({
+      user,
+      requested: c.req.query('workspace_id')
+    });
+  } catch {
+    return c.json({ message: 'Not found' }, 404);
+  }
   const id = c.req.param('id');
-  const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
+  const [record] = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, targetWorkspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
@@ -366,10 +415,14 @@ useCasesRouter.get('/:id', async (c) => {
   return c.json(hydrated);
 });
 
-useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c) => {
+useCasesRouter.put('/:id', requireEditor, zValidator('json', useCaseInput.partial()), async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
-  const [record] = await db.select().from(useCases).where(eq(useCases.id, id));
+  const [record] = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
@@ -397,6 +450,25 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
   }
   
   const folderId = payload.folderId ?? record.folderId;
+
+  // If folderId changed, validate folder belongs to workspace
+  if (payload.folderId) {
+    const [folder] = await db
+      .select({ id: folders.id })
+      .from(folders)
+      .where(and(eq(folders.id, payload.folderId), eq(folders.workspaceId, workspaceId)))
+      .limit(1);
+    if (!folder) return c.json({ message: 'Folder not found' }, 404);
+  }
+
+  if (payload.companyId) {
+    const [company] = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+      .limit(1);
+    if (!company) return c.json({ message: 'Company not found' }, 404);
+  }
   
   await db
     .update(useCases)
@@ -406,15 +478,19 @@ useCasesRouter.put('/:id', zValidator('json', useCaseInput.partial()), async (c)
       // newData est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
       data: newData as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
     })
-    .where(eq(useCases.id, id));
-  const [updated] = await db.select().from(useCases).where(eq(useCases.id, id));
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
+  const [updated] = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   const hydrated = await hydrateUseCase(updated);
   return c.json(hydrated);
 });
 
-useCasesRouter.delete('/:id', async (c) => {
+useCasesRouter.delete('/:id', requireEditor, async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
-  await db.delete(useCases).where(eq(useCases.id, id));
+  await db.delete(useCases).where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   return c.body(null, 204);
 });
 
@@ -425,8 +501,9 @@ const generateInput = z.object({
   model: z.string().optional()
 });
 
-useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) => {
+useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput), async (c) => {
   try {
+    const { workspaceId } = c.get('user') as { workspaceId: string };
     const { input, create_new_folder, company_id, model } = c.req.valid('json');
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
@@ -441,8 +518,19 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       const folderDescription = `Dossier généré automatiquement pour: ${input}`;
       
       folderId = createId();
+
+      if (company_id) {
+        const [company] = await db
+          .select({ id: companies.id })
+          .from(companies)
+          .where(and(eq(companies.id, company_id), eq(companies.workspaceId, workspaceId)))
+          .limit(1);
+        if (!company) return c.json({ message: 'Company not found' }, 404);
+      }
+
       await db.insert(folders).values({
         id: folderId,
+        workspaceId,
         name: folderName,
         description: folderDescription,
         companyId: company_id || null,
@@ -459,7 +547,7 @@ useCasesRouter.post('/generate', zValidator('json', generateInput), async (c) =>
       input,
       companyId: company_id,
       model: selectedModel
-    });
+    }, { workspaceId });
     
     return c.json({
       success: true,
@@ -490,8 +578,9 @@ const detailInput = z.object({
   model: z.string().optional()
 });
 
-useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) => {
+useCasesRouter.post('/:id/detail', requireEditor, zValidator('json', detailInput), async (c) => {
   try {
+    const { workspaceId } = c.get('user') as { workspaceId: string };
     const id = c.req.param('id');
     const { model } = c.req.valid('json');
     
@@ -500,13 +589,19 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
     const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer le cas d'usage
-    const [useCase] = await db.select().from(useCases).where(eq(useCases.id, id));
+    const [useCase] = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
     if (!useCase) {
       return c.json({ message: 'Cas d\'usage non trouvé' }, 404);
     }
     
     // Récupérer la configuration de la matrice du dossier
-    const [folder] = await db.select().from(folders).where(eq(folders.id, useCase.folderId));
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, useCase.folderId), eq(folders.workspaceId, workspaceId)));
     if (!folder) {
       return c.json({ message: 'Dossier non trouvé' }, 404);
     }
@@ -517,7 +612,7 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
     // Mettre à jour le statut à "detailing"
     await db.update(useCases)
       .set({ status: 'detailing' })
-      .where(eq(useCases.id, id));
+      .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
     await notifyUseCaseEvent(id);
     
     // Extraire le nom depuis data JSONB (avec rétrocompatibilité)
@@ -533,7 +628,7 @@ useCasesRouter.post('/:id/detail', zValidator('json', detailInput), async (c) =>
       useCaseName,
       folderId: useCase.folderId,
       model: selectedModel
-    });
+    }, { workspaceId });
     
     return c.json({
       success: true,

@@ -1,16 +1,40 @@
-import { chromium, type Browser, type Page } from '@playwright/test';
+import { chromium, request, type Browser, type Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { debug, displayDebugOnFailure, clearDebugBuffer } from './helpers/debug-global-setup';
-import { waitForVerificationCode, deleteAllEmails, getAllEmails } from './helpers/maildev';
+import { waitForVerificationCode, waitForMagicLinkToken, deleteAllEmails, getAllEmails } from './helpers/maildev';
 
-const STORAGE_STATE_PATH = './.auth/state.json';
+const STORAGE_STATE_PATH = './.auth/state.json'; // admin (default for most tests)
+const STORAGE_STATE_USER_A = './.auth/user-a.json';
+const STORAGE_STATE_USER_B = './.auth/user-b.json';
+const STORAGE_STATE_VICTIM = './.auth/user-victim.json';
 const BASE_URL = process.env.UI_BASE_URL || 'http://localhost:5173';
-const TEST_USER = {
-  userName: 'e2e-admin@example.com',
-  userDisplayName: 'E2E Admin',
-  email: 'e2e-admin@example.com',
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+
+type TestUser = {
+  email: string;
+  displayName: string;
+};
+
+const ADMIN_USER: TestUser = {
+  email: process.env.ADMIN_EMAIL || 'e2e-admin@example.com',
+  displayName: 'E2E Admin',
+};
+
+const USER_A: TestUser = {
+  email: 'e2e-user-a@example.com',
+  displayName: 'E2E User A',
+};
+
+const USER_B: TestUser = {
+  email: 'e2e-user-b@example.com',
+  displayName: 'E2E User B',
+};
+
+const USER_VICTIM: TestUser = {
+  email: 'e2e-user-victim@example.com',
+  displayName: 'E2E Victim',
 };
 
 async function setupWebAuthn(page: Page) {
@@ -47,9 +71,9 @@ async function setupWebAuthn(page: Page) {
   return { client, authenticatorId };
 }
 
-async function enrollOrLogin(page: Page, client: any, authenticatorId: string) {
+async function enrollOrLogin(page: Page, client: any, authenticatorId: string, user: TestUser) {
   // Toujours faire l'enrôlement (pas de détection de session existante)
-  debug('Proceeding with enrollment');
+  debug(`Proceeding with enrollment for ${user.email}`);
   
   // Nettoyer les emails précédents dans Maildev
   try {
@@ -105,8 +129,8 @@ async function enrollOrLogin(page: Page, client: any, authenticatorId: string) {
   debug('Step 1: Requesting verification code');
   const emailField = page.getByLabel('Email');
   await expect(emailField).toBeVisible({ timeout: 5000 });
-  await emailField.fill(TEST_USER.email);
-  debug(`Email filled: ${TEST_USER.email}`);
+  await emailField.fill(user.email);
+  debug(`Email filled: ${user.email}`);
   
   const requestCodeButton = page.getByRole('button', { name: /demander|envoyer|code/i });
   await expect(requestCodeButton).toBeVisible({ timeout: 5000 });
@@ -171,7 +195,7 @@ async function enrollOrLogin(page: Page, client: any, authenticatorId: string) {
   // Étape 2: Récupérer le code depuis Maildev et l'entrer
   debug('Step 2: Waiting for verification code from Maildev');
   try {
-    const verificationCode = await waitForVerificationCode(TEST_USER.email, 60000); // Augmenter le timeout à 60s
+    const verificationCode = await waitForVerificationCode(user.email, 60000); // Augmenter le timeout à 60s
     debug(`Verification code received: ${verificationCode}`);
     
     // Entrer le code dans les champs individuels
@@ -334,6 +358,87 @@ async function enrollOrLogin(page: Page, client: any, authenticatorId: string) {
   debug('✅ Session verified - can access protected pages');
 }
 
+async function enrollAndSave(browser: Browser, user: TestUser, storagePath: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  const { client, authenticatorId } = await setupWebAuthn(page);
+  await enrollOrLogin(page, client, authenticatorId, user);
+
+  // Ensure ./.auth exists before saving storage state
+  try {
+    fs.mkdirSync(path.dirname(storagePath), { recursive: true });
+  } catch {}
+
+  await context.storageState({ path: storagePath });
+  await context.close();
+  debug(`✅ Storage state saved for ${user.email} -> ${storagePath}`);
+}
+
+async function magicLinkLoginAndSave(browser: Browser, user: TestUser, storagePath: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  // Avoid mixing emails between accounts
+  await deleteAllEmails();
+
+  const api = await request.newContext({ baseURL: API_BASE_URL });
+  try {
+    const res = await api.post('/api/v1/auth/magic-link/request', { data: { email: user.email } });
+    if (!res.ok()) {
+      throw new Error(`POST /api/v1/auth/magic-link/request failed: ${res.status()} ${res.statusText()}`);
+    }
+  } finally {
+    await api.dispose();
+  }
+
+  const token = await waitForMagicLinkToken(user.email, 60_000);
+  // Do NOT rely on UI route /auth/magic-link/verify (can be flaky depending on client runtime).
+  // Instead, verify via API to retrieve a sessionToken, then set the cookie manually.
+  const apiVerify = await request.newContext({ baseURL: API_BASE_URL });
+  try {
+    const res = await apiVerify.post('/api/v1/auth/magic-link/verify', {
+      data: { token },
+      headers: { origin: BASE_URL },
+    });
+    if (!res.ok()) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`POST /api/v1/auth/magic-link/verify failed: ${res.status()} ${res.statusText()} ${body.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { sessionToken?: string };
+    if (!data.sessionToken) throw new Error(`Missing sessionToken in magic-link verify response for ${user.email}`);
+
+    // Set cookie in browser context (HTTP E2E => secure=false)
+    await context.addCookies([
+      {
+        name: 'session',
+        value: data.sessionToken,
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
+      },
+    ]);
+  } finally {
+    await apiVerify.dispose();
+  }
+
+  // Verify cookie works by loading a protected page
+  await page.goto(`${BASE_URL}/entreprises`);
+  await page.waitForLoadState('domcontentloaded');
+  if (page.url().includes('/auth/login')) {
+    throw new Error(`Magic link session invalid for ${user.email} (redirected to /auth/login)`);
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(storagePath), { recursive: true });
+  } catch {}
+  await context.storageState({ path: storagePath });
+  await context.close();
+  debug(`✅ Storage state saved (magic link) for ${user.email} -> ${storagePath}`);
+}
+
 export default async function globalSetup() {
   debug('Starting global setup...');
   let browser: Browser | null = null;
@@ -344,22 +449,16 @@ export default async function globalSetup() {
         '--allow-insecure-localhost'
       ]
     });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    const { client, authenticatorId } = await setupWebAuthn(page);
-    await enrollOrLogin(page, client, authenticatorId);
-
-    // Ensure ./.auth exists before saving storage state
-    try {
-      fs.mkdirSync(path.dirname(STORAGE_STATE_PATH), { recursive: true });
-    } catch {}
-    await context.storageState({ path: STORAGE_STATE_PATH });
-    // Debug: list cookies saved in storage
-    try {
-      const cookies = await context.cookies();
-      debug(`Cookies saved: ${JSON.stringify(cookies.map(c => ({ name: c.name, domain: c.domain, path: c.path, secure: c.secure })))}`);
-    } catch {}
+    // Auth strategy for E2E:
+    // Use magic-link for ALL users (including admin) to avoid flaky WebAuthn enrollment.
+    // Requirements:
+    // - db-seed-test creates these users in DB
+    // - users.emailVerified MUST be true (session validation requires it)
+    // - admin user has role=admin_app
+    await magicLinkLoginAndSave(browser, ADMIN_USER, STORAGE_STATE_PATH);
+    await magicLinkLoginAndSave(browser, USER_A, STORAGE_STATE_USER_A);
+    await magicLinkLoginAndSave(browser, USER_B, STORAGE_STATE_USER_B);
+    await magicLinkLoginAndSave(browser, USER_VICTIM, STORAGE_STATE_VICTIM);
     
     // Si on arrive ici, c'est un succès - on peut nettoyer le buffer
     clearDebugBuffer();

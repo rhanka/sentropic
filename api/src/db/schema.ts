@@ -1,8 +1,24 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+// Workspace constants (keep stable IDs for migrations/backfills)
+export const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+export const workspaces = pgTable('workspaces', {
+  id: text('id').primaryKey(),
+  ownerUserId: text('owner_user_id').unique(), // nullable is allowed; unique permits multiple NULLs in Postgres
+  name: text('name').notNull(),
+  shareWithAdmin: boolean('share_with_admin').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
 
 export const companies = pgTable('companies', {
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
   industry: text('industry'),
   size: text('size'),
@@ -18,6 +34,10 @@ export const companies = pgTable('companies', {
 
 export const folders = pgTable('folders', {
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
   description: text('description'),
   companyId: text('company_id').references(() => companies.id),
@@ -30,6 +50,10 @@ export const folders = pgTable('folders', {
 export const useCases = pgTable('use_cases', {
   // === GESTION D'ÉTAT ===
   id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   folderId: text('folder_id')
     .notNull()
     .references(() => folders.id, { onDelete: 'cascade' }),
@@ -71,6 +95,10 @@ export const jobQueue = pgTable('job_queue', {
   id: text('id').primaryKey(),
   type: text('type').notNull(), // 'use_case_list' | 'use_case_detail'
   status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'completed' | 'failed'
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
   data: text('data').notNull(), // JSON string
   result: text('result'), // JSON string
   error: text('error'),
@@ -85,10 +113,22 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   displayName: text('display_name'),
   role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
+  accountStatus: text('account_status').notNull().default('active'),
+  approvalDueAt: timestamp('approval_due_at', { withTimezone: false }),
+  approvedAt: timestamp('approved_at', { withTimezone: false }),
+  // Self-FK: define via table callback below to avoid TS self-referential initializer inference issues.
+  approvedByUserId: text('approved_by_user_id'),
+  disabledAt: timestamp('disabled_at', { withTimezone: false }),
+  disabledReason: text('disabled_reason'),
   emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  approvedByUserIdFk: foreignKey({
+    columns: [table.approvedByUserId],
+    foreignColumns: [table.id],
+  }),
+}));
 
 export const webauthnCredentials = pgTable('webauthn_credentials', {
   id: text('id').primaryKey(),
@@ -172,12 +212,17 @@ export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
+export type WorkspaceRow = typeof workspaces.$inferSelect;
 // Chatbot Tables (Lot A)
 export const chatSessions = pgTable('chat_sessions', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Workspace scope for this chat session.
+  // - For regular users: their own workspace (set at session creation)
+  // - For admin_app: can be a shared workspace (read-only) or Admin Workspace
+  workspaceId: text('workspace_id').references(() => workspaces.id),
   primaryContextType: text('primary_context_type'), // 'company' | 'folder' | 'usecase' | 'executive_summary'
   primaryContextId: text('primary_context_id'),
   title: text('title'),
@@ -186,6 +231,7 @@ export const chatSessions = pgTable('chat_sessions', {
 }, (table) => ({
   userIdIdx: index('chat_sessions_user_id_idx').on(table.userId),
   primaryContextIdx: index('chat_sessions_primary_context_idx').on(table.primaryContextType, table.primaryContextId),
+  workspaceIdIdx: index('chat_sessions_workspace_id_idx').on(table.workspaceId),
 }));
 
 export const chatMessages = pgTable('chat_messages', {
@@ -242,6 +288,35 @@ export const chatStreamEvents = pgTable('chat_stream_events', {
   streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
 }));
 
+// Chat tracing (debug/audit): store the exact OpenAI payloads + tool calls per iteration.
+// Retention is enforced via periodic purge (7 days by default).
+export const chatGenerationTraces = pgTable('chat_generation_traces', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: 'cascade' }),
+  assistantMessageId: text('assistant_message_id')
+    .notNull()
+    .references(() => chatMessages.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').references(() => workspaces.id),
+  phase: text('phase').notNull(), // 'pass1' | 'pass2'
+  iteration: integer('iteration').notNull(), // within phase
+  model: text('model'),
+  toolChoice: text('tool_choice'),
+  tools: jsonb('tools'), // array of tool metadata (names etc.)
+  openaiMessages: jsonb('openai_messages').notNull(), // exact messages payload sent to OpenAI
+  toolCalls: jsonb('tool_calls'), // executed tool calls for this iteration (args + results)
+  meta: jsonb('meta'), // sizes, truncation flags, timings
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  sessionIdIdx: index('chat_generation_traces_session_id_idx').on(table.sessionId),
+  assistantMessageIdIdx: index('chat_generation_traces_assistant_message_id_idx').on(table.assistantMessageId),
+  createdAtIdx: index('chat_generation_traces_created_at_idx').on(table.createdAt),
+}));
+
 export const contextModificationHistory = pgTable('context_modification_history', {
   id: text('id').primaryKey(),
   contextType: text('context_type').notNull(), // 'company' | 'folder' | 'usecase' | 'executive_summary'
@@ -274,4 +349,5 @@ export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type ChatContextRow = typeof chatContexts.$inferSelect;
 export type ChatStreamEventRow = typeof chatStreamEvents.$inferSelect;
+export type ChatGenerationTraceRow = typeof chatGenerationTraces.$inferSelect;
 export type ContextModificationHistoryRow = typeof contextModificationHistory.$inferSelect;

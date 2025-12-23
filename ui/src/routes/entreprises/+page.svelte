@@ -5,11 +5,15 @@
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
+  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
 
   const HUB_KEY = 'companiesList';
 
-  onMount(async () => {
-    await loadCompanies();
+  onMount(() => {
+    void (async () => {
+      await loadCompanies();
+    })();
 
     // Abonnement SSE global via streamHub
     streamHub.set(HUB_KEY, (evt: any) => {
@@ -34,6 +38,16 @@
         });
       }
     });
+
+    // Reload on admin workspace scope change
+    let lastScope = $adminWorkspaceScope.selectedId;
+    const unsub = adminWorkspaceScope.subscribe((s) => {
+      if (s.selectedId !== lastScope) {
+        lastScope = s.selectedId;
+        void loadCompanies();
+      }
+    });
+    return () => unsub();
   });
 
   onDestroy(() => {
@@ -75,11 +89,18 @@
 </script>
 
 <section class="space-y-6">
+  {#if $adminReadOnlyScope}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Mode admin — workspace partagé : <b>lecture seule</b> (création / suppression désactivées).
+    </div>
+  {/if}
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Entreprises</h1>
-    <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => goto('/entreprises/new')}>
-      Ajouter
-    </button>
+    {#if !$adminReadOnlyScope}
+      <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => goto('/entreprises/new')}>
+        Ajouter
+      </button>
+    {/if}
   </div>
 
   <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -98,6 +119,7 @@
             <div class="flex-1 min-w-0">
               <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800">{company.name}</h2>
             </div>
+            {#if !$adminReadOnlyScope}
             <button 
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
               on:click|stopPropagation={() => handleDeleteCompany(company.id)}
@@ -107,6 +129,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
             </button>
+            {/if}
           </div>
           <!-- Suivi du stream (pas de waiter/spinner) -->
           <div class="p-3 sm:p-4">
@@ -135,15 +158,17 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                 </svg>
               </button>
-              <button 
-                class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                on:click|stopPropagation={() => handleDeleteCompany(company.id)}
-                title="Supprimer"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-              </button>
+              {#if !$adminReadOnlyScope}
+                <button 
+                  class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                  on:click|stopPropagation={() => handleDeleteCompany(company.id)}
+                  title="Supprimer"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              {/if}
             </div>
           </div>
           

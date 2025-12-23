@@ -64,10 +64,13 @@ function createPersistentFolderIdStore() {
 export const currentFolderId = createPersistentFolderIdStore();
 
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
 // Fonctions API
 export const fetchFolders = async (): Promise<Folder[]> => {
-  const data = await apiGet<{ items: Folder[] }>('/folders');
+  const scoped = getScopedWorkspaceIdForAdmin();
+  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+  const data = await apiGet<{ items: Folder[] }>(`/folders${qs}`);
   return data.items;
 };
 

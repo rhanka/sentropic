@@ -10,6 +10,13 @@
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
+  import { companiesStore, currentCompanyId } from '$lib/stores/companies';
+  import { foldersStore, currentFolderId } from '$lib/stores/folders';
+  import { useCasesStore } from '$lib/stores/useCases';
+  import { queueStore } from '$lib/stores/queue';
+  import { me } from '$lib/stores/me';
+  import { streamHub } from '$lib/stores/streamHub';
+  import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
 
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
 
@@ -124,6 +131,37 @@
   onMount(async () => {
     await initializeSession();
   });
+
+  // Clear all user-scoped stores when the authenticated user changes (incl. logout),
+  // to prevent cross-account data "bleed" in the UI.
+  let lastUserId: string | null = null;
+  let lastAdminScope: string | null = null;
+  $: {
+    const currentUserId = $session.user?.id ?? null;
+    const currentScope =
+      $session.user?.role === 'admin_app'
+        ? ($adminWorkspaceScope.selectedId ?? ADMIN_WORKSPACE_ID)
+        : null;
+
+    if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
+      // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
+      // On nettoie uniquement les caches côté UI.
+      streamHub.clearCaches();
+      companiesStore.set([]);
+      currentCompanyId.set(null);
+      foldersStore.set([]);
+      currentFolderId.set(null);
+      useCasesStore.set([]);
+      queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
+      // `me` représente le profil de l'utilisateur courant (pas le scope admin).
+      // On ne le vide que si l'utilisateur change.
+      if (currentUserId !== lastUserId) {
+        me.set({ loading: false, data: null, error: null });
+      }
+      lastUserId = currentUserId;
+      lastAdminScope = currentScope;
+    }
+  }
 
   // Nettoyer les timers lors du démontage
   onDestroy(() => {

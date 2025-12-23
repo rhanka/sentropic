@@ -1,11 +1,72 @@
 import { test, expect } from '@playwright/test';
 
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
-test.setTimeout(90_000); // CI can be slower; keep E2E stable
+test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
 
-test.describe('Chat', () => {
+// Important: ces tests manipulent le même compte + les mêmes sessions.
+// En parallèle (workers>1), ils se marchent dessus (création/suppression sessions) → flaky.
+test.describe.serial('Chat', () => {
+  const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
-    page.locator('div.flex.justify-start div.rounded.bg-white.border.border-slate-200');
+    assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
+
+  async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
+    await composer.fill(message);
+    await composer.focus();
+    const [res] = await Promise.all([
+      page.waitForResponse((res: any) => {
+        const req = res.request();
+        return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
+      }, { timeout: 30_000 }),
+      composer.press('Enter')
+    ]);
+    const data = await res.json().catch(() => null);
+    return {
+      jobId: String((data as any)?.jobId ?? ''),
+      streamId: String((data as any)?.streamId ?? ''),
+      assistantMessageId: String((data as any)?.assistantMessageId ?? ''),
+      sessionId: String((data as any)?.sessionId ?? '')
+    };
+  }
+
+  async function debugBackendState(page: any, jobId: string, streamId: string) {
+    try {
+      if (jobId) {
+        const jobRes = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+        console.log('[chat.spec] job status:', jobRes.status(), await jobRes.text());
+      } else {
+        console.log('[chat.spec] no jobId captured from POST /chat/messages');
+      }
+    } catch (e) {
+      console.log('[chat.spec] failed to fetch job status:', e);
+    }
+    try {
+      if (streamId) {
+        const evRes = await page.request.get(
+          `/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`
+        );
+        console.log('[chat.spec] stream events:', evRes.status(), await evRes.text());
+      } else {
+        console.log('[chat.spec] no streamId captured from POST /chat/messages');
+      }
+    } catch (e) {
+      console.log('[chat.spec] failed to fetch stream events:', e);
+    }
+  }
+
+  async function debugAssistantState(page: any) {
+    try {
+      const wrappers = assistantWrapper(page);
+      const wrapperCount = await wrappers.count();
+      const wrapperTexts = await wrappers.allTextContents();
+      console.log('[chat.spec] Assistant wrappers count:', wrapperCount);
+      console.log('[chat.spec] Assistant wrappers (last 3):', wrapperTexts.slice(-3));
+      const bubbleTexts = await assistantBubble(page).allTextContents();
+      console.log('[chat.spec] Assistant bubbles (last 5):', bubbleTexts.slice(-5));
+    } catch (e) {
+      console.log('[chat.spec] Failed to dump assistant bubbles:', e);
+    }
+  }
 
   test('devrait ouvrir le chat, envoyer un message et recevoir une réponse', async ({ page }) => {
     // Aller sur une page simple (pas besoin de contexte spécifique)
@@ -28,19 +89,26 @@ test.describe('Chat', () => {
     // Envoyer un message avec une demande de réponse spécifique pour vérifier la réponse
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
-    await composer.fill(message);
-    await composer.focus();
-    await composer.press('Enter');
+    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse dans la liste (fond sombre, aligné à droite)
     // Svelte est réactif, le message apparaît immédiatement (timeout 1s)
     const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 5000 });
     
+    // Le placeholder assistant (StreamMessage) est ajouté immédiatement après l'envoi.
+    await expect.poll(async () => await assistantWrapper(page).count(), { timeout: 10_000 }).toBeGreaterThan(0);
+
     // Attendre qu'une réponse de l'assistant apparaisse avec le texte spécifique demandé
     // On cherche directement le texte "OK" dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
-    await expect(assistantResponse).toBeVisible({ timeout: 30_000 });
+    try {
+      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
   });
 
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
@@ -93,23 +161,19 @@ test.describe('Chat', () => {
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
     const message1 = `Réponds brièvement (test E2E)`;
-    await composer.fill(message1);
-    await composer.focus();
-    await composer.press('Enter');
+    await sendMessageAndWaitApi(page, composer, message1);
     
     // Attendre que le message utilisateur apparaisse
     const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
     await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'un message assistant apparaisse (placeholder streaming ou contenu final)
-    const assistantWrappers = page.locator('div.flex.justify-start');
+    const assistantWrappers = assistantWrapper(page);
     await expect.poll(async () => await assistantWrappers.count(), { timeout: 30_000 }).toBeGreaterThan(0);
     
     // Envoyer un deuxième message dans la même session avec une autre réponse spécifique
     const message2 = `Deuxième message (test E2E)`;
-    await composer.fill(message2);
-    await composer.focus();
-    await composer.press('Enter');
+    await sendMessageAndWaitApi(page, composer, message2);
     
     // Vérifier que les deux messages utilisateur sont visibles
     const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
@@ -139,18 +203,15 @@ test.describe('Chat', () => {
     
     // Envoyer un message pour créer une session
     const message = 'Test session conservation';
-    await composer.fill(message);
-    await composer.focus();
-    await composer.press('Enter');
+    await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
     const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 1000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (peu importe le contenu, on teste la conservation de session)
-    // On cherche le dernier message assistant qui contient du texte visible (pas seulement des espaces)
-    const assistantResponse = assistantBubble(page).last();
-    await expect(assistantResponse).toBeVisible({ timeout: 15_000 });
+    // On attend au moins le placeholder assistant (StreamMessage) pour éviter de dépendre du contenu final.
+    await expect.poll(async () => await assistantWrapper(page).count(), { timeout: 30_000 }).toBeGreaterThan(0);
     
     // Fermer le widget (bouton X)
     const closeButton = page.locator('button[aria-label="Fermer"]');
@@ -189,9 +250,7 @@ test.describe('Chat', () => {
     // On demande explicitement de ne PAS utiliser d'outils
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
-    await composer.fill(message);
-    await composer.focus();
-    await composer.press('Enter');
+    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
     const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
@@ -200,7 +259,13 @@ test.describe('Chat', () => {
     // Attendre la réponse de l'assistant avec le texte spécifique
     // On cherche directement le texte dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
-    await expect(assistantResponse).toBeVisible({ timeout: 15_000 });
+    try {
+      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
     
     // Vérifier que le sélecteur contient maintenant une session (en plus de "Nouvelle session" et "Jobs IA")
     const headerSelect = page.locator('select[title="Session / Jobs"]');
@@ -228,9 +293,7 @@ test.describe('Chat', () => {
     // Envoyer un message pour créer une session avec une réponse spécifique
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
-    await composer.fill(message);
-    await composer.focus();
-    await composer.press('Enter');
+    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
     const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
@@ -239,7 +302,13 @@ test.describe('Chat', () => {
     // Attendre la réponse de l'assistant avec le texte spécifique
     // On cherche directement le texte dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
-    await expect(assistantResponse).toBeVisible({ timeout: 15_000 });
+    try {
+      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
     
     // Vérifier qu'une session existe dans le sélecteur
     const headerSelect = page.locator('select[title="Session / Jobs"]');

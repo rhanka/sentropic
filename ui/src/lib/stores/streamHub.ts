@@ -1,6 +1,15 @@
 import { API_BASE_URL } from '$lib/config';
-import { get } from 'svelte/store';
 import { isAuthenticated } from '$lib/stores/session';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+
+function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => void }): T {
+  let value!: T;
+  const unsub = store.subscribe((v: T) => {
+    value = v;
+  });
+  unsub();
+  return value;
+}
 
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
@@ -37,6 +46,7 @@ const EVENT_TYPES = [
 class StreamHub {
   private subs = new Map<string, Subscription>();
   private es: EventSource | null = null;
+  private currentUrl: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
   private lastJobEventById = new Map<string, StreamHubEvent>();
@@ -47,6 +57,32 @@ class StreamHub {
   private streamHistoryById = new Map<string, StreamHubEvent[]>();
   private maxStreamIds = 50;
   private maxEventsPerStream = 50;
+
+  /**
+   * Clear all cached/replayed events and close the current SSE connection.
+   * Useful on logout / user switch to prevent cross-account "ghost" updates.
+   */
+  reset() {
+    this.lastJobEventById.clear();
+    this.lastCompanyEventById.clear();
+    this.lastFolderEventById.clear();
+    this.lastUseCaseEventById.clear();
+    this.streamHistoryById.clear();
+    this.close();
+    this.scheduleReconnect();
+  }
+
+  /**
+   * Clear caches without closing SSE.
+   * Useful when switching UI scope while keeping a single SSE connection stable.
+   */
+  clearCaches() {
+    this.lastJobEventById.clear();
+    this.lastCompanyEventById.clear();
+    this.lastFolderEventById.clear();
+    this.lastUseCaseEventById.clear();
+    this.streamHistoryById.clear();
+  }
 
   set(key: string, onEvent: (event: StreamHubEvent) => void) {
     this.subs.set(key, { onEvent });
@@ -112,6 +148,7 @@ class StreamHub {
       this.es.close();
       this.es = null;
     }
+    this.currentUrl = null;
   }
 
   private dispatch(event: StreamHubEvent) {
@@ -202,7 +239,7 @@ class StreamHub {
 
   private async ensureConnected() {
     // pas d'auth => pas de SSE
-    if (!get(isAuthenticated)) {
+    if (!getStoreValue(isAuthenticated)) {
       this.close();
       return;
     }
@@ -213,11 +250,15 @@ class StreamHub {
       return;
     }
 
-    const url = `${API_BASE_URL}/streams/sse`;
-    if (this.es) return;
+    const urlObj = new URL(`${API_BASE_URL}/streams/sse`);
+    const scoped = getScopedWorkspaceIdForAdmin();
+    if (scoped) urlObj.searchParams.set('workspace_id', scoped);
+    const url = urlObj.toString();
+    if (this.es && this.currentUrl === url) return;
 
     this.close();
     this.es = new EventSource(url, { withCredentials: true } as any);
+    this.currentUrl = url;
 
     const handle = (type: string, raw: MessageEvent) => {
       try {

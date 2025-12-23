@@ -50,6 +50,8 @@
       return key;
     }
   };
+
+  // Le sélecteur de workspace admin est dans /parametres (section Workspace) — pas dans le header.
 </script>
 
 <header class="border-b border-slate-200 bg-white">

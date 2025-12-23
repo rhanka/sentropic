@@ -32,6 +32,7 @@
     auxText: string;
     contentText: string;
     toolArgsById: Record<string, string>;
+    toolNameById: Record<string, string>;
     toolCallIds: Set<string>;
     sawReasoning: boolean;
     sawTools: boolean;
@@ -48,6 +49,7 @@
     auxText: '',
     contentText: '',
     toolArgsById: {},
+    toolNameById: {},
     toolCallIds: new Set<string>(),
     sawReasoning: false,
     sawTools: false,
@@ -109,7 +111,8 @@
       const state = String(data?.state ?? 'unknown');
       if (state === 'started') {
         st.sawStarted = true;
-        st.stepTitle = '…';
+        // Option B: libellé explicite pour la phase de démarrage
+        st.stepTitle = 'Préparation…';
         st.startedAtMs = ts;
       } else {
         st.stepTitle = `Statut: ${state}`;
@@ -128,6 +131,7 @@
       st.stepTitle = `Outil: ${name}`;
       const toolId = String(data?.tool_call_id ?? '').trim();
       if (toolId) st.toolCallIds.add(toolId);
+      if (toolId && name && name !== 'unknown') st.toolNameById[toolId] = name;
       const args = String(data?.args ?? '').trim();
       if (args) st.auxText = args;
       upsertStep(`Outil: ${name}`, args || undefined);
@@ -138,17 +142,21 @@
       const delta = String(data?.delta ?? '');
       if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
       st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
-      st.stepTitle = 'Outil (args)';
+      const toolName = st.toolNameById[toolId];
+      st.stepTitle = toolName ? `Outil: ${toolName} (args)` : 'Outil (args)';
       st.auxText = st.toolArgsById[toolId];
-      upsertStep(`Outil: ${toolId} (args)`, st.auxText);
+      upsertStep(`Outil: ${toolName || toolId} (args)`, st.auxText);
     } else if (eventType === 'tool_call_result') {
       st.sawTools = true;
       st.sawStarted = false;
-      const status = String(data?.result?.status ?? 'unknown');
+      const status = String(data?.result?.status ?? (data?.result ? 'completed' : 'unknown'));
       const err = data?.result?.error;
-      st.stepTitle = err ? 'Outil: erreur' : `Outil: ${status}`;
+      const toolId = String(data?.tool_call_id ?? '').trim();
+      const toolName = toolId ? st.toolNameById[toolId] : undefined;
+      const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
+      st.stepTitle = `Outil: ${label}`;
       if (err) st.auxText = String(err);
-      upsertStep(`Outil: ${err ? 'erreur' : status}`, err ? String(err) : undefined);
+      upsertStep(`Outil: ${label}`, err ? String(err) : undefined);
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepTitle = 'Réponse';
@@ -166,7 +174,7 @@
       applyEvent(ev.eventType, ev.data, ev.sequence, ev.createdAt);
     }
     // trigger rerender for Set/Record updates
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, steps: [...st.steps] };
+    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, toolNameById: { ...st.toolNameById }, steps: [...st.steps] };
   };
 
   const hydrateHistory = async () => {
@@ -248,6 +256,7 @@
       auxText: '',
       contentText: '',
       toolArgsById: {},
+      toolNameById: {},
       toolCallIds: new Set<string>(),
       sawReasoning: false,
       sawTools: false,
@@ -369,7 +378,7 @@
             <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
             </svg>
-            <span>En cours…</span>
+            <span>Préparation…</span>
           </div>
         {/if}
         {#if hasSteps && !hasContent}
@@ -396,7 +405,7 @@
           <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
           </svg>
-          <span>En cours…</span>
+          <span>Préparation…</span>
         </div>
       {/if}
       {#if hasSteps && !isTerminalStatus(status)}

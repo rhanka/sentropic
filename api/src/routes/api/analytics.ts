@@ -3,19 +3,32 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import { useCases, folders } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { hydrateUseCases } from './use-cases';
+import { requireEditor } from '../../middleware/rbac';
 
 export const analyticsRouter = new Hono();
 
 analyticsRouter.get('/summary', async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const folderId = c.req.query('folder_id');
   if (!folderId) {
     return c.json({ message: 'folder_id is required' }, 400);
   }
-  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+
+  const [folder] = await db
+    .select({ id: folders.id })
+    .from(folders)
+    .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+    .limit(1);
+  if (!folder) return c.json({ message: 'Folder not found' }, 404);
+
+  const rows = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId)));
   const items = await hydrateUseCases(rows);
   const totals = items.reduce(
     (acc, item) => {
@@ -34,11 +47,23 @@ analyticsRouter.get('/summary', async (c) => {
 });
 
 analyticsRouter.get('/scatter', async (c) => {
+  const { workspaceId } = c.get('user') as { workspaceId: string };
   const folderId = c.req.query('folder_id');
   if (!folderId) {
     return c.json({ message: 'folder_id is required' }, 400);
   }
-  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+
+  const [folder] = await db
+    .select({ id: folders.id })
+    .from(folders)
+    .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+    .limit(1);
+  if (!folder) return c.json({ message: 'Folder not found' }, 404);
+
+  const rows = await db
+    .select()
+    .from(useCases)
+    .where(and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId)));
   const items = await hydrateUseCases(rows);
   const mapped = items.map((item) => ({
     id: item.id,
@@ -62,12 +87,16 @@ const executiveSummarySchema = z.object({
   model: z.string().optional()
 });
 
-analyticsRouter.post('/executive-summary', zValidator('json', executiveSummarySchema), async (c) => {
+analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', executiveSummarySchema), async (c) => {
   try {
+    const { workspaceId } = c.get('user') as { workspaceId: string };
     const { folder_id, value_threshold, complexity_threshold, model } = c.req.valid('json');
 
     // Vérifier que le dossier existe
-    const [folder] = await db.select().from(folders).where(eq(folders.id, folder_id));
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, folder_id), eq(folders.workspaceId, workspaceId)));
     if (!folder) {
       return c.json({ message: 'Folder not found' }, 404);
     }
@@ -79,7 +108,7 @@ analyticsRouter.post('/executive-summary', zValidator('json', executiveSummarySc
     // Mettre à jour le statut du dossier à 'generating'
     await db.update(folders)
       .set({ status: 'generating' })
-      .where(eq(folders.id, folder_id));
+      .where(and(eq(folders.id, folder_id), eq(folders.workspaceId, workspaceId)));
 
     // Ajouter le job à la queue
     const jobId = await queueManager.addJob('executive_summary', {
@@ -87,7 +116,7 @@ analyticsRouter.post('/executive-summary', zValidator('json', executiveSummarySc
       valueThreshold: value_threshold,
       complexityThreshold: complexity_threshold,
       model: selectedModel
-    });
+    }, { workspaceId });
 
     return c.json({
       success: true,

@@ -70,11 +70,17 @@ export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: "read_usecase",
     description:
-      "Lit le contenu complet d'un use case (structure use_cases.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications.",
+      "Lit un use case (structure use_cases.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications. IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires (réduit fortement les tokens et évite de renvoyer un blob complet).",
     parameters: {
       type: "object",
       properties: {
-        useCaseId: { type: "string", description: "ID du use case à lire" }
+        useCaseId: { type: "string", description: "ID du use case à lire" },
+        select: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Liste de champs de `data` à inclure. Exemples: ['references'] ou ['problem','solution','description']. Si absent, renvoie `data` complet."
+        }
       },
       required: ["useCaseId"]
     }

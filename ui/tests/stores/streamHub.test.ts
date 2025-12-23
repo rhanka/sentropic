@@ -50,14 +50,23 @@ class MockEventSource {
 // Mock global EventSource
 global.EventSource = MockEventSource as any;
 
-// Mock isAuthenticated store
+// Mock session stores (used indirectly by adminWorkspaceScope)
 vi.mock('../../src/lib/stores/session', () => ({
+  session: {
+    subscribe: vi.fn((fn: (value: any) => void) => {
+      fn({
+        user: { id: 'test-admin', email: null, displayName: null, role: 'admin_app' },
+        loading: false,
+      });
+      return () => {};
+    }),
+  },
   isAuthenticated: {
     subscribe: vi.fn((fn: (value: boolean) => void) => {
       fn(true);
       return () => {};
-    })
-  }
+    }),
+  },
 }));
 
 describe('streamHub', () => {

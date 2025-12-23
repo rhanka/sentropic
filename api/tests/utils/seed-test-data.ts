@@ -5,12 +5,20 @@ import {
   useCases, 
   settings, 
   users, 
+  workspaces,
   webauthnCredentials, 
   sessions,
   userSessions,
   webauthnChallenges,
   magicLinks,
-  jobQueue
+  jobQueue,
+  emailVerificationCodes,
+  chatContexts,
+  chatMessages,
+  chatSessions,
+  chatStreamEvents,
+  contextModificationHistory,
+  ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
 
@@ -23,57 +31,220 @@ export async function seedTestData() {
     console.log('🗑️  Cleaning up existing data...');
     
     // 1. Delete tables with foreign keys (in dependency order)
+    await db.delete(chatStreamEvents);
+    await db.delete(chatContexts);
+    await db.delete(chatMessages);
+    await db.delete(chatSessions);
+    await db.delete(contextModificationHistory);
+
     await db.delete(useCases); // Depends on folders and companies
     await db.delete(folders); // Depends on companies
-    await db.delete(companies); // No dependencies
+    await db.delete(companies); // Depends on workspaces
     
     // 2. Delete auth-related tables with foreign keys
     await db.delete(userSessions); // Depends on users
     await db.delete(webauthnCredentials); // Depends on users
     await db.delete(webauthnChallenges); // Depends on users
     await db.delete(magicLinks); // Depends on users
+    await db.delete(emailVerificationCodes); // Depends on users/email
     await db.delete(sessions); // Old sessions table (if exists)
     await db.delete(users); // No dependencies
     
     // 3. Delete other tables
     await db.delete(jobQueue); // Clean job queue to avoid interference
     await db.delete(settings); // Clean settings to ensure clean state
+    await db.delete(workspaces); // After all workspace-scoped tables are deleted
     
     // Note: businessConfig is kept as it contains business configuration
     // that might be needed. If you want to clean it too, uncomment:
     // await db.delete(businessConfig);
     
     console.log('✅ All data cleaned (companies, folders, use cases, users, auth, jobs, settings)');
-    // 1. Entreprises de test
-    const testCompaniesData = [
+    // Deterministic IDs for stable E2E fixtures
+    const E2E_ADMIN_ID = 'e2e-user-admin';
+    const E2E_USER_A_ID = 'e2e-user-a';
+    const E2E_USER_B_ID = 'e2e-user-b';
+    const E2E_USER_VICTIM_ID = 'e2e-user-victim';
+    const E2E_PENDING_ID = 'e2e-user-pending';
+
+    const E2E_WS_ADMIN = ADMIN_WORKSPACE_ID;
+    const E2E_WS_A = 'e2e-ws-a';
+    const E2E_WS_B = 'e2e-ws-b';
+    const E2E_WS_VICTIM = 'e2e-ws-victim';
+
+    // 0. Workspaces & users (multi-tenant)
+    // NOTE: we seed users with emailVerified=true because session validation requires it.
+    const now = new Date();
+
+    await db.insert(workspaces).values([
       {
-        id: 'test-rio-tinto',
-        name: 'Rio Tinto Test',
-        industry: 'Mining & Metals',
-        size: 'Large (10,000+ employees)',
-        products: 'Aluminium, Iron Ore, Copper, Diamonds',
-        processes: 'Mining, Smelting, Refining, Manufacturing',
-        challenges: 'Decarbonization, ESG compliance, Operational efficiency',
-        objectives: 'Carbon-neutral aluminum production, Digital transformation',
-        technologies: 'AI/ML, IoT, Digital twins, Process optimization',
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
+        id: E2E_WS_ADMIN,
+        ownerUserId: E2E_ADMIN_ID, // will be claimed by actual admin_app at boot; OK for E2E fixtures
+        name: 'Admin Workspace',
+        shareWithAdmin: false,
+        createdAt: now,
+        updatedAt: now,
       },
       {
-        id: 'test-delpharm',
-        name: 'Delpharm Test',
-        industry: 'Pharmaceutical Manufacturing',
-        size: 'Medium (1,000-5,000 employees)',
-        products: 'Generic pharmaceuticals, Contract manufacturing',
-        processes: 'Drug development, Manufacturing, Quality control',
-        challenges: 'Regulatory compliance, Cost optimization, Quality assurance',
-        objectives: 'Expand manufacturing capacity, Improve efficiency',
-        technologies: 'Process automation, Quality management systems',
-        status: 'draft',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
+        id: E2E_WS_A,
+        ownerUserId: E2E_USER_A_ID,
+        name: 'Workspace A (E2E)',
+        shareWithAdmin: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_WS_B,
+        ownerUserId: E2E_USER_B_ID,
+        name: 'Workspace B (E2E)',
+        shareWithAdmin: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_WS_VICTIM,
+        ownerUserId: E2E_USER_VICTIM_ID,
+        name: 'Workspace Victim (E2E)',
+        shareWithAdmin: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    await db.insert(users).values([
+      {
+        id: E2E_ADMIN_ID,
+        email: 'e2e-admin@example.com',
+        displayName: 'E2E Admin',
+        role: 'admin_app',
+        accountStatus: 'active',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_USER_A_ID,
+        email: 'e2e-user-a@example.com',
+        displayName: 'E2E User A',
+        role: 'editor',
+        accountStatus: 'active',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_USER_B_ID,
+        email: 'e2e-user-b@example.com',
+        displayName: 'E2E User B',
+        role: 'editor',
+        accountStatus: 'active',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_USER_VICTIM_ID,
+        email: 'e2e-user-victim@example.com',
+        displayName: 'E2E Victim',
+        role: 'editor',
+        accountStatus: 'active',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: E2E_PENDING_ID,
+        email: 'e2e-user-pending@example.com',
+        displayName: 'E2E Pending',
+        role: 'editor',
+        accountStatus: 'pending_admin_approval',
+        approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    console.log('✅ Workspaces + users seeded (admin + userA + userB + pending)');
+
+    // 1. Entreprises de test (extraits et simplifiés depuis backup réel)
+    const testCompaniesData = [
+      {
+        id: 'e2e-company-a-pomerleau',
+        workspaceId: E2E_WS_A,
+        name: 'Pomerleau',
+        industry: 'Construction',
+        size: 'Plus de 5 000 employés',
+        products: 'Construction bâtiments, infrastructures, génie civil',
+        processes: 'Gestion de projets, BIM, planification, sécurité chantier',
+        challenges: 'Délais, coordination, sécurité, conformité',
+        objectives: 'Durabilité, performance projets, digitalisation',
+        technologies: 'BIM, IoT, analytics, IA',
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'e2e-company-b-bmr',
+        workspaceId: E2E_WS_B,
+        name: 'Groupe BMR inc.',
+        industry: 'Retail',
+        size: 'Réseau 200+ magasins',
+        products: 'Quincaillerie, rénovation, matériaux',
+        processes: 'Supply chain, omnicanal, pricing/promo, inventaire',
+        challenges: 'Saisonnalité, supply constraints, omnicanal',
+        objectives: 'Améliorer promesse livraison et conversion',
+        technologies: 'ERP/POS/WMS, e-commerce, data',
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'e2e-company-admin-bombardier',
+        workspaceId: E2E_WS_ADMIN,
+        name: 'Bombardier Inc.',
+        industry: 'Aéronautique',
+        size: '≈18k employés',
+        products: 'Jets d’affaires + services MRO',
+        processes: 'Ingénierie, supply chain, MRO',
+        challenges: 'Supply chain, ramp-up, qualité',
+        objectives: 'Croissance services, efficacité',
+        technologies: 'PLM, data, maintenance prédictive',
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      },
+      // Required by e2e/tests/ai-generation.spec.ts (expects an option containing "Delpharm")
+      {
+        id: 'e2e-company-admin-delpharm',
+        workspaceId: E2E_WS_ADMIN,
+        name: 'Delpharm',
+        industry: 'Pharmaceutique',
+        size: '1000-5000',
+        products: 'CDMO, génériques',
+        processes: 'Manufacturing, QC, supply',
+        challenges: 'Compliance, coûts, qualité',
+        objectives: 'Efficacité, capacité',
+        technologies: 'Automation, data',
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'e2e-company-victim',
+        workspaceId: E2E_WS_VICTIM,
+        name: 'Victim Co',
+        industry: 'E2E',
+        size: '1-10',
+        products: 'N/A',
+        processes: 'N/A',
+        challenges: 'N/A',
+        objectives: 'N/A',
+        technologies: 'N/A',
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      },
     ];
 
     // Insérer les entreprises de test
@@ -82,161 +253,170 @@ export async function seedTestData() {
       console.log(`✅ Company: ${company.name} (${company.status})`);
     }
 
-    // 2. Dossier de test
-    const testFolderData = {
-      id: 'test-folder-e2e',
-      name: 'Dossier Test E2E',
-      description: 'Dossier de test pour les tests E2E',
-      status: 'in_progress',
-      companyId: 'test-rio-tinto',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+    // 2. Dossiers de test (un par workspace)
+    const matrixConfig = JSON.stringify({
+      valueAxes: testMatrix.default.valueAxes,
+      complexityAxes: testMatrix.default.complexityAxes,
+      valueThresholds: [
+        { level: 1, points: 0, cases: 0 },
+        { level: 2, points: 2, cases: 0 },
+        { level: 3, points: 8, cases: 0 },
+        { level: 4, points: 34, cases: 0 },
+        { level: 5, points: 100, cases: 0 },
+      ],
+      complexityThresholds: [
+        { level: 1, points: 0, cases: 0 },
+        { level: 2, points: 2, cases: 0 },
+        { level: 3, points: 8, cases: 0 },
+        { level: 4, points: 34, cases: 0 },
+        { level: 5, points: 100, cases: 0 },
+      ],
+    });
 
-    await db.insert(folders).values(testFolderData).onConflictDoNothing();
-    console.log(`✅ Folder: ${testFolderData.name}`);
+    const testFolders = [
+      {
+        id: 'e2e-folder-a',
+        workspaceId: E2E_WS_A,
+        name: 'Pomerleau — Cas E2E (tenancy A)',
+        description: "Dossier E2E réaliste (sans IA) pour valider le cloisonnement workspace.",
+        companyId: 'e2e-company-a-pomerleau',
+        matrixConfig,
+        status: 'completed',
+        executiveSummary: null,
+        createdAt: now,
+      },
+      {
+        id: 'e2e-folder-b',
+        workspaceId: E2E_WS_B,
+        name: 'BMR — Cas E2E (tenancy B)',
+        description: "Dossier E2E réaliste (sans IA) pour valider le cloisonnement workspace.",
+        companyId: 'e2e-company-b-bmr',
+        matrixConfig,
+        status: 'completed',
+        executiveSummary: null,
+        createdAt: now,
+      },
+      {
+        id: 'e2e-folder-admin',
+        workspaceId: E2E_WS_ADMIN,
+        name: 'Bombardier — Cas E2E (admin)',
+        description: "Dossier E2E admin.",
+        companyId: 'e2e-company-admin-bombardier',
+        matrixConfig,
+        status: 'completed',
+        executiveSummary: null,
+        createdAt: now,
+      },
+      {
+        id: 'e2e-folder-victim',
+        workspaceId: E2E_WS_VICTIM,
+        name: 'Victim — Dossier E2E',
+        description: "Dossier E2E victim (pour disable/delete).",
+        companyId: 'e2e-company-victim',
+        matrixConfig,
+        status: 'completed',
+        executiveSummary: null,
+        createdAt: now,
+      },
+    ] as const;
 
-    // 3. Cas d'usage de test avec différents statuts
+    for (const folder of testFolders) {
+      await db.insert(folders).values(folder).onConflictDoNothing();
+      console.log(`✅ Folder: ${folder.name}`);
+    }
+
+    // 3. Cas d'usage (schema v2: toutes les colonnes métier dans JSONB data)
+    const mkUseCaseData = (name: string, description: string, extra: Record<string, unknown> = {}) => ({
+      name,
+      description,
+      ...extra,
+    });
+
     const testUseCasesData = [
+      // Workspace A
       {
-        id: 'test-uc-1',
-        folderId: 'test-folder-e2e',
-        companyId: 'test-rio-tinto',
-        name: 'Réponses clients automatiques',
-        description: 'Système de réponse automatique aux questions clients',
-        process: 'Customer service automation',
-        domain: 'Customer Service',
-        technologies: '["NLP", "Chatbot", "Machine Learning"]',
-        prerequisites: 'Customer data, FAQ database, Integration APIs',
-        deadline: '3 months',
-        contact: 'Customer Service Manager',
-        benefits: '["Reduced response time", "24/7 availability", "Cost savings"]',
-        metrics: '["Response time", "Customer satisfaction", "Resolution rate"]',
-        risks: '["Data privacy", "Accuracy concerns", "Integration complexity"]',
-        nextSteps: '["Data collection", "Model training", "Pilot testing"]',
-        sources: '["CRM", "FAQ database", "Customer feedback"]',
-        relatedData: '["Customer queries", "Response templates", "Performance metrics"]',
-        references: '[{"title": "AI in Customer Service", "url": "https://example.com"}]',
-        valueScores: '[{"axisId": "business_value", "rating": 5, "description": "High business value"}]',
-        complexityScores: '[{"axisId": "ai_maturity", "rating": 2, "description": "Low complexity"}]',
-        totalValueScore: 5,
-        totalComplexityScore: 2,
-        status: 'active',
-        createdAt: new Date()
+        id: 'e2e-uc-a-1',
+        workspaceId: E2E_WS_A,
+        folderId: 'e2e-folder-a',
+        companyId: 'e2e-company-a-pomerleau',
+        status: 'completed',
+        model: null,
+        createdAt: now,
+        data: mkUseCaseData(
+          'Optimisation planning chantier via IA',
+          "Optimiser la planification et l'ordonnancement sur grands projets pour réduire retards et coûts.",
+          { domain: 'Construction', process: 'Planification / scheduling' }
+        ),
       },
       {
-        id: 'test-uc-2',
-        folderId: 'test-folder-e2e',
-        companyId: 'test-rio-tinto',
-        name: 'Analyse sentiment',
-        description: 'Analyse des sentiments dans les commentaires clients',
-        process: 'Sentiment analysis',
-        domain: 'Marketing',
-        technologies: '["NLP", "Sentiment Analysis", "Text Mining"]',
-        prerequisites: 'Customer feedback data, Text processing tools',
-        deadline: '6 months',
-        contact: 'Marketing Manager',
-        benefits: '["Better customer insights", "Improved products", "Brand monitoring"]',
-        metrics: '["Sentiment accuracy", "Processing speed", "Insight quality"]',
-        risks: '["Data quality", "Model bias", "Privacy concerns"]',
-        nextSteps: '["Data preparation", "Model development", "Validation"]',
-        sources: '["Social media", "Reviews", "Surveys"]',
-        relatedData: '["Customer comments", "Sentiment scores", "Trends"]',
-        references: '[{"title": "Sentiment Analysis Guide", "url": "https://example.com"}]',
-        valueScores: '[{"axisId": "business_value", "rating": 4, "description": "Medium-high value"}]',
-        complexityScores: '[{"axisId": "ai_maturity", "rating": 3, "description": "Medium complexity"}]',
-        totalValueScore: 4,
-        totalComplexityScore: 3,
-        status: 'active',
-        createdAt: new Date()
+        id: 'e2e-uc-a-2',
+        workspaceId: E2E_WS_A,
+        folderId: 'e2e-folder-a',
+        companyId: 'e2e-company-a-pomerleau',
+        status: 'completed',
+        model: null,
+        createdAt: now,
+        data: mkUseCaseData(
+          'Détection défauts et contrôle qualité (vision)',
+          "Inspection automatique (images/drones) pour détecter défauts et non-conformités plus tôt.",
+          { domain: 'Construction', process: 'Contrôle qualité' }
+        ),
+      },
+
+      // Workspace B
+      {
+        id: 'e2e-uc-b-1',
+        workspaceId: E2E_WS_B,
+        folderId: 'e2e-folder-b',
+        companyId: 'e2e-company-b-bmr',
+        status: 'completed',
+        model: null,
+        createdAt: now,
+        data: mkUseCaseData(
+          "Orchestration dernier km & promesse fiable",
+          "Améliorer l’OTIF, réduire coûts/stop et fiabiliser la promesse e-commerce.",
+          { domain: 'Retail', process: 'Logistique / last mile' }
+        ),
       },
       {
-        id: 'test-uc-3',
-        folderId: 'test-folder-e2e',
-        companyId: 'test-rio-tinto',
-        name: 'Extraction documents',
-        description: 'Extraction automatique de données depuis des documents',
-        process: 'Document processing',
-        domain: 'Operations',
-        technologies: '["OCR", "Document AI", "Data extraction"]',
-        prerequisites: 'Document repository, OCR tools, Data validation',
-        deadline: '9 months',
-        contact: 'Operations Manager',
-        benefits: '["Reduced manual work", "Faster processing", "Better accuracy"]',
-        metrics: '["Extraction accuracy", "Processing time", "Error rate"]',
-        risks: '["Document quality", "Format variations", "Integration issues"]',
-        nextSteps: '["Document analysis", "Tool selection", "Pilot testing"]',
-        sources: '["Document management system", "File storage", "Scanned documents"]',
-        relatedData: '["Document types", "Extracted data", "Validation results"]',
-        references: '[{"title": "Document AI Solutions", "url": "https://example.com"}]',
-        valueScores: '[{"axisId": "business_value", "rating": 3, "description": "Medium value"}]',
-        complexityScores: '[{"axisId": "ai_maturity", "rating": 5, "description": "High complexity"}]',
-        totalValueScore: 3,
-        totalComplexityScore: 5,
-        status: 'generating',
-        createdAt: new Date()
+        id: 'e2e-uc-b-2',
+        workspaceId: E2E_WS_B,
+        folderId: 'e2e-folder-b',
+        companyId: 'e2e-company-b-bmr',
+        status: 'completed',
+        model: null,
+        createdAt: now,
+        data: mkUseCaseData(
+          "Enrichissement PIM (contenu produit)",
+          "Enrichir automatiquement les fiches produit (FR/EN) pour conversion + SEO, avec validation humaine.",
+          { domain: 'Retail', process: 'PIM / contenu produit' }
+        ),
       },
+
+      // Admin workspace
       {
-        id: 'test-uc-4',
-        folderId: 'test-folder-e2e',
-        companyId: 'test-rio-tinto',
-        name: 'Détection fraude',
-        description: 'Système de détection de fraude en temps réel',
-        process: 'Fraud detection',
-        domain: 'Security',
-        technologies: '["Machine Learning", "Anomaly Detection", "Real-time processing"]',
-        prerequisites: 'Transaction data, ML models, Real-time infrastructure',
-        deadline: '12 months',
-        contact: 'Security Manager',
-        benefits: '["Reduced fraud losses", "Real-time protection", "Better security"]',
-        metrics: '["Detection rate", "False positive rate", "Response time"]',
-        risks: '["Model accuracy", "False positives", "System performance"]',
-        nextSteps: '["Data analysis", "Model training", "System integration"]',
-        sources: '["Transaction logs", "User behavior", "External data"]',
-        relatedData: '["Transaction patterns", "Risk scores", "Alerts"]',
-        references: '[{"title": "Fraud Detection ML", "url": "https://example.com"}]',
-        valueScores: '[{"axisId": "business_value", "rating": 2, "description": "Low-medium value"}]',
-        complexityScores: '[{"axisId": "ai_maturity", "rating": 4, "description": "High complexity"}]',
-        totalValueScore: 2,
-        totalComplexityScore: 4,
-        status: 'draft',
-        createdAt: new Date()
+        id: 'e2e-uc-admin-1',
+        workspaceId: E2E_WS_ADMIN,
+        folderId: 'e2e-folder-admin',
+        companyId: 'e2e-company-admin-bombardier',
+        status: 'completed',
+        model: 'gpt-4.1-nano',
+        createdAt: now,
+        data: mkUseCaseData(
+          'Maintenance prédictive flotte',
+          "Exploiter télémétrie et historiques MRO pour anticiper pannes et optimiser la disponibilité.",
+          { domain: 'Aéronautique', process: 'MRO / maintenance' }
+        ),
       },
-      {
-        id: 'test-uc-5',
-        folderId: 'test-folder-e2e',
-        companyId: 'test-rio-tinto',
-        name: 'Prévision vente',
-        description: 'Prédiction des ventes futures basée sur l\'historique',
-        process: 'Sales forecasting',
-        domain: 'Sales',
-        technologies: '["Time Series", "Machine Learning", "Statistical models"]',
-        prerequisites: 'Historical sales data, Market data, Forecasting tools',
-        deadline: '6 months',
-        contact: 'Sales Manager',
-        benefits: '["Better planning", "Reduced inventory", "Improved accuracy"]',
-        metrics: '["Forecast accuracy", "Planning efficiency", "Inventory optimization"]',
-        risks: '["Data quality", "Market volatility", "Model complexity"]',
-        nextSteps: '["Data collection", "Model development", "Validation"]',
-        sources: '["Sales database", "Market data", "External factors"]',
-        relatedData: '["Sales history", "Forecast results", "Accuracy metrics"]',
-        references: '[{"title": "Sales Forecasting ML", "url": "https://example.com"}]',
-        valueScores: '[{"axisId": "business_value", "rating": 5, "description": "High value"}]',
-        complexityScores: '[{"axisId": "ai_maturity", "rating": 5, "description": "High complexity"}]',
-        totalValueScore: 5,
-        totalComplexityScore: 5,
-        status: 'generating_detail',
-        createdAt: new Date()
-      }
-    ];
+    ] as const;
 
     // Insérer les cas d'usage de test
     for (const useCase of testUseCasesData) {
       await db.insert(useCases).values(useCase).onConflictDoNothing();
-      console.log(`✅ Use Case: ${useCase.name} (${useCase.status})`);
+      console.log(`✅ Use Case: ${(useCase as any).data?.name ?? useCase.id} (${useCase.status})`);
     }
 
-    // 4. Configuration de matrice par défaut (si pas déjà présente)
+    // 4. Settings: matrice par défaut
     const defaultMatrix = {
       key: 'default-matrix',
       value: JSON.stringify({
@@ -244,34 +424,24 @@ export async function seedTestData() {
         description: 'Configuration de matrice pour les tests E2E',
         valueAxes: testMatrix.default.valueAxes,
         complexityAxes: testMatrix.default.complexityAxes,
-        valueThresholds: [
-          { level: 1, points: 0, cases: 0 },
-          { level: 2, points: 2, cases: 0 },
-          { level: 3, points: 8, cases: 0 },
-          { level: 4, points: 34, cases: 0 },
-          { level: 5, points: 100, cases: 0 }
-        ],
-        complexityThresholds: [
-          { level: 1, points: 0, cases: 0 },
-          { level: 2, points: 2, cases: 0 },
-          { level: 3, points: 8, cases: 0 },
-          { level: 4, points: 34, cases: 0 },
-          { level: 5, points: 100, cases: 0 }
-        ]
+        valueThresholds: JSON.parse(matrixConfig).valueThresholds,
+        complexityThresholds: JSON.parse(matrixConfig).complexityThresholds,
       }),
       description: 'Configuration de matrice pour les tests E2E',
-      updatedAt: new Date()
+      updatedAt: now,
     };
 
     await db.insert(settings).values(defaultMatrix).onConflictDoNothing();
-    console.log(`✅ Matrix: ${defaultMatrix.key}`);
+    console.log(`✅ Setting: ${defaultMatrix.key}`);
 
     console.log('\n🎉 Test data seeded successfully!');
     console.log('\n📊 Summary:');
     console.log(`- Companies: ${testCompaniesData.length}`);
-    console.log(`- Folders: 1`);
+    console.log(`- Folders: ${testFolders.length}`);
     console.log(`- Use Cases: ${testUseCasesData.length}`);
     console.log(`- Matrix: 1`);
+    console.log(`- Workspaces: 4`);
+    console.log(`- Users: 5`);
 
   } catch (error) {
     console.error('❌ Error seeding test data:', error);

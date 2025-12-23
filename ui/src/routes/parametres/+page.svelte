@@ -3,6 +3,17 @@
   import { apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { session } from '$lib/stores/session';
+  import { deactivateAccount, deleteAccount, loadMe, me, updateMe } from '$lib/stores/me';
+  import {
+    adminWorkspaceScope,
+    loadAdminWorkspaces,
+    setAdminWorkspaceScope,
+    ADMIN_WORKSPACE_ID,
+    adminReadOnlyScope
+  } from '$lib/stores/adminWorkspaceScope';
+  import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
 
   interface Prompt {
     id: string;
@@ -41,10 +52,83 @@
   let isPurgingQueue = false;
 
   onMount(async () => {
+    await loadMe();
+    if (isAdminApp()) {
+      void loadAdminWorkspaces();
+    }
+    if (isAdmin()) {
     await loadPrompts();
     await loadAISettings();
     await loadQueueStats();
+    }
   });
+
+  const isAdmin = () => {
+    const s = get(session);
+    return s.user?.role === 'admin_app' || s.user?.role === 'admin_org';
+  };
+
+  const isAdminApp = () => {
+    const s = get(session);
+    return s.user?.role === 'admin_app';
+  };
+
+  const onAdminScopeChange = (e: Event) => {
+    const v = (e.currentTarget as HTMLSelectElement | null)?.value;
+    if (v) setAdminWorkspaceScope(v);
+  };
+
+  let savingWorkspace = false;
+  let deleting = false;
+  let deactivating = false;
+  let workspaceName = '';
+  let shareWithAdmin = false;
+
+  $: if ($me.data?.workspace) {
+    workspaceName = $me.data.workspace.name;
+    shareWithAdmin = $me.data.workspace.shareWithAdmin;
+  }
+
+  const saveWorkspace = async () => {
+    if (!$me.data?.workspace) return;
+    savingWorkspace = true;
+    try {
+      await updateMe(isAdmin() ? { workspaceName } : { workspaceName, shareWithAdmin });
+      addToast({ type: 'success', message: 'Paramètres du workspace enregistrés' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur enregistrement workspace' });
+    } finally {
+      savingWorkspace = false;
+    }
+  };
+
+  const handleDeactivate = async () => {
+    if (!confirm('Désactiver votre compte ? Vous pourrez demander une réactivation.')) return;
+    deactivating = true;
+    try {
+      await deactivateAccount();
+      addToast({ type: 'success', message: 'Compte désactivé. Veuillez vous reconnecter.' });
+      await session.logout();
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur désactivation' });
+    } finally {
+      deactivating = false;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('SUPPRESSION DÉFINITIVE: supprimer votre compte et toutes vos données immédiatement ?')) return;
+    deleting = true;
+    try {
+      await deleteAccount();
+      addToast({ type: 'success', message: 'Compte supprimé.' });
+      await session.logout();
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur suppression' });
+    } finally {
+      deleting = false;
+    }
+  };
 
   const loadPrompts = async () => {
     try {
@@ -244,6 +328,100 @@
 
 <section class="space-y-6">
   <h1 class="text-3xl font-semibold">Paramètres</h1>
+
+  <!-- Section Compte & Workspace (tous les utilisateurs) -->
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800">Compte & Workspace</h2>
+
+    {#if $me.loading}
+      <p class="text-sm text-slate-600">Chargement…</p>
+    {:else if $me.error}
+      <p class="text-sm text-rose-700">{$me.error}</p>
+    {:else if $me.data}
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded border border-slate-200 p-4">
+          <h3 class="font-medium">Compte</h3>
+          <div class="mt-2 text-sm text-slate-700 space-y-1">
+            <div><span class="text-slate-500">Email:</span> {$me.data.user?.email ?? '—'}</div>
+            <div><span class="text-slate-500">Nom:</span> {$me.data.user?.displayName ?? '—'}</div>
+            <div><span class="text-slate-500">Role effectif:</span> {$me.data.effectiveRole}</div>
+            <div><span class="text-slate-500">Statut:</span> {$me.data.user?.accountStatus}</div>
+          </div>
+          {#if $me.data.user?.accountStatus === 'pending_admin_approval'}
+            <p class="mt-2 text-sm text-amber-700">
+              Compte en attente de validation admin (48h). Après expiration: accès lecture seule.
+            </p>
+          {:else if $me.data.user?.accountStatus === 'approval_expired_readonly'}
+            <p class="mt-2 text-sm text-amber-700">
+              Validation expirée: accès lecture seule (guest). Un admin peut réactiver.
+            </p>
+          {/if}
+        </div>
+
+        <div class="rounded border border-slate-200 p-4">
+          <h3 class="font-medium">Workspace</h3>
+          <div class="mt-3 space-y-3">
+            {#if $session.user?.role === 'admin_app'}
+              <label class="block text-sm">
+                <div class="text-slate-600">Contexte admin (lecture)</div>
+                <select
+                  class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
+                  bind:value={$adminWorkspaceScope.selectedId}
+                  on:change={onAdminScopeChange}
+                >
+                  <option value={ADMIN_WORKSPACE_ID}>Admin Workspace</option>
+                  {#each $adminWorkspaceScope.items.filter((w) => w.id !== ADMIN_WORKSPACE_ID) as ws (ws.id)}
+                    <option value={ws.id}>
+                      {(ws.ownerEmail || ws.ownerUserId || '—') + ' — ' + (ws.name || ws.id)}
+                    </option>
+                  {/each}
+                </select>
+                {#if $adminReadOnlyScope}
+                  <p class="mt-2 text-xs text-amber-700">
+                    Workspace partagé : <b>lecture seule</b> (actions destructives désactivées).
+                  </p>
+                {/if}
+              </label>
+              <div class="border-t border-slate-100 pt-3"></div>
+            {/if}
+            <label class="block text-sm">
+              <div class="text-slate-600">Nom</div>
+              <input class="mt-1 w-full rounded border border-slate-200 px-3 py-2" bind:value={workspaceName} />
+            </label>
+            {#if !isAdmin()}
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" class="h-4 w-4" bind:checked={shareWithAdmin} />
+                <span>Partager mon workspace avec l’administrateur</span>
+              </label>
+            {/if}
+            <div class="flex gap-2">
+              <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white" on:click={saveWorkspace} disabled={savingWorkspace}>
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded border border-rose-200 bg-rose-50 p-4">
+        <h3 class="font-medium text-rose-800">Zone dangereuse</h3>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button class="rounded bg-amber-700 px-3 py-2 text-sm text-white" on:click={handleDeactivate} disabled={deactivating}>
+            Désactiver mon compte
+          </button>
+          <button class="rounded bg-rose-700 px-3 py-2 text-sm text-white" on:click={handleDelete} disabled={deleting}>
+            Supprimer mon compte
+          </button>
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  {#if !isAdmin()}
+    <div class="rounded border border-slate-200 bg-white p-6">
+      <p class="text-sm text-slate-600">Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.</p>
+    </div>
+  {:else}
   
   <!-- Section Gestion des Prompts -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
@@ -423,6 +601,11 @@
     </div>
   </div>
 
+  {#if isAdminApp()}
+    <!-- Interface admin (utilisateurs) - intégrée dans Paramètres -->
+    <AdminUsersPanel embeddedTitle="Admin · Utilisateurs (approbations)" />
+  {/if}
+
   <!-- Section Administration -->
   <div class="rounded border border-red-200 bg-red-50 p-6">
     <h2 class="text-lg font-semibold text-red-800 mb-4">Zone de danger</h2>
@@ -450,6 +633,8 @@
       <p><strong>Frontend:</strong> SvelteKit + Tailwind CSS</p>
     </div>
   </div>
+
+  {/if}
 </section>
 
 <!-- Modal d'édition des prompts -->

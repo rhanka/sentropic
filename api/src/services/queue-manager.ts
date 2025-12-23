@@ -1,12 +1,12 @@
 import { db, pool } from '../db/client';
-import { sql, eq, desc } from 'drizzle-orm';
+import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichCompany } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases, jobQueue, type JobQueueRow } from '../db/schema';
+import { companies, folders, useCases, jobQueue, ADMIN_WORKSPACE_ID, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -59,6 +59,7 @@ export interface Job {
   type: JobType;
   data: JobData;
   status: 'pending' | 'processing' | 'completed' | 'failed';
+  workspaceId?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -162,6 +163,51 @@ export class QueueManager {
     this.cancelAllInProgress = false;
   }
 
+  /**
+   * Best-effort: cancel any in-flight jobs for a specific workspace.
+   * This prevents leakage/cost when a user purges their own job history.
+   */
+  async cancelProcessingForWorkspace(workspaceId: string, reason: string = 'purge-mine'): Promise<void> {
+    // Mark DB rows as failed first (best-effort) so other readers see them as cancelled.
+    let processingIds: string[] = [];
+    try {
+      const rows = (await db.all(sql`
+        SELECT id FROM job_queue
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `)) as Array<{ id: string }>;
+      processingIds = rows.map((r) => r.id);
+    } catch (e) {
+      console.warn('⚠️ Failed to load processing jobs for workspace cancellation:', e);
+    }
+
+    if (processingIds.length === 0) return;
+
+    try {
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ${`Job cancelled by ${reason}`}
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `);
+    } catch (e) {
+      // ignore
+    }
+
+    for (const jobId of processingIds) {
+      const controller = this.jobControllers.get(jobId);
+      if (!controller) continue;
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore
+      }
+      try {
+        await this.notifyJobEvent(jobId);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   async drain(timeoutMs: number = 10000): Promise<void> {
     const start = Date.now();
     while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
@@ -172,16 +218,17 @@ export class QueueManager {
   /**
    * Ajouter un job à la queue
    */
-  async addJob(type: JobType, data: JobData): Promise<string> {
+  async addJob(type: JobType, data: JobData, opts?: { workspaceId?: string }): Promise<string> {
     if (this.cancelAllInProgress || this.paused) {
       console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
       throw new Error('Queue is paused or cancelling; job not accepted');
     }
     const jobId = createId();
+    const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
     
     await db.run(sql`
-      INSERT INTO job_queue (id, type, data, status, created_at)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()})
+      INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
+      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()}, ${workspaceId})
     `);
     await this.notifyJobEvent(jobId);
     
@@ -212,23 +259,51 @@ export class QueueManager {
     console.log('🚀 Starting job processing...');
 
     try {
+      const inFlight = new Set<Promise<void>>();
+
+      const pickPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
+        if (limit <= 0) return [];
+        // Priority: chat > usecase_list > others, then FIFO by created_at.
+        // This avoids chat starvation when long jobs (usecase_detail/executive_summary) are running.
+        return (await db.all(sql`
+          SELECT * FROM job_queue
+          WHERE status = 'pending'
+          ORDER BY
+            CASE type
+              WHEN 'chat_message' THEN 0
+              WHEN 'usecase_list' THEN 1
+              ELSE 2
+            END,
+            created_at ASC
+          LIMIT ${limit}
+        `)) as JobQueueRow[];
+      };
+
       while (!this.paused) {
         if (this.cancelAllInProgress) break;
-        // Récupérer les jobs en attente
-        const pendingJobs = await db.all(sql`
-          SELECT * FROM job_queue 
-          WHERE status = 'pending' 
-          ORDER BY created_at ASC 
-          LIMIT ${this.maxConcurrentJobs}
-        `) as JobQueueRow[];
 
-        if (pendingJobs.length === 0) {
-          break;
+        // Fill available slots continuously (don't wait for a whole batch to finish).
+        const slots = Math.max(0, this.maxConcurrentJobs - inFlight.size);
+        if (slots > 0) {
+          const pendingJobs = await pickPendingJobs(slots);
+          for (const job of pendingJobs) {
+            const p = this.processJob(job).finally(() => {
+              inFlight.delete(p);
+            });
+            inFlight.add(p);
+          }
         }
 
-        // Traiter les jobs en parallèle
-        const promises = pendingJobs.map((job) => this.processJob(job));
-        await Promise.all(promises);
+        // If nothing is running and nothing is pending, we're done.
+        if (inFlight.size === 0) {
+          const more = await pickPendingJobs(1);
+          if (more.length === 0) break;
+          // else loop will pick it next iteration
+          continue;
+        }
+
+        // Wait for at least one job to finish, then continue filling.
+        await Promise.race(inFlight);
       }
     } finally {
       this.isProcessing = false;
@@ -246,6 +321,18 @@ export class QueueManager {
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
+
+      // Safety: the job may have been purged between SELECT and processing start.
+      // If it no longer exists (or is no longer pending), don't execute any expensive work.
+      const [current] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, jobId))
+        .limit(1);
+      if (!current || current.status !== 'pending') {
+        console.log(`⏭️ Skipping job ${jobId}: missing or not pending (likely purged)`);
+        return;
+      }
       
       // Marquer comme en cours
       await db.run(sql`
@@ -346,6 +433,16 @@ export class QueueManager {
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, input, companyId, model } = data;
+
+    const [folder] = await db
+      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (!folder) {
+      throw new Error('Folder not found');
+    }
+    const workspaceId = folder.workspaceId;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -355,7 +452,10 @@ export class QueueManager {
     let companyInfo = '';
     if (companyId) {
       try {
-        const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId)));
         if (company) {
           companyInfo = JSON.stringify({
             name: company.name,
@@ -416,6 +516,7 @@ export class QueueManager {
       };
       return {
         id: createId(),
+        workspaceId,
         folderId: folderId,
         companyId: companyId || null,
         data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
@@ -463,7 +564,7 @@ export class QueueManager {
             useCaseName: useCaseName,
             folderId: folderId,
             model: selectedModel
-          });
+          }, { workspaceId });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
         }
@@ -550,7 +651,10 @@ export class QueueManager {
     }
     
     // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
-    const [existingUseCase] = await db.select().from(useCases).where(eq(useCases.id, useCaseId));
+    const [existingUseCase] = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
     let existingData: Partial<UseCaseData> = {};
     if (existingUseCase?.data) {
       try {
@@ -596,16 +700,22 @@ export class QueueManager {
         model: selectedModel,
         status: 'completed'
       })
-      .where(eq(useCases.id, useCaseId));
+      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
     await this.notifyUseCaseEvent(useCaseId);
 
     // Vérifier si tous les use cases du dossier sont complétés
-    const allUseCases = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
+    const allUseCases = await db
+      .select()
+      .from(useCases)
+      .where(and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, folder.workspaceId)));
     const allCompleted = allUseCases.length > 0 && allUseCases.every(uc => uc.status === 'completed');
 
     if (allCompleted) {
       // Vérifier si une synthèse exécutive existe déjà
-      const [currentFolder] = await db.select().from(folders).where(eq(folders.id, folderId));
+      const [currentFolder] = await db
+        .select()
+        .from(folders)
+        .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
       const hasExecutiveSummary = currentFolder?.executiveSummary;
 
       if (!hasExecutiveSummary) {
@@ -614,7 +724,7 @@ export class QueueManager {
         // Mettre à jour le statut du dossier
         await db.update(folders)
           .set({ status: 'generating' })
-          .where(eq(folders.id, folderId));
+          .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
         await this.notifyFolderEvent(folderId);
 
         // Ajouter le job de génération de synthèse exécutive
@@ -622,7 +732,7 @@ export class QueueManager {
           await this.addJob('executive_summary', {
             folderId,
             model: selectedModel
-          });
+          }, { workspaceId: folder.workspaceId });
           console.log(`📝 Job executive_summary ajouté pour le dossier ${folderId}`);
         } catch (error) {
           console.error(`❌ Erreur lors de l'ajout du job executive_summary:`, error);
@@ -694,6 +804,7 @@ export class QueueManager {
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,
@@ -705,10 +816,11 @@ export class QueueManager {
   /**
    * Obtenir tous les jobs
    */
-  async getAllJobs(): Promise<Job[]> {
+  async getAllJobs(opts?: { workspaceId?: string }): Promise<Job[]> {
     const results = await db
       .select()
       .from(jobQueue)
+      .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
       .orderBy(desc(jobQueue.createdAt));
     
     return results.map((row) => ({
@@ -716,6 +828,7 @@ export class QueueManager {
       type: row.type as JobType,
       data: JSON.parse(row.data) as JobData,
       status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
       createdAt: row.createdAt.toISOString(),
       startedAt: row.startedAt || undefined,

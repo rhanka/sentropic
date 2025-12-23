@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { afterUpdate, onMount, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
   type ChatSession = {
     id: string;
@@ -40,13 +41,16 @@
   let errorMsg: string | null = null;
   let input = '';
   let listEl: HTMLDivElement | null = null;
-  let pendingScrollToBottom = false;
-  let scrollToBottomInFlight = false;
+  let followBottom = true;
+  let scrollScheduled = false;
+  let scrollForcePending = false;
+  const BOTTOM_THRESHOLD_PX = 96;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
   const terminalRefreshInFlight = new Set<string>();
+  const jobPollInFlight = new Set<string>();
 
   /**
    * Détecte le contexte depuis la route actuelle
@@ -75,8 +79,27 @@
     return null;
   };
 
-  const requestScrollToBottom = () => {
-    pendingScrollToBottom = true;
+  const isNearBottom = (): boolean => {
+    if (!listEl) return true;
+    const remaining = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+    return remaining < BOTTOM_THRESHOLD_PX;
+  };
+
+  const scheduleScrollToBottom = (opts?: { force?: boolean }) => {
+    if (opts?.force) scrollForcePending = true;
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+      scrollScheduled = false;
+      const force = scrollForcePending;
+      scrollForcePending = false;
+      if (!force && !followBottom) return;
+      void scrollChatToBottomStable();
+    });
+  };
+
+  const onListScroll = () => {
+    followBottom = isNearBottom();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -103,22 +126,6 @@
       }
     }
   };
-
-  // Exécuter le scroll UNIQUEMENT quand on l'a explicitement demandé (load/switch/stream),
-  // pas sur des updates DOM ordinaires (ex: ouverture d'un chevron).
-  afterUpdate(() => {
-    if (!pendingScrollToBottom) return;
-    if (scrollToBottomInFlight) return;
-    pendingScrollToBottom = false;
-    scrollToBottomInFlight = true;
-    void (async () => {
-      try {
-        await scrollChatToBottomStable();
-      } finally {
-        scrollToBottomInFlight = false;
-      }
-    })();
-  });
 
   const formatApiError = (e: unknown, fallback: string) => {
     if (e instanceof ApiError) {
@@ -156,7 +163,7 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined
       }));
-      if (opts?.scrollToBottom !== false) requestScrollToBottom();
+      if (opts?.scrollToBottom !== false) scheduleScrollToBottom({ force: true });
 
       // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
       initialEventsByMessageId = new Map();
@@ -199,7 +206,7 @@
     messages = [];
     initialEventsByMessageId = new Map();
     errorMsg = null;
-    requestScrollToBottom();
+    scheduleScrollToBottom({ force: true });
   };
 
   export const deleteCurrentSession = async () => {
@@ -224,10 +231,49 @@
       (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' } : m
     );
     if (sessionId) await loadMessages(sessionId, { scrollToBottom: true });
-    requestScrollToBottom();
+    scheduleScrollToBottom({ force: true });
     // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
     await tick();
     terminalRefreshInFlight.delete(streamId);
+  };
+
+  const pollJobUntilTerminal = async (jobId: string, streamId: string, opts?: { timeoutMs?: number }) => {
+    if (!jobId || !streamId) return;
+    if (jobPollInFlight.has(jobId)) return;
+    jobPollInFlight.add(jobId);
+    const timeoutMs = opts?.timeoutMs ?? 60_000;
+    const startedAt = Date.now();
+    try {
+      // Petit délai: si SSE marche, on évite de poller tout de suite
+      await new Promise((r) => setTimeout(r, 750));
+
+      while (Date.now() - startedAt < timeoutMs) {
+        // Si entre-temps le message a été hydraté (contenu final) ou marqué terminal, on stop
+        const current = messages.find((m) => (m._streamId ?? m.id) === streamId);
+        if (!current) return;
+        if (current.content && current.content.trim().length > 0) return;
+        if (current._localStatus === 'completed' || current._localStatus === 'failed') return;
+
+        // Queue: endpoint user-scopé
+        const job = await apiGet<{ status?: string }>(`/queue/jobs/${encodeURIComponent(jobId)}`);
+        const status = String((job as any)?.status ?? 'unknown');
+
+        if (status === 'completed') {
+          await handleAssistantTerminal(streamId, 'done');
+          return;
+        }
+        if (status === 'failed') {
+          await handleAssistantTerminal(streamId, 'error');
+          return;
+        }
+        // pending/processing
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    } catch {
+      // ignore (fallback best-effort)
+    } finally {
+      jobPollInFlight.delete(jobId);
+    }
   };
 
   const sendMessage = async () => {
@@ -246,6 +292,7 @@
         content: string;
         primaryContextType?: string;
         primaryContextId?: string;
+        workspace_id?: string;
       } = {
         content: text
       };
@@ -258,6 +305,8 @@
         payload.primaryContextType = context.primaryContextType;
         payload.primaryContextId = context.primaryContextId;
       }
+      const scoped = getScopedWorkspaceIdForAdmin();
+      if (scoped) payload.workspace_id = scoped;
 
       const res = await apiPost<{
         sessionId: string;
@@ -292,7 +341,12 @@
         _streamId: res.streamId
       };
       messages = [...messages, userMsg, assistantMsg];
-      requestScrollToBottom();
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
+
+      // Fallback: si SSE rate les events (connection pas prête), on rattrape via polling queue.
+      // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
+      void pollJobUntilTerminal(res.jobId, assistantMsg._streamId ?? assistantMsg.id, { timeoutMs: 90_000 });
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de l’envoi');
     } finally {
@@ -314,6 +368,7 @@
     class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 slim-scroll"
     style="scrollbar-gutter: stable;"
     bind:this={listEl}
+    on:scroll={onListScroll}
   >
     {#if errorMsg}
       <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
@@ -343,9 +398,10 @@
                 streamId={sid}
                 status={m._localStatus ?? (m.content ? 'completed' : 'processing')}
                 finalContent={m.content ?? null}
+                historySource="stream"
                 initialEvents={initEvents}
                 historyPending={showDetailWaiter}
-                onStreamEvent={() => requestScrollToBottom()}
+                onStreamEvent={() => scheduleScrollToBottom()}
                 onTerminal={(t) => void handleAssistantTerminal(sid, t)}
               />
             </div>

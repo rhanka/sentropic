@@ -20,6 +20,9 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - MAIL_FROM=${MAIL_FROM:-no-reply@top-ai-ideas.local}
+      # Chat tracing (dev: enabled by default, can be overridden)
+      - CHAT_TRACE_ENABLED=${CHAT_TRACE_ENABLED:-true}
+      - CHAT_TRACE_RETENTION_DAYS=${CHAT_TRACE_RETENTION_DAYS:-7}
     ports:
       - "8787:8787"
     depends_on:

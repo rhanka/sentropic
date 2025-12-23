@@ -117,6 +117,23 @@
           - [ ] Upload avec résumé automatique (0,1k token/page)
           - [ ] Consultation des métadonnées et du résumé
 
+## Admin scoped chat (Chat-1 + read-only)
+
+Décision (liée au modèle workspaces / partage admin) :
+
+- L’admin **reste propriétaire** de ses sessions (pas d’accès à l’historique chat de l’utilisateur).
+- Quand l’admin est **scopé** sur un workspace utilisateur **partagé** (`shareWithAdmin=true`) :
+  - le chat peut **lire** les données du workspace (ex: `read_usecase`, lecture des références),
+  - le chat doit être **read-only** pour les écritures (ex: `update_usecase_field` interdit).
+
+Implémentation attendue :
+
+- Stocker le scope dans `chat_sessions.workspace_id`.
+- Le serveur calcule un flag `readOnly` selon :
+  - user role
+  - workspace scope courant
+  - `shareWithAdmin` du workspace cible
+
 ## Streaming OpenAI → DB → NOTIFY → SSE
 
 - [x] Transport : appel OpenAI en streaming côté API/worker (Hono). Chaque chunk est écrit dans `chat_stream_events` puis un `NOTIFY` (payload minimal : `stream_id`, `sequence`, éventuellement `event_type`) signale la nouveauté. L'UI SvelteKit (SPA statique) consomme un endpoint SSE global `GET /api/v1/streams/sse` qui est abonné aux NOTIFY PG ; pas de forward direct OpenAI → SSE. Websocket optionnelle plus tard, SSE par défaut.
@@ -143,6 +160,36 @@ Règles :
 - `status.started` dès ouverture de flux, `done` ou `error` clôture.
 - Tool calls : `tool_call_start` puis zéro ou plusieurs `tool_call_delta`, puis `tool_call_result`.
 - Les deltas reasoning/content sont alternables, l’UI agrège.
+
+## Chat tracing (debug) — 7 jours (20–30 lignes)
+
+Objectif : debug des problèmes “agents” (boucles d’outils, payloads mal construits, perte de contexte) en stockant **le payload exact envoyé à OpenAI** et les tool calls exécutés.
+
+Activation (env) :
+- `CHAT_TRACE_ENABLED=true|false`
+- `CHAT_TRACE_RETENTION_DAYS=7` (défaut 7)
+
+Stockage (DB) :
+- Table `chat_generation_traces` :
+  - identifiants: `session_id`, `assistant_message_id`, `user_id`, `workspace_id`
+  - `phase` (`pass1`/`pass2`), `iteration`, `model`, `tool_choice`
+  - `tools` (**définitions complètes**: description + schema)
+  - `openai_messages` / `input` (**payload exact**) + `previous_response_id` quand applicable
+  - `tool_calls` (args + results)
+  - `meta` (callSite, flags readOnly, etc.)
+
+Purge :
+- sweep 1x au démarrage puis toutes les 24h
+- suppression des traces plus anciennes que `CHAT_TRACE_RETENTION_DAYS`
+
+SQL utile :
+
+```sql
+SELECT phase, iteration, model, tool_choice, created_at
+FROM chat_generation_traces
+WHERE assistant_message_id = '<messageId>'
+ORDER BY created_at ASC;
+```
 
 ## Composants UI & Streaming (SvelteKit)
 
@@ -201,191 +248,7 @@ Le modèle de données pour le chatbot permet de :
 
 ### Diagramme ERD
 
-```mermaid
-erDiagram
-    users ||--o{ chat_sessions : "possède"
-    users ||--o{ companies : "possède"
-    
-    chat_sessions ||--o{ chat_messages : "contient"
-    chat_sessions ||--o{ chat_contexts : "modifie"
-    chat_messages ||--o{ chat_stream_events : "génère"
-    chat_messages ||--o{ context_modification_history : "déclenche"
-    
-    chat_contexts }o--|| companies : "référence"
-    chat_contexts }o--|| folders : "référence"
-    chat_contexts }o--|| use_cases : "référence"
-    chat_contexts }o--|| folders : "référence_executive"
-    
-    companies ||--o{ folders : "contient"
-    folders ||--o{ use_cases : "contient"
-    companies ||--o{ use_cases : "contient"
-    
-    context_modification_history }o--|| companies : "modifie"
-    context_modification_history }o--|| folders : "modifie"
-    context_modification_history }o--|| use_cases : "modifie"
-    context_modification_history }o--|| folders : "modifie_executive"
-    
-    prompts ||--o{ prompt_versions : "a_versions"
-    prompts ||--o{ chat_messages : "utilisé_dans"
-    prompts ||--o{ context_modification_history : "utilisé_pour"
-    prompts ||--o{ structured_generation_runs : "utilisé_dans"
-    
-    context_modification_history }o--|| prompts : "via_prompt_id"
-    context_modification_history }o--|| prompt_versions : "via_prompt_version_id"
-    chat_messages }o--|| prompts : "via_prompt_id"
-    chat_messages }o--|| prompt_versions : "via_prompt_version_id"
-    structured_generation_runs }o--|| prompts : "prompt"
-    structured_generation_runs }o--|| prompt_versions : "version"
-    structured_generation_runs }o--|| job_queue : "job_queue"
-    prompt_versions }o--|| users : "modifié_par"
-    
-    users {
-        text id PK
-        text email
-        text display_name
-        text role
-        timestamp created_at
-    }
-    
-    companies {
-        text id PK
-        text name
-        text industry
-        text size
-        text products
-        text processes
-        text challenges
-        text objectives
-        text technologies
-        text status
-        timestamp created_at
-        timestamp updated_at
-    }
-    
-    folders {
-        text id PK
-        text name
-        text description
-        text company_id FK
-        text matrix_config
-        text executive_summary
-        text status
-        timestamp created_at
-    }
-    
-    use_cases {
-        text id PK
-        text folder_id FK
-        text company_id FK
-        text status
-        text model
-        jsonb data
-        timestamp created_at
-    }
-    
-    chat_sessions {
-        text id PK
-        text user_id FK
-        text primary_context_type
-        text primary_context_id
-        text title
-        timestamp created_at
-        timestamp updated_at
-    }
-    
-    chat_messages {
-        text id PK
-        text session_id FK
-        text role
-        text content
-        jsonb tool_calls
-        text tool_call_id
-        text reasoning
-        text model
-        text prompt_id
-        text prompt_version_id
-        integer sequence
-        timestamp created_at
-    }
-    
-    chat_contexts {
-        text id PK
-        text session_id FK
-        text context_type
-        text context_id
-        jsonb snapshot_before
-        jsonb snapshot_after
-        jsonb modifications
-        timestamp modified_at
-        timestamp created_at
-    }
-    
-    chat_stream_events {
-        text id PK
-        text message_id FK
-        text stream_id
-        text event_type
-        jsonb data
-        integer sequence
-        timestamp created_at
-    }
-    
-    context_modification_history {
-        text id PK
-        text context_type
-        text context_id
-        text session_id FK
-        text message_id FK
-        text field
-        jsonb old_value
-        jsonb new_value
-        text tool_call_id
-        text prompt_id
-        text prompt_type
-        text prompt_version_id
-        text job_id
-        integer sequence
-        timestamp created_at
-    }
-    
-    prompts {
-        text id PK
-        text name
-        text description
-        text prompt_type
-        text current_version_id
-        timestamp created_at
-        timestamp updated_at
-    }
-    
-    prompt_versions {
-        text id PK
-        text prompt_id FK
-        text version
-        text content
-        jsonb variables
-        text changed_by FK
-        timestamp created_at
-    }
-    
-    structured_generation_runs {
-        text id PK
-        text prompt_id FK
-        text prompt_version_id FK
-        text stream_id
-        text model
-        text job_id FK
-        text context_type
-        text context_id
-        text message_id FK
-        text status
-        jsonb error
-        timestamp started_at
-        timestamp finished_at
-        timestamp created_at
-        timestamp updated_at
-    }
-```
+Voir `spec/DATA_MODEL.md` (section **Chat / streaming / tracing**) : on centralise l’ERD là-bas pour éviter les duplications et rester aligné avec `api/src/db/schema.ts`.
 
 ### Tables principales
 

@@ -97,6 +97,16 @@ export async function apiPut<T = any>(endpoint: string, data?: any): Promise<T> 
 }
 
 /**
+ * Make a PATCH request to an API endpoint
+ */
+export async function apiPatch<T = any>(endpoint: string, data?: any): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: 'PATCH',
+    body: data ? JSON.stringify(data) : undefined,
+  });
+}
+
+/**
  * Make a DELETE request to an API endpoint
  */
 export async function apiDelete<T = any>(endpoint: string): Promise<T> {
