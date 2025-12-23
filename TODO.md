@@ -38,14 +38,16 @@
   - [x] Tests unitaires et d'intégration
   - [x] Tests E2E Playwright
   - [x] Extension aux autres objets (folder, company, executive_summary)
-- [x] Ajouter une fonction de validation des droits utilisateurs, avec un des profils. Ce profil doit permettre d'avoir accès à toutes les fonctions sans limite d'usage. Mais il n'a accès qu'à ses propres
+- [x] Ajouter une fonction de validation des droits utilisateurs, avec un des profils. Ce profil doit permettre d'avoir accès à toutes les fonctions sans limite d'usage. Mais il n'a accès qu'à ses propres artefacts
+- [x] Lience
 - [ ] améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
   - [ ] gérer mobile (panneau plein écran / bottom-sheet)
   - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
   - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
 - [ ] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
-- [ ] Utiliser une lib d'icones digne de ce nom
-- [ ] Ajouter GPT 5.2
+- [x] Utiliser une lib d'icones digne de ce nom (@lucide/svelte)
+- [x] Ajouter GPT 5.2 (branch: feat/add-gpt-5-2-models)
+- [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt
 - [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
