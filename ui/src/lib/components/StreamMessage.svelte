@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import { apiGet } from '$lib/utils/api';
+  import { ChevronDown, Loader2 } from '@lucide/svelte';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -316,9 +317,7 @@
           tabindex="-1"
           aria-hidden="true"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
+          <ChevronDown class="w-4 h-4" />
         </button>
       </div>
     {/if}
@@ -335,14 +334,9 @@
           aria-label={st.expanded ? 'Replier le détail' : 'Déplier le détail'}
           on:click={() => st = { ...st, expanded: !st.expanded }}
         >
-          <svg
+          <ChevronDown
             class="w-4 h-4 transition-transform duration-150 {st.expanded ? 'rotate-180' : ''}"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
+          />
         </button>
       </div>
       {#if st.expanded}
@@ -375,9 +369,7 @@
       {:else}
         {#if showStartup}
           <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
+            <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>Préparation…</span>
           </div>
         {/if}
@@ -402,9 +394,7 @@
       {/if}
       {#if showStartup}
         <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-          <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-          </svg>
+          <Loader2 class="w-3.5 h-3.5 animate-spin" />
           <span>Préparation…</span>
         </div>
       {/if}
