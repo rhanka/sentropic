@@ -17,6 +17,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { getScopedWorkspaceIdForAdmin, adminReadOnlyScope, adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
+  import { Printer, RotateCcw, FileText, TrendingUp, Settings, X } from '@lucide/svelte';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -580,22 +581,18 @@
           <div class="flex items-center gap-2">
             <button
               on:click={() => window.print()}
-              class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+              class="p-2 text-blue-600 hover:text-blue-700 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
               title="Imprimer ou exporter le rapport en PDF"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-              </svg>
+              <Printer class="w-5 h-5" />
             </button>
           <button
             on:click={generateExecutiveSummary}
             disabled={isGeneratingSummary}
-              class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              class="p-2 text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
               title="Régénérer la synthèse exécutive"
           >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" class:animate-spin={isGeneratingSummary}>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
+              <RotateCcw class="w-5 h-5 {isGeneratingSummary ? 'animate-spin' : ''}" />
           </button>
         </div>
             </div>
@@ -650,9 +647,7 @@
           <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
             <div class="flex items-center">
               <div class="flex-shrink-0">
-                <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
+                <FileText class="w-8 h-8 text-blue-500" />
               </div>
               <div class="ml-4">
                 <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
@@ -670,9 +665,7 @@
             <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
               <div class="flex items-center">
                 <div class="flex-shrink-0">
-                  <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                  </svg>
+                  <TrendingUp class="w-8 h-8 text-green-600" />
                 </div>
                 <div class="ml-4 flex-1">
                   <p class="text-sm font-medium text-green-700">Gains rapides</p>
@@ -693,10 +686,7 @@
                 class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
                 title="Configuration du quadrant ROI"
               >
-                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
+                <Settings class="w-5 h-5 text-slate-500" />
                 {#if valueThreshold !== null || complexityThreshold !== null}
                   <span class="ml-1 w-2 h-2 bg-blue-600 rounded-full"></span>
                 {/if}
@@ -711,9 +701,7 @@
                       class="text-slate-400 hover:text-slate-600"
                       aria-label="Fermer la configuration"
                     >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                      </svg>
+                      <X class="w-5 h-5" />
                     </button>
                   </div>
                   <div class="grid gap-4 md:grid-cols-2">
