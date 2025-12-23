@@ -5,6 +5,7 @@
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '../i18n';
   import { currentFolderId } from '../stores/folders';
+  import { ChevronDown } from '@lucide/svelte';
 
   let showUserMenu = false;
 
@@ -83,9 +84,7 @@
               {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
             </div>
             <span class="text-slate-700">{$session.user.displayName || $session.user.email || 'User'}</span>
-            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDown class="w-4 h-4 text-slate-400" />
           </button>
 
           {#if showUserMenu}

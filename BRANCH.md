@@ -5,15 +5,22 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
 
 ## Plan / Todo
 - [x] Install @lucide/svelte library
-- [ ] Create icon inventory by view/component
-- [ ] Replace icons in Header component
-- [ ] Replace icons in ChatWidget component
-- [ ] Replace icons in dossiers/+page (and remove "voir les cas d'usage" and "voir la matrice" buttons)
-- [ ] Replace icons in entreprises/+page (and remove "voir les détails" button)
-- [ ] Replace icons in UseCaseDetail component (and modify print/delete buttons)
-- [ ] Replace icons in StreamMessage component
-- [ ] Replace icons in other components (Toast, QueueMonitor, etc.)
-- [ ] Test all changes
+- [x] Create icon inventory by view/component
+- [x] Replace icons in Header component
+- [x] Replace icons in ChatWidget component
+- [x] Replace icons in dossiers/+page (and remove "voir les cas d'usage" and "voir la matrice" buttons)
+- [x] Replace icons in entreprises/+page (and remove "voir les détails" button)
+- [x] Replace icons in UseCaseDetail component (and modify print/delete buttons)
+- [x] Replace icons in StreamMessage component
+- [x] Replace icons in other components (Toast, QueueMonitor, etc.)
+- [x] Replace icons in auth pages (register, magic-link verify)
+- [x] Replace icons in NavigationGuard, References components
+- [x] Replace icons in matrice/+page.svelte
+- [x] Replace icons in parametres/+page.svelte
+- [x] Replace icons in dashboard/+page.svelte
+- [x] Replace icons in ChatPanel component
+- [x] Replace icons in UseCaseScatterPlot component
+- [x] Test all changes (via make logs-ui)
 - [ ] Verify CI passes
 
 ## Icon Inventory by View/Component
@@ -178,19 +185,35 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
      - Warning: `AlertTriangle`
      - Info: `Info`
 
+## Remaining SVG Icons (1 custom animation kept)
+
+### Files with remaining SVG:
+1. **ui/src/lib/components/UseCaseScatterPlot.svelte** - Custom loading animation SVG (3 animated circles) - **KEPT INTENTIONALLY** as it's a custom animation that cannot be replaced with a Lucide icon
+
 ## Commits & Progress
-- [ ] **Commit 1**: Install @lucide/svelte
-- [ ] **Commit 2**: Replace icons in Header component
-- [ ] **Commit 3**: Replace icons in ChatWidget component
-- [ ] **Commit 4**: Replace icons in dossiers/+page and remove buttons
-- [ ] **Commit 5**: Replace icons in entreprises/+page and remove button
-- [ ] **Commit 6**: Replace icons in cas-usage/[id]/+page and modify buttons
-- [ ] **Commit 7**: Replace icons in StreamMessage component
-- [ ] **Commit 8**: Replace icons in UseCaseDetail component
-- [ ] **Commit 9**: Replace icons in QueueMonitor and Toast components
+- [x] **Commit 1**: Replace icons in Header component
+- [ ] **Commit 2**: Replace icons in ChatWidget component
+- [ ] **Commit 3**: Replace icons in ChatPanel component
+- [ ] **Commit 4**: Replace icons in StreamMessage component
+- [ ] **Commit 5**: Replace icons in Toast component
+- [ ] **Commit 6**: Replace icons in QueueMonitor component
+- [ ] **Commit 7**: Replace icons in StarRating component
+- [ ] **Commit 8**: Replace icons in References component
+- [ ] **Commit 9**: Replace icons in NavigationGuard component
+- [ ] **Commit 10**: Replace icons in UseCaseDetail component
+- [ ] **Commit 11**: Replace icons in UseCaseScatterPlot component
+- [ ] **Commit 12**: Replace icons in dossiers page and remove buttons
+- [ ] **Commit 13**: Replace icons in entreprises page and remove button
+- [ ] **Commit 14**: Replace icons in cas-usage/+page
+- [ ] **Commit 15**: Replace icons in cas-usage/[id]/+page and modify buttons
+- [ ] **Commit 16**: Replace icons in dashboard page
+- [ ] **Commit 17**: Replace icons in matrice page
+- [ ] **Commit 18**: Replace icons in parametres page
+- [ ] **Commit 19**: Replace icons in auth/register page
+- [ ] **Commit 20**: Replace icons in auth/magic-link/verify page
 
 ## Status
-- **Progress**: 0/9 commits completed
-- **Current**: Starting commits with code + BRANCH.md updates
-- **Next**: Commit 1 - Install @lucide/svelte
+- **Progress**: In progress - Creating atomic commits
+- **Remaining**: All files modified, ready for commits
+- **Next**: Create commits one file at a time with BRANCH.md updates
 
