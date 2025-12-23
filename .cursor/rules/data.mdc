@@ -26,6 +26,10 @@ tags: [database, migrations, drizzle]
 - `sessions` - User authentication sessions
 - `job_queue` - Async job processing queue
 
+### Data model (diagrammes)
+- Le modèle de données (ERD Mermaid) est documenté dans `spec/DATA_MODEL.md` (source de vérité alignée sur `api/src/db/schema.ts`).
+- Si le schéma Drizzle change (`api/src/db/schema.ts` + migrations), mettre à jour `spec/DATA_MODEL.md`.
+
 ### Schema Conventions
 - **Primary Keys**: UUID strings (uuid type)
 - **Timestamps**: ISO strings with `CURRENT_TIMESTAMP` default

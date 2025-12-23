@@ -1,17 +1,49 @@
-# Workflow d'Authentification Sécurisé WebAuthn
+# Workflow d'Authentification (WebAuthn + Magic Link utilitaire)
 
 ## Principes de sécurité
 
-1. **Enregistrement device avant vérification email** : L'utilisateur peut enregistrer son device WebAuthn avant de valider son email
-2. **Device inactif tant que email non vérifié** : Le device WebAuthn n'est PAS utilisable pour se connecter tant que l'email n'est pas vérifié
-3. **Déconnexion automatique** : Après enregistrement du device, l'utilisateur est déconnecté (pas de session) tant que l'email n'est pas validé
-4. **Activation via magic link** : Le magic link valide l'email et active le device pour qu'il devienne utilisable
-5. **Pas de connexion magic link** : Une fois le device activé, on ne peut se connecter QUE via WebAuthn (pas de magic link login)
-6. **Fallback pour réinitialisation** : Le magic link sert uniquement à valider l'email et réinitialiser/ajouter un nouveau device
+1. **Email vérifié requis pour une session** : `validateSession()` bloque si `users.emailVerified=false`.
+2. **Connexion exposée dans l’UI** : **WebAuthn** (passkeys / discoverable credentials) — bouton unique sur `/auth/login`.
+3. **Vérification email par code (6 chiffres)** : utilisée sur `/auth/register` pour obtenir un `verificationToken` nécessaire à l’enrôlement WebAuthn (anti-abus).
+4. **Magic link (utilitaire, non exposé sur l’écran de login)** : endpoints API présents + page UI `/auth/magic-link/verify`, principalement utile pour tests/E2E/ops (pas un mode de connexion “produit” dans l’écran de login).
+5. **Sessions** : cookie `session` HttpOnly, `Secure` en prod, `SameSite=Lax`, persistées en DB (`user_sessions`).
+6. **Règles d’accès** : statut de compte (`accountStatus` + `approvalDueAt`) et `emailVerified` influencent l’accès (voir `session-manager.ts`).
 
 ## Workflows détaillés
 
-### 1. Nouvel utilisateur (première inscription)
+### 1. Magic link (utilitaire, non exposé dans l’UI de login)
+
+Ce flux existe côté API et via la page `/auth/magic-link/verify`, mais **n’est pas proposé comme méthode de connexion dans l’UI de login** (pas de champ email / pas de bouton “recevoir un lien”).
+
+```mermaid
+sequenceDiagram
+    participant U as Utilisateur
+    participant UI as Interface UI
+    participant API as API Backend
+    participant SMTP as Serveur SMTP
+    participant DB as PostgreSQL
+
+    Note over UI,API: En pratique (tests/ops), on déclenche l’envoi du lien via l’API
+    UI->>API: POST /auth/magic-link/request { email }
+    API->>SMTP: Envoie un lien (token, TTL 10 min)
+    SMTP->>U: Email avec lien
+    U->>UI: Clique le lien (/auth/magic-link/verify?token=xxx)
+    UI->>API: POST /auth/magic-link/verify { token }
+    API->>DB: Crée le user si nécessaire + marque le lien "used"
+    API->>DB: Marque users.emailVerified=true (email prouvé)
+    API->>DB: Crée une session (user_sessions) + Set-Cookie(session=...)
+    API->>UI: success + infos user
+    UI->>UI: Redirige vers /dashboard (/home selon UX)
+```
+
+**Détails :**
+1. UI demande un lien via `POST /api/v1/auth/magic-link/request`.
+2. L’utilisateur clique le lien ; l’UI appelle `POST /api/v1/auth/magic-link/verify`.
+3. Le backend crée l’utilisateur si besoin, **met `emailVerified=true`**, et crée une session (cookie).
+
+### 2. Enrôlement WebAuthn via code email (UI `/auth/register`)
+
+Ce flux permet d’ajouter une passkey pour les connexions futures.
 
 ```mermaid
 sequenceDiagram
@@ -21,61 +53,29 @@ sequenceDiagram
     participant SMTP as Serveur SMTP
     participant Device as Device WebAuthn
 
-    U->>UI: Va sur /auth/register
+    U->>UI: Va sur /auth/register (ajout device)
     U->>UI: Entre son email
     UI->>API: POST /auth/email/verify-request { email }
     API->>SMTP: Envoie code à 6 chiffres
     SMTP->>U: Email avec code
-    UI->>UI: Affiche input code
     U->>UI: Saisit le code
     UI->>API: POST /auth/email/verify-code { email, code }
-    API->>API: Vérifie code (TTL 10 min, usage unique)
     API->>UI: Retourne verificationToken
-    UI->>UI: Active bouton enrôlement WebAuthn
-    U->>UI: Clique "Enrôler device"
     UI->>API: POST /auth/register/options { email, verificationToken }
     API->>UI: Retourne options WebAuthn
     UI->>Device: startRegistration(options)
-    Device->>U: Demande authentification (biométrie/PIN)
-    U->>Device: Valide (empreinte/Face ID)
     Device->>UI: Retourne credential
-    UI->>API: POST /auth/register/verify { email, verificationToken, credential }
-    API->>API: Vérifie token et credential
-    API->>API: Crée utilisateur (emailVerified: true)
-    API->>API: Crée device (activé)
-    API->>API: Crée session JWT
-    API->>UI: Retourne session (cookie)
-    UI->>UI: Redirige vers /home
-    Note over U,API: Utilisateur connecté avec device actif
+    UI->>API: POST /auth/register/verify { email, verificationToken, userId, credential }
+    API->>API: Crée/associe le device à l'utilisateur + emailVerified=true
+    API->>API: Crée une session (cookie)
 ```
 
 **Détails :**
-1. Utilisateur va sur /auth/register
-2. Entre son email
-   → Sur blur + email valide : POST /auth/email/verify-request (avec email)
-   → Envoie un email avec un code à 6 chiffres
-   → Affiche l'input pour saisir le code à 6 chiffres (apparaît sous l'input email)
-   
-3. Utilisateur saisit le code reçu par email
-   → POST /auth/email/verify-code (avec email + code)
-   → Vérifie le code (TTL 10 min, usage unique)
-   → Retourne un token temporaire de validation (valide pour X minutes)
-   → Active le bouton d'enrôlement WebAuthn
-   
-4. Utilisateur ENRÔLE son device WebAuthn
-   → POST /auth/register/options (avec email + validation token)
-     - Le navigateur demande à l'utilisateur d'utiliser son device (biométrie, PIN, etc.)
-     - L'utilisateur valide sur son device (empreinte digitale, Face ID, etc.)
-   → POST /auth/register/verify (avec credential retourné par le device + validation token)
-   → Vérifie que le code a été validé pour cet email (via le token)
-   → Crée l'utilisateur (emailVerified: true)
-   → Crée le device WebAuthn en base (activé et utilisable)
-   → Crée une session complète (cookie)
-   → Redirige vers /home (utilisateur est connecté)
-   
-5. Utilisateur peut maintenant se connecter avec son device WebAuthn
+1. Le code email donne un `verificationToken` (TTL, usage unique).
+2. Ce token est requis pour `POST /auth/register/options` et `POST /auth/register/verify`.
+3. `register/verify` crée le credential et ouvre une session.
 
-### 2. Connexion normale (utilisateur avec device activé)
+### 3. Connexion WebAuthn (passkeys)
 
 ```mermaid
 sequenceDiagram
@@ -85,87 +85,34 @@ sequenceDiagram
     participant Device as Device WebAuthn
 
     U->>UI: Va sur /auth/login
-    UI->>API: POST /auth/login/options (pas d'email)
-    API->>UI: Retourne options WebAuthn (discoverable)
+    UI->>API: POST /auth/login/options (email optionnel)
+    API->>UI: options WebAuthn
     UI->>Device: startAuthentication(options)
-    Device->>U: Affiche passkeys disponibles
-    U->>Device: Sélectionne passkey
-    Device->>U: Demande authentification (biométrie/PIN)
-    U->>Device: Valide (empreinte/Face ID)
-    Device->>UI: Retourne credential
+    Device->>UI: credential
     UI->>API: POST /auth/login/verify { credential }
-    API->>API: Vérifie credential et device
-    API->>API: Vérifie emailVerified: true
-    API->>API: Crée session JWT
-    API->>UI: Retourne session (cookie)
-    UI->>UI: Redirige vers /home
-    Note over U,API: Utilisateur connecté
+    API->>API: Vérifie credential + emailVerified + accountStatus
+    API->>API: Crée session (cookie)
 ```
 
-**Détails :**
-1. Utilisateur va sur /auth/login
-2. Utilise son device WebAuthn directement (passkeys/discoverable credentials)
-   → POST /auth/login/options (pas besoin d'email)
-   → Le navigateur demande à l'utilisateur d'utiliser son device (biométrie, PIN, etc.)
-   → POST /auth/login/verify (avec credential retourné par le device)
-   → Vérifie le device
-   → Vérifie que emailVerified: true (device activé)
-   → Crée une session
-   → Utilisateur est connecté
-
-**Note:** 
-- Pas de saisie d'email nécessaire (credentials discoverables/passkeys)
-- Magic link n'est PAS disponible comme option de connexion si l'utilisateur a déjà un device activé
-- Le magic link est uniquement pour la réinitialisation (perte de device)
-
-### 3. Fallback : Perte de device
+### 4. Perte d’appareil / récupération (UI “J’ai perdu mon appareil”)
 
 ```mermaid
 sequenceDiagram
     participant U as Utilisateur
     participant UI as Interface UI
     participant API as API Backend
-    participant SMTP as Serveur SMTP
     participant Device as Nouveau Device WebAuthn
 
     U->>UI: Va sur /auth/login
-    U->>UI: Clique "J'ai perdu mon device"
-    UI->>UI: Affiche formulaire réinitialisation
-    U->>UI: Entre son email
-    UI->>API: POST /auth/email/verify-request { email }
-    API->>SMTP: Envoie code à 6 chiffres
-    SMTP->>U: Email avec code
-    U->>UI: Saisit le code
-    UI->>API: POST /auth/email/verify-code { email, code }
-    API->>UI: Retourne verificationToken
-    UI->>API: POST /auth/register/options { email, verificationToken }
-    API->>UI: Retourne options WebAuthn
-    UI->>Device: startRegistration(options)
-    Device->>U: Demande authentification
-    U->>Device: Valide
-    Device->>UI: Retourne credential
-    UI->>API: POST /auth/register/verify { email, verificationToken, credential }
-    API->>API: Vérifie utilisateur existe
-    API->>API: Crée nouveau device (inactif)
-    API->>SMTP: Envoie magic link
-    SMTP->>U: Email avec magic link
-    UI->>UI: Affiche "Vérifiez votre email"
-    U->>SMTP: Clique sur magic link
-    SMTP->>UI: GET /auth/magic-link/verify?token=xxx
-    UI->>API: POST /auth/magic-link/verify { token }
-    API->>API: Vérifie token
-    API->>API: Marque emailVerified: true
-    API->>API: Active nouveau device
-    API->>API: Crée session JWT
-    API->>UI: Retourne session (cookie)
-    UI->>UI: Redirige vers /home
-    Note over U,API: Utilisateur connecté avec nouveau device actif
+    U->>UI: Clique "J'ai perdu mon appareil"
+    UI->>UI: Redirige vers /auth/register
+    Note over U,UI: Le workflow /auth/register (code email + enrôlement WebAuthn) crée la session
 ```
 
 **Détails :**
 1. Utilisateur va sur /auth/login
-2. Clique sur "J'ai perdu mon device" ou "Réinitialiser mon device"
-3. Entre son email ET ENRÔLE un nouveau device WebAuthn (même principe que workflow 1)
+2. Clique sur "J'ai perdu mon appareil"
+3. Suit le workflow `/auth/register` : code email + enrôlement WebAuthn (même principe que l’inscription)
    → POST /auth/register/options (avec email)
      - Le navigateur demande à l'utilisateur d'utiliser son device (biométrie, PIN, etc.)
      - L'utilisateur valide sur son device (empreinte digitale, Face ID, etc.)
@@ -173,25 +120,11 @@ sequenceDiagram
    → Vérifie que le device n'est pas déjà enregistré pour cet utilisateur
      * Si le device existe déjà : retourne erreur "Ce device est déjà enregistré, utilisez-le pour vous connecter"
      * Propose de rediriger vers /auth/login
-   → Vérifie que l'utilisateur existe et a emailVerified: true
-   → Crée le nouveau device WebAuthn en base (enregistré mais pas encore activé)
-   → NE crée PAS de session (l'utilisateur est déconnecté)
-   → Propose de révoquer les anciens devices (optionnel, peut être fait après)
-   → Envoie un email avec magic link pour activation du nouveau device
-   → Redirige vers une page "Vérifiez votre email"
-   
-4. Utilisateur reçoit l'email et clique sur le magic link
-   → GET /auth/magic-link/verify?token=xxx
-   → Vérifie le token du magic link
-   → Marque email comme emailVerified: true (si pas déjà fait)
-   → Active le nouveau device WebAuthn enregistré (il devient maintenant utilisable)
-   → Crée une session complète (cookie)
-   → Redirige vers /home (utilisateur est connecté)
-   
-5. Utilisateur peut maintenant se connecter avec son nouveau device WebAuthn
-   → Les anciens devices peuvent être révoqués depuis /auth/devices si nécessaire
+   → Marque `emailVerified=true` pendant `/auth/register/verify` (preuve par code email)
+   → Crée une session (cookie)
+4. L’utilisateur peut maintenant se connecter avec son nouveau device WebAuthn.
 
-### 4. Enregistrement d'un device supplémentaire (utilisateur déjà connecté)
+### 5. Enregistrement d'un device supplémentaire (utilisateur déjà connecté)
 
 ```mermaid
 sequenceDiagram
@@ -271,12 +204,11 @@ sequenceDiagram
 
 ### POST /auth/magic-link/request
 - ✅ Génère et envoie le magic link
-- ✅ Peut être utilisé pour première inscription ou réinitialisation
+- ✅ Peut être utilisé pour login (utilisateur existant) ou première inscription (crée l’utilisateur si besoin)
 
 ### POST /auth/magic-link/verify
-- ✅ Marque toujours `emailVerified: true` après vérification
-- ✅ Active le nouveau device WebAuthn enregistré (devient utilisable)
-  - Si plusieurs devices en attente d'activation, active celui enregistré le plus récemment
+- ✅ Marque `users.emailVerified = true` (email prouvé) après vérification
+- ✅ Crée une session (cookie `session`) si le compte n’est pas désactivé
   - Les anciens devices déjà activés restent actifs (sauf si explicitement révoqués)
 - ✅ Vérifie si l'utilisateur a un nouveau device en attente d'activation
 - ✅ Si c'est la validation après enrôlement (nouveau device en attente) :
@@ -296,7 +228,7 @@ sequenceDiagram
 - ✅ N'affiche PAS de champ email (pas nécessaire avec passkeys)
 - ✅ Affiche uniquement le bouton WebAuthn (passkeys discoverables)
 - ✅ N'affiche PAS l'option magic link comme méthode de connexion principale
-- ✅ Affiche "J'ai perdu mon device" → magic link (pour réinitialisation uniquement)
+- ✅ Affiche "J'ai perdu mon appareil" → renvoie vers `/auth/register` (code email + enrôlement WebAuthn)
 
 ## Validation de session
 
@@ -311,14 +243,14 @@ sequenceDiagram
 - **Actif** : Device créé et emailVerified: true → Utilisable pour login
 
 ### Activation des devices
-- Les devices sont automatiquement activés lorsque l'email est vérifié via magic link
-- Un utilisateur peut avoir plusieurs devices, tous activés en même temps quand email vérifié
+- Les devices deviennent utilisables lorsque `users.emailVerified=true` (ex: preuve d’email par code sur `/auth/register`, ou via magic link utilitaire).
+- Un utilisateur peut avoir plusieurs devices, tous utilisables tant que l’email est vérifié.
 
 ## États possibles d'un utilisateur
 
 1. **Email non vérifié, device enregistré (inactif)** : 
    - Device existe mais ne peut pas être utilisé pour login
-   - Doit vérifier email via magic link
+   - Doit vérifier l’email (ex: par code sur `/auth/register`, ou magic link utilitaire)
    - Pas de session active
 
 2. **Email vérifié, device enregistré (actif)** : 
@@ -326,8 +258,7 @@ sequenceDiagram
    - Peut se connecter via WebAuthn
 
 3. **Email vérifié, devices enregistrés (perte)** : 
-   - Enrôle un nouveau device → magic link pour activation
-   - Le nouveau device est activé après validation du magic link
+   - Enrôle un nouveau device via `/auth/register` (preuve d’email par code)
    - Les anciens devices restent actifs (peuvent être révoqués plus tard)
 
 4. **Email vérifié, pas de device (cas edge)** : 
@@ -336,14 +267,10 @@ sequenceDiagram
 
 ## Flux d'activation après validation email
 
-Lorsque le magic link valide l'email :
+Lorsqu’un mécanisme valide l’email (code `/auth/register` ou magic link utilitaire) :
 1. Marque `emailVerified: true` sur l'utilisateur
-2. Active le nouveau device WebAuthn enregistré le plus récemment (qui était en attente)
-   - Les devices déjà activés restent actifs (pas de changement)
-   - Seul le nouveau device en attente devient activé
-3. Crée une session complète
-4. Redirige vers /home
-5. L'utilisateur peut maintenant utiliser son nouveau device pour se connecter
+2. Les credentials WebAuthn deviennent utilisables pour se connecter
+3. Les flows d’enrôlement créent typiquement une session (cookie) à la fin du workflow
 
 ## Migration
 

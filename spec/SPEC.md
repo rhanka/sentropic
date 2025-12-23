@@ -82,7 +82,7 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - État: aucun.
 
 2) Génération `Home` (/home)
-- Intention: point d'entrée métier pour décrire le contexte et lancer une génération encadrée (dossier + cas d'usage). 
+- Intention: point d'entrée métier pour décrire le contexte et lancer une génération encadrée (dossier + cas d'usage) via **job queue**.
 - UI:
   - Zone de texte `currentInput` (obligatoire).
   - Sélecteur d'entreprise (optionnel) alimenté par `/companies`.
@@ -94,12 +94,12 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
     - Response 200: `{ items: Company[] }`
   - POST `/api/v1/use-cases/generate`
     - Request JSON: `{ input: string; create_new_folder: boolean; company_id?: string }`
-    - Response 200: `{ created_folder_id?: string; created_use_case_ids: string[]; summary: string }`
-    - Effets serveur: création éventuelle d'un dossier, génération titres + détails via OpenAI, validation JSON, calcul de scores (voir 2.1), persistance.
+    - Response 200: `{ success: true; status: "generating"; created_folder_id?: string; jobId: string }`
+    - Effets serveur: création éventuelle d'un dossier (`folders.status="generating"`), enqueue job `usecase_list` (puis `usecase_detail`), persistance, streaming via `chat_stream_events` + SSE global.
   - Erreurs: 400 si `input` vide, 429/5xx pour OpenAI/serveur; UI affiche toasts d'erreur.
 - États/UI:
   - Loading pendant génération; toasts d'avancement.
-  - Succès → navigation `/cas-usage`.
+  - Succès → navigation `/dossiers` (suivi du statut/stream), puis accès au listing `/cas-usage`.
 
 3) Dossiers `Folders` (/dossiers)
 - Intention: organiser la production par périmètre; associer un dossier à une entreprise; gérer le dossier actif.
@@ -181,7 +181,8 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
   - GET `/api/v1/companies/{id}` → `Company`
   - PUT `/api/v1/companies/{id}` body `Partial<Company>` → `Company`
   - DELETE `/api/v1/companies/{id}` → 204
-  - POST `/api/v1/companies/ai-enrich` body `{ name: string }` → `Partial<Company>` (champs enrichis)
+  - POST `/api/v1/companies/{id}/enrich` body `{ model?: string }` → `{ success: true; status: "enriching"; jobId: string }`
+  - POST `/api/v1/companies/ai-enrich` body `{ name: string; model?: string }` → `Partial<Company>` (enrichissement sync, sans persister)
 - États/UI: feuille latérale (sheet) de création/édition; toasts.
 
 9) Paramètres `Settings` (/parametres)
@@ -223,68 +224,34 @@ Variables sous-jacentes clés côté backend/API:
 - Contexte de génération: `currentCompanyId`, association dossier→entreprise, prompts/configs.
 - Agrégations: comptages par niveaux, scoring, normalisation pour graphiques.
 
-## 2) Modèle de données (SQLite + Litestream)
+## 2) Modèle de données (PostgreSQL 16 + Drizzle + workspaces)
 
-Base: un fichier SQLite unique (ex: `data/app.db`) persistant. Sauvegarde continue via Litestream vers un bucket S3 (Scaleway). Restauration automatique au démarrage si nécessaire.
+Base: **PostgreSQL 16** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
 
-Schéma initial (simplifié, colonnes en snake_case):
-- companies
-  - id (uuid, pk)
-  - name (text)
-  - industry (text)
-  - size (text)
-  - products (text)
-  - processes (text)
-  - challenges (text)
-  - objectives (text)
-  - technologies (text)
-  - created_at (timestamptz)
-  - updated_at (timestamptz)
+Principe: **tenancy par workspace** (private-by-default) :
+- Table `workspaces` (avec `share_with_admin`)
+- Tous les objets métier sont scoppés par `workspace_id` (`companies`, `folders`, `use_cases`, `job_queue`, etc.)
 
-- folders
-  - id (uuid, pk)
-  - name (text)
-  - description (text)
-  - company_id (uuid, fk → companies.id, nullable)
-  - matrix_config (json)   // configuration complète par dossier
-  - created_at (timestamptz)
+Tables principales (simplifié) :
+- `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, `share_with_admin`, timestamps
+- `users`: `id`, `email`, `display_name`, `role`, `account_status`, `approval_due_at`, `email_verified`, timestamps
+- `companies`: `id`, `workspace_id`, `name`, champs métier, `status` (`draft|enriching|completed`)
+- `folders`: `id`, `workspace_id`, `name`, `company_id?`, `matrix_config` (texte JSON), `status` (`generating|completed`), `executive_summary` (texte JSON)
+- `use_cases`: `id`, `workspace_id`, `folder_id`, `company_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `data` (**JSONB**: contient `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
+- `job_queue`: `id`, `workspace_id`, `type`, `status`, `data` (JSON string), `result?`, `error?`, timestamps
 
-- use_cases
-  - id (uuid, pk)
-  - folder_id (uuid, fk → folders.id)
-  - company_id (uuid, fk → companies.id, nullable)
-  - name (text)
-  - description (text)
-  - process (text)
-  - technology (text)
-  - deadline (text)
-  - contact (text)
-  - benefits (json)                // tableau de strings
-  - metrics (json)                 // tableau de strings
-  - risks (json)                   // tableau de strings
-  - next_steps (json)              // tableau de strings
-  - sources (json)                 // tableau de strings
-  - related_data (json)            // tableau de strings
-  - value_scores (json)            // [{ axisId, rating, description }]
-  - complexity_scores (json)       // idem
-  - total_value_score (real)
-  - total_complexity_score (real)
-  - created_at (timestamptz)
+Auth & sessions :
+- `user_sessions`: sessions (hash token + refresh, expiresAt, deviceName, ip/userAgent)
+- `webauthn_credentials`: passkeys (credential_id, public_key, counter, uv, etc.)
+- `webauthn_challenges`: challenges registration/auth
+- `magic_links`: tokens magic link (hash + expiresAt)
+- `email_verification_codes`: codes email (hash + verificationToken)
 
-- settings
-  - id (uuid, pk)
-  - openai_models (json)
-  - prompts (json)
-  - generation_limits (json)
-
-- business_config 
-  - id (uuid, pk)
-  - sectors (json)
-  - processes (json)
-
-Notes:
-- `matrix_config` est stocké par dossier pour permettre des matrices différentes selon le contexte.
-- Indices à prévoir: (folder_id), (company_id). Pour les champs JSON, prévoir des vues matérialisées pour filtres complexes si besoin.
+Streaming/chat :
+- `chat_sessions` (inclut `workspace_id` pour scope admin read-only)
+- `chat_messages`
+- `chat_stream_events`
+- `chat_generation_traces` (debug)
 
 ### 2.1) Méthode de calcul des scores (serveur)
 
@@ -311,17 +278,17 @@ Bornes et normalisation (Dashboard):
 - Facilité d'implémentation: `ease = 100 − complexity_norm`.
 
 Remarques d'implémentation API:
-- À la création/mise à jour d'un `use_case`, l'API recalcule systématiquement `total_value_score` et `total_complexity_score` à partir des `..._scores` fournis et de la `matrix_config` du dossier.
-- En cas de mise à jour de `matrix_config` (poids, thresholds), l'API expose une route de recalcul en masse des cas du dossier.
+- Les colonnes `total_*` ne sont plus stockées en base : les scores agrégés sont **calculés dynamiquement** côté API/UI à partir de `matrix_config` + `use_cases.data.valueScores|complexityScores`.
+- La génération IA remplit les scores dans `use_cases.data` (JSONB).
 
 ## 3) API backend (TypeScript) – Contrats
 
-Base: `/api/v1` (Node + TypeScript; framework: Hono ou Fastify; ORM recommandé: Drizzle ou Kysely sur SQLite; migrations intégrées)
+Base: `/api/v1` (Node + TypeScript; framework: **Hono**; ORM: **Drizzle**; DB: **PostgreSQL 16**; migrations Drizzle Kit)
 
-Auth WebAuthn (passwordless) :
-- Authentification sans mot de passe via WebAuthn (passkeys/biométrie).
-- Flow sécurisé avec vérification email obligatoire (code à 6 chiffres) avant enrôlement du device.
-- Magic link comme fallback pour réinitialisation de device (activation uniquement, pas de connexion).
+Auth (passwordless) :
+- **Connexion exposée dans l’UI** : **WebAuthn** (passkeys) via `POST /api/v1/auth/login/options` puis `POST /api/v1/auth/login/verify`.
+- **Inscription / enrôlement device** : preuve d’email par **code (6 chiffres)** pour obtenir un `verificationToken` (`/api/v1/auth/email/*`), puis `POST /api/v1/auth/register/options|verify`.
+- **Magic link (utilitaire, non exposé sur l’écran de login)** : endpoints présents (`POST /api/v1/auth/magic-link/request|verify`) + page `/auth/magic-link/verify`, principalement pour tests/E2E/ops (pas un mode de connexion “produit” dans l’écran de login).
 - Sessions serveur (cookie `HttpOnly`, `Secure`, `SameSite=Lax`), stockage sessions en PostgreSQL.
 - RBAC avec hiérarchie de rôles (admin_app > admin_org > editor > guest).
 - Gestion multi-devices avec activation/révocation.
@@ -406,7 +373,8 @@ Endpoints principaux (API v1):
   - GET `/api/v1/companies/{id}` → retrieve
   - PUT `/api/v1/companies/{id}` → update
   - DELETE `/api/v1/companies/{id}` → delete
-  - POST `/api/v1/companies/ai-enrich` → enrichissement IA
+  - POST `/api/v1/companies/{id}/enrich` → enrichissement IA async (queue)
+  - POST `/api/v1/companies/ai-enrich` → enrichissement IA sync (sans persistance)
 
 - Folders
   - GET `/api/v1/folders` → list (+ filtre company_id)
@@ -421,7 +389,7 @@ Endpoints principaux (API v1):
   - GET `/api/v1/use-cases/{id}` → retrieve
   - PUT `/api/v1/use-cases/{id}` → update
   - DELETE `/api/v1/use-cases/{id}` → delete
-  - POST `/api/v1/use-cases/generate` → génère N cas: body { input, create_new_folder, company_id? } → crée dossier si demandé, appelle OpenAI, stocke cas (recalcul des scores serveur)
+  - POST `/api/v1/use-cases/generate` → démarre une génération (job queue): body `{ input, create_new_folder, company_id? }` → retourne `{ created_folder_id, jobId }`
 
 - Analytics
   - GET `/api/v1/analytics/summary?folder_id=...` → résumé statistiques
@@ -461,7 +429,7 @@ Règles de calcul:
 ## 4) Génération LLM (OpenAI, Node)
 
 Services TypeScript dédiés :
-- `api/src/services/queue-manager.ts` → Gestionnaire de queue SQLite pour jobs asynchrones
+- `api/src/services/queue-manager.ts` → Gestionnaire de queue **PostgreSQL** (table `job_queue`) pour jobs asynchrones
 - `api/src/services/context-company.ts` → Enrichissement d'entreprises via IA
 - `api/src/services/context-usecase.ts` → Génération de cas d'usage via IA
 - `api/src/services/settings.ts` → Gestion des paramètres et configuration
@@ -484,11 +452,11 @@ Paramètres: prompts, modèles, limites (retries/file parallèle) stockés en DB
 
 **Association prompts ↔ endpoints :**
 - `/api/v1/use-cases/generate` :
-  - Si `create_new_folder=true` : utilise `folder_name_prompt` → crée dossier
-  - Génère titres avec `use_case_list_prompt`
-  - Pour chaque titre : `use_case_detail_prompt` avec scoring automatique
-  - Validation JSON + calcul des scores + persistance
-- `/api/v1/companies/ai-enrich` : `company_info_prompt` → enrichissement d'entreprise
+  - Si `create_new_folder=true` : crée un dossier `folders.status="generating"` (nom/description peuvent être générés via prompt)
+  - Enqueue job `usecase_list` (prompt liste), puis jobs `usecase_detail` (prompt détail)
+  - Persistance dans `use_cases.data` (JSONB) + events de stream `chat_stream_events`
+- `/api/v1/companies/{id}/enrich` : enqueue job `company_enrich` (prompt entreprise)
+- `/api/v1/companies/ai-enrich` : enrichissement sync (retourne données, sans persister)
 
 **Workflow de génération :**
 
@@ -531,20 +499,19 @@ Composants clés:
 - `Matrix` page: formulaires poids/thresholds, dialogue d'édition des descriptions de niveaux.
 - `Dashboard`: graphiques (Recharts → alternatives Svelte: `layercake`, `apexcharts` svelte, ou `recharts` via wrapper si nécessaire); le backend peut fournir des données pré-normalisées.
 
-## 6) DevOps & Outillage (Docker, Make, CI/CD, Litestream)
+## 6) DevOps & Outillage (Docker, Make, CI/CD)
 
 Structure de repo (implémentée):
 - `/ui` (SvelteKit 5) → Interface utilisateur statique
 - `/api` (Hono + TypeScript) → API REST avec Drizzle ORM
-- `/data` (SQLite) → Base de données locale (gitignored)
 - `/e2e` (Playwright) → Tests end-to-end
 - `Makefile` à la racine avec cibles: `make build`, `make test`, `make lint`, `make up`, `make down`, `make db-*`.
-- `docker-compose.yml` dev local: services `ui`, `api`, `sqlite`, `litestream` avec réplication vers S3.
+- `docker-compose.yml` dev local: services `ui`, `api`, `postgres` (+ `maildev` en test/e2e).
 - `Dockerfile` séparés `ui/` et `api/` (prod-ready, multi-stage build).
 - **À implémenter**: `.github/workflows/ci.yml` + `deploy.yml` pour CI/CD.
 - Déploiement (à implémenter):
-  - UI: build statique SvelteKit → publication GitHub Pages.
-  - API: build image → push Scaleway Container Registry → déploiement Container PaaS. Volume persistant pour `app.db` + Litestream configuré pour backup S3.
+  - UI: build statique SvelteKit.
+  - API: build image → push Scaleway Container Registry → déploiement Container PaaS (DB PostgreSQL managée ou service dédié).
 
 Variables/Secrets CI:
 - `OPENAI_API_KEY` (secret)
