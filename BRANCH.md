@@ -203,7 +203,7 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
 - [x] **Commit 10**: Replace icons in UseCaseDetail component
 - [x] **Commit 11**: Replace icons in UseCaseScatterPlot component
 - [x] **Commit 12**: Replace icons in dossiers page and remove buttons
-- [ ] **Commit 13**: Replace icons in entreprises page and remove button
+- [x] **Commit 13**: Replace icons in entreprises page and remove button
 - [ ] **Commit 14**: Replace icons in cas-usage/+page
 - [ ] **Commit 15**: Replace icons in cas-usage/[id]/+page and modify buttons
 - [ ] **Commit 16**: Replace icons in dashboard page
