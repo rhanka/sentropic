@@ -1880,7 +1880,7 @@
             const complexityXFull = '✖'.repeat(raw.complexityStars || 0);
             const complexityXEmpty = '✕'.repeat(5 - (raw.complexityStars || 0));
             const complexityXDisplay = `${complexityXFull}${complexityXEmpty}`;
-            
+
             const lines = [
               ...descriptionLines,
               `Valeur: ${raw.y} pts (${valueStarsDisplay})`,

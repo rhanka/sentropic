@@ -572,7 +572,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- Délai -->
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2">
             <Clock class="w-5 h-5 text-slate-500" />
             Délai
           </h3>

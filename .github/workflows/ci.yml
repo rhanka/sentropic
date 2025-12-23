@@ -388,11 +388,10 @@ jobs:
   deploy-api:
     runs-on: ubuntu-latest
     needs: [changes, publish-api-image]
+    if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
       - name: Use Scaleway CLI
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
         uses: scaleway/action-scw@v0
         with:
           save-config: true
@@ -403,13 +402,26 @@ jobs:
           default-project-id: ${{ secrets.SCW_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_ORGANIZATION_ID }}
       - name: Deploy API
-        if: ( needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
         run: make deploy-api
+
+  # Wait for API deployment if API changed
+  wait-for-api:
+    runs-on: ubuntu-latest
+    needs: [changes, deploy-api]
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Check if API deployment was needed
+        run: |
+          if [ "${{ needs.changes.outputs.api }}" == "true" ] || [ "${{ needs.changes.outputs.global }}" == "true" ]; then
+            echo "API deployment was required and should be completed"
+          else
+            echo "API deployment was not required, skipping wait"
+          fi
 
   # Deploy UI
   deploy-ui:
     runs-on: ubuntu-latest
-    needs: [changes, deploy-api]
+    needs: [changes, publish-ui-image, wait-for-api]
     if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     permissions:
       pages: write
