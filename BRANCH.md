@@ -195,7 +195,7 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
 - [x] **Commit 2**: Replace icons in ChatWidget component
 - [x] **Commit 3**: Replace icons in ChatPanel component
 - [x] **Commit 4**: Replace icons in StreamMessage component
-- [ ] **Commit 5**: Replace icons in Toast component
+- [x] **Commit 5**: Replace icons in Toast component
 - [ ] **Commit 6**: Replace icons in QueueMonitor component
 - [ ] **Commit 7**: Replace icons in StarRating component
 - [ ] **Commit 8**: Replace icons in References component
