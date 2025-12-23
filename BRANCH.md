@@ -199,7 +199,7 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
 - [x] **Commit 6**: Replace icons in QueueMonitor component
 - [x] **Commit 7**: Replace icons in StarRating component
 - [x] **Commit 8**: Replace icons in References component
-- [ ] **Commit 9**: Replace icons in NavigationGuard component
+- [x] **Commit 9**: Replace icons in NavigationGuard component
 - [ ] **Commit 10**: Replace icons in UseCaseDetail component
 - [ ] **Commit 11**: Replace icons in UseCaseScatterPlot component
 - [ ] **Commit 12**: Replace icons in dossiers page and remove buttons
