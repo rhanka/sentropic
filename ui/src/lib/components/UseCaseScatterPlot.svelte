@@ -5,6 +5,7 @@
   import { Chart, registerables } from 'chart.js';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
+  import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -1869,10 +1870,21 @@
             const fullDescription = raw.description ? `Description: ${raw.description.substring(0, 120)}${raw.description.length > 120 ? '...' : ''}` : '';
             const descriptionLines = wrapText(fullDescription, 50); // Largeur réduite (~50 chars)
 
+            // Générer les étoiles pour la valeur (pleines + vides)
+            const valueStarsFull = '★'.repeat(raw.valueStars || 0);
+            const valueStarsEmpty = '☆'.repeat(5 - (raw.valueStars || 0));
+            const valueStarsDisplay = `${valueStarsFull}${valueStarsEmpty}`;
+            
+            // Générer les X pour la complexité (pleins gras + vides fins)
+            // ✖ est plus gras que ✕, donc ✖ pour plein (complexité élevée), ✕ pour vide (complexité faible)
+            const complexityXFull = '✖'.repeat(raw.complexityStars || 0);
+            const complexityXEmpty = '✕'.repeat(5 - (raw.complexityStars || 0));
+            const complexityXDisplay = `${complexityXFull}${complexityXEmpty}`;
+            
             const lines = [
               ...descriptionLines,
-              `Valeur: ${raw.y} pts (${raw.valueStars}/5 ⭐)`,
-              `Complexité: ${raw.x} pts (${raw.complexityStars}/5 ❌)`
+              `Valeur: ${raw.y} pts (${valueStarsDisplay})`,
+              `Complexité: ${raw.x} pts (${complexityXDisplay})`
             ];
             return lines.filter(line => line !== '');
           },
@@ -2131,18 +2143,14 @@
     {#if useCases.length === 0}
       <div class="absolute inset-0 flex items-center justify-center text-slate-500">
         <div class="text-center">
-          <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-          </svg>
+          <BarChart3 class="w-12 h-12 mx-auto mb-2 text-slate-300" />
           <p class="text-sm">Aucun cas d'usage à afficher</p>
         </div>
       </div>
     {:else if !matrix}
       <div class="absolute inset-0 flex items-center justify-center text-slate-500">
         <div class="text-center">
-          <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-          </svg>
+          <BarChart3 class="w-12 h-12 mx-auto mb-2 text-slate-300" />
           <p class="text-sm">Chargement de la matrice...</p>
         </div>
       </div>
@@ -2157,16 +2165,10 @@
       {#if isComputingLabels}
         <span class="inline-flex items-center gap-1 ml-2" transition:fade={{ duration: 200 }}>
           Placement des labels en cours
-          <svg class="h-3 w-5 inline-block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 6" fill="currentColor">
-            <circle cx="3" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0s;"></circle>
-            <circle cx="10" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0.2s;"></circle>
-            <circle cx="17" cy="3" r="0.8" class="loading-dot" style="animation-delay: 0.4s;"></circle>
-          </svg>
+          <Loader2 class="h-4 w-4 animate-spin" />
         </span>
       {:else}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
-        </svg>
+        <MousePointerClick class="w-4 h-4" />
         <span>
           Cliquez sur un point pour voir le détail.
         </span>
@@ -2177,16 +2179,6 @@
 </div>
 
 <style>
-  /* Animation pour les 3 points de chargement */
-  @keyframes loading-dot-pulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 1; }
-  }
-  
-  .loading-dot {
-    animation: loading-dot-pulse 1.4s ease-in-out infinite;
-  }
-
   /* Style supplémentaire pour le tooltip Chart.js pour correspondre aux labels */
   :global(.chartjs-tooltip) {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
