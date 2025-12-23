@@ -207,7 +207,7 @@ Replace all SVG icons throughout the application with Lucide icons from `@lucide
 - [x] **Commit 14**: Replace icons in cas-usage/+page
 - [x] **Commit 15**: Replace icons in cas-usage/[id]/+page and modify buttons
 - [x] **Commit 16**: Replace icons in dashboard page
-- [ ] **Commit 17**: Replace icons in matrice page
+- [x] **Commit 17**: Replace icons in matrice page
 - [ ] **Commit 18**: Replace icons in parametres page
 - [ ] **Commit 19**: Replace icons in auth/register page
 - [ ] **Commit 20**: Replace icons in auth/magic-link/verify page
