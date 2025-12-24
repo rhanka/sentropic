@@ -9,6 +9,7 @@ Implement markdown streaming rendering in the chat component using `svelte-strea
 - **Component**: `ui/src/lib/components/StreamMessage.svelte`
 - **Library**: `svelte-streamdown` (Svelte port of Streamdown by Vercel)
 - **Scope**: Chat variant only (variant="chat")
+- **Also**: Render basic markdown styling (bold/italic) in list cards for use cases and companies
 - **Impact**: UI only, no API changes required
 
 ## Plan / Todo
@@ -39,7 +40,7 @@ Implement markdown streaming rendering in the chat component using `svelte-strea
 - [ ] Test edge cases: empty content, very long content, special markdown characters
 - [ ] Verify no regression in job variant rendering (should remain text-only)
 - [x] Run type checking: `make typecheck-ui` ✅ Passed
-- [ ] Run linting: `make lint`
+- [x] Run linting: `make lint` ✅ Passed
 
 ### Phase 5: CI & Final Validation
 - [ ] Verify CI passes: check GitHub Actions after push
@@ -73,15 +74,15 @@ Implement markdown streaming rendering in the chat component using `svelte-strea
 ```
 
 ## Commits & Progress
-- [x] **Commit 1**: Install svelte-streamdown dependency
-- [x] **Commit 2**: Integrate Streamdown component in StreamMessage (both paths)
-- [ ] **Commit 3**: Styling adjustments and UX verification
+- [x] **Commit 1** (b570823): Install svelte-streamdown dependency + Integrate Streamdown component in StreamMessage (both paths)
+- [x] **Commit 2** (7d8d237): Render markdown in use case & company cards (marked + DOMPurify)
+- [ ] **Commit 3**: Styling adjustments and UX verification (if needed)
 - [ ] **Commit 4**: Tests and validation
 
 ## Status
-- **Progress**: Phase 1 & 2 completed, Phase 4 partially completed (typecheck passed)
-- **Current**: Integration complete, ready for styling verification and testing
-- **Next**: Run linting, then manual testing and UX verification
+- **Progress**: Phase 1 & 2 completed ✅, Phase 4 partially completed (typecheck ✅, lint ✅)
+- **Current**: Chat streaming markdown ✅; card markdown (list previews) ✅
+- **Next**: Manual testing and UX verification, then `make test-ui`
 
 ## Questions / Considerations
 - Should we configure any `svelte-streamdown` options (security, code highlighting, etc.)?
