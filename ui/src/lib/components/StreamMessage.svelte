@@ -347,8 +347,15 @@
               <li class="text-[11px] text-slate-600">
                 <div class="font-medium text-slate-600">{step.title}</div>
                 {#if step.body}
-                  <div class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll" use:scrollToEnd>
-                    {step.body}
+                  <div
+                    class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+                    use:scrollToEnd
+                  >
+                    {#if step.title === 'Raisonnement'}
+                      <Streamdown content={step.body} />
+                    {:else}
+                      {step.body}
+                    {/if}
                   </div>
                 {/if}
               </li>
@@ -377,8 +384,15 @@
         {#if hasSteps && !hasContent}
           <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
           {#if st.auxText}
-            <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
-              {st.auxText}
+            <div
+              class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+              use:scrollToEnd
+            >
+              {#if st.stepTitle === 'Raisonnement'}
+                <Streamdown content={st.auxText} />
+              {:else}
+                {st.auxText}
+              {/if}
             </div>
           {/if}
         {/if}
