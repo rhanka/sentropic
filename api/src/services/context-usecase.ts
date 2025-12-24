@@ -53,6 +53,35 @@ const UNICODE_BULLETS = '[\\u2022\\u2023\\u25e6\\u25aa\\u25ab\\u2023\\u25cf\\u25
 const BULLET_PREFIX_RE = new RegExp(`^\\s*(?:[-*+]|(?:\\d+\\.)|${UNICODE_BULLETS})\\s+`);
 const MARKER_ONLY_RE = new RegExp(`^\\s*(?:[-*+]|${UNICODE_BULLETS})\\s*$`);
 const NUMBER_MARKER_ONLY_RE = /^\s*\d+\.\s*$/;
+const HEADING_PREFIX_RE = /^\s*#{2,6}\s+/;
+
+function inlineHeadingPrefix(input: string): string {
+  const normalized = input.replace(/\r\n/g, '\n');
+  if (!HEADING_PREFIX_RE.test(normalized)) return input;
+
+  const lines = normalized.split('\n');
+  if (lines.length === 0) return input;
+
+  const first = lines[0] ?? '';
+  const restLines = lines.slice(1);
+
+  const withoutHashes = first.replace(HEADING_PREFIX_RE, '').trim();
+  if (!withoutHashes) return input;
+
+  // Heuristic: bold the "heading title" part, keep the remainder (if any) as normal text.
+  // - Prefer splitting on ":" or "—" or " - " to avoid bolding a whole long sentence.
+  const match = withoutHashes.match(/^(.*?)(\s*(?::|—| - )\s*)(.*)$/);
+  const title = (match?.[1] ?? withoutHashes).trim();
+  const sep = match?.[2] ?? '';
+  const tail = match?.[3] ?? '';
+
+  const rebuiltFirst =
+    title
+      ? (tail ? `**${title}**${sep}${tail}` : `**${title}**`)
+      : withoutHashes;
+
+  return [rebuiltFirst, ...restLines].join('\n').trim();
+}
 
 function normalizeOneListItem(raw: string): string[] {
   const normalized = raw.replace(/\r\n/g, '\n').trim();
@@ -70,6 +99,8 @@ function normalizeOneListItem(raw: string): string[] {
     t = t.replace(BULLET_PREFIX_RE, '').trim();
     if (!t) return [];
     if (MARKER_ONLY_RE.test(t) || NUMBER_MARKER_ONLY_RE.test(t)) return [];
+    // Convert markdown headings at the start of an item (##..######) into inline bold.
+    t = inlineHeadingPrefix(t);
     return [t];
   };
 

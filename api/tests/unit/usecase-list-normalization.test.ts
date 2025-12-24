@@ -31,6 +31,11 @@ describe('normalizeStringListField', () => {
     const out = normalizeStringListField('-\n- A\n-\n- B');
     expect(out).toEqual(['A', 'B']);
   });
+
+  it('converts leading markdown headings (##..######) into inline bold in list items', () => {
+    const out = normalizeStringListField(['- ### Cadrage: définir périmètre', '#### Sans séparateur', '## Titre — suite']);
+    expect(out).toEqual(['**Cadrage**: définir périmètre', '**Sans séparateur**', '**Titre** — suite']);
+  });
 });
 
 
