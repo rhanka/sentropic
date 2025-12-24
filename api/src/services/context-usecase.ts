@@ -53,7 +53,7 @@ const UNICODE_BULLETS = '[\\u2022\\u2023\\u25e6\\u25aa\\u25ab\\u2023\\u25cf\\u25
 const BULLET_PREFIX_RE = new RegExp(`^\\s*(?:[-*+]|(?:\\d+\\.)|${UNICODE_BULLETS})\\s+`);
 const MARKER_ONLY_RE = new RegExp(`^\\s*(?:[-*+]|${UNICODE_BULLETS})\\s*$`);
 const NUMBER_MARKER_ONLY_RE = /^\s*\d+\.\s*$/;
-const HEADING_PREFIX_RE = /^\s*#{2,6}\s+/;
+const HEADING_PREFIX_RE = /^\s*#{1,6}\s+/;
 
 function inlineHeadingPrefix(input: string): string {
   const normalized = input.replace(/\r\n/g, '\n');

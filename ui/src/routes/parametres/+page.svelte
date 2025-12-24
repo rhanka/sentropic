@@ -487,10 +487,7 @@
                   >
                     <option value="gpt-5">GPT-5</option>
                     <option value="gpt-5.2">GPT-5.2</option>
-                    <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
                     <option value="gpt-5-mini">GPT-5 Mini</option>
-                    <option value="gpt-5-nano">GPT-5 Nano</option>
-                    <option value="gpt-4.1">GPT-4.1</option>
                     <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
                   </select>
           <p class="text-xs text-slate-500 mt-1">Modèle utilisé par défaut pour toutes les opérations IA</p>

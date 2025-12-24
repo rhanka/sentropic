@@ -46,7 +46,7 @@
   - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
 - [ ] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
 - [x] Utiliser une lib d'icones digne de ce nom (@lucide/svelte)
-- [x] Ajouter GPT 5.2 (branch: feat/add-gpt-5-2-models)
+- [x] Ajouter GPT 5.2
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt

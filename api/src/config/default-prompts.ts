@@ -92,7 +92,6 @@ Les informations de l'entreprise sont les suivantes: {{company_info}}
 
 Utilise la matrice valeur/complexité fournie pour évaluer chaque axe de valeur et complexité : {{matrix}}
 
-
 La réponse doit impérativement contenir tous les éléments suivants au format JSON:
 {
   "name": "{{use_case}}",
@@ -109,24 +108,24 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   "leadtime": "Estimation du délai de mise en œuvre relativement à la complexité du cas d'usage (ex: 3 mois, 6 mois, 36 mois...)",
   "prerequisites": "Prérequis pour la mise en œuvre du cas d'usage (ex: Datalake, Historien IoT, Senseurs, etc.)",
   "contact": "Nom du responsable suggéré (rôle ex responsable opérations)",
-  "benefits": [
-    "Bénéfice 1",
+  "benefits": [ // 60-90 mots pour l'ensemble des bénéfices
+    "Bénéfice 1", 
     "Bénéfice 2",
     "Bénéfice 3",
     "Bénéfice 4",
     "Bénéfice 5"
   ],
-  "metrics": [
+  "metrics": [ // 30-40 mots pour l'ensemble des métriques
     "KPI ou mesure de succès 1",
     "KPI ou mesure de succès 2",
     "KPI ou mesure de succès 3"
   ],
-  "risks": [
+  "risks": [ // 30-40 mots pour l'ensemble des risques
     "Risque 1",
     "Risque 2",
     "Risque 3"
   ],
-  "nextSteps": [
+  "nextSteps": [ // 40-80 mots pour l'ensemble des prochaines étapes
     "Étape 1",
     "Étape 2",
     "Étape 3",
@@ -150,12 +149,12 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     {
       "axisId": "id de l'axe de valeur (selon la matrice, eg business_value)",
       "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
-      "description": "Justification du score"
+      "description": "Justification du score (20-30 mots)"
     },
     {
       "axisId": "id de l'axe de valeur (selon la matrice, eg time_criticality)",
       "rating": 0 (ou 1, 3, 5, 8, 13, 21, 34, 55, 89, 100) (score Fibonnacci, selon l'échelle de la matrice),
-      "description": "Justification du score"
+      "description": "Justification du score (20-30 mots)"
     }
     // Complète pour les autres axes de valeur présents dans la matrice
   ],
@@ -163,12 +162,12 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     {
       "axisId": "id de l'axe de valeur (selon la matrice, eg ai_maturity)",
       "rating": 5 (ex de score Fibonnacci),
-      "description": "Justification du score"
+      "description": "Justification du score (20-30 mots)"
     },
     {
       "axisId": "id de l'axe de valeur (selon la matrice, eg implementation_effort)",
       "rating": 13 (ex de score Fibonnacci),
-      "description": "Justification du score"
+      "description": "Justification du score (20-30 mots)"
     }
     // Complète pour les autres axes de complexité présents dans la matrice
   ]
@@ -181,7 +180,9 @@ OBLIGATOIRE:
 - Consolide la description au regard des nouvelles informations identifiées dans la réflexion et les recherches
 - Inclus dans la description des données chiffrées et des tendances du marché quand c'est pertinent avec citation vers références en utilisant [1], [2], [3]... en bonne articulation avec problem et solution
 - Tous les champs non numériques (description, problem, solution, chaque items des bénéfices et mesures de succès, risques, prochaines étapes et descriptions des valeur et complexités) doivent être formattée en markdown, avec mises en exergue en gras des éléments importants
+- Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
 - Les champs description, problem et solution doivent être formattés en markdown, potentiellement multilignes (listes à puces) pour une meilleure lisibilité
+- Respecte strictement le nombre de mots par champ (description, problem, solution)
 - Le problème doit être évaluée le plus profondément au regard du contexte (de l'entreprise et du cas d'usage si fourni), prenant en compte des données récentes (entreprise et/ou secteur/processus métier) via web_search et si besoin web_extract (avec des URL valide uniquement)
 - La solution solution doit prendre en compte ls informations fournies si une entreprise est fournie, et une recherche de solutions potentielles avec référence doit permettre de fiabiliser l'évaluation de complexité, le cas échénat via web_search et potentiellement web_extract
 - Bénéfices mesures de succès doivent être basés sur un véritable rationnel et citation vers références
