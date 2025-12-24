@@ -3,6 +3,7 @@
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import { apiGet } from '$lib/utils/api';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
+  import { Streamdown } from 'svelte-streamdown';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -359,12 +360,12 @@
 
     {#if variant === 'chat'}
       {#if finalContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-          {finalContent}
+        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+          <Streamdown content={finalContent} />
         </div>
       {:else if hasContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-          {st.contentText}
+        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+          <Streamdown content={st.contentText} />
         </div>
       {:else}
         {#if showStartup}
