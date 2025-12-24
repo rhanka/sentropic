@@ -262,13 +262,13 @@ export const generateUseCaseDetail = async (
     // Normalize list fields to avoid marker-only entries and nested bullet formatting.
     return {
       ...detail,
-      technologies: normalizeStringListField((detail as any)?.technologies),
-      benefits: normalizeStringListField((detail as any)?.benefits),
-      metrics: normalizeStringListField((detail as any)?.metrics),
-      risks: normalizeStringListField((detail as any)?.risks),
-      nextSteps: normalizeStringListField((detail as any)?.nextSteps),
-      dataSources: normalizeStringListField((detail as any)?.dataSources),
-      dataObjects: normalizeStringListField((detail as any)?.dataObjects),
+      technologies: normalizeStringListField(detail?.technologies),
+      benefits: normalizeStringListField(detail?.benefits),
+      metrics: normalizeStringListField(detail?.metrics),
+      risks: normalizeStringListField(detail?.risks),
+      nextSteps: normalizeStringListField(detail?.nextSteps),
+      dataSources: normalizeStringListField(detail?.dataSources),
+      dataObjects: normalizeStringListField(detail?.dataObjects),
     };
   } catch (e) {
     console.error('Erreur de parsing JSON pour le détail:', e);
