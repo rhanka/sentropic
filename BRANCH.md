@@ -1,11 +1,13 @@
-# Feature: Chat Tools — Folders / Use Cases / Executive Summary / Companies (CRUD + Batch + AI)
+# Feature: Chat Tools — Folders / Use Cases / Executive Summary / Companies (Core Read/Update)
 
 ## Objective
-Add chat tool-calls so the assistant can operate from key UI views with **read + update** tools (mandatory), plus selected **batch** and **destructive** actions (delete) and **AI-assisted creation/population** where relevant:
-- Folders view: list/read, batch actions, delete, add one or many folders, optionally populate with AI.
-- Folder context: list/read/update use cases, batch update (e.g., translate all use cases to English), add/delete use cases.
-- Executive summary: read/update, optionally grounded on the current folder’s use cases.
-- Companies: list/read/update, batch update, batch add (AI-assisted), batch delete, plus company detail read/update.
+Add chat tool-calls so the assistant can operate from key UI views with **core read/update tools**:
+- Companies: list/read/update (single-entity update).
+- Folders: list/read/update (single-entity update).
+- Folder-scoped use cases list: read (ids-only or selected fields).
+- Executive summary: read/update.
+- Matrix: read/update.
+- Web tools (`web_search`, `web_extract`) available in all views.
 
 **Important**: this feature expands beyond “read-only”. Any destructive or high-impact action must follow project guardrails (⚠ human approval on dangerous actions).
 
@@ -15,29 +17,26 @@ Add chat tool-calls so the assistant can operate from key UI views with **read +
 - No broad refactors, no unrelated schema changes.
 
 ## Views → Tools availability (contract)
-- **Folders list view**:
-  - Folder tools: read/list, create (single/multi), update (batch allowed), delete (batch allowed).
-  - Can access use case tools (list/detail) for any folder selected in context.
-- **Use case list view (within a folder)**:
-  - Use case tools: read/list, update (batch allowed), create, delete (batch allowed).
-  - Executive summary tools are allowed.
-  - Constraint: only the **current folder** is in scope for list/batch operations.
-- **Use case detail view**:
-  - Use case tools: read + update only (no change vs current behavior).
-- **Companies list view**:
-  - Companies (batch) tools: list/read, create (batch + AI-assisted), update (batch allowed), delete (batch allowed).
-- **Company detail view**:
-  - Company (detail) tools: read + update for the **current company**.
-  - Read-only access to that company’s folders and use cases.
+- **Companies list view (`/entreprises`)**:
+  - List companies (read-only).
+- **Company detail view (`/entreprises/[id]`)**:
+  - Read/update the current company.
+- **Folders list view (`/dossiers`)**:
+  - List folders (read-only).
+  - Read a folder’s use cases / executive summary / matrix by providing `folderId`.
+- **Use case list view (`/cas-usage`)**:
+  - Folder-scoped via `currentFolderId` (chat context = `folder`).
+  - Read folder, list use cases, read/update executive summary, read/update matrix, read company linked to folder.
+- **Use case detail view (`/cas-usage/[id]`)**:
+  - Read/update the current use case (existing tools).
 - **Executive summary view**:
-  - Executive summary tools: read + update.
-  - Can access “use case list” tools for the current folder.
+  - Folder-scoped (read/update executive summary; can list use cases; can read matrix).
 - **Dashboard view (`/dashboard`)**:
   - Folder-scoped when a folder is selected in the dashboard.
   - Must have access to folder + executive summary tools (read/update), use cases list (read), and web tools.
 - **Matrix view (`/matrice`)**:
   - Folder-scoped when a folder is selected.
-  - Must have access to: folder, company (read-only), use cases list/detail (read), matrix (read/update once implemented), and web tools.
+  - Must have access to: folder, company (read-only), use cases list (read), matrix (read/update), and web tools.
 
 ## Tool design principles (based on your additions)
 - **Read + update tools exist for each entity**, consistent with the existing use case tools.
@@ -51,9 +50,6 @@ Tool IDs should be **English-only** and stable. UI text remains FR via i18n.
 
 ### Companies (batch / list scope) — `companies_*`
 - `companies_list`: list companies (supports `ids_only` or `fields` selection).
-- `companies_update_batch`: batch update companies (⚠ high-impact).
-- `companies_create_batch`: create one or many companies; optionally AI-assisted (⚠ high-impact).
-- `companies_delete_batch`: delete one or many companies (⚠ high-impact).
 
 ### Company (detail scope) — `company_*`
 - `company_get`: read one company by id (supports `fields` selection).
@@ -74,7 +70,7 @@ Current code already follows Option B for new entities, except **use case detail
 - Use case detail:
   - Target: `usecase_get` (detail)
   - Current: `read_usecase` (detail)  → will be migrated
-  - Update: keep `update_usecase_field` for now, but consider renaming to `usecase_update` later (or alias).
+  - Update: migrate `update_usecase_field` → `usecase_update` (alias strategy).
 - Companies:
   - `companies_list` ✅
   - `company_get` ✅
@@ -113,9 +109,10 @@ Current code already follows Option B for new entities, except **use case detail
   - [x] `usecases_list`
   - [x] `executive_summary_get`
   - [x] `executive_summary_update`
+  - [x] `matrix_get`
+  - [x] `matrix_update`
   - [ ] (Planned) `usecase_get` (alias of `read_usecase`, for Option B consistency)
-  - [ ] (Planned) `matrix_get`
-  - [ ] (Planned) `matrix_update`
+  - [ ] (Planned) `usecase_update` (alias of `update_usecase_field`, for Option B consistency)
 
 #### Tool handlers (`api/src/services/tool-service.ts`)
 - [x] Companies:
@@ -126,9 +123,9 @@ Current code already follows Option B for new entities, except **use case detail
   - [x] `listFolders` (supports `companyId` filter, `idsOnly` + `select`; parses `matrixConfig` and `executiveSummary`)
   - [x] `getFolder` (supports `select`; parses `matrixConfig` and `executiveSummary`)
   - [x] `updateFolderFields` (writes audit/history; NOTIFY `folder_events`)
-- [ ] Matrix (folder.matrixConfig):
-  - [ ] `getMatrix` (read-only; returns parsed matrixConfig; supports select if we define it)
-  - [ ] `updateMatrix` (update matrixConfig; writes audit/history under contextType `folder`; NOTIFY `folder_events`)
+- [x] Matrix (folder.matrixConfig):
+  - [x] `getMatrix`
+  - [x] `updateMatrix`
 - [x] Executive summary:
   - [x] `getExecutiveSummary` (reads `folders.executiveSummary`, parses JSON, supports `select`)
   - [x] `updateExecutiveSummaryFields` (writes audit/history under contextType `executive_summary`; NOTIFY `folder_events`)
@@ -152,39 +149,19 @@ Current code already follows Option B for new entities, except **use case detail
 - [x] Folder → company read-only:
   - [x] allow `company_get` in `folder` / `executive_summary` contexts **only** for the company linked to the current folder (`folders.companyId`)
 - [x] System prompt enriched for `company`, `folder`, `executive_summary` contexts (tool list + rules)
-  - [ ] (Planned) Update `usecase` system prompt to prefer `usecase_get` naming (keep `read_usecase` as alias during migration)
-  - [ ] (Planned) Add matrix tools to contexts:
-    - folder (detail + list-with-selected-folder via `/cas-usage`)
-    - executive_summary
-    - usecase detail (read-only matrix of the parent folder)
-  - [ ] (Planned) Extend usecase detail context to allow:
-    - read-only matrix of the parent folder
-    - read-only company associated to the parent folder (or use case companyId if present)
+  - [ ] (Planned) Update `usecase` system prompt to prefer `usecase_get` / `usecase_update` naming (keep old names as aliases during migration)
 
 #### Tests
 - [x] Added unit tests for the new ToolService handlers:
   - [x] `api/tests/unit/tool-service-company-folder.test.ts`
   - Covers: list/get/update company (history + chat context), list usecases for folder (select), get/update executive summary (history)
 
-### Not implemented yet (still pending / next iterations)
-- [ ] Batch update / batch delete / multi-create tools (the “⚠ high-impact” set):
-  - [ ] `companies_update_batch`, `companies_create_batch`, `companies_delete_batch`
-  - [ ] folder batch operations (create/update/delete batch)
-  - [ ] use case batch operations (translate all, batch delete, etc.)
-- [ ] AI-assisted “populate” tools for folders/companies (contract + safeguards + queue integration)
-- [ ] E2E coverage (only if we need UI changes; currently avoided)
+### Remaining (kept in this branch scope)
 - [ ] Naming migration work (Option B):
-  - [ ] Add `usecase_get` tool + dispatch alias
-  - [ ] Update tests to accept either name (transition) and then switch to `usecase_get`
-  - [ ] Update prompts/docs to use `usecase_get`
-  - [ ] (Later) consider `usecase_update` alias for `update_usecase_field` if we want full Option B purity
-- [ ] Matrix tools:
-  - [ ] Add `matrix_get` / `matrix_update` tool definitions + handlers + wiring
-  - [ ] Enforce view-scope rules:
-    - `/cas-usage` (list): matrix must be readable for the **selected folder**
-    - `/executive-summary`: matrix must be readable for the **current folder**
-    - `/cas-usage/[id]` (use case detail): matrix must be readable for the **parent folder** (derive folderId securely)
-  - [ ] Add tests + UAT scenarios
+  - [ ] Add `usecase_get` (alias of `read_usecase`)
+  - [ ] Add `usecase_update` (alias of `update_usecase_field`)
+  - [ ] Update prompts/docs/tests to prefer `usecase_get` / `usecase_update`
+  - [ ] Deprecate/remove old names after UAT + CI green
 
 ### Files touched (for quick review)
 - `api/src/services/tools.ts`
@@ -208,14 +185,13 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
   - `folders_list`, `folder_get`, `folder_update`
   - `usecases_list` (folder-scoped list)
   - `executive_summary_get`, `executive_summary_update`
+  - `matrix_get`, `matrix_update`
   - Security checks (context id mismatch) + read-only blocking for update tools
 - **Also re-validates (already existing feature, still active)**:
   - `read_usecase` + `update_usecase_field` + web tools in usecase context (regression guard)
-- **Does NOT cover (not implemented yet on this branch)**:
-  - any batch create/update/delete tools (`*_create_batch`, `*_update_batch`, `*_delete_batch`)
-  - AI-populate tools and their safeguards
-  - the Option B naming migration task (`usecase_get` alias) — planned next
-  - matrix tools (`matrix_get` / `matrix_update`) — planned next
+- **Does NOT cover (moved to spec/TOOLS.md)**:
+  - batch/high-impact tools and AI-populate tools
+  - the Option B naming migration work (`usecase_get` / `usecase_update`)
 
 ### General UAT rules
 - Use a test workspace with a few sample objects: **2 companies**, **2 folders**, **3–5 use cases**.
@@ -271,10 +247,10 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
   - if the folder has no company, assistant explains it (no unsafe guess)
   - if company exists, returned values match the company detail view
 
-### Scenario 4bis — Folder context: read + update matrix (planned when `matrix_get/matrix_update` is implemented)
+### Scenario 4bis — Folder context: read + update matrix ✅
 - **Context**: `/cas-usage` (use case list) with a selected folder OR `/dossiers/[id]`
 - **Prompt**: “Affiche la matrice (axes + weights)”
-- **Expected tools**: `matrix_get` (or, during transition, `folder_get select=["matrixConfig"]`)
+- **Expected tools**: `matrix_get`
 - **Checks**: returned matrix matches what the “Matrice” page shows for the folder
 
 - **Prompt**: “Change le poids de l’axe valeur ‘X’ à 0.3”
@@ -341,21 +317,7 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
   - and follow the project rule: never perform destructive actions without human approval.
 
 ## Open Questions (still need confirmation)
-- What are the **exact tool IDs** you want? (English-only IDs recommended; UI labels remain FR via i18n.)
-- For batch operations: do you want a universal `dry_run` + `confirm` pattern, or reuse an existing approval mechanism already in the codebase?
-- For “populate with AI”: what is the minimum acceptable contract (inputs, expected outputs, limits, and cost safeguards)?
-
-### Scenario 10 — Use case detail: read-only access to matrix + company (planned)
-- **Context**: use case detail view (`/cas-usage/[id]`)
-- **Prompt**: “Affiche la matrice du dossier (résumé: axes + poids)”
-- **Expected tools** (planned):
-  - a secure way to derive folderId from the use case context (no user-provided folderId)
-  - then `matrix_get` (read-only)
-
-- **Prompt**: “Affiche l’entreprise associée (name + industry + size)”
-- **Expected tools** (planned):
-  - derive folderId from use case context, read folder.companyId
-  - then `company_get` (read-only) with select
+- Naming migration (`usecase_get` / `usecase_update`) timing: do we introduce aliases now or after UAT?
 
 ## Plan / Todo
 - [x] Inventory existing services/endpoints/queries for folders/use cases/executive summaries/companies (reuse first).
@@ -368,44 +330,10 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
 - [ ] Run required test suite via Make after UAT: `make test-api [SCOPE=...]`.
 - [ ] Push branch and verify GitHub Actions status for this branch.
 
-## Atomic commit plan (file-level, no partial staging)
-Rule: each commit includes whole files only (no hunk-level staging).
-
-1. **feat(api): add chat tools definitions**
-   - `api/src/services/tools.ts`
-
-2. **feat(api): implement tool handlers (companies/folders/executive summary/usecases list)**
-   - `api/src/services/tool-service.ts`
-
-3. **feat(api): enable tools per context + security rules + web tools everywhere**
-   - `api/src/services/chat-service.ts`
-
-4. **test(api): add unit tests for new ToolService behaviors**
-   - `api/tests/unit/tool-service-company-folder.test.ts`
-
-5. **feat(ui): route context detection for chat (companies list, folders list, usecases list, dashboard, matrix)**
-   - `ui/src/lib/components/ChatPanel.svelte`
-
-6. **fix(ui): dashboard auto-refresh on tool-driven executive summary updates**
-   - `ui/src/routes/dashboard/+page.svelte`
-
-7. **docs: update BRANCH.md (status + UAT + commit plan)**
-   - `BRANCH.md`
-
-## Commits & Progress
-- [x] **Commit 1**: docs: BRANCH.md (scope + plan + guardrails)
-- [ ] **Commit 2**: feat(api): add new chat tools definitions (tools registry)
-- [ ] **Commit 3**: feat(api): implement tool handlers in ToolService (companies/folders/executive summary/usecases list)
-- [ ] **Commit 4**: feat(api): wire tools into ChatService (enable per context + dispatch + scope checks)
-- [ ] **Commit 5**: test(api): add ToolService unit tests for company/folder/executive summary tools
-- [ ] **Commit 6**: test(api): run `make test-api` (store result in PR / notes)
-- [ ] **Commit 7**: refactor(api): naming migration to Option B for use case detail (`usecase_get` alias)
-
 ## Status
-- **Progress**: Phase “read + update core tools” implemented; lint/typecheck pending; tests intentionally delayed for UAT
-- **Current**: Pre-UAT quality gate (lint/typecheck), then wait for UAT feedback
+- **Progress**: Core tools implemented; lint/typecheck completed; tests intentionally delayed for UAT
+- **Current**: UAT by Antoine (no `make test-*` before that)
 - **Next**:
-  - Run: `make lint-api` and `make typecheck-api`
-  - Wait for UAT feedback (no `make test-*` before that)
+  - Wait for UAT feedback
   - After UAT: run `make test-api SCOPE=tests/unit/tool-service-company-folder.test.ts` then broader `make test-api`
-  - Then decide next slice (batch/AI-populate) + guardrails
+  - Then implement naming migration (`usecase_get` / `usecase_update`)
