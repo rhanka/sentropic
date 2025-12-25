@@ -65,9 +65,9 @@ This document is the single checklist for **chat tools**: what is already implem
 ## Remaining / Not implemented ⬜
 
 ### Naming migration (Option B)
-- [ ] Add alias tool `usecase_get` (detail) for `read_usecase`
-- [ ] Add alias tool `usecase_update` (single-entity) for `update_usecase_field`
-- [ ] Update prompts/docs to prefer `usecase_get`/`usecase_update`
+- [x] Add alias tool `usecase_get` (detail) for `read_usecase`
+- [x] Add alias tool `usecase_update` (single-entity) for `update_usecase_field`
+- [x] Update prompts to prefer `usecase_get`/`usecase_update` (legacy names still supported)
 - [ ] Deprecate/remove `read_usecase`/`update_usecase_field` once stable
 
 ### Use case detail: matrix + company access (read-only)

@@ -88,6 +88,20 @@ export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
+ * Alias (Option B): `usecase_get` — preferred name for the use case read tool.
+ * Keeps backward-compatibility with the legacy `read_usecase` tool id.
+ */
+export const useCaseGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'usecase_get',
+    description:
+      "Lit un use case (structure use_cases.data). (Nom standard Option B: usecase_get). IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires.",
+    parameters: readUseCaseTool.function.parameters
+  }
+};
+
+/**
  * Tool générique: met à jour un ou plusieurs champs de `use_cases.data.*`.
  * Le mapping DB est pris en charge côté `tool-service.ts`.
  */
@@ -116,6 +130,20 @@ export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool 
       },
       required: ["useCaseId", "updates"]
     }
+  }
+};
+
+/**
+ * Alias (Option B): `usecase_update` — preferred name for updating a use case.
+ * Keeps backward-compatibility with the legacy `update_usecase_field` tool id.
+ */
+export const useCaseUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'usecase_update',
+    description:
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier des champs du use case. (Nom standard Option B: usecase_update). Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data) via des paths dot-notation.",
+    parameters: updateUseCaseFieldTool.function.parameters
   }
 };
 

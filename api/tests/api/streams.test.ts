@@ -235,7 +235,7 @@ describe('Streams API Endpoints', () => {
       const toolCallStart = data.events.find((e: any) => e.eventType === 'tool_call_start');
       expect(toolCallStart).toBeDefined();
       expect(toolCallStart.data.tool_call_id).toBe('test_tool_1');
-      expect(toolCallStart.data.name).toBe('read_usecase');
+      expect(['read_usecase', 'usecase_get']).toContain(toolCallStart.data.name);
       
       const toolCallResult = data.events.find((e: any) => e.eventType === 'tool_call_result');
       expect(toolCallResult).toBeDefined();

@@ -111,8 +111,8 @@ Current code already follows Option B for new entities, except **use case detail
   - [x] `executive_summary_update`
   - [x] `matrix_get`
   - [x] `matrix_update`
-  - [ ] (Planned) `usecase_get` (alias of `read_usecase`, for Option B consistency)
-  - [ ] (Planned) `usecase_update` (alias of `update_usecase_field`, for Option B consistency)
+  - [x] `usecase_get` (alias of `read_usecase`, for Option B consistency)
+  - [x] `usecase_update` (alias of `update_usecase_field`, for Option B consistency)
 
 #### Tool handlers (`api/src/services/tool-service.ts`)
 - [x] Companies:
@@ -149,7 +149,7 @@ Current code already follows Option B for new entities, except **use case detail
 - [x] Folder → company read-only:
   - [x] allow `company_get` in `folder` / `executive_summary` contexts **only** for the company linked to the current folder (`folders.companyId`)
 - [x] System prompt enriched for `company`, `folder`, `executive_summary` contexts (tool list + rules)
-  - [ ] (Planned) Update `usecase` system prompt to prefer `usecase_get` / `usecase_update` naming (keep old names as aliases during migration)
+  - [x] Usecase system prompt now prefers `usecase_get` / `usecase_update` (old names kept as aliases)
 
 #### Tests
 - [x] Added unit tests for the new ToolService handlers:
@@ -157,10 +157,10 @@ Current code already follows Option B for new entities, except **use case detail
   - Covers: list/get/update company (history + chat context), list usecases for folder (select), get/update executive summary (history)
 
 ### Remaining (kept in this branch scope)
-- [ ] Naming migration work (Option B):
-  - [ ] Add `usecase_get` (alias of `read_usecase`)
-  - [ ] Add `usecase_update` (alias of `update_usecase_field`)
-  - [ ] Update prompts/docs/tests to prefer `usecase_get` / `usecase_update`
+- [x] Naming migration work (Option B):
+  - [x] Add `usecase_get` (alias of `read_usecase`)
+  - [x] Add `usecase_update` (alias of `update_usecase_field`)
+  - [x] Update prompts to prefer `usecase_get` / `usecase_update`
   - [ ] Deprecate/remove old names after UAT + CI green
 
 ### Files touched (for quick review)
@@ -269,12 +269,12 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
   - history entry created under contextType `executive_summary`
   - dashboard UI updates automatically via SSE `folder_update` (no manual refresh needed)
 
-### Scenario 6 — Security: context mismatch must be rejected
+### Scenario 6 — Security: context mismatch must be rejected ✅
 - **Context**: company detail (ACME)
 - **Prompt**: “Lis l’entreprise <otherCompanyId>”
 - **Expected result**: tool call should fail with a **Security** error (context id mismatch)
 
-### Scenario 7 — Read-only mode: updates must be blocked
+### Scenario 7 — Read-only mode: updates must be blocked ✅
 - **Context**: chat session scoped to a different readable workspace (admin_app read-only)
 - **Prompt**: “Change l’industrie en ‘Tech’”
 - **Expected result**: tool call result returns error “Read-only workspace … disabled”
