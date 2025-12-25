@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { app } from '../../src/app';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import {
@@ -9,6 +9,7 @@ import {
 import { db } from '../../src/db/client';
 import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, useCases, folders } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
+import * as tools from '../../src/services/tools';
 
 describe('Chat AI - Tool Calls Integration', () => {
   let user: any;
@@ -187,6 +188,12 @@ describe('Chat AI - Tool Calls Integration', () => {
   describe('web_extract tool', () => {
     it('should handle web_extract with array of URLs correctly', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
+
+      // Make this test deterministic: avoid external Tavily network calls.
+      const extractSpy = vi.spyOn(tools, 'extractUrlContent').mockResolvedValue([
+        { url: 'https://example.com/article1', content: 'Article 1 content' },
+        { url: 'https://example.com/article2', content: 'Article 2 content' }
+      ]);
       
       // Ajouter des références au use case pour déclencher web_extract
       const currentRow = (await db.select().from(useCases).where(eq(useCases.id, useCaseId)))[0];
@@ -216,7 +223,7 @@ describe('Chat AI - Tool Calls Integration', () => {
       const { jobId, assistantMessageId } = chatData;
 
       // Attendre la complétion
-      await waitForJobCompletion(jobId, adminUser);
+      await waitForJobCompletion(jobId, adminUser, 30);
 
       // Vérifier les stream events
       const streamEventsRes = await authenticatedRequest(
@@ -235,8 +242,19 @@ describe('Chat AI - Tool Calls Integration', () => {
       );
       expect(errorEvents.length).toBe(0);
 
+      // If the assistant called web_extract, ensure it used the mocked path (no network) and single call.
+      if (extractSpy.mock.calls.length > 0) {
+        expect(extractSpy).toHaveBeenCalledTimes(1);
+        const arg0 = extractSpy.mock.calls[0]?.[0];
+        expect(Array.isArray(arg0)).toBe(true);
+        if (Array.isArray(arg0)) {
+          expect(arg0).toEqual(['https://example.com/article1', 'https://example.com/article2']);
+        }
+      }
+
+      extractSpy.mockRestore();
       await cleanupAuthData(); // Cleanup admin user
-    }, 15000);
+    }, 30000);
   });
 
   describe('Security validation', () => {

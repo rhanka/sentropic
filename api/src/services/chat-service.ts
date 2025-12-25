@@ -978,9 +978,13 @@ Règles :
             );
             streamSeq += 1;
             const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
-            const extractPromises = urls.map((url: string) => extractUrlContent(url, options.signal));
-            const extractResults = await Promise.all(extractPromises);
-            result = { status: 'completed', results: extractResults };
+            if (!urls || urls.length === 0) {
+              throw new Error('web_extract: urls array must not be empty');
+            }
+            // IMPORTANT: Tavily extract supports arrays — do a single call for all URLs.
+            const extractResult = await extractUrlContent(urls, options.signal);
+            const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
+            result = { status: 'completed', results: resultsArray };
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',
