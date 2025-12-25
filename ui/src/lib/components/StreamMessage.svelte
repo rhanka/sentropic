@@ -376,11 +376,11 @@
 
     {#if variant === 'chat'}
       {#if finalContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
           <Streamdown content={finalContent} />
         </div>
       {:else if hasContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
           <Streamdown content={st.contentText} />
         </div>
       {:else}
@@ -433,3 +433,33 @@
     {/if}
   </div>
 
+<style>
+  /* Keep markdown headings compact inside chat bubbles (Streamdown default heading sizes are too large). */
+  .chatMarkdown :global(h1) {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    margin: 0.4rem 0 0.25rem;
+    font-weight: 700;
+  }
+  .chatMarkdown :global(h2) {
+    font-size: 1.25rem;
+    line-height: 1.25;
+    margin: 0.35rem 0 0.2rem;
+    font-weight: 700;
+  }
+  .chatMarkdown :global(h3) {
+    font-size: 1rem;
+    line-height: 1.3;
+    margin: 0.3rem 0 0.15rem;
+    font-weight: 700;
+  }
+  /* From H4 and below, keep the same size as body text (0.75rem). */
+  .chatMarkdown :global(h4),
+  .chatMarkdown :global(h5),
+  .chatMarkdown :global(h6) {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    margin: 0.25rem 0 0.1rem;
+    font-weight: 700;
+  }
+</style>
