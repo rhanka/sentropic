@@ -119,6 +119,240 @@ export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool 
   }
 };
 
+/**
+ * Companies (batch / list scope) tools
+ */
+export const companiesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'companies_list',
+    description:
+      'List companies in the current workspace. Use idsOnly to get just IDs, or use select to limit returned fields.',
+    parameters: {
+      type: 'object',
+      properties: {
+        idsOnly: { type: 'boolean', description: 'If true, return only company IDs.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional list of company fields to include (e.g. ["name","industry","size"]). If omitted, returns full company rows.'
+        }
+      },
+      required: []
+    }
+  }
+};
+
+/**
+ * Company (detail scope) tools
+ */
+export const companyGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'company_get',
+    description:
+      'Read a single company by id. Prefer using select to reduce tokens.',
+    parameters: {
+      type: 'object',
+      properties: {
+        companyId: { type: 'string', description: 'Company ID to read.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of fields to include (e.g. ["name","processes"]).'
+        }
+      },
+      required: ['companyId']
+    }
+  }
+};
+
+export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'company_update',
+    description:
+      'Update fields of a single company by id. Use this tool when the user explicitly requests changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        companyId: { type: 'string', description: 'Company ID to update.' },
+        updates: {
+          type: 'array',
+          description: 'List of field updates to apply.',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string', description: 'Company field name (e.g. name, industry, products).' },
+              value: { description: 'New value (string or null).' }
+            },
+            required: ['field', 'value']
+          }
+        }
+      },
+      required: ['companyId', 'updates']
+    }
+  }
+};
+
+/**
+ * Folders (batch / list scope) tools
+ */
+export const foldersListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'folders_list',
+    description:
+      'List folders in the current workspace. Optionally filter by companyId. Use idsOnly or select to reduce payload.',
+    parameters: {
+      type: 'object',
+      properties: {
+        companyId: { type: 'string', description: 'Optional company ID to filter folders.' },
+        idsOnly: { type: 'boolean', description: 'If true, return only folder IDs.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional list of folder fields to include (e.g. ["name","description","companyId"]). If omitted, returns full folder rows.'
+        }
+      },
+      required: []
+    }
+  }
+};
+
+/**
+ * Folder (detail scope) tools
+ */
+export const folderGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'folder_get',
+    description:
+      'Read a single folder by id (including parsed matrixConfig / executiveSummary when available). Prefer select to reduce tokens.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID to read.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of folder fields to include.'
+        }
+      },
+      required: ['folderId']
+    }
+  }
+};
+
+export const folderUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'folder_update',
+    description:
+      'Update fields of a single folder by id. Use this tool when the user explicitly requests changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID to update.' },
+        updates: {
+          type: 'array',
+          description: 'List of field updates to apply.',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string', description: 'Folder field name (e.g. name, description, companyId, executiveSummary).' },
+              value: { description: 'New value (JSON). For matrixConfig/executiveSummary, pass an object.' }
+            },
+            required: ['field', 'value']
+          }
+        }
+      },
+      required: ['folderId', 'updates']
+    }
+  }
+};
+
+/**
+ * Use cases list within a folder context
+ */
+export const useCasesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'usecases_list',
+    description:
+      'List use cases for a folder. Use idsOnly to get only IDs, or select to limit returned fields from use_cases.data.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID to list use cases for.' },
+        idsOnly: { type: 'boolean', description: 'If true, return only use case IDs.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional list of fields from use_cases.data to include (top-level only, like read_usecase).'
+        }
+      },
+      required: ['folderId']
+    }
+  }
+};
+
+/**
+ * Executive summary tools (stored on folders.executiveSummary)
+ */
+export const executiveSummaryGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'executive_summary_get',
+    description:
+      'Read the executive summary for a folder (stored on folders.executiveSummary).',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID owning the executive summary.' },
+        select: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional list of executive summary fields to include (e.g. ["introduction","analyse"]).'
+        }
+      },
+      required: ['folderId']
+    }
+  }
+};
+
+export const executiveSummaryUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'executive_summary_update',
+    description:
+      'Update the executive summary fields for a folder. Use this tool when the user explicitly requests changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID owning the executive summary.' },
+        updates: {
+          type: 'array',
+          description: 'List of executive summary field updates to apply.',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string', description: 'Executive summary field (introduction, analyse, recommandation, synthese_executive, references).' },
+              value: { description: 'New value (string or JSON).' }
+            },
+            required: ['field', 'value']
+          }
+        }
+      },
+      required: ['folderId', 'updates']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;
