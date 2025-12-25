@@ -609,6 +609,101 @@ export class ToolService {
   }
 
   // ---------------------------
+  // Matrix (folders.matrixConfig)
+  // ---------------------------
+
+  async getMatrix(folderId: string, opts?: { workspaceId?: string | null }): Promise<{
+    folderId: string;
+    matrixConfig: Record<string, unknown> | null;
+  }> {
+    if (!folderId) throw new Error('folderId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, folderId);
+    const [row] = await db.select({ matrixConfig: folders.matrixConfig }).from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+    const parsed = parseJsonOrNull(row.matrixConfig) as Record<string, unknown> | null;
+    return { folderId, matrixConfig: parsed };
+  }
+
+  async updateMatrix(input: {
+    folderId: string;
+    matrixConfig: unknown;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    messageId?: string | null;
+    toolCallId?: string | null;
+  }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.folderId) throw new Error('folderId is required');
+    if (input.matrixConfig == null || typeof input.matrixConfig !== 'object') throw new Error('matrixConfig is required');
+
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, input.folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, input.folderId);
+
+    const [row] = await db.select().from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+
+    const beforeRow = row as unknown as Record<string, unknown>;
+    const beforeMatrix = parseJsonOrNull(beforeRow.matrixConfig);
+
+    await db
+      .update(folders)
+      .set({ matrixConfig: JSON.stringify(input.matrixConfig) })
+      .where(where);
+
+    await this.notifyFolderEvent(input.folderId);
+
+    const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [
+      { field: 'matrixConfig', oldValue: beforeMatrix, newValue: input.matrixConfig }
+    ];
+
+    const sessionId = input.sessionId ?? null;
+    const messageId = input.messageId ?? null;
+    const toolCallId = input.toolCallId ?? null;
+
+    if (sessionId) {
+      await db.insert(chatContexts).values({
+        id: createId(),
+        sessionId,
+        contextType: 'folder',
+        contextId: input.folderId,
+        snapshotBefore: { matrixConfig: beforeMatrix },
+        snapshotAfter: { matrixConfig: input.matrixConfig },
+        modifications: applied,
+        modifiedAt: new Date(),
+        createdAt: new Date()
+      });
+    }
+
+    let seq = await getNextModificationSequence('folder', input.folderId);
+    for (const item of applied) {
+      await db.insert(contextModificationHistory).values({
+        id: createId(),
+        contextType: 'folder',
+        contextId: input.folderId,
+        sessionId,
+        messageId,
+        field: item.field,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        toolCallId,
+        promptId: null,
+        promptType: null,
+        promptVersionId: null,
+        jobId: null,
+        sequence: seq,
+        createdAt: new Date()
+      });
+      seq += 1;
+    }
+
+    return { folderId: input.folderId, applied };
+  }
+
+  // ---------------------------
   // Executive Summary (folders.executiveSummary)
   // ---------------------------
 

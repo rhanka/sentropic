@@ -353,6 +353,44 @@ export const executiveSummaryUpdateTool: OpenAI.Chat.Completions.ChatCompletionT
   }
 };
 
+/**
+ * Matrix tools (folders.matrixConfig)
+ */
+export const matrixGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'matrix_get',
+    description: 'Read the matrix configuration (folders.matrixConfig) for a folder.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID owning the matrix configuration.' }
+      },
+      required: ['folderId']
+    }
+  }
+};
+
+export const matrixUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'matrix_update',
+    description:
+      'Update the matrix configuration (folders.matrixConfig) for a folder. Use this tool when the user explicitly requests changes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Folder ID owning the matrix configuration.' },
+        matrixConfig: {
+          type: 'object',
+          description: 'New matrix configuration object. This replaces the stored matrixConfig.'
+        }
+      },
+      required: ['folderId', 'matrixConfig']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

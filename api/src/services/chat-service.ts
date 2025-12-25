@@ -21,7 +21,9 @@ import {
   folderUpdateTool,
   useCasesListTool,
   executiveSummaryGetTool,
-  executiveSummaryUpdateTool
+  executiveSummaryUpdateTool,
+  matrixGetTool,
+  matrixUpdateTool
 } from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
@@ -357,6 +359,8 @@ export class ChatService {
         foldersListTool,
         folderGetTool,
         ...(readOnly ? [] : [folderUpdateTool]),
+        matrixGetTool,
+        ...(readOnly ? [] : [matrixUpdateTool]),
         useCasesListTool,
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
@@ -370,6 +374,7 @@ export class ChatService {
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
         useCasesListTool,
         folderGetTool,
+        matrixGetTool,
         companyGetTool,
         webSearchTool,
         webExtractTool
@@ -443,6 +448,8 @@ ${folderLine}
 Tools disponibles :
 - \`folder_get\` : Lit le dossier courant
 - \`folder_update\` : Met à jour des champs du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`matrix_get\` : Lit la matrice (matrixConfig) du dossier
+- \`matrix_update\` : Met à jour la matrice (matrixConfig) du dossier${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`usecases_list\` : Liste des cas d'usage du dossier courant (idsOnly ou select)
 - \`executive_summary_get\` : Lit la synthèse exécutive du dossier courant
 - \`executive_summary_update\` : Met à jour la synthèse exécutive du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
@@ -463,6 +470,7 @@ Tools disponibles :
 - \`executive_summary_update\` : Met à jour la synthèse exécutive${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`usecases_list\` : Liste les cas d'usage du dossier (pour relier la synthèse aux cas)
 - \`folder_get\` : Lit le dossier (contexte général)
+- \`matrix_get\` : Lit la matrice (matrixConfig) du dossier
 - \`company_get\` : Lit l'entreprise rattachée au dossier (si le dossier a un companyId)
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
@@ -872,6 +880,52 @@ Règles :
             const updateResult = await toolService.updateExecutiveSummaryFields({
               folderId: args.folderId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              sessionId: options.sessionId,
+              messageId: options.assistantMessageId,
+              toolCallId: toolCall.id,
+              workspaceId: sessionWorkspaceId
+            });
+            result = updateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'matrix_get') {
+            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
+            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
+              throw new Error('Security: matrix_get is only available in folder/executive_summary context');
+            }
+            if (primaryContextType === 'executive_summary') {
+              if (!primaryContextId || args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            } else if (primaryContextType === 'folder' && primaryContextId) {
+              if (args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            }
+            const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
+            result = getResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'matrix_update') {
+            if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
+            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
+              throw new Error('Security: folderId does not match session context');
+            }
+            const updateResult = await toolService.updateMatrix({
+              folderId: args.folderId,
+              matrixConfig: args.matrixConfig,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,

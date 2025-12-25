@@ -188,6 +188,27 @@ describe('Tool Service - company/folder/executive_summary', () => {
     expect(history.length).toBe(1);
     expect(history[0].field).toBe('introduction');
   });
+
+  it('should get and update matrixConfig (folders.matrixConfig)', async () => {
+    const before = await toolService.getMatrix(folderId, { workspaceId });
+    expect(before.folderId).toBe(folderId);
+    expect(before.matrixConfig).toBeTruthy();
+
+    const updated = await toolService.updateMatrix({
+      folderId,
+      matrixConfig: { valueAxes: [{ id: 'v1', name: 'Value', weight: 0.3 }], complexityAxes: [] },
+      workspaceId,
+      sessionId,
+      messageId: 'msg-mx-1',
+      toolCallId: 'tool-mx-1'
+    });
+    expect(updated.folderId).toBe(folderId);
+    expect(updated.applied[0].field).toBe('matrixConfig');
+
+    const after = await toolService.getMatrix(folderId, { workspaceId });
+    expect(after.matrixConfig).toBeTruthy();
+    expect((after.matrixConfig as any).valueAxes?.[0]?.weight).toBe(0.3);
+  });
 });
 
 
