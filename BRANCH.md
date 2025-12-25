@@ -279,45 +279,37 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
 - **Prompt**: “Change l’industrie en ‘Tech’”
 - **Expected result**: tool call result returns error “Read-only workspace … disabled”
 
-### UAT exit criteria (Stop/Go)
-- **Go** when:
-  - scenarios 1–5 work without errors
-  - scenarios 6–7 correctly block unsafe behavior
-- **Stop** when:
-  - a tool can modify an object outside its context
-  - updates are possible in read-only mode
-  - tool result payloads are too large / unusable in the UI
-
-### Scenario 8 — Use case detail view regression: read + update (existing feature)
+### Scenario 8 — Use case detail view: non-reg rename (`usecase_get` / `usecase_update`) ✅
 - **Context**: use case detail view
 - **Prompt**: “Lis le use case (problem + solution seulement)”
-- **Expected tools**: `read_usecase` with `select=["problem","solution"]`
+- **Expected tools**: `usecase_get` with `select=["problem","solution"]`
 
 - **Prompt**: “Mets à jour le champ problem en 3 puces”
-- **Expected tools**: `update_usecase_field`
+- **Expected tools**: `usecase_update`
 - **Checks**:
   - use case updates are visible after refresh
   - context history is created under contextType `usecase`
 
-### Scenario 9 — Use case web tools regression (existing feature)
+### Scenario 9 — Use case web tools regression (existing feature) ✅
 - **Context**: use case detail view with at least 2 references URLs
 - **Prompt**: “Résume les références et cite 2 points clés par URL”
 - **Expected tools**:
-  - `read_usecase` (to fetch `references`)
+  - `usecase_get` (preferred; to fetch `references`) — legacy `read_usecase` also accepted
   - `web_extract` (single call with all URLs in the `urls` array)
 - **Checks**:
   - only **one** `web_extract` call is made for multiple URLs
   - tool results are present and the final answer references extracted content
 
-## Guardrails (MANDATORY)
-- Any tool that can **delete**, **batch update**, or **create many objects**, or **trigger AI population** must be treated as **⚠ high-impact**:
-  - require explicit user intent confirmation in the chat UX,
-  - be logged with full parameters and result counts,
-  - implement safe defaults (`dry_run=true` by default where possible),
-  - and follow the project rule: never perform destructive actions without human approval.
 
-## Open Questions (still need confirmation)
-- Naming migration (`usecase_get` / `usecase_update`) timing: do we introduce aliases now or after UAT?
+### UAT exit criteria (Stop/Go) ✅
+- **Go** when:
+  - scenarios 1–5 work without errors
+  - scenarios 6–7 correctly block unsafe behavior
+  - scenarios 8-9 don't reveal any regression 
+- **Stop** when:
+  - a tool can modify an object outside its context
+  - updates are possible in read-only mode
+  - tool result payloads are too large / unusable in the UI
 
 ## Plan / Todo
 - [x] Inventory existing services/endpoints/queries for folders/use cases/executive summaries/companies (reuse first).
@@ -326,7 +318,7 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
 - [x] Ensure authorization is consistent (session + workspace scope) and add context-id matching checks.
 - [x] Add unit tests for new ToolService methods.
 - [x] Run `make lint-api` and `make typecheck-api` (pre-UAT quality gate).
-- [ ] UAT (manual) by Antoine before running tests.
+- [x] UAT (manual) by F.A before running tests.
 - [ ] Run required test suite via Make after UAT: `make test-api [SCOPE=...]`.
 - [ ] Push branch and verify GitHub Actions status for this branch.
 
@@ -336,4 +328,4 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
 - **Next**:
   - Wait for UAT feedback
   - After UAT: run `make test-api SCOPE=tests/unit/tool-service-company-folder.test.ts` then broader `make test-api`
-  - Then implement naming migration (`usecase_get` / `usecase_update`)
+  - Naming migration implemented (`usecase_get` / `usecase_update` aliases)
