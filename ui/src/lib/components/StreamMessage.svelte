@@ -436,19 +436,19 @@
 <style>
   /* Keep markdown headings compact inside chat bubbles (Streamdown default heading sizes are too large). */
   .chatMarkdown :global(h1) {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     line-height: 1.25;
     margin: 0.4rem 0 0.25rem;
     font-weight: 700;
   }
   .chatMarkdown :global(h2) {
-    font-size: 1.25rem;
+    font-size: 1rem;
     line-height: 1.25;
     margin: 0.35rem 0 0.2rem;
     font-weight: 700;
   }
   .chatMarkdown :global(h3) {
-    font-size: 1rem;
+    font-size: 0.85rem;
     line-height: 1.3;
     margin: 0.3rem 0 0.15rem;
     font-weight: 700;
