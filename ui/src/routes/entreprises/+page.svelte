@@ -1,4 +1,6 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // {@html} is only used with sanitized HTML produced by renderInlineMarkdown().
   import { companiesStore, fetchCompanies, deleteCompany } from '$lib/stores/companies';
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
@@ -7,6 +9,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { renderInlineMarkdown } from '$lib/utils/markdown';
   import { Trash2 } from '@lucide/svelte';
 
   const HUB_KEY = 'companiesList';
@@ -167,12 +170,16 @@
                   <p class="text-sm text-slate-600">Secteur: {company.industry}</p>
                 {/if}
                 {#if company.size}
-                  <p class="text-sm text-slate-500 line-clamp-2">Taille: {company.size}</p>
+                  <p class="text-sm text-slate-500 line-clamp-2 break-words">
+                    Taille: <span>{@html renderInlineMarkdown(company.size)}</span>
+                  </p>
                 {/if}
               </div>
             {/if}
             {#if company.products}
-              <div class="text-sm text-slate-600 line-clamp-2">{company.products}</div>
+              <div class="text-sm text-slate-600 line-clamp-2 break-words">
+                {@html renderInlineMarkdown(company.products)}
+              </div>
             {/if}
           </div>
           

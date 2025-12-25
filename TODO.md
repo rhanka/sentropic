@@ -44,7 +44,7 @@
   - [ ] gérer mobile (panneau plein écran / bottom-sheet)
   - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
   - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
-- [ ] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
+- [x] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
 - [x] Utiliser une lib d'icones digne de ce nom (@lucide/svelte)
 - [x] Ajouter GPT 5.2
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
@@ -56,7 +56,6 @@
   - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
   - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage)
   - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
-  - [ ] Tests : Unit/int/E2E pour upload → job résumé → statut ready/failed
   - **Couverture CU** : CU-022
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] chat / json

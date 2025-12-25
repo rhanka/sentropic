@@ -248,4 +248,21 @@ export function renderMarkdownWithRefs(
   return sanitizeHtml(html);
 }
 
+/**
+ * Render markdown as inline HTML (no wrapping block elements like <p>),
+ * useful for compact UI contexts such as cards.
+ */
+export function renderInlineMarkdown(text: string | null | undefined): string {
+  if (!text) return '';
+
+  const normalized = normalizeUseCaseMarkdown(text);
+
+  // marked.parseInline exists in marked v4+; fallback to full parse if unavailable.
+  const anyMarked = marked as unknown as { parseInline?: (src: string) => unknown };
+  const rendered = anyMarked.parseInline ? anyMarked.parseInline(normalized) : marked(normalized);
+  const html = typeof rendered === 'string' ? rendered : String(rendered);
+
+  return sanitizeHtml(html);
+}
+
 

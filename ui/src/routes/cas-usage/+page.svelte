@@ -1,4 +1,6 @@
 <script lang="ts">
+  /* eslint-disable svelte/no-at-html-tags */
+  // {@html} is only used with sanitized HTML produced by renderInlineMarkdown().
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
@@ -13,6 +15,7 @@
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { renderInlineMarkdown } from '$lib/utils/markdown';
   import { Trash2, Star, X, Minus, Loader2 } from '@lucide/svelte';
 
   let isLoading = false;
@@ -169,7 +172,7 @@
       removeToast(progressToastId);
       progressToastId = addToast({
         type: 'success',
-        message: `✅ ${result.message || 'Génération démarrée avec succès'}`,
+        message: `${result.message || 'Génération démarrée avec succès'}`,
         duration: 5000
       });
 
@@ -275,7 +278,9 @@
         <!-- Body -->
         <div class="p-3 sm:p-4 pt-2 flex-1 min-h-0">
           {#if useCase?.data?.description || useCase?.description}
-            <p class="text-sm text-slate-600 line-clamp-2 mb-3">{useCase?.data?.description || useCase?.description || ''}</p>
+            <div class="text-sm text-slate-600 line-clamp-2 mb-3 break-words">
+              {@html renderInlineMarkdown(useCase?.data?.description || useCase?.description || '')}
+            </div>
           {/if}
           {#if isDetailing || isGenerating}
             <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={6} />

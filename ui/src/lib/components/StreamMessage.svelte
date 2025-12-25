@@ -3,6 +3,7 @@
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import { apiGet } from '$lib/utils/api';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
+  import { Streamdown } from 'svelte-streamdown';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -100,6 +101,13 @@
     st.steps = [...st.steps, { title, body }].slice(-stepLimit);
   };
 
+  const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
+    if (!prev) return false;
+    if (!delta || !delta.startsWith('**')) return false;
+    // Only insert a break if the previous content does not end with whitespace (space/tab/newline).
+    return !/\s$/.test(prev);
+  };
+
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
     if (!Number.isFinite(sequence)) return;
     if (sequence <= st.lastSeq) return;
@@ -123,7 +131,9 @@
       st.sawStarted = false;
       st.stepTitle = 'Raisonnement';
       const delta = String(data?.delta ?? '');
-      st.auxText = (st.auxText || '') + delta;
+      const prev = st.auxText || '';
+      const sep = needsReasoningSectionBreak(prev, delta) ? '\n\n' : '';
+      st.auxText = prev + sep + delta;
       upsertStep('Raisonnement', st.auxText);
     } else if (eventType === 'tool_call_start') {
       st.sawTools = true;
@@ -346,8 +356,15 @@
               <li class="text-[11px] text-slate-600">
                 <div class="font-medium text-slate-600">{step.title}</div>
                 {#if step.body}
-                  <div class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll" use:scrollToEnd>
-                    {step.body}
+                  <div
+                    class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+                    use:scrollToEnd
+                  >
+                    {#if step.title === 'Raisonnement'}
+                      <Streamdown content={step.body} />
+                    {:else}
+                      {step.body}
+                    {/if}
                   </div>
                 {/if}
               </li>
@@ -359,12 +376,12 @@
 
     {#if variant === 'chat'}
       {#if finalContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-          {finalContent}
+        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+          <Streamdown content={finalContent} />
         </div>
       {:else if hasContent}
-        <div class="rounded bg-white border border-slate-200 text-xs px-3 py-2 whitespace-pre-wrap break-words text-slate-900">
-          {st.contentText}
+        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+          <Streamdown content={st.contentText} />
         </div>
       {:else}
         {#if showStartup}
@@ -376,8 +393,15 @@
         {#if hasSteps && !hasContent}
           <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
           {#if st.auxText}
-            <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
-              {st.auxText}
+            <div
+              class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+              use:scrollToEnd
+            >
+              {#if st.stepTitle === 'Raisonnement'}
+                <Streamdown content={st.auxText} />
+              {:else}
+                {st.auxText}
+              {/if}
             </div>
           {/if}
         {/if}
@@ -409,3 +433,33 @@
     {/if}
   </div>
 
+<style>
+  /* Keep markdown headings compact inside chat bubbles (Streamdown default heading sizes are too large). */
+  .chatMarkdown :global(h1) {
+    font-size: 1.25rem;
+    line-height: 1.25;
+    margin: 0.4rem 0 0.25rem;
+    font-weight: 700;
+  }
+  .chatMarkdown :global(h2) {
+    font-size: 1rem;
+    line-height: 1.25;
+    margin: 0.35rem 0 0.2rem;
+    font-weight: 700;
+  }
+  .chatMarkdown :global(h3) {
+    font-size: 0.85rem;
+    line-height: 1.3;
+    margin: 0.3rem 0 0.15rem;
+    font-weight: 700;
+  }
+  /* From H4 and below, keep the same size as body text (0.75rem). */
+  .chatMarkdown :global(h4),
+  .chatMarkdown :global(h5),
+  .chatMarkdown :global(h6) {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    margin: 0.25rem 0 0.1rem;
+    font-weight: 700;
+  }
+</style>
