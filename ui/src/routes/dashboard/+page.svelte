@@ -8,6 +8,7 @@
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
+  import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
@@ -27,6 +28,7 @@
   let currentFolder: any = null;
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
+  const HUB_KEY = 'dashboardPage';
   
   // Variables locales pour l'édition markdown (non persistantes)
   let editedIntroduction = '';
@@ -118,6 +120,38 @@
     startAutoRefresh();
     })();
 
+    // SSE: refresh executive summary + folder/matrix data when updated via chat tools (folder_update)
+    // and keep charts/lists synced with usecase_update.
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type === 'folder_update') {
+        const folderId: string = evt.folderId;
+        const data: any = evt.data ?? {};
+        if (!folderId || !selectedFolderId || folderId !== selectedFolderId) return;
+        if (data?.deleted) return;
+        void loadMatrix(folderId);
+        return;
+      }
+      if (evt?.type === 'usecase_update') {
+        const useCaseId: string = evt.useCaseId;
+        const data: any = evt.data ?? {};
+        if (!useCaseId) return;
+        if (data?.deleted) {
+          useCasesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
+          return;
+        }
+        if (data?.useCase) {
+          const updated = data.useCase;
+          useCasesStore.update((items) => {
+            const idx = items.findIndex((uc) => uc.id === updated.id);
+            if (idx === -1) return [updated, ...items];
+            const next = [...items];
+            next[idx] = { ...next[idx], ...updated };
+            return next;
+          });
+        }
+      }
+    });
+
     // Reload on admin workspace scope change
     let lastScope = $adminWorkspaceScope.selectedId;
     const unsub = adminWorkspaceScope.subscribe((s) => {
@@ -133,6 +167,7 @@
 
   onDestroy(() => {
     refreshManager.stopAllRefreshes();
+    streamHub.delete(HUB_KEY);
   });
 
   const loadData = async () => {
@@ -150,6 +185,8 @@
       selectedFolderId = $currentFolderId || (folders.length > 0 ? folders[0].id : null);
       
       if (selectedFolderId) {
+        // Ensure global context is set (used by chat context detection)
+        currentFolderId.set(selectedFolderId);
         await loadMatrix(selectedFolderId);
       }
     } catch (error) {
@@ -366,6 +403,12 @@
   
   // Nom du dossier sélectionné
   $: selectedFolderName = selectedFolderId ? ($foldersStore.find(f => f.id === selectedFolderId)?.name || '') : '';
+
+  // Keep global folder context in sync so ChatWidget (route-scoped) can enable folder tools on /dashboard.
+  // This ensures the chat context matches the selected folder in the dashboard UI.
+  $: if (selectedFolderId && selectedFolderId !== $currentFolderId) {
+    currentFolderId.set(selectedFolderId);
+  }
   
   // Vérifier si la synthèse est en cours de génération
   $: isSummaryGenerating = currentFolder?.status === 'generating' && !executiveSummary;
