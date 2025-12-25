@@ -5,7 +5,24 @@ import { createId } from '../utils/id';
 import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
-import { readUseCaseTool, updateUseCaseFieldTool, webSearchTool, webExtractTool, searchWeb, extractUrlContent } from './tools';
+import type OpenAI from 'openai';
+import {
+  readUseCaseTool,
+  updateUseCaseFieldTool,
+  webSearchTool,
+  webExtractTool,
+  searchWeb,
+  extractUrlContent,
+  companiesListTool,
+  companyGetTool,
+  companyUpdateTool,
+  foldersListTool,
+  folderGetTool,
+  folderUpdateTool,
+  useCasesListTool,
+  executiveSummaryGetTool,
+  executiveSummaryUpdateTool
+} from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { env } from '../config/env';
@@ -321,16 +338,45 @@ export class ChatService {
     const primaryContextType = session.primaryContextType;
     const primaryContextId = session.primaryContextId;
 
-    // Préparer les tools : seulement si le contexte est 'usecase'
-    const tools =
-      primaryContextType === 'usecase'
-        ? [
-            readUseCaseTool,
-            ...(readOnly ? [] : [updateUseCaseFieldTool]),
-            webSearchTool,
-            webExtractTool
-          ]
-        : undefined;
+    // Prepare tools based on primary context type (view-scoped behavior).
+    // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
+    let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
+    if (primaryContextType === 'usecase') {
+      tools = [readUseCaseTool, ...(readOnly ? [] : [updateUseCaseFieldTool]), webSearchTool, webExtractTool];
+    } else if (primaryContextType === 'company') {
+      tools = [
+        companiesListTool,
+        companyGetTool,
+        ...(readOnly ? [] : [companyUpdateTool]),
+        foldersListTool,
+        webSearchTool,
+        webExtractTool
+      ];
+    } else if (primaryContextType === 'folder') {
+      tools = [
+        foldersListTool,
+        folderGetTool,
+        ...(readOnly ? [] : [folderUpdateTool]),
+        useCasesListTool,
+        executiveSummaryGetTool,
+        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
+        companyGetTool,
+        webSearchTool,
+        webExtractTool
+      ];
+    } else if (primaryContextType === 'executive_summary') {
+      tools = [
+        executiveSummaryGetTool,
+        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
+        useCasesListTool,
+        folderGetTool,
+        companyGetTool,
+        webSearchTool,
+        webExtractTool
+      ];
+    } else {
+      tools = undefined;
+    }
 
     // Enrichir le system prompt avec le contexte si disponible
     let systemPrompt = "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.";
@@ -367,6 +413,62 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 1. Appeler read_usecase pour lire le use case actuel
 2. Appeler update_usecase_field avec les modifications (par exemple : path: 'problem', path: 'solution')
 3. Les modifications sont alors appliquées directement en base de données`;
+    } else if (primaryContextType === 'company') {
+      const companyLine = primaryContextId
+        ? `Tu travailles sur l'entreprise ${primaryContextId}.`
+        : `Tu es sur la liste des entreprises (pas d'entreprise sélectionnée).`;
+      systemPrompt += ` 
+
+${companyLine}
+
+Tools disponibles :
+- \`companies_list\` : Liste des entreprises (batch/list)
+- \`company_get\` : Lit le détail d'une entreprise (utilise l'ID du contexte si présent)
+- \`company_update\` : Met à jour des champs d'une entreprise${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`folders_list\` : Liste des dossiers (tu peux filtrer par companyId)
+- \`web_search\` : Recherche d'informations récentes sur le web
+- \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
+
+Règles :
+- Pour lister les entreprises visibles ici, utilise \`companies_list\`.
+- Si un contexte companyId est présent, ne modifie/consulte que cette entreprise.`;
+    } else if (primaryContextType === 'folder') {
+      const folderLine = primaryContextId
+        ? `Tu travailles sur le dossier ${primaryContextId}.`
+        : `Tu es sur la liste des dossiers (pas de dossier sélectionné). Tu peux lire les dossiers via \`folders_list\`, puis lire les cas d'usage d'un dossier via \`usecases_list\` en passant son folderId.`;
+      systemPrompt += ` 
+
+${folderLine}
+
+Tools disponibles :
+- \`folder_get\` : Lit le dossier courant
+- \`folder_update\` : Met à jour des champs du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`usecases_list\` : Liste des cas d'usage du dossier courant (idsOnly ou select)
+- \`executive_summary_get\` : Lit la synthèse exécutive du dossier courant
+- \`executive_summary_update\` : Met à jour la synthèse exécutive du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`company_get\` : Lit l'entreprise rattachée au dossier (si le dossier a un companyId)
+- \`web_search\` : Recherche d'informations récentes sur le web
+- \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
+
+Règles :
+- Pour toute modification, lis d'abord puis mets à jour via les tools.
+- Si un folderId de contexte est présent, ne lis/modifie que ce dossier. Sinon (vue liste), tu peux lire plusieurs dossiers en fournissant explicitement leur folderId.`;
+    } else if (primaryContextType === 'executive_summary' && primaryContextId) {
+      systemPrompt += ` 
+
+Tu travailles sur la synthèse exécutive du dossier ${primaryContextId}.
+
+Tools disponibles :
+- \`executive_summary_get\` : Lit la synthèse exécutive
+- \`executive_summary_update\` : Met à jour la synthèse exécutive${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`usecases_list\` : Liste les cas d'usage du dossier (pour relier la synthèse aux cas)
+- \`folder_get\` : Lit le dossier (contexte général)
+- \`company_get\` : Lit l'entreprise rattachée au dossier (si le dossier a un companyId)
+- \`web_search\` : Recherche d'informations récentes sur le web
+- \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
+
+Règles :
+- Ne tente pas d'accéder à un autre dossier que celui du contexte.`;
     }
 
     let streamSeq = await getNextSequence(options.assistantMessageId);
@@ -553,6 +655,232 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
               options.assistantMessageId,
               'tool_call_result',
               // Normaliser pour l'UI: toujours fournir result.status
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'companies_list') {
+            if (primaryContextType !== 'company') {
+              throw new Error('Security: companies_list is only available in company context');
+            }
+            const listResult = await toolService.listCompanies({
+              workspaceId: sessionWorkspaceId,
+              idsOnly: !!args.idsOnly,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = listResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'company_get') {
+            // company context: must match context id
+            if (primaryContextType === 'company') {
+              if (!primaryContextId || args.companyId !== primaryContextId) {
+                throw new Error('Security: companyId does not match session context');
+              }
+            } else if (primaryContextType === 'folder' || primaryContextType === 'executive_summary') {
+              // folder/executive_summary context: only allow reading the company linked to the current folder
+              if (!primaryContextId) throw new Error('Security: company_get requires a folder context id');
+              const folder = await toolService.getFolder(primaryContextId, {
+                workspaceId: sessionWorkspaceId,
+                select: ['companyId']
+              });
+              const folderCompanyId = typeof (folder.data as Record<string, unknown>)?.companyId === 'string'
+                ? ((folder.data as Record<string, unknown>).companyId as string)
+                : null;
+              if (!folderCompanyId) throw new Error('Folder has no companyId');
+              if (args.companyId !== folderCompanyId) {
+                throw new Error('Security: companyId is not linked to current folder');
+              }
+            } else {
+              throw new Error('Security: company_get is not available in this context');
+            }
+
+            const getResult = await toolService.getCompany(args.companyId, {
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = getResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'company_update') {
+            if (readOnly) throw new Error('Read-only workspace: company_update is disabled');
+            if (primaryContextType !== 'company' || !primaryContextId || args.companyId !== primaryContextId) {
+              throw new Error('Security: companyId does not match session context');
+            }
+            const updateResult = await toolService.updateCompanyFields({
+              companyId: args.companyId,
+              updates: Array.isArray(args.updates) ? args.updates : [],
+              sessionId: options.sessionId,
+              messageId: options.assistantMessageId,
+              toolCallId: toolCall.id,
+              workspaceId: sessionWorkspaceId
+            });
+            result = updateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'folders_list') {
+            if (primaryContextType !== 'company' && primaryContextType !== 'folder') {
+              throw new Error('Security: folders_list is only available in company/folder context');
+            }
+            const companyId =
+              primaryContextType === 'company' && primaryContextId
+                ? primaryContextId
+                : (typeof args.companyId === 'string' ? args.companyId : null);
+            const listResult = await toolService.listFolders({
+              workspaceId: sessionWorkspaceId,
+              companyId,
+              idsOnly: !!args.idsOnly,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = listResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'folder_get') {
+            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
+            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
+              throw new Error('Security: folder_get is only available in folder/executive_summary context');
+            }
+            if (primaryContextType === 'executive_summary') {
+              if (!primaryContextId || args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            } else if (primaryContextType === 'folder' && primaryContextId) {
+              if (args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            }
+            const getResult = await toolService.getFolder(args.folderId, {
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = getResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'folder_update') {
+            if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
+            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
+              throw new Error('Security: folderId does not match session context');
+            }
+            const updateResult = await toolService.updateFolderFields({
+              folderId: args.folderId,
+              updates: Array.isArray(args.updates) ? args.updates : [],
+              sessionId: options.sessionId,
+              messageId: options.assistantMessageId,
+              toolCallId: toolCall.id,
+              workspaceId: sessionWorkspaceId
+            });
+            result = updateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'usecases_list') {
+            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow listing any folderId (workspace-scoped).
+            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
+              throw new Error('Security: usecases_list is only available in folder/executive_summary context');
+            }
+            if (primaryContextType === 'executive_summary') {
+              if (!primaryContextId || args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            } else if (primaryContextType === 'folder' && primaryContextId) {
+              if (args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            }
+            const listResult = await toolService.listUseCasesForFolder(args.folderId, {
+              workspaceId: sessionWorkspaceId,
+              idsOnly: !!args.idsOnly,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = listResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'executive_summary_get') {
+            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
+            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
+              throw new Error('Security: executive_summary_get is only available in folder/executive_summary context');
+            }
+            if (primaryContextType === 'executive_summary') {
+              if (!primaryContextId || args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            } else if (primaryContextType === 'folder' && primaryContextId) {
+              if (args.folderId !== primaryContextId) {
+                throw new Error('Security: folderId does not match session context');
+              }
+            }
+            const getResult = await toolService.getExecutiveSummary(args.folderId, {
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = getResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'executive_summary_update') {
+            if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
+            if ((primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') || !primaryContextId || args.folderId !== primaryContextId) {
+              throw new Error('Security: folderId does not match session context');
+            }
+            const updateResult = await toolService.updateExecutiveSummaryFields({
+              folderId: args.folderId,
+              updates: Array.isArray(args.updates) ? args.updates : [],
+              sessionId: options.sessionId,
+              messageId: options.assistantMessageId,
+              toolCallId: toolCall.id,
+              workspaceId: sessionWorkspaceId
+            });
+            result = updateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
               { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
               streamSeq,
               options.assistantMessageId
