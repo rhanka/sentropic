@@ -101,6 +101,13 @@
     st.steps = [...st.steps, { title, body }].slice(-stepLimit);
   };
 
+  const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
+    if (!prev) return false;
+    if (!delta || !delta.startsWith('**')) return false;
+    // Only insert a break if the previous content does not end with whitespace (space/tab/newline).
+    return !/\s$/.test(prev);
+  };
+
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
     if (!Number.isFinite(sequence)) return;
     if (sequence <= st.lastSeq) return;
@@ -124,7 +131,9 @@
       st.sawStarted = false;
       st.stepTitle = 'Raisonnement';
       const delta = String(data?.delta ?? '');
-      st.auxText = (st.auxText || '') + delta;
+      const prev = st.auxText || '';
+      const sep = needsReasoningSectionBreak(prev, delta) ? '\n\n' : '';
+      st.auxText = prev + sep + delta;
       upsertStep('Raisonnement', st.auxText);
     } else if (eventType === 'tool_call_start') {
       st.sawTools = true;
