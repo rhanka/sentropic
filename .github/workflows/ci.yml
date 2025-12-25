@@ -421,7 +421,7 @@ jobs:
   # Deploy UI
   deploy-ui:
     runs-on: ubuntu-latest
-    needs: [changes, publish-ui-image, wait-for-api]
+    needs: [changes, build-ui, publish-ui-image, wait-for-api]
     if: ( needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true' ) && github.ref == 'refs/heads/main'
     permissions:
       pages: write
