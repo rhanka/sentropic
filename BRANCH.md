@@ -311,6 +311,154 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
   - updates are possible in read-only mode
   - tool result payloads are too large / unusable in the UI
 
+## Automated Test Plan (post-UAT)
+
+This section inventories **all test entrypoints** (Make targets) and **all test files** across `api/`, `ui/`, and `e2e/`, and calls out what should be updated/extended for the changes introduced on this branch.
+
+### Make targets / commands (source: `Makefile` + `.cursor/rules/testing.mdc`)
+
+- **API**
+  - `make test-api` (composite): `test-api-smoke`, `test-api-unit`, `test-api-endpoints`, `test-api-queue`, `test-api-security`, `test-api-ai`, `test-api-limit`
+  - `make test-api-unit [SCOPE=tests/unit/foo.test.ts]`
+  - `make test-api-smoke [SCOPE=tests/smoke/foo.test.ts]`
+  - `make test-api-endpoints [SCOPE=tests/api/foo.test.ts]`
+  - `make test-api-queue [SCOPE=tests/queue/foo.test.ts]`
+  - `make test-api-ai [SCOPE=tests/ai/foo.test.ts]`
+  - `make test-api-security [SCOPE=tests/security/foo.test.ts]`
+  - `make test-api-limit [SCOPE=tests/limit/foo.test.ts]`
+
+- **UI (Vitest)**
+  - `make test-ui [SCOPE=tests/stores/session.test.ts]`
+
+- **E2E (Playwright)**
+  - `make test-e2e [E2E_SPEC=tests/usecase-detail.spec.ts]`
+  - `make test-smoke` (quick E2E subset)
+
+### Test files inventory
+
+#### API tests (`api/tests/**`)
+
+- **Unit** (`api/tests/unit/`)
+  - `auth/admin-registration.test.ts`
+  - `auth/challenge-manager.test.ts`
+  - `auth/magic-link.test.ts`
+  - `auth/session-manager.test.ts`
+  - `auth/webauthn-authentication.test.ts`
+  - `auth/webauthn-config.test.ts`
+  - `auth/webauthn-registration.test.ts`
+  - `cors.test.ts`
+  - `fibonacci-mapping.test.ts`
+  - `id.test.ts`
+  - `json.test.ts`
+  - `matrix.test.ts`
+  - `score-validation.test.ts`
+  - `scoring.test.ts`
+  - `stream-service.test.ts`
+  - `tool-service.test.ts`  ← includes chat tools core handlers (companies/folders/executive summary/matrix/usecases_list)
+  - `tool-service.test.ts`
+  - `tools.test.ts` (web tools extraction)
+  - `types.test.ts`
+  - `usecase-list-normalization.test.ts`
+
+- **API endpoints** (`api/tests/api/`)
+  - `admin-users.test.ts`
+  - `admin.test.ts`
+  - `ai-settings.test.ts`
+  - `analytics.test.ts`
+  - `auth/authentication.test.ts`
+  - `auth/credentials.test.ts`
+  - `auth/magic-link.test.ts`
+  - `auth/registration.test.ts`
+  - `auth/session.test.ts`
+  - `business-config.test.ts`
+  - `chat.test.ts`
+  - `companies.test.ts`
+  - `folders.test.ts`
+  - `health.test.ts`
+  - `me.test.ts`
+  - `prompts.test.ts`
+  - `settings.test.ts`
+  - `streams.test.ts`
+  - `use-cases.test.ts`
+
+- **AI** (`api/tests/ai/`)
+  - `chat-sync.test.ts`
+  - `chat-tools.test.ts`
+  - `company-enrichment-sync.test.ts`
+  - `executive-summary-auto.test.ts`
+  - `executive-summary-sync.test.ts`
+  - `usecase-generation-async.test.ts`
+  - `usecase-generation-sync.test.ts`
+
+- **Queue** (`api/tests/queue/`)
+  - `queue.test.ts`
+
+- **Smoke** (`api/tests/smoke/`)
+  - `api-health.test.ts`
+  - `database.test.ts`
+  - `restore-validation.test.ts`
+
+- **Security** (`api/tests/security/`)
+  - `challenge-replay-protection.test.ts`
+  - `cors-security.test.ts`
+  - `counter-validation.test.ts`
+  - `security-basic.test.ts`
+  - `security-headers.test.ts`
+
+- **Limit** (`api/tests/limit/`)
+  - `rate-limiting.test.ts`
+
+#### UI unit tests (`ui/tests/**`)
+
+- `tests/stores/companies.test.ts`
+- `tests/stores/folders.test.ts`
+- `tests/stores/session.test.ts`
+- `tests/stores/streamHub.test.ts`
+- `tests/stores/toast.test.ts`
+- `tests/stores/useCases.test.ts`
+- `tests/utils/api.test.ts`
+- `tests/utils/scoring.test.ts`
+
+#### E2E tests (`e2e/tests/**`)
+
+- `access-control.spec.ts`
+- `admin-users.spec.ts`
+- `ai-generation.spec.ts`
+- `app.spec.ts`
+- `auth-devices.spec.ts`
+- `auth-routes.spec.ts`
+- `auth-simple.spec.ts`
+- `auth-webauthn.spec.ts`
+- `auth-workflow.spec.ts`
+- `chat.spec.ts`
+- `companies-detail.spec.ts`
+- `companies.spec.ts`
+- `dashboard.spec.ts`
+- `error-handling.spec.ts`
+- `executive-summary.spec.ts`
+- `folders.spec.ts`
+- `i18n.spec.ts`
+- `matrix.spec.ts`
+- `settings.spec.ts`
+- `tenancy-workspaces.spec.ts`
+- `usecase-detail.spec.ts`
+- `usecase.spec.ts`
+- `workflow.spec.ts`
+
+### Coverage vs changes (what to update / extend vs `main`)
+
+#### Already covered by existing automated tests
+- [x] **ToolService handlers** for companies/folders/executive summary/matrix/usecases list: `api/tests/unit/tool-service-company-folder.test.ts`
+- [x] **SSE/event hub mechanics** (client-side caching/replay): `ui/tests/stores/streamHub.test.ts`
+- [x] **web_extract batching rules** at service level: `api/tests/unit/tools.test.ts`
+
+#### Recommended additions / adjustments
+- [ ] **ChatService context gating + security rules**: add focused unit/integration coverage for context-id mismatch & cross-context constraints (currently mostly covered via UAT + broader AI tests).
+- [ ] **Naming migration preference**: update/add AI tests to assert `usecase_get` / `usecase_update` are *preferred* (aliases still accepted). Candidate: extend `api/tests/ai/chat-tools.test.ts`.
+- [ ] **UI route context detection contract** (`ChatPanel.svelte`): add a UI unit test for `detectContextFromRoute` or cover via E2E `chat.spec.ts` on key routes (`/entreprises`, `/dossiers`, `/cas-usage`, `/dashboard`, `/matrice`).
+- [ ] **No-refresh reference updates** on `/cas-usage/[id]`: extend `e2e/tests/usecase-detail.spec.ts` with a step that updates references via chat and asserts UI updates without hard reload.
+- [ ] **Dashboard auto-refresh** after executive summary tool update: extend `e2e/tests/dashboard.spec.ts` to cover SSE-driven refresh (or at minimum confirm via API event + UI re-render).
+
 ## Plan / Todo
 - [x] Inventory existing services/endpoints/queries for folders/use cases/executive summaries/companies (reuse first).
 - [x] Align tool contracts with existing “use case” tool patterns (field selection + ids-only mode).
@@ -319,7 +467,11 @@ Goal: validate the **end-to-end behavior** of the new tool-calls from the UI (an
 - [x] Add unit tests for new ToolService methods.
 - [x] Run `make lint-api` and `make typecheck-api` (pre-UAT quality gate).
 - [x] UAT (manual) by F.A before running tests.
-- [ ] Run required test suite via Make after UAT: `make test-api [SCOPE=...]`.
+- [x] Run required test suite via Make after UAT:
+  - [x] `make test-api-unit SCOPE=tests/unit/tool-service.test.ts`
+  - [x] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts`
+  - [x] `make test-api`
+  - [x] `make test-ui`
 - [ ] Push branch and verify GitHub Actions status for this branch.
 
 ## Status
