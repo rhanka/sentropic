@@ -420,21 +420,54 @@ export class QueueManager {
     // Enrichir l'entreprise avec streaming
     // enrichCompany utilise le streaming si streamId est fourni
     const enrichedData: CompanyData = await enrichCompany(companyName, model, signal, streamId);
+
+    // Safety: PostgreSQL text/json cannot contain NUL (\u0000). Strip control chars before DB write.
+    const sanitizePgText = (input: string): string => {
+      let out = '';
+      for (let i = 0; i < input.length; i += 1) {
+        const code = input.charCodeAt(i);
+        if (code === 0) continue;
+        if (code < 32 && code !== 9 && code !== 10 && code !== 13) continue;
+        out += input[i];
+      }
+      return out;
+    };
+    const clean = (s: string) => sanitizePgText(typeof s === 'string' ? s : String(s ?? ''));
+    const cleanedReferences = Array.isArray(enrichedData.references)
+      ? enrichedData.references
+          .map((r) => ({
+            title: clean(r.title),
+            url: clean(r.url),
+            excerpt: r.excerpt ? clean(r.excerpt) : undefined,
+          }))
+          .filter((r) => r.title.trim() && r.url.trim())
+      : [];
+    const cleanedData: CompanyData = {
+      industry: clean(enrichedData.industry),
+      size: clean(enrichedData.size),
+      products: clean(enrichedData.products),
+      processes: clean(enrichedData.processes),
+      kpis: clean(enrichedData.kpis),
+      challenges: clean(enrichedData.challenges),
+      objectives: clean(enrichedData.objectives),
+      technologies: clean(enrichedData.technologies),
+      references: cleanedReferences,
+    };
     
     // Store enriched profile in organizations.data JSONB (legacy prompt shape)
     await db
       .update(organizations)
       .set({
         data: {
-          industry: enrichedData.industry,
-          size: enrichedData.size,
-          products: enrichedData.products,
-          processes: enrichedData.processes,
-          kpis: enrichedData.kpis,
-          challenges: enrichedData.challenges,
-          objectives: enrichedData.objectives,
-          technologies: enrichedData.technologies,
-          references: enrichedData.references ?? [],
+          industry: cleanedData.industry,
+          size: cleanedData.size,
+          products: cleanedData.products,
+          processes: cleanedData.processes,
+          kpis: cleanedData.kpis,
+          challenges: cleanedData.challenges,
+          objectives: cleanedData.objectives,
+          technologies: cleanedData.technologies,
+          references: cleanedData.references ?? [],
         },
         status: 'completed',
         updatedAt: new Date(),

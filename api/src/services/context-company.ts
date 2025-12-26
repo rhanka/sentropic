@@ -13,13 +13,28 @@ export interface CompanyData {
   references?: Array<{ title: string; url: string; excerpt?: string }>;
 }
 
+function sanitizePgText(input: string): string {
+  // PostgreSQL text/JSON cannot contain NUL (\u0000). Also strip other control chars that can break JSON ingestion.
+  // Keep: \t \n \r.
+  let out = '';
+  for (let i = 0; i < input.length; i += 1) {
+    const code = input.charCodeAt(i);
+    // NUL is forbidden in Postgres text/json.
+    if (code === 0) continue;
+    // Strip other ASCII control chars except tab/newline/carriage return.
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) continue;
+    out += input[i];
+  }
+  return out;
+}
+
 function normalizeCompanyField(value: unknown): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return sanitizePgText(value);
   if (value === null || value === undefined) return '';
   try {
-    return JSON.stringify(value);
+    return sanitizePgText(JSON.stringify(value));
   } catch {
-    return String(value);
+    return sanitizePgText(String(value));
   }
 }
 
@@ -39,9 +54,9 @@ function coerceCompanyData(value: unknown): CompanyData {
           .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
           .filter((r): r is Record<string, unknown> => !!r)
           .map((r) => ({
-            title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
-            url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
-            excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+            title: sanitizePgText(typeof r.title === 'string' ? r.title : String(r.title ?? '')),
+            url: sanitizePgText(typeof r.url === 'string' ? r.url : String(r.url ?? '')),
+            excerpt: typeof r.excerpt === 'string' ? sanitizePgText(r.excerpt) : undefined,
           }))
           .filter((r) => r.title.trim() && r.url.trim())
       : undefined
