@@ -448,13 +448,15 @@ This section inventories **all test entrypoints** (Make targets) and **all test 
 ### Coverage vs changes (what to update / extend vs `main`)
 
 #### Already covered by existing automated tests
-- [x] **ToolService handlers** for companies/folders/executive summary/matrix/usecases list: `api/tests/unit/tool-service-company-folder.test.ts`
+- [x] **ToolService handlers** for companies/folders/executive summary/matrix/usecases list: `api/tests/unit/tool-service.test.ts`
+- [x] **ChatService tool gating + security wiring** (tools availability per context + `matrix_get` security): `api/tests/unit/chat-service-tools.test.ts`
 - [x] **SSE/event hub mechanics** (client-side caching/replay): `ui/tests/stores/streamHub.test.ts`
 - [x] **web_extract batching rules** at service level: `api/tests/unit/tools.test.ts`
 
 #### Recommended additions / adjustments
-- [ ] **ChatService context gating + security rules**: add focused unit/integration coverage for context-id mismatch & cross-context constraints (currently mostly covered via UAT + broader AI tests).
+- [x] **ChatService context gating + security rules**: focused unit coverage added (see above).
 - [ ] **Naming migration preference**: update/add AI tests to assert `usecase_get` / `usecase_update` are *preferred* (aliases still accepted). Candidate: extend `api/tests/ai/chat-tools.test.ts`.
+- [x] **Folder → Matrix tool integration (real LLM)**: `api/tests/ai/chat-tools.test.ts` includes a folder-context scenario asserting `matrix_get` tool call.
 - [ ] **UI route context detection contract** (`ChatPanel.svelte`): add a UI unit test for `detectContextFromRoute` or cover via E2E `chat.spec.ts` on key routes (`/entreprises`, `/dossiers`, `/cas-usage`, `/dashboard`, `/matrice`).
 - [ ] **No-refresh reference updates** on `/cas-usage/[id]`: extend `e2e/tests/usecase-detail.spec.ts` with a step that updates references via chat and asserts UI updates without hard reload.
 - [ ] **Dashboard auto-refresh** after executive summary tool update: extend `e2e/tests/dashboard.spec.ts` to cover SSE-driven refresh (or at minimum confirm via API event + UI re-render).
@@ -469,15 +471,16 @@ This section inventories **all test entrypoints** (Make targets) and **all test 
 - [x] UAT (manual) by F.A before running tests.
 - [x] Run required test suite via Make after UAT:
   - [x] `make test-api-unit SCOPE=tests/unit/tool-service.test.ts`
-  - [x] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts`
-  - [x] `make test-api`
-  - [x] `make test-ui`
+  - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts`
+  - [x] `make test-api-ai`
+  - [ ] `make test-api`
+  - [ ] `make test-ui`
 - [ ] Push branch and verify GitHub Actions status for this branch.
 
 ## Status
-- **Progress**: Core tools implemented; lint/typecheck completed; tests intentionally delayed for UAT
-- **Current**: UAT by Antoine (no `make test-*` before that)
+- **Progress**: Core tools implemented; API tests (unit + AI) executed successfully post-UAT
+- **Current**: Finishing documentation + commits; UI tests next
 - **Next**:
-  - Wait for UAT feedback
-  - After UAT: run `make test-api SCOPE=tests/unit/tool-service-company-folder.test.ts` then broader `make test-api`
-  - Naming migration implemented (`usecase_get` / `usecase_update` aliases)
+  - Run `make test-ui` (and fix if needed)
+  - Run `make test-api` for full API suite confidence
+  - Push branch and verify GitHub Actions status
