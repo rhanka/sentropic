@@ -257,6 +257,49 @@ describe('Chat AI - Tool Calls Integration', () => {
     }, 30000);
   });
 
+  describe('folder context - matrix_get tool (real integration)', () => {
+    it('should call matrix_get when explicitly requested in folder context', async () => {
+      const adminUser = await createAuthenticatedUser('admin_app');
+
+      const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: [
+          `Tu DOIS appeler le tool \`matrix_get\` maintenant avec folderId="${folderId}".`,
+          `N'invente rien. Ne réponds pas avant d'avoir appelé \`matrix_get\`.`,
+          `Après le tool_call_result, réponds uniquement avec: OK`
+        ].join('\n'),
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: getTestModel()
+      });
+
+      expect(chatResponse.status).toBe(200);
+      const chatData = await chatResponse.json();
+      const { jobId, assistantMessageId } = chatData;
+
+      await waitForJobCompletion(jobId, adminUser, 30);
+
+      const streamEventsRes = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/streams/events/${assistantMessageId}`,
+        user.sessionToken!
+      );
+      expect(streamEventsRes.status).toBe(200);
+      const streamData = await streamEventsRes.json();
+      const events = streamData.events;
+
+      const mxStart = events.find((e: any) => e.eventType === 'tool_call_start' && e.data?.name === 'matrix_get');
+      expect(mxStart).toBeDefined();
+
+      const mxResult = events.find(
+        (e: any) => e.eventType === 'tool_call_result' && e.data?.result?.status === 'completed' && e.data?.result?.folderId === folderId
+      );
+      expect(mxResult).toBeDefined();
+
+      await cleanupAuthData(); // Cleanup admin user
+    }, 30000);
+  });
+
   describe('Security validation', () => {
     it('should reject update_usecase_field with useCaseId not matching context', async () => {
       // Créer un autre use case

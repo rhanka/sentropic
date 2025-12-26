@@ -314,6 +314,7 @@ describe('Tool Service', () => {
     let folderId: string;
     let useCaseId: string;
     let msgCompanyUpdateId: string;
+    let msgFolderUpdateId: string;
     let msgExecutiveSummaryUpdateId: string;
     let msgMatrixUpdateId: string;
 
@@ -354,12 +355,14 @@ describe('Tool Service', () => {
 
       // Create chat messages for FK constraints (context_modification_history.message_id)
       msgCompanyUpdateId = createId();
+      msgFolderUpdateId = createId();
       msgExecutiveSummaryUpdateId = createId();
       msgMatrixUpdateId = createId();
       await db.insert(chatMessages).values([
         { id: msgCompanyUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 1, createdAt: new Date() },
-        { id: msgExecutiveSummaryUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 2, createdAt: new Date() },
-        { id: msgMatrixUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 3, createdAt: new Date() }
+        { id: msgFolderUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 2, createdAt: new Date() },
+        { id: msgExecutiveSummaryUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 3, createdAt: new Date() },
+        { id: msgMatrixUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 4, createdAt: new Date() }
       ]);
 
       companyId = createId();
@@ -437,6 +440,36 @@ describe('Tool Service', () => {
       }
     });
 
+    it('should list folders (idsOnly) in workspace', async () => {
+      const res = await toolService.listFolders({ workspaceId, idsOnly: true });
+      expect('ids' in res).toBe(true);
+      if ('ids' in res) {
+        expect(res.ids).toContain(folderId);
+        expect(res.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('should get folder with select and parse JSON fields', async () => {
+      const res = await toolService.getFolder(folderId, {
+        workspaceId,
+        select: ['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']
+      });
+
+      expect(res.folderId).toBe(folderId);
+      expect(res.selected).toEqual(['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']);
+      expect(res.data.id).toBe(folderId);
+      expect(res.data.name).toBe('Folder 1');
+      expect(res.data.companyId).toBe(companyId);
+
+      // matrixConfig / executiveSummary are stored as strings in DB but returned as parsed objects here.
+      const mx = res.data.matrixConfig as any;
+      const es = res.data.executiveSummary as any;
+      expect(typeof mx).toBe('object');
+      expect(typeof es).toBe('object');
+      expect(mx?.valueAxes).toBeDefined();
+      expect(es?.introduction).toBe('Hello');
+    });
+
     it('should get and update a company, writing history + chat context when sessionId provided', async () => {
       const before = await toolService.getCompany(companyId, { workspaceId, select: ['name', 'industry'] });
       expect(before.companyId).toBe(companyId);
@@ -464,6 +497,45 @@ describe('Tool Service', () => {
         .select()
         .from(chatContexts)
         .where(and(eq(chatContexts.contextType, 'company'), eq(chatContexts.contextId, companyId)));
+      expect(contexts.length).toBe(1);
+    });
+
+    it('should update a folder and write folder history + chat context when sessionId provided', async () => {
+      const before = await toolService.getFolder(folderId, { workspaceId, select: ['name', 'executiveSummary'] });
+      expect(before.folderId).toBe(folderId);
+      expect(before.data.name).toBe('Folder 1');
+      expect((before.data as any).executiveSummary?.introduction).toBe('Hello');
+
+      const updated = await toolService.updateFolderFields({
+        folderId,
+        updates: [
+          { field: 'name', value: 'Folder 1 updated' },
+          { field: 'executiveSummary', value: { introduction: 'Updated intro (folder)' } }
+        ],
+        workspaceId,
+        sessionId: testSessionId,
+        messageId: msgFolderUpdateId,
+        toolCallId: 'tool-f-1'
+      });
+      expect(updated.folderId).toBe(folderId);
+      expect(updated.applied.length).toBe(2);
+      expect(updated.applied.map((a) => a.field)).toEqual(['name', 'executiveSummary']);
+
+      const after = await toolService.getFolder(folderId, { workspaceId, select: ['name', 'executiveSummary'] });
+      expect(after.data.name).toBe('Folder 1 updated');
+      expect((after.data as any).executiveSummary?.introduction).toBe('Updated intro (folder)');
+
+      const history = await db
+        .select()
+        .from(contextModificationHistory)
+        .where(and(eq(contextModificationHistory.contextType, 'folder'), eq(contextModificationHistory.contextId, folderId)));
+      expect(history.length).toBeGreaterThan(0);
+      expect(history.map((h) => h.field)).toEqual(expect.arrayContaining(['name', 'executiveSummary']));
+
+      const contexts = await db
+        .select()
+        .from(chatContexts)
+        .where(and(eq(chatContexts.contextType, 'folder'), eq(chatContexts.contextId, folderId)));
       expect(contexts.length).toBe(1);
     });
 
