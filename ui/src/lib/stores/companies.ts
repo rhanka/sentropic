@@ -1,80 +1,16 @@
-import { writable } from 'svelte/store';
-import { ApiError } from '$lib/utils/api';
+// Backward-compatible store: "companies" maps to "organizations".
+// Keep this file to avoid breaking many imports while UI routes are migrated.
+export {
+  organizationsStore as companiesStore,
+  currentOrganizationId as currentCompanyId,
+  fetchOrganizations as fetchCompanies,
+  fetchOrganizationById as fetchCompanyById,
+  createOrganization as createCompany,
+  updateOrganization as updateCompany,
+  deleteOrganization as deleteCompany,
+  enrichOrganization as enrichCompany,
+  createDraftOrganization as createDraftCompany,
+  startOrganizationEnrichment as startCompanyEnrichment,
+} from './organizations';
 
-export type Company = {
-  id: string;
-  name: string;
-  industry?: string;
-  size?: string;
-  products?: string;
-  processes?: string;
-  challenges?: string;
-  objectives?: string;
-  technologies?: string;
-  status?: 'draft' | 'enriching' | 'completed';
-};
-
-export type CompanyEnrichmentData = {
-  normalizedName: string;
-  industry: string;
-  size: string;
-  products: string;
-  processes: string;
-  challenges: string;
-  objectives: string;
-  technologies: string;
-};
-
-export const companiesStore = writable<Company[]>([]);
-export const currentCompanyId = writable<string | null>(null);
-
-import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
-import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-
-// Fonctions API
-export const fetchCompanies = async (): Promise<Company[]> => {
-  const scoped = getScopedWorkspaceIdForAdmin();
-  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-  const data = await apiGet<{ items: Company[] }>(`/companies${qs}`);
-  return data.items;
-};
-
-export const fetchCompanyById = async (id: string): Promise<Company> => {
-  const scoped = getScopedWorkspaceIdForAdmin();
-  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-  return await apiGet<Company>(`/companies/${id}${qs}`);
-};
-
-export const createCompany = async (company: Omit<Company, 'id'>): Promise<Company> => {
-  return await apiPost<Company>('/companies', company);
-};
-
-export const updateCompany = async (id: string, company: Partial<Company>): Promise<Company> => {
-  return await apiPut<Company>(`/companies/${id}`, company);
-};
-
-export const deleteCompany = async (id: string): Promise<void> => {
-  try {
-    await apiDelete(`/companies/${id}`);
-  } catch (error: any) {
-    // Gérer spécifiquement l'erreur 409 (Conflict - dependencies exist)
-    if (error instanceof ApiError && error.status === 409 && error.data?.details) {
-      const folders = error.data.details.folders || 0;
-      const useCases = error.data.details.useCases || 0;
-      throw new Error(`Impossible de supprimer l'entreprise (${folders} dossier(s) et ${useCases} cas d'usage)`);
-    }
-    throw error;
-  }
-};
-
-export const enrichCompany = async (companyName: string): Promise<CompanyEnrichmentData> => {
-  return apiPost<CompanyEnrichmentData>('/companies/ai-enrich', { name: companyName });
-};
-
-export const createDraftCompany = async (name: string): Promise<Company> => {
-  return apiPost<Company>('/companies/draft', { name });
-};
-
-export const startCompanyEnrichment = async (companyId: string): Promise<void> => {
-  await apiPost(`/companies/${companyId}/enrich`);
-};
+export type { Organization as Company, OrganizationEnrichmentData as CompanyEnrichmentData } from './organizations';

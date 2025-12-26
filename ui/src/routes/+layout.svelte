@@ -31,6 +31,7 @@
   // Routes protégées (nécessitent une authentification)
   const PROTECTED_ROUTES = [
     '/home',
+    '/organisations',
     '/entreprises',
     '/dossiers',
     '/cas-usage',
@@ -48,9 +49,10 @@
 
   // Vérifier si une route est protégée
   function isProtectedRoute(path: string): boolean {
-    // Routes dynamiques avec paramètres (ex: /entreprises/[id], /entreprises/new, /dossiers/[id], /cas-usage/[id])
+    // Routes dynamiques avec paramètres (ex: /organisations/[id], /organisations/new, /dossiers/[id], /cas-usage/[id])
     // Ces routes sont toutes protégées
     if (
+      path.startsWith('/organisations/') ||
       path.startsWith('/entreprises/') || 
       path.startsWith('/dossiers/') || 
       path.startsWith('/cas-usage/')

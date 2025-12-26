@@ -97,8 +97,8 @@
         {#if $companiesStore.length === 0}
           <p class="text-sm text-slate-500 mt-1">
             Aucune entreprise disponible. 
-            <a href="/entreprises" class="text-blue-600 hover:text-blue-800 underline">
-              Créer une entreprise
+            <a href="/organisations" class="text-blue-600 hover:text-blue-800 underline">
+              Créer une organisation
             </a>
           </p>
         {/if}
@@ -117,9 +117,9 @@
   {#if !isLoading && $companiesStore.length > 0}
     <div class="rounded border border-slate-200 bg-white p-6 shadow-sm">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Entreprises disponibles</h2>
-        <a href="/entreprises" class="text-sm text-blue-600 hover:text-blue-800 underline">
-          Voir toutes les entreprises
+        <h2 class="text-lg font-semibold">Organisations disponibles</h2>
+        <a href="/organisations" class="text-sm text-blue-600 hover:text-blue-800 underline">
+          Voir toutes les organisations
         </a>
       </div>
       <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -141,8 +141,8 @@
       </div>
       {#if $companiesStore.length > 6}
         <div class="mt-4 text-center">
-          <a href="/entreprises" class="text-sm text-blue-600 hover:text-blue-800 underline">
-            Voir {$companiesStore.length - 6} autres entreprises...
+          <a href="/organisations" class="text-sm text-blue-600 hover:text-blue-800 underline">
+            Voir {$companiesStore.length - 6} autres organisations...
           </a>
         </div>
       {/if}
