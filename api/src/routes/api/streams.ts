@@ -98,6 +98,73 @@ function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function parseOrgData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function coerceMarkdownString(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const items = value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!items.length) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
+  }
+  return undefined;
+}
+
+function coerceReferences(value: unknown): Array<{ title: string; url: string; excerpt?: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => !!v)
+    .map((r) => ({
+      title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
+      url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
+      excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+    }))
+    .filter((r) => r.title.trim() && r.url.trim());
+}
+
+function hydrateOrganizationForSse(row: Record<string, unknown>): Record<string, unknown> {
+  const data = parseOrgData(row.data);
+  const legacyKpisCombined = (() => {
+    const sector = coerceMarkdownString(data.kpis_sector);
+    const org = coerceMarkdownString(data.kpis_org);
+    const parts = [sector, org].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+    if (!parts.length) return undefined;
+    return parts.join('\n\n');
+  })();
+
+  return {
+    id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
+    name: typeof row.name === 'string' ? row.name : String(row.name ?? ''),
+    status: row.status ?? null,
+    industry: typeof data.industry === 'string' ? data.industry : undefined,
+    size: typeof data.size === 'string' ? data.size : undefined,
+    products: coerceMarkdownString(data.products),
+    processes: coerceMarkdownString(data.processes),
+    kpis: coerceMarkdownString(data.kpis) ?? legacyKpisCombined,
+    challenges: coerceMarkdownString(data.challenges),
+    objectives: coerceMarkdownString(data.objectives),
+    technologies: coerceMarkdownString(data.technologies),
+    references: coerceReferences(data.references),
+  };
+}
+
 async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const requested = url.searchParams.get('workspace_id');
@@ -327,7 +394,7 @@ streamsRouter.get('/sse', async (c) => {
             WHERE id = ${companyId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
           if (!row?.id || typeof row.id !== 'string') return;
-          push(sseCompanyEvent(companyId, { company: row }));
+          push(sseCompanyEvent(companyId, { company: hydrateOrganizationForSse(row) }));
         } catch {
           // ignore
         }
