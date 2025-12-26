@@ -430,11 +430,11 @@ export class QueueManager {
           size: enrichedData.size,
           products: enrichedData.products,
           processes: enrichedData.processes,
+          kpis: enrichedData.kpis,
           challenges: enrichedData.challenges,
           objectives: enrichedData.objectives,
           technologies: enrichedData.technologies,
-          kpis_sector: [],
-          kpis_org: [],
+          references: enrichedData.references ?? [],
         },
         status: 'completed',
         updatedAt: new Date(),
@@ -465,8 +465,8 @@ export class QueueManager {
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
     
-    // Récupérer les informations de l'entreprise si nécessaire
-    let companyInfo = '';
+    // Récupérer les informations de l'organisation si nécessaire
+    let organizationInfo = '';
     if (resolvedOrganizationId) {
       try {
         const [org] = await db
@@ -475,7 +475,7 @@ export class QueueManager {
           .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, workspaceId)));
         if (org) {
           const orgData = parseOrgData(org.data);
-          companyInfo = JSON.stringify({
+          organizationInfo = JSON.stringify({
             name: org.name,
             industry: orgData.industry,
             size: orgData.size,
@@ -485,7 +485,7 @@ export class QueueManager {
             objectives: orgData.objectives,
             technologies: orgData.technologies
           }, null, 2);
-          console.log(`📊 Organization info loaded for ${org.name}:`, companyInfo);
+          console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
         } else {
           console.warn(`⚠️ Organization not found with id: ${resolvedOrganizationId}`);
         }
@@ -498,7 +498,7 @@ export class QueueManager {
 
     // Générer la liste de cas d'usage
     const streamId = `folder_${folderId}`;
-    const useCaseList = await generateUseCaseList(input, companyInfo, selectedModel, signal, streamId);
+    const useCaseList = await generateUseCaseList(input, organizationInfo, selectedModel, signal, streamId);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -600,14 +600,14 @@ export class QueueManager {
       throw new Error('Configuration de matrice non trouvée');
     }
     
-    // Organization info (kept as companyInfo variable for prompt backward-compat)
-    let companyInfo = '';
+    // Organization info (prompt uses organization_info)
+    let organizationInfo = '';
     if (folder.organizationId) {
       try {
         const [org] = await db.select().from(organizations).where(eq(organizations.id, folder.organizationId));
         if (org) {
           const orgData = parseOrgData(org.data);
-          companyInfo = JSON.stringify(
+          organizationInfo = JSON.stringify(
             {
               name: org.name,
               industry: orgData.industry,
@@ -621,7 +621,7 @@ export class QueueManager {
             null,
             2
           );
-          console.log(`📊 Organization info loaded for ${org.name}:`, companyInfo);
+          console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
         } else {
           console.warn(`⚠️ Organization not found with id: ${folder.organizationId}`);
         }
@@ -634,7 +634,15 @@ export class QueueManager {
     
     // Générer le détail
     const streamId = `usecase_${useCaseId}`;
-    const useCaseDetail = await generateUseCaseDetail(useCaseName, context, matrixConfig, companyInfo, selectedModel, signal, streamId);
+    const useCaseDetail = await generateUseCaseDetail(
+      useCaseName,
+      context,
+      matrixConfig,
+      organizationInfo,
+      selectedModel,
+      signal,
+      streamId
+    );
     
     // Valider les scores générés
     const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);

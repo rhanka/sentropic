@@ -40,6 +40,7 @@ export type UseCaseData = {
   references?: Array<{
     title: string;
     url: string;
+    excerpt?: string;
   }>;
   
   // === Scores détaillés (pour recalcul dynamique) ===

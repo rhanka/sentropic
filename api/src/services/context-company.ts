@@ -6,9 +6,11 @@ export interface CompanyData {
   size: string;
   products: string;
   processes: string;
+  kpis: string;
   challenges: string;
   objectives: string;
   technologies: string;
+  references?: Array<{ title: string; url: string; excerpt?: string }>;
 }
 
 function normalizeCompanyField(value: unknown): string {
@@ -28,9 +30,21 @@ function coerceCompanyData(value: unknown): CompanyData {
     size: normalizeCompanyField(rec.size),
     products: normalizeCompanyField(rec.products),
     processes: normalizeCompanyField(rec.processes),
+    kpis: normalizeCompanyField(rec.kpis),
     challenges: normalizeCompanyField(rec.challenges),
     objectives: normalizeCompanyField(rec.objectives),
-    technologies: normalizeCompanyField(rec.technologies)
+    technologies: normalizeCompanyField(rec.technologies),
+    references: Array.isArray(rec.references)
+      ? rec.references
+          .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
+          .filter((r): r is Record<string, unknown> => !!r)
+          .map((r) => ({
+            title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
+            url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
+            excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+          }))
+          .filter((r) => r.title.trim() && r.url.trim())
+      : undefined
   };
 }
 
@@ -82,7 +96,7 @@ export const enrichCompany = async (
 
   const industriesList = industries.industries.map(i => i.name).join(', ');
   const prompt = companyInfoPrompt
-    .replace('{{company_name}}', companyName)
+    .replace('{{organization_name}}', companyName)
     .replace('{{industries}}', industriesList);
 
   const finalStreamId = streamId || `company_enrich_${Date.now()}`;
@@ -132,7 +146,7 @@ export const enrichCompanyStream = async (
 
   const industriesList = industries.industries.map(i => i.name).join(', ');
   const prompt = companyInfoPrompt
-    .replace('{{company_name}}', companyName)
+    .replace('{{organization_name}}', companyName)
     .replace('{{industries}}', industriesList);
   const { content: accumulatedContent } = await executeWithToolsStream(prompt, {
     model,

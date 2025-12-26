@@ -2,31 +2,35 @@
 export const defaultPrompts = [
   {
     id: 'company_info',
-    name: 'Enrichissement d\'entreprise',
-    description: 'Prompt pour enrichir les informations d\'une entreprise',
-    content: `Recherchez et fournissez des informations complètes sur l'entreprise {{company_name}}. 
+    name: 'Enrichissement d\'organisation',
+    description: 'Prompt pour enrichir les informations d\'une organisation',
+    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
 Les secteurs d'activité disponibles sont: {{industries}}.
-Normalisez le nom de l'entreprise selon son usage officiel.
+Normalisez le nom de l'organisation selon son usage officiel.
 
 Réponds UNIQUEMENT avec un JSON valide contenant:
 {
-  "name": "Nom officiel de l'entreprise",
+  "name": "Nom officiel de l'organisation",
   "industry": "Secteur d'activité principal",
   "size": "Taille en nombre d'employés et chiffre d'affaires si disponible",
   "products": "Description détaillée des principaux produits ou services",
   "processes": "Description des processus métier clés",
-  "challenges": "Défis principaux auxquels l'entreprise est confrontée actuellement",
-  "objectives": "Objectifs stratégiques connus de l'entreprise",
-  "technologies": "Technologies ou systèmes d'information déjà utilisés"
+  "kpis": "Indicateurs de performance (une string markdown, idéalement en liste à puces) — mélange sectoriel + spécifique à l'organisation",
+  "challenges": "Défis principaux auxquels l'organisation est confrontée actuellement",
+  "objectives": "Objectifs stratégiques connus de l'organisation",
+  "technologies": "Technologies ou systèmes d'information déjà utilisés",
+  "references": [
+    { "title": "titre court", "url": "url web_search", "excerpt": "extrait factuel (1-2 phrases)" }
+  ]
 }
 
 IMPORTANT: 
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
-- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'entreprise. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
+- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
-    variables: ['company_name', 'industries']
+    variables: ['organization_name', 'industries']
   },
   {
     id: 'folder_name',
@@ -41,7 +45,7 @@ Réponds UNIQUEMENT avec un JSON valide:
   "name": "Nom du dossier",
   "description": "Description du dossier"
 }`,
-    variables: ['user_input','company_info']
+    variables: ['user_input', 'organization_info']
   },
   {
     id: 'use_case_list',
@@ -49,7 +53,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     description: 'Prompt pour générer une liste de cas d\'usage',
     content: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
-    - les informations de l'entreprise: {{company_info}},
+    - les informations de l'organisation: {{organization_info}},
     - le nombre de cas d'usage demandés par l'utilisateur, sinon génère {{use_case_count}} cas d'usages
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
@@ -79,7 +83,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     ...
   ]
 }`,
-    variables: ['user_input', 'company_info', 'use_case_count']
+    variables: ['user_input', 'organization_info', 'use_case_count']
   },
   {
     id: 'use_case_detail',
@@ -89,7 +93,7 @@ Réponds UNIQUEMENT avec un JSON valide:
 
     Le contexte initial du cas d'usage était le suivant: {{user_input}}.
 
-Les informations de l'entreprise sont les suivantes: {{company_info}}
+Les informations de l'organisation sont les suivantes: {{organization_info}}
 
 Utilise la matrice valeur/complexité fournie pour évaluer chaque axe de valeur et complexité : {{matrix}}
 
@@ -142,8 +146,8 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Donnée associée 3"
   ],
   "references": [
-    { "title": "description du lien 1", "url": "url web_search du lien 1" },
-    { "title": "description du lien 2", "url": "url web_search du lien 2" },
+    { "title": "description du lien 1", "url": "url web_search du lien 1", "excerpt": "extrait factuel (1-2 phrases)" },
+    { "title": "description du lien 2", "url": "url web_search du lien 2", "excerpt": "extrait factuel (1-2 phrases)" },
     ...
   ],
   "valueScores": [
@@ -194,7 +198,7 @@ OBLIGATOIRE:
 - Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
 - Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 - Justifie chaque score Fibonacci choisi dans la description`,
-    variables: ['use_case', 'user_input', 'matrix', 'company_info']
+    variables: ['use_case', 'user_input', 'matrix', 'organization_info']
   },
   {
     id: 'executive_summary',
@@ -204,7 +208,7 @@ OBLIGATOIRE:
 
 Contexte du dossier: {{folder_description}}
 
-Informations de l'entreprise (si disponibles): {{company_info}}
+Informations de l'organisation (si disponibles): {{organization_info}}
 
 Cas d'usage prioritaires (top cas):
 {{top_cas}}
@@ -257,6 +261,6 @@ Spécification de chaque section:
     - Les opportunités à saisir
 - synthese_executive: Synthèse exécutive du dossier en markdown (2-3 paragraphes sans titre). Résumé concis et percutant pour les décideurs, mettant en avant les points clés, les recommandations principales et l'impact attendu.
 `,
-    variables: ['folder_description', 'company_info', 'top_cas', 'use_cases']
+    variables: ['folder_description', 'organization_info', 'top_cas', 'use_cases']
   }
 ];

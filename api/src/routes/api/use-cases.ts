@@ -67,7 +67,8 @@ const useCaseInput = z.object({
   dataObjects: z.array(z.string()).optional(),
   references: z.array(z.object({
     title: z.string(),
-    url: z.string()
+    url: z.string(),
+    excerpt: z.string().optional(),
   })).optional(),
   valueScores: z.array(scoreEntry).optional(),
   complexityScores: z.array(scoreEntry).optional()
@@ -180,7 +181,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
     data.dataObjects = parseJson<string[]>(legacyRow.dataObjects) ?? [];
   }
   if (!data.references && legacyRow.references) {
-    data.references = parseJson<Array<{title: string; url: string}>>(legacyRow.references) ?? [];
+    data.references = parseJson<Array<{ title: string; url: string; excerpt?: string }>>(legacyRow.references) ?? [];
   }
   if (!data.valueScores && legacyRow.valueScores) {
     data.valueScores = parseJson<ScoreEntry[]>(legacyRow.valueScores) ?? [];
@@ -265,7 +266,9 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     if (!data.nextSteps && legacyRow.nextSteps) data.nextSteps = parseJson<string[]>(legacyRow.nextSteps) ?? [];
     if (!data.dataSources && legacyRow.dataSources) data.dataSources = parseJson<string[]>(legacyRow.dataSources) ?? [];
     if (!data.dataObjects && legacyRow.dataObjects) data.dataObjects = parseJson<string[]>(legacyRow.dataObjects) ?? [];
-    if (!data.references && legacyRow.references) data.references = parseJson<Array<{title: string; url: string}>>(legacyRow.references) ?? [];
+    if (!data.references && legacyRow.references) {
+      data.references = parseJson<Array<{ title: string; url: string; excerpt?: string }>>(legacyRow.references) ?? [];
+    }
     if (!data.valueScores && legacyRow.valueScores) data.valueScores = parseJson<ScoreEntry[]>(legacyRow.valueScores) ?? [];
     if (!data.complexityScores && legacyRow.complexityScores) data.complexityScores = parseJson<ScoreEntry[]>(legacyRow.complexityScores) ?? [];
     

@@ -141,11 +141,10 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     ? topCases.map((name, index) => `${index + 1}. ${name}`).join('\n')
     : 'Aucun cas d\'usage prioritaire identifié';
 
-  // Provide "company_info" to prompts (kept as variable name for backward-compat with prompts)
-  let companyInfo = 'No organization info available';
+  let organizationInfo = 'No organization info available';
   if (folder.organizationId) {
     const data = parseOrganizationData(folder.organizationData);
-    companyInfo = JSON.stringify(
+    organizationInfo = JSON.stringify(
       {
         name: folder.organizationName ?? 'Unknown organization',
         industry: data.industry,
@@ -170,7 +169,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   // Remplacer les variables du prompt
   const prompt = executiveSummaryPrompt
     .replace('{{folder_description}}', folder.description || folder.name)
-    .replace('{{company_info}}', companyInfo)
+    .replace('{{organization_info}}', organizationInfo)
     .replace('{{top_cas}}', topCasesFormatted)
     .replace('{{use_cases}}', useCasesFormatted);
 
