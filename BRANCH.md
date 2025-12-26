@@ -1,0 +1,76 @@
+# Feature: Organizations (rename companies + enrich org data model)
+
+## Objective
+Replace the "Company" concept with "Organization" across the stack (DB schema, API, UI) and evolve the organization profile model:
+- Deep rename `companies/company` → `organizations/organization` (types, routes, UI screens).
+- Migrate organization profile fields to a JSONB `data` payload (similar to `use_cases.data`) to reduce future schema churn.
+- Add a KPI section: sector KPIs + organization-specific KPIs.
+- Include references in AI generations (store and expose sources used by the model).
+
+## Scope / Guardrails
+- Docker-first: all installs/build/tests run through `make` (no native `npm`).
+- Minimal refactors outside the organization scope.
+- Backward-compatibility decision needed:
+  - Keep `/companies` API as alias during transition **or** break and migrate fully to `/organizations`.
+  - **UI routes rename is required**: `/entreprises` → `/organisations`.
+    - Decide whether to keep `/entreprises` as a redirect/alias temporarily (recommended) to avoid breaking deep links.
+
+## Plan / Todo
+- [ ] **Branch setup**: inventory all usages of `companies/company/entreprises` (API, UI, tests) and decide routing compatibility.
+- [ ] **DB schema**:
+  - [ ] Introduce `organizations` table (rename from `companies` via migration).
+  - [ ] Add `data JSONB` to organizations and migrate existing columns into `data`.
+  - [ ] Keep stable columns: `id`, `workspace_id`, `name`, `status`, timestamps.
+  - [ ] Add KPI shape in `data` (`kpis_sector`, `kpis_org`) and ensure defaults are safe.
+  - [ ] Update FK columns `folders.company_id` / `use_cases.company_id` naming strategy (decide whether to rename or keep as-is for minimal impact).
+- [ ] **API**:
+  - [ ] Add `organizations` router with CRUD + enrich endpoints.
+  - [ ] Update services to use organization `data` JSONB (context building, enrichment, prompts).
+  - [ ] Add generation references:
+    - [ ] Define a stable references structure in generated payloads (e.g. `references: [{ title, url, excerpt }]`).
+    - [ ] Persist references (DB field or within `use_cases.data`) and expose via API.
+  - [ ] Update tools/chat context types from `company` to `organization` (with alias if needed).
+  - [ ] Ensure OpenAPI reflects new naming.
+- [ ] **UI**:
+  - [ ] Rename store `companies.ts` → `organizations.ts` and update all imports.
+  - [ ] **Rename UI routes**:
+    - [ ] Create new routes under `/organisations` (list, detail, new).
+    - [ ] Keep `/entreprises` as redirect/alias temporarily (optional, but recommended) and update navigation/menu.
+  - [ ] Update screens to display "Organisation" terminology and render KPIs section.
+  - [ ] Ensure create/new flow still works; update EditableInput endpoints.
+  - [ ] Update i18n labels (FR-first; EN to follow if required by current coverage rules).
+- [ ] **User testing (manual) — after UI, before Data / Seed**
+  - [ ] Navigate to `/organisations` (list) and verify the page loads.
+  - [ ] Verify `/entreprises` redirects to `/organisations` (deep-link compatibility).
+  - [ ] Create a new organization, then open its detail page.
+  - [ ] Edit key fields and confirm autosave still works (EditableInput).
+  - [ ] Trigger “enrich” and confirm streaming status updates still appear.
+  - [ ] Verify folders/use-cases creation still accept an organization selection.
+  - [ ] Verify delete behavior: blocked with a clear message if dependencies exist.
+- [ ] **Data / Seed**:
+  - [ ] Move demo organization seed into `data/` (source-of-truth fixtures) and adjust `api/src/scripts/db-seed.ts`.
+  - [ ] Update test seeding (`api/tests/utils/seed-test-data.ts`) to match new table/model.
+- [ ] **Tests & Docs**:
+  - [ ] Update API unit/integration tests for organizations.
+  - [ ] Update Playwright E2E tests currently referencing companies.
+  - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`.
+  - [ ] Run required make targets before finalizing (see below).
+
+## Commits & Progress
+- [ ] **Commit 1**: docs/branch plan (BRANCH.md) + inventory notes
+- [ ] **Commit 2**: db: organizations table + migration to JSONB data
+- [ ] **Commit 3**: api: organizations router + aliasing + OpenAPI updates
+- [ ] **Commit 4**: ui: organizations store + routes + KPI section
+- [ ] **Commit 5**: tests/docs: update unit + e2e + spec/DATA_MODEL.md
+
+## Validation (must pass before finishing the branch)
+- `make test-api`
+- `make test-ui` (or targeted UI test target if configured)
+- If needed for confidence: `make build-api build-ui-image test-e2e`
+- Verify CI run for the branch (per `.cursor/rules/workflow.mdc`)
+
+## Status
+- **Progress**: 0/5 commits completed
+- **Current**: writing branch plan and inventory
+- **Next**: confirm routing strategy (API/UI aliases vs full rename), then start DB migration design
+
