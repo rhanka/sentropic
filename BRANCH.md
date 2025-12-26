@@ -57,11 +57,11 @@ Replace the "Company" concept with "Organization" across the stack (DB schema, A
   - [ ] Run required make targets before finalizing (see below).
 
 ## Commits & Progress
-- [ ] **Commit 1**: docs/branch plan (BRANCH.md) + inventory notes
-- [ ] **Commit 2**: db: organizations table + migration to JSONB data
-- [ ] **Commit 3**: api: organizations router + aliasing + OpenAPI updates
-- [ ] **Commit 4**: ui: organizations store + routes + KPI section
-- [ ] **Commit 5**: tests/docs: update unit + e2e + spec/DATA_MODEL.md
+- [x] **Commit 1** (0fd6ae8): docs/branch plan (BRANCH.md) + inventory notes
+- [x] **Commit 2** (a3ccaf3): db+api: migrate companies→organizations (JSONB org data, routes, services)
+- [x] **Commit 3** (469abc3): ui: rename /entreprises → /organisations (redirects + nav + KPI display)
+- [ ] **Commit 4**: api: generation references (persist + expose)
+- [ ] **Commit 5**: tests/docs: update unit + e2e + spec/DATA_MODEL.md + data/seed migration
 
 ## Validation (must pass before finishing the branch)
 - `make test-api`
@@ -70,7 +70,7 @@ Replace the "Company" concept with "Organization" across the stack (DB schema, A
 - Verify CI run for the branch (per `.cursor/rules/workflow.mdc`)
 
 ## Status
-- **Progress**: 0/5 commits completed
-- **Current**: writing branch plan and inventory
-- **Next**: confirm routing strategy (API/UI aliases vs full rename), then start DB migration design
+- **Progress**: 3/5 commits completed
+- **Current**: user testing (manual) for /organisations + redirects
+- **Next**: implement generation references (API) then update tests/docs
 
