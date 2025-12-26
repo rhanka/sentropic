@@ -177,6 +177,10 @@ function coerceOrganizationReferences(
   return out.length ? out : undefined;
 }
 
+function coerceOrganizationReferencesOrEmpty(value: unknown): Array<{ title: string; url: string; excerpt?: string }> {
+  return coerceOrganizationReferences(value) ?? [];
+}
+
 function parseOrganizationData(value: unknown): OrganizationData {
   if (!value) return {};
   if (typeof value === 'object') return value as OrganizationData;
@@ -292,6 +296,7 @@ export class ToolService {
       'products',
       'processes',
       'kpis',
+      'references',
       'challenges',
       'objectives',
       'technologies',
@@ -322,6 +327,9 @@ export class ToolService {
       }
       if (field === 'kpis') {
         newValue = coerceOrganizationKpis(u.value) ?? (typeof u.value === 'string' ? u.value : '');
+      }
+      if (field === 'references') {
+        newValue = coerceOrganizationReferencesOrEmpty(u.value);
       }
 
       if (field === 'name' || field === 'status') {

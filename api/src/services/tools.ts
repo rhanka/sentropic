@@ -209,6 +209,7 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
       '- products ↔ Produits et Services\n' +
       '- processes ↔ Processus Métier\n' +
       '- kpis ↔ Indicateurs de performance\n' +
+      '- references ↔ Références\n' +
       '- challenges ↔ Défis Principaux\n' +
       '- objectives ↔ Objectifs Stratégiques\n' +
       '- technologies ↔ Technologies\n' +
@@ -233,6 +234,7 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
                   'products',
                   'processes',
                   'kpis',
+                  'references',
                   'challenges',
                   'objectives',
                   'technologies',
