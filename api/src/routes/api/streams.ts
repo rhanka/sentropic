@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { and, eq } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, companies, folders, jobQueue, useCases, workspaces } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, organizations, useCases, workspaces } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -34,7 +34,11 @@ function parseJobIds(url: URL): string[] {
 }
 
 function parseCompanyIds(url: URL): string[] {
-  const repeated = url.searchParams.getAll('companyIds').flatMap(v => (v || '').split(','));
+  // Backward-compat param (companyIds) + preferred (organizationIds)
+  const repeated = [
+    ...url.searchParams.getAll('organizationIds'),
+    ...url.searchParams.getAll('companyIds'),
+  ].flatMap(v => (v || '').split(','));
   return [...new Set(repeated.map(s => s.trim()).filter(Boolean))];
 }
 
@@ -204,9 +208,9 @@ streamsRouter.get('/sse', async (c) => {
           if (streamId.startsWith('company_')) {
             const id = streamId.slice('company_'.length);
             const [r] = await db
-              .select({ id: companies.id })
-              .from(companies)
-              .where(and(eq(companies.id, id), eq(companies.workspaceId, targetWorkspaceId)))
+              .select({ id: organizations.id })
+              .from(organizations)
+              .where(and(eq(organizations.id, id), eq(organizations.workspaceId, targetWorkspaceId)))
               .limit(1);
             return !!r;
           }
@@ -319,7 +323,7 @@ streamsRouter.get('/sse', async (c) => {
         try {
           const row = (await db.get(sql`
             SELECT *
-            FROM companies
+            FROM organizations
             WHERE id = ${companyId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
           if (!row?.id || typeof row.id !== 'string') return;

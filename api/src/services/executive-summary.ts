@@ -1,10 +1,33 @@
 import { db } from '../db/client';
-import { useCases, folders, companies } from '../db/schema';
+import { useCases, folders, organizations } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
 import { hydrateUseCases } from '../routes/api/use-cases';
+
+type OrganizationData = {
+  industry?: string;
+  size?: string;
+  products?: string;
+  processes?: string;
+  challenges?: string;
+  objectives?: string;
+  technologies?: string;
+};
+
+function parseOrganizationData(value: unknown): OrganizationData {
+  if (!value) return {};
+  if (typeof value === 'object') return value as OrganizationData;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as OrganizationData;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
 
 // Fonction helper pour calculer la médiane
 function calculateMedian(values: number[]): number {
@@ -54,11 +77,12 @@ export async function generateExecutiveSummary(
     id: folders.id,
     name: folders.name,
     description: folders.description,
-    companyId: folders.companyId,
-    companyName: companies.name
+    organizationId: folders.organizationId,
+    organizationName: organizations.name,
+    organizationData: organizations.data
   })
   .from(folders)
-  .leftJoin(companies, eq(folders.companyId, companies.id))
+  .leftJoin(organizations, eq(folders.organizationId, organizations.id))
   .where(eq(folders.id, folderId));
 
   if (!folder) {
@@ -117,22 +141,24 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     ? topCases.map((name, index) => `${index + 1}. ${name}`).join('\n')
     : 'Aucun cas d\'usage prioritaire identifié';
 
-  // Récupérer les informations de l'entreprise si disponible
-  let companyInfo = 'Aucune information d\'entreprise disponible';
-  if (folder.companyId) {
-    const [company] = await db.select().from(companies).where(eq(companies.id, folder.companyId));
-    if (company) {
-      companyInfo = JSON.stringify({
-        name: company.name,
-        industry: company.industry,
-        size: company.size,
-        products: company.products,
-        processes: company.processes,
-        challenges: company.challenges,
-        objectives: company.objectives,
-        technologies: company.technologies
-      }, null, 2);
-    }
+  // Provide "company_info" to prompts (kept as variable name for backward-compat with prompts)
+  let companyInfo = 'No organization info available';
+  if (folder.organizationId) {
+    const data = parseOrganizationData(folder.organizationData);
+    companyInfo = JSON.stringify(
+      {
+        name: folder.organizationName ?? 'Unknown organization',
+        industry: data.industry,
+        size: data.size,
+        products: data.products,
+        processes: data.processes,
+        challenges: data.challenges,
+        objectives: data.objectives,
+        technologies: data.technologies,
+      },
+      null,
+      2
+    );
   }
 
   // Récupérer le prompt executive_summary

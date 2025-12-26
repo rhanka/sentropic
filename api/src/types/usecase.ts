@@ -64,6 +64,9 @@ export type UseCase = {
   // === Gestion d'état (colonnes natives) ===
   id: string;
   folderId: string;
+  // Preferred naming (DB column is organization_id)
+  organizationId?: string | null;
+  // Backward-compat for older UI/API payloads
   companyId?: string | null;
   status: string;
   model?: string | null;

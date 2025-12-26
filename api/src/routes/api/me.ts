@@ -6,7 +6,7 @@ import {
   chatSessions,
   chatGenerationTraces,
   chatStreamEvents,
-  companies,
+  organizations,
   contextModificationHistory,
   emailVerificationCodes,
   folders,
@@ -126,9 +126,9 @@ meRouter.delete('/', async (c) => {
   await db.transaction(async (tx) => {
     // Collect object IDs for stream cleanup + history cleanup
     const companyRows = await tx
-      .select({ id: companies.id })
-      .from(companies)
-      .where(eq(companies.workspaceId, workspaceId));
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.workspaceId, workspaceId));
     const folderRows = await tx
       .select({ id: folders.id })
       .from(folders)
@@ -171,7 +171,7 @@ meRouter.delete('/', async (c) => {
     // Delete business objects (workspace scoped)
     await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
-    await tx.delete(companies).where(eq(companies.workspaceId, workspaceId));
+    await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
     // Auth artifacts
     await tx.delete(userSessions).where(eq(userSessions.userId, userId));

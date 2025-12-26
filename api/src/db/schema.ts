@@ -13,23 +13,22 @@ export const workspaces = pgTable('workspaces', {
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 });
 
-export const companies = pgTable('companies', {
+export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id')
     .notNull()
     .references(() => workspaces.id)
     .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
-  industry: text('industry'),
-  size: text('size'),
-  products: text('products'),
-  processes: text('processes'),
-  challenges: text('challenges'),
-  objectives: text('objectives'),
-  technologies: text('technologies'),
   status: text('status').default('completed'), // 'draft', 'enriching', 'completed'
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  // Business fields moved to JSONB to avoid schema churn (similar to use_cases.data)
+  // Suggested structure (non-exhaustive):
+  // - industry, size, products, processes, challenges, objectives, technologies
+  // - kpis_sector: string[] (or structured objects in the future)
+  // - kpis_org: string[] (or structured objects in the future)
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
 });
 
 export const folders = pgTable('folders', {
@@ -40,7 +39,7 @@ export const folders = pgTable('folders', {
     .default(ADMIN_WORKSPACE_ID),
   name: text('name').notNull(),
   description: text('description'),
-  companyId: text('company_id').references(() => companies.id),
+  organizationId: text('organization_id').references(() => organizations.id),
   matrixConfig: text('matrix_config'),
   executiveSummary: text('executive_summary'), // JSON string with 4 sections: { introduction, analyse, recommandation, synthese_executive }
   status: text('status').default('completed'), // 'generating', 'completed'
@@ -57,7 +56,7 @@ export const useCases = pgTable('use_cases', {
   folderId: text('folder_id')
     .notNull()
     .references(() => folders.id, { onDelete: 'cascade' }),
-  companyId: text('company_id').references(() => companies.id),
+  organizationId: text('organization_id').references(() => organizations.id),
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
   model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
@@ -206,7 +205,7 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
 }));
 
-export type CompanyRow = typeof companies.$inferSelect;
+export type OrganizationRow = typeof organizations.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type UseCaseRow = typeof useCases.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;

@@ -1,15 +1,29 @@
 import { db, pool } from '../db/client';
 import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
-import { enrichCompany } from './context-company';
+import { enrichCompany, type CompanyData } from './context-company';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { companies, folders, useCases, jobQueue, ADMIN_WORKSPACE_ID, type JobQueueRow } from '../db/schema';
+import { folders, organizations, useCases, jobQueue, ADMIN_WORKSPACE_ID, type JobQueueRow } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
+
+function parseOrgData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
 
 export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
@@ -22,7 +36,8 @@ export interface CompanyEnrichJobData {
 export interface UseCaseListJobData {
   folderId: string;
   input: string;
-  companyId?: string;
+  organizationId?: string;
+  companyId?: string; // backward-compat alias
   model?: string;
 }
 
@@ -404,26 +419,27 @@ export class QueueManager {
     
     // Enrichir l'entreprise avec streaming
     // enrichCompany utilise le streaming si streamId est fourni
-    const enrichedData = await enrichCompany(companyName, model, signal, streamId);
+    const enrichedData: CompanyData = await enrichCompany(companyName, model, signal, streamId);
     
-    // Sérialiser les champs qui peuvent être des arrays en JSON strings
-    const serializedData = {
-      ...enrichedData,
-      products: Array.isArray(enrichedData.products) ? JSON.stringify(enrichedData.products) : enrichedData.products,
-      technologies: Array.isArray(enrichedData.technologies) ? JSON.stringify(enrichedData.technologies) : enrichedData.technologies,
-      processes: Array.isArray(enrichedData.processes) ? JSON.stringify(enrichedData.processes) : enrichedData.processes,
-      challenges: Array.isArray(enrichedData.challenges) ? JSON.stringify(enrichedData.challenges) : enrichedData.challenges,
-      objectives: Array.isArray(enrichedData.objectives) ? JSON.stringify(enrichedData.objectives) : enrichedData.objectives,
-    };
-    
-    // Mettre à jour en base
-    await db.update(companies)
+    // Store enriched profile in organizations.data JSONB (legacy prompt shape)
+    await db
+      .update(organizations)
       .set({
-        ...serializedData,
+        data: {
+          industry: enrichedData.industry,
+          size: enrichedData.size,
+          products: enrichedData.products,
+          processes: enrichedData.processes,
+          challenges: enrichedData.challenges,
+          objectives: enrichedData.objectives,
+          technologies: enrichedData.technologies,
+          kpis_sector: [],
+          kpis_org: [],
+        },
         status: 'completed',
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      .where(eq(companies.id, companyId));
+      .where(eq(organizations.id, companyId));
 
     await this.notifyCompanyEvent(companyId);
   }
@@ -432,7 +448,8 @@ export class QueueManager {
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, companyId, model } = data;
+    const { folderId, input, organizationId, companyId, model } = data;
+    const resolvedOrganizationId = organizationId ?? companyId;
 
     const [folder] = await db
       .select({ id: folders.id, workspaceId: folders.workspaceId })
@@ -450,29 +467,30 @@ export class QueueManager {
     
     // Récupérer les informations de l'entreprise si nécessaire
     let companyInfo = '';
-    if (companyId) {
+    if (resolvedOrganizationId) {
       try {
-        const [company] = await db
+        const [org] = await db
           .select()
-          .from(companies)
-          .where(and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId)));
-        if (company) {
+          .from(organizations)
+          .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, workspaceId)));
+        if (org) {
+          const orgData = parseOrgData(org.data);
           companyInfo = JSON.stringify({
-            name: company.name,
-            industry: company.industry,
-            size: company.size,
-            products: company.products,
-            processes: company.processes,
-            challenges: company.challenges,
-            objectives: company.objectives,
-            technologies: company.technologies
+            name: org.name,
+            industry: orgData.industry,
+            size: orgData.size,
+            products: orgData.products,
+            processes: orgData.processes,
+            challenges: orgData.challenges,
+            objectives: orgData.objectives,
+            technologies: orgData.technologies
           }, null, 2);
-          console.log(`📊 Informations entreprise récupérées pour ${company.name}:`, companyInfo);
+          console.log(`📊 Organization info loaded for ${org.name}:`, companyInfo);
         } else {
-          console.warn(`⚠️ Entreprise non trouvée avec l'ID: ${companyId}`);
+          console.warn(`⚠️ Organization not found with id: ${resolvedOrganizationId}`);
         }
       } catch (error) {
-        console.warn('Erreur lors de la récupération des informations de l\'entreprise:', error);
+        console.warn('Error fetching organization info:', error);
       }
     } else {
       console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
@@ -490,7 +508,7 @@ export class QueueManager {
           description: `Dossier généré automatiquement pour: ${input}`
         })
         .where(eq(folders.id, folderId));
-      console.log(`📁 Dossier mis à jour: ${useCaseList.dossier} (ID: ${folderId}, Company: ${companyId || 'Aucune'})`);
+      console.log(`📁 Folder updated: ${useCaseList.dossier} (ID: ${folderId}, Org: ${resolvedOrganizationId || 'None'})`);
       await this.notifyFolderEvent(folderId);
     }
 
@@ -518,21 +536,8 @@ export class QueueManager {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        companyId: companyId || null,
+        organizationId: resolvedOrganizationId || null,
         data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
-        // Colonnes temporaires pour rétrocompatibilité (seront supprimées après migration)
-        process: '',
-        technologies: JSON.stringify([]),
-        deadline: '',
-        contact: '',
-        benefits: JSON.stringify([]),
-        metrics: JSON.stringify([]),
-        risks: JSON.stringify([]),
-        nextSteps: JSON.stringify([]),
-        dataSources: JSON.stringify([]),
-        dataObjects: JSON.stringify([]),
-        valueScores: JSON.stringify([]),
-        complexityScores: JSON.stringify([]),
         model: selectedModel,
         status: 'generating',
         createdAt: new Date()
@@ -595,28 +600,33 @@ export class QueueManager {
       throw new Error('Configuration de matrice non trouvée');
     }
     
-    // Récupérer les informations de l'entreprise si nécessaire
+    // Organization info (kept as companyInfo variable for prompt backward-compat)
     let companyInfo = '';
-    if (folder.companyId) {
+    if (folder.organizationId) {
       try {
-        const [company] = await db.select().from(companies).where(eq(companies.id, folder.companyId));
-        if (company) {
-          companyInfo = JSON.stringify({
-            name: company.name,
-            industry: company.industry,
-            size: company.size,
-            products: company.products,
-            processes: company.processes,
-            challenges: company.challenges,
-            objectives: company.objectives,
-            technologies: company.technologies
-          }, null, 2);
-          console.log(`📊 Informations entreprise récupérées pour ${company.name}:`, companyInfo);
+        const [org] = await db.select().from(organizations).where(eq(organizations.id, folder.organizationId));
+        if (org) {
+          const orgData = parseOrgData(org.data);
+          companyInfo = JSON.stringify(
+            {
+              name: org.name,
+              industry: orgData.industry,
+              size: orgData.size,
+              products: orgData.products,
+              processes: orgData.processes,
+              challenges: orgData.challenges,
+              objectives: orgData.objectives,
+              technologies: orgData.technologies
+            },
+            null,
+            2
+          );
+          console.log(`📊 Organization info loaded for ${org.name}:`, companyInfo);
         } else {
-          console.warn(`⚠️ Entreprise non trouvée avec l'ID: ${folder.companyId}`);
+          console.warn(`⚠️ Organization not found with id: ${folder.organizationId}`);
         }
       } catch (error) {
-        console.error('Erreur lors de la récupération de l\'entreprise:', error);
+        console.error('Error fetching organization:', error);
       }
     }
     

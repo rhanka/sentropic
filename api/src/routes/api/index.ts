@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { companiesRouter } from './companies';
+import { organizationsRouter } from './organizations';
 import { foldersRouter } from './folders';
 import { useCasesRouter } from './use-cases';
 import { healthRouter } from './health';
@@ -24,6 +25,10 @@ apiRouter.route('/health', healthRouter);
 // Editor routes (require editor role or higher)
 apiRouter.use('/companies/*', requireAuth);
 apiRouter.route('/companies', companiesRouter);
+
+// New naming (preferred)
+apiRouter.use('/organizations/*', requireAuth);
+apiRouter.route('/organizations', organizationsRouter);
 
 apiRouter.use('/folders/*', requireAuth);
 apiRouter.route('/folders', foldersRouter);

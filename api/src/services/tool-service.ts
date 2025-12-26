@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, companies, contextModificationHistory, folders, useCases } from '../db/schema';
+import { chatContexts, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
 import { createId } from '../utils/id';
 
 export type UseCaseFieldUpdate = {
@@ -120,6 +120,52 @@ async function getNextModificationSequence(contextType: string, contextId: strin
   return maxSequence + 1;
 }
 
+type OrganizationData = {
+  industry?: string;
+  size?: string;
+  products?: string;
+  processes?: string;
+  challenges?: string;
+  objectives?: string;
+  technologies?: string;
+  kpis_sector?: string[];
+  kpis_org?: string[];
+};
+
+function parseOrganizationData(value: unknown): OrganizationData {
+  if (!value) return {};
+  if (typeof value === 'object') return value as OrganizationData;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as OrganizationData;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<string, unknown> {
+  const data = parseOrganizationData(row.data);
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    name: row.name,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    industry: data.industry,
+    size: data.size,
+    products: data.products,
+    processes: data.processes,
+    challenges: data.challenges,
+    objectives: data.objectives,
+    technologies: data.technologies,
+    kpis_sector: Array.isArray(data.kpis_sector) ? data.kpis_sector : [],
+    kpis_org: Array.isArray(data.kpis_org) ? data.kpis_org : [],
+  };
+}
+
 export class ToolService {
   // ---------------------------
   // Companies
@@ -134,15 +180,15 @@ export class ToolService {
     | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
   > {
     const workspaceId = (opts?.workspaceId ?? '').trim();
-    const where = workspaceId ? eq(companies.workspaceId, workspaceId) : undefined;
-    const rows = where ? await db.select().from(companies).where(where) : await db.select().from(companies);
+    const where = workspaceId ? eq(organizations.workspaceId, workspaceId) : undefined;
+    const rows = where ? await db.select().from(organizations).where(where) : await db.select().from(organizations);
 
     if (opts?.idsOnly) {
       return { ids: rows.map((r) => r.id), count: rows.length };
     }
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const items = rows.map((r) => pickObjectFields(r as unknown as Record<string, unknown>, select));
+    const items = rows.map((r) => pickObjectFields(hydrateCompanyForTools(r), select));
     return { items, selected: select, count: rows.length };
   }
 
@@ -153,14 +199,14 @@ export class ToolService {
     if (!companyId) throw new Error('companyId is required');
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId))
-      : eq(companies.id, companyId);
+      ? and(eq(organizations.id, companyId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, companyId);
 
-    const [row] = await db.select().from(companies).where(where).limit(1);
+    const [row] = await db.select().from(organizations).where(where).limit(1);
     if (!row) throw new Error('Company not found');
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const data = pickObjectFields(row as unknown as Record<string, unknown>, select);
+    const data = pickObjectFields(hydrateCompanyForTools(row), select);
     return { companyId, data, selected: select };
   }
 
@@ -178,12 +224,12 @@ export class ToolService {
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(companies.id, input.companyId), eq(companies.workspaceId, workspaceId))
-      : eq(companies.id, input.companyId);
-    const [row] = await db.select().from(companies).where(where).limit(1);
+      ? and(eq(organizations.id, input.companyId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, input.companyId);
+    const [row] = await db.select().from(organizations).where(where).limit(1);
     if (!row) throw new Error('Company not found');
 
-    const before = deepClone(row as unknown as Record<string, unknown>);
+    const before = deepClone(hydrateCompanyForTools(row));
 
     const allowed = new Set([
       'name',
@@ -194,27 +240,40 @@ export class ToolService {
       'challenges',
       'objectives',
       'technologies',
+      'kpis_sector',
+      'kpis_org',
       'status'
     ]);
 
     const setPayload: Record<string, unknown> = {};
+    const dataBefore = parseOrganizationData(row.data);
+    const nextData: OrganizationData = { ...dataBefore };
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
     for (const u of input.updates) {
       const field = String(u.field ?? '').trim();
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
-      const oldValue = (row as unknown as Record<string, unknown>)[field];
-      setPayload[field] = u.value;
-      applied.push({ field, oldValue, newValue: u.value });
+      const oldValue = (before as Record<string, unknown>)[field];
+      const newValue = u.value;
+
+      if (field === 'name' || field === 'status') {
+        setPayload[field] = newValue;
+      } else {
+        // All business fields are stored in organizations.data JSONB
+        (nextData as Record<string, unknown>)[field] = newValue;
+        setPayload.data = nextData;
+      }
+
+      applied.push({ field, oldValue, newValue });
     }
 
     setPayload.updatedAt = new Date();
 
-    const updated = await db.update(companies).set(setPayload).where(where).returning();
+    const updated = await db.update(organizations).set(setPayload).where(where).returning();
     if (updated.length === 0) throw new Error('Company not found');
 
-    const after = deepClone(updated[0] as unknown as Record<string, unknown>);
+    const after = deepClone(hydrateCompanyForTools(updated[0]));
 
     await this.notifyCompanyEvent(input.companyId);
 
@@ -445,15 +504,15 @@ export class ToolService {
     | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
   > {
     const workspaceId = (opts?.workspaceId ?? '').trim();
-    const companyId = (opts?.companyId ?? '').trim();
+    const organizationId = (opts?.companyId ?? '').trim();
 
     const where =
-      workspaceId && companyId
-        ? and(eq(folders.workspaceId, workspaceId), eq(folders.companyId, companyId))
+      workspaceId && organizationId
+        ? and(eq(folders.workspaceId, workspaceId), eq(folders.organizationId, organizationId))
         : workspaceId
           ? eq(folders.workspaceId, workspaceId)
-          : companyId
-            ? eq(folders.companyId, companyId)
+          : organizationId
+            ? eq(folders.organizationId, organizationId)
             : undefined;
 
     const rows = where ? await db.select().from(folders).where(where) : await db.select().from(folders);
@@ -520,7 +579,8 @@ export class ToolService {
 
     const before = deepClone(row as unknown as Record<string, unknown>);
 
-    const allowed = new Set(['name', 'description', 'companyId', 'matrixConfig', 'executiveSummary', 'status']);
+    // Backward-compat: accept companyId updates but map them to folders.organizationId
+    const allowed = new Set(['name', 'description', 'companyId', 'organizationId', 'matrixConfig', 'executiveSummary', 'status']);
     const setPayload: Record<string, unknown> = {};
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
@@ -529,26 +589,28 @@ export class ToolService {
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
 
-      // Validate FK companyId if changed and workspace is known
-      if (field === 'companyId' && workspaceId) {
-        const nextCompanyId = typeof u.value === 'string' ? u.value : null;
-        if (nextCompanyId) {
-          const [company] = await db
-            .select({ id: companies.id })
-            .from(companies)
-            .where(and(eq(companies.id, nextCompanyId), eq(companies.workspaceId, workspaceId)))
+      // Validate FK organizationId (companyId is an alias)
+      if ((field === 'companyId' || field === 'organizationId') && workspaceId) {
+        const nextId = typeof u.value === 'string' ? u.value : null;
+        if (nextId) {
+          const [org] = await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(and(eq(organizations.id, nextId), eq(organizations.workspaceId, workspaceId)))
             .limit(1);
-          if (!company) throw new Error('Company not found');
+          if (!org) throw new Error('Organization not found');
         }
       }
 
-      const oldValue = (row as unknown as Record<string, unknown>)[field];
+      const normalizedField = field === 'companyId' ? 'organizationId' : field;
+      const oldValue = (row as unknown as Record<string, unknown>)[normalizedField];
 
       if (field === 'matrixConfig' || field === 'executiveSummary') {
         setPayload[field] = u.value == null ? null : JSON.stringify(u.value);
         applied.push({ field, oldValue: parseJsonOrNull(oldValue), newValue: u.value });
       } else {
-        setPayload[field] = u.value;
+        // companyId is mapped to organizationId in DB
+        setPayload[normalizedField] = u.value;
         applied.push({ field, oldValue, newValue: u.value });
       }
     }

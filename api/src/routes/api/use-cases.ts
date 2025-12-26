@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { companies, folders, useCases } from '../../db/schema';
+import { organizations, folders, useCases } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
@@ -47,7 +47,7 @@ const scoreEntry = z.object({
 
 const useCaseInput = z.object({
   folderId: z.string(),
-  companyId: z.string().optional(),
+  organizationId: z.string().optional(),
   name: z.string().min(1),
   description: z.string().optional(), // 30-60 caractères
   // Nouveaux champs pour data JSONB
@@ -200,7 +200,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
   return {
     id: row.id,
     folderId: row.folderId,
-    companyId: row.companyId,
+    organizationId: row.organizationId,
     status: row.status ?? 'completed',
     model: row.model,
     createdAt: row.createdAt,
@@ -280,7 +280,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     return {
       id: row.id,
       folderId: row.folderId,
-      companyId: row.companyId,
+      organizationId: row.organizationId,
       status: row.status ?? 'completed',
       model: row.model,
       createdAt: row.createdAt,
@@ -359,13 +359,13 @@ useCasesRouter.post('/', requireEditor, zValidator('json', useCaseInput), async 
     return c.json({ message: 'Folder not found' }, 404);
   }
 
-  if (payload.companyId) {
-    const [company] = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+  if (payload.organizationId) {
+    const [org] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, payload.organizationId), eq(organizations.workspaceId, workspaceId)))
       .limit(1);
-    if (!company) return c.json({ message: 'Company not found' }, 404);
+    if (!org) return c.json({ message: 'Not found' }, 404);
   }
 
   const id = createId();
@@ -380,7 +380,7 @@ useCasesRouter.post('/', requireEditor, zValidator('json', useCaseInput), async 
     id,
     workspaceId,
     folderId: payload.folderId,
-    companyId: payload.companyId,
+    organizationId: payload.organizationId,
     // data est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
     data: data as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
   });
@@ -461,20 +461,20 @@ useCasesRouter.put('/:id', requireEditor, zValidator('json', useCaseInput.partia
     if (!folder) return c.json({ message: 'Folder not found' }, 404);
   }
 
-  if (payload.companyId) {
-    const [company] = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+  if (payload.organizationId) {
+    const [org] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, payload.organizationId), eq(organizations.workspaceId, workspaceId)))
       .limit(1);
-    if (!company) return c.json({ message: 'Company not found' }, 404);
+    if (!org) return c.json({ message: 'Not found' }, 404);
   }
   
   await db
     .update(useCases)
     .set({
       folderId,
-      companyId: payload.companyId ?? record.companyId,
+      organizationId: payload.organizationId ?? record.organizationId,
       // newData est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
       data: newData as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
     })
@@ -497,14 +497,16 @@ useCasesRouter.delete('/:id', requireEditor, async (c) => {
 const generateInput = z.object({
   input: z.string().min(1),
   create_new_folder: z.boolean(),
-  company_id: z.string().optional(),
+  organization_id: z.string().optional(),
+  company_id: z.string().optional(), // backward-compat alias
   model: z.string().optional()
 });
 
 useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId } = c.get('user') as { workspaceId: string };
-    const { input, create_new_folder, company_id, model } = c.req.valid('json');
+    const { input, create_new_folder, organization_id, company_id, model } = c.req.valid('json');
+    const organizationId = organization_id ?? company_id;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -519,13 +521,13 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
       
       folderId = createId();
 
-      if (company_id) {
-        const [company] = await db
-          .select({ id: companies.id })
-          .from(companies)
-          .where(and(eq(companies.id, company_id), eq(companies.workspaceId, workspaceId)))
+      if (organizationId) {
+        const [org] = await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
           .limit(1);
-        if (!company) return c.json({ message: 'Company not found' }, 404);
+        if (!org) return c.json({ message: 'Not found' }, 404);
       }
 
       await db.insert(folders).values({
@@ -533,7 +535,7 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
         workspaceId,
         name: folderName,
         description: folderDescription,
-        companyId: company_id || null,
+        organizationId: organizationId || null,
         matrixConfig: JSON.stringify(defaultMatrixConfig),
         status: 'generating'
         // createdAt omitted to use defaultNow() in Postgres
@@ -545,7 +547,7 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
     const jobId = await queueManager.addJob('usecase_list', {
       folderId: folderId!,
       input,
-      companyId: company_id,
+      organizationId,
       model: selectedModel
     }, { workspaceId });
     

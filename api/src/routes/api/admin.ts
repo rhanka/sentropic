@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { ADMIN_WORKSPACE_ID, companies, folders, useCases, userSessions, users, workspaces } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -32,7 +32,7 @@ adminRouter.post('/reset', async (c) => {
     // Supprimer toutes les données dans l'ordre inverse des dépendances
     await db.delete(useCases);
     await db.delete(folders);
-    await db.delete(companies);
+    await db.delete(organizations);
     
     return c.json({ 
       message: 'All data has been reset successfully',
@@ -52,7 +52,7 @@ adminRouter.post('/reset', async (c) => {
 
 adminRouter.get('/stats', async (c) => {
   try {
-    const [companiesCount] = await db.select({ count: sql`count(*)` }).from(companies);
+    const [companiesCount] = await db.select({ count: sql`count(*)` }).from(organizations);
     const [foldersCount] = await db.select({ count: sql`count(*)` }).from(folders);
     const [useCasesCount] = await db.select({ count: sql`count(*)` }).from(useCases);
     
@@ -266,7 +266,10 @@ adminRouter.delete('/users/:id', async (c) => {
       await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
 
       // Collect object IDs for stream cleanup + history cleanup
-      const companyRows = await tx.select({ id: companies.id }).from(companies).where(eq(companies.workspaceId, workspaceId));
+      const companyRows = await tx
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.workspaceId, workspaceId));
       const folderRows = await tx.select({ id: folders.id }).from(folders).where(eq(folders.workspaceId, workspaceId));
       const useCaseRows = await tx.select({ id: useCases.id }).from(useCases).where(eq(useCases.workspaceId, workspaceId));
 
@@ -303,7 +306,7 @@ adminRouter.delete('/users/:id', async (c) => {
       // Delete business objects (workspace scoped)
       await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
       await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
-      await tx.delete(companies).where(eq(companies.workspaceId, workspaceId));
+      await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
       await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
 
       // Delete workspace
