@@ -201,7 +201,19 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: 'company_update',
     description:
-      'Update fields of a single company by id. Use this tool when the user explicitly requests changes.',
+      "Met à jour les champs d'une organisation (tool historique nommé company_update). IMPORTANT: tu dois utiliser le NOM EXACT du champ, sinon l'API répondra \"Unsupported field\".\n\n" +
+      'Mapping champ (API) ↔ intitulé (UI) :\n' +
+      '- name ↔ Nom\n' +
+      '- industry ↔ Secteur\n' +
+      '- size ↔ Taille\n' +
+      '- products ↔ Produits et Services\n' +
+      '- processes ↔ Processus Métier\n' +
+      '- kpis ↔ Indicateurs de performance\n' +
+      '- challenges ↔ Défis Principaux\n' +
+      '- objectives ↔ Objectifs Stratégiques\n' +
+      '- technologies ↔ Technologies\n' +
+      '- status ↔ Statut\n\n' +
+      "Quand l'utilisateur parle en intitulé UI (ex: \"Indicateurs de performance\"), tu dois TOUJOURS utiliser le champ API correspondant (ex: kpis).",
     parameters: {
       type: 'object',
       properties: {
@@ -212,7 +224,23 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           items: {
             type: 'object',
             properties: {
-              field: { type: 'string', description: 'Company field name (e.g. name, industry, products).' },
+              field: {
+                type: 'string',
+                enum: [
+                  'name',
+                  'industry',
+                  'size',
+                  'products',
+                  'processes',
+                  'kpis',
+                  'challenges',
+                  'objectives',
+                  'technologies',
+                  'status'
+                ],
+                description:
+                  "Nom exact du champ (API). Tu dois choisir une valeur dans l'enum. Le champ UI \"Indicateurs de performance\" correspond à `kpis`."
+              },
               value: { description: 'New value (string or null).' }
             },
             required: ['field', 'value']
