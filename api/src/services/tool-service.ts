@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, contextModificationHistory, useCases } from '../db/schema';
+import { chatContexts, companies, contextModificationHistory, folders, useCases } from '../db/schema';
 import { createId } from '../utils/id';
 
 export type UseCaseFieldUpdate = {
@@ -38,6 +38,30 @@ function getPathSegments(path: string): string[] {
 
 function deepClone<T>(obj: T): T {
   return obj === undefined ? obj : (JSON.parse(JSON.stringify(obj)) as T);
+}
+
+function parseJsonOrNull(value: unknown): unknown | null {
+  if (value == null) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function pickObjectFields(obj: Record<string, unknown>, select: string[] | null): Record<string, unknown> {
+  if (!select || select.length === 0) return obj;
+  const out: Record<string, unknown> = {};
+  for (const key of select) {
+    const k = String(key).trim();
+    if (!k) continue;
+    if (Object.prototype.hasOwnProperty.call(obj, k)) out[k] = obj[k];
+  }
+  return out;
 }
 
 function coerceMarkdownList(value: unknown): string | null {
@@ -97,6 +121,146 @@ async function getNextModificationSequence(contextType: string, contextId: strin
 }
 
 export class ToolService {
+  // ---------------------------
+  // Companies
+  // ---------------------------
+
+  async listCompanies(opts?: {
+    workspaceId?: string | null;
+    idsOnly?: boolean | null;
+    select?: string[] | null;
+  }): Promise<
+    | { ids: string[]; count: number }
+    | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
+  > {
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId ? eq(companies.workspaceId, workspaceId) : undefined;
+    const rows = where ? await db.select().from(companies).where(where) : await db.select().from(companies);
+
+    if (opts?.idsOnly) {
+      return { ids: rows.map((r) => r.id), count: rows.length };
+    }
+
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    const items = rows.map((r) => pickObjectFields(r as unknown as Record<string, unknown>, select));
+    return { items, selected: select, count: rows.length };
+  }
+
+  async getCompany(
+    companyId: string,
+    opts?: { workspaceId?: string | null; select?: string[] | null }
+  ): Promise<{ companyId: string; data: Record<string, unknown>; selected: string[] | null }> {
+    if (!companyId) throw new Error('companyId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId))
+      : eq(companies.id, companyId);
+
+    const [row] = await db.select().from(companies).where(where).limit(1);
+    if (!row) throw new Error('Company not found');
+
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    const data = pickObjectFields(row as unknown as Record<string, unknown>, select);
+    return { companyId, data, selected: select };
+  }
+
+  async updateCompanyFields(input: {
+    companyId: string;
+    updates: Array<{ field: string; value: unknown }>;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    messageId?: string | null;
+    toolCallId?: string | null;
+  }): Promise<{ companyId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.companyId) throw new Error('companyId is required');
+    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
+    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(companies.id, input.companyId), eq(companies.workspaceId, workspaceId))
+      : eq(companies.id, input.companyId);
+    const [row] = await db.select().from(companies).where(where).limit(1);
+    if (!row) throw new Error('Company not found');
+
+    const before = deepClone(row as unknown as Record<string, unknown>);
+
+    const allowed = new Set([
+      'name',
+      'industry',
+      'size',
+      'products',
+      'processes',
+      'challenges',
+      'objectives',
+      'technologies',
+      'status'
+    ]);
+
+    const setPayload: Record<string, unknown> = {};
+    const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
+
+    for (const u of input.updates) {
+      const field = String(u.field ?? '').trim();
+      if (!field) throw new Error('Invalid field');
+      if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
+      const oldValue = (row as unknown as Record<string, unknown>)[field];
+      setPayload[field] = u.value;
+      applied.push({ field, oldValue, newValue: u.value });
+    }
+
+    setPayload.updatedAt = new Date();
+
+    const updated = await db.update(companies).set(setPayload).where(where).returning();
+    if (updated.length === 0) throw new Error('Company not found');
+
+    const after = deepClone(updated[0] as unknown as Record<string, unknown>);
+
+    await this.notifyCompanyEvent(input.companyId);
+
+    const sessionId = input.sessionId ?? null;
+    const messageId = input.messageId ?? null;
+    const toolCallId = input.toolCallId ?? null;
+
+    if (sessionId) {
+      await db.insert(chatContexts).values({
+        id: createId(),
+        sessionId,
+        contextType: 'company',
+        contextId: input.companyId,
+        snapshotBefore: before,
+        snapshotAfter: after,
+        modifications: applied,
+        modifiedAt: new Date(),
+        createdAt: new Date()
+      });
+    }
+
+    let seq = await getNextModificationSequence('company', input.companyId);
+    for (const item of applied) {
+      await db.insert(contextModificationHistory).values({
+        id: createId(),
+        contextType: 'company',
+        contextId: input.companyId,
+        sessionId,
+        messageId,
+        field: item.field,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        toolCallId,
+        promptId: null,
+        promptType: null,
+        promptVersionId: null,
+        jobId: null,
+        sequence: seq,
+        createdAt: new Date()
+      });
+      seq += 1;
+    }
+
+    return { companyId: input.companyId, applied };
+  }
+
   /**
    * Tool pour lire un use case complet.
    * Retourne la structure `use_cases.data` complète.
@@ -267,6 +431,418 @@ export class ToolService {
     return { useCaseId: input.useCaseId, applied };
   }
 
+  // ---------------------------
+  // Folders
+  // ---------------------------
+
+  async listFolders(opts?: {
+    workspaceId?: string | null;
+    companyId?: string | null;
+    idsOnly?: boolean | null;
+    select?: string[] | null;
+  }): Promise<
+    | { ids: string[]; count: number }
+    | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
+  > {
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const companyId = (opts?.companyId ?? '').trim();
+
+    const where =
+      workspaceId && companyId
+        ? and(eq(folders.workspaceId, workspaceId), eq(folders.companyId, companyId))
+        : workspaceId
+          ? eq(folders.workspaceId, workspaceId)
+          : companyId
+            ? eq(folders.companyId, companyId)
+            : undefined;
+
+    const rows = where ? await db.select().from(folders).where(where) : await db.select().from(folders);
+
+    if (opts?.idsOnly) {
+      return { ids: rows.map((r) => r.id), count: rows.length };
+    }
+
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    const items = rows.map((r) => {
+      const rec = r as unknown as Record<string, unknown>;
+      const parsed = {
+        ...rec,
+        matrixConfig: parseJsonOrNull(rec.matrixConfig),
+        executiveSummary: parseJsonOrNull(rec.executiveSummary)
+      };
+      return pickObjectFields(parsed, select);
+    });
+    return { items, selected: select, count: rows.length };
+  }
+
+  async getFolder(
+    folderId: string,
+    opts?: { workspaceId?: string | null; select?: string[] | null }
+  ): Promise<{ folderId: string; data: Record<string, unknown>; selected: string[] | null }> {
+    if (!folderId) throw new Error('folderId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, folderId);
+    const [row] = await db.select().from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+
+    const rec = row as unknown as Record<string, unknown>;
+    const parsed = {
+      ...rec,
+      matrixConfig: parseJsonOrNull(rec.matrixConfig),
+      executiveSummary: parseJsonOrNull(rec.executiveSummary)
+    };
+
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    return { folderId, data: pickObjectFields(parsed, select), selected: select };
+  }
+
+  async updateFolderFields(input: {
+    folderId: string;
+    updates: Array<{ field: string; value: unknown }>;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    messageId?: string | null;
+    toolCallId?: string | null;
+  }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.folderId) throw new Error('folderId is required');
+    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
+    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, input.folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, input.folderId);
+
+    const [row] = await db.select().from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+
+    const before = deepClone(row as unknown as Record<string, unknown>);
+
+    const allowed = new Set(['name', 'description', 'companyId', 'matrixConfig', 'executiveSummary', 'status']);
+    const setPayload: Record<string, unknown> = {};
+    const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
+
+    for (const u of input.updates) {
+      const field = String(u.field ?? '').trim();
+      if (!field) throw new Error('Invalid field');
+      if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
+
+      // Validate FK companyId if changed and workspace is known
+      if (field === 'companyId' && workspaceId) {
+        const nextCompanyId = typeof u.value === 'string' ? u.value : null;
+        if (nextCompanyId) {
+          const [company] = await db
+            .select({ id: companies.id })
+            .from(companies)
+            .where(and(eq(companies.id, nextCompanyId), eq(companies.workspaceId, workspaceId)))
+            .limit(1);
+          if (!company) throw new Error('Company not found');
+        }
+      }
+
+      const oldValue = (row as unknown as Record<string, unknown>)[field];
+
+      if (field === 'matrixConfig' || field === 'executiveSummary') {
+        setPayload[field] = u.value == null ? null : JSON.stringify(u.value);
+        applied.push({ field, oldValue: parseJsonOrNull(oldValue), newValue: u.value });
+      } else {
+        setPayload[field] = u.value;
+        applied.push({ field, oldValue, newValue: u.value });
+      }
+    }
+
+    const updated = await db.update(folders).set(setPayload).where(where).returning();
+    if (updated.length === 0) throw new Error('Folder not found');
+
+    const afterRow = updated[0] as unknown as Record<string, unknown>;
+    const after = deepClone({
+      ...afterRow,
+      matrixConfig: parseJsonOrNull(afterRow.matrixConfig),
+      executiveSummary: parseJsonOrNull(afterRow.executiveSummary)
+    });
+
+    await this.notifyFolderEvent(input.folderId);
+
+    const sessionId = input.sessionId ?? null;
+    const messageId = input.messageId ?? null;
+    const toolCallId = input.toolCallId ?? null;
+
+    if (sessionId) {
+      await db.insert(chatContexts).values({
+        id: createId(),
+        sessionId,
+        contextType: 'folder',
+        contextId: input.folderId,
+        snapshotBefore: before,
+        snapshotAfter: after,
+        modifications: applied,
+        modifiedAt: new Date(),
+        createdAt: new Date()
+      });
+    }
+
+    let seq = await getNextModificationSequence('folder', input.folderId);
+    for (const item of applied) {
+      await db.insert(contextModificationHistory).values({
+        id: createId(),
+        contextType: 'folder',
+        contextId: input.folderId,
+        sessionId,
+        messageId,
+        field: item.field,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        toolCallId,
+        promptId: null,
+        promptType: null,
+        promptVersionId: null,
+        jobId: null,
+        sequence: seq,
+        createdAt: new Date()
+      });
+      seq += 1;
+    }
+
+    return { folderId: input.folderId, applied };
+  }
+
+  // ---------------------------
+  // Matrix (folders.matrixConfig)
+  // ---------------------------
+
+  async getMatrix(folderId: string, opts?: { workspaceId?: string | null }): Promise<{
+    folderId: string;
+    matrixConfig: Record<string, unknown> | null;
+  }> {
+    if (!folderId) throw new Error('folderId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, folderId);
+    const [row] = await db.select({ matrixConfig: folders.matrixConfig }).from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+    const parsed = parseJsonOrNull(row.matrixConfig) as Record<string, unknown> | null;
+    return { folderId, matrixConfig: parsed };
+  }
+
+  async updateMatrix(input: {
+    folderId: string;
+    matrixConfig: unknown;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    messageId?: string | null;
+    toolCallId?: string | null;
+  }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.folderId) throw new Error('folderId is required');
+    if (input.matrixConfig == null || typeof input.matrixConfig !== 'object') throw new Error('matrixConfig is required');
+
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, input.folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, input.folderId);
+
+    const [row] = await db.select().from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+
+    const beforeRow = row as unknown as Record<string, unknown>;
+    const beforeMatrix = parseJsonOrNull(beforeRow.matrixConfig);
+
+    await db
+      .update(folders)
+      .set({ matrixConfig: JSON.stringify(input.matrixConfig) })
+      .where(where);
+
+    await this.notifyFolderEvent(input.folderId);
+
+    const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [
+      { field: 'matrixConfig', oldValue: beforeMatrix, newValue: input.matrixConfig }
+    ];
+
+    const sessionId = input.sessionId ?? null;
+    const messageId = input.messageId ?? null;
+    const toolCallId = input.toolCallId ?? null;
+
+    if (sessionId) {
+      await db.insert(chatContexts).values({
+        id: createId(),
+        sessionId,
+        contextType: 'folder',
+        contextId: input.folderId,
+        snapshotBefore: { matrixConfig: beforeMatrix },
+        snapshotAfter: { matrixConfig: input.matrixConfig },
+        modifications: applied,
+        modifiedAt: new Date(),
+        createdAt: new Date()
+      });
+    }
+
+    let seq = await getNextModificationSequence('folder', input.folderId);
+    for (const item of applied) {
+      await db.insert(contextModificationHistory).values({
+        id: createId(),
+        contextType: 'folder',
+        contextId: input.folderId,
+        sessionId,
+        messageId,
+        field: item.field,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        toolCallId,
+        promptId: null,
+        promptType: null,
+        promptVersionId: null,
+        jobId: null,
+        sequence: seq,
+        createdAt: new Date()
+      });
+      seq += 1;
+    }
+
+    return { folderId: input.folderId, applied };
+  }
+
+  // ---------------------------
+  // Executive Summary (folders.executiveSummary)
+  // ---------------------------
+
+  async getExecutiveSummary(folderId: string, opts?: { workspaceId?: string | null; select?: string[] | null }): Promise<{
+    folderId: string;
+    executiveSummary: Record<string, unknown> | null;
+    selected: string[] | null;
+  }> {
+    if (!folderId) throw new Error('folderId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, folderId);
+
+    const [row] = await db.select({ executiveSummary: folders.executiveSummary }).from(folders).where(where).limit(1);
+    if (!row) throw new Error('Folder not found');
+
+    const parsed = parseJsonOrNull(row.executiveSummary) as Record<string, unknown> | null;
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    const out = parsed ? pickObjectFields(parsed, select) : null;
+    return { folderId, executiveSummary: out, selected: select };
+  }
+
+  async updateExecutiveSummaryFields(input: {
+    folderId: string;
+    updates: Array<{ field: string; value: unknown }>;
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    messageId?: string | null;
+    toolCallId?: string | null;
+  }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.folderId) throw new Error('folderId is required');
+    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
+    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+
+    const workspaceId = (input.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(folders.id, input.folderId), eq(folders.workspaceId, workspaceId))
+      : eq(folders.id, input.folderId);
+
+    const [folderRow] = await db.select().from(folders).where(where).limit(1);
+    if (!folderRow) throw new Error('Folder not found');
+
+    const beforeObj = (parseJsonOrNull((folderRow as unknown as Record<string, unknown>).executiveSummary) ?? null) as
+      | Record<string, unknown>
+      | null;
+    const before = deepClone(beforeObj ?? {});
+
+    const allowed = new Set(['introduction', 'analyse', 'recommandation', 'synthese_executive', 'references']);
+    const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
+
+    const next = deepClone(before) as Record<string, unknown>;
+    for (const u of input.updates) {
+      const field = String(u.field ?? '').trim();
+      if (!field) throw new Error('Invalid field');
+      if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
+      const oldValue = next[field];
+      next[field] = u.value;
+      applied.push({ field, oldValue, newValue: u.value });
+    }
+
+    await db.update(folders).set({ executiveSummary: JSON.stringify(next) }).where(where);
+    await this.notifyFolderEvent(input.folderId);
+
+    const sessionId = input.sessionId ?? null;
+    const messageId = input.messageId ?? null;
+    const toolCallId = input.toolCallId ?? null;
+
+    if (sessionId) {
+      await db.insert(chatContexts).values({
+        id: createId(),
+        sessionId,
+        contextType: 'executive_summary',
+        contextId: input.folderId,
+        snapshotBefore: before,
+        snapshotAfter: next,
+        modifications: applied,
+        modifiedAt: new Date(),
+        createdAt: new Date()
+      });
+    }
+
+    let seq = await getNextModificationSequence('executive_summary', input.folderId);
+    for (const item of applied) {
+      await db.insert(contextModificationHistory).values({
+        id: createId(),
+        contextType: 'executive_summary',
+        contextId: input.folderId,
+        sessionId,
+        messageId,
+        field: item.field,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        toolCallId,
+        promptId: null,
+        promptType: null,
+        promptVersionId: null,
+        jobId: null,
+        sequence: seq,
+        createdAt: new Date()
+      });
+      seq += 1;
+    }
+
+    return { folderId: input.folderId, applied };
+  }
+
+  // ---------------------------
+  // Use cases list (folder scope)
+  // ---------------------------
+
+  async listUseCasesForFolder(
+    folderId: string,
+    opts?: { workspaceId?: string | null; idsOnly?: boolean | null; select?: string[] | null }
+  ): Promise<
+    | { ids: string[]; count: number }
+    | { items: Array<{ id: string; data: Record<string, unknown> }>; selected: string[] | null; count: number }
+  > {
+    if (!folderId) throw new Error('folderId is required');
+    const workspaceId = (opts?.workspaceId ?? '').trim();
+    const where = workspaceId
+      ? and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, workspaceId))
+      : eq(useCases.folderId, folderId);
+
+    const rows = await db.select().from(useCases).where(where);
+
+    if (opts?.idsOnly) {
+      return { ids: rows.map((r) => r.id), count: rows.length };
+    }
+
+    const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
+    const items = rows.map((r) => {
+      const data = (r.data ?? {}) as Record<string, unknown>;
+      return { id: r.id, data: pickObjectFields(data, select) };
+    });
+
+    return { items, selected: select, count: rows.length };
+  }
+
   /**
    * Émet un événement usecase_update via NOTIFY PostgreSQL pour rafraîchir l'UI en temps réel
    */
@@ -275,6 +851,26 @@ export class ToolService {
     const client = await pool.connect();
     try {
       await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyCompanyEvent(companyId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ company_id: companyId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyFolderEvent(folderId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ folder_id: folderId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }

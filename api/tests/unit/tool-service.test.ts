@@ -1,8 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { toolService } from '../../src/services/tool-service';
 import { db } from '../../src/db/client';
-import { useCases, chatContexts, contextModificationHistory, chatSessions, users, folders } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+  useCases,
+  chatContexts,
+  contextModificationHistory,
+  chatSessions,
+  chatMessages,
+  users,
+  folders,
+  companies,
+  workspaces
+} from '../../src/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 
 describe('Tool Service', () => {
@@ -295,6 +305,295 @@ describe('Tool Service', () => {
           ]
         })
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('company/folder/executive_summary tools (workspace-scoped)', () => {
+    let workspaceId: string;
+    let companyId: string;
+    let folderId: string;
+    let useCaseId: string;
+    let msgCompanyUpdateId: string;
+    let msgFolderUpdateId: string;
+    let msgExecutiveSummaryUpdateId: string;
+    let msgMatrixUpdateId: string;
+
+    beforeEach(async () => {
+      // Workspace required for company/folder tools
+      workspaceId = createId();
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        ownerUserId: null,
+        name: 'Test Workspace',
+        shareWithAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      // Create a user + session in that workspace
+      testUserId = createId();
+      await db.insert(users).values({
+        id: testUserId,
+        email: `test-${testUserId}@example.com`,
+        displayName: 'Test User',
+        role: 'editor',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      testSessionId = createId();
+      await db.insert(chatSessions).values({
+        id: testSessionId,
+        userId: testUserId,
+        workspaceId,
+        primaryContextType: 'company',
+        primaryContextId: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      // Create chat messages for FK constraints (context_modification_history.message_id)
+      msgCompanyUpdateId = createId();
+      msgFolderUpdateId = createId();
+      msgExecutiveSummaryUpdateId = createId();
+      msgMatrixUpdateId = createId();
+      await db.insert(chatMessages).values([
+        { id: msgCompanyUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 1, createdAt: new Date() },
+        { id: msgFolderUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 2, createdAt: new Date() },
+        { id: msgExecutiveSummaryUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 3, createdAt: new Date() },
+        { id: msgMatrixUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 4, createdAt: new Date() }
+      ]);
+
+      companyId = createId();
+      await db.insert(companies).values({
+        id: companyId,
+        workspaceId,
+        name: 'ACME',
+        industry: 'Manufacturing',
+        status: 'completed',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      folderId = createId();
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId,
+        name: 'Folder 1',
+        description: 'Desc',
+        companyId,
+        matrixConfig: JSON.stringify({ valueAxes: [], complexityAxes: [] }),
+        executiveSummary: JSON.stringify({ introduction: 'Hello' }),
+        status: 'completed',
+        createdAt: new Date()
+      });
+
+      useCaseId = createId();
+      await db.insert(useCases).values({
+        id: useCaseId,
+        workspaceId,
+        folderId,
+        status: 'completed',
+        createdAt: new Date(),
+        data: {
+          name: 'UC 1',
+          description: 'Test',
+          references: [{ title: 'Ref', url: 'https://example.com' }]
+        }
+      });
+    });
+
+    afterEach(async () => {
+      await db
+        .delete(contextModificationHistory)
+        .where(
+          and(
+            inArray(contextModificationHistory.contextType, ['company', 'folder', 'executive_summary']),
+            inArray(contextModificationHistory.contextId, [companyId, folderId])
+          )
+        );
+      await db
+        .delete(chatContexts)
+        .where(
+          and(
+            inArray(chatContexts.contextType, ['company', 'folder', 'executive_summary']),
+            inArray(chatContexts.contextId, [companyId, folderId])
+          )
+        );
+
+      await db.delete(useCases).where(eq(useCases.id, useCaseId));
+      await db.delete(folders).where(eq(folders.id, folderId));
+      await db.delete(companies).where(eq(companies.id, companyId));
+      await db.delete(chatMessages).where(eq(chatMessages.sessionId, testSessionId));
+      await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
+      await db.delete(users).where(eq(users.id, testUserId));
+      await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    });
+
+    it('should list companies (idsOnly) in workspace', async () => {
+      const res = await toolService.listCompanies({ workspaceId, idsOnly: true });
+      expect('ids' in res).toBe(true);
+      if ('ids' in res) {
+        expect(res.ids).toContain(companyId);
+        expect(res.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('should list folders (idsOnly) in workspace', async () => {
+      const res = await toolService.listFolders({ workspaceId, idsOnly: true });
+      expect('ids' in res).toBe(true);
+      if ('ids' in res) {
+        expect(res.ids).toContain(folderId);
+        expect(res.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('should get folder with select and parse JSON fields', async () => {
+      const res = await toolService.getFolder(folderId, {
+        workspaceId,
+        select: ['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']
+      });
+
+      expect(res.folderId).toBe(folderId);
+      expect(res.selected).toEqual(['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']);
+      expect(res.data.id).toBe(folderId);
+      expect(res.data.name).toBe('Folder 1');
+      expect(res.data.companyId).toBe(companyId);
+
+      // matrixConfig / executiveSummary are stored as strings in DB but returned as parsed objects here.
+      const mx = res.data.matrixConfig as any;
+      const es = res.data.executiveSummary as any;
+      expect(typeof mx).toBe('object');
+      expect(typeof es).toBe('object');
+      expect(mx?.valueAxes).toBeDefined();
+      expect(es?.introduction).toBe('Hello');
+    });
+
+    it('should get and update a company, writing history + chat context when sessionId provided', async () => {
+      const before = await toolService.getCompany(companyId, { workspaceId, select: ['name', 'industry'] });
+      expect(before.companyId).toBe(companyId);
+      expect(before.data.name).toBe('ACME');
+
+      const updated = await toolService.updateCompanyFields({
+        companyId,
+        updates: [{ field: 'industry', value: 'Tech' }],
+        workspaceId,
+        sessionId: testSessionId,
+        messageId: msgCompanyUpdateId,
+        toolCallId: 'tool-1'
+      });
+      expect(updated.companyId).toBe(companyId);
+      expect(updated.applied[0].field).toBe('industry');
+
+      const history = await db
+        .select()
+        .from(contextModificationHistory)
+        .where(and(eq(contextModificationHistory.contextType, 'company'), eq(contextModificationHistory.contextId, companyId)));
+      expect(history.length).toBeGreaterThan(0);
+      expect(history[0].field).toBe('industry');
+
+      const contexts = await db
+        .select()
+        .from(chatContexts)
+        .where(and(eq(chatContexts.contextType, 'company'), eq(chatContexts.contextId, companyId)));
+      expect(contexts.length).toBe(1);
+    });
+
+    it('should update a folder and write folder history + chat context when sessionId provided', async () => {
+      const before = await toolService.getFolder(folderId, { workspaceId, select: ['name', 'executiveSummary'] });
+      expect(before.folderId).toBe(folderId);
+      expect(before.data.name).toBe('Folder 1');
+      expect((before.data as any).executiveSummary?.introduction).toBe('Hello');
+
+      const updated = await toolService.updateFolderFields({
+        folderId,
+        updates: [
+          { field: 'name', value: 'Folder 1 updated' },
+          { field: 'executiveSummary', value: { introduction: 'Updated intro (folder)' } }
+        ],
+        workspaceId,
+        sessionId: testSessionId,
+        messageId: msgFolderUpdateId,
+        toolCallId: 'tool-f-1'
+      });
+      expect(updated.folderId).toBe(folderId);
+      expect(updated.applied.length).toBe(2);
+      expect(updated.applied.map((a) => a.field)).toEqual(['name', 'executiveSummary']);
+
+      const after = await toolService.getFolder(folderId, { workspaceId, select: ['name', 'executiveSummary'] });
+      expect(after.data.name).toBe('Folder 1 updated');
+      expect((after.data as any).executiveSummary?.introduction).toBe('Updated intro (folder)');
+
+      const history = await db
+        .select()
+        .from(contextModificationHistory)
+        .where(and(eq(contextModificationHistory.contextType, 'folder'), eq(contextModificationHistory.contextId, folderId)));
+      expect(history.length).toBeGreaterThan(0);
+      expect(history.map((h) => h.field)).toEqual(expect.arrayContaining(['name', 'executiveSummary']));
+
+      const contexts = await db
+        .select()
+        .from(chatContexts)
+        .where(and(eq(chatContexts.contextType, 'folder'), eq(chatContexts.contextId, folderId)));
+      expect(contexts.length).toBe(1);
+    });
+
+    it('should list use cases for a folder with select', async () => {
+      const res = await toolService.listUseCasesForFolder(folderId, { workspaceId, select: ['name'] });
+      expect('items' in res).toBe(true);
+      if ('items' in res) {
+        expect(res.items.length).toBe(1);
+        expect(res.items[0].id).toBe(useCaseId);
+        expect(res.items[0].data.name).toBe('UC 1');
+        expect((res.items[0].data as any).description).toBeUndefined();
+      }
+    });
+
+    it('should update executive summary fields and write executive_summary history', async () => {
+      const before = await toolService.getExecutiveSummary(folderId, { workspaceId });
+      expect(before.folderId).toBe(folderId);
+      expect(before.executiveSummary?.introduction).toBe('Hello');
+
+      await toolService.updateExecutiveSummaryFields({
+        folderId,
+        updates: [{ field: 'introduction', value: 'Updated intro' }],
+        workspaceId,
+        sessionId: testSessionId,
+        messageId: msgExecutiveSummaryUpdateId,
+        toolCallId: 'tool-2'
+      });
+
+      const after = await toolService.getExecutiveSummary(folderId, { workspaceId });
+      expect(after.executiveSummary?.introduction).toBe('Updated intro');
+
+      const history = await db
+        .select()
+        .from(contextModificationHistory)
+        .where(and(eq(contextModificationHistory.contextType, 'executive_summary'), eq(contextModificationHistory.contextId, folderId)));
+      expect(history.length).toBe(1);
+      expect(history[0].field).toBe('introduction');
+    });
+
+    it('should get and update matrixConfig (folders.matrixConfig)', async () => {
+      const before = await toolService.getMatrix(folderId, { workspaceId });
+      expect(before.folderId).toBe(folderId);
+      expect(before.matrixConfig).toBeTruthy();
+
+      const updated = await toolService.updateMatrix({
+        folderId,
+        matrixConfig: { valueAxes: [{ id: 'v1', name: 'Value', weight: 0.3 }], complexityAxes: [] },
+        workspaceId,
+        sessionId: testSessionId,
+        messageId: msgMatrixUpdateId,
+        toolCallId: 'tool-mx-1'
+      });
+      expect(updated.folderId).toBe(folderId);
+      expect(updated.applied[0].field).toBe('matrixConfig');
+
+      const after = await toolService.getMatrix(folderId, { workspaceId });
+      expect(after.matrixConfig).toBeTruthy();
+      expect((after.matrixConfig as any).valueAxes?.[0]?.weight).toBe(0.3);
     });
   });
 });

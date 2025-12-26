@@ -4,6 +4,7 @@
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { currentFolderId } from '$lib/stores/folders';
   import { Send } from '@lucide/svelte';
 
   type ChatSession = {
@@ -55,15 +56,30 @@
 
   /**
    * Détecte le contexte depuis la route actuelle
-   * Retourne { primaryContextType, primaryContextId } ou null si pas de contexte
+   * Retourne { primaryContextType, primaryContextId? } ou null si pas de contexte
    */
-  const detectContextFromRoute = (): { primaryContextType: string; primaryContextId: string } | null => {
+  const detectContextFromRoute = (): { primaryContextType: string; primaryContextId?: string } | null => {
     const routeId = $page.route.id;
     const params = $page.params;
 
     // /cas-usage/[id] → usecase
     if (routeId === '/cas-usage/[id]' && params.id) {
       return { primaryContextType: 'usecase', primaryContextId: params.id };
+    }
+
+    // /cas-usage → use case list; when a folder is selected, treat chat context as folder
+    if (routeId === '/cas-usage' && $currentFolderId) {
+      return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
+    }
+
+    // /dashboard → dashboard is folder-scoped when a folder is selected
+    if (routeId === '/dashboard' && $currentFolderId) {
+      return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
+    }
+
+    // /matrice → matrix view is folder-scoped when a folder is selected
+    if (routeId === '/matrice' && $currentFolderId) {
+      return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
     }
 
     // /dossiers/[id] → folder
@@ -74,6 +90,16 @@
     // /entreprises/[id] → company
     if (routeId === '/entreprises/[id]' && params.id) {
       return { primaryContextType: 'company', primaryContextId: params.id };
+    }
+
+    // /entreprises → companies list (company scope without a specific id)
+    if (routeId === '/entreprises') {
+      return { primaryContextType: 'company' };
+    }
+
+    // /dossiers → folders list (folder scope without a specific id)
+    if (routeId === '/dossiers') {
+      return { primaryContextType: 'folder' };
     }
 
     // Pas de contexte détecté
@@ -304,7 +330,7 @@
 
       if (context) {
         payload.primaryContextType = context.primaryContextType;
-        payload.primaryContextId = context.primaryContextId;
+        if (context.primaryContextId) payload.primaryContextId = context.primaryContextId;
       }
       const scoped = getScopedWorkspaceIdForAdmin();
       if (scoped) payload.workspace_id = scoped;

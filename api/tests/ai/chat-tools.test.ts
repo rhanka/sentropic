@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { app } from '../../src/app';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import {
@@ -9,6 +9,7 @@ import {
 import { db } from '../../src/db/client';
 import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, useCases, folders } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
+import * as tools from '../../src/services/tools';
 
 describe('Chat AI - Tool Calls Integration', () => {
   let user: any;
@@ -187,6 +188,12 @@ describe('Chat AI - Tool Calls Integration', () => {
   describe('web_extract tool', () => {
     it('should handle web_extract with array of URLs correctly', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
+
+      // Make this test deterministic: avoid external Tavily network calls.
+      const extractSpy = vi.spyOn(tools, 'extractUrlContent').mockResolvedValue([
+        { url: 'https://example.com/article1', content: 'Article 1 content' },
+        { url: 'https://example.com/article2', content: 'Article 2 content' }
+      ]);
       
       // Ajouter des références au use case pour déclencher web_extract
       const currentRow = (await db.select().from(useCases).where(eq(useCases.id, useCaseId)))[0];
@@ -216,7 +223,7 @@ describe('Chat AI - Tool Calls Integration', () => {
       const { jobId, assistantMessageId } = chatData;
 
       // Attendre la complétion
-      await waitForJobCompletion(jobId, adminUser);
+      await waitForJobCompletion(jobId, adminUser, 30);
 
       // Vérifier les stream events
       const streamEventsRes = await authenticatedRequest(
@@ -235,8 +242,62 @@ describe('Chat AI - Tool Calls Integration', () => {
       );
       expect(errorEvents.length).toBe(0);
 
+      // If the assistant called web_extract, ensure it used the mocked path (no network) and single call.
+      if (extractSpy.mock.calls.length > 0) {
+        expect(extractSpy).toHaveBeenCalledTimes(1);
+        const arg0 = extractSpy.mock.calls[0]?.[0];
+        expect(Array.isArray(arg0)).toBe(true);
+        if (Array.isArray(arg0)) {
+          expect(arg0).toEqual(['https://example.com/article1', 'https://example.com/article2']);
+        }
+      }
+
+      extractSpy.mockRestore();
       await cleanupAuthData(); // Cleanup admin user
-    }, 15000);
+    }, 30000);
+  });
+
+  describe('folder context - matrix_get tool (real integration)', () => {
+    it('should call matrix_get when explicitly requested in folder context', async () => {
+      const adminUser = await createAuthenticatedUser('admin_app');
+
+      const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: [
+          `Tu DOIS appeler le tool \`matrix_get\` maintenant avec folderId="${folderId}".`,
+          `N'invente rien. Ne réponds pas avant d'avoir appelé \`matrix_get\`.`,
+          `Après le tool_call_result, réponds uniquement avec: OK`
+        ].join('\n'),
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: getTestModel()
+      });
+
+      expect(chatResponse.status).toBe(200);
+      const chatData = await chatResponse.json();
+      const { jobId, assistantMessageId } = chatData;
+
+      await waitForJobCompletion(jobId, adminUser, 30);
+
+      const streamEventsRes = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/streams/events/${assistantMessageId}`,
+        user.sessionToken!
+      );
+      expect(streamEventsRes.status).toBe(200);
+      const streamData = await streamEventsRes.json();
+      const events = streamData.events;
+
+      const mxStart = events.find((e: any) => e.eventType === 'tool_call_start' && e.data?.name === 'matrix_get');
+      expect(mxStart).toBeDefined();
+
+      const mxResult = events.find(
+        (e: any) => e.eventType === 'tool_call_result' && e.data?.result?.status === 'completed' && e.data?.result?.folderId === folderId
+      );
+      expect(mxResult).toBeDefined();
+
+      await cleanupAuthData(); // Cleanup admin user
+    }, 30000);
   });
 
   describe('Security validation', () => {

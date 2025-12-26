@@ -39,7 +39,7 @@
   - [x] Tests E2E Playwright
   - [x] Extension aux autres objets (folder, company, executive_summary)
 - [x] Ajouter une fonction de validation des droits utilisateurs, avec un des profils. Ce profil doit permettre d'avoir accès à toutes les fonctions sans limite d'usage. Mais il n'a accès qu'à ses propres artefacts
-- [x] Lience
+- [x] Licence
 - [ ] améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
   - [ ] gérer mobile (panneau plein écran / bottom-sheet)
   - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
@@ -50,11 +50,14 @@
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt
+- [ ] Améliorer la vue cas d'usage
+  - [ ] Afficher le nom du dossier
+  - [ ] Afficher l'entreprise
 - [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
   - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
   - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
-  - [ ] Tools: ajouter les tools pour les vues dossier (list des cas d'usage), et synthèse exécutive (interagissant aussi potentiellement avec la liste des cas d'usage)
+  - [ ] Tools/chat: prochain lot de màj tools (batch/AI-populate + migration naming usecase) — cf. `spec/TOOLS.md`
   - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
   - **Couverture CU** : CU-022
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.

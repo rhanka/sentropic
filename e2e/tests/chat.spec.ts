@@ -20,8 +20,16 @@ test.describe.serial('Chat', () => {
       }, { timeout: 30_000 }),
       composer.press('Enter')
     ]);
+    const req = res.request();
+    let requestBody: any = null;
+    try {
+      requestBody = typeof req.postDataJSON === 'function' ? req.postDataJSON() : JSON.parse(req.postData() || 'null');
+    } catch {
+      requestBody = null;
+    }
     const data = await res.json().catch(() => null);
     return {
+      requestBody,
       jobId: String((data as any)?.jobId ?? ''),
       streamId: String((data as any)?.streamId ?? ''),
       assistantMessageId: String((data as any)?.assistantMessageId ?? ''),
@@ -109,6 +117,81 @@ test.describe.serial('Chat', () => {
       await debugBackendState(page, jobId, streamId);
       throw e;
     }
+  });
+
+  test('devrait envoyer le bon contexte primaire au backend selon la route', async ({ page }) => {
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+
+    // 1) /dossiers → folder (no id)
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    const r1 = await sendMessageAndWaitApi(page, composer, 'Test context dossiers');
+    expect(r1.requestBody?.primaryContextType).toBe('folder');
+    expect(r1.requestBody?.primaryContextId ?? null).toBeNull();
+
+    // 2) /entreprises → company (no id)
+    await page.goto('/entreprises');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Entreprises', { timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    const r2 = await sendMessageAndWaitApi(page, composer, 'Test context entreprises');
+    expect(r2.requestBody?.primaryContextType).toBe('company');
+    expect(r2.requestBody?.primaryContextId ?? null).toBeNull();
+
+    // 2bis) /entreprises/[id] → company + id from URL
+    // Click the first company row/card to navigate to detail.
+    // Close the chat panel first to avoid intercepting clicks on the underlying cards.
+    const closeButton = page.locator('button[aria-label="Fermer"]');
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click();
+      await expect(composer).not.toBeVisible({ timeout: 5000 });
+    }
+    const companyRows = page.locator('article.rounded.border.border-slate-200');
+    if ((await companyRows.count()) > 0) {
+      await companyRows.first().click();
+      await page.waitForURL(/\/entreprises\/[^/?#]+$/, { timeout: 10_000 });
+      await page.waitForLoadState('domcontentloaded');
+      const m = page.url().match(/\/entreprises\/([^/?#]+)/);
+      const companyId = m ? m[1] : '';
+      expect(companyId).toBeTruthy();
+
+      await expect(chatButton).toBeVisible({ timeout: 5000 });
+      await chatButton.click();
+      await expect(composer).toBeVisible({ timeout: 5000 });
+      const r2b = await sendMessageAndWaitApi(page, composer, 'Test context entreprise detail');
+      expect(r2b.requestBody?.primaryContextType).toBe('company');
+      expect(r2b.requestBody?.primaryContextId).toBe(companyId);
+    }
+
+    // 3) /cas-usage/[id] → usecase + id from URL
+    await page.goto('/cas-usage');
+    await page.waitForLoadState('domcontentloaded');
+    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
+    if ((await useCaseCards.count()) === 0) {
+      // If no seeded use cases are available, skip this assertion to keep E2E stable.
+      return;
+    }
+    const firstCard = useCaseCards.first();
+    const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible().catch(() => false);
+    if (isGenerating) return;
+    await firstCard.click();
+    await page.waitForLoadState('domcontentloaded');
+    const match = page.url().match(/\/cas-usage\/([^/?#]+)/);
+    const useCaseId = match ? match[1] : '';
+    expect(useCaseId).toBeTruthy();
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    const r3 = await sendMessageAndWaitApi(page, composer, 'Test context usecase detail');
+    expect(r3.requestBody?.primaryContextType).toBe('usecase');
+    expect(r3.requestBody?.primaryContextId).toBe(useCaseId);
   });
 
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
