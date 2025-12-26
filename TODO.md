@@ -57,7 +57,7 @@
   - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
   - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
   - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
-  - [ ] Tools/chat: prochain lot de màj tools (batch/AI-populate + migration naming usecase) — cf. `spec/TOOLS.md`
+  - [x] Tools/chat: prochain lot de màj tools (batch/AI-populate + migration naming usecase) — cf. `spec/TOOLS.md`
   - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
   - **Couverture CU** : CU-022
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
