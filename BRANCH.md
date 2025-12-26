@@ -10,63 +10,85 @@ Replace the "Company" concept with "Organization" across the stack (DB schema, A
 ## Scope / Guardrails
 - Docker-first: all installs/build/tests run through `make` (no native `npm`).
 - Minimal refactors outside the organization scope.
-- Backward-compatibility decision needed:
-  - Keep `/companies` API as alias during transition **or** break and migrate fully to `/organizations`.
-  - **UI routes rename is required**: `/entreprises` → `/organisations`.
-    - Decide whether to keep `/entreprises` as a redirect/alias temporarily (recommended) to avoid breaking deep links.
+- **Décision**: **aucune rétrocompatibilité** à conserver (sauf migration des données déjà faite).
+  - Supprimer l’alias API `/companies`.
+  - Supprimer les routes UI `/entreprises` (y compris redirects).
+  - Supprimer l’alias store UI `ui/src/lib/stores/companies.ts`.
+  - Remplacer les events SSE `company_update` / canaux `company_events` / ids `companyId` par `organization_*`.
+  - Renommer le tool OpenAI `company_update` → `organization_update` (breaking), et aligner tous les usages.
+
+## Inventaire restant (grep)
+Occurrences `company/companies` (hors “organization”): **634** au total, réparties principalement ainsi:
+- `api/src`: **38** (rétrocompat explicite + streams + chat/tools)
+- `ui/src`: **214** (alias store `companies`, pages `/entreprises`, paramètres `companyId`, streamHub `company_update`)
+- `api/tests`: **178** (tests API/queue/enrich encore en `/companies` + `companies` schema alias)
+- `e2e`: **26** (tests encore sur `/entreprises` + /api/v1/companies)
+- `spec`: **61** (docs/specs)
+
+Occurrences `entreprise(s)`:
+- `ui/src`: **32**
+- `e2e`: **135** (dont beaucoup dans `e2e/playwright-report/**` → artefacts à supprimer du repo et ignorer)
 
 ## Plan / Todo
-- [ ] **Branch setup**: inventory all usages of `companies/company/entreprises` (API, UI, tests) and decide routing compatibility.
-- [ ] **DB schema**:
-  - [ ] Introduce `organizations` table (rename from `companies` via migration).
-  - [ ] Add `data JSONB` to organizations and migrate existing columns into `data`.
-  - [ ] Keep stable columns: `id`, `workspace_id`, `name`, `status`, timestamps.
-  - [ ] Add KPI field in `data` (`kpis` markdown string) and ensure defaults are safe.
-  - [ ] Update FK columns `folders.company_id` / `use_cases.company_id` naming strategy (decide whether to rename or keep as-is for minimal impact).
-- [ ] **API**:
-  - [ ] Add `organizations` router with CRUD + enrich endpoints.
-  - [ ] Update services to use organization `data` JSONB (context building, enrichment, prompts).
-  - [ ] Add generation references:
-    - [ ] Define a stable references structure in generated payloads (e.g. `references: [{ title, url, excerpt }]`).
-    - [ ] Persist references (DB field or within `use_cases.data`) and expose via API.
-  - [ ] Update tools/chat context types from `company` to `organization` (with alias if needed).
-  - [ ] Ensure OpenAPI reflects new naming.
-- [ ] **UI**:
-  - [ ] Rename store `companies.ts` → `organizations.ts` and update all imports.
-  - [ ] **Rename UI routes**:
-    - [ ] Create new routes under `/organisations` (list, detail, new).
-    - [ ] Keep `/entreprises` as redirect/alias temporarily (optional, but recommended) and update navigation/menu.
-  - [ ] Update screens to display "Organisation" terminology and render KPI (`kpis`) under “Processus”.
-  - [ ] Ensure create/new flow still works; update EditableInput endpoints.
-  - [ ] Update i18n labels (FR-first; EN to follow if required by current coverage rules).
-- [ ] **User testing (manual) — after UI, before Data / Seed**
-  - [ ] Navigate to `/organisations` (list) and verify the page loads.
-  - [ ] Verify `/entreprises` redirects to `/organisations` (deep-link compatibility).
-  - [ ] Create a new organization, then open its detail page.
-  - [ ] Edit key fields and confirm autosave still works (EditableInput).
-  - [ ] Trigger “enrich” and confirm streaming status updates still appear.
-  - [ ] Verify folders/use-cases creation still accept an organization selection.
-  - [ ] Verify delete behavior: blocked with a clear message if dependencies exist.
-- [ ] **Data / Seed**:
-  - [ ] Move demo organization seed into `data/` (source-of-truth fixtures) and adjust `api/src/scripts/db-seed.ts`.
-  - [ ] Update test seeding (`api/tests/utils/seed-test-data.ts`) to match new table/model.
-- [ ] **Tests & Docs**:
-  - [ ] Update API unit/integration tests for organizations.
-  - [ ] Update Playwright E2E tests currently referencing companies.
-  - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`.
-  - [ ] Run required make targets before finalizing (see below).
+- [ ] **Lot 0 — Cleanup repo (artefacts)**:
+  - [ ] Supprimer `e2e/playwright-report/**` du repo (si versionné) et l’ajouter au `.gitignore`.
+- [ ] **Lot 1 — Suppression de la rétrocompat “companies/entreprises” (breaking)**:
+  - [ ] **API**
+    - [ ] Retirer le montage `/companies` dans `api/src/routes/api/index.ts`.
+    - [ ] Supprimer `api/src/routes/api/companies.ts`.
+    - [ ] Supprimer l’alias `companies` dans `api/src/db/schema.ts` (et ajuster les imports).
+    - [ ] OpenAPI: remplacer `/companies` par `/organizations` (ex: `api/src/openapi/export.ts`).
+  - [ ] **SSE / Streams**
+    - [ ] `api/src/routes/api/streams.ts`: `company_update` → `organization_update` + `companyIds` → `organizationIds`.
+    - [ ] `NOTIFY/LISTEN`: `company_events` → `organization_events` (queue manager + organizations router).
+    - [ ] `streamId` prefix: `company_` → `organization_` (et aligner StreamMessage UI).
+  - [ ] **Chat Tools**
+    - [ ] Renommer le tool OpenAI `company_update` → `organization_update` + ajuster `api/src/services/tools.ts` + `tool-service.ts` + specs.
+    - [ ] Renommer le contexte `company` → `organization` partout (API + UI ChatPanel + tests).
+  - [ ] **UI**
+    - [ ] Supprimer `ui/src/lib/stores/companies.ts` et migrer tous les imports vers `organizations`.
+    - [ ] Supprimer `ui/src/routes/entreprises/**` (plus de redirects).
+    - [ ] Corriger les params/labels: `companyId` → `organizationId`, “Entreprise” → “Organisation”.
+    - [ ] `ui/src/lib/stores/streamHub.ts`: `company_update` → `organization_update`, caches et types.
+- [ ] **Lot 2 — Tests (Vitest)**
+  - [ ] Renommer `api/tests/api/companies.test.ts` → `organizations.test.ts` et basculer tous les endpoints en `/organizations`.
+  - [ ] Mettre à jour les tests queue/enrich/smoke qui appellent `/companies/*`.
+  - [ ] Mettre à jour les fixtures/seed tests qui importent `companies` depuis le schema.
+- [ ] **Lot 3 — E2E (Playwright)**
+  - [ ] Renommer `e2e/tests/companies*.spec.ts` en `organizations*.spec.ts`.
+  - [ ] Remplacer `/entreprises` → `/organisations` (et supprimer les attentes de redirect).
+  - [ ] Remplacer `/api/v1/companies` → `/api/v1/organizations` dans les assertions réseau.
+  - [ ] Chat E2E: `primaryContextType: company` → `organization`.
+- [ ] **Lot 4 — Docs / Spec**
+  - [ ] Mettre à jour `spec/DATA_MODEL.md` (source de vérité alignée sur `api/src/db/schema.ts`).
+  - [ ] Mettre à jour `spec/SPEC*.md`, `spec/TOOLS.md`, `README.md` pour “organization”.
 
-## Commits & Progress
-- [x] **Commit 1** (0fd6ae8): docs/branch plan (BRANCH.md) + inventory notes
-- [x] **Commit 2** (a3ccaf3): db+api: migrate companies→organizations (JSONB org data, routes, services)
-- [x] **Commit 3** (469abc3): ui: rename /entreprises → /organisations (redirects + nav + KPI display)
-- [x] **Commit 4**:
-  - **Prompts**: `company_info` → `organization_info` + `references` + `excerpt`
-  - **Org model**: `kpis` single markdown string (+ legacy tolerance)
-  - **Tools**: enforce correct field names, allow `references` updates via `company_update`
-  - **SSE**: hydrate `company_update` payload so UI reacts live
-  - **Stability**: strip `\u0000` / control chars from enrichment outputs before JSONB insert
-- [ ] **Commit 5**: tests/docs: update unit + e2e + spec/DATA_MODEL.md + data/seed migration
+## Commits & Progress (aligné sur l’historique git)
+
+### Déjà fait (commits réels)
+- [x] `0fd6ae8`: docs — plan initial Organizations (BRANCH.md)
+- [x] `a3ccaf3`: db+api — migration `companies` → `organizations` (+ JSONB `data`)
+- [x] `469abc3`: ui — routes `/entreprises` → `/organisations` (avec redirects à ce stade)
+- [x] `d59d18f`: docs — update BRANCH progress (intermédiaire)
+- [x] `5d5fc99`: db — register migration organizations
+- [x] `023f70f`: api — normalize organization profile values
+- [x] `818e4ae`: api — fix headers/fields for organization
+- [x] `6a3604c`: api — KPI: `kpis` string (tolérance legacy)
+- [x] `8376d2d`: api — prompts: `organization_info` + références (+ excerpt)
+- [x] `d46501e`: docs — clarify field mapping pour tool (company_update → champs)
+- [x] `7400971`: api — SSE: hydrate payload `company_update` (compat temporaire)
+- [x] `5eb49d1`: api — sanitize null bytes/control chars avant insert JSONB
+- [x] `21076ce`: api — autoriser update `references` via tool-service/tools
+- [x] `bc3a112`: ui — dossiers: `organizationId/organizationName` (fix affichage/liaison)
+- [x] `9be21b8`: docs — update BRANCH progress (organizations)
+- [x] `73d2ead`: docs — inventaire grep + plan “no rétrocompat”
+
+### À faire (lots cohérents, commits à venir)
+- [ ] **Lot 0**: cleanup artefacts (ex: `e2e/playwright-report/**` si versionné + `.gitignore`)
+- [ ] **Lot 1 (breaking)**: suppression rétrocompat “companies/entreprises” (API + UI + SSE + tools)
+- [ ] **Lot 2**: tests API/Vitest (endpoints, fixtures, seed)
+- [ ] **Lot 3**: E2E Playwright (routes, assertions réseau, chat context)
+- [ ] **Lot 4**: docs/spec (DATA_MODEL + SPEC + TOOLS + README)
 
 ## Validation (must pass before finishing the branch)
 - `make test-api`
@@ -75,7 +97,7 @@ Replace the "Company" concept with "Organization" across the stack (DB schema, A
 - Verify CI run for the branch (per `.cursor/rules/workflow.mdc`)
 
 ## Status
-- **Progress**: 4/5 commits completed
-- **Current**: tests/docs update + Data Model spec alignment
-- **Next**: update Vitest + Playwright tests, `spec/DATA_MODEL.md`, and any remaining docs/fixtures referencing companies
+- **Progress**: feature OK, reste à **supprimer la rétrocompat + migrer tests/docs**
+- **Current**: exécuter Lot 0 puis Lot 1 (breaking cleanup)
+- **Next**: Lots 2→4, puis `make test-api test-ui test-e2e`
 
