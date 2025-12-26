@@ -14,7 +14,7 @@ await db.insert(organizations).values({
     challenges: 'Scaling AI use cases',
     objectives: 'Identify ROI positive AI initiatives',
     technologies: 'Cloud, AI platforms',
-    kpis_sector: [],
-    kpis_org: [],
+    kpis: '',
+    references: [],
   }
 });

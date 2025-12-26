@@ -26,8 +26,8 @@ export const organizations = pgTable('organizations', {
   // Business fields moved to JSONB to avoid schema churn (similar to use_cases.data)
   // Suggested structure (non-exhaustive):
   // - industry, size, products, processes, challenges, objectives, technologies
-  // - kpis_sector: string[] (or structured objects in the future)
-  // - kpis_org: string[] (or structured objects in the future)
+  // - kpis: string (markdown)
+  // - references: { title, url, excerpt? }[]
   data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
 });
 

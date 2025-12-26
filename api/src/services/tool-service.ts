@@ -125,11 +125,11 @@ type OrganizationData = {
   size?: string;
   products?: string;
   processes?: string;
+  kpis?: string;
   challenges?: string;
   objectives?: string;
   technologies?: string;
-  kpis_sector?: string[];
-  kpis_org?: string[];
+  references?: Array<{ title: string; url: string; excerpt?: string }>;
 };
 
 function coerceOrganizationMarkdownField(value: unknown): string | undefined {
@@ -147,22 +147,34 @@ function coerceOrganizationMarkdownField(value: unknown): string | undefined {
   return undefined;
 }
 
-function coerceOrganizationKpiList(value: unknown): string[] | undefined {
+function coerceOrganizationKpis(value: unknown): string | undefined {
   if (value == null) return undefined;
+  if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
-    return value
+    const items = value
       .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
       .map((s) => s.trim())
       .filter(Boolean);
-  }
-  if (typeof value === 'string') {
-    // Supporte : lignes ou séparateur virgule.
-    return value
-      .split(/\r?\n|,/g)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
   }
   return undefined;
+}
+
+function coerceOrganizationReferences(
+  value: unknown
+): Array<{ title: string; url: string; excerpt?: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => !!v)
+    .map((r) => ({
+      title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
+      url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
+      excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+    }))
+    .filter((r) => r.title.trim() && r.url.trim());
+  return out.length ? out : undefined;
 }
 
 function parseOrganizationData(value: unknown): OrganizationData {
@@ -180,6 +192,14 @@ function parseOrganizationData(value: unknown): OrganizationData {
 
 function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<string, unknown> {
   const data = parseOrganizationData(row.data);
+  const raw = data as unknown as Record<string, unknown>;
+  const legacyKpisCombined = (() => {
+    const sector = coerceOrganizationKpis(raw.kpis_sector);
+    const org = coerceOrganizationKpis(raw.kpis_org);
+    const parts = [sector, org].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+    if (parts.length === 0) return undefined;
+    return parts.join('\n\n');
+  })();
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -190,13 +210,13 @@ function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<
     industry: data.industry,
     size: data.size,
     // Tolérance aux anciennes écritures (ex: arrays) + normalisation vers markdown string
-    products: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).products) ?? data.products,
-    processes: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).processes) ?? data.processes,
-    challenges: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).challenges) ?? data.challenges,
-    objectives: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).objectives) ?? data.objectives,
-    technologies: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).technologies) ?? data.technologies,
-    kpis_sector: coerceOrganizationKpiList((data as unknown as Record<string, unknown>).kpis_sector) ?? [],
-    kpis_org: coerceOrganizationKpiList((data as unknown as Record<string, unknown>).kpis_org) ?? [],
+    products: coerceOrganizationMarkdownField(raw.products) ?? data.products,
+    processes: coerceOrganizationMarkdownField(raw.processes) ?? data.processes,
+    kpis: coerceOrganizationKpis(raw.kpis ?? data.kpis) ?? legacyKpisCombined,
+    challenges: coerceOrganizationMarkdownField(raw.challenges) ?? data.challenges,
+    objectives: coerceOrganizationMarkdownField(raw.objectives) ?? data.objectives,
+    technologies: coerceOrganizationMarkdownField(raw.technologies) ?? data.technologies,
+    references: coerceOrganizationReferences(raw.references ?? data.references) ?? [],
   };
 }
 
@@ -271,11 +291,10 @@ export class ToolService {
       'size',
       'products',
       'processes',
+      'kpis',
       'challenges',
       'objectives',
       'technologies',
-      'kpis_sector',
-      'kpis_org',
       'status'
     ]);
 
@@ -301,8 +320,8 @@ export class ToolService {
       ) {
         newValue = coerceOrganizationMarkdownField(u.value) ?? (typeof u.value === 'string' ? u.value : '');
       }
-      if (field === 'kpis_sector' || field === 'kpis_org') {
-        newValue = coerceOrganizationKpiList(u.value) ?? [];
+      if (field === 'kpis') {
+        newValue = coerceOrganizationKpis(u.value) ?? (typeof u.value === 'string' ? u.value : '');
       }
 
       if (field === 'name' || field === 'status') {

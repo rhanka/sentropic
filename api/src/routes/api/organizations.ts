@@ -16,11 +16,11 @@ type OrganizationData = {
   size?: string;
   products?: string;
   processes?: string;
+  kpis?: string;
   challenges?: string;
   objectives?: string;
   technologies?: string;
-  kpis_sector?: string[];
-  kpis_org?: string[];
+  references?: Array<{ title: string; url: string; excerpt?: string }>;
 };
 
 function coerceMarkdownField(value: unknown): string | undefined {
@@ -37,20 +37,31 @@ function coerceMarkdownField(value: unknown): string | undefined {
   return undefined;
 }
 
-function coerceKpiList(value: unknown): string[] {
+function coerceKpisString(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
-    return value
+    const items = value
       .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
       .map((s) => s.trim())
       .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
   }
-  if (typeof value === 'string') {
-    return value
-      .split(/\r?\n|,/g)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return undefined;
+}
+
+function coerceReferences(value: unknown): Array<{ title: string; url: string; excerpt?: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => !!v)
+    .map((r) => ({
+      title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
+      url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
+      excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+    }))
+    .filter((r) => r.title.trim() && r.url.trim());
 }
 
 function parseOrganizationData(value: unknown): OrganizationData {
@@ -76,6 +87,16 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
   const rawStatus = row.status;
   const status =
     rawStatus === 'draft' || rawStatus === 'enriching' || rawStatus === 'completed' ? rawStatus : null;
+
+  // KPI legacy: accepte kpis (string) ou anciens kpis_sector/kpis_org (arrays)
+  const legacyKpisCombined = (() => {
+    const sector = coerceKpisString(raw.kpis_sector);
+    const org = coerceKpisString(raw.kpis_org);
+    const parts = [sector, org].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+    if (parts.length === 0) return undefined;
+    return parts.join('\n\n');
+  })();
+
   return {
     id: row.id,
     name: row.name,
@@ -85,11 +106,11 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
     // Tolère les anciennes écritures en arrays (ex: via chat) et normalise vers markdown string
     products: coerceMarkdownField(raw.products) ?? data.products,
     processes: coerceMarkdownField(raw.processes) ?? data.processes,
+    kpis: coerceKpisString(raw.kpis ?? data.kpis) ?? legacyKpisCombined,
     challenges: coerceMarkdownField(raw.challenges) ?? data.challenges,
     objectives: coerceMarkdownField(raw.objectives) ?? data.objectives,
     technologies: coerceMarkdownField(raw.technologies) ?? data.technologies,
-    kpis_sector: coerceKpiList(raw.kpis_sector ?? data.kpis_sector),
-    kpis_org: coerceKpiList(raw.kpis_org ?? data.kpis_org),
+    references: coerceReferences(raw.references ?? data.references),
   };
 }
 
@@ -99,11 +120,10 @@ const organizationInput = z.object({
   size: z.string().optional(),
   products: z.string().optional(),
   processes: z.string().optional(),
+  kpis: z.string().optional(),
   challenges: z.string().optional(),
   objectives: z.string().optional(),
   technologies: z.string().optional(),
-  kpis_sector: z.array(z.string()).optional(),
-  kpis_org: z.array(z.string()).optional(),
   status: z.enum(['draft', 'enriching', 'completed']).default('completed'),
 });
 
@@ -148,11 +168,11 @@ organizationsRouter.post('/', requireEditor, zValidator('json', organizationInpu
     size: payload.size,
     products: payload.products,
     processes: payload.processes,
+    kpis: payload.kpis,
     challenges: payload.challenges,
     objectives: payload.objectives,
     technologies: payload.technologies,
-    kpis_sector: payload.kpis_sector ?? [],
-    kpis_org: payload.kpis_org ?? [],
+    references: [],
   };
 
   await db.insert(organizations).values({
@@ -191,7 +211,7 @@ organizationsRouter.post(
       workspaceId,
       name,
       status: 'draft',
-      data: { kpis_sector: [], kpis_org: [] } satisfies OrganizationData,
+      data: { references: [] } satisfies OrganizationData,
     });
 
     const [org] = await db
@@ -281,11 +301,10 @@ organizationsRouter.put('/:id', requireEditor, zValidator('json', organizationIn
     ...(payload.size !== undefined ? { size: payload.size } : {}),
     ...(payload.products !== undefined ? { products: payload.products } : {}),
     ...(payload.processes !== undefined ? { processes: payload.processes } : {}),
+    ...(payload.kpis !== undefined ? { kpis: payload.kpis } : {}),
     ...(payload.challenges !== undefined ? { challenges: payload.challenges } : {}),
     ...(payload.objectives !== undefined ? { objectives: payload.objectives } : {}),
     ...(payload.technologies !== undefined ? { technologies: payload.technologies } : {}),
-    ...(payload.kpis_sector !== undefined ? { kpis_sector: payload.kpis_sector } : {}),
-    ...(payload.kpis_org !== undefined ? { kpis_org: payload.kpis_org } : {}),
   };
 
   const updated = await db

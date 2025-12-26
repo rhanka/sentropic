@@ -13,8 +13,8 @@ export type Organization = {
   challenges?: string;
   objectives?: string;
   technologies?: string;
-  kpis_sector?: string[];
-  kpis_org?: string[];
+  kpis?: string;
+  references?: Array<{ title: string; url: string; excerpt?: string }>;
   status?: 'draft' | 'enriching' | 'completed';
 };
 
