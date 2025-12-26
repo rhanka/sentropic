@@ -23,6 +23,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant:
 IMPORTANT: 
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
+- Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
 - Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'entreprise. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
     variables: ['company_name', 'industries']
