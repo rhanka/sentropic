@@ -457,7 +457,12 @@ This section inventories **all test entrypoints** (Make targets) and **all test 
 - [x] **ChatService context gating + security rules**: focused unit coverage added (see above).
 - [ ] **Naming migration preference**: update/add AI tests to assert `usecase_get` / `usecase_update` are *preferred* (aliases still accepted). Candidate: extend `api/tests/ai/chat-tools.test.ts`.
 - [x] **Folder → Matrix tool integration (real LLM)**: `api/tests/ai/chat-tools.test.ts` includes a folder-context scenario asserting `matrix_get` tool call.
-- [ ] **UI route context detection contract** (`ChatPanel.svelte`): add a UI unit test for `detectContextFromRoute` or cover via E2E `chat.spec.ts` on key routes (`/entreprises`, `/dossiers`, `/cas-usage`, `/dashboard`, `/matrice`).
+- [ ] **UI route→chat context detection contract** (`ChatPanel.svelte`):
+  - Preferred (minimal, no UI refactor on this branch): extend `e2e/tests/chat.spec.ts` to assert the JSON payload sent to `/api/v1/chat/messages` includes expected `primaryContextType/primaryContextId` on key routes:
+    - `/dossiers` → `primaryContextType='folder'` (no id)
+    - `/entreprises` → `primaryContextType='company'` (no id)
+    - `/cas-usage/[id]` → `primaryContextType='usecase'` + `primaryContextId=params.id`
+  - Optional (later / separate PR): add UI unit coverage by extracting the route→context mapping into a pure helper.
 - [ ] **No-refresh reference updates** on `/cas-usage/[id]`: extend `e2e/tests/usecase-detail.spec.ts` with a step that updates references via chat and asserts UI updates without hard reload.
 - [ ] **Dashboard auto-refresh** after executive summary tool update: extend `e2e/tests/dashboard.spec.ts` to cover SSE-driven refresh (or at minimum confirm via API event + UI re-render).
 
@@ -475,6 +480,11 @@ This section inventories **all test entrypoints** (Make targets) and **all test 
   - [x] `make test-api-ai`
   - [ ] `make test-api`
   - [ ] `make test-ui`
+- [x] Build production images required for E2E seeding:
+  - [x] `make build-api`
+  - [x] `make build-ui-image`
+- [x] E2E (scoped):
+  - [x] `make test-e2e E2E_SPEC=tests/chat.spec.ts`
 - [ ] Push branch and verify GitHub Actions status for this branch.
 
 ## Status
