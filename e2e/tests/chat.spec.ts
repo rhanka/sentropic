@@ -145,6 +145,31 @@ test.describe.serial('Chat', () => {
     expect(r2.requestBody?.primaryContextType).toBe('company');
     expect(r2.requestBody?.primaryContextId ?? null).toBeNull();
 
+    // 2bis) /entreprises/[id] → company + id from URL
+    // Click the first company row/card to navigate to detail.
+    // Close the chat panel first to avoid intercepting clicks on the underlying cards.
+    const closeButton = page.locator('button[aria-label="Fermer"]');
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click();
+      await expect(composer).not.toBeVisible({ timeout: 5000 });
+    }
+    const companyRows = page.locator('article.rounded.border.border-slate-200');
+    if ((await companyRows.count()) > 0) {
+      await companyRows.first().click();
+      await page.waitForURL(/\/entreprises\/[^/?#]+$/, { timeout: 10_000 });
+      await page.waitForLoadState('domcontentloaded');
+      const m = page.url().match(/\/entreprises\/([^/?#]+)/);
+      const companyId = m ? m[1] : '';
+      expect(companyId).toBeTruthy();
+
+      await expect(chatButton).toBeVisible({ timeout: 5000 });
+      await chatButton.click();
+      await expect(composer).toBeVisible({ timeout: 5000 });
+      const r2b = await sendMessageAndWaitApi(page, composer, 'Test context entreprise detail');
+      expect(r2b.requestBody?.primaryContextType).toBe('company');
+      expect(r2b.requestBody?.primaryContextId).toBe(companyId);
+    }
+
     // 3) /cas-usage/[id] → usecase + id from URL
     await page.goto('/cas-usage');
     await page.waitForLoadState('domcontentloaded');
