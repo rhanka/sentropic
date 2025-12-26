@@ -132,6 +132,39 @@ type OrganizationData = {
   kpis_org?: string[];
 };
 
+function coerceOrganizationMarkdownField(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const items = value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
+  }
+  // Ne pas forcer la stringification d'objets arbitraires (risque [object Object] en UI).
+  return undefined;
+}
+
+function coerceOrganizationKpiList(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    // Supporte : lignes ou séparateur virgule.
+    return value
+      .split(/\r?\n|,/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return undefined;
+}
+
 function parseOrganizationData(value: unknown): OrganizationData {
   if (!value) return {};
   if (typeof value === 'object') return value as OrganizationData;
@@ -156,13 +189,14 @@ function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<
     updatedAt: row.updatedAt,
     industry: data.industry,
     size: data.size,
-    products: data.products,
-    processes: data.processes,
-    challenges: data.challenges,
-    objectives: data.objectives,
-    technologies: data.technologies,
-    kpis_sector: Array.isArray(data.kpis_sector) ? data.kpis_sector : [],
-    kpis_org: Array.isArray(data.kpis_org) ? data.kpis_org : [],
+    // Tolérance aux anciennes écritures (ex: arrays) + normalisation vers markdown string
+    products: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).products) ?? data.products,
+    processes: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).processes) ?? data.processes,
+    challenges: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).challenges) ?? data.challenges,
+    objectives: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).objectives) ?? data.objectives,
+    technologies: coerceOrganizationMarkdownField((data as unknown as Record<string, unknown>).technologies) ?? data.technologies,
+    kpis_sector: coerceOrganizationKpiList((data as unknown as Record<string, unknown>).kpis_sector) ?? [],
+    kpis_org: coerceOrganizationKpiList((data as unknown as Record<string, unknown>).kpis_org) ?? [],
   };
 }
 
@@ -255,7 +289,21 @@ export class ToolService {
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
       const oldValue = (before as Record<string, unknown>)[field];
-      const newValue = u.value;
+      let newValue: unknown = u.value;
+
+      // Normalisation durable: le profil organisation est stocké en markdown string pour ces champs.
+      if (
+        field === 'products' ||
+        field === 'processes' ||
+        field === 'challenges' ||
+        field === 'objectives' ||
+        field === 'technologies'
+      ) {
+        newValue = coerceOrganizationMarkdownField(u.value) ?? (typeof u.value === 'string' ? u.value : '');
+      }
+      if (field === 'kpis_sector' || field === 'kpis_org') {
+        newValue = coerceOrganizationKpiList(u.value) ?? [];
+      }
 
       if (field === 'name' || field === 'status') {
         setPayload[field] = newValue;

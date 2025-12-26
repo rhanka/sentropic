@@ -23,6 +23,36 @@ type OrganizationData = {
   kpis_org?: string[];
 };
 
+function coerceMarkdownField(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const items = value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
+  }
+  return undefined;
+}
+
+function coerceKpiList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n|,/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function parseOrganizationData(value: unknown): OrganizationData {
   if (!value) return {};
   if (typeof value === 'object') return value as OrganizationData;
@@ -42,6 +72,7 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
   status: 'draft' | 'enriching' | 'completed' | null;
 } & OrganizationData {
   const data = parseOrganizationData(row.data);
+  const raw = data as unknown as Record<string, unknown>;
   const rawStatus = row.status;
   const status =
     rawStatus === 'draft' || rawStatus === 'enriching' || rawStatus === 'completed' ? rawStatus : null;
@@ -51,13 +82,14 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
     status,
     industry: data.industry,
     size: data.size,
-    products: data.products,
-    processes: data.processes,
-    challenges: data.challenges,
-    objectives: data.objectives,
-    technologies: data.technologies,
-    kpis_sector: Array.isArray(data.kpis_sector) ? data.kpis_sector : [],
-    kpis_org: Array.isArray(data.kpis_org) ? data.kpis_org : [],
+    // Tolère les anciennes écritures en arrays (ex: via chat) et normalise vers markdown string
+    products: coerceMarkdownField(raw.products) ?? data.products,
+    processes: coerceMarkdownField(raw.processes) ?? data.processes,
+    challenges: coerceMarkdownField(raw.challenges) ?? data.challenges,
+    objectives: coerceMarkdownField(raw.objectives) ?? data.objectives,
+    technologies: coerceMarkdownField(raw.technologies) ?? data.technologies,
+    kpis_sector: coerceKpiList(raw.kpis_sector ?? data.kpis_sector),
+    kpis_org: coerceKpiList(raw.kpis_org ?? data.kpis_org),
   };
 }
 
