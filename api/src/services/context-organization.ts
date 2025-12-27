@@ -1,7 +1,7 @@
 import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 
-export interface CompanyData {
+export interface OrganizationData {
   industry: string;
   size: string;
   products: string;
@@ -28,7 +28,7 @@ function sanitizePgText(input: string): string {
   return out;
 }
 
-function normalizeCompanyField(value: unknown): string {
+function normalizeOrganizationField(value: unknown): string {
   if (typeof value === 'string') return sanitizePgText(value);
   if (value === null || value === undefined) return '';
   try {
@@ -38,17 +38,17 @@ function normalizeCompanyField(value: unknown): string {
   }
 }
 
-function coerceCompanyData(value: unknown): CompanyData {
+function coerceOrganizationData(value: unknown): OrganizationData {
   const rec = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
   return {
-    industry: normalizeCompanyField(rec.industry),
-    size: normalizeCompanyField(rec.size),
-    products: normalizeCompanyField(rec.products),
-    processes: normalizeCompanyField(rec.processes),
-    kpis: normalizeCompanyField(rec.kpis),
-    challenges: normalizeCompanyField(rec.challenges),
-    objectives: normalizeCompanyField(rec.objectives),
-    technologies: normalizeCompanyField(rec.technologies),
+    industry: normalizeOrganizationField(rec.industry),
+    size: normalizeOrganizationField(rec.size),
+    products: normalizeOrganizationField(rec.products),
+    processes: normalizeOrganizationField(rec.processes),
+    kpis: normalizeOrganizationField(rec.kpis),
+    challenges: normalizeOrganizationField(rec.challenges),
+    objectives: normalizeOrganizationField(rec.objectives),
+    technologies: normalizeOrganizationField(rec.technologies),
     references: Array.isArray(rec.references)
       ? rec.references
           .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
@@ -85,103 +85,93 @@ const industries = {
 };
 
 /**
- * Enrichir une entreprise avec l'IA
+ * Enrichir une organisation avec l'IA
  * Si streamId est fourni, utilise le streaming et écrit les événements dans chat_stream_events
- * Sinon, utilise l'ancienne méthode (non-streaming) pour compatibilité
  */
-export const enrichCompany = async (
-  companyName: string, 
-  model?: string, 
+export const enrichOrganization = async (
+  organizationName: string,
+  model?: string,
   signal?: AbortSignal,
   streamId?: string
-): Promise<CompanyData> => {
+): Promise<OrganizationData> => {
   // Si streamId est fourni, utiliser la version streaming
   if (streamId) {
-    // enrichCompanyStream attend : (companyName, streamId, model, signal)
-    // enrichCompany reçoit : (companyName, model, signal, streamId)
-    return enrichCompanyStream(companyName, streamId, model, signal);
+    // enrichOrganizationStream attend : (organizationName, streamId, model, signal)
+    // enrichOrganization reçoit : (organizationName, model, signal, streamId)
+    return enrichOrganizationStream(organizationName, streamId, model, signal);
   }
 
-  // Utiliser executeWithToolsStream même sans streamId (générer un streamId temporaire)
-  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
-  
-  if (!companyInfoPrompt) {
+  const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
+  if (!organizationInfoPrompt) {
     throw new Error('Prompt organization_info non trouvé');
   }
 
   const industriesList = industries.industries.map(i => i.name).join(', ');
-  const prompt = companyInfoPrompt
-    .replace('{{organization_name}}', companyName)
+  const prompt = organizationInfoPrompt
+    .replace('{{organization_name}}', organizationName)
     .replace('{{industries}}', industriesList);
 
-  const finalStreamId = streamId || `company_enrich_${Date.now()}`;
+  const finalStreamId = streamId || `organization_enrich_${Date.now()}`;
   const { content } = await executeWithToolsStream(prompt, {
-    model: model || 'gpt-4.1-nano', 
+    model: model || 'gpt-4.1-nano',
     useWebSearch: true,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
-    promptId: 'company_info',
+    promptId: 'organization_info',
     streamId: finalStreamId,
     signal
   });
 
   if (!content) {
-    throw new Error('Aucune réponse reçue de l\'IA');
+    throw new Error("Aucune réponse reçue de l'IA");
   }
 
   try {
     const parsed = JSON.parse(content) as unknown;
-    return coerceCompanyData(parsed);
+    return coerceOrganizationData(parsed);
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', content);
-    throw new Error('Erreur lors du parsing de la réponse de l\'IA');
+    throw new Error("Erreur lors du parsing de la réponse de l'IA");
   }
 };
 
 /**
- * Enrichir une entreprise avec l'IA en streaming
- * @param companyName - Nom de l'entreprise
- * @param streamId - ID du stream pour écrire les événements (optionnel, généré si non fourni)
- * @param model - Modèle OpenAI à utiliser (optionnel, utilise le défaut depuis settings)
- * @param signal - AbortSignal pour annulation
- * @returns Données enrichies de l'entreprise
+ * Enrichir une organisation avec l'IA en streaming
  */
-export const enrichCompanyStream = async (
-  companyName: string,
+export const enrichOrganizationStream = async (
+  organizationName: string,
   streamId?: string,
   model?: string,
   signal?: AbortSignal
-): Promise<CompanyData> => {
-  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
-  
-  if (!companyInfoPrompt) {
+): Promise<OrganizationData> => {
+  const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
+  if (!organizationInfoPrompt) {
     throw new Error('Prompt organization_info non trouvé');
   }
 
   const industriesList = industries.industries.map(i => i.name).join(', ');
-  const prompt = companyInfoPrompt
-    .replace('{{organization_name}}', companyName)
+  const prompt = organizationInfoPrompt
+    .replace('{{organization_name}}', organizationName)
     .replace('{{industries}}', industriesList);
+
   const { content: accumulatedContent } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
     responseFormat: 'json_object',
     reasoningSummary: 'detailed',
-    promptId: 'company_info',
+    promptId: 'organization_info',
     streamId,
     signal
   });
 
-  // Parser le contenu final
   if (!accumulatedContent) {
-    throw new Error('Aucune réponse reçue de l\'IA');
+    throw new Error("Aucune réponse reçue de l'IA");
   }
 
   try {
     const cleaned = accumulatedContent
       .trim()
-      // retirer d'éventuels code fences
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/i, '')
       .replace(/```\s*$/i, '')
@@ -193,7 +183,6 @@ export const enrichCompanyStream = async (
     try {
       parsedData = tryParse(cleaned);
     } catch {
-      // Fallback: extraire le premier objet JSON plausible (au cas où du texte parasite s'ajoute)
       const firstBrace = cleaned.indexOf('{');
       const lastBrace = cleaned.lastIndexOf('}');
       if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -202,10 +191,13 @@ export const enrichCompanyStream = async (
         throw new Error('No JSON object boundaries found');
       }
     }
-    return coerceCompanyData(parsedData);
+
+    return coerceOrganizationData(parsedData);
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', accumulatedContent);
-    throw new Error('Erreur lors du parsing de la réponse de l\'IA');
+    throw new Error("Erreur lors du parsing de la réponse de l'IA");
   }
 };
+
+

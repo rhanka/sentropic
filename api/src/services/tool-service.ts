@@ -194,7 +194,7 @@ function parseOrganizationData(value: unknown): OrganizationData {
   return {};
 }
 
-function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<string, unknown> {
+function hydrateOrganizationForTools(row: typeof organizations.$inferSelect): Record<string, unknown> {
   const data = parseOrganizationData(row.data);
   const raw = data as unknown as Record<string, unknown>;
   const legacyKpisCombined = (() => {
@@ -226,10 +226,10 @@ function hydrateCompanyForTools(row: typeof organizations.$inferSelect): Record<
 
 export class ToolService {
   // ---------------------------
-  // Companies
+  // Organizations
   // ---------------------------
 
-  async listCompanies(opts?: {
+  async listOrganizations(opts?: {
     workspaceId?: string | null;
     idsOnly?: boolean | null;
     select?: string[] | null;
@@ -246,48 +246,48 @@ export class ToolService {
     }
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const items = rows.map((r) => pickObjectFields(hydrateCompanyForTools(r), select));
+    const items = rows.map((r) => pickObjectFields(hydrateOrganizationForTools(r), select));
     return { items, selected: select, count: rows.length };
   }
 
-  async getCompany(
-    companyId: string,
+  async getOrganization(
+    organizationId: string,
     opts?: { workspaceId?: string | null; select?: string[] | null }
-  ): Promise<{ companyId: string; data: Record<string, unknown>; selected: string[] | null }> {
-    if (!companyId) throw new Error('companyId is required');
+  ): Promise<{ organizationId: string; data: Record<string, unknown>; selected: string[] | null }> {
+    if (!organizationId) throw new Error('organizationId is required');
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(organizations.id, companyId), eq(organizations.workspaceId, workspaceId))
-      : eq(organizations.id, companyId);
+      ? and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, organizationId);
 
     const [row] = await db.select().from(organizations).where(where).limit(1);
-    if (!row) throw new Error('Company not found');
+    if (!row) throw new Error('Organization not found');
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const data = pickObjectFields(hydrateCompanyForTools(row), select);
-    return { companyId, data, selected: select };
+    const data = pickObjectFields(hydrateOrganizationForTools(row), select);
+    return { organizationId, data, selected: select };
   }
 
-  async updateCompanyFields(input: {
-    companyId: string;
+  async updateOrganizationFields(input: {
+    organizationId: string;
     updates: Array<{ field: string; value: unknown }>;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
-  }): Promise<{ companyId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
-    if (!input.companyId) throw new Error('companyId is required');
+  }): Promise<{ organizationId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.organizationId) throw new Error('organizationId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(organizations.id, input.companyId), eq(organizations.workspaceId, workspaceId))
-      : eq(organizations.id, input.companyId);
+      ? and(eq(organizations.id, input.organizationId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, input.organizationId);
     const [row] = await db.select().from(organizations).where(where).limit(1);
-    if (!row) throw new Error('Company not found');
+    if (!row) throw new Error('Organization not found');
 
-    const before = deepClone(hydrateCompanyForTools(row));
+    const before = deepClone(hydrateOrganizationForTools(row));
 
     const allowed = new Set([
       'name',
@@ -346,11 +346,11 @@ export class ToolService {
     setPayload.updatedAt = new Date();
 
     const updated = await db.update(organizations).set(setPayload).where(where).returning();
-    if (updated.length === 0) throw new Error('Company not found');
+    if (updated.length === 0) throw new Error('Organization not found');
 
-    const after = deepClone(hydrateCompanyForTools(updated[0]));
+    const after = deepClone(hydrateOrganizationForTools(updated[0]));
 
-    await this.notifyOrganizationEvent(input.companyId);
+    await this.notifyOrganizationEvent(input.organizationId);
 
     const sessionId = input.sessionId ?? null;
     const messageId = input.messageId ?? null;
@@ -360,8 +360,8 @@ export class ToolService {
       await db.insert(chatContexts).values({
         id: createId(),
         sessionId,
-        contextType: 'company',
-        contextId: input.companyId,
+        contextType: 'organization',
+        contextId: input.organizationId,
         snapshotBefore: before,
         snapshotAfter: after,
         modifications: applied,
@@ -370,12 +370,12 @@ export class ToolService {
       });
     }
 
-    let seq = await getNextModificationSequence('company', input.companyId);
+    let seq = await getNextModificationSequence('organization', input.organizationId);
     for (const item of applied) {
       await db.insert(contextModificationHistory).values({
         id: createId(),
-        contextType: 'company',
-        contextId: input.companyId,
+        contextType: 'organization',
+        contextId: input.organizationId,
         sessionId,
         messageId,
         field: item.field,
@@ -392,7 +392,7 @@ export class ToolService {
       seq += 1;
     }
 
-    return { companyId: input.companyId, applied };
+    return { organizationId: input.organizationId, applied };
   }
 
   /**
@@ -571,7 +571,7 @@ export class ToolService {
 
   async listFolders(opts?: {
     workspaceId?: string | null;
-    companyId?: string | null;
+    organizationId?: string | null;
     idsOnly?: boolean | null;
     select?: string[] | null;
   }): Promise<
@@ -579,7 +579,7 @@ export class ToolService {
     | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
   > {
     const workspaceId = (opts?.workspaceId ?? '').trim();
-    const organizationId = (opts?.companyId ?? '').trim();
+    const organizationId = (opts?.organizationId ?? '').trim();
 
     const where =
       workspaceId && organizationId
@@ -654,8 +654,7 @@ export class ToolService {
 
     const before = deepClone(row as unknown as Record<string, unknown>);
 
-    // Backward-compat: accept companyId updates but map them to folders.organizationId
-    const allowed = new Set(['name', 'description', 'companyId', 'organizationId', 'matrixConfig', 'executiveSummary', 'status']);
+    const allowed = new Set(['name', 'description', 'organizationId', 'matrixConfig', 'executiveSummary', 'status']);
     const setPayload: Record<string, unknown> = {};
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
@@ -664,8 +663,8 @@ export class ToolService {
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
 
-      // Validate FK organizationId (companyId is an alias)
-      if ((field === 'companyId' || field === 'organizationId') && workspaceId) {
+      // Validate FK organizationId
+      if (field === 'organizationId' && workspaceId) {
         const nextId = typeof u.value === 'string' ? u.value : null;
         if (nextId) {
           const [org] = await db
@@ -676,16 +675,13 @@ export class ToolService {
           if (!org) throw new Error('Organization not found');
         }
       }
-
-      const normalizedField = field === 'companyId' ? 'organizationId' : field;
-      const oldValue = (row as unknown as Record<string, unknown>)[normalizedField];
+      const oldValue = (row as unknown as Record<string, unknown>)[field];
 
       if (field === 'matrixConfig' || field === 'executiveSummary') {
         setPayload[field] = u.value == null ? null : JSON.stringify(u.value);
         applied.push({ field, oldValue: parseJsonOrNull(oldValue), newValue: u.value });
       } else {
-        // companyId is mapped to organizationId in DB
-        setPayload[normalizedField] = u.value;
+        setPayload[field] = u.value;
         applied.push({ field, oldValue, newValue: u.value });
       }
     }

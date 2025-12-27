@@ -123,7 +123,7 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Bénéfice 4",
     "Bénéfice 5"
   ],
-  "metrics": [ // 30-40 mots pour l'ensemble des métriques
+  "metrics": [ // 30-40 mots pour l'ensemble des métriques, alignés avec les kpis de l'organisation si fournis dans le JSON de l'organisation
     "KPI ou mesure de succès 1",
     "KPI ou mesure de succès 2",
     "KPI ou mesure de succès 3"

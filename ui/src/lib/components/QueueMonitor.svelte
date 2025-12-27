@@ -44,7 +44,7 @@
 
   const getTypeLabel = (type: JobType): string => {
     switch (type) {
-      case 'company_enrich': return 'Enrichissement organisation';
+      case 'organization_enrich': return 'Enrichissement organisation';
       case 'usecase_list': return 'Génération cas d\'usage';
       case 'usecase_detail': return 'Détail cas d\'usage';
       case 'executive_summary': return 'Synthèse exécutive';
@@ -53,9 +53,9 @@
   };
 
   const getStreamIdForJob = (job: any): string => {
-    // Pour company_enrich: streamId déterministe basé sur l'organisation (organization_<id>)
-    if (job?.type === 'company_enrich' && job?.data?.companyId) {
-      return `organization_${job.data.companyId}`;
+    // Pour organization_enrich: streamId déterministe basé sur l'organisation (organization_<id>)
+    if (job?.type === 'organization_enrich' && job?.data?.organizationId) {
+      return `organization_${job.data.organizationId}`;
     }
     // Pour usecase_list: streamId déterministe basé sur le dossier (folder_<folderId>)
     if (job?.type === 'usecase_list' && (job?.data?.folderId || job?.data?.folder_id)) {

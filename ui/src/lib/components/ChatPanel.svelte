@@ -87,14 +87,14 @@
       return { primaryContextType: 'folder', primaryContextId: params.id };
     }
 
-    // /organisations/[id] → company (organization)
+    // /organisations/[id] → organization
     if (routeId === '/organisations/[id]' && params.id) {
-      return { primaryContextType: 'company', primaryContextId: params.id };
+      return { primaryContextType: 'organization', primaryContextId: params.id };
     }
 
-    // /organisations → organizations list (company scope without a specific id)
+    // /organisations → organizations list (organization scope without a specific id)
     if (routeId === '/organisations') {
-      return { primaryContextType: 'company' };
+      return { primaryContextType: 'organization' };
     }
 
     // /dossiers → folders list (folder scope without a specific id)

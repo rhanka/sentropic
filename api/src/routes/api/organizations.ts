@@ -5,7 +5,7 @@ import { db, pool } from '../../db/client';
 import { folders, organizations, useCases } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
-import { enrichCompany as enrichOrganization } from '../../services/context-company';
+import { enrichOrganization } from '../../services/context-organization';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
@@ -243,12 +243,11 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   await notifyOrganizationEvent(id);
 
-  // Keep existing queue job type for now (will be renamed later if needed).
   const jobId = await queueManager.addJob(
-    'company_enrich',
+    'organization_enrich',
     {
-      companyId: id,
-      companyName: org.name,
+      organizationId: id,
+      organizationName: org.name,
       model: selectedModel,
     },
     { workspaceId }

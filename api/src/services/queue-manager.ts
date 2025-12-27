@@ -1,7 +1,7 @@
 import { db, pool } from '../db/client';
 import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
-import { enrichCompany, type CompanyData } from './context-company';
+import { enrichOrganization, type OrganizationData } from './context-organization';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
@@ -25,11 +25,11 @@ function parseOrgData(value: unknown): Record<string, unknown> {
   return {};
 }
 
-export type JobType = 'company_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
+export type JobType = 'organization_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
 
-export interface CompanyEnrichJobData {
-  companyId: string;
-  companyName: string;
+export interface OrganizationEnrichJobData {
+  organizationId: string;
+  organizationName: string;
   model?: string;
 }
 
@@ -37,7 +37,6 @@ export interface UseCaseListJobData {
   folderId: string;
   input: string;
   organizationId?: string;
-  companyId?: string; // backward-compat alias
   model?: string;
 }
 
@@ -63,7 +62,7 @@ export interface ChatMessageJobData {
 }
 
 export type JobData =
-  | CompanyEnrichJobData
+  | OrganizationEnrichJobData
   | UseCaseListJobData
   | UseCaseDetailJobData
   | ExecutiveSummaryJobData
@@ -362,8 +361,8 @@ export class QueueManager {
 
       // Traiter selon le type
       switch (jobType) {
-        case 'company_enrich':
-          await this.processCompanyEnrich(jobData as CompanyEnrichJobData, jobId, controller.signal);
+        case 'organization_enrich':
+          await this.processOrganizationEnrich(jobData as OrganizationEnrichJobData, jobId, controller.signal);
           break;
         case 'usecase_list':
           await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
@@ -406,20 +405,20 @@ export class QueueManager {
   }
 
   /**
-   * Worker pour l'enrichissement d'entreprise
+   * Worker pour l'enrichissement d'organisation
    */
-  private async processCompanyEnrich(data: CompanyEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
-    const { companyId, companyName, model } = data;
+  private async processOrganizationEnrich(data: OrganizationEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
+    const { organizationId, organizationName, model } = data;
     
     // Générer un streamId pour le streaming
     // IMPORTANT:
-    // Pour l'enrichissement entreprise, on veut pouvoir suivre l'avancement côté UI avec uniquement le companyId
+    // Pour l'enrichissement organisation, on veut pouvoir suivre l'avancement côté UI avec uniquement l'organizationId
     // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
-    const streamId = `organization_${companyId}`;
+    const streamId = `organization_${organizationId}`;
     
-    // Enrichir l'entreprise avec streaming
-    // enrichCompany utilise le streaming si streamId est fourni
-    const enrichedData: CompanyData = await enrichCompany(companyName, model, signal, streamId);
+    // Enrichir l'organisation avec streaming
+    // enrichOrganization utilise le streaming si streamId est fourni
+    const enrichedData: OrganizationData = await enrichOrganization(organizationName, model, signal, streamId);
 
     // Safety: PostgreSQL text/json cannot contain NUL (\u0000). Strip control chars before DB write.
     const sanitizePgText = (input: string): string => {
@@ -442,7 +441,7 @@ export class QueueManager {
           }))
           .filter((r) => r.title.trim() && r.url.trim())
       : [];
-    const cleanedData: CompanyData = {
+    const cleanedData: OrganizationData = {
       industry: clean(enrichedData.industry),
       size: clean(enrichedData.size),
       products: clean(enrichedData.products),
@@ -472,17 +471,16 @@ export class QueueManager {
         status: 'completed',
         updatedAt: new Date(),
       })
-      .where(eq(organizations.id, companyId));
+      .where(eq(organizations.id, organizationId));
 
-    await this.notifyOrganizationEvent(companyId);
+    await this.notifyOrganizationEvent(organizationId);
   }
 
   /**
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, companyId, model } = data;
-    const resolvedOrganizationId = organizationId ?? companyId;
+    const { folderId, input, organizationId, model } = data;
 
     const [folder] = await db
       .select({ id: folders.id, workspaceId: folders.workspaceId })
@@ -500,12 +498,12 @@ export class QueueManager {
     
     // Récupérer les informations de l'organisation si nécessaire
     let organizationInfo = '';
-    if (resolvedOrganizationId) {
+    if (organizationId) {
       try {
         const [org] = await db
           .select()
           .from(organizations)
-          .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, workspaceId)));
+          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)));
         if (org) {
           const orgData = parseOrgData(org.data);
           organizationInfo = JSON.stringify({
@@ -520,7 +518,7 @@ export class QueueManager {
           }, null, 2);
           console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
         } else {
-          console.warn(`⚠️ Organization not found with id: ${resolvedOrganizationId}`);
+          console.warn(`⚠️ Organization not found with id: ${organizationId}`);
         }
       } catch (error) {
         console.warn('Error fetching organization info:', error);
@@ -541,7 +539,7 @@ export class QueueManager {
           description: `Dossier généré automatiquement pour: ${input}`
         })
         .where(eq(folders.id, folderId));
-      console.log(`📁 Folder updated: ${useCaseList.dossier} (ID: ${folderId}, Org: ${resolvedOrganizationId || 'None'})`);
+      console.log(`📁 Folder updated: ${useCaseList.dossier} (ID: ${folderId}, Org: ${organizationId || 'None'})`);
       await this.notifyFolderEvent(folderId);
     }
 
@@ -569,7 +567,7 @@ export class QueueManager {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        organizationId: resolvedOrganizationId || null,
+        organizationId: organizationId || null,
         data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',

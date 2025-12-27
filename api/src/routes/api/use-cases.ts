@@ -501,15 +501,14 @@ const generateInput = z.object({
   input: z.string().min(1),
   create_new_folder: z.boolean(),
   organization_id: z.string().optional(),
-  company_id: z.string().optional(), // backward-compat alias
   model: z.string().optional()
 });
 
 useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId } = c.get('user') as { workspaceId: string };
-    const { input, create_new_folder, organization_id, company_id, model } = c.req.valid('json');
-    const organizationId = organization_id ?? company_id;
+    const { input, create_new_folder, organization_id, model } = c.req.valid('json');
+    const organizationId = organization_id;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();

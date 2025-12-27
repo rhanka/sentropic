@@ -148,23 +148,23 @@ export const useCaseUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
- * Companies (batch / list scope) tools
+ * Organizations (batch / list scope) tools
  */
-export const companiesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const organizationsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'companies_list',
+    name: 'organizations_list',
     description:
-      'List companies in the current workspace. Use idsOnly to get just IDs, or use select to limit returned fields.',
+      'List organizations in the current workspace. Use idsOnly to get just IDs, or use select to limit returned fields.',
     parameters: {
       type: 'object',
       properties: {
-        idsOnly: { type: 'boolean', description: 'If true, return only company IDs.' },
+        idsOnly: { type: 'boolean', description: 'If true, return only organization IDs.' },
         select: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Optional list of company fields to include (e.g. ["name","industry","size"]). If omitted, returns full company rows.'
+            'Optional list of organization fields to include (e.g. ["name","industry","size"]). If omitted, returns full organization rows.'
         }
       },
       required: []
@@ -173,35 +173,35 @@ export const companiesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
- * Company (detail scope) tools
+ * Organization (detail scope) tools
  */
-export const companyGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const organizationGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'company_get',
+    name: 'organization_get',
     description:
-      'Read a single company by id. Prefer using select to reduce tokens.',
+      'Read a single organization by id. Prefer using select to reduce tokens.',
     parameters: {
       type: 'object',
       properties: {
-        companyId: { type: 'string', description: 'Company ID to read.' },
+        organizationId: { type: 'string', description: 'Organization ID to read.' },
         select: {
           type: 'array',
           items: { type: 'string' },
           description: 'Optional list of fields to include (e.g. ["name","processes"]).'
         }
       },
-      required: ['companyId']
+      required: ['organizationId']
     }
   }
 };
 
-export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const organizationUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'company_update',
+    name: 'organization_update',
     description:
-      "Met à jour les champs d'une organisation (tool historique nommé company_update). IMPORTANT: tu dois utiliser le NOM EXACT du champ, sinon l'API répondra \"Unsupported field\".\n\n" +
+      "Met à jour les champs d'une organisation. IMPORTANT: tu dois utiliser le NOM EXACT du champ, sinon l'API répondra \"Unsupported field\".\n\n" +
       'Mapping champ (API) ↔ intitulé (UI) :\n' +
       '- name ↔ Nom\n' +
       '- industry ↔ Secteur\n' +
@@ -218,7 +218,7 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
     parameters: {
       type: 'object',
       properties: {
-        companyId: { type: 'string', description: 'Company ID to update.' },
+        organizationId: { type: 'string', description: 'Organization ID to update.' },
         updates: {
           type: 'array',
           description: 'List of field updates to apply.',
@@ -249,7 +249,7 @@ export const companyUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           }
         }
       },
-      required: ['companyId', 'updates']
+      required: ['organizationId', 'updates']
     }
   }
 };
@@ -262,17 +262,17 @@ export const foldersListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: 'folders_list',
     description:
-      'List folders in the current workspace. Optionally filter by companyId. Use idsOnly or select to reduce payload.',
+      'List folders in the current workspace. Optionally filter by organizationId. Use idsOnly or select to reduce payload.',
     parameters: {
       type: 'object',
       properties: {
-        companyId: { type: 'string', description: 'Optional company ID to filter folders.' },
+        organizationId: { type: 'string', description: 'Optional organization ID to filter folders.' },
         idsOnly: { type: 'boolean', description: 'If true, return only folder IDs.' },
         select: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Optional list of folder fields to include (e.g. ["name","description","companyId"]). If omitted, returns full folder rows.'
+            'Optional list of folder fields to include (e.g. ["name","description","organizationId"]). If omitted, returns full folder rows.'
         }
       },
       required: []
@@ -320,7 +320,7 @@ export const folderUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           items: {
             type: 'object',
             properties: {
-              field: { type: 'string', description: 'Folder field name (e.g. name, description, companyId, executiveSummary).' },
+              field: { type: 'string', description: 'Folder field name (e.g. name, description, organizationId, executiveSummary).' },
               value: { description: 'New value (JSON). For matrixConfig/executiveSummary, pass an object.' }
             },
             required: ['field', 'value']
