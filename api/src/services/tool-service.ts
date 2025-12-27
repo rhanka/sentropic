@@ -350,7 +350,7 @@ export class ToolService {
 
     const after = deepClone(hydrateCompanyForTools(updated[0]));
 
-    await this.notifyCompanyEvent(input.companyId);
+    await this.notifyOrganizationEvent(input.companyId);
 
     const sessionId = input.sessionId ?? null;
     const messageId = input.messageId ?? null;
@@ -993,11 +993,11 @@ export class ToolService {
     }
   }
 
-  private async notifyCompanyEvent(companyId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ company_id: companyId });
+  private async notifyOrganizationEvent(organizationId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ organization_id: organizationId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY organization_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }

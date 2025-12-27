@@ -103,10 +103,10 @@ export const enrichCompany = async (
   }
 
   // Utiliser executeWithToolsStream même sans streamId (générer un streamId temporaire)
-  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
+  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
   
   if (!companyInfoPrompt) {
-    throw new Error('Prompt company_info non trouvé');
+    throw new Error('Prompt organization_info non trouvé');
   }
 
   const industriesList = industries.industries.map(i => i.name).join(', ');
@@ -153,10 +153,10 @@ export const enrichCompanyStream = async (
   model?: string,
   signal?: AbortSignal
 ): Promise<CompanyData> => {
-  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'company_info')?.content || '';
+  const companyInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
   
   if (!companyInfoPrompt) {
-    throw new Error('Prompt company_info non trouvé');
+    throw new Error('Prompt organization_info non trouvé');
   }
 
   const industriesList = industries.industries.map(i => i.name).join(', ');

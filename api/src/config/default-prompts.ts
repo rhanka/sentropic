@@ -1,12 +1,13 @@
 // Configuration des prompts par défaut
 export const defaultPrompts = [
   {
-    id: 'company_info',
+    id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',
     content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
 Les secteurs d'activité disponibles sont: {{industries}}.
 Normalisez le nom de l'organisation selon son usage officiel.
+La date actuelle est ${new Date().toISOString()}.
 
 Réponds UNIQUEMENT avec un JSON valide contenant:
 {
@@ -28,7 +29,9 @@ IMPORTANT:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
-- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes.
+- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. 
+- Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes s'il le faut
+- Chacun des champs, en particulier technologies et kpis doivent être fondés sur des informations référencées (web) et récentes.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
     variables: ['organization_name', 'industries']
   },

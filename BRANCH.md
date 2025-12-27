@@ -30,8 +30,8 @@ Occurrences `entreprise(s)`:
 - `e2e`: **135** (dont beaucoup dans `e2e/playwright-report/**` → artefacts à supprimer du repo et ignorer)
 
 ## Plan / Todo
-- [ ] **Lot 0 — Cleanup repo (artefacts)**:
-  - [ ] Supprimer `e2e/playwright-report/**` du repo (si versionné) et l’ajouter au `.gitignore`.
+- [x] **Lot 0 — Cleanup repo (artefacts)**:
+  - [x] Supprimer `e2e/playwright-report/**` du repo (si versionné) et l’ajouter au `.gitignore`. (commit: `519fefe`)
 - [ ] **Lot 1 — Suppression de la rétrocompat “companies/entreprises” (breaking)**:
   - [ ] **API**
     - [ ] Retirer le montage `/companies` dans `api/src/routes/api/index.ts`.
@@ -82,10 +82,13 @@ Occurrences `entreprise(s)`:
 - [x] `bc3a112`: ui — dossiers: `organizationId/organizationName` (fix affichage/liaison)
 - [x] `9be21b8`: docs — update BRANCH progress (organizations)
 - [x] `73d2ead`: docs — inventaire grep + plan “no rétrocompat”
+- [x] `519fefe`: cleanup — suppression des artefacts `e2e/playwright-report/**`
+- [x] `a8fd061`: breaking — SSE/streams/org events passent en `organization_*` (UI réactive sur `/organisations`)
+- [x] `da57c13`: fix — `tool-service` notifie `organization_events` (corrige la non-réactivité après updates via tools) + prompt `organization_info`
 
 ### À faire (lots cohérents, commits à venir)
-- [ ] **Lot 0**: cleanup artefacts (ex: `e2e/playwright-report/**` si versionné + `.gitignore`)
-- [ ] **Lot 1 (breaking)**: suppression rétrocompat “companies/entreprises” (API + UI + SSE + tools)
+- [x] **Lot 0**: cleanup artefacts (ex: `e2e/playwright-report/**` si versionné + `.gitignore`)
+- [ ] **Lot 1 (breaking)**: suppression rétrocompat “companies/entreprises” (API + UI + SSE + tools) — en cours
 - [ ] **Lot 2**: tests API/Vitest (endpoints, fixtures, seed)
 - [ ] **Lot 3**: E2E Playwright (routes, assertions réseau, chat context)
 - [ ] **Lot 4**: docs/spec (DATA_MODEL + SPEC + TOOLS + README)
@@ -98,6 +101,6 @@ Occurrences `entreprise(s)`:
 
 ## Status
 - **Progress**: feature OK, reste à **supprimer la rétrocompat + migrer tests/docs**
-- **Current**: exécuter Lot 0 puis Lot 1 (breaking cleanup)
+- **Current**: Lot 1 (breaking cleanup)
 - **Next**: Lots 2→4, puis `make test-api test-ui test-e2e`
 
