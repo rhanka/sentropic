@@ -130,11 +130,10 @@ const organizationInput = z.object({
 export const organizationsRouter = new Hono();
 
 async function notifyOrganizationEvent(organizationId: string): Promise<void> {
-  // Backward-compatible channel name (UI listens to company_events today).
-  const notifyPayload = JSON.stringify({ company_id: organizationId });
+  const notifyPayload = JSON.stringify({ organization_id: organizationId });
   const client = await pool.connect();
   try {
-    await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    await client.query(`NOTIFY organization_events, '${notifyPayload.replace(/'/g, "''")}'`);
   } finally {
     client.release();
   }

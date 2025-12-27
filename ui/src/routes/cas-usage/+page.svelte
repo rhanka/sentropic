@@ -37,7 +37,7 @@
       const shouldGenerate = urlParams.get('generate') === 'true';
       const context = urlParams.get('context');
       const createNewFolder = urlParams.get('createNewFolder') === 'true';
-      const companyId = urlParams.get('companyId');
+      const organizationId = urlParams.get('organizationId');
       const folderId = urlParams.get('folder');
 
       // Si un dossier spécifique est demandé, le sélectionner
@@ -55,7 +55,7 @@
           return;
         }
         // Lancer la génération
-        await startGeneration(context, createNewFolder, companyId);
+        await startGeneration(context, createNewFolder, organizationId);
       } else if ($currentFolderId) {
         // Charger les cas existants seulement si un dossier est sélectionné
         await loadUseCases();
@@ -150,7 +150,7 @@
 
   // Polling désactivé: cas d'usage se mettent à jour via SSE (usecase_update)
 
-  const startGeneration = async (context: string, createNewFolder: boolean, companyId: string | null) => {
+  const startGeneration = async (context: string, createNewFolder: boolean, organizationId: string | null) => {
     let progressToastId = '';
     
     try {
@@ -165,7 +165,7 @@
       const result = await apiPost('/use-cases/generate', {
         input: context,
         create_new_folder: createNewFolder,
-        company_id: companyId
+        organization_id: organizationId
       });
 
       // Mettre à jour le toaster de progression

@@ -33,12 +33,8 @@ function parseJobIds(url: URL): string[] {
   return [...new Set(repeated.map(s => s.trim()).filter(Boolean))];
 }
 
-function parseCompanyIds(url: URL): string[] {
-  // Backward-compat param (companyIds) + preferred (organizationIds)
-  const repeated = [
-    ...url.searchParams.getAll('organizationIds'),
-    ...url.searchParams.getAll('companyIds'),
-  ].flatMap(v => (v || '').split(','));
+function parseOrganizationIds(url: URL): string[] {
+  const repeated = url.searchParams.getAll('organizationIds').flatMap(v => (v || '').split(','));
   return [...new Set(repeated.map(s => s.trim()).filter(Boolean))];
 }
 
@@ -83,9 +79,9 @@ function sseJobEvent(jobId: string, data: unknown): string {
   return `event: job_update\nid: job:${jobId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
-function sseCompanyEvent(companyId: string, data: unknown): string {
-  const payload = JSON.stringify({ companyId, data });
-  return `event: company_update\nid: company:${companyId}:${Date.now()}\ndata: ${payload}\n\n`;
+function sseOrganizationEvent(organizationId: string, data: unknown): string {
+  const payload = JSON.stringify({ organizationId, data });
+  return `event: organization_update\nid: organization:${organizationId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
 function sseFolderEvent(folderId: string, data: unknown): string {
@@ -221,21 +217,21 @@ streamsRouter.get('/sse', async (c) => {
 
   const streamIds = parseStreamIds(url);
   const jobIds = parseJobIds(url);
-  const companyIds = parseCompanyIds(url);
+  const organizationIds = parseOrganizationIds(url);
   const jobsScope = (url.searchParams.get('jobs') || '').trim(); // 'all' option
   const wantsAllJobs = jobsScope === 'all';
-  const companiesScope = (url.searchParams.get('companies') || '').trim(); // 'all' option
-  const wantsAllCompanies = companiesScope === 'all';
+  const organizationsScope = (url.searchParams.get('organizations') || '').trim(); // 'all' option
+  const wantsAllOrganizations = organizationsScope === 'all';
 
   // Keep a single stable SSE URL: stream events are no longer "opt-in" via streamIds.
   // If streamIds are provided, we honor them as an additional client-side filter.
   const hasStreamFilter = streamIds.length > 0;
-  const wantsAllCompaniesEffective = wantsAllCompanies || companyIds.length === 0;
+  const wantsAllOrganizationsEffective = wantsAllOrganizations || organizationIds.length === 0;
   const wantsAllJobsEffective = wantsAllJobs || jobIds.length === 0;
 
   if (streamIds.length > 200) return c.json({ message: 'Trop de streamIds (max 200)' }, 400);
   if (jobIds.length > 500) return c.json({ message: 'Trop de jobIds (max 500)' }, 400);
-  if (companyIds.length > 500) return c.json({ message: 'Trop de companyIds (max 500)' }, 400);
+  if (organizationIds.length > 500) return c.json({ message: 'Trop de organizationIds (max 500)' }, 400);
 
   // Protection: job updates sont sensibles → admin_app requis
   // With tenancy: allow all authenticated users to stream their own workspace jobs.
@@ -244,7 +240,7 @@ streamsRouter.get('/sse', async (c) => {
   const cursor = parseCursor(url.searchParams.get('cursor'));
   const wanted = new Set(streamIds);
   const wantedJobs = new Set(jobIds);
-  const wantedCompanies = new Set(companyIds);
+  const wantedOrganizations = new Set(organizationIds);
 
   // lastSeq par stream (reprise)
   const lastSeq: Record<string, number> = {};
@@ -272,8 +268,8 @@ streamsRouter.get('/sse', async (c) => {
         if (cached !== undefined) return cached;
 
         const allowed = await (async () => {
-          if (streamId.startsWith('company_')) {
-            const id = streamId.slice('company_'.length);
+          if (streamId.startsWith('organization_')) {
+            const id = streamId.slice('organization_'.length);
             const [r] = await db
               .select({ id: organizations.id })
               .from(organizations)
@@ -386,15 +382,15 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
-      const emitCompanySnapshot = async (companyId: string) => {
+      const emitOrganizationSnapshot = async (organizationId: string) => {
         try {
           const row = (await db.get(sql`
             SELECT *
             FROM organizations
-            WHERE id = ${companyId} AND workspace_id = ${targetWorkspaceId}
+            WHERE id = ${organizationId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
           if (!row?.id || typeof row.id !== 'string') return;
-          push(sseCompanyEvent(companyId, { company: hydrateOrganizationForSse(row) }));
+          push(sseOrganizationEvent(organizationId, { organization: hydrateOrganizationForSse(row) }));
         } catch {
           // ignore
         }
@@ -468,10 +464,10 @@ streamsRouter.get('/sse', async (c) => {
         }
       }
 
-      // snapshot initial pour les companyIds explicitement demandés
-      if (wantedCompanies.size > 0) {
-        for (const id of wantedCompanies) {
-          await emitCompanySnapshot(id);
+      // snapshot initial pour les organizationIds explicitement demandés
+      if (wantedOrganizations.size > 0) {
+        for (const id of wantedOrganizations) {
+          await emitOrganizationSnapshot(id);
         }
       }
 
@@ -487,7 +483,7 @@ streamsRouter.get('/sse', async (c) => {
           client.removeListener('notification', onNotification);
           await client.query('UNLISTEN stream_events');
           await client.query('UNLISTEN job_events');
-          await client.query('UNLISTEN company_events');
+          await client.query('UNLISTEN organization_events');
           await client.query('UNLISTEN folder_events');
           await client.query('UNLISTEN usecase_events');
         } catch {
@@ -540,11 +536,11 @@ streamsRouter.get('/sse', async (c) => {
             if (!canStreamJobs) return;
             if (!wantsAllJobsEffective && wantedJobs.size > 0 && !wantedJobs.has(jobId)) return;
             void emitJobSnapshot(jobId);
-          } else if (msg.channel === 'company_events') {
-            const companyId = payload.company_id;
-            if (!companyId || typeof companyId !== 'string') return;
-            if (!wantsAllCompaniesEffective && wantedCompanies.size > 0 && !wantedCompanies.has(companyId)) return;
-            void emitCompanySnapshot(companyId);
+          } else if (msg.channel === 'organization_events') {
+            const organizationId = payload.organization_id;
+            if (!organizationId || typeof organizationId !== 'string') return;
+            if (!wantsAllOrganizationsEffective && wantedOrganizations.size > 0 && !wantedOrganizations.has(organizationId)) return;
+            void emitOrganizationSnapshot(organizationId);
           } else if (msg.channel === 'folder_events') {
             const folderId = payload.folder_id;
             if (!folderId || typeof folderId !== 'string') return;
@@ -561,7 +557,7 @@ streamsRouter.get('/sse', async (c) => {
 
       client.on('notification', onNotification);
       await client.query('LISTEN job_events');
-      await client.query('LISTEN company_events');
+      await client.query('LISTEN organization_events');
       await client.query('LISTEN folder_events');
       await client.query('LISTEN usecase_events');
       await client.query('LISTEN stream_events');

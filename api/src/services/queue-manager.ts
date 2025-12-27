@@ -103,11 +103,11 @@ export class QueueManager {
     }
   }
 
-  private async notifyCompanyEvent(companyId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ company_id: companyId });
+  private async notifyOrganizationEvent(organizationId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ organization_id: organizationId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY organization_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
@@ -415,7 +415,7 @@ export class QueueManager {
     // IMPORTANT:
     // Pour l'enrichissement entreprise, on veut pouvoir suivre l'avancement côté UI avec uniquement le companyId
     // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
-    const streamId = `company_${companyId}`;
+    const streamId = `organization_${companyId}`;
     
     // Enrichir l'entreprise avec streaming
     // enrichCompany utilise le streaming si streamId est fourni
@@ -474,7 +474,7 @@ export class QueueManager {
       })
       .where(eq(organizations.id, companyId));
 
-    await this.notifyCompanyEvent(companyId);
+    await this.notifyOrganizationEvent(companyId);
   }
 
   /**

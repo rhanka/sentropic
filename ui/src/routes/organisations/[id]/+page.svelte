@@ -37,13 +37,13 @@
     if (hubKey) streamHub.delete(hubKey);
     hubKey = `organizationDetail:${organizationId}`;
     streamHub.set(hubKey, (evt: any) => {
-      if (evt?.type !== 'company_update' && evt?.type !== 'organization_update') return;
-      const id: string = evt.organizationId || evt.companyId;
+      if (evt?.type !== 'organization_update') return;
+      const id: string = evt.organizationId;
       const data: any = evt.data ?? {};
       if (!id || id !== organizationId) return;
       if (data?.deleted) return;
-      if (data?.organization || data?.company) {
-        const updated = data.organization || data.company;
+      if (data?.organization) {
+        const updated = data.organization;
         organization = { ...(organization || ({} as any)), ...updated };
       }
     });

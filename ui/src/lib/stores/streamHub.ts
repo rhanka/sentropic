@@ -13,7 +13,7 @@ function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => voi
 
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
-  | { type: 'company_update'; companyId: string; data: any }
+  | { type: 'organization_update'; organizationId: string; data: any }
   | { type: 'folder_update'; folderId: string; data: any }
   | { type: 'usecase_update'; useCaseId: string; data: any }
   | { type: string; streamId: string; sequence: number; data: any };
@@ -21,13 +21,13 @@ export type StreamHubEvent =
 type Subscription = {
   onEvent: (event: StreamHubEvent) => void;
   streamId?: string;
-  onlyType?: 'job_update' | 'company_update';
+  onlyType?: 'job_update' | 'organization_update';
 };
 
 const EVENT_TYPES = [
   // job/company
   'job_update',
-  'company_update',
+  'organization_update',
   'folder_update',
   'usecase_update',
   // stream events (normalized)
@@ -50,7 +50,7 @@ class StreamHub {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
   private lastJobEventById = new Map<string, StreamHubEvent>();
-  private lastCompanyEventById = new Map<string, StreamHubEvent>();
+  private lastOrganizationEventById = new Map<string, StreamHubEvent>();
   private lastFolderEventById = new Map<string, StreamHubEvent>();
   private lastUseCaseEventById = new Map<string, StreamHubEvent>();
   // Historique compact par stream_id (on garde surtout les tool calls + un état courant reasoning/content)
@@ -64,7 +64,7 @@ class StreamHub {
    */
   reset() {
     this.lastJobEventById.clear();
-    this.lastCompanyEventById.clear();
+    this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
     this.streamHistoryById.clear();
@@ -78,7 +78,7 @@ class StreamHub {
    */
   clearCaches() {
     this.lastJobEventById.clear();
-    this.lastCompanyEventById.clear();
+    this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
     this.streamHistoryById.clear();
@@ -89,7 +89,7 @@ class StreamHub {
     // Replay immédiat du cache vers ce subscriber
     try {
       for (const ev of this.lastJobEventById.values()) onEvent(ev);
-      for (const ev of this.lastCompanyEventById.values()) onEvent(ev);
+      for (const ev of this.lastOrganizationEventById.values()) onEvent(ev);
       for (const ev of this.lastFolderEventById.values()) onEvent(ev);
       for (const ev of this.lastUseCaseEventById.values()) onEvent(ev);
       for (const events of this.streamHistoryById.values()) {
@@ -156,9 +156,9 @@ class StreamHub {
     if ((event as any).type === 'job_update') {
       const e = event as any;
       if (e.jobId) this.lastJobEventById.set(e.jobId, event);
-    } else if ((event as any).type === 'company_update') {
+    } else if ((event as any).type === 'organization_update') {
       const e = event as any;
-      if (e.companyId) this.lastCompanyEventById.set(e.companyId, event);
+      if (e.organizationId) this.lastOrganizationEventById.set(e.organizationId, event);
     } else if ((event as any).type === 'folder_update') {
       const e = event as any;
       if (e.folderId) this.lastFolderEventById.set(e.folderId, event);
@@ -268,8 +268,8 @@ class StreamHub {
           this.dispatch({ type, jobId: parsed.jobId, data: parsed.data });
           return;
         }
-        if (type === 'company_update') {
-          this.dispatch({ type, companyId: parsed.companyId, data: parsed.data });
+        if (type === 'organization_update') {
+          this.dispatch({ type, organizationId: parsed.organizationId, data: parsed.data });
           return;
         }
         if (type === 'folder_update') {

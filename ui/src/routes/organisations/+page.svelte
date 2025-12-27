@@ -1,7 +1,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
   // {@html} is only used with sanitized HTML produced by renderInlineMarkdown().
-  import { companiesStore, fetchCompanies, deleteCompany } from '$lib/stores/companies';
+  import { organizationsStore, fetchOrganizations, deleteOrganization } from '$lib/stores/organizations';
   import { addToast } from '$lib/stores/toast';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
@@ -12,29 +12,29 @@
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import { Trash2 } from '@lucide/svelte';
 
-  const HUB_KEY = 'companiesList';
+  const HUB_KEY = 'organizationsList';
 
   onMount(() => {
     void (async () => {
-      await loadCompanies();
+      await loadOrganizations();
     })();
 
     // Abonnement SSE global via streamHub
     streamHub.set(HUB_KEY, (evt: any) => {
-      if (evt?.type !== 'company_update') return;
-      const companyId: string = evt.companyId;
+      if (evt?.type !== 'organization_update') return;
+      const organizationId: string = evt.organizationId;
       const data: any = evt.data ?? {};
-      if (!companyId) return;
+      if (!organizationId) return;
 
       if (data?.deleted) {
-        companiesStore.update((items) => items.filter((c) => c.id !== companyId));
+        organizationsStore.update((items) => items.filter((o) => o.id !== organizationId));
         return;
       }
 
-      if (data?.company) {
-        const updated = data.company;
-        companiesStore.update((items) => {
-          const idx = items.findIndex((c) => c.id === updated.id);
+      if (data?.organization) {
+        const updated = data.organization;
+        organizationsStore.update((items) => {
+          const idx = items.findIndex((o) => o.id === updated.id);
           if (idx === -1) return [updated, ...items];
           const next = [...items];
           next[idx] = { ...next[idx], ...updated };
@@ -48,7 +48,7 @@
     const unsub = adminWorkspaceScope.subscribe((s) => {
       if (s.selectedId !== lastScope) {
         lastScope = s.selectedId;
-        void loadCompanies();
+        void loadOrganizations();
       }
     });
     return () => unsub();
@@ -58,10 +58,10 @@
     streamHub.delete(HUB_KEY);
   });
 
-  const loadCompanies = async () => {
+  const loadOrganizations = async () => {
     try {
-      const companies = await fetchCompanies();
-      companiesStore.set(companies);
+      const orgs = await fetchOrganizations();
+      organizationsStore.set(orgs);
     } catch (err) {
       console.error('Failed to fetch companies:', err);
       addToast({
@@ -75,8 +75,8 @@
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
 
     try {
-      await deleteCompany(id);
-      companiesStore.update((items) => items.filter((c) => c.id !== id));
+      await deleteOrganization(id);
+      organizationsStore.update((items) => items.filter((o) => o.id !== id));
 
       addToast({
         type: 'success',
@@ -108,25 +108,25 @@
   </div>
 
   <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-    {#each $companiesStore as company}
-      {@const isEnriching = company.status === 'enriching'}
-      {@const isDraft = company.status === 'draft'}
+    {#each $organizationsStore as organization}
+      {@const isEnriching = organization.status === 'enriching'}
+      {@const isDraft = organization.status === 'draft'}
       {@const canClick = !isEnriching}
       <article
         {...(canClick ? { role: 'button', tabindex: 0 } : {})}
         class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
-        on:click={() => { if (canClick) goto(`/organisations/${company.id}`); }}
-        on:keydown={(e) => { if (canClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goto(`/organisations/${company.id}`); } }}
+        on:click={() => { if (canClick) goto(`/organisations/${organization.id}`); }}
+        on:keydown={(e) => { if (canClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goto(`/organisations/${organization.id}`); } }}
       >
         {#if isEnriching}
           <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-purple-200 bg-purple-50 gap-2 rounded-t-lg">
             <div class="flex-1 min-w-0">
-              <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800">{company.name}</h2>
+                    <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800">{organization.name}</h2>
             </div>
             {#if !$adminReadOnlyScope}
               <button
                 class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
-                on:click|stopPropagation={() => handleDeleteCompany(company.id)}
+                      on:click|stopPropagation={() => handleDeleteCompany(organization.id)}
                 title="Supprimer l'organisation"
               >
                 <Trash2 class="w-4 h-4" />
@@ -135,8 +135,8 @@
           </div>
           <div class="p-3 sm:p-4">
             <StreamMessage
-              streamId={`company_${company.id}`}
-              status={company.status}
+                      streamId={`organization_${organization.id}`}
+                      status={organization.status}
               maxHistory={6}
               placeholderTitle="Enrichissement en cours…"
             />
@@ -144,13 +144,13 @@
         {:else}
           <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-purple-200 bg-purple-50 gap-2 rounded-t-lg">
             <div class="flex-1 min-w-0">
-              <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800 group-hover:text-purple-900 transition-colors">{company.name}</h2>
+                    <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800 group-hover:text-purple-900 transition-colors">{organization.name}</h2>
             </div>
             <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               {#if !$adminReadOnlyScope}
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                  on:click|stopPropagation={() => handleDeleteCompany(company.id)}
+                          on:click|stopPropagation={() => handleDeleteCompany(organization.id)}
                   title="Supprimer"
                 >
                   <Trash2 class="w-4 h-4" />
@@ -160,21 +160,21 @@
           </div>
 
           <div class="p-3 sm:p-4 pt-2 flex-1 min-h-0">
-            {#if company.industry || company.size}
+                    {#if organization.industry || organization.size}
               <div class="flex flex-col gap-1 mb-3">
-                {#if company.industry}
-                  <p class="text-sm text-slate-600">Secteur: {company.industry}</p>
+                        {#if organization.industry}
+                          <p class="text-sm text-slate-600">Secteur: {organization.industry}</p>
                 {/if}
-                {#if company.size}
+                        {#if organization.size}
                   <p class="text-sm text-slate-500 line-clamp-2 break-words">
-                    Taille: <span>{@html renderInlineMarkdown(company.size)}</span>
+                            Taille: <span>{@html renderInlineMarkdown(organization.size)}</span>
                   </p>
                 {/if}
               </div>
             {/if}
-            {#if company.products}
+                    {#if organization.products}
               <div class="text-sm text-slate-600 line-clamp-2 break-words">
-                {@html renderInlineMarkdown(company.products)}
+                        {@html renderInlineMarkdown(organization.products)}
               </div>
             {/if}
           </div>
