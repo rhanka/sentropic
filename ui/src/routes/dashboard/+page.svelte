@@ -12,7 +12,6 @@
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { refreshManager } from '$lib/stores/refresh';
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -117,7 +116,6 @@
     loadConfig();
     void (async () => {
     await loadData();
-    startAutoRefresh();
     })();
 
     // SSE: refresh executive summary + folder/matrix data when updated via chat tools (folder_update)
@@ -166,7 +164,6 @@
   });
 
   onDestroy(() => {
-    refreshManager.stopAllRefreshes();
     streamHub.delete(HUB_KEY);
   });
 
@@ -431,36 +428,7 @@
       })
   );
 
-  // Rafraîchir automatiquement le folder si la synthèse est en cours de génération
-  $: {
-    const hasGeneratingFolder = currentFolder?.status === 'generating';
-    
-    if (hasGeneratingFolder && selectedFolderId) {
-      if (!refreshManager.isRefreshActive('dashboard-folder')) {
-        refreshManager.startRefresh('dashboard-folder', async () => {
-          await loadMatrix(selectedFolderId!);
-          // Mettre à jour aussi le store des dossiers
-          const folders = await fetchFolders();
-          foldersStore.set(folders);
-        }, 2000);
-      }
-    } else {
-      refreshManager.stopRefresh('dashboard-folder');
-    }
-  }
-
-  const startAutoRefresh = () => {
-    const hasGeneratingFolder = currentFolder?.status === 'generating';
-    
-    if (hasGeneratingFolder && selectedFolderId) {
-      refreshManager.startRefresh('dashboard-folder', async () => {
-        await loadMatrix(selectedFolderId!);
-        // Mettre à jour aussi le store des dossiers
-        const folders = await fetchFolders();
-        foldersStore.set(folders);
-      }, 2000);
-    }
-  };
+  // refreshManager supprimé (no retrocompat): la réactivité passe par SSE (streamHub)
 
   // Ajuster automatiquement la taille de police de la synthèse exécutive
   const adjustSummaryFontSize = () => {

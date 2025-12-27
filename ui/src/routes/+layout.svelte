@@ -10,7 +10,7 @@
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
-  import { companiesStore, currentCompanyId } from '$lib/stores/companies';
+  import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
   import { foldersStore, currentFolderId } from '$lib/stores/folders';
   import { useCasesStore } from '$lib/stores/useCases';
   import { queueStore } from '$lib/stores/queue';
@@ -32,7 +32,6 @@
   const PROTECTED_ROUTES = [
     '/home',
     '/organisations',
-    '/entreprises',
     '/dossiers',
     '/cas-usage',
     '/matrice',
@@ -53,7 +52,6 @@
     // Ces routes sont toutes protégées
     if (
       path.startsWith('/organisations/') ||
-      path.startsWith('/entreprises/') || 
       path.startsWith('/dossiers/') || 
       path.startsWith('/cas-usage/')
     ) {
@@ -149,8 +147,8 @@
       // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
       // On nettoie uniquement les caches côté UI.
       streamHub.clearCaches();
-      companiesStore.set([]);
-      currentCompanyId.set(null);
+      organizationsStore.set([]);
+      currentOrganizationId.set(null);
       foldersStore.set([]);
       currentFolderId.set(null);
       useCasesStore.set([]);

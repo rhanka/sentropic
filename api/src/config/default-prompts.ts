@@ -31,7 +31,7 @@ IMPORTANT:
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
 - Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. 
 - Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes s'il le faut
-- Chacun des champs, en particulier technologies et kpis doivent être fondés sur des informations référencées (web) et récentes.
+- Chacun des champs, en particulier taille (nombre employés et chiffre d'affaires), technologies IT (regarder les recrutements) et kpis doivent être fondés sur des informations référencées (web) et récentes, et peuvent chacun faire l'objet d'une recherche web_searchspécifique.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
     variables: ['organization_name', 'industries']
   },

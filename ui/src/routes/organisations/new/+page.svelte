@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { createCompany, createDraftCompany, startCompanyEnrichment, type Company } from '$lib/stores/companies';
+  import {
+    createOrganization,
+    createDraftOrganization,
+    startOrganizationEnrichment,
+    type Organization
+  } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
 
-  let company: Partial<Company> = {
+  let company: Partial<Organization> = {
     name: '',
     industry: '',
     size: '',
@@ -35,8 +40,8 @@
     isEnriching = true;
 
     try {
-      const draftCompany = await createDraftCompany(company.name);
-      await startCompanyEnrichment(draftCompany.id);
+      const draftCompany = await createDraftOrganization(company.name);
+      await startOrganizationEnrichment(draftCompany.id);
 
       addToast({
         type: 'success',
@@ -65,7 +70,7 @@
 
     isCreating = true;
     try {
-      const newCompany = await createCompany(company as Omit<Company, 'id'>);
+      const newCompany = await createOrganization(company as Omit<Organization, 'id'>);
       addToast({
         type: 'success',
         message: 'Organisation créée avec succès !'

@@ -34,22 +34,22 @@ Occurrences `entreprise(s)`:
   - [x] Supprimer `e2e/playwright-report/**` du repo (si versionné) et l’ajouter au `.gitignore`. (commit: `519fefe`)
 - [ ] **Lot 1 — Suppression de la rétrocompat “companies/entreprises” (breaking)**:
   - [ ] **API**
-    - [ ] Retirer le montage `/companies` dans `api/src/routes/api/index.ts`.
-    - [ ] Supprimer `api/src/routes/api/companies.ts`.
+    - [x] Retirer le montage `/companies` dans `api/src/routes/api/index.ts`. (commit: `f409935`)
+    - [x] Supprimer `api/src/routes/api/companies.ts`. (commit: `f409935`)
     - [ ] Supprimer l’alias `companies` dans `api/src/db/schema.ts` (et ajuster les imports).
     - [ ] OpenAPI: remplacer `/companies` par `/organizations` (ex: `api/src/openapi/export.ts`).
   - [ ] **SSE / Streams**
-    - [ ] `api/src/routes/api/streams.ts`: `company_update` → `organization_update` + `companyIds` → `organizationIds`.
-    - [ ] `NOTIFY/LISTEN`: `company_events` → `organization_events` (queue manager + organizations router).
-    - [ ] `streamId` prefix: `company_` → `organization_` (et aligner StreamMessage UI).
+    - [x] `api/src/routes/api/streams.ts`: `company_update` → `organization_update` + `companyIds` → `organizationIds`. (commit: `a8fd061`)
+    - [x] `NOTIFY/LISTEN`: `company_events` → `organization_events` (queue manager + organizations router + tool-service). (commit: `a8fd061`, `050d009`)
+    - [x] `streamId` prefix: `company_` → `organization_` (et aligner StreamMessage UI). (commit: `a8fd061`)
   - [ ] **Chat Tools**
     - [ ] Renommer le tool OpenAI `company_update` → `organization_update` + ajuster `api/src/services/tools.ts` + `tool-service.ts` + specs.
     - [ ] Renommer le contexte `company` → `organization` partout (API + UI ChatPanel + tests).
   - [ ] **UI**
-    - [ ] Supprimer `ui/src/lib/stores/companies.ts` et migrer tous les imports vers `organizations`.
-    - [ ] Supprimer `ui/src/routes/entreprises/**` (plus de redirects).
-    - [ ] Corriger les params/labels: `companyId` → `organizationId`, “Entreprise” → “Organisation”.
-    - [ ] `ui/src/lib/stores/streamHub.ts`: `company_update` → `organization_update`, caches et types.
+    - [x] Supprimer `ui/src/lib/stores/companies.ts` et migrer tous les imports vers `organizations`. (commit: `f409935`)
+    - [x] Supprimer `ui/src/routes/entreprises/**` (plus de redirects). (commit: `f409935`)
+    - [x] Corriger les params/labels: `companyId` → `organizationId`, “Entreprise” → “Organisation”. (commit: `f409935`)
+    - [x] `ui/src/lib/stores/streamHub.ts`: `company_update` → `organization_update`, caches et types. (commit: `a8fd061`)
 - [ ] **Lot 2 — Tests (Vitest)**
   - [ ] Renommer `api/tests/api/companies.test.ts` → `organizations.test.ts` et basculer tous les endpoints en `/organizations`.
   - [ ] Mettre à jour les tests queue/enrich/smoke qui appellent `/companies/*`.
@@ -81,10 +81,11 @@ Occurrences `entreprise(s)`:
 - [x] `21076ce`: api — autoriser update `references` via tool-service/tools
 - [x] `bc3a112`: ui — dossiers: `organizationId/organizationName` (fix affichage/liaison)
 - [x] `9be21b8`: docs — update BRANCH progress (organizations)
-- [x] `73d2ead`: docs — inventaire grep + plan “no rétrocompat”
+- [x] `d6fd848`: docs — inventaire grep + plan “no rétrocompat”
 - [x] `519fefe`: cleanup — suppression des artefacts `e2e/playwright-report/**`
 - [x] `a8fd061`: breaking — SSE/streams/org events passent en `organization_*` (UI réactive sur `/organisations`)
-- [x] `da57c13`: fix — `tool-service` notifie `organization_events` (corrige la non-réactivité après updates via tools) + prompt `organization_info`
+- [x] `050d009`: breaking — `tool-service` notifie `organization_events` (corrige la non-réactivité après updates via tools)
+- [x] `f409935`: breaking — suppression `/companies` (API) + suppression `/entreprises` (UI) + suppression store alias `companies`
 
 ### À faire (lots cohérents, commits à venir)
 - [x] **Lot 0**: cleanup artefacts (ex: `e2e/playwright-report/**` si versionné + `.gitignore`)
@@ -98,6 +99,11 @@ Occurrences `entreprise(s)`:
 - `make test-ui` (or targeted UI test target if configured)
 - If needed for confidence: `make build-api build-ui-image test-e2e`
 - Verify CI run for the branch (per `.cursor/rules/workflow.mdc`)
+
+## Notes d’exploitation (important)
+- **Attention**: `make db-query` dépend de `up` (Makefile) → **relance la stack** et peut laisser des jobs en `processing` si des workers tournent.
+  - **Pendant une génération** (queue active), préférer **`make db-query-postgres-only`**.
+  - Si tu as déjà des jobs bloqués suite à un restart, la mitigation la plus simple est de repasser les jobs `processing` → `pending` (selon type + ancienneté), puis de relancer la queue.
 
 ## Status
 - **Progress**: feature OK, reste à **supprimer la rétrocompat + migrer tests/docs**
