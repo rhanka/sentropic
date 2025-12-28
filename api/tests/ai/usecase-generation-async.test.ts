@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 
 describe('AI Workflow - Complete Integration Test', () => {
   let createdFolderId: string | null = null;
-  let createdCompanyId: string | null = null;
+  let createdOrganizationId: string | null = null;
   let user: any;
 
   beforeEach(async () => {
@@ -38,11 +38,11 @@ describe('AI Workflow - Complete Integration Test', () => {
       } catch {}
       createdFolderId = null;
     }
-    if (createdCompanyId) {
+    if (createdOrganizationId) {
       try {
-        await authenticatedRequest(app, 'DELETE', `/api/v1/companies/${createdCompanyId}`, user.sessionToken!);
+        await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
       } catch {}
-      createdCompanyId = null;
+      createdOrganizationId = null;
     }
     await cleanupAuthData();
   });
@@ -62,28 +62,28 @@ describe('AI Workflow - Complete Integration Test', () => {
     } catch {}
   });
 
-  // Test complet : Enrichissement d'entreprise + Génération de use cases avec cette entreprise
-  it('should complete full AI workflow: company enrichment + use case generation', async () => {
-    const companyName = `AI Company Workflow ${createTestId()}`;
+  // Test complet : Enrichissement d'organisation + Génération de use cases avec cette organisation
+  it('should complete full AI workflow: organization enrichment + use case generation', async () => {
+    const organizationName = `AI Organization Workflow ${createTestId()}`;
     
-    // 1) Create a company draft
+    // 1) Create an organization draft
     const draft = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/companies/draft',
+      '/api/v1/organizations/draft',
       user.sessionToken!,
-      { name: companyName }
+      { name: organizationName }
     );
     expect(draft.status).toBe(201);
     const draftData = await draft.json();
-    createdCompanyId = draftData.id as string;
+    createdOrganizationId = draftData.id as string;
     expect(draftData.status).toBe('draft');
 
-    // 2) Start company enrichment
+    // 2) Start organization enrichment
     const enrichResponse = await authenticatedRequest(
       app,
       'POST',
-      `/api/v1/companies/${createdCompanyId}/enrich`,
+      `/api/v1/organizations/${createdOrganizationId}/enrich`,
       user.sessionToken!,
       { model: getTestModel() }
     );
@@ -93,20 +93,20 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichData.status).toBe('enriching');
     expect(enrichData.jobId).toBeDefined();
 
-    // 3) Wait for company enrichment completion with polling
-    let enrichedCompany;
+    // 3) Wait for organization enrichment completion with polling
+    let enrichedOrganization;
     let attempts = 0;
     const maxAttempts = 5; // 5 * 5s = 25s max
     
     do {
       await sleep(5000); // Wait 5 seconds between checks
-      enrichedCompany = await authenticatedRequest(app, 'GET', `/api/v1/companies/${createdCompanyId}`, user.sessionToken!);
+      enrichedOrganization = await authenticatedRequest(app, 'GET', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
       attempts++;
-    } while (enrichedCompany.status === 200 && (await enrichedCompany.clone().json()).status === 'enriching' && attempts < maxAttempts);
+    } while (enrichedOrganization.status === 200 && (await enrichedOrganization.clone().json()).status === 'enriching' && attempts < maxAttempts);
 
-    // 4) Verify company enrichment completed
-    expect(enrichedCompany.status).toBe(200);
-    const enrichedData = await enrichedCompany.json();
+    // 4) Verify organization enrichment completed
+    expect(enrichedOrganization.status).toBe(200);
+    const enrichedData = await enrichedOrganization.json();
     expect(enrichedData.status).toBe('completed');
     expect(enrichedData.industry).toBeDefined();
     expect(enrichedData.industry).not.toBeNull();
@@ -117,8 +117,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichedData.objectives).toBeDefined();
     expect(enrichedData.technologies).toBeDefined();
 
-    // 5) Start use case generation with the enriched company
-    const input = `Generate 5 AI use cases for ${companyName} in the ${enrichedData.industry} industry`;
+    // 5) Start use case generation with the enriched organization
+    const input = `Generate 5 AI use cases for ${organizationName} in the ${enrichedData.industry} industry`;
     const generateResponse = await authenticatedRequest(
       app,
       'POST',
@@ -127,7 +127,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       {
         input,
         create_new_folder: true,
-        company_id: createdCompanyId,
+        organization_id: createdOrganizationId,
         model: getTestModel()
       }
     );
@@ -149,11 +149,11 @@ describe('AI Workflow - Complete Integration Test', () => {
       attempts2++;
     } while (folderResponse.status === 200 && (await folderResponse.clone().json()).status === 'generating' && attempts2 < maxAttempts2);
 
-    // 7) Verify folder is completed and associated with company
+    // 7) Verify folder is completed and associated with organization
     expect(folderResponse.status).toBe(200);
     const folderData = await folderResponse.json();
     expect(folderData.status).toBe('completed');
-    expect(folderData.companyId).toBe(createdCompanyId);
+    expect(folderData.organizationId).toBe(createdOrganizationId);
 
     // 8) Wait for use cases to complete with polling
     let useCasesResponse;
@@ -199,7 +199,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     
     // Verify the first completed use case
     const firstCompleted = completedUseCases[0];
-    expect(firstCompleted.companyId).toBe(createdCompanyId);
+    expect(firstCompleted.organizationId).toBe(createdOrganizationId);
     // name and description are now in data JSONB
     expect(firstCompleted.data?.name).toBeDefined();
     expect(firstCompleted.data?.description).toBeDefined();
@@ -245,8 +245,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(useCaseEventTypes).toContain('content_delta');
     expect(useCaseEventTypes).toContain('done');
 
-    // 9) Verify all use cases are associated with the company
-    const allAssociated = useCases.every((uc: any) => uc.companyId === createdCompanyId);
+    // 9) Verify all use cases are associated with the organization
+    const allAssociated = useCases.every((uc: any) => uc.organizationId === createdOrganizationId);
     expect(allAssociated).toBe(true);
 
     // 10) Wait for all jobs to complete and verify queue is clean

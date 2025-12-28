@@ -1,4 +1,4 @@
-export const testCompanies = {
+export const testOrganizations = {
   valid: {
     name: 'Test Company Inc',
     industry: 'Technologie',

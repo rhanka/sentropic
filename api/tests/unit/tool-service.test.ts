@@ -9,7 +9,7 @@ import {
   chatMessages,
   users,
   folders,
-  companies,
+  organizations,
   workspaces
 } from '../../src/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -308,9 +308,9 @@ describe('Tool Service', () => {
     });
   });
 
-  describe('company/folder/executive_summary tools (workspace-scoped)', () => {
+  describe('organization/folder/executive_summary tools (workspace-scoped)', () => {
     let workspaceId: string;
-    let companyId: string;
+    let organizationId: string;
     let folderId: string;
     let useCaseId: string;
     let msgCompanyUpdateId: string;
@@ -347,7 +347,7 @@ describe('Tool Service', () => {
         id: testSessionId,
         userId: testUserId,
         workspaceId,
-        primaryContextType: 'company',
+        primaryContextType: 'organization',
         primaryContextId: null,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -365,9 +365,9 @@ describe('Tool Service', () => {
         { id: msgMatrixUpdateId, sessionId: testSessionId, role: 'assistant', content: 'test', sequence: 4, createdAt: new Date() }
       ]);
 
-      companyId = createId();
-      await db.insert(companies).values({
-        id: companyId,
+      organizationId = createId();
+      await db.insert(organizations).values({
+        id: organizationId,
         workspaceId,
         name: 'ACME',
         industry: 'Manufacturing',
@@ -382,7 +382,7 @@ describe('Tool Service', () => {
         workspaceId,
         name: 'Folder 1',
         description: 'Desc',
-        companyId,
+        organizationId,
         matrixConfig: JSON.stringify({ valueAxes: [], complexityAxes: [] }),
         executiveSummary: JSON.stringify({ introduction: 'Hello' }),
         status: 'completed',
@@ -409,33 +409,33 @@ describe('Tool Service', () => {
         .delete(contextModificationHistory)
         .where(
           and(
-            inArray(contextModificationHistory.contextType, ['company', 'folder', 'executive_summary']),
-            inArray(contextModificationHistory.contextId, [companyId, folderId])
+            inArray(contextModificationHistory.contextType, ['organization', 'folder', 'executive_summary']),
+            inArray(contextModificationHistory.contextId, [organizationId, folderId])
           )
         );
       await db
         .delete(chatContexts)
         .where(
           and(
-            inArray(chatContexts.contextType, ['company', 'folder', 'executive_summary']),
-            inArray(chatContexts.contextId, [companyId, folderId])
+            inArray(chatContexts.contextType, ['organization', 'folder', 'executive_summary']),
+            inArray(chatContexts.contextId, [organizationId, folderId])
           )
         );
 
       await db.delete(useCases).where(eq(useCases.id, useCaseId));
       await db.delete(folders).where(eq(folders.id, folderId));
-      await db.delete(companies).where(eq(companies.id, companyId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, testSessionId));
       await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
       await db.delete(users).where(eq(users.id, testUserId));
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     });
 
-    it('should list companies (idsOnly) in workspace', async () => {
-      const res = await toolService.listCompanies({ workspaceId, idsOnly: true });
+    it('should list organizations (idsOnly) in workspace', async () => {
+      const res = await toolService.listOrganizations({ workspaceId, idsOnly: true });
       expect('ids' in res).toBe(true);
       if ('ids' in res) {
-        expect(res.ids).toContain(companyId);
+        expect(res.ids).toContain(organizationId);
         expect(res.count).toBeGreaterThan(0);
       }
     });
@@ -452,14 +452,14 @@ describe('Tool Service', () => {
     it('should get folder with select and parse JSON fields', async () => {
       const res = await toolService.getFolder(folderId, {
         workspaceId,
-        select: ['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']
+        select: ['id', 'name', 'organizationId', 'matrixConfig', 'executiveSummary']
       });
 
       expect(res.folderId).toBe(folderId);
-      expect(res.selected).toEqual(['id', 'name', 'companyId', 'matrixConfig', 'executiveSummary']);
+      expect(res.selected).toEqual(['id', 'name', 'organizationId', 'matrixConfig', 'executiveSummary']);
       expect(res.data.id).toBe(folderId);
       expect(res.data.name).toBe('Folder 1');
-      expect(res.data.companyId).toBe(companyId);
+      expect(res.data.organizationId).toBe(organizationId);
 
       // matrixConfig / executiveSummary are stored as strings in DB but returned as parsed objects here.
       const mx = res.data.matrixConfig as any;
@@ -470,33 +470,33 @@ describe('Tool Service', () => {
       expect(es?.introduction).toBe('Hello');
     });
 
-    it('should get and update a company, writing history + chat context when sessionId provided', async () => {
-      const before = await toolService.getCompany(companyId, { workspaceId, select: ['name', 'industry'] });
-      expect(before.companyId).toBe(companyId);
+    it('should get and update an organization, writing history + chat context when sessionId provided', async () => {
+      const before = await toolService.getOrganization(organizationId, { workspaceId, select: ['name', 'industry'] });
+      expect(before.organizationId).toBe(organizationId);
       expect(before.data.name).toBe('ACME');
 
-      const updated = await toolService.updateCompanyFields({
-        companyId,
+      const updated = await toolService.updateOrganizationFields({
+        organizationId,
         updates: [{ field: 'industry', value: 'Tech' }],
         workspaceId,
         sessionId: testSessionId,
         messageId: msgCompanyUpdateId,
         toolCallId: 'tool-1'
       });
-      expect(updated.companyId).toBe(companyId);
+      expect(updated.organizationId).toBe(organizationId);
       expect(updated.applied[0].field).toBe('industry');
 
       const history = await db
         .select()
         .from(contextModificationHistory)
-        .where(and(eq(contextModificationHistory.contextType, 'company'), eq(contextModificationHistory.contextId, companyId)));
+        .where(and(eq(contextModificationHistory.contextType, 'organization'), eq(contextModificationHistory.contextId, organizationId)));
       expect(history.length).toBeGreaterThan(0);
       expect(history[0].field).toBe('industry');
 
       const contexts = await db
         .select()
         .from(chatContexts)
-        .where(and(eq(chatContexts.contextType, 'company'), eq(chatContexts.contextId, companyId)));
+        .where(and(eq(chatContexts.contextType, 'organization'), eq(chatContexts.contextId, organizationId)));
       expect(contexts.length).toBe(1);
     });
 

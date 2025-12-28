@@ -7,7 +7,7 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { companies, chatStreamEvents, chatMessages, chatSessions, users, workspaces } from '../../src/db/schema';
+import { organizations, chatStreamEvents, chatMessages, chatSessions, users, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { writeStreamEvent, getNextSequence } from '../../src/services/stream-service';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
@@ -300,12 +300,12 @@ describe('Streams API Endpoints', () => {
       const adminReader = await openSse(admin.sessionToken!, '/api/v1/streams/sse');
       const userReader = await openSse(u.sessionToken!, '/api/v1/streams/sse');
 
-      const companyRes = await authenticatedRequest(app, 'POST', '/api/v1/companies', u.sessionToken!, {
+      const orgRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', u.sessionToken!, {
         name: `SSE Tenant ${suffix}`,
         industry: 'Test',
       });
-      expect(companyRes.status).toBe(201);
-      const company = await companyRes.json();
+      expect(orgRes.status).toBe(201);
+      const org = await orgRes.json();
 
       const userEvents = await collectFor(userReader, 1500);
       const adminEvents = await collectFor(adminReader, 1500);
@@ -313,17 +313,17 @@ describe('Streams API Endpoints', () => {
       await userReader.cancel();
       await adminReader.cancel();
 
-      const userCompanyUpdates = userEvents.filter((e) => e.event === 'company_update');
-      expect(userCompanyUpdates.length).toBeGreaterThan(0);
-      const userSawCompany = userCompanyUpdates.some((e) => e.data?.companyId === company.id);
-      expect(userSawCompany).toBe(true);
+      const userOrgUpdates = userEvents.filter((e) => e.event === 'organization_update');
+      expect(userOrgUpdates.length).toBeGreaterThan(0);
+      const userSawOrg = userOrgUpdates.some((e) => e.data?.organizationId === org.id);
+      expect(userSawOrg).toBe(true);
 
-      const adminCompanyUpdates = adminEvents.filter((e) => e.event === 'company_update');
-      const adminSawCompany = adminCompanyUpdates.some((e) => e.data?.companyId === company.id);
-      expect(adminSawCompany).toBe(false);
+      const adminOrgUpdates = adminEvents.filter((e) => e.event === 'organization_update');
+      const adminSawOrg = adminOrgUpdates.some((e) => e.data?.organizationId === org.id);
+      expect(adminSawOrg).toBe(false);
 
-      // Cleanup inserted company (avoid cross-test bleed)
-      await db.delete(companies).where(eq(companies.id, company.id));
+      // Cleanup inserted org (avoid cross-test bleed)
+      await db.delete(organizations).where(eq(organizations.id, org.id));
     });
   });
 });

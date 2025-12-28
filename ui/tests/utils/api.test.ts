@@ -12,7 +12,7 @@ describe('API Utils', () => {
       mockFetchJsonOnce({ error: 'Unauthorized' }, 401);
 
       try {
-        await apiRequest('/api/v1/companies');
+        await apiRequest('/api/v1/organizations');
         expect.fail('Should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
@@ -28,7 +28,7 @@ describe('API Utils', () => {
       }, 401);
 
       try {
-        await apiRequest('/api/v1/companies');
+        await apiRequest('/api/v1/organizations');
         expect.fail('Should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
@@ -41,7 +41,7 @@ describe('API Utils', () => {
       mockFetchJsonOnce({ error: 'Not Found' }, 404);
 
       try {
-        await apiRequest('/api/v1/companies/999');
+        await apiRequest('/api/v1/organizations/999');
         expect.fail('Should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);

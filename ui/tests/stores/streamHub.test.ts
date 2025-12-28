@@ -271,9 +271,9 @@ describe('streamHub', () => {
         data: { status: 'running' }
       });
       
-      // company_update event
-      mockEventSource.simulateEvent('company_update', {
-        companyId: 'company-1',
+      // organization_update event
+      mockEventSource.simulateEvent('organization_update', {
+        organizationId: 'organization-1',
         data: { name: 'Test' }
       });
     }

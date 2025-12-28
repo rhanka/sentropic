@@ -20,7 +20,7 @@ describe('Basic Security Tests', () => {
 
   describe('Security Headers', () => {
     it('should include CSP header on all responses', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -30,7 +30,7 @@ describe('Basic Security Tests', () => {
     });
 
     it('should include X-Content-Type-Options header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -39,7 +39,7 @@ describe('Basic Security Tests', () => {
     });
 
     it('should include X-Frame-Options header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -49,7 +49,7 @@ describe('Basic Security Tests', () => {
     });
 
     it('should include Referrer-Policy header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -58,7 +58,7 @@ describe('Basic Security Tests', () => {
     });
 
     it('should include X-XSS-Protection header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -71,7 +71,7 @@ describe('Basic Security Tests', () => {
          describe('CORS Headers', () => {
            it('should include CORS headers on preflight requests', async () => {
              // Test OPTIONS preflight request with valid origin
-             const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/companies', null, {
+             const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/organizations', null, {
                'Origin': 'http://localhost:5173',
                'Access-Control-Request-Method': 'GET',
                'Access-Control-Request-Headers': 'Content-Type, Authorization'
@@ -114,13 +114,13 @@ describe('Basic Security Tests', () => {
 
   describe('Authentication Security', () => {
     it('should require authentication for protected endpoints', async () => {
-      const response = await unauthenticatedRequest(app, 'GET', '/api/v1/companies');
+      const response = await unauthenticatedRequest(app, 'GET', '/api/v1/organizations');
 
       expect(response.status).toBe(401);
     });
 
     it('should reject invalid session tokens', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', 'invalid-token');
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', 'invalid-token');
 
       expect(response.status).toBe(401);
     });

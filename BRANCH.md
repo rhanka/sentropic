@@ -32,28 +32,28 @@ Occurrences `entreprise(s)`:
 ## Plan / Todo
 - [x] **Lot 0 — Cleanup repo (artefacts)**:
   - [x] Supprimer `e2e/playwright-report/**` du repo (si versionné) et l’ajouter au `.gitignore`. (commit: `519fefe`)
-- [ ] **Lot 1 — Suppression de la rétrocompat “companies/entreprises” (breaking)**:
+- [x] **Lot 1 — Suppression de la rétrocompat “companies/entreprises” (breaking)**:
   - [ ] **API**
     - [x] Retirer le montage `/companies` dans `api/src/routes/api/index.ts`. (commit: `f409935`)
     - [x] Supprimer `api/src/routes/api/companies.ts`. (commit: `f409935`)
-    - [ ] Supprimer l’alias `companies` dans `api/src/db/schema.ts` (et ajuster les imports).
-    - [ ] OpenAPI: remplacer `/companies` par `/organizations` (ex: `api/src/openapi/export.ts`).
+    - [x] Supprimer l’alias `companies` dans `api/src/db/schema.ts` (et ajuster les imports). (commit: `53f3293`)
+    - [x] OpenAPI: remplacer `/companies` par `/organizations` (ex: `api/src/openapi/export.ts`). (commit: `53f3293`)
   - [ ] **SSE / Streams**
     - [x] `api/src/routes/api/streams.ts`: `company_update` → `organization_update` + `companyIds` → `organizationIds`. (commit: `a8fd061`)
     - [x] `NOTIFY/LISTEN`: `company_events` → `organization_events` (queue manager + organizations router + tool-service). (commit: `a8fd061`, `050d009`)
     - [x] `streamId` prefix: `company_` → `organization_` (et aligner StreamMessage UI). (commit: `a8fd061`)
   - [ ] **Chat Tools**
-    - [ ] Renommer le tool OpenAI `company_update` → `organization_update` + ajuster `api/src/services/tools.ts` + `tool-service.ts` + specs.
-    - [ ] Renommer le contexte `company` → `organization` partout (API + UI ChatPanel + tests).
+    - [x] Renommer le tool OpenAI `company_update` → `organization_update` + ajuster `api/src/services/tools.ts` + `tool-service.ts` + specs. (commit: `53f3293`)
+    - [x] Renommer le contexte `company` → `organization` partout (API + UI ChatPanel + tests). (commit: `53f3293`)
   - [ ] **UI**
     - [x] Supprimer `ui/src/lib/stores/companies.ts` et migrer tous les imports vers `organizations`. (commit: `f409935`)
     - [x] Supprimer `ui/src/routes/entreprises/**` (plus de redirects). (commit: `f409935`)
     - [x] Corriger les params/labels: `companyId` → `organizationId`, “Entreprise” → “Organisation”. (commit: `f409935`)
     - [x] `ui/src/lib/stores/streamHub.ts`: `company_update` → `organization_update`, caches et types. (commit: `a8fd061`)
-- [ ] **Lot 2 — Tests (Vitest)**
-  - [ ] Renommer `api/tests/api/companies.test.ts` → `organizations.test.ts` et basculer tous les endpoints en `/organizations`.
-  - [ ] Mettre à jour les tests queue/enrich/smoke qui appellent `/companies/*`.
-  - [ ] Mettre à jour les fixtures/seed tests qui importent `companies` depuis le schema.
+- [x] **Lot 2 — Tests (Vitest)**
+  - [x] Basculer tous les endpoints tests `/companies` → `/organizations` (API/queue/security/smoke).
+  - [x] Mettre à jour les fixtures/seed tests (plus de `companies`/`companyId` dans `api/tests`).
+  - [x] UI: portage du test store `companies` → `organizations` + ajustement streamHub tests (`organization_update`).
 - [ ] **Lot 3 — E2E (Playwright)**
   - [ ] Renommer `e2e/tests/companies*.spec.ts` en `organizations*.spec.ts`.
   - [ ] Remplacer `/entreprises` → `/organisations` (et supprimer les attentes de redirect).
@@ -86,11 +86,13 @@ Occurrences `entreprise(s)`:
 - [x] `a8fd061`: breaking — SSE/streams/org events passent en `organization_*` (UI réactive sur `/organisations`)
 - [x] `050d009`: breaking — `tool-service` notifie `organization_events` (corrige la non-réactivité après updates via tools)
 - [x] `f409935`: breaking — suppression `/companies` (API) + suppression `/entreprises` (UI) + suppression store alias `companies`
+- [x] `53f3293`: breaking — finish Lot 1 (chat tools + org_enrich job + remove company)
+- [ ] `<pending>`: tests — Lot 2 (Vitest API+UI) : migration tests `/companies`→`/organizations` + portage store organizations
 
 ### À faire (lots cohérents, commits à venir)
 - [x] **Lot 0**: cleanup artefacts (ex: `e2e/playwright-report/**` si versionné + `.gitignore`)
-- [ ] **Lot 1 (breaking)**: suppression rétrocompat “companies/entreprises” (API + UI + SSE + tools) — en cours
-- [ ] **Lot 2**: tests API/Vitest (endpoints, fixtures, seed)
+- [x] **Lot 1 (breaking)**: suppression rétrocompat “companies/entreprises” (API + UI + SSE + tools) — terminé
+- [x] **Lot 2**: tests API/Vitest + UI/Vitest — terminé
 - [ ] **Lot 3**: E2E Playwright (routes, assertions réseau, chat context)
 - [ ] **Lot 4**: docs/spec (DATA_MODEL + SPEC + TOOLS + README)
 
@@ -106,7 +108,7 @@ Occurrences `entreprise(s)`:
   - Si tu as déjà des jobs bloqués suite à un restart, la mitigation la plus simple est de repasser les jobs `processing` → `pending` (selon type + ancienneté), puis de relancer la queue.
 
 ## Status
-- **Progress**: feature OK, reste à **supprimer la rétrocompat + migrer tests/docs**
-- **Current**: Lot 1 (breaking cleanup)
-- **Next**: Lots 2→4, puis `make test-api test-ui test-e2e`
+- **Progress**: feature OK, reste à **migrer E2E + docs/spec**
+- **Current**: Lot 3 (E2E)
+- **Next**: Lots 3→4, puis `make test-api test-ui test-e2e`
 

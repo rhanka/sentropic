@@ -1,6 +1,6 @@
 import { db } from '../../src/db/client.js';
 import { 
-  companies, 
+  organizations, 
   folders, 
   useCases, 
   settings, 
@@ -37,9 +37,9 @@ export async function seedTestData() {
     await db.delete(chatSessions);
     await db.delete(contextModificationHistory);
 
-    await db.delete(useCases); // Depends on folders and companies
-    await db.delete(folders); // Depends on companies
-    await db.delete(companies); // Depends on workspaces
+    await db.delete(useCases); // Depends on folders and organizations
+    await db.delete(folders); // Depends on organizations
+    await db.delete(organizations); // Depends on workspaces
     
     // 2. Delete auth-related tables with foreign keys
     await db.delete(userSessions); // Depends on users
@@ -59,7 +59,7 @@ export async function seedTestData() {
     // that might be needed. If you want to clean it too, uncomment:
     // await db.delete(businessConfig);
     
-    console.log('✅ All data cleaned (companies, folders, use cases, users, auth, jobs, settings)');
+    console.log('✅ All data cleaned (organizations, folders, use cases, users, auth, jobs, settings)');
     // Deterministic IDs for stable E2E fixtures
     const E2E_ADMIN_ID = 'e2e-user-admin';
     const E2E_USER_A_ID = 'e2e-user-a';
@@ -167,90 +167,138 @@ export async function seedTestData() {
 
     console.log('✅ Workspaces + users seeded (admin + userA + userB + pending)');
 
-    // 1. Entreprises de test (extraits et simplifiés depuis backup réel)
-    const testCompaniesData = [
+    // 1. Organisations de test (profil dans organizations.data JSONB)
+    const testOrganizationsData = [
       {
-        id: 'e2e-company-a-pomerleau',
+        id: 'e2e-organization-a-pomerleau',
         workspaceId: E2E_WS_A,
         name: 'Pomerleau',
-        industry: 'Construction',
-        size: 'Plus de 5 000 employés',
-        products: 'Construction bâtiments, infrastructures, génie civil',
-        processes: 'Gestion de projets, BIM, planification, sécurité chantier',
-        challenges: 'Délais, coordination, sécurité, conformité',
-        objectives: 'Durabilité, performance projets, digitalisation',
-        technologies: 'BIM, IoT, analytics, IA',
+        data: {
+          industry: 'Construction',
+          size: 'Plus de 5 000 employés',
+          products: 'Construction bâtiments, infrastructures, génie civil',
+          processes: 'Gestion de projets, BIM, planification, sécurité chantier',
+          challenges: 'Délais, coordination, sécurité, conformité',
+          objectives: 'Durabilité, performance projets, digitalisation',
+          technologies: 'BIM, IoT, analytics, IA',
+          kpis: [
+            '## Indicateurs de performance',
+            '- Respect des délais (OTD)',
+            '- Écart budget vs réalisé',
+            '- Taux d’incidents / sécurité (LTIFR)',
+          ].join('\n'),
+          references: [
+            { title: 'Site officiel (exemple)', url: 'https://example.com/pomerleau', excerpt: 'Page entreprise (fixture de test).' },
+          ],
+        },
         status: 'completed',
         createdAt: now,
         updatedAt: now,
       },
       {
-        id: 'e2e-company-b-bmr',
+        id: 'e2e-organization-b-bmr',
         workspaceId: E2E_WS_B,
         name: 'Groupe BMR inc.',
-        industry: 'Retail',
-        size: 'Réseau 200+ magasins',
-        products: 'Quincaillerie, rénovation, matériaux',
-        processes: 'Supply chain, omnicanal, pricing/promo, inventaire',
-        challenges: 'Saisonnalité, supply constraints, omnicanal',
-        objectives: 'Améliorer promesse livraison et conversion',
-        technologies: 'ERP/POS/WMS, e-commerce, data',
+        data: {
+          industry: 'Retail',
+          size: 'Réseau 200+ magasins',
+          products: 'Quincaillerie, rénovation, matériaux',
+          processes: 'Supply chain, omnicanal, pricing/promo, inventaire',
+          challenges: 'Saisonnalité, supply constraints, omnicanal',
+          objectives: 'Améliorer promesse livraison et conversion',
+          technologies: 'ERP/POS/WMS, e-commerce, data',
+          kpis: [
+            '## Indicateurs de performance',
+            '- Taux de rupture',
+            '- OTIF / promesse de livraison',
+            '- Marge brute',
+          ].join('\n'),
+          references: [
+            { title: 'Site officiel (exemple)', url: 'https://example.com/bmr', excerpt: 'Page entreprise (fixture de test).' },
+          ],
+        },
         status: 'completed',
         createdAt: now,
         updatedAt: now,
       },
       {
-        id: 'e2e-company-admin-bombardier',
+        id: 'e2e-organization-admin-bombardier',
         workspaceId: E2E_WS_ADMIN,
         name: 'Bombardier Inc.',
-        industry: 'Aéronautique',
-        size: '≈18k employés',
-        products: 'Jets d’affaires + services MRO',
-        processes: 'Ingénierie, supply chain, MRO',
-        challenges: 'Supply chain, ramp-up, qualité',
-        objectives: 'Croissance services, efficacité',
-        technologies: 'PLM, data, maintenance prédictive',
+        data: {
+          industry: 'Aéronautique',
+          size: '≈18k employés',
+          products: 'Jets d’affaires + services MRO',
+          processes: 'Ingénierie, supply chain, MRO',
+          challenges: 'Supply chain, ramp-up, qualité',
+          objectives: 'Croissance services, efficacité',
+          technologies: 'PLM, data, maintenance prédictive',
+          kpis: [
+            '## Indicateurs de performance',
+            '- Disponibilité flotte',
+            '- MTBF / MTTR',
+            '- On-time delivery',
+          ].join('\n'),
+          references: [
+            { title: 'Site officiel (exemple)', url: 'https://example.com/bombardier', excerpt: 'Page entreprise (fixture de test).' },
+          ],
+        },
         status: 'completed',
         createdAt: now,
         updatedAt: now,
       },
       // Required by e2e/tests/ai-generation.spec.ts (expects an option containing "Delpharm")
       {
-        id: 'e2e-company-admin-delpharm',
+        id: 'e2e-organization-admin-delpharm',
         workspaceId: E2E_WS_ADMIN,
         name: 'Delpharm',
-        industry: 'Pharmaceutique',
-        size: '1000-5000',
-        products: 'CDMO, génériques',
-        processes: 'Manufacturing, QC, supply',
-        challenges: 'Compliance, coûts, qualité',
-        objectives: 'Efficacité, capacité',
-        technologies: 'Automation, data',
+        data: {
+          industry: 'Pharmaceutique',
+          size: '1000-5000',
+          products: 'CDMO, génériques',
+          processes: 'Manufacturing, QC, supply',
+          challenges: 'Compliance, coûts, qualité',
+          objectives: 'Efficacité, capacité',
+          technologies: 'Automation, data',
+          kpis: [
+            '## Indicateurs de performance',
+            '- Lots libérés à temps',
+            '- Taux de déviation',
+            '- CAPA on-time',
+          ].join('\n'),
+          references: [
+            { title: 'Site officiel (exemple)', url: 'https://example.com/delpharm', excerpt: 'Page entreprise (fixture de test).' },
+          ],
+        },
         status: 'completed',
         createdAt: now,
         updatedAt: now,
       },
       {
-        id: 'e2e-company-victim',
+        id: 'e2e-organization-victim',
         workspaceId: E2E_WS_VICTIM,
         name: 'Victim Co',
-        industry: 'E2E',
-        size: '1-10',
-        products: 'N/A',
-        processes: 'N/A',
-        challenges: 'N/A',
-        objectives: 'N/A',
-        technologies: 'N/A',
+        data: {
+          industry: 'E2E',
+          size: '1-10',
+          products: 'N/A',
+          processes: 'N/A',
+          challenges: 'N/A',
+          objectives: 'N/A',
+          technologies: 'N/A',
+          kpis: '',
+          references: [],
+        },
         status: 'completed',
         createdAt: now,
         updatedAt: now,
       },
     ];
 
-    // Insérer les entreprises de test
-    for (const company of testCompaniesData) {
-      await db.insert(companies).values(company).onConflictDoNothing();
-      console.log(`✅ Company: ${company.name} (${company.status})`);
+    // Insérer les organisations de test
+    for (const org of testOrganizationsData) {
+      await db.insert(organizations).values(org).onConflictDoNothing();
+      console.log(`✅ Organization: ${org.name} (${org.status})`);
     }
 
     // 2. Dossiers de test (un par workspace)
@@ -279,7 +327,7 @@ export async function seedTestData() {
         workspaceId: E2E_WS_A,
         name: 'Pomerleau — Cas E2E (tenancy A)',
         description: "Dossier E2E réaliste (sans IA) pour valider le cloisonnement workspace.",
-        companyId: 'e2e-company-a-pomerleau',
+        organizationId: 'e2e-organization-a-pomerleau',
         matrixConfig,
         status: 'completed',
         executiveSummary: null,
@@ -290,7 +338,7 @@ export async function seedTestData() {
         workspaceId: E2E_WS_B,
         name: 'BMR — Cas E2E (tenancy B)',
         description: "Dossier E2E réaliste (sans IA) pour valider le cloisonnement workspace.",
-        companyId: 'e2e-company-b-bmr',
+        organizationId: 'e2e-organization-b-bmr',
         matrixConfig,
         status: 'completed',
         executiveSummary: null,
@@ -301,7 +349,7 @@ export async function seedTestData() {
         workspaceId: E2E_WS_ADMIN,
         name: 'Bombardier — Cas E2E (admin)',
         description: "Dossier E2E admin.",
-        companyId: 'e2e-company-admin-bombardier',
+        organizationId: 'e2e-organization-admin-bombardier',
         matrixConfig,
         status: 'completed',
         executiveSummary: null,
@@ -312,7 +360,7 @@ export async function seedTestData() {
         workspaceId: E2E_WS_VICTIM,
         name: 'Victim — Dossier E2E',
         description: "Dossier E2E victim (pour disable/delete).",
-        companyId: 'e2e-company-victim',
+        organizationId: 'e2e-organization-victim',
         matrixConfig,
         status: 'completed',
         executiveSummary: null,
@@ -338,7 +386,7 @@ export async function seedTestData() {
         id: 'e2e-uc-a-1',
         workspaceId: E2E_WS_A,
         folderId: 'e2e-folder-a',
-        companyId: 'e2e-company-a-pomerleau',
+        organizationId: 'e2e-organization-a-pomerleau',
         status: 'completed',
         model: null,
         createdAt: now,
@@ -352,7 +400,7 @@ export async function seedTestData() {
         id: 'e2e-uc-a-2',
         workspaceId: E2E_WS_A,
         folderId: 'e2e-folder-a',
-        companyId: 'e2e-company-a-pomerleau',
+        organizationId: 'e2e-organization-a-pomerleau',
         status: 'completed',
         model: null,
         createdAt: now,
@@ -368,7 +416,7 @@ export async function seedTestData() {
         id: 'e2e-uc-b-1',
         workspaceId: E2E_WS_B,
         folderId: 'e2e-folder-b',
-        companyId: 'e2e-company-b-bmr',
+        organizationId: 'e2e-organization-b-bmr',
         status: 'completed',
         model: null,
         createdAt: now,
@@ -382,7 +430,7 @@ export async function seedTestData() {
         id: 'e2e-uc-b-2',
         workspaceId: E2E_WS_B,
         folderId: 'e2e-folder-b',
-        companyId: 'e2e-company-b-bmr',
+        organizationId: 'e2e-organization-b-bmr',
         status: 'completed',
         model: null,
         createdAt: now,
@@ -398,7 +446,7 @@ export async function seedTestData() {
         id: 'e2e-uc-admin-1',
         workspaceId: E2E_WS_ADMIN,
         folderId: 'e2e-folder-admin',
-        companyId: 'e2e-company-admin-bombardier',
+        organizationId: 'e2e-organization-admin-bombardier',
         status: 'completed',
         model: 'gpt-4.1-nano',
         createdAt: now,
@@ -436,7 +484,7 @@ export async function seedTestData() {
 
     console.log('\n🎉 Test data seeded successfully!');
     console.log('\n📊 Summary:');
-    console.log(`- Companies: ${testCompaniesData.length}`);
+    console.log(`- Organizations: ${testOrganizationsData.length}`);
     console.log(`- Folders: ${testFolders.length}`);
     console.log(`- Use Cases: ${testUseCasesData.length}`);
     console.log(`- Matrix: 1`);
