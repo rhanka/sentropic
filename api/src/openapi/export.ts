@@ -48,7 +48,7 @@ const openapiDoc = {
                   sessionId: { type: 'string' },
                   content: { type: 'string' },
                   model: { type: 'string' },
-                  primaryContextType: { type: 'string', enum: ['company', 'folder', 'usecase', 'executive_summary'] },
+                  primaryContextType: { type: 'string', enum: ['organization', 'folder', 'usecase', 'executive_summary'] },
                   primaryContextId: { type: 'string' },
                   sessionTitle: { type: 'string' }
                 },

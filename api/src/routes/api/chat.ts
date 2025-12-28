@@ -13,7 +13,7 @@ const createMessageInput = z.object({
   content: z.string().min(1),
   model: z.string().optional(),
   workspace_id: z.string().optional(),
-  primaryContextType: z.enum(['company', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
 });

@@ -83,7 +83,7 @@
     isSaving = true;
     try {
       // Extract endpoint path from full URL if needed
-      // apiEndpoint can be either "/companies/123" or "http://.../companies/123"
+      // apiEndpoint can be either "/organizations/123" or "http://.../organizations/123"
       // apiPut handles both cases
       let payload = fullData || { value };
       if (typeof fullDataGetter === 'function') {

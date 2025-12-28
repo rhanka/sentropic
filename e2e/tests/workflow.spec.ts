@@ -1,27 +1,27 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Workflow métier complet', () => {
-  test('devrait exécuter le workflow complet : entreprise → génération → dossiers → cas d\'usage → dashboard', async ({ page }) => {
-    // Étape 1: Créer une entreprise
-    await page.goto('/entreprises');
+  test('devrait exécuter le workflow complet : organisation → génération → dossiers → cas d\'usage → dashboard', async ({ page }) => {
+    // Étape 1: Créer une organisation
+    await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
-    // Cliquer sur le bouton d'ajout (redirige vers /entreprises/new)
+    // Cliquer sur le bouton d'ajout (redirige vers /organisations/new)
     await page.click('button:has-text("Ajouter")');
-    await expect(page).toHaveURL(/\/entreprises\/new$/);
+    await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Remplir le nom via l'EditableInput dans le H1 (textarea pour multiline)
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(nameInput).toBeVisible();
-    await nameInput.fill('TestCompanyE2E');
+    await nameInput.fill('TestOrganizationE2E');
     
-    // Créer l'entreprise
+    // Créer l'organisation
     await page.click('button:has-text("Créer")');
-    await expect(page).toHaveURL(/\/entreprises\/[a-zA-Z0-9-]+$/);
+    await expect(page).toHaveURL(/\/organisations\/[a-zA-Z0-9-]+$/);
     
     // Vérifier sur la page détail
     const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
-    await expect(detailNameInput).toHaveValue('TestCompanyE2E');
+    await expect(detailNameInput).toHaveValue('TestOrganizationE2E');
     
     // Étape 2: Générer des cas d'usage
     await page.goto('/cas-usage');

@@ -6,7 +6,7 @@ import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('Restore Validation', () => {
   describe('Schema Validation', () => {
-    it('should have all 12 tables present', async () => {
+    it('should have required core tables present', async () => {
       const tables = await db.all(sql`
         SELECT table_name 
         FROM information_schema.tables 
@@ -16,7 +16,7 @@ describe('Restore Validation', () => {
       `) as { table_name: string }[];
 
       const expectedTables = [
-        'companies',
+        'organizations',
         'folders',
         'use_cases',
         'settings',
@@ -88,10 +88,10 @@ describe('Restore Validation', () => {
     it('should return data if restored from production backup', async () => {
       // Verify that if backup non-empty, we have data
       // If backup empty, this test passes anyway
-      const companiesResponse = await authenticatedHttpRequest('GET', '/api/v1/companies', editorUser.sessionToken!);
-      expect(companiesResponse.status).toBe(200);
-      const companiesData = await companiesResponse.json();
-      expect(Array.isArray(companiesData.items)).toBe(true);
+      const orgsResponse = await authenticatedHttpRequest('GET', '/api/v1/organizations', editorUser.sessionToken!);
+      expect(orgsResponse.status).toBe(200);
+      const orgsData = await orgsResponse.json();
+      expect(Array.isArray(orgsData.items)).toBe(true);
 
       const foldersResponse = await authenticatedHttpRequest('GET', '/api/v1/folders', editorUser.sessionToken!);
       expect(foldersResponse.status).toBe(200);
@@ -112,19 +112,19 @@ describe('Restore Validation', () => {
     });
 
     it('should maintain referential integrity (FK relationships)', async () => {
-      // Create a company
-      const companyResponse = await authenticatedHttpRequest('POST', '/api/v1/companies', user.sessionToken!, {
-        name: `Test Company ${Date.now()}`,
+      // Create an organization
+      const orgResponse = await authenticatedHttpRequest('POST', '/api/v1/organizations', user.sessionToken!, {
+        name: `Test Organization ${Date.now()}`,
         industry: 'Test Industry',
       });
-      expect(companyResponse.status).toBe(201);
-      const company = await companyResponse.json();
+      expect(orgResponse.status).toBe(201);
+      const org = await orgResponse.json();
 
-      // Create a folder linked to this company
+      // Create a folder linked to this organization
       const folderResponse = await authenticatedHttpRequest('POST', '/api/v1/folders', user.sessionToken!, {
         name: `Test Folder ${Date.now()}`,
         description: 'Test folder description',
-        companyId: company.id,
+        organizationId: org.id,
       });
       expect(folderResponse.status).toBe(201);
       const folder = await folderResponse.json();
@@ -133,11 +133,11 @@ describe('Restore Validation', () => {
       const getFolderResponse = await authenticatedHttpRequest('GET', `/api/v1/folders/${folder.id}`, user.sessionToken!);
       expect(getFolderResponse.status).toBe(200);
       const folderData = await getFolderResponse.json();
-      expect(folderData.companyId).toBe(company.id);
+      expect(folderData.organizationId).toBe(org.id);
 
       // Cleanup
       await authenticatedHttpRequest('DELETE', `/api/v1/folders/${folder.id}`, user.sessionToken!);
-      await authenticatedHttpRequest('DELETE', `/api/v1/companies/${company.id}`, user.sessionToken!);
+      await authenticatedHttpRequest('DELETE', `/api/v1/organizations/${org.id}`, user.sessionToken!);
     });
 
     it('should handle JSONB fields correctly', async () => {

@@ -8,12 +8,12 @@ test.describe('Gestion des erreurs', () => {
   });
 
   test('devrait gérer les erreurs de validation des formulaires', async ({ page }) => {
-    await page.goto('/entreprises');
+    await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers /new et vérifier que le bouton Créer est désactivé sans nom
     await page.click('button:has-text("Ajouter")');
-    await expect(page).toHaveURL(/\/entreprises\/new$/);
+    await expect(page).toHaveURL(/\/organisations\/new$/);
     const createBtn = page.locator('button:has-text("Créer")');
     await expect(createBtn).toBeDisabled();
   });
@@ -36,7 +36,7 @@ test.describe('Gestion des erreurs', () => {
 
   test('devrait gérer les erreurs de suppression', async ({ page }) => {
     // Intercepter les requêtes de suppression pour simuler une erreur
-    await page.route('**/api/v1/companies/**', route => {
+    await page.route('**/api/v1/organizations/**', route => {
       if (route.request().method() === 'DELETE') {
         route.fulfill({
           status: 403,
@@ -48,7 +48,7 @@ test.describe('Gestion des erreurs', () => {
       }
     });
     
-    await page.goto('/entreprises');
+    await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
     // Essayer de supprimer une entreprise
@@ -74,7 +74,7 @@ test.describe('Gestion des erreurs', () => {
   test('devrait permettre de réessayer après une erreur', async ({ page }) => {
     // Intercepter les requêtes pour simuler une erreur puis un succès
     let requestCount = 0;
-    await page.route('**/api/v1/companies**', route => {
+    await page.route('**/api/v1/organizations**', route => {
       requestCount++;
       if (requestCount === 1) {
         route.fulfill({
@@ -87,7 +87,7 @@ test.describe('Gestion des erreurs', () => {
       }
     });
     
-    await page.goto('/entreprises');
+    await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
     // Chercher un bouton de réessai

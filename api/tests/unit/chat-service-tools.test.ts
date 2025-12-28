@@ -86,9 +86,9 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const contexts: Array<{ primaryContextType: 'usecase' | 'company' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
+    const contexts: Array<{ primaryContextType: 'usecase' | 'organization' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
       { primaryContextType: 'usecase', primaryContextId: createId() },
-      { primaryContextType: 'company', primaryContextId: createId() },
+      { primaryContextType: 'organization', primaryContextId: createId() },
       { primaryContextType: 'folder', primaryContextId: folderId },
       { primaryContextType: 'executive_summary', primaryContextId: folderId },
     ];
@@ -129,14 +129,14 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       expect(folderTools).toContain('folder_update');
     }
 
-    // Spot-check: company context provides companies_list + company_get (+ update in non-readonly)
-    const companyTools = seen.map((s) => s.names).find((names) => names.includes('companies_list'));
-    expect(companyTools).toBeDefined();
-    if (companyTools) {
-      expect(companyTools).toContain('companies_list');
-      expect(companyTools).toContain('company_get');
-      expect(companyTools).toContain('company_update');
-      expect(companyTools).toContain('folders_list');
+    // Spot-check: organization context provides organizations_list + organization_get (+ update in non-readonly)
+    const orgTools = seen.map((s) => s.names).find((names) => names.includes('organizations_list'));
+    expect(orgTools).toBeDefined();
+    if (orgTools) {
+      expect(orgTools).toContain('organizations_list');
+      expect(orgTools).toContain('organization_get');
+      expect(orgTools).toContain('organization_update');
+      expect(orgTools).toContain('folders_list');
     }
   });
 

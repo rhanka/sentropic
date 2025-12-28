@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatGenerationTraces, chatMessages, chatSessions, companies, folders, useCases, workspaces } from '../../src/db/schema';
+import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, useCases, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
@@ -38,19 +38,19 @@ describe('Me API', () => {
     const meData = await meRes.json();
     const wsId = meData.workspace.id as string;
 
-    const companyId = createTestId();
+    const organizationId = createTestId();
     const folderId = createTestId();
     const useCaseId = createTestId();
 
-    await db.insert(companies).values({ id: companyId, workspaceId: wsId, name: `C ${createTestId()}` });
+    await db.insert(organizations).values({ id: organizationId, workspaceId: wsId, name: `O ${createTestId()}` });
     await db.insert(folders).values({ id: folderId, workspaceId: wsId, name: `F ${createTestId()}`, status: 'completed' });
     await db.insert(useCases).values({ id: useCaseId, workspaceId: wsId, folderId, data: { name: 'UC' } as any, status: 'completed' });
 
     const del = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
     expect(del.status).toBe(200);
 
-    const remainingCompanies = await db.select().from(companies).where(eq(companies.id, companyId));
-    expect(remainingCompanies.length).toBe(0);
+    const remainingOrgs = await db.select().from(organizations).where(eq(organizations.id, organizationId));
+    expect(remainingOrgs.length).toBe(0);
   });
 
   it('should delete /me even if an admin chat session + trace are scoped to the user workspace (no FK 500)', async () => {

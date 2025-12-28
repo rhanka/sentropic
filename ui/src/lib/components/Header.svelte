@@ -12,7 +12,7 @@
   const navItems = [
     { href: '/', label: 'nav.home' },
     { href: '/dossiers', label: 'nav.folders' },
-    { href: '/entreprises', label: 'nav.companies' },
+    { href: '/organisations', label: 'nav.organizations' },
     { href: '/cas-usage', label: 'nav.useCases' },
     { href: '/matrice', label: 'nav.matrix' },
     { href: '/dashboard', label: 'nav.dashboard' },

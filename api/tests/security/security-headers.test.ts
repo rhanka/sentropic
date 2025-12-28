@@ -20,7 +20,7 @@ describe('Security Headers Tests', () => {
 
   describe('Content Security Policy (CSP)', () => {
     it('should include CSP header on all responses', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -32,7 +32,7 @@ describe('Security Headers Tests', () => {
     });
 
     it('should include strict CSP directives', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       const cspHeader = response.headers.get('Content-Security-Policy');
       expect(cspHeader).toContain("'self'");
@@ -41,7 +41,7 @@ describe('Security Headers Tests', () => {
 
     it('should include CSP header on error responses', async () => {
       // Test 404 response
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies/non-existent-id', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations/non-existent-id', user.sessionToken);
 
       expect(response.status).toBe(404);
       
@@ -52,7 +52,7 @@ describe('Security Headers Tests', () => {
 
   describe('HTTP Strict Transport Security (HSTS)', () => {
     it('should include HSTS header on HTTPS responses', async () => {
-      const response = await app.request('/api/v1/companies', {
+      const response = await app.request('/api/v1/organizations', {
         method: 'GET',
         headers: {
           'x-forwarded-proto': 'https', // Simulate HTTPS
@@ -69,7 +69,7 @@ describe('Security Headers Tests', () => {
     });
 
     it('should not include HSTS header on HTTP responses', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -80,7 +80,7 @@ describe('Security Headers Tests', () => {
 
   describe('Cross-Origin Embedder Policy (COEP)', () => {
     it('should include COEP header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -92,7 +92,7 @@ describe('Security Headers Tests', () => {
 
   describe('Cross-Origin Opener Policy (COOP)', () => {
     it('should include COOP header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -104,7 +104,7 @@ describe('Security Headers Tests', () => {
 
   describe('X-Frame-Options', () => {
     it('should include X-Frame-Options header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -116,7 +116,7 @@ describe('Security Headers Tests', () => {
 
   describe('X-Content-Type-Options', () => {
     it('should include X-Content-Type-Options header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -127,7 +127,7 @@ describe('Security Headers Tests', () => {
 
   describe('Referrer-Policy', () => {
     it('should include Referrer-Policy header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -139,7 +139,7 @@ describe('Security Headers Tests', () => {
 
   describe('X-XSS-Protection', () => {
     it('should include X-XSS-Protection header', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -174,7 +174,7 @@ describe('Security Headers Tests', () => {
 
     it('should include security headers on error responses', async () => {
       // Test 500 error by making an invalid request
-      const response = await authenticatedRequest(app, 'POST', '/api/v1/companies', user.sessionToken, {
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken, {
         // Missing required fields to trigger validation error
       });
 
@@ -190,7 +190,7 @@ describe('Security Headers Tests', () => {
   describe('Security Headers Consistency', () => {
     it('should have consistent security headers across all endpoints', async () => {
       const endpoints = [
-        () => authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken),
+        () => authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken),
         () => authenticatedRequest(app, 'GET', '/api/v1/folders', user.sessionToken),
         () => authenticatedRequest(app, 'GET', '/api/v1/useCases', user.sessionToken),
         () => authenticatedRequest(app, 'GET', '/api/v1/settings', user.sessionToken),

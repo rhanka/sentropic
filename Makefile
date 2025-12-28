@@ -490,20 +490,6 @@ db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT *
 	@echo ""
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
 
-.PHONY: db-query-postgres-only
-db-query-postgres-only: ## Execute a custom SQL query using postgres only (no api/ui) (usage: make db-query-postgres-only QUERY="...")
-	@if [ -z "$(QUERY)" ]; then \
-		echo "❌ Error: QUERY parameter is required"; \
-		echo "Usage: make db-query-postgres-only QUERY=\"SELECT * FROM companies\""; \
-		exit 1; \
-	fi
-	@echo "🚀 Ensuring PostgreSQL is running..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
-	@echo "📊 Executing query (postgres only):"
-	@echo "$(QUERY)"
-	@echo ""
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
-
 .PHONY: db-inspect-usecases
 db-inspect-usecases: up ## Inspect use cases and folders relationship
 	@echo "📊 Use Cases Details:"

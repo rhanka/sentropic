@@ -61,13 +61,13 @@ test.describe.serial('Génération IA', () => {
   };
 
   // 1) Génération d'entreprise (enrichissement IA) via l'UI
-  test('devrait générer une entreprise via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
-    await page.goto('/entreprises');
+  test('devrait générer une organisation via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
+    await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
 
     // Cliquer sur le bouton Ajouter
     await page.getByRole('button', { name: 'Ajouter' }).click();
-    await page.waitForURL('/entreprises/new', { timeout: 30_000 });
+    await page.waitForURL('/organisations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Remplir le nom de l'entreprise (BRP - déjà modifié par l'utilisateur)
@@ -86,38 +86,38 @@ test.describe.serial('Génération IA', () => {
 
     const enrichResPromise = page.waitForResponse((res) => {
       const req = res.request();
-      return req.method() === 'POST' && /\/api\/v1\/companies\/[^/]+\/enrich$/.test(res.url());
+      return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich$/.test(res.url());
     }, { timeout: 30_000 });
 
     await aiButton.click();
     const enrichRes = await enrichResPromise;
     const enrichJson = await enrichRes.json().catch(() => null);
     const enrichJobId = String((enrichJson as any)?.jobId ?? '').trim();
-    if (!enrichJobId) throw new Error(`Réponse enrich company sans jobId: ${JSON.stringify(enrichJson)}`);
+    if (!enrichJobId) throw new Error(`Réponse enrich organization sans jobId: ${JSON.stringify(enrichJson)}`);
     
-    // Vérifier la redirection vers /entreprises
-    await page.waitForURL('/entreprises', { timeout: 30_000 });
+    // Vérifier la redirection vers /organisations
+    await page.waitForURL('/organisations', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     debug(`Enrich jobId: ${enrichJobId} — attente fin du job...`);
     await waitForJobTerminal(page, enrichJobId, { timeoutMs: 6 * 60_000, intervalMs: 1000 });
 
-    // La liste /entreprises est alimentée par API + potentiellement SSE; après job terminal on force un refresh.
+    // La liste /organisations est alimentée par API + potentiellement SSE; après job terminal on force un refresh.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
     // Attendre une carte BRP "terminée" (footer: "Cliquez pour voir les détails")
-    const companyCard = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'Cliquez pour voir les détails' }).first();
-    await expect(companyCard).toBeVisible({ timeout: 60_000 });
+    const organizationCard = page.locator('article').filter({ hasText: 'BRP' }).filter({ hasText: 'Cliquez pour voir les détails' }).first();
+    await expect(organizationCard).toBeVisible({ timeout: 60_000 });
     
     // Cliquer sur la carte pour voir les détails
-    await companyCard.click();
-    await page.waitForURL(/\/entreprises\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
+    await organizationCard.click();
+    await page.waitForURL(/\/organisations\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le titre contient BRP (textarea pour multiline)
-    const companyTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
-    await expect(companyTitle).toHaveValue(/BRP/);
+    const organizationTitle = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
+    await expect(organizationTitle).toHaveValue(/BRP/);
   });
 
   // 2) Génération de cas d'usage depuis l'accueil
@@ -158,7 +158,7 @@ test.describe.serial('Génération IA', () => {
       throw new Error('Session révoquée - utilisateur non authentifié');
     }
     
-    // Attendre que les entreprises soient chargées (le select n'est visible que quand isLoading = false)
+    // Attendre que les organisations soient chargées (le select n'est visible que quand isLoading = false)
     debug('Recherche de la textarea...');
     const textarea = page.locator('textarea').first();
     await expect(textarea).toBeVisible({ timeout: 30_000 });
@@ -166,17 +166,17 @@ test.describe.serial('Génération IA', () => {
     await textarea.fill('Génère 3 cas d\'usage pour l\'extension de l\'usine de Boucherville');
     debug('Textarea remplie');
     
-    // Sélectionner l'entreprise contenant Delpharm
+    // Sélectionner l'organisation contenant Delpharm
     // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
-    debug('Recherche du select entreprise...');
+    debug('Recherche du select organisation...');
     // Note: on the /home page the "label" is a <span> inside a <label> without for/id,
     // so Playwright getByLabel() is not reliable here. Target the select inside that label.
-    const companySelect = page.locator('label:has-text("Entreprise (optionnel)") select');
-    await expect(companySelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading companies
+    const organizationSelect = page.locator('label:has-text("Organisation (optionnel)") select');
+    await expect(organizationSelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading organizations
     debug('Select trouvé');
     
     // Afficher toutes les options disponibles pour debug
-    const allOptions = await companySelect.locator('option').all();
+    const allOptions = await organizationSelect.locator('option').all();
     debug(`Nombre d'options trouvées: ${allOptions.length}`);
     for (let i = 0; i < allOptions.length; i++) {
       const optionText = await allOptions[i].textContent();
@@ -186,22 +186,22 @@ test.describe.serial('Génération IA', () => {
     
     // Trouver l'option contenant Delpharm
     debug('Recherche de l\'option Delpharm...');
-    const companyOptionCount = await companySelect.locator('option').filter({ hasText: 'Delpharm' }).count();
-    debug(`Nombre d'options contenant "Delpharm": ${companyOptionCount}`);
+    const orgOptionCount = await organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).count();
+    debug(`Nombre d'options contenant "Delpharm": ${orgOptionCount}`);
     
-    if (companyOptionCount === 0) {
+    if (orgOptionCount === 0) {
       debug('ERROR: Aucune option contenant "Delpharm" trouvée');
-      const allOptionsText = await companySelect.locator('option').allTextContents();
+      const allOptionsText = await organizationSelect.locator('option').allTextContents();
       debug(`ERROR: Options disponibles: ${JSON.stringify(allOptionsText)}`);
       throw new Error('Entreprise Delpharm non trouvée dans la liste');
     }
     
-    const companyOption = companySelect.locator('option').filter({ hasText: 'Delpharm' }).first();
-    const optionValue = await companyOption.getAttribute('value');
+    const orgOption = organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).first();
+    const optionValue = await orgOption.getAttribute('value');
     debug(`Option Delpharm trouvée, value: ${optionValue}`);
     if (optionValue) {
-      await companySelect.selectOption(optionValue);
-      debug('Entreprise Delpharm sélectionnée');
+      await organizationSelect.selectOption(optionValue);
+      debug('Organisation Delpharm sélectionnée');
     } else {
       debug('ERROR: Option Delpharm trouvée mais pas de valeur');
       throw new Error('Option Delpharm trouvée mais sans valeur');

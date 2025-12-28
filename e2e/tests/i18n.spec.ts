@@ -10,7 +10,7 @@ test.describe('Internationalisation (i18n)', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que les textes français sont présents
-    const frenchTexts = page.locator('text=Accueil, text=Dossiers, text=Entreprises, text=Configuration métier, text=Cas d\'usage, text=Matrice, text=Dashboard, text=Design, text=Données, text=Paramètres');
+    const frenchTexts = page.locator('text=Accueil, text=Dossiers, text=Organisations, text=Configuration métier, text=Cas d\'usage, text=Matrice, text=Dashboard, text=Design, text=Données, text=Paramètres');
     
     if (await frenchTexts.count() > 0) {
       await expect(frenchTexts.first()).toBeVisible();
@@ -32,7 +32,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Vérifier que les textes anglais sont présents
-        const englishTexts = page.locator('text=Home, text=Folders, text=Companies, text=Business Configuration, text=Use Cases, text=Matrix, text=Dashboard, text=Design, text=Data, text=Settings');
+        const englishTexts = page.locator('text=Home, text=Folders, text=Organizations, text=Business Configuration, text=Use Cases, text=Matrix, text=Dashboard, text=Design, text=Data, text=Settings');
         
         if (await englishTexts.count() > 0) {
           await expect(englishTexts.first()).toBeVisible();
@@ -56,11 +56,11 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Naviguer vers une autre page
-        await page.goto('/entreprises');
+        await page.goto('/organisations');
         await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que la langue est toujours en anglais
-        const englishText = page.locator('text=Companies, text=Add, text=Name, text=Sector');
+        const englishText = page.locator('text=Organizations, text=Add, text=Name, text=Sector');
         
         if (await englishText.count() > 0) {
           await expect(englishText.first()).toBeVisible();
@@ -84,7 +84,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur une page qui peut générer des erreurs
-        await page.goto('/entreprises');
+        await page.goto('/organisations');
         await page.waitForLoadState('domcontentloaded');
         
         // Essayer de créer une entreprise sans nom pour générer une erreur
@@ -116,14 +116,14 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur la page des entreprises
-        await page.goto('/entreprises');
+        await page.goto('/organisations');
         await page.waitForLoadState('domcontentloaded');
         
         // Ouvrir le formulaire d'ajout
         await page.click('button:has-text("Add")');
         
         // Vérifier que les labels sont en anglais
-        const englishLabels = page.locator('text=Company Name, text=Sector, text=Name, text=Activity');
+        const englishLabels = page.locator('text=Organization Name, text=Sector, text=Name, text=Activity');
         
         if (await englishLabels.count() > 0) {
           await expect(englishLabels.first()).toBeVisible();
@@ -147,7 +147,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur la page des entreprises
-        await page.goto('/entreprises');
+        await page.goto('/organisations');
         await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que les boutons sont en anglais

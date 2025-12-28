@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { createTestId } from '../utils/test-helpers';
-import { testCompanies } from '../utils/test-data';
+import { testOrganizations } from '../utils/test-data';
 import { 
   createAuthenticatedUser, 
   authenticatedRequest, 
@@ -19,25 +19,25 @@ describe('Folders API', () => {
     await cleanupAuthData();
   });
 
-  // Helper function to create a test company
-  async function createTestCompany() {
-    const companyData = {
-      name: `Test Company ${createTestId()}`,
-      industry: testCompanies.valid.industry,
+  // Helper function to create a test organization
+  async function createTestOrganization() {
+    const orgData = {
+      name: `Test Organization ${createTestId()}`,
+      industry: testOrganizations.valid.industry,
     };
 
-    const response = await authenticatedRequest(app, 'POST', '/api/v1/companies', user.sessionToken!, companyData);
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken!, orgData);
     expect(response.status).toBe(201);
     const data = await response.json();
     return data.id;
   }
 
   // Helper function to create a test folder
-  async function createTestFolder(companyId?: string) {
+  async function createTestFolder(organizationId?: string) {
     const folderData = {
       name: `Test Folder ${createTestId()}`,
       description: 'Test folder description',
-      ...(companyId && { companyId })
+      ...(organizationId && { organizationId })
     };
 
     const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, folderData);
@@ -55,9 +55,9 @@ describe('Folders API', () => {
       expect(Array.isArray(data.items)).toBe(true);
     });
 
-    it('should get folders filtered by company_id', async () => {
-      const companyId = await createTestCompany();
-      const response = await authenticatedRequest(app, 'GET', `/api/v1/folders?company_id=${companyId}`, user.sessionToken!);
+    it('should get folders filtered by organization_id', async () => {
+      const organizationId = await createTestOrganization();
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/folders?organization_id=${organizationId}`, user.sessionToken!);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -67,11 +67,11 @@ describe('Folders API', () => {
 
   describe('POST /folders', () => {
     it('should create a folder', async () => {
-      const companyId = await createTestCompany();
+      const organizationId = await createTestOrganization();
       const folderData = {
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder description',
-        companyId: companyId
+        organizationId: organizationId
       };
 
       const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, folderData);
@@ -80,13 +80,13 @@ describe('Folders API', () => {
       const data = await response.json();
       expect(data.name).toBe(folderData.name);
       expect(data.description).toBe(folderData.description);
-      expect(data.companyId).toBe(companyId);
+      expect(data.organizationId).toBe(organizationId);
     });
 
-    it('should create a folder without company', async () => {
+    it('should create a folder without organization', async () => {
       const folderData = {
         name: `Test Folder ${createTestId()}`,
-        description: 'Test folder without company'
+        description: 'Test folder without organization'
       };
 
       const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, folderData);
@@ -94,7 +94,7 @@ describe('Folders API', () => {
       expect(response.status).toBe(201);
       const data = await response.json();
       expect(data.name).toBe(folderData.name);
-      expect(data.companyId).toBeNull();
+      expect(data.organizationId).toBeNull();
     });
 
     it('should create a folder with matrix config', async () => {

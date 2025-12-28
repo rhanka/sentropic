@@ -21,7 +21,7 @@ describe('CORS Security Tests', () => {
   describe('CORS Headers with Credentials', () => {
     it('should include proper CORS headers for preflight requests', async () => {
       // Test OPTIONS preflight request
-      const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/companies', null, {
+      const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/organizations', null, {
         'Origin': 'http://localhost:5173',
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers': 'Content-Type, Authorization'
@@ -39,7 +39,7 @@ describe('CORS Security Tests', () => {
 
     it('should include proper CORS headers for actual requests', async () => {
       // Test actual GET request with credentials
-      const response = await app.request('/api/v1/companies', {
+      const response = await app.request('/api/v1/organizations', {
         method: 'GET',
         headers: {
           'Origin': 'http://localhost:5173',
@@ -56,7 +56,7 @@ describe('CORS Security Tests', () => {
 
     it('should reject requests from disallowed origins', async () => {
       // Test request from disallowed origin
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken, null, {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken, null, {
         'Origin': 'https://malicious.com'
       });
 
@@ -69,7 +69,7 @@ describe('CORS Security Tests', () => {
 
     it('should handle wildcard subdomain patterns correctly', async () => {
       // Test request from allowed wildcard subdomain
-      const response = await app.request('/api/v1/companies', {
+      const response = await app.request('/api/v1/organizations', {
         method: 'GET',
         headers: {
           'Origin': 'https://app.sent-tech.ca',
@@ -86,7 +86,7 @@ describe('CORS Security Tests', () => {
 
     it('should reject requests from non-matching wildcard patterns', async () => {
       // Test request from non-matching wildcard pattern
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken, null, {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken, null, {
         'Origin': 'https://malicious-sent-tech.ca'
       });
 
@@ -98,7 +98,7 @@ describe('CORS Security Tests', () => {
 
     it('should handle requests without Origin header', async () => {
       // Test request without Origin header (e.g., from server-to-server)
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/companies', user.sessionToken);
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken);
 
       expect(response.status).toBe(200);
       
@@ -119,7 +119,7 @@ describe('CORS Security Tests', () => {
         location: 'Test City'
       };
 
-      const response = await app.request('/api/v1/companies', {
+      const response = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
           'Origin': 'http://localhost:5173',
@@ -138,7 +138,7 @@ describe('CORS Security Tests', () => {
 
     it('should allow PUT requests with proper CORS headers', async () => {
       // First create a company
-      const createResponse = await app.request('/api/v1/companies', {
+      const createResponse = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
           'Origin': 'http://localhost:5173',
@@ -159,7 +159,7 @@ describe('CORS Security Tests', () => {
       const createdCompany = await createResponse.json();
       
       // Then update it
-      const updateResponse = await app.request(`/api/v1/companies/${createdCompany.id}`, {
+      const updateResponse = await app.request(`/api/v1/organizations/${createdCompany.id}`, {
         method: 'PUT',
         headers: {
           'Origin': 'http://localhost:5173',
@@ -185,7 +185,7 @@ describe('CORS Security Tests', () => {
 
     it('should allow DELETE requests with proper CORS headers', async () => {
       // First create a company
-      const createResponse = await app.request('/api/v1/companies', {
+      const createResponse = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
           'Origin': 'http://localhost:5173',
@@ -206,7 +206,7 @@ describe('CORS Security Tests', () => {
       const createdCompany = await createResponse.json();
       
       // Then delete it
-      const deleteResponse = await app.request(`/api/v1/companies/${createdCompany.id}`, {
+      const deleteResponse = await app.request(`/api/v1/organizations/${createdCompany.id}`, {
         method: 'DELETE',
         headers: {
           'Origin': 'http://localhost:5173',

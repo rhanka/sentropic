@@ -9,14 +9,14 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
    - Sous-jacent: pas d'état, toasts UI.
 
 2. Génération `Home` (/home)
-   - Champs: `currentInput` (texte libre), sélection d'`entreprise` (facultative), option `createNewFolder`.
+   - Champs: `currentInput` (texte libre), sélection d'`organisation` (facultative), option `createNewFolder`.
    - Actions: `generateUseCases(input, createNewFolder)` → crée éventuellement un dossier + génère une liste de cas puis leurs détails via OpenAI.
-   - Dépendances: `companies`, `currentCompanyId`, `folders`, `currentFolderId`, toasts.
+   - Dépendances: `organizations`, `currentOrganizationId`, `folders`, `currentFolderId`, toasts.
    - Navigation: redirige vers `/cas-usage` après succès.
 
 3. Dossiers `Folders` (/dossiers)
    - CRUD de dossiers: `addFolder(name, description)`, `updateFolder`, `deleteFolder`, `setCurrentFolder`.
-   - Affiche nombre de cas d'usage par dossier, association éventuelle à une `companyId`.
+   - Affiche nombre de cas d'usage par dossier, association éventuelle à une `organizationId`.
    - Navigation: sélectionner un dossier redirige vers `/cas-usage`.
 
 4. Liste des cas `UseCaseList` (/cas-usage)
@@ -37,12 +37,12 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
    - Configuration des axes de valeur/complexité (poids), seuils (points, threshold, cases) et descriptions de niveaux (1..5).
    - Met à jour les scores des cas du dossier courant.
 
-8. Entreprises `Companies` (/entreprises, /entreprises/:id)
-   - CRUD d'entreprises, sélection d'une `currentCompanyId`.
-   - Utilisée pour contextualiser les prompts de génération (OpenAI) et l'association dossier→entreprise.
+8. Organisations `Organizations` (/organisations, /organisations/:id)
+   - CRUD d'organisations, sélection d'une `currentOrganizationId`.
+   - Utilisée pour contextualiser les prompts de génération (OpenAI) et l'association dossier→organisation.
 
 9. Paramètres `Settings` (/parametres)
-   - Stocker via l'API backend: prompts, modèles (liste/détail/dossier/entreprise), paramètres avancés `maxRetries`, `parallelQueue`. La clé `OPENAI_API_KEY` reste côté serveur (jamais côté client).
+   - Stocker via l'API backend: prompts, modèles (liste/détail/dossier/organisation), paramètres avancés `maxRetries`, `parallelQueue`. La clé `OPENAI_API_KEY` reste côté serveur (jamais côté client).
 
 10. Configuration métier `BusinessConfiguration` (/configuration-metier)
     - **À implémenter** - Liste/modification basique des secteurs et processus.
@@ -60,7 +60,7 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Items:
   - Accueil `/`
   - Dossiers `/dossiers`
-  - Entreprises `/entreprises`
+  - Organisations `/organisations`
   - Secteurs et processus `/configuration-metier`
   - Cas d'usage `/cas-usage`
   - Matrice `/matrice`
@@ -85,15 +85,15 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Intention: point d'entrée métier pour décrire le contexte et lancer une génération encadrée (dossier + cas d'usage) via **job queue**.
 - UI:
   - Zone de texte `currentInput` (obligatoire).
-  - Sélecteur d'entreprise (optionnel) alimenté par `/companies`.
+  - Sélecteur d'organisation (optionnel) alimenté par `/organizations`.
   - Case `createNewFolder` (par défaut: true).
   - Bouton "Générer vos cas d'usage".
-- Stores utilisés: `companiesStore`, `foldersStore` (lecture), `useCasesStore` (aucune écriture directe ici).
+- Stores utilisés: `organizationsStore`, `foldersStore` (lecture), `useCasesStore` (aucune écriture directe ici).
 - API:
-  - GET `/api/v1/companies`
-    - Response 200: `{ items: Company[] }`
+  - GET `/api/v1/organizations`
+    - Response 200: `{ items: Organization[] }`
   - POST `/api/v1/use-cases/generate`
-    - Request JSON: `{ input: string; create_new_folder: boolean; company_id?: string }`
+    - Request JSON: `{ input: string; create_new_folder: boolean; organization_id?: string }`
     - Response 200: `{ success: true; status: "generating"; created_folder_id?: string; jobId: string }`
     - Effets serveur: création éventuelle d'un dossier (`folders.status="generating"`), enqueue job `usecase_list` (puis `usecase_detail`), persistance, streaming via `chat_stream_events` + SSE global.
   - Erreurs: 400 si `input` vide, 429/5xx pour OpenAI/serveur; UI affiche toasts d'erreur.
@@ -102,15 +102,15 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
   - Succès → navigation `/dossiers` (suivi du statut/stream), puis accès au listing `/cas-usage`.
 
 3) Dossiers `Folders` (/dossiers)
-- Intention: organiser la production par périmètre; associer un dossier à une entreprise; gérer le dossier actif.
+- Intention: organiser la production par périmètre; associer un dossier à une organisation; gérer le dossier actif.
 - UI:
-  - Liste des dossiers avec: nom, description, date, entreprise associée (si présente), nombre de cas.
+  - Liste des dossiers avec: nom, description, date, organisation associée (si présente), nombre de cas.
   - Actions: Créer, Éditer, Supprimer, Sélectionner (définit le dossier actif côté store).
-- Stores: `foldersStore` (list + currentFolderId), `companiesStore` (pour nom d'entreprise), `useCasesStore` (compter par dossier côté front ou via count API optionnelle).
+- Stores: `foldersStore` (list + currentFolderId), `organizationsStore` (pour nom d'organisation), `useCasesStore` (compter par dossier côté front ou via count API optionnelle).
 - API:
   - GET `/api/v1/folders` → `{ items: Folder[] }`
-  - POST `/api/v1/folders` body `{ name, description, company_id? }` → `{ id, ... }`
-  - PUT `/api/v1/folders/{id}` body `{ name?, description?, company_id?, matrix_config? }` → `{ id, ... }`
+  - POST `/api/v1/folders` body `{ name, description, organizationId? }` → `{ id, ... }`
+  - PUT `/api/v1/folders/{id}` body `{ name?, description?, organizationId?, matrix_config? }` → `{ id, ... }`
   - DELETE `/api/v1/folders/{id}` → 204 (cascade `use_cases`)
   - Optionnel (count): GET `/api/v1/use-cases/count?folder_id=...` → `{ count: number }`
 - États/UI: modales de création/édition/suppression; confirmations; toasts.
@@ -168,28 +168,28 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
   - POST `/api/v1/folders/{id}/recalculate` → 202/200 (recalcule tous les scores du dossier)
 - États/UI: confirmation d'impact (recalcul); toasts succès/erreur.
 
-8) Entreprises `Companies` (/entreprises, /entreprises/:id)
-- Intention: créer/maintenir des profils d'entreprise riches pour contextualiser la génération et l'analyse.
+8) Organisations `Organizations` (/organisations, /organisations/:id)
+- Intention: créer/maintenir des profils d'organisation riches pour contextualiser la génération et l'analyse.
 - UI:
-  - Liste des entreprises; fiche avec `name`, `industry`, `size`, `products`, `processes`, `challenges`, `objectives`, `technologies`.
+  - Liste des organisations; fiche avec `name` + profil dans `data` (`industry`, `size`, `products`, `processes`, `kpis`, `challenges`, `objectives`, `technologies`, `references`).
   - Actions: Créer/Éditer/Supprimer; Définir "active" côté store si besoin pour `/home`.
   - Option: auto-remplissage via OpenAI sur saisie du nom.
-- Stores: `companiesStore` (list + currentCompanyId).
+- Stores: `organizationsStore` (list + currentOrganizationId).
 - API:
-  - GET `/api/v1/companies` → `{ items: Company[] }`
-  - POST `/api/v1/companies` body `CompanyInput` → `Company`
-  - GET `/api/v1/companies/{id}` → `Company`
-  - PUT `/api/v1/companies/{id}` body `Partial<Company>` → `Company`
-  - DELETE `/api/v1/companies/{id}` → 204
-  - POST `/api/v1/companies/{id}/enrich` body `{ model?: string }` → `{ success: true; status: "enriching"; jobId: string }`
-  - POST `/api/v1/companies/ai-enrich` body `{ name: string; model?: string }` → `Partial<Company>` (enrichissement sync, sans persister)
+  - GET `/api/v1/organizations` → `{ items: Organization[] }`
+  - POST `/api/v1/organizations` body `OrganizationInput` → `Organization`
+  - GET `/api/v1/organizations/{id}` → `Organization`
+  - PUT `/api/v1/organizations/{id}` body `Partial<Organization>` → `Organization`
+  - DELETE `/api/v1/organizations/{id}` → 204
+  - POST `/api/v1/organizations/{id}/enrich` body `{ model?: string }` → `{ success: true; status: "enriching"; jobId: string }`
+  - POST `/api/v1/organizations/ai-enrich` body `{ name: string; model?: string }` → `OrganizationData` (enrichissement sync, sans persister)
 - États/UI: feuille latérale (sheet) de création/édition; toasts.
 
 9) Paramètres `Settings` (/parametres)
 - Intention: industrialiser la génération (prompts, modèles, limites), séparer secrets et tuning côté serveur.
 - UI:
-  - Édition des prompts: `useCaseListPrompt`, `useCaseDetailPrompt`, `folderNamePrompt`, `companyInfoPrompt`.
-  - Sélection des modèles: `listModel`, `detailModel`, `folderModel`, `companyInfoModel`.
+  - Édition des prompts: `useCaseListPrompt`, `useCaseDetailPrompt`, `folderNamePrompt`, `organizationInfoPrompt`.
+  - Sélection des modèles: `listModel`, `detailModel`, `folderModel`, `organizationInfoModel`.
   - Limites: `maxRetries`, `parallelQueue`.
   - Actions: Sauvegarder, Réinitialiser.
 - Store: `settingsStore`.
@@ -220,8 +220,8 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - API: endpoints utilitaires si nécessaire (facultatif), sinon mock/démo.
 
 Variables sous-jacentes clés côté backend/API:
-- Gestion des entités: `Company`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).
-- Contexte de génération: `currentCompanyId`, association dossier→entreprise, prompts/configs.
+- Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).
+- Contexte de génération: `currentOrganizationId`, association dossier→organisation, prompts/configs.
 - Agrégations: comptages par niveaux, scoring, normalisation pour graphiques.
 
 ## 2) Modèle de données (PostgreSQL 16 + Drizzle + workspaces)
@@ -230,14 +230,14 @@ Base: **PostgreSQL 16** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db
 
 Principe: **tenancy par workspace** (private-by-default) :
 - Table `workspaces` (avec `share_with_admin`)
-- Tous les objets métier sont scoppés par `workspace_id` (`companies`, `folders`, `use_cases`, `job_queue`, etc.)
+- Tous les objets métier sont scoppés par `workspace_id` (`organizations`, `folders`, `use_cases`, `job_queue`, etc.)
 
 Tables principales (simplifié) :
 - `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, `share_with_admin`, timestamps
 - `users`: `id`, `email`, `display_name`, `role`, `account_status`, `approval_due_at`, `email_verified`, timestamps
-- `companies`: `id`, `workspace_id`, `name`, champs métier, `status` (`draft|enriching|completed`)
-- `folders`: `id`, `workspace_id`, `name`, `company_id?`, `matrix_config` (texte JSON), `status` (`generating|completed`), `executive_summary` (texte JSON)
-- `use_cases`: `id`, `workspace_id`, `folder_id`, `company_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `data` (**JSONB**: contient `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
+- `organizations`: `id`, `workspace_id`, `name`, `status` (`draft|enriching|completed`), `data` (**JSONB**: contient `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.)
+- `folders`: `id`, `workspace_id`, `name`, `organization_id?`, `matrix_config` (texte JSON), `status` (`generating|completed`), `executive_summary` (texte JSON)
+- `use_cases`: `id`, `workspace_id`, `folder_id`, `organization_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `data` (**JSONB**: contient `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
 - `job_queue`: `id`, `workspace_id`, `type`, `status`, `data` (JSON string), `result?`, `error?`, timestamps
 
 Auth & sessions :
@@ -367,20 +367,20 @@ Endpoints principaux (API v1):
 - Health
   - GET `/api/v1/health` → health check
 
-- Companies
-  - GET `/api/v1/companies` → list
-  - POST `/api/v1/companies` → create (body = Company sans id)
-  - GET `/api/v1/companies/{id}` → retrieve
-  - PUT `/api/v1/companies/{id}` → update
-  - DELETE `/api/v1/companies/{id}` → delete
-  - POST `/api/v1/companies/{id}/enrich` → enrichissement IA async (queue)
-  - POST `/api/v1/companies/ai-enrich` → enrichissement IA sync (sans persistance)
+- Organizations
+  - GET `/api/v1/organizations` → list
+  - POST `/api/v1/organizations` → create (body = Organization sans id)
+  - GET `/api/v1/organizations/{id}` → retrieve
+  - PUT `/api/v1/organizations/{id}` → update
+  - DELETE `/api/v1/organizations/{id}` → delete
+  - POST `/api/v1/organizations/{id}/enrich` → enrichissement IA async (queue)
+  - POST `/api/v1/organizations/ai-enrich` → enrichissement IA sync (sans persistance)
 
 - Folders
-  - GET `/api/v1/folders` → list (+ filtre company_id)
-  - POST `/api/v1/folders` → create (name, description, company_id?)
+  - GET `/api/v1/folders` → list (+ filtre organization_id)
+  - POST `/api/v1/folders` → create (name, description, organizationId?)
   - GET `/api/v1/folders/{id}` → retrieve (incl. `matrix_config`)
-  - PUT `/api/v1/folders/{id}` → update (name, description, company_id, matrix_config)
+  - PUT `/api/v1/folders/{id}` → update (name, description, organizationId, matrix_config)
   - DELETE `/api/v1/folders/{id}` → delete (cascade use_cases)
 
 - Use Cases
@@ -389,7 +389,7 @@ Endpoints principaux (API v1):
   - GET `/api/v1/use-cases/{id}` → retrieve
   - PUT `/api/v1/use-cases/{id}` → update
   - DELETE `/api/v1/use-cases/{id}` → delete
-  - POST `/api/v1/use-cases/generate` → démarre une génération (job queue): body `{ input, create_new_folder, company_id? }` → retourne `{ created_folder_id, jobId }`
+  - POST `/api/v1/use-cases/generate` → démarre une génération (job queue): body `{ input, create_new_folder, organization_id? }` → retourne `{ created_folder_id, jobId }`
 
 - Analytics
   - GET `/api/v1/analytics/summary?folder_id=...` → résumé statistiques
@@ -430,15 +430,15 @@ Règles de calcul:
 
 Services TypeScript dédiés :
 - `api/src/services/queue-manager.ts` → Gestionnaire de queue **PostgreSQL** (table `job_queue`) pour jobs asynchrones
-- `api/src/services/context-company.ts` → Enrichissement d'entreprises via IA
+- `api/src/services/context-organization.ts` → Enrichissement d'organisations via IA
 - `api/src/services/context-usecase.ts` → Génération de cas d'usage via IA
 - `api/src/services/settings.ts` → Gestion des paramètres et configuration
 - `api/src/services/tools.ts` → Utilitaires et outils généraux
 
 Fonctions de génération IA :
-- `generateFolderNameAndDescription(input, model, company?)`
-- `generateUseCaseList(input, model, company?)`
-- `generateUseCaseDetail(title, input, matrix_config, model, company?)` → renvoie un JSON strict; l'API valide (Zod), calcule les scores et persiste.
+- `generateFolderNameAndDescription(input, model, organization?)`
+- `generateUseCaseList(input, model, organization?)`
+- `generateUseCaseDetail(title, input, matrix_config, model, organization?)` → renvoie un JSON strict; l'API valide (Zod), calcule les scores et persiste.
 
 Paramètres: prompts, modèles, limites (retries/file parallèle) stockés en DB (`/settings`). `OPENAI_API_KEY` uniquement côté serveur. Concurrence contrôlée (p-limit) + retries exponentiels.
 
@@ -448,21 +448,21 @@ Paramètres: prompts, modèles, limites (retries/file parallèle) stockés en DB
 - `use_case_list_prompt` → Génération de liste de cas d'usage
 - `use_case_detail_prompt` → Génération détaillée d'un cas d'usage avec scoring
 - `folder_name_prompt` → Génération de nom et description de dossier
-- `company_info_prompt` → Enrichissement d'informations d'entreprise
+- `organization_info_prompt` → Enrichissement d'informations d'organisation
 
 **Association prompts ↔ endpoints :**
 - `/api/v1/use-cases/generate` :
   - Si `create_new_folder=true` : crée un dossier `folders.status="generating"` (nom/description peuvent être générés via prompt)
   - Enqueue job `usecase_list` (prompt liste), puis jobs `usecase_detail` (prompt détail)
   - Persistance dans `use_cases.data` (JSONB) + events de stream `chat_stream_events`
-- `/api/v1/companies/{id}/enrich` : enqueue job `company_enrich` (prompt entreprise)
-- `/api/v1/companies/ai-enrich` : enrichissement sync (retourne données, sans persister)
+- `/api/v1/organizations/{id}/enrich` : enqueue job `organization_enrich` (prompt organisation)
+- `/api/v1/organizations/ai-enrich` : enrichissement sync (retourne données, sans persister)
 
 **Workflow de génération :**
 
 ```mermaid
 flowchart TD
-  A[Home form submit] -->|input, create_new_folder, company_id?| B{create_new_folder?}
+  A[Home form submit] -->|input, create_new_folder, organization_id?| B{create_new_folder?}
   B -- yes --> C[Prompt: folder_name_prompt]
   C --> D[POST /api/v1/folders]
   B -- no --> D
@@ -484,13 +484,13 @@ Routing (adapter-static):
 - `/cas-usage/[id]` → UseCaseDetail
 - `/dashboard` → Dashboard
 - `/matrice` → Matrix
-- `/entreprises` (+ `/entreprises/[id]`) → Companies
+- `/organisations` (+ `/organisations/[id]`) → Organizations
 - `/parametres` → Settings
 - `/configuration-metier` → BusinessConfiguration
 - `+error.svelte` → NotFound
 
 State management:
-- Stores Svelte: `companiesStore`, `foldersStore`, `useCasesStore`, `matrixStore`, `settingsStore`, `businessStore`.
+- Stores Svelte: `organizationsStore`, `foldersStore`, `useCasesStore`, `matrixStore`, `settingsStore`, `businessStore`.
 - Les stores synchronisent via l'API backend; aucune persistance locale critique. Des caches peuvent exister en `sessionStorage` si besoin UX.
 
 Composants clés:

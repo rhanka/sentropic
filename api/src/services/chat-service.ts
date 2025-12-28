@@ -15,9 +15,9 @@ import {
   webExtractTool,
   searchWeb,
   extractUrlContent,
-  companiesListTool,
-  companyGetTool,
-  companyUpdateTool,
+  organizationsListTool,
+  organizationGetTool,
+  organizationUpdateTool,
   foldersListTool,
   folderGetTool,
   folderUpdateTool,
@@ -32,7 +32,7 @@ import { ensureWorkspaceForUser } from './workspace-service';
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 
-export type ChatContextType = 'company' | 'folder' | 'usecase' | 'executive_summary';
+export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -354,11 +354,11 @@ export class ChatService {
         webSearchTool,
         webExtractTool
       ];
-    } else if (primaryContextType === 'company') {
+    } else if (primaryContextType === 'organization') {
       tools = [
-        companiesListTool,
-        companyGetTool,
-        ...(readOnly ? [] : [companyUpdateTool]),
+        organizationsListTool,
+        organizationGetTool,
+        ...(readOnly ? [] : [organizationUpdateTool]),
         foldersListTool,
         webSearchTool,
         webExtractTool
@@ -373,7 +373,7 @@ export class ChatService {
         useCasesListTool,
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        companyGetTool,
+        organizationGetTool,
         webSearchTool,
         webExtractTool
       ];
@@ -384,7 +384,7 @@ export class ChatService {
         useCasesListTool,
         folderGetTool,
         matrixGetTool,
-        companyGetTool,
+        organizationGetTool,
         webSearchTool,
         webExtractTool
       ];
@@ -427,25 +427,25 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
 1. Appeler usecase_get pour lire le use case actuel
 2. Appeler usecase_update avec les modifications (par exemple : path: 'problem', path: 'solution')
 3. Les modifications sont alors appliquées directement en base de données`;
-    } else if (primaryContextType === 'company') {
-      const companyLine = primaryContextId
-        ? `Tu travailles sur l'entreprise ${primaryContextId}.`
-        : `Tu es sur la liste des entreprises (pas d'entreprise sélectionnée).`;
+    } else if (primaryContextType === 'organization') {
+      const orgLine = primaryContextId
+        ? `Tu travailles sur l'organisation ${primaryContextId}.`
+        : `Tu es sur la liste des organisations (pas d'organisation sélectionnée).`;
       systemPrompt += ` 
 
-${companyLine}
+${orgLine}
 
 Tools disponibles :
-- \`companies_list\` : Liste des entreprises (batch/list)
-- \`company_get\` : Lit le détail d'une entreprise (utilise l'ID du contexte si présent)
-- \`company_update\` : Met à jour des champs d'une entreprise${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
-- \`folders_list\` : Liste des dossiers (tu peux filtrer par companyId)
+- \`organizations_list\` : Liste des organisations (batch/list)
+- \`organization_get\` : Lit le détail d'une organisation (utilise l'ID du contexte si présent)
+- \`organization_update\` : Met à jour des champs d'une organisation${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`folders_list\` : Liste des dossiers (tu peux filtrer par organizationId)
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
 
 Règles :
-- Pour lister les entreprises visibles ici, utilise \`companies_list\`.
-- Si un contexte companyId est présent, ne modifie/consulte que cette entreprise.`;
+- Pour lister les organisations visibles ici, utilise \`organizations_list\`.
+- Si un contexte organizationId est présent, ne modifie/consulte que cette organisation.`;
     } else if (primaryContextType === 'folder') {
       const folderLine = primaryContextId
         ? `Tu travailles sur le dossier ${primaryContextId}.`
@@ -462,7 +462,7 @@ Tools disponibles :
 - \`usecases_list\` : Liste des cas d'usage du dossier courant (idsOnly ou select)
 - \`executive_summary_get\` : Lit la synthèse exécutive du dossier courant
 - \`executive_summary_update\` : Met à jour la synthèse exécutive du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
-- \`company_get\` : Lit l'entreprise rattachée au dossier (si le dossier a un companyId)
+- \`organization_get\` : Lit l'organisation rattachée au dossier (si le dossier a un organizationId)
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
 
@@ -480,7 +480,7 @@ Tools disponibles :
 - \`usecases_list\` : Liste les cas d'usage du dossier (pour relier la synthèse aux cas)
 - \`folder_get\` : Lit le dossier (contexte général)
 - \`matrix_get\` : Lit la matrice (matrixConfig) du dossier
-- \`company_get\` : Lit l'entreprise rattachée au dossier (si le dossier a un companyId)
+- \`organization_get\` : Lit l'organisation rattachée au dossier (si le dossier a un organizationId)
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
 
@@ -677,11 +677,11 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'companies_list') {
-            if (primaryContextType !== 'company') {
-              throw new Error('Security: companies_list is only available in company context');
+          } else if (toolCall.name === 'organizations_list') {
+            if (primaryContextType !== 'organization') {
+              throw new Error('Security: organizations_list is only available in organization context');
             }
-            const listResult = await toolService.listCompanies({
+            const listResult = await toolService.listOrganizations({
               workspaceId: sessionWorkspaceId,
               idsOnly: !!args.idsOnly,
               select: Array.isArray(args.select) ? args.select : null
@@ -695,31 +695,31 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'company_get') {
-            // company context: must match context id
-            if (primaryContextType === 'company') {
-              if (!primaryContextId || args.companyId !== primaryContextId) {
-                throw new Error('Security: companyId does not match session context');
+          } else if (toolCall.name === 'organization_get') {
+            // organization context: must match context id
+            if (primaryContextType === 'organization') {
+              if (!primaryContextId || args.organizationId !== primaryContextId) {
+                throw new Error('Security: organizationId does not match session context');
               }
             } else if (primaryContextType === 'folder' || primaryContextType === 'executive_summary') {
-              // folder/executive_summary context: only allow reading the company linked to the current folder
-              if (!primaryContextId) throw new Error('Security: company_get requires a folder context id');
+              // folder/executive_summary context: only allow reading the organization linked to the current folder
+              if (!primaryContextId) throw new Error('Security: organization_get requires a folder context id');
               const folder = await toolService.getFolder(primaryContextId, {
                 workspaceId: sessionWorkspaceId,
-                select: ['companyId']
+                select: ['organizationId']
               });
-              const folderCompanyId = typeof (folder.data as Record<string, unknown>)?.companyId === 'string'
-                ? ((folder.data as Record<string, unknown>).companyId as string)
+              const folderOrganizationId = typeof (folder.data as Record<string, unknown>)?.organizationId === 'string'
+                ? ((folder.data as Record<string, unknown>).organizationId as string)
                 : null;
-              if (!folderCompanyId) throw new Error('Folder has no companyId');
-              if (args.companyId !== folderCompanyId) {
-                throw new Error('Security: companyId is not linked to current folder');
+              if (!folderOrganizationId) throw new Error('Folder has no organizationId');
+              if (args.organizationId !== folderOrganizationId) {
+                throw new Error('Security: organizationId is not linked to current folder');
               }
             } else {
-              throw new Error('Security: company_get is not available in this context');
+              throw new Error('Security: organization_get is not available in this context');
             }
 
-            const getResult = await toolService.getCompany(args.companyId, {
+            const getResult = await toolService.getOrganization(args.organizationId, {
               workspaceId: sessionWorkspaceId,
               select: Array.isArray(args.select) ? args.select : null
             });
@@ -732,13 +732,13 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'company_update') {
-            if (readOnly) throw new Error('Read-only workspace: company_update is disabled');
-            if (primaryContextType !== 'company' || !primaryContextId || args.companyId !== primaryContextId) {
-              throw new Error('Security: companyId does not match session context');
+          } else if (toolCall.name === 'organization_update') {
+            if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
+            if (primaryContextType !== 'organization' || !primaryContextId || args.organizationId !== primaryContextId) {
+              throw new Error('Security: organizationId does not match session context');
             }
-            const updateResult = await toolService.updateCompanyFields({
-              companyId: args.companyId,
+            const updateResult = await toolService.updateOrganizationFields({
+              organizationId: args.organizationId,
               updates: Array.isArray(args.updates) ? args.updates : [],
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
@@ -755,16 +755,16 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'folders_list') {
-            if (primaryContextType !== 'company' && primaryContextType !== 'folder') {
-              throw new Error('Security: folders_list is only available in company/folder context');
+            if (primaryContextType !== 'organization' && primaryContextType !== 'folder') {
+              throw new Error('Security: folders_list is only available in organization/folder context');
             }
-            const companyId =
-              primaryContextType === 'company' && primaryContextId
+            const organizationId =
+              primaryContextType === 'organization' && primaryContextId
                 ? primaryContextId
-                : (typeof args.companyId === 'string' ? args.companyId : null);
+                : (typeof args.organizationId === 'string' ? args.organizationId : null);
             const listResult = await toolService.listFolders({
               workspaceId: sessionWorkspaceId,
-              companyId,
+              organizationId,
               idsOnly: !!args.idsOnly,
               select: Array.isArray(args.select) ? args.select : null
             });

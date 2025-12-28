@@ -13,27 +13,27 @@ describe('Database Connectivity', () => {
     await cleanupAuthData();
   });
 
-  it('should be able to create and read companies', async () => {
-    const testCompany = {
-      name: `Test Company ${Date.now()}`,
+  it('should be able to create and read organizations', async () => {
+    const testOrg = {
+      name: `Test Organization ${Date.now()}`,
       industry: 'Test Industry',
     };
 
-    // Create company
-    const createResponse = await authenticatedHttpRequest('POST', '/api/v1/companies', user.sessionToken!, testCompany);
+    // Create organization
+    const createResponse = await authenticatedHttpRequest('POST', '/api/v1/organizations', user.sessionToken!, testOrg);
     expect(createResponse.status).toBe(201);
     const createData = await createResponse.json();
-    expect(createData.name).toBe(testCompany.name);
+    expect(createData.name).toBe(testOrg.name);
 
-    // Read companies
-    const readResponse = await authenticatedHttpRequest('GET', '/api/v1/companies', user.sessionToken!);
+    // Read organizations
+    const readResponse = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
     expect(readResponse.status).toBe(200);
     const readData = await readResponse.json();
     expect(readData.items.length).toBeGreaterThan(0);
 
     // Cleanup
     if (createData.id) {
-      await authenticatedHttpRequest('DELETE', `/api/v1/companies/${createData.id}`, user.sessionToken!);
+      await authenticatedHttpRequest('DELETE', `/api/v1/organizations/${createData.id}`, user.sessionToken!);
     }
   });
 

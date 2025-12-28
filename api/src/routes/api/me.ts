@@ -6,7 +6,7 @@ import {
   chatSessions,
   chatGenerationTraces,
   chatStreamEvents,
-  companies,
+  organizations,
   contextModificationHistory,
   emailVerificationCodes,
   folders,
@@ -125,10 +125,10 @@ meRouter.delete('/', async (c) => {
 
   await db.transaction(async (tx) => {
     // Collect object IDs for stream cleanup + history cleanup
-    const companyRows = await tx
-      .select({ id: companies.id })
-      .from(companies)
-      .where(eq(companies.workspaceId, workspaceId));
+    const organizationRows = await tx
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.workspaceId, workspaceId));
     const folderRows = await tx
       .select({ id: folders.id })
       .from(folders)
@@ -138,13 +138,13 @@ meRouter.delete('/', async (c) => {
       .from(useCases)
       .where(eq(useCases.workspaceId, workspaceId));
 
-    const companyIds = companyRows.map((r) => r.id);
+    const organizationIds = organizationRows.map((r) => r.id);
     const folderIds = folderRows.map((r) => r.id);
     const useCaseIds = useCaseRows.map((r) => r.id);
 
-    // Stream events for structured generations (company_/folder_/usecase_)
+    // Stream events for structured generations (organization_/folder_/usecase_)
     const streamIds: string[] = [];
-    for (const id of companyIds) streamIds.push(`company_${id}`);
+    for (const id of organizationIds) streamIds.push(`organization_${id}`);
     for (const id of folderIds) streamIds.push(`folder_${id}`);
     for (const id of useCaseIds) streamIds.push(`usecase_${id}`);
     if (streamIds.length) {
@@ -152,10 +152,15 @@ meRouter.delete('/', async (c) => {
     }
 
     // Context modification history linked to these objects
-    if (companyIds.length) {
+    if (organizationIds.length) {
       await tx
         .delete(contextModificationHistory)
-        .where(and(eq(contextModificationHistory.contextType, 'company'), inArray(contextModificationHistory.contextId, companyIds)));
+        .where(
+          and(
+            eq(contextModificationHistory.contextType, 'organization'),
+            inArray(contextModificationHistory.contextId, organizationIds)
+          )
+        );
     }
     if (folderIds.length) {
       await tx
@@ -171,7 +176,7 @@ meRouter.delete('/', async (c) => {
     // Delete business objects (workspace scoped)
     await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
-    await tx.delete(companies).where(eq(companies.workspaceId, workspaceId));
+    await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
     // Auth artifacts
     await tx.delete(userSessions).where(eq(userSessions.userId, userId));

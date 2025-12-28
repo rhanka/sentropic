@@ -25,7 +25,7 @@ export type UseCaseData = {
 export type UseCase = {
   id: string;
   folderId: string;
-  companyId?: string;
+  organizationId?: string | null;
   status?: 'draft' | 'generating' | 'detailing' | 'completed';
   model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
   createdAt: string;
@@ -67,11 +67,15 @@ export const fetchUseCases = async (folderId?: string): Promise<UseCase[]> => {
   return data.items;
 };
 
-export const generateUseCases = async (input: string, createNewFolder: boolean, companyId?: string): Promise<{created_folder_id?: string; created_use_case_ids: string[]; summary: string}> => {
+export const generateUseCases = async (
+  input: string,
+  createNewFolder: boolean,
+  organizationId?: string
+): Promise<{ created_folder_id?: string; created_use_case_ids: string[]; summary: string }> => {
   return apiPost('/use-cases/generate', {
     input,
     create_new_folder: createNewFolder,
-    company_id: companyId
+    organization_id: organizationId
   });
 };
 

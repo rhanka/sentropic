@@ -172,13 +172,13 @@
           <p class="text-slate-600 font-mono text-sm">{folder.id}</p>
         </div>
 
-        <!-- Entreprise associée -->
+        <!-- Organisation associée -->
         <div class="rounded border border-slate-200 bg-white p-4">
-          <h3 class="font-semibold text-slate-900 mb-2">Entreprise</h3>
-          {#if folder.companyId}
-            <p class="text-slate-600">ID: {folder.companyId}</p>
+          <h3 class="font-semibold text-slate-900 mb-2">Organisation</h3>
+          {#if folder.organizationId}
+            <p class="text-slate-600">ID: {folder.organizationId}</p>
           {:else}
-            <p class="text-slate-500 italic">Aucune entreprise associée</p>
+            <p class="text-slate-500 italic">Aucune organisation associée</p>
           {/if}
         </div>
       </div>

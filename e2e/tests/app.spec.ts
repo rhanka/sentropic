@@ -36,7 +36,7 @@ test.describe('Application principale', () => {
     const navItems = [
       'Accueil',
       'Dossiers', 
-      'Entreprises',
+      'Organisations',
       'Cas d\'usage',
       'Évaluation',
       'Dashboard',
@@ -69,9 +69,9 @@ test.describe('Application principale', () => {
     await page.getByRole('link', { name: 'Dossiers' }).click();
     await expect(page).toHaveURL('/dossiers');
     
-    // Tester la navigation vers les entreprises
-    await page.getByRole('link', { name: 'Entreprises' }).click();
-    await expect(page).toHaveURL('/entreprises');
+    // Tester la navigation vers les organisations
+    await page.getByRole('link', { name: 'Organisations' }).click();
+    await expect(page).toHaveURL('/organisations');
     
     // Essayer la navigation vers le dashboard si le lien n'est pas désactivé
     const dashboardLink = page.locator('a:has-text("Dashboard")');

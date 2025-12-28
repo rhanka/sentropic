@@ -19,25 +19,25 @@ describe('Use Cases API', () => {
     await cleanupAuthData();
   });
 
-  // Helper function to create a test company
-  async function createTestCompany() {
-    const companyData = {
-      name: `Test Company ${createTestId()}`,
+  // Helper function to create a test organization
+  async function createTestOrganization() {
+    const orgData = {
+      name: `Test Organization ${createTestId()}`,
       industry: 'Technology',
     };
 
-    const response = await authenticatedRequest(app, 'POST', '/api/v1/companies', user.sessionToken!, companyData);
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken!, orgData);
     expect(response.status).toBe(201);
     const data = await response.json();
     return data.id;
   }
 
   // Helper function to create a test folder
-  async function createTestFolder(companyId?: string) {
+  async function createTestFolder(organizationId?: string) {
     const folderData = {
       name: `Test Folder ${createTestId()}`,
       description: 'Test folder description',
-      ...(companyId && { companyId })
+      ...(organizationId && { organizationId })
     };
 
     const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, folderData);

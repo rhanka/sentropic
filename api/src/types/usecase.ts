@@ -40,6 +40,7 @@ export type UseCaseData = {
   references?: Array<{
     title: string;
     url: string;
+    excerpt?: string;
   }>;
   
   // === Scores détaillés (pour recalcul dynamique) ===
@@ -64,7 +65,8 @@ export type UseCase = {
   // === Gestion d'état (colonnes natives) ===
   id: string;
   folderId: string;
-  companyId?: string | null;
+  // Preferred naming (DB column is organization_id)
+  organizationId?: string | null;
   status: string;
   model?: string | null;
   createdAt: Date | string;

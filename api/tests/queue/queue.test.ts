@@ -33,16 +33,16 @@ describe('Queue', () => {
   });
 
   it('should create an async enrichment job (without waiting)', async () => {
-    // Create a company draft
-    const companyRes = await authenticatedRequest(app, 'POST', '/api/v1/companies/draft', user.sessionToken!, {
+    // Create an organization draft
+    const orgRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations/draft', user.sessionToken!, {
       name: `Queue Test ${createTestId()}`
     });
-    expect(companyRes.status).toBe(201);
-    const companyData = await companyRes.json();
-    const companyId = companyData.id;
+    expect(orgRes.status).toBe(201);
+    const orgData = await orgRes.json();
+    const organizationId = orgData.id;
 
     // Launch async enrichment job
-    const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/companies/${companyId}/enrich`, user.sessionToken!, {
+    const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${organizationId}/enrich`, user.sessionToken!, {
       model: 'gpt-4.1-nano'
     });
     expect(enrichRes.status).toBe(200);
@@ -51,7 +51,7 @@ describe('Queue', () => {
     expect(enrichData.jobId).toBeDefined();
 
     // Cleanup
-    await authenticatedRequest(app, 'DELETE', `/api/v1/companies/${companyId}`, user.sessionToken!);
+    await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${organizationId}`, user.sessionToken!);
   });
 
   it('should expose queue statistics', async () => {
@@ -84,25 +84,25 @@ describe('Queue', () => {
 
   it('should allow a user to purge only their own jobs (workspace-scoped)', async () => {
     // user2 creates a job in their workspace
-    const companyRes2 = await authenticatedRequest(app, 'POST', '/api/v1/companies/draft', user2.sessionToken!, {
+    const orgRes2 = await authenticatedRequest(app, 'POST', '/api/v1/organizations/draft', user2.sessionToken!, {
       name: `Queue Test U2 ${createTestId()}`
     });
-    expect(companyRes2.status).toBe(201);
-    const company2 = await companyRes2.json();
+    expect(orgRes2.status).toBe(201);
+    const org2 = await orgRes2.json();
 
-    const enrichRes2 = await authenticatedRequest(app, 'POST', `/api/v1/companies/${company2.id}/enrich`, user2.sessionToken!, {
+    const enrichRes2 = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${org2.id}/enrich`, user2.sessionToken!, {
       model: 'gpt-4.1-nano'
     });
     expect(enrichRes2.status).toBe(200);
 
     // user (admin workspace) creates a job in their workspace
-    const companyRes = await authenticatedRequest(app, 'POST', '/api/v1/companies/draft', user.sessionToken!, {
+    const orgRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations/draft', user.sessionToken!, {
       name: `Queue Test U1 ${createTestId()}`
     });
-    expect(companyRes.status).toBe(201);
-    const company = await companyRes.json();
+    expect(orgRes.status).toBe(201);
+    const org = await orgRes.json();
 
-    const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/companies/${company.id}/enrich`, user.sessionToken!, {
+    const enrichRes = await authenticatedRequest(app, 'POST', `/api/v1/organizations/${org.id}/enrich`, user.sessionToken!, {
       model: 'gpt-4.1-nano'
     });
     expect(enrichRes.status).toBe(200);
@@ -138,8 +138,8 @@ describe('Queue', () => {
     expect(Array.isArray(j1a)).toBe(true);
 
     // Cleanup resources
-    await authenticatedRequest(app, 'DELETE', `/api/v1/companies/${company2.id}`, user2.sessionToken!);
-    await authenticatedRequest(app, 'DELETE', `/api/v1/companies/${company.id}`, user.sessionToken!);
+    await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${org2.id}`, user2.sessionToken!);
+    await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${org.id}`, user.sessionToken!);
   });
 });
 

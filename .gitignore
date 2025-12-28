@@ -13,6 +13,7 @@ api/.tsbuildinfo
 #e2e tests results
 e2e/test-results
 e2e/.auth
+e2e/playwright-report
 
 # Logs
 *.log

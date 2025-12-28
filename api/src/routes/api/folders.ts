@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { folders, companies } from '../../db/schema';
+import { folders, organizations } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { and, desc, eq } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
@@ -70,7 +70,8 @@ const executiveSummaryDataSchema = z.object({
 const folderInput = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  companyId: z.string().optional(),
+  // Preferred naming
+  organizationId: z.string().optional(),
   matrixConfig: matrixSchema.optional(),
   executiveSummary: executiveSummaryDataSchema.optional()
 });
@@ -117,36 +118,36 @@ foldersRouter.get('/', async (c) => {
   } catch {
     return c.json({ message: 'Not found' }, 404);
   }
-  const companyId = c.req.query('company_id');
+  const organizationId = c.req.query('organization_id');
   
-  // Faire un LEFT JOIN avec la table companies pour récupérer le nom de l'entreprise
-  const rows = companyId
+  // LEFT JOIN with organizations to retrieve organization name
+  const rows = organizationId
     ? await db.select({
         id: folders.id,
         name: folders.name,
         description: folders.description,
-        companyId: folders.companyId,
-        companyName: companies.name,
+        organizationId: folders.organizationId,
+        organizationName: organizations.name,
         matrixConfig: folders.matrixConfig,
         status: folders.status,
         createdAt: folders.createdAt
       })
       .from(folders)
-      .leftJoin(companies, and(eq(folders.companyId, companies.id), eq(companies.workspaceId, targetWorkspaceId)))
-      .where(and(eq(folders.workspaceId, targetWorkspaceId), eq(folders.companyId, companyId)))
+      .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
+      .where(and(eq(folders.workspaceId, targetWorkspaceId), eq(folders.organizationId, organizationId)))
       .orderBy(desc(folders.createdAt))
     : await db.select({
         id: folders.id,
         name: folders.name,
         description: folders.description,
-        companyId: folders.companyId,
-        companyName: companies.name,
+        organizationId: folders.organizationId,
+        organizationName: organizations.name,
         matrixConfig: folders.matrixConfig,
         status: folders.status,
         createdAt: folders.createdAt
       })
       .from(folders)
-      .leftJoin(companies, and(eq(folders.companyId, companies.id), eq(companies.workspaceId, targetWorkspaceId)))
+      .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
       .where(eq(folders.workspaceId, targetWorkspaceId))
       .orderBy(desc(folders.createdAt));
       
@@ -161,19 +162,20 @@ foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
+  const organizationId = payload.organizationId;
   
   // Utiliser la matrice fournie ou la matrice par défaut
   const matrixToUse = payload.matrixConfig || defaultMatrixConfig;
 
-  // Validate company belongs to workspace (if provided)
-  if (payload.companyId) {
-    const [company] = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+  // Validate organization belongs to workspace (if provided)
+  if (organizationId) {
+    const [org] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
       .limit(1);
-    if (!company) {
-      return c.json({ message: 'Company not found' }, 404);
+    if (!org) {
+      return c.json({ message: 'Not found' }, 404);
     }
   }
   
@@ -182,7 +184,7 @@ foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c
     workspaceId,
     name: payload.name,
     description: payload.description,
-    companyId: payload.companyId,
+    organizationId,
     matrixConfig: JSON.stringify(matrixToUse)
   });
   const [folder] = await db
@@ -212,15 +214,15 @@ foldersRouter.get('/:id', async (c) => {
     id: folders.id,
     name: folders.name,
     description: folders.description,
-    companyId: folders.companyId,
-    companyName: companies.name,
+    organizationId: folders.organizationId,
+    organizationName: organizations.name,
     matrixConfig: folders.matrixConfig,
     executiveSummary: folders.executiveSummary,
     status: folders.status,
     createdAt: folders.createdAt
   })
   .from(folders)
-  .leftJoin(companies, and(eq(folders.companyId, companies.id), eq(companies.workspaceId, targetWorkspaceId)))
+  .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
   .where(and(eq(folders.id, id), eq(folders.workspaceId, targetWorkspaceId)));
   
   if (!folder) {
@@ -250,21 +252,23 @@ foldersRouter.put('/:id', requireEditor, zValidator('json', folderInput.partial(
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
+  const organizationId = payload.organizationId;
 
-  // Validate company belongs to workspace (if provided)
-  if (payload.companyId) {
-    const [company] = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(and(eq(companies.id, payload.companyId), eq(companies.workspaceId, workspaceId)))
+  // Validate organization belongs to workspace (if provided)
+  if (organizationId) {
+    const [org] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
       .limit(1);
-    if (!company) {
-      return c.json({ message: 'Company not found' }, 404);
+    if (!org) {
+      return c.json({ message: 'Not found' }, 404);
     }
   }
 
   const updatePayload = {
     ...payload,
+    organizationId,
     matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined,
     executiveSummary: payload.executiveSummary ? JSON.stringify(payload.executiveSummary) : undefined
   };

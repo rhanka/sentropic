@@ -34,6 +34,7 @@ export interface UseCaseDetail {
   references: Array<{
     title: string;
     url: string;
+    excerpt?: string;
   }>;
   valueScores: Array<{
     axisId: string;
@@ -178,7 +179,7 @@ function parseJsonLenient<T>(raw: string): T {
  */
 export const generateUseCaseList = async (
   input: string, 
-  companyInfo?: string, 
+  organizationInfo?: string, 
   model?: string,
   signal?: AbortSignal,
   streamId?: string
@@ -191,7 +192,7 @@ export const generateUseCaseList = async (
 
   const prompt = useCaseListPrompt
     .replace('{{user_input}}', input)
-    .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
+    .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{use_case_count}}', String(defaultUseCaseCount));
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
@@ -225,7 +226,7 @@ export const generateUseCaseDetail = async (
   useCase: string,
   context: string,
   matrix: MatrixConfig,
-  companyInfo?: string,
+  organizationInfo?: string,
   model?: string,
   signal?: AbortSignal,
   streamId?: string
@@ -239,7 +240,7 @@ export const generateUseCaseDetail = async (
   const prompt = useCaseDetailPrompt
     .replace(/\{\{use_case\}\}/g, useCase)
     .replace('{{user_input}}', context)
-    .replace('{{company_info}}', companyInfo || 'Aucune information d\'entreprise disponible')
+    .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)

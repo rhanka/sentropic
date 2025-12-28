@@ -10,7 +10,7 @@
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
-  import { companiesStore, currentCompanyId } from '$lib/stores/companies';
+  import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
   import { foldersStore, currentFolderId } from '$lib/stores/folders';
   import { useCasesStore } from '$lib/stores/useCases';
   import { queueStore } from '$lib/stores/queue';
@@ -31,7 +31,7 @@
   // Routes protégées (nécessitent une authentification)
   const PROTECTED_ROUTES = [
     '/home',
-    '/entreprises',
+    '/organisations',
     '/dossiers',
     '/cas-usage',
     '/matrice',
@@ -48,10 +48,10 @@
 
   // Vérifier si une route est protégée
   function isProtectedRoute(path: string): boolean {
-    // Routes dynamiques avec paramètres (ex: /entreprises/[id], /entreprises/new, /dossiers/[id], /cas-usage/[id])
+    // Routes dynamiques avec paramètres (ex: /organisations/[id], /organisations/new, /dossiers/[id], /cas-usage/[id])
     // Ces routes sont toutes protégées
     if (
-      path.startsWith('/entreprises/') || 
+      path.startsWith('/organisations/') ||
       path.startsWith('/dossiers/') || 
       path.startsWith('/cas-usage/')
     ) {
@@ -147,8 +147,8 @@
       // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
       // On nettoie uniquement les caches côté UI.
       streamHub.clearCaches();
-      companiesStore.set([]);
-      currentCompanyId.set(null);
+      organizationsStore.set([]);
+      currentOrganizationId.set(null);
       foldersStore.set([]);
       currentFolderId.set(null);
       useCasesStore.set([]);

@@ -21,8 +21,8 @@ describe('API Health', () => {
       await cleanupAuthData();
     });
 
-    it('should have companies endpoint accessible', async () => {
-      const response = await authenticatedHttpRequest('GET', '/api/v1/companies', user.sessionToken!);
+    it('should have organizations endpoint accessible', async () => {
+      const response = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(Array.isArray(data.items)).toBe(true);

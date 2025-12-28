@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getTestModel } from '../utils/test-helpers';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { app } from '../../src/app';
-import { testCompanies } from '../utils/test-data';
+import { testOrganizations } from '../utils/test-data';
 import { db } from '../../src/db/client';
-import { companies, chatStreamEvents } from '../../src/db/schema';
+import { organizations, chatStreamEvents } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createTestId, sleep } from '../utils/test-helpers';
 
-describe('Company Enrichment - Sync', () => {
+describe('Organization Enrichment - Sync', () => {
   let user: any;
 
   beforeEach(async () => {
@@ -19,16 +19,16 @@ describe('Company Enrichment - Sync', () => {
     await cleanupAuthData();
   });
 
-  it('should enrich a company directly via /companies/ai-enrich', async () => {
+  it('should enrich an organization directly via /organizations/ai-enrich', async () => {
     const enrichData = {
-      name: testCompanies.forEnrichment.name,
+      name: testOrganizations.forEnrichment.name,
       model: getTestModel(),
     };
 
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/companies/ai-enrich',
+      '/api/v1/organizations/ai-enrich',
       user.sessionToken!,
       enrichData
     );
@@ -52,7 +52,7 @@ describe('Company Enrichment - Sync', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/companies/ai-enrich',
+      '/api/v1/organizations/ai-enrich',
       user.sessionToken!,
       enrichData
     );
@@ -69,7 +69,7 @@ describe('Company Enrichment - Sync', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/companies/ai-enrich',
+      '/api/v1/organizations/ai-enrich',
       user.sessionToken!,
       enrichData
     );
@@ -79,25 +79,25 @@ describe('Company Enrichment - Sync', () => {
     expect(data.industry).toBeDefined();
   });
 
-  it('should enrich a company asynchronously and verify stream events', async () => {
-    // Créer une entreprise draft
-    const companyName = `Test Company Stream ${createTestId()}`;
+  it('should enrich an organization asynchronously and verify stream events', async () => {
+    // Créer une organisation draft
+    const organizationName = `Test Organization Stream ${createTestId()}`;
     const createResponse = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/companies/draft',
+      '/api/v1/organizations/draft',
       user.sessionToken!,
-      { name: companyName }
+      { name: organizationName }
     );
     expect(createResponse.status).toBe(201);
-    const companyData = await createResponse.json();
-    const companyId = companyData.id;
+    const organizationData = await createResponse.json();
+    const organizationId = organizationData.id;
 
     // Démarrer l'enrichissement asynchrone
     const enrichResponse = await authenticatedRequest(
       app,
       'POST',
-      `/api/v1/companies/${companyId}/enrich`,
+      `/api/v1/organizations/${organizationId}/enrich`,
       user.sessionToken!,
       { model: getTestModel() }
     );
@@ -110,7 +110,7 @@ describe('Company Enrichment - Sync', () => {
     // Attendre la complétion du job
     let jobCompleted = false;
     let attempts = 0;
-    const maxAttempts = 18; // 18 * 1s = 18s max (reste < timeout test: 20s)
+    const maxAttempts = 60; // 60 * 1s = 60s max (AI + web search peut être lent / flaky)
 
     while (!jobCompleted && attempts < maxAttempts) {
       await sleep(1000);
@@ -130,7 +130,7 @@ describe('Company Enrichment - Sync', () => {
     expect(jobCompleted).toBe(true);
 
     // Vérifier que les événements sont écrits dans chat_stream_events
-    const streamId = `company_${companyId}`;
+    const streamId = `organization_${organizationId}`;
     const streamEvents = await db
       .select()
       .from(chatStreamEvents)
@@ -147,6 +147,6 @@ describe('Company Enrichment - Sync', () => {
 
     // Cleanup
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
-    await db.delete(companies).where(eq(companies.id, companyId));
-  }, 20000); // 20 seconds timeout
+    await db.delete(organizations).where(eq(organizations.id, organizationId));
+  }, 90000); // 90 seconds timeout (flakiness mitigation)
 });

@@ -65,11 +65,11 @@
   - [ ] ajouter le rendu de résultat des tools et l'historiser
   - [ ] gérer le streaming json (sortie de réponse, entree et sortie de tool même si ce dernier est en bloc) avec la complexité cf spec/MARKDOWN_STREAMING.md
   - [ ] (Future) Sharing with admin per object (companies/folders/use cases), not only workspace-level
-- [ ] Entreprise >> Organisation
-  - [ ] Renommer entreprise(s) / company.ies en organisation / organizations en profondeur (modèle de donnée, api, écrans).
-  - [ ] En profiter pour migrer vers data les données de l'entreprise
-  - [ ] Ajouter les références à la génération
-  - [ ] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
+- [x] Entreprise >> Organisation
+  - [x] Renommer entreprise(s) / company.ies en organisation / organizations en profondeur (modèle de donnée, api, écrans).
+  - [x] En profiter pour migrer vers data les données de l'entreprise
+  - [x] Ajouter les références à la génération
+  - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 - [ ] **Chatbot Lot C — Tool-calls parallèles et appels structurés** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [x] Tool calls parallèles fonctionnels (boucle itérative dans `runAssistantGeneration`)
   - [x] Affichage des tool calls dans `StreamMessage` (accordéon par tool_call_id)

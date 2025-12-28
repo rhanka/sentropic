@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, companies, contextModificationHistory, folders, useCases } from '../db/schema';
+import { chatContexts, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
 import { createId } from '../utils/id';
 
 export type UseCaseFieldUpdate = {
@@ -120,12 +120,116 @@ async function getNextModificationSequence(contextType: string, contextId: strin
   return maxSequence + 1;
 }
 
+type OrganizationData = {
+  industry?: string;
+  size?: string;
+  products?: string;
+  processes?: string;
+  kpis?: string;
+  challenges?: string;
+  objectives?: string;
+  technologies?: string;
+  references?: Array<{ title: string; url: string; excerpt?: string }>;
+};
+
+function coerceOrganizationMarkdownField(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const items = value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
+  }
+  // Ne pas forcer la stringification d'objets arbitraires (risque [object Object] en UI).
+  return undefined;
+}
+
+function coerceOrganizationKpis(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const items = value
+      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0) return undefined;
+    return items.map((s) => `- ${s}`).join('\n');
+  }
+  return undefined;
+}
+
+function coerceOrganizationReferences(
+  value: unknown
+): Array<{ title: string; url: string; excerpt?: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => !!v)
+    .map((r) => ({
+      title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
+      url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
+      excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
+    }))
+    .filter((r) => r.title.trim() && r.url.trim());
+  return out.length ? out : undefined;
+}
+
+function coerceOrganizationReferencesOrEmpty(value: unknown): Array<{ title: string; url: string; excerpt?: string }> {
+  return coerceOrganizationReferences(value) ?? [];
+}
+
+function parseOrganizationData(value: unknown): OrganizationData {
+  if (!value) return {};
+  if (typeof value === 'object') return value as OrganizationData;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as OrganizationData;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function hydrateOrganizationForTools(row: typeof organizations.$inferSelect): Record<string, unknown> {
+  const data = parseOrganizationData(row.data);
+  const raw = data as unknown as Record<string, unknown>;
+  const legacyKpisCombined = (() => {
+    const sector = coerceOrganizationKpis(raw.kpis_sector);
+    const org = coerceOrganizationKpis(raw.kpis_org);
+    const parts = [sector, org].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+    if (parts.length === 0) return undefined;
+    return parts.join('\n\n');
+  })();
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    name: row.name,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    industry: data.industry,
+    size: data.size,
+    // Tolérance aux anciennes écritures (ex: arrays) + normalisation vers markdown string
+    products: coerceOrganizationMarkdownField(raw.products) ?? data.products,
+    processes: coerceOrganizationMarkdownField(raw.processes) ?? data.processes,
+    kpis: coerceOrganizationKpis(raw.kpis ?? data.kpis) ?? legacyKpisCombined,
+    challenges: coerceOrganizationMarkdownField(raw.challenges) ?? data.challenges,
+    objectives: coerceOrganizationMarkdownField(raw.objectives) ?? data.objectives,
+    technologies: coerceOrganizationMarkdownField(raw.technologies) ?? data.technologies,
+    references: coerceOrganizationReferences(raw.references ?? data.references) ?? [],
+  };
+}
+
 export class ToolService {
   // ---------------------------
-  // Companies
+  // Organizations
   // ---------------------------
 
-  async listCompanies(opts?: {
+  async listOrganizations(opts?: {
     workspaceId?: string | null;
     idsOnly?: boolean | null;
     select?: string[] | null;
@@ -134,56 +238,56 @@ export class ToolService {
     | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
   > {
     const workspaceId = (opts?.workspaceId ?? '').trim();
-    const where = workspaceId ? eq(companies.workspaceId, workspaceId) : undefined;
-    const rows = where ? await db.select().from(companies).where(where) : await db.select().from(companies);
+    const where = workspaceId ? eq(organizations.workspaceId, workspaceId) : undefined;
+    const rows = where ? await db.select().from(organizations).where(where) : await db.select().from(organizations);
 
     if (opts?.idsOnly) {
       return { ids: rows.map((r) => r.id), count: rows.length };
     }
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const items = rows.map((r) => pickObjectFields(r as unknown as Record<string, unknown>, select));
+    const items = rows.map((r) => pickObjectFields(hydrateOrganizationForTools(r), select));
     return { items, selected: select, count: rows.length };
   }
 
-  async getCompany(
-    companyId: string,
+  async getOrganization(
+    organizationId: string,
     opts?: { workspaceId?: string | null; select?: string[] | null }
-  ): Promise<{ companyId: string; data: Record<string, unknown>; selected: string[] | null }> {
-    if (!companyId) throw new Error('companyId is required');
+  ): Promise<{ organizationId: string; data: Record<string, unknown>; selected: string[] | null }> {
+    if (!organizationId) throw new Error('organizationId is required');
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(companies.id, companyId), eq(companies.workspaceId, workspaceId))
-      : eq(companies.id, companyId);
+      ? and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, organizationId);
 
-    const [row] = await db.select().from(companies).where(where).limit(1);
-    if (!row) throw new Error('Company not found');
+    const [row] = await db.select().from(organizations).where(where).limit(1);
+    if (!row) throw new Error('Organization not found');
 
     const select = Array.isArray(opts?.select) ? opts?.select.filter((s) => typeof s === 'string' && s.trim()) : null;
-    const data = pickObjectFields(row as unknown as Record<string, unknown>, select);
-    return { companyId, data, selected: select };
+    const data = pickObjectFields(hydrateOrganizationForTools(row), select);
+    return { organizationId, data, selected: select };
   }
 
-  async updateCompanyFields(input: {
-    companyId: string;
+  async updateOrganizationFields(input: {
+    organizationId: string;
     updates: Array<{ field: string; value: unknown }>;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
-  }): Promise<{ companyId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
-    if (!input.companyId) throw new Error('companyId is required');
+  }): Promise<{ organizationId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
+    if (!input.organizationId) throw new Error('organizationId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(companies.id, input.companyId), eq(companies.workspaceId, workspaceId))
-      : eq(companies.id, input.companyId);
-    const [row] = await db.select().from(companies).where(where).limit(1);
-    if (!row) throw new Error('Company not found');
+      ? and(eq(organizations.id, input.organizationId), eq(organizations.workspaceId, workspaceId))
+      : eq(organizations.id, input.organizationId);
+    const [row] = await db.select().from(organizations).where(where).limit(1);
+    if (!row) throw new Error('Organization not found');
 
-    const before = deepClone(row as unknown as Record<string, unknown>);
+    const before = deepClone(hydrateOrganizationForTools(row));
 
     const allowed = new Set([
       'name',
@@ -191,6 +295,8 @@ export class ToolService {
       'size',
       'products',
       'processes',
+      'kpis',
+      'references',
       'challenges',
       'objectives',
       'technologies',
@@ -198,25 +304,53 @@ export class ToolService {
     ]);
 
     const setPayload: Record<string, unknown> = {};
+    const dataBefore = parseOrganizationData(row.data);
+    const nextData: OrganizationData = { ...dataBefore };
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
     for (const u of input.updates) {
       const field = String(u.field ?? '').trim();
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
-      const oldValue = (row as unknown as Record<string, unknown>)[field];
-      setPayload[field] = u.value;
-      applied.push({ field, oldValue, newValue: u.value });
+      const oldValue = (before as Record<string, unknown>)[field];
+      let newValue: unknown = u.value;
+
+      // Normalisation durable: le profil organisation est stocké en markdown string pour ces champs.
+      if (
+        field === 'products' ||
+        field === 'processes' ||
+        field === 'challenges' ||
+        field === 'objectives' ||
+        field === 'technologies'
+      ) {
+        newValue = coerceOrganizationMarkdownField(u.value) ?? (typeof u.value === 'string' ? u.value : '');
+      }
+      if (field === 'kpis') {
+        newValue = coerceOrganizationKpis(u.value) ?? (typeof u.value === 'string' ? u.value : '');
+      }
+      if (field === 'references') {
+        newValue = coerceOrganizationReferencesOrEmpty(u.value);
+      }
+
+      if (field === 'name' || field === 'status') {
+        setPayload[field] = newValue;
+      } else {
+        // All business fields are stored in organizations.data JSONB
+        (nextData as Record<string, unknown>)[field] = newValue;
+        setPayload.data = nextData;
+      }
+
+      applied.push({ field, oldValue, newValue });
     }
 
     setPayload.updatedAt = new Date();
 
-    const updated = await db.update(companies).set(setPayload).where(where).returning();
-    if (updated.length === 0) throw new Error('Company not found');
+    const updated = await db.update(organizations).set(setPayload).where(where).returning();
+    if (updated.length === 0) throw new Error('Organization not found');
 
-    const after = deepClone(updated[0] as unknown as Record<string, unknown>);
+    const after = deepClone(hydrateOrganizationForTools(updated[0]));
 
-    await this.notifyCompanyEvent(input.companyId);
+    await this.notifyOrganizationEvent(input.organizationId);
 
     const sessionId = input.sessionId ?? null;
     const messageId = input.messageId ?? null;
@@ -226,8 +360,8 @@ export class ToolService {
       await db.insert(chatContexts).values({
         id: createId(),
         sessionId,
-        contextType: 'company',
-        contextId: input.companyId,
+        contextType: 'organization',
+        contextId: input.organizationId,
         snapshotBefore: before,
         snapshotAfter: after,
         modifications: applied,
@@ -236,12 +370,12 @@ export class ToolService {
       });
     }
 
-    let seq = await getNextModificationSequence('company', input.companyId);
+    let seq = await getNextModificationSequence('organization', input.organizationId);
     for (const item of applied) {
       await db.insert(contextModificationHistory).values({
         id: createId(),
-        contextType: 'company',
-        contextId: input.companyId,
+        contextType: 'organization',
+        contextId: input.organizationId,
         sessionId,
         messageId,
         field: item.field,
@@ -258,7 +392,7 @@ export class ToolService {
       seq += 1;
     }
 
-    return { companyId: input.companyId, applied };
+    return { organizationId: input.organizationId, applied };
   }
 
   /**
@@ -437,7 +571,7 @@ export class ToolService {
 
   async listFolders(opts?: {
     workspaceId?: string | null;
-    companyId?: string | null;
+    organizationId?: string | null;
     idsOnly?: boolean | null;
     select?: string[] | null;
   }): Promise<
@@ -445,15 +579,15 @@ export class ToolService {
     | { items: Array<Record<string, unknown>>; selected: string[] | null; count: number }
   > {
     const workspaceId = (opts?.workspaceId ?? '').trim();
-    const companyId = (opts?.companyId ?? '').trim();
+    const organizationId = (opts?.organizationId ?? '').trim();
 
     const where =
-      workspaceId && companyId
-        ? and(eq(folders.workspaceId, workspaceId), eq(folders.companyId, companyId))
+      workspaceId && organizationId
+        ? and(eq(folders.workspaceId, workspaceId), eq(folders.organizationId, organizationId))
         : workspaceId
           ? eq(folders.workspaceId, workspaceId)
-          : companyId
-            ? eq(folders.companyId, companyId)
+          : organizationId
+            ? eq(folders.organizationId, organizationId)
             : undefined;
 
     const rows = where ? await db.select().from(folders).where(where) : await db.select().from(folders);
@@ -520,7 +654,7 @@ export class ToolService {
 
     const before = deepClone(row as unknown as Record<string, unknown>);
 
-    const allowed = new Set(['name', 'description', 'companyId', 'matrixConfig', 'executiveSummary', 'status']);
+    const allowed = new Set(['name', 'description', 'organizationId', 'matrixConfig', 'executiveSummary', 'status']);
     const setPayload: Record<string, unknown> = {};
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
@@ -529,19 +663,18 @@ export class ToolService {
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
 
-      // Validate FK companyId if changed and workspace is known
-      if (field === 'companyId' && workspaceId) {
-        const nextCompanyId = typeof u.value === 'string' ? u.value : null;
-        if (nextCompanyId) {
-          const [company] = await db
-            .select({ id: companies.id })
-            .from(companies)
-            .where(and(eq(companies.id, nextCompanyId), eq(companies.workspaceId, workspaceId)))
+      // Validate FK organizationId
+      if (field === 'organizationId' && workspaceId) {
+        const nextId = typeof u.value === 'string' ? u.value : null;
+        if (nextId) {
+          const [org] = await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(and(eq(organizations.id, nextId), eq(organizations.workspaceId, workspaceId)))
             .limit(1);
-          if (!company) throw new Error('Company not found');
+          if (!org) throw new Error('Organization not found');
         }
       }
-
       const oldValue = (row as unknown as Record<string, unknown>)[field];
 
       if (field === 'matrixConfig' || field === 'executiveSummary') {
@@ -856,11 +989,11 @@ export class ToolService {
     }
   }
 
-  private async notifyCompanyEvent(companyId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ company_id: companyId });
+  private async notifyOrganizationEvent(organizationId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ organization_id: organizationId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY company_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY organization_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }

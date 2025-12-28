@@ -1,16 +1,16 @@
 import { db } from '../db/client.js';
-import { companies, folders, useCases } from '../db/schema.js';
+import { organizations, folders, useCases } from '../db/schema.js';
 
 async function extractTestData() {
   console.log('🔍 Extracting test data from existing database...\n');
 
   try {
-    // Récupérer toutes les entreprises
-    const companiesData = await db.select().from(companies);
-    console.log('=== COMPANIES ===');
-    companiesData.forEach((company, index) => {
-      console.log(`Company ${index + 1}:`);
-      console.log(JSON.stringify(company, null, 2));
+    // Récupérer toutes les organisations
+    const organizationsData = await db.select().from(organizations);
+    console.log('=== ORGANIZATIONS ===');
+    organizationsData.forEach((org, index) => {
+      console.log(`Organization ${index + 1}:`);
+      console.log(JSON.stringify(org, null, 2));
       console.log('');
     });
 
@@ -33,10 +33,10 @@ async function extractTestData() {
     });
 
     // Identifier Rio Tinto et Delpharm
-    const rioTinto = companiesData.find(c => c.name?.toLowerCase().includes('rio tinto'));
-    const delpharm = companiesData.find(c => c.name?.toLowerCase().includes('delpharm'));
+    const rioTinto = organizationsData.find((o) => o.name?.toLowerCase().includes('rio tinto'));
+    const delpharm = organizationsData.find((o) => o.name?.toLowerCase().includes('delpharm'));
 
-    console.log('=== IDENTIFIED COMPANIES ===');
+    console.log('=== IDENTIFIED ORGANIZATIONS ===');
     if (rioTinto) {
       console.log('Rio Tinto found:', rioTinto.id);
     }
@@ -46,7 +46,11 @@ async function extractTestData() {
 
     // Trouver les cas d'usage liés à Rio Tinto
     if (rioTinto) {
-      const rioTintoUseCases = useCasesData.filter(uc => uc.companyId === rioTinto.id);
+      type UseCaseRowLike = { organizationId?: string | null };
+      const rioTintoUseCases = useCasesData.filter((uc) => {
+        const row = uc as unknown as UseCaseRowLike;
+        return row.organizationId === rioTinto.id;
+      });
       console.log(`\nRio Tinto use cases: ${rioTintoUseCases.length}`);
     }
 
