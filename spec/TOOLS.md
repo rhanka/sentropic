@@ -8,13 +8,13 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] `web_search`
 - [x] `web_extract`
 
-### Companies tools
-- [x] `companies_list` (supports `idsOnly` + `select`)
-- [x] `company_get` (supports `select`)
-- [x] `company_update` (single-entity update; blocked in read-only workspace)
+### Organizations tools
+- [x] `organizations_list` (supports `idsOnly` + `select`)
+- [x] `organization_get` (supports `select`)
+- [x] `organization_update` (single-entity update; blocked in read-only workspace)
 
 ### Folders tools
-- [x] `folders_list` (supports optional `companyId`, `idsOnly` + `select`)
+- [x] `folders_list` (supports optional `organizationId`, `idsOnly` + `select`)
 - [x] `folder_get` (supports `select`)
 - [x] `folder_update` (single-entity update; blocked in read-only workspace)
 
@@ -33,9 +33,9 @@ This document is the single checklist for **chat tools**: what is already implem
 
 ### Contexts enabled in API (tool availability)
 - [x] `primaryContextType=usecase`: use case tools + web tools
-- [x] `primaryContextType=company`: companies tools (+ folders_list) + web tools
-- [x] `primaryContextType=folder`: folder tools + usecases_list + executive summary tools + matrix tools + company_get (restricted) + web tools
-- [x] `primaryContextType=executive_summary`: executive summary tools + usecases_list + folder_get + matrix_get + company_get (restricted) + web tools
+- [x] `primaryContextType=organization`: organizations tools (+ folders_list) + web tools
+- [x] `primaryContextType=folder`: folder tools + usecases_list + executive summary tools + matrix tools + organization_get (restricted) + web tools
+- [x] `primaryContextType=executive_summary`: executive summary tools + usecases_list + folder_get + matrix_get + organization_get (restricted) + web tools
 
 ### Security / scope rules
 - [x] Workspace scope enforced via `workspaceId` in ToolService queries
@@ -46,12 +46,12 @@ This document is the single checklist for **chat tools**: what is already implem
   - [x] `usecases_list(folderId=...)`
   - [x] `executive_summary_get(folderId=...)`
   - [x] `matrix_get(folderId=...)`
-- [x] Folder → company read-only constraint:
-  - [x] `company_get` is allowed from `folder`/`executive_summary` only if `companyId` matches the folder’s `companyId`
+- [x] Folder → organization read-only constraint:
+  - [x] `organization_get` is allowed from `folder`/`executive_summary` only if `organizationId` matches the folder’s `organizationId`
 
 ### UI context wiring
-- [x] `/entreprises` (companies list) sends `primaryContextType=company` (no id)
-- [x] `/entreprises/[id]` sends `primaryContextType=company` + `primaryContextId`
+- [x] `/organisations` (organizations list) sends `primaryContextType=organization` (no id)
+- [x] `/organisations/[id]` sends `primaryContextType=organization` + `primaryContextId`
 - [x] `/dossiers` (folders list) sends `primaryContextType=folder` (no id)
 - [x] `/dossiers/[id]` sends `primaryContextType=folder` + `primaryContextId`
 - [x] `/cas-usage` uses `currentFolderId` and sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
@@ -70,26 +70,26 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] Update prompts to prefer `usecase_get`/`usecase_update` (legacy names still supported)
 - [ ] Deprecate/remove `read_usecase`/`update_usecase_field` once stable
 
-### Use case detail: matrix + company access (read-only)
+### Use case detail: matrix + organization access (read-only)
 - [ ] From `primaryContextType=usecase`, allow:
   - [ ] read-only access to parent folder matrix (`matrix_get`) **with secure folderId derivation**
-  - [ ] read-only access to parent folder company (`company_get`) **with secure folderId derivation**
+  - [ ] read-only access to parent folder organization (`organization_get`) **with secure folderId derivation**
 
-### Matrix view: richer access to use cases + company + folder
+### Matrix view: richer access to use cases + organization + folder
 - [ ] Add explicit “matrix view” tool contract:
   - [ ] use case detail reads from matrix view with folder scoping (`usecase_get` with folder ownership check)
-  - [ ] company reads from matrix view (read-only, via folder.companyId)
+  - [ ] organization reads from matrix view (read-only, via folder.organizationId)
 
 ### Batch / destructive tools (⚠ high-impact)
-- [ ] `companies_create_batch`
-- [ ] `companies_update_batch`
-- [ ] `companies_delete_batch`
+- [ ] `organizations_create_batch`
+- [ ] `organizations_update_batch`
+- [ ] `organizations_delete_batch`
 - [ ] Folder batch create/update/delete tools
 - [ ] Use case batch operations (translate-all, batch delete, etc.)
 - [ ] Dry-run and explicit confirmation pattern for high-impact tools
 
 ### AI-assisted “populate” tools (⚠ high-impact)
-- [ ] Company AI populate / enrich batch from chat tools
+- [ ] Organization AI populate / enrich batch from chat tools
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
 

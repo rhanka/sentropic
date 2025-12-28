@@ -4,13 +4,13 @@ MANDATORY: va lire .cursor/rules/MASTER.mdc et suis les instructions avant tout
 
 **Un assistant à génération et évaluation de cas d'usage d'intelligence artificielle**
 
-Top AI Ideas est une application web qui aide les entreprises à identifier, générer et évaluer des cas d'usage d'IA pertinents pour leur activité. L'application utilise l'intelligence artificielle (OpenAI) pour générer automatiquement des propositions de cas d'usage détaillés, puis les évalue selon des critères de valeur métier et de complexité d'implémentation.
+Top AI Ideas est une application web qui aide les organisations à identifier, générer et évaluer des cas d'usage d'IA pertinents pour leur activité. L'application utilise l'intelligence artificielle (OpenAI) pour générer automatiquement des propositions de cas d'usage détaillés, puis les évalue selon des critères de valeur métier et de complexité d'implémentation.
 
 ## Fonctionnalités principales
 
 - **Génération automatique** : Création de cas d'usage d'IA via prompts intelligents et contextuels
 - **Évaluation structurée** : Scoring automatique selon des matrices de valeur/complexité configurables
-- **Gestion d'entreprises** : Profils d'entreprises pour contextualiser les générations
+- **Gestion d'organisations** : Profils d'organisations pour contextualiser les générations
 - **Organisation par dossiers** : Classification et organisation des cas d'usage par projet
 - **Dashboard analytique** : Visualisation des cas d'usage avec graphiques de priorisation
 - **Interface bilingue** : Support français et anglais (à venir)
@@ -92,7 +92,7 @@ API backend base URL. The UI will make all API calls to this URL.
 **Usage:**
 ```typescript
 import { API_BASE_URL } from '$lib/config';
-const response = await fetch(`${API_BASE_URL}/companies`);
+const response = await fetch(`${API_BASE_URL}/organizations`);
 ```
 
 #### API Configuration
@@ -219,13 +219,13 @@ Tous les endpoints d'authentification sont protégés par rate limiting pour pr�
 
 **✅ Étape 1 – Données & API (TERMINÉE)**
 - Schéma PostgreSQL 16 avec migrations Drizzle.
-- CRUD: companies, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
+- CRUD: organizations, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
 - Génération OpenAI (list/detail/folder) + `/use-cases/generate` (validation Zod, recalcul des scores).
 - Queue basée sur PostgreSQL avec QueueManager pour jobs asynchrones.
 - Agrégations Dashboard pré-normalisées.
 
 **✅ Étape 2 – UI SvelteKit (TERMINÉE)**
-- Pages implémentées: `Home`, `Folders`, `UseCaseList`, `UseCaseDetail`, `Matrix`, `Dashboard`, `Companies`, `Settings`, `NotFound`.
+- Pages implémentées: `Home`, `Folders`, `UseCaseList`, `UseCaseDetail`, `Matrix`, `Dashboard`, `Organizations`, `Settings`, `NotFound`.
 - i18n FR/EN pour libellés UI.
 - Navigation et stores fonctionnels.
 - Refresh automatique des vues pendant traitement IA.

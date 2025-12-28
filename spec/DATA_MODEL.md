@@ -9,14 +9,14 @@ Conventions : tables en `snake_case`, clés primaires `text` (UUID string), mult
 erDiagram
     users ||--o| workspaces : "owner_user_id (unique, nullable)"
 
-    workspaces ||--o{ companies : "workspace_id"
+    workspaces ||--o{ organizations : "workspace_id"
     workspaces ||--o{ folders : "workspace_id"
     workspaces ||--o{ use_cases : "workspace_id"
     workspaces ||--o{ job_queue : "workspace_id"
 
-    companies ||--o{ folders : "company_id (optional)"
+    organizations ||--o{ folders : "organization_id (optional)"
     folders ||--o{ use_cases : "folder_id"
-    companies ||--o{ use_cases : "company_id (optional)"
+    organizations ||--o{ use_cases : "organization_id (optional)"
 
     workspaces {
         text id PK
@@ -43,11 +43,12 @@ erDiagram
         timestamp updated_at
     }
 
-    companies {
+    organizations {
         text id PK
         text workspace_id FK
         text name
         text status
+        jsonb data
         timestamp created_at
         timestamp updated_at
     }
@@ -55,7 +56,7 @@ erDiagram
     folders {
         text id PK
         text workspace_id FK
-        text company_id "FK companies.id (nullable)"
+        text organization_id "FK organizations.id (nullable)"
         text name
         text description
         text matrix_config
@@ -68,7 +69,7 @@ erDiagram
         text id PK
         text workspace_id FK
         text folder_id FK
-        text company_id "FK companies.id (nullable)"
+        text organization_id "FK organizations.id (nullable)"
         text status
         text model
         jsonb data
@@ -90,6 +91,7 @@ erDiagram
 ```
 
 Notes :
+- `organizations.data` est **JSONB** (profil organisation : `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.).
 - `use_cases.data` est **JSONB** (contient `name`, `description`, scores, etc. – migration 0008).
 - `workspaces.owner_user_id` est **unique mais nullable** (Postgres autorise plusieurs `NULL`).
 
@@ -277,7 +279,7 @@ erDiagram
 ```
 
 Notes :
-- `context_modification_history.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `companies/folders/use_cases` (et `folders` pour `executive_summary`).
+- `context_modification_history.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases` (et `folders` pour `executive_summary`).
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 
 

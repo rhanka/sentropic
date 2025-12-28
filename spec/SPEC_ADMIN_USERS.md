@@ -8,7 +8,7 @@ The app currently has a minimal role-based access control (RBAC) model with role
 
 Core business routes are protected by `requireEditor` (API) and the UI relies on `/auth/session` to obtain `role`.
 
-However, the business data model (`companies`, `folders`, `use_cases`) is not scoped to a user or workspace yet (no owner/tenant columns). This means data is effectively shared across all authenticated users, which conflicts with a "private-by-default" workspace/namespace requirement.
+However, the business data model (`organizations`, `folders`, `use_cases`) is not scoped to a user or workspace yet (no owner/tenant columns). This means data is effectively shared across all authenticated users, which conflicts with a "private-by-default" workspace/namespace requirement.
 
 This spec introduces:
 - an **admin approval workflow** with a **48h approval deadline**,
@@ -93,7 +93,7 @@ Introduce a `workspaces` table and scope business objects by workspace:
   - timestamps (`createdAt`, `updatedAt`)
 
 Add `workspaceId` (FK to `workspaces.id`) to:
-- `companies`
+- `organizations`
 - `folders`
 - `use_cases`
 - `job_queue` (queue tenancy; user can only see their own jobs by default)
@@ -237,7 +237,7 @@ Split global admin settings from user settings:
   - location: **Settings > Workspace** (not in the global header)
   - selector label: show **owner email** + workspace name (avoid ambiguous "My Workspace")
   - selecting a user workspace switches the admin scope for:
-    - dashboard, companies, folders, use cases, matrix pages
+    - dashboard, organizations, folders, use cases, matrix pages
   - access mode: **read-only** when scoped to a user workspace (A1/A2)
 
 ### Admin panel
