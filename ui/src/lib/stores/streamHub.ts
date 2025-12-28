@@ -25,7 +25,7 @@ type Subscription = {
 };
 
 const EVENT_TYPES = [
-  // job/company
+  // job/organization
   'job_update',
   'organization_update',
   'folder_update',

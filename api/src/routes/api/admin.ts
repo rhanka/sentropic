@@ -52,12 +52,12 @@ adminRouter.post('/reset', async (c) => {
 
 adminRouter.get('/stats', async (c) => {
   try {
-    const [companiesCount] = await db.select({ count: sql`count(*)` }).from(organizations);
+    const [organizationsCount] = await db.select({ count: sql`count(*)` }).from(organizations);
     const [foldersCount] = await db.select({ count: sql`count(*)` }).from(folders);
     const [useCasesCount] = await db.select({ count: sql`count(*)` }).from(useCases);
     
     return c.json({
-      companies: companiesCount.count,
+      organizations: organizationsCount.count,
       folders: foldersCount.count,
       useCases: useCasesCount.count,
       timestamp: new Date().toISOString()
@@ -266,20 +266,20 @@ adminRouter.delete('/users/:id', async (c) => {
       await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
 
       // Collect object IDs for stream cleanup + history cleanup
-      const companyRows = await tx
+      const organizationRows = await tx
         .select({ id: organizations.id })
         .from(organizations)
         .where(eq(organizations.workspaceId, workspaceId));
       const folderRows = await tx.select({ id: folders.id }).from(folders).where(eq(folders.workspaceId, workspaceId));
       const useCaseRows = await tx.select({ id: useCases.id }).from(useCases).where(eq(useCases.workspaceId, workspaceId));
 
-      const companyIds = companyRows.map((r) => r.id);
+      const organizationIds = organizationRows.map((r) => r.id);
       const folderIds = folderRows.map((r) => r.id);
       const useCaseIds = useCaseRows.map((r) => r.id);
 
-      // Stream events for structured generations (company_/folder_/usecase_)
+      // Stream events for structured generations (organization_/folder_/usecase_)
       const streamIds: string[] = [];
-      for (const id of companyIds) streamIds.push(`company_${id}`);
+      for (const id of organizationIds) streamIds.push(`organization_${id}`);
       for (const id of folderIds) streamIds.push(`folder_${id}`);
       for (const id of useCaseIds) streamIds.push(`usecase_${id}`);
       if (streamIds.length) {
@@ -287,10 +287,15 @@ adminRouter.delete('/users/:id', async (c) => {
       }
 
       // Context modification history linked to these objects
-      if (companyIds.length) {
+      if (organizationIds.length) {
         await tx
           .delete(contextModificationHistory)
-          .where(and(eq(contextModificationHistory.contextType, 'company'), inArray(contextModificationHistory.contextId, companyIds)));
+          .where(
+            and(
+              eq(contextModificationHistory.contextType, 'organization'),
+              inArray(contextModificationHistory.contextId, organizationIds)
+            )
+          );
       }
       if (folderIds.length) {
         await tx

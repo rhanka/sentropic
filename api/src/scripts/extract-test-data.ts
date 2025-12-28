@@ -33,8 +33,8 @@ async function extractTestData() {
     });
 
     // Identifier Rio Tinto et Delpharm
-    const rioTinto = organizationsData.find(c => c.name?.toLowerCase().includes('rio tinto'));
-    const delpharm = organizationsData.find(c => c.name?.toLowerCase().includes('delpharm'));
+    const rioTinto = organizationsData.find((o) => o.name?.toLowerCase().includes('rio tinto'));
+    const delpharm = organizationsData.find((o) => o.name?.toLowerCase().includes('delpharm'));
 
     console.log('=== IDENTIFIED ORGANIZATIONS ===');
     if (rioTinto) {
@@ -46,10 +46,10 @@ async function extractTestData() {
 
     // Trouver les cas d'usage liés à Rio Tinto
     if (rioTinto) {
-      type UseCaseRowLike = { organizationId?: string | null; companyId?: string | null };
+      type UseCaseRowLike = { organizationId?: string | null };
       const rioTintoUseCases = useCasesData.filter((uc) => {
         const row = uc as unknown as UseCaseRowLike;
-        return (row.organizationId ?? row.companyId) === rioTinto.id;
+        return row.organizationId === rioTinto.id;
       });
       console.log(`\nRio Tinto use cases: ${rioTintoUseCases.length}`);
     }

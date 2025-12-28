@@ -10,7 +10,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
 
-  let company: Partial<Organization> = {
+  let organization: Partial<Organization> = {
     name: '',
     industry: '',
     size: '',
@@ -23,25 +23,25 @@
   let isEnriching = false;
   let isCreating = false;
 
-  $: companyData = {
-    name: company.name || '',
-    industry: company.industry || '',
-    size: company.size || '',
-    technologies: company.technologies || '',
-    products: company.products || '',
-    processes: company.processes || '',
-    challenges: company.challenges || '',
-    objectives: company.objectives || ''
+  $: organizationData = {
+    name: organization.name || '',
+    industry: organization.industry || '',
+    size: organization.size || '',
+    technologies: organization.technologies || '',
+    products: organization.products || '',
+    processes: organization.processes || '',
+    challenges: organization.challenges || '',
+    objectives: organization.objectives || ''
   };
 
-  const handleEnrichCompany = async () => {
-    if (!company.name?.trim()) return;
+  const handleEnrichOrganization = async () => {
+    if (!organization.name?.trim()) return;
 
     isEnriching = true;
 
     try {
-      const draftCompany = await createDraftOrganization(company.name);
-      await startOrganizationEnrichment(draftCompany.id);
+      const draftOrganization = await createDraftOrganization(organization.name);
+      await startOrganizationEnrichment(draftOrganization.id);
 
       addToast({
         type: 'success',
@@ -61,23 +61,23 @@
   };
 
   const handleFieldUpdate = (field: string, value: string) => {
-    company = { ...company, [field]: value };
-    companyData = { ...companyData, [field]: value };
+    organization = { ...organization, [field]: value };
+    organizationData = { ...organizationData, [field]: value };
   };
 
-  const handleCreateCompany = async () => {
-    if (!company.name?.trim()) return;
+  const handleCreateOrganization = async () => {
+    if (!organization.name?.trim()) return;
 
     isCreating = true;
     try {
-      const newCompany = await createOrganization(company as Omit<Organization, 'id'>);
+      const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
       addToast({
         type: 'success',
         message: 'Organisation créée avec succès !'
       });
-      if (newCompany && newCompany.id) {
+      if (newOrganization && newOrganization.id) {
         unsavedChangesStore.reset();
-        goto(`/organisations/${newCompany.id}`);
+        goto(`/organisations/${newOrganization.id}`);
       }
     } catch (err) {
       console.error('Failed to create organization:', err);
@@ -95,32 +95,32 @@
   };
 </script>
 
-{#if company}
+{#if organization}
   <div class="space-y-6">
     <div class="grid grid-cols-12 gap-4 items-center">
       <div class="col-span-6 min-w-0">
         <h1 class="text-3xl font-semibold break-words mb-0">
           <EditableInput
-            value={company.name || 'Nouvelle organisation'}
+            value={organization.name || 'Nouvelle organisation'}
             originalValue=""
-            changeId="new-company-name"
+            changeId="new-organization-name"
             apiEndpoint=""
-            fullData={companyData}
+            fullData={organizationData}
             markdown={false}
             multiline={true}
             on:change={(e) => handleFieldUpdate('name', e.detail.value)}
             on:saved={() => {}}
           />
         </h1>
-        {#if company.industry}
+        {#if organization.industry}
           <p class="text-lg text-slate-600 mt-1">
             <span class="font-medium">Secteur:</span>
             <EditableInput
-              value={company.industry}
+              value={organization.industry}
               originalValue=""
-              changeId="new-company-industry"
+              changeId="new-organization-industry"
               apiEndpoint=""
-              fullData={companyData}
+              fullData={organizationData}
               on:change={(e) => handleFieldUpdate('industry', e.detail.value)}
               on:saved={() => {}}
             />
@@ -131,9 +131,9 @@
       <div class="col-span-6 flex items-center justify-end gap-2">
         <button
           class="rounded bg-blue-500 px-4 py-2 text-white disabled:opacity-50"
-          data-testid="enrich-company"
-          on:click={handleEnrichCompany}
-          disabled={isEnriching || !company.name?.trim()}
+          data-testid="enrich-organization"
+          on:click={handleEnrichOrganization}
+          disabled={isEnriching || !organization.name?.trim()}
           title="Enrichir automatiquement avec l'IA"
         >
           {isEnriching ? 'IA...' : 'IA'}
@@ -141,8 +141,8 @@
         <button
           class="rounded bg-green-500 px-4 py-2 text-white disabled:opacity-50"
           title="Créer"
-          on:click={handleCreateCompany}
-          disabled={!company.name?.trim() || isCreating}
+          on:click={handleCreateOrganization}
+          disabled={!organization.name?.trim() || isCreating}
         >
           {isCreating ? 'Création...' : 'Créer'}
         </button>
@@ -155,11 +155,11 @@
         <h3 class="font-semibold text-slate-900 mb-2">Taille</h3>
         <div class="text-slate-600">
           <EditableInput
-            value={company.size || 'Non renseigné'}
+            value={organization.size || 'Non renseigné'}
             originalValue=""
-            changeId="new-company-size"
+            changeId="new-organization-size"
             apiEndpoint=""
-            fullData={companyData}
+            fullData={organizationData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('size', e.detail.value)}
             on:saved={() => {}}
@@ -171,11 +171,11 @@
         <h3 class="font-semibold text-slate-900 mb-2">Technologies</h3>
         <div class="text-slate-600">
           <EditableInput
-            value={company.technologies || 'Non renseigné'}
+            value={organization.technologies || 'Non renseigné'}
             originalValue=""
-            changeId="new-company-technologies"
+            changeId="new-organization-technologies"
             apiEndpoint=""
-            fullData={companyData}
+            fullData={organizationData}
             markdown={true}
             on:change={(e) => handleFieldUpdate('technologies', e.detail.value)}
             on:saved={() => {}}
@@ -188,11 +188,11 @@
       <h3 class="font-semibold text-slate-900 mb-2">Produits et Services</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.products || 'Non renseigné'}
+          value={organization.products || 'Non renseigné'}
           originalValue=""
-          changeId="new-company-products"
+          changeId="new-organization-products"
           apiEndpoint=""
-          fullData={companyData}
+          fullData={organizationData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('products', e.detail.value)}
           on:saved={() => {}}
@@ -204,11 +204,11 @@
       <h3 class="font-semibold text-slate-900 mb-2">Processus Métier</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.processes || 'Non renseigné'}
+          value={organization.processes || 'Non renseigné'}
           originalValue=""
-          changeId="new-company-processes"
+          changeId="new-organization-processes"
           apiEndpoint=""
-          fullData={companyData}
+          fullData={organizationData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('processes', e.detail.value)}
           on:saved={() => {}}
@@ -220,11 +220,11 @@
       <h3 class="font-semibold text-slate-900 mb-2">Défis Principaux</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.challenges || 'Non renseigné'}
+          value={organization.challenges || 'Non renseigné'}
           originalValue=""
-          changeId="new-company-challenges"
+          changeId="new-organization-challenges"
           apiEndpoint=""
-          fullData={companyData}
+          fullData={organizationData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('challenges', e.detail.value)}
           on:saved={() => {}}
@@ -236,11 +236,11 @@
       <h3 class="font-semibold text-slate-900 mb-2">Objectifs Stratégiques</h3>
       <div class="text-slate-600">
         <EditableInput
-          value={company.objectives || 'Non renseigné'}
+          value={organization.objectives || 'Non renseigné'}
           originalValue=""
-          changeId="new-company-objectives"
+          changeId="new-organization-objectives"
           apiEndpoint=""
-          fullData={companyData}
+          fullData={organizationData}
           markdown={true}
           on:change={(e) => handleFieldUpdate('objectives', e.detail.value)}
           on:saved={() => {}}

@@ -17,7 +17,7 @@
  * ```typescript
  * import { apiGet } from '$lib/utils/api';
  * 
- * const companies = await apiGet('/companies');
+ * const organizations = await apiGet('/organizations');
  * ```
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787/api/v1';

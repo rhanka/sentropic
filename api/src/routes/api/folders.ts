@@ -72,8 +72,6 @@ const folderInput = z.object({
   description: z.string().optional(),
   // Preferred naming
   organizationId: z.string().optional(),
-  // Backward-compatible alias
-  companyId: z.string().optional(),
   matrixConfig: matrixSchema.optional(),
   executiveSummary: executiveSummaryDataSchema.optional()
 });
@@ -120,8 +118,7 @@ foldersRouter.get('/', async (c) => {
   } catch {
     return c.json({ message: 'Not found' }, 404);
   }
-  // Backward-compatible query param: company_id (preferred will become organization_id)
-  const organizationId = c.req.query('organization_id') ?? c.req.query('company_id');
+  const organizationId = c.req.query('organization_id');
   
   // LEFT JOIN with organizations to retrieve organization name
   const rows = organizationId
@@ -165,7 +162,7 @@ foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
-  const organizationId = payload.organizationId ?? payload.companyId;
+  const organizationId = payload.organizationId;
   
   // Utiliser la matrice fournie ou la matrice par défaut
   const matrixToUse = payload.matrixConfig || defaultMatrixConfig;
@@ -255,7 +252,7 @@ foldersRouter.put('/:id', requireEditor, zValidator('json', folderInput.partial(
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
-  const organizationId = payload.organizationId ?? payload.companyId;
+  const organizationId = payload.organizationId;
 
   // Validate organization belongs to workspace (if provided)
   if (organizationId) {

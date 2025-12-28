@@ -11,7 +11,7 @@ import { logger } from '../logger';
  * Role Hierarchy:
  * - admin_app: Full system access, user management
  * - admin_org: Organization-level admin, manage folders/users in org
- * - editor: Edit use cases, folders, companies
+ * - editor: Edit use cases, folders, organizations
  * - guest: Read-only access
  */
 

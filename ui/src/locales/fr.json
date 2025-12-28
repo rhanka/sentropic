@@ -2,7 +2,7 @@
   "nav": {
     "home": "Accueil",
     "folders": "Dossiers",
-    "companies": "Organisations",
+    "organizations": "Organisations",
     "business": "Configuration métier",
     "useCases": "Cas d'usage",
     "matrix": "Évaluation",

@@ -63,7 +63,7 @@
       const orgs = await fetchOrganizations();
       organizationsStore.set(orgs);
     } catch (err) {
-      console.error('Failed to fetch companies:', err);
+      console.error('Failed to fetch organizations:', err);
       addToast({
         type: 'error',
         message: 'Erreur lors du chargement des organisations'
@@ -71,7 +71,7 @@
     }
   };
 
-  const handleDeleteCompany = async (id: string) => {
+  const handleDeleteOrganization = async (id: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
 
     try {
@@ -83,7 +83,7 @@
         message: 'Organisation supprimée avec succès !'
       });
     } catch (err) {
-      console.error('Failed to delete company:', err);
+      console.error('Failed to delete organization:', err);
       addToast({
         type: 'error',
         message: err instanceof Error ? err.message : 'Erreur lors de la suppression'
@@ -126,7 +126,7 @@
             {#if !$adminReadOnlyScope}
               <button
                 class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
-                      on:click|stopPropagation={() => handleDeleteCompany(organization.id)}
+                      on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
                 title="Supprimer l'organisation"
               >
                 <Trash2 class="w-4 h-4" />
@@ -150,7 +150,7 @@
               {#if !$adminReadOnlyScope}
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                          on:click|stopPropagation={() => handleDeleteCompany(organization.id)}
+                          on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
                   title="Supprimer"
                 >
                   <Trash2 class="w-4 h-4" />

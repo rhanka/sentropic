@@ -13,10 +13,10 @@
       const organizations = await fetchOrganizations();
       organizationsStore.set(organizations);
     } catch (err) {
-      console.error('Failed to fetch companies:', err);
+      console.error('Failed to fetch organizations:', err);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des entreprises'
+        message: 'Erreur lors du chargement des organisations'
       });
     } finally {
       isLoading = false;

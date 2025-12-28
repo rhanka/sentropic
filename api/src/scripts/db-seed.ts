@@ -4,7 +4,7 @@ import { createId } from '../utils/id';
 
 await db.insert(organizations).values({
   id: createId(),
-  name: 'Demo Company',
+  name: 'Demo Organization',
   status: 'completed',
   data: {
     industry: 'Technology',
