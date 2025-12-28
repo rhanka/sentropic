@@ -5,15 +5,15 @@ test.describe('Tenancy / cloisonnement workspace', () => {
     test.use({ storageState: './.auth/user-a.json' });
 
     test('ne devrait pas voir les données du workspace B', async ({ page }) => {
-      await page.goto('/entreprises');
+      await page.goto('/organisations');
       await page.waitForLoadState('domcontentloaded');
 
-      await expect(page.locator('h1')).toContainText('Entreprises', { timeout: 15_000 });
+      await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
 
-      // Seeded company in workspace A
+      // Seeded organization in workspace A
       await expect(page.locator('body')).toContainText('Pomerleau', { timeout: 15_000 });
 
-      // Must not see workspace B company
+      // Must not see workspace B organization
       await expect(page.locator('body')).not.toContainText('Groupe BMR', { timeout: 15_000 });
     });
   });
@@ -22,15 +22,15 @@ test.describe('Tenancy / cloisonnement workspace', () => {
     test.use({ storageState: './.auth/user-b.json' });
 
     test('ne devrait pas voir les données du workspace A', async ({ page }) => {
-      await page.goto('/entreprises');
+      await page.goto('/organisations');
       await page.waitForLoadState('domcontentloaded');
 
-      await expect(page.locator('h1')).toContainText('Entreprises', { timeout: 15_000 });
+      await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
 
-      // Seeded company in workspace B
+      // Seeded organization in workspace B
       await expect(page.locator('body')).toContainText('Groupe BMR', { timeout: 15_000 });
 
-      // Must not see workspace A company
+      // Must not see workspace A organization
       await expect(page.locator('body')).not.toContainText('Pomerleau', { timeout: 15_000 });
     });
   });

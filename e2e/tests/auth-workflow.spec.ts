@@ -144,7 +144,7 @@ test.describe('WebAuthn Integration with Application', () => {
     
     // Vérifier que les éléments de navigation sont présents
     // Note: les menus peuvent être grisés si non authentifié
-    const navItems = ['Accueil', 'Dossiers', 'Entreprises', 'Cas d\'usage', 'Évaluation', 'Dashboard', 'Paramètres'];
+    const navItems = ['Accueil', 'Dossiers', 'Organisations', 'Cas d\'usage', 'Évaluation', 'Dashboard', 'Paramètres'];
     
     for (const item of navItems) {
       const navElement = page.getByRole('link', { name: item });

@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
-export type CreatedCompany = {
+export type CreatedOrganization = {
   id: string;
   name: string;
 };
@@ -8,13 +8,13 @@ export type CreatedCompany = {
 export type CreatedFolder = {
   id: string;
   name: string;
-  companyId: string | null;
+  organizationId: string | null;
 };
 
 export type CreatedUseCase = {
   id: string;
   folderId: string;
-  companyId: string | null;
+  organizationId: string | null;
   data: { name: string; description?: string };
 };
 
@@ -25,29 +25,29 @@ async function assertOk(res: any, label: string) {
   }
 }
 
-export async function createCompany(
+export async function createOrganization(
   api: APIRequestContext,
   input: { name: string }
-): Promise<CreatedCompany> {
-  const res = await api.post('/api/v1/companies', {
+): Promise<CreatedOrganization> {
+  const res = await api.post('/api/v1/organizations', {
     data: {
       name: input.name,
       status: 'completed',
     },
   });
-  await assertOk(res, 'POST /api/v1/companies');
-  return (await res.json()) as CreatedCompany;
+  await assertOk(res, 'POST /api/v1/organizations');
+  return (await res.json()) as CreatedOrganization;
 }
 
 export async function createFolder(
   api: APIRequestContext,
-  input: { name: string; description?: string; companyId?: string }
+  input: { name: string; description?: string; organizationId?: string }
 ): Promise<CreatedFolder> {
   const res = await api.post('/api/v1/folders', {
     data: {
       name: input.name,
       description: input.description,
-      companyId: input.companyId,
+      organizationId: input.organizationId,
     },
   });
   await assertOk(res, 'POST /api/v1/folders');
@@ -58,7 +58,7 @@ export async function createUseCase(
   api: APIRequestContext,
   input: {
     folderId: string;
-    companyId?: string;
+    organizationId?: string;
     name: string;
     description?: string;
   }
@@ -66,7 +66,7 @@ export async function createUseCase(
   const res = await api.post('/api/v1/use-cases', {
     data: {
       folderId: input.folderId,
-      companyId: input.companyId,
+      organizationId: input.organizationId,
       name: input.name,
       description: input.description,
       process: 'Automatisation & productivité',
