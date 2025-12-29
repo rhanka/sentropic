@@ -16,6 +16,9 @@ Constraints:
 - Dev mode (SvelteKit dev server, non-compiled) streaming works.
 - Production GH Pages (static SPA) + Scaleway (API serverless):
   - SSE connection exists, but UI does not display streamed events.
+  - Root cause identified: Scaleway Serverless Postgres (SDB) does not propagate `LISTEN/NOTIFY` across sessions (SSE server relies on it).
+  - New managed Postgres instance was created and data copied; `LISTEN/NOTIFY` probe succeeds on the managed DB.
+  - Switching production DB requires TLS; the managed DB uses a CA that must be provided to Node.js (otherwise `DEPTH_ZERO_SELF_SIGNED_CERT`).
 
 ## Fixes (Implemented)
 - **Fix: SSE URL construction supports relative `VITE_API_BASE_URL` (local production)**
@@ -33,33 +36,37 @@ Constraints:
     - Local production no longer throws `Failed to construct 'URL': Invalid URL` from `ensureConnected`.
     - Local production now streams successfully (SSE request is created and events are received).
 
+- **Fix: API supports custom DB CA certificate for TLS**
+  - **Files changed**:
+    - `api/src/db/client.ts`
+    - `api/src/config/env.ts`
+  - **Problem**:
+    - When pointing `DATABASE_URL` to the new managed Postgres with `?ssl=true`, Node/Postgres client fails with:
+      - `DEPTH_ZERO_SELF_SIGNED_CERT`
+  - **Change implemented**:
+    - Added optional env vars to provide the CA certificate:
+      - `DB_SSL_CA_PEM` (raw PEM)
+      - `DB_SSL_CA_PEM_B64` (base64 PEM; recommended for secret stores)
+    - `DB_SSL_REJECT_UNAUTHORIZED` remains supported (default: true).
+  - **How to deploy (Scaleway Container env)**:
+    - Set `DATABASE_URL` (password must be URL-encoded) and include `?ssl=true`.
+    - Set `DB_SSL_CA_PEM_B64` to the base64-encoded PEM.
+
 ## Remaining Problem (GH Pages + Scaleway)
-SSE connection exists, but streamed events are not visible in the UI.
+SSE connection exists, but streamed events are not visible in the UI (when API uses SDB).
+With the managed DB + working `LISTEN/NOTIFY`, SSE is expected to work without polling.
 
-## Working Hypotheses (GH Pages + Scaleway)
-#### B1) Proxy/LB buffering between client and API
-- **Why**:
-  - SSE must flush chunks; intermediary proxies can buffer, compress, or time out.
-  - API sends SSE headers including `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` (helpful for Nginx, not always for managed LB).
-- **How to confirm**:
-  - In browser, open the SSE request and verify whether pings arrive every ~1s.
-  - If connection is “open” but no pings: strong sign of buffering upstream.
-  - Inspect response headers for `content-encoding` (gzip/br) and caching.
-
-#### B2) CORS/credentials mismatch (depends on deployment domain topology)
-- **Why**:
-  - SSE is opened with `withCredentials: true`; cross-origin requires correct CORS with credentials.
-  - API CORS is strict: it echoes `Access-Control-Allow-Origin: <Origin>` only if origin is allowlisted; it sets `Access-Control-Allow-Credentials: true`.
-  - Any proxy injecting `Access-Control-Allow-Origin: *` (with credentials) is invalid and can cause silent failures.
-- **How to confirm**:
-  - Check SSE response headers:
-    - `Access-Control-Allow-Origin` must be the exact UI origin (not `*`) when credentials are used.
-    - `Access-Control-Allow-Credentials: true` must be present.
-  - Check if cookies are sent to the API domain and accepted.
-
-### C) “Reactive updates not applied after chat tools”
-This likely has two layers:
-1) Are SSE events actually received in production? (depends on A/B)
-2) If received, are they dispatched and causing stores/components to refresh?
-
-Given the current reports, step (1) must be solved first; otherwise reactivity can only rely on fallback polling.
+## Production Switch Checklist (Scaleway + CI)
+- **Scaleway Container (runtime API)**:
+  - Update container env var `DATABASE_URL` to the new DB:
+    - include `?ssl=true`
+    - URL-encode the password (special chars)
+  - Add `DB_SSL_CA_PEM_B64` (base64 PEM).
+  - Redeploy the API image so the new TLS env support is present.
+  - Validate:
+    - `/api/v1/health`
+    - `/api/v1/streams/sse` shows events beyond `ping` during chat/tool updates.
+- **GitHub Actions (CI)**:
+  - CI currently uses `secrets.DATABASE_URL_PROD` only for `make db-backup-prod` in `test-smoke-restore`.
+  - If you want CI backup/restore to target the new DB, update `secrets.DATABASE_URL_PROD` accordingly.
+  - If CI needs strict TLS verification with the managed DB CA, add a new secret (e.g. `DB_CA_PEM_B64`) and adjust the backup step to mount/write the PEM and set `PGSSLROOTCERT`/`PGSSLMODE=verify-full` (optional; can also use `sslmode=require` if acceptable).
