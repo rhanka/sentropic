@@ -254,7 +254,19 @@ streamsRouter.get('/sse', async (c) => {
       const pending = new Map<string, boolean>();
       const streamAllowedCache = new Map<string, boolean>();
 
-      const push = (text: string) => controller.enqueue(encoder.encode(text));
+      // IMPORTANT (prod stability):
+      // The SSE request can be aborted at any time; we must never enqueue after the controller is closed,
+      // otherwise Node's WebStreams throws ERR_INVALID_STATE and can crash the whole API process.
+      let closed = false;
+      const push = (text: string) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(text));
+        } catch {
+          // Controller already closed (or stream errored). Mark as closed to prevent further writes.
+          closed = true;
+        }
+      };
       const heartbeat = setInterval(() => {
         try {
           push(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
@@ -319,6 +331,7 @@ streamsRouter.get('/sse', async (c) => {
       };
 
       const drainStream = async (streamId: string) => {
+        if (closed) return;
         if (hasStreamFilter && !wanted.has(streamId)) return;
         if (draining.get(streamId)) {
           pending.set(streamId, true);
@@ -326,11 +339,13 @@ streamsRouter.get('/sse', async (c) => {
         }
         draining.set(streamId, true);
         try {
+          if (closed) return;
           const allowed = await isStreamAllowed(streamId);
           if (!allowed) return;
 
           const events = await readStreamEvents(streamId, lastSeq[streamId] ?? 0);
           for (const ev of events) {
+            if (closed) return;
             lastSeq[streamId] = ev.sequence;
             push(sseEvent({ eventType: ev.eventType, streamId, sequence: ev.sequence, data: ev.data }));
           }
@@ -339,7 +354,7 @@ streamsRouter.get('/sse', async (c) => {
           if (pending.get(streamId)) {
             pending.set(streamId, false);
             // rattrapage supplémentaire
-            void drainStream(streamId);
+            void drainStream(streamId).catch(() => {});
           }
         }
       };
@@ -473,7 +488,6 @@ streamsRouter.get('/sse', async (c) => {
 
       // LISTEN/NOTIFY
       const client = await pool.connect();
-      let closed = false;
 
       const cleanup = async () => {
         if (closed) return;
@@ -523,13 +537,13 @@ streamsRouter.get('/sse', async (c) => {
                   return;
                 }
                 // Gap detected (or first seen): catch up by draining from lastSeq (or 0).
-                void drainStream(streamId);
-              })();
+                void drainStream(streamId).catch(() => {});
+              })().catch(() => {});
               return;
             }
 
             // Fallback: if no sequence, best-effort drain
-            void drainStream(streamId);
+            void drainStream(streamId).catch(() => {});
           } else if (msg.channel === 'job_events') {
             const jobId = payload.job_id;
             if (!jobId || typeof jobId !== 'string') return;
