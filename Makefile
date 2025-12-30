@@ -544,11 +544,22 @@ db-backup-prod: backup-dir up ## Backup production database from Scaleway to loc
 		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
 		exit 1; \
 	fi
+	@if [ -z "$$DB_SSL_CA_PEM_B64" ]; then \
+		echo "❌ Error: DB_SSL_CA_PEM_B64 must be set (base64-encoded CA PEM)"; \
+		exit 1; \
+	fi
 	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:17-alpine sh -c " \
-		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
+	docker run --rm \
+		-v $(PWD)/data/backup:/backups \
+		-e DATABASE_URL_PROD="$$DATABASE_URL_PROD" \
+		-e DB_SSL_CA_PEM_B64="$$DB_SSL_CA_PEM_B64" \
+		postgres:17-alpine sh -lc " \
+			printf '%s' \"$$DB_SSL_CA_PEM_B64\" | base64 -d > /tmp/ca.pem && \
+			export PGSSLMODE=verify-full && \
+			export PGSSLROOTCERT=/tmp/ca.pem && \
+			pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-restore
