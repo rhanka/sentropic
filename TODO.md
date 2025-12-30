@@ -50,12 +50,11 @@
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt
-- [ ] UI Fix
-  - Le streaming ne fonctionne pas en compilé (peut être depuis stream markdown à confirmer), ni dans le chat, ni dans les cartes
-  - Les différentes vues ne sont pas mises à jours de façon réactives lors d'un update via tools dans les chat
+- [x] UI Fix streaming (change postgres prod + update stream for local mode)
 - [ ] Améliorer la vue cas d'usage
-  - [ ] Afficher le nom du dossier
-  - [ ] Afficher l'entreprise
+  - [x] Afficher le nom du dossier (branche: `feat/usecase-show-folder-organization`)
+  - [x] Afficher l'entreprise (branche: `feat/usecase-show-folder-organization`)
+  - [ ] UI Fix post stream 'blink' (when message finished in chat) (branche: `feat/usecase-show-folder-organization`)
 - [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
   - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
