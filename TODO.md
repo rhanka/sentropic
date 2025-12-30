@@ -54,7 +54,7 @@
 - [ ] Améliorer la vue cas d'usage
   - [x] Afficher le nom du dossier (branche: `feat/usecase-show-folder-organization`)
   - [x] Afficher l'entreprise (branche: `feat/usecase-show-folder-organization`)
-  - [ ] UI Fix post stream 'blink' (when message finished in chat) (branche: `feat/usecase-show-folder-organization`)
+  - [x] UI Fix post stream 'blink' (when message finished in chat) (branche: `feat/usecase-show-folder-organization`)
 - [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
   - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`

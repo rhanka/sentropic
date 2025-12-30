@@ -67,6 +67,11 @@
   let detailLoaded = false;
   let lastInitialEventsRef: unknown = null;
 
+  // Chat bubble: keep a single DOM subtree and only update the content prop.
+  // This avoids a visual "blink" when switching from streamed markdown to final persisted markdown.
+  $: finalText = typeof finalContent === 'string' ? finalContent : '';
+  $: displayContent = finalText.trim().length > 0 ? finalText : (st.contentText || '');
+
   const scrollToEnd = (node: HTMLElement) => {
     const scroll = () => {
       try {
@@ -375,13 +380,9 @@
     {/if}
 
     {#if variant === 'chat'}
-      {#if finalContent}
+      {#if (finalText && finalText.trim().length > 0) || hasContent}
         <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
-          <Streamdown content={finalContent} />
-        </div>
-      {:else if hasContent}
-        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
-          <Streamdown content={st.contentText} />
+          <Streamdown content={displayContent} />
         </div>
       {:else}
         {#if showStartup}
