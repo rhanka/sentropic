@@ -547,7 +547,7 @@ db-backup-prod: backup-dir up ## Backup production database from Scaleway to loc
 	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:16-alpine sh -c " \
+	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:17-alpine sh -c " \
 		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
@@ -597,35 +597,6 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 		WHERE table_schema = 'public' \
 		AND table_name IN ('users', 'user_sessions', 'webauthn_credentials', 'webauthn_challenges', 'magic_links') \
 		ORDER BY table_name;" || echo "  (WebAuthn tables not found - will be created by migrations)"
-
-.PHONY: db-restore-postgres-only
-db-restore-postgres-only: ## Restore backup to local database without starting api/ui [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
-	@if [ -z "$(BACKUP_FILE)" ]; then \
-		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=prod-2025-12-20T14-54-47.dump)"; \
-		echo "Available backups:"; \
-		ls -1 data/backup/*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No backups found"; \
-		exit 1; \
-	fi
-	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
-	@echo "This action is DESTRUCTIVE and will remove:"
-	@echo "  - All local companies, folders, use cases"
-	@echo "  - All local users and sessions"
-	@echo "  - All local settings and configuration"
-	@echo ""
-	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
-		read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
-	fi
-	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
-		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
-		exit 1; \
-	fi
-	@echo "🚀 Starting PostgreSQL service..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
-	@echo "🔄 Restoring backup to local database..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml cp data/backup/$(BACKUP_FILE) postgres:/tmp/restore.dump
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
-		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
-	@echo "✅ Restore completed."
 
 .PHONY: db-fresh
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database
