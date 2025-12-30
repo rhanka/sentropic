@@ -5,6 +5,7 @@ export type Folder = {
   id: string;
   name: string;
   description: string;
+  model?: string | null;
   organizationId?: string | null;
   organizationName?: string | null;
   matrixConfig?: any;
