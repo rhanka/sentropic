@@ -4,6 +4,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(8787),
   DATABASE_URL: z.string().default('postgres://app:app@postgres:5432/app'),
+  // Optional DB TLS knobs (used by db/client.ts)
+  DB_SSL_REJECT_UNAUTHORIZED: z.string().optional(),
+  DB_SSL_CA_PEM: z.string().optional(),
+  DB_SSL_CA_PEM_B64: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),

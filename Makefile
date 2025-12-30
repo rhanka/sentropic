@@ -285,7 +285,7 @@ run-e2e:
 
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
-	# If E2E_SPEC is set, run only that file/glob (e.g., tests/companies.spec.ts)
+	# If E2E_SPEC is set, run only that file/glob (e.g., tests/organizations.spec.ts)
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps -e E2E_SPEC e2e sh -lc ' \
 	  if [ -n "$$E2E_SPEC" ]; then \
 	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
@@ -329,7 +329,7 @@ clean-all: clean ## Clean everything including images
 clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to skip prompt]
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
-	@echo "  - All companies"
+	@echo "  - All organization"
 	@echo "  - All folders"
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
@@ -448,7 +448,7 @@ db-reset: up ## Reset database (WARNING: destroys all data) [SKIP_CONFIRM=true t
 	@echo "⚠️  WARNING: This will DELETE ALL DATA in the database!"
 	@echo "This action is IRREVERSIBLE and will remove:"
 	@echo "  - All users and session"
-	@echo "  - All companies"
+	@echo "  - All organizations"
 	@echo "  - All folders"
 	@echo "  - All use cases"
 	@echo "  - All job queue data"
@@ -472,17 +472,17 @@ db-inspect: up ## Inspect database directly via postgres container (query databa
 		UNION ALL \
 		SELECT 'folders', COUNT(*) FROM folders \
 		UNION ALL \
-		SELECT 'companies', COUNT(*) FROM companies \
+		SELECT 'organizations', COUNT(*) FROM organizations \
 		UNION ALL \
 		SELECT 'users', COUNT(*) FROM users \
 		UNION ALL \
 		SELECT 'user_sessions', COUNT(*) FROM user_sessions;"
 
 .PHONY: db-query
-db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT * FROM companies")
+db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT * FROM organizations")
 	@if [ -z "$(QUERY)" ]; then \
 		echo "❌ Error: QUERY parameter is required"; \
-		echo "Usage: make db-query QUERY=\"SELECT * FROM companies\""; \
+		echo "Usage: make db-query QUERY=\"SELECT * FROM organizations\""; \
 		exit 1; \
 	fi
 	@echo "📊 Executing query:"
@@ -494,10 +494,10 @@ db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT *
 db-inspect-usecases: up ## Inspect use cases and folders relationship
 	@echo "📊 Use Cases Details:"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
-		SELECT uc.id, uc.name, uc.folder_id, f.name as folder_name, uc.company_id, c.name as company_name \
+		SELECT uc.id, uc.name, uc.folder_id, f.name as folder_name, uc.organization_id, o.name as organization_name \
 		FROM use_cases uc \
 		LEFT JOIN folders f ON uc.folder_id = f.id \
-		LEFT JOIN companies c ON uc.company_id = c.id \
+		LEFT JOIN organizations o ON uc.organization_id = o.id \
 		ORDER BY uc.created_at DESC \
 		LIMIT 20;"
 
@@ -544,10 +544,21 @@ db-backup-prod: backup-dir up ## Backup production database from Scaleway to loc
 		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
 		exit 1; \
 	fi
+	@if [ -z "$$DB_SSL_CA_PEM_B64" ]; then \
+		echo "❌ Error: DB_SSL_CA_PEM_B64 must be set (base64-encoded CA PEM)"; \
+		exit 1; \
+	fi
 	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	docker run --rm -v $(PWD)/data/backup:/backups -e DATABASE_URL_PROD="$$DATABASE_URL_PROD" postgres:16-alpine sh -c " \
+	docker run --rm \
+		-v $(PWD)/data/backup:/backups \
+		-e DATABASE_URL_PROD="$$DATABASE_URL_PROD" \
+		-e DB_SSL_CA_PEM_B64="$$DB_SSL_CA_PEM_B64" \
+		postgres:17-alpine sh -lc " \
+			printf '%s' \"$$DB_SSL_CA_PEM_B64\" | base64 -d > /tmp/ca.pem && \
+			export PGSSLMODE=verify-full && \
+			export PGSSLROOTCERT=/tmp/ca.pem && \
 		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
@@ -561,7 +572,7 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 	fi
 	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
 	@echo "This action is DESTRUCTIVE and will remove:"
-	@echo "  - All local companies, folders, use cases"
+	@echo "  - All local organizations, folders, use cases"
 	@echo "  - All local users and sessions"
 	@echo "  - All local settings and configuration"
 	@echo ""
@@ -584,7 +595,7 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 		UNION ALL \
 		SELECT 'folders', COUNT(*) FROM folders \
 		UNION ALL \
-		SELECT 'companies', COUNT(*) FROM companies \
+		SELECT 'organizations', COUNT(*) FROM organizations \
 		UNION ALL \
 		SELECT 'settings', COUNT(*) FROM settings \
 		UNION ALL \
@@ -597,35 +608,6 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 		WHERE table_schema = 'public' \
 		AND table_name IN ('users', 'user_sessions', 'webauthn_credentials', 'webauthn_challenges', 'magic_links') \
 		ORDER BY table_name;" || echo "  (WebAuthn tables not found - will be created by migrations)"
-
-.PHONY: db-restore-postgres-only
-db-restore-postgres-only: ## Restore backup to local database without starting api/ui [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
-	@if [ -z "$(BACKUP_FILE)" ]; then \
-		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=prod-2025-12-20T14-54-47.dump)"; \
-		echo "Available backups:"; \
-		ls -1 data/backup/*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No backups found"; \
-		exit 1; \
-	fi
-	@echo "⚠️  WARNING: This will REPLACE all data in local database!"
-	@echo "This action is DESTRUCTIVE and will remove:"
-	@echo "  - All local companies, folders, use cases"
-	@echo "  - All local users and sessions"
-	@echo "  - All local settings and configuration"
-	@echo ""
-	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
-		read -p "Are you sure you want to continue? Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
-	fi
-	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
-		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
-		exit 1; \
-	fi
-	@echo "🚀 Starting PostgreSQL service..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait
-	@echo "🔄 Restoring backup to local database..."
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml cp data/backup/$(BACKUP_FILE) postgres:/tmp/restore.dump
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
-		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
-	@echo "✅ Restore completed."
 
 .PHONY: db-fresh
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database

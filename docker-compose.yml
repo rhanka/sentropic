@@ -53,7 +53,7 @@ services:
   # sqlite/litestream removed after migration to Postgres
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-app}
       - POSTGRES_USER=${POSTGRES_USER:-app}

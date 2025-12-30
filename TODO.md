@@ -50,6 +50,9 @@
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt
+- [ ] UI Fix
+  - Le streaming ne fonctionne pas en compilé (peut être depuis stream markdown à confirmer), ni dans le chat, ni dans les cartes
+  - Les différentes vues ne sont pas mises à jours de façon réactives lors d'un update via tools dans les chat
 - [ ] Améliorer la vue cas d'usage
   - [ ] Afficher le nom du dossier
   - [ ] Afficher l'entreprise

@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { SQL } from 'drizzle-orm';
 import { env } from '../config/env';
+import { Buffer } from 'node:buffer';
 
 // Expect DATABASE_URL like: postgres://user:pass@host:5432/db[?ssl=true&options=databaseid%3D<id>]
 const connectionString = env.DATABASE_URL;
@@ -9,7 +10,7 @@ const connectionString = env.DATABASE_URL;
 // SSL & options handling (local vs serverless):
 // - Local Postgres: no ssl (default)
 // - Serverless (Scaleway): ssl required + databaseid option (via URL ?options=databaseid%3D<id> ou PGOPTIONS)
-let ssl: false | { rejectUnauthorized: boolean; servername?: string } = false;
+let ssl: false | { rejectUnauthorized: boolean; servername?: string; ca?: string | string[] } = false;
 let pgOptions: string | undefined = undefined;
 
 try {
@@ -17,10 +18,21 @@ try {
   const sslParam = url.searchParams.get('ssl');
   const forceSSL = (sslParam && sslParam.toLowerCase() === 'true') || process.env.PGSSLMODE === 'require';
   if (forceSSL) {
+    const caPem =
+      typeof process.env.DB_SSL_CA_PEM === 'string' && process.env.DB_SSL_CA_PEM.trim()
+        ? process.env.DB_SSL_CA_PEM
+        : undefined;
+    const caPemB64 =
+      typeof process.env.DB_SSL_CA_PEM_B64 === 'string' && process.env.DB_SSL_CA_PEM_B64.trim()
+        ? process.env.DB_SSL_CA_PEM_B64
+        : undefined;
+    const caFromB64 = caPemB64 ? Buffer.from(caPemB64, 'base64').toString('utf8') : undefined;
+
     ssl = {
       // Scaleway utilise un certificat public; on peut laisser true. Autoriser false via env si besoin de debug.
       rejectUnauthorized: (process.env.DB_SSL_REJECT_UNAUTHORIZED ?? 'true') !== 'false',
-      servername: url.hostname
+      servername: url.hostname,
+      ...(caPem || caFromB64 ? { ca: (caPem || caFromB64) as string } : {})
     };
   }
   pgOptions = url.searchParams.get('options') || process.env.PGOPTIONS || undefined;

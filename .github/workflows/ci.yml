@@ -325,6 +325,7 @@ jobs:
       - name: Backup production database
         env:
           DATABASE_URL_PROD: ${{ secrets.DATABASE_URL_PROD }}
+          DB_SSL_CA_PEM_B64: ${{ secrets.DB_SSL_CA_PEM_B64 }}
         run: make db-backup-prod
       - name: Test restore and smoke tests
         env:
