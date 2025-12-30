@@ -10,6 +10,7 @@
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
+  import { goto } from '$app/navigation';
   import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
   import {
     CheckCircle2,
@@ -33,6 +34,8 @@
   export let matrix: MatrixConfig | null = null;
   export let calculatedScores: any = null;
   export let isEditing: boolean = false;
+  export let organizationId: string | null = null;
+  export let organizationName: string | null = null;
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -506,6 +509,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- Badge + Boutons sur 1 colonne (4/12) -->
       {#if showActions}
         <div class="col-span-4 print:col-span-1 flex items-center justify-end gap-2 no-print">
+          {#if organizationId}
+            <button
+              type="button"
+              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
+              on:click={() => goto(`/organisations/${organizationId}`)}
+              title="Voir l'organisation"
+            >
+              {organizationName || 'Organisation'}
+            </button>
+          {/if}
           {#if useCase.model}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
               {useCase.model}
@@ -515,12 +528,19 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <slot name="actions-view" />
           </div>
         </div>
-      {:else if useCase.model}
-        <!-- En mode print, afficher le badge si présent -->
+      {:else if organizationId || useCase.model}
+        <!-- En mode print, afficher les badges si présents -->
         <div class="col-span-4 print:col-span-1 flex items-center justify-end">
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-            {useCase.model}
-          </span>
+          {#if organizationId}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700">
+              {organizationName || 'Organisation'}
+            </span>
+          {/if}
+          {#if useCase.model}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+              {useCase.model}
+            </span>
+          {/if}
         </div>
       {/if}
     </div>
