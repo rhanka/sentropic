@@ -19,7 +19,8 @@
   import { streamHub } from '$lib/stores/streamHub';
   import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
 
-  const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/devices', '/auth/magic-link'];
+  // Keep header visible on /auth/devices (required for navigation).
+  const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
 
   // Routes publiques (accessibles sans authentification)
   const PUBLIC_ROUTES = [
