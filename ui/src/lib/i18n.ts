@@ -1,18 +1,24 @@
-import { register, init, getLocaleFromNavigator, locale, waitLocale } from 'svelte-i18n';
+import { browser } from '$app/environment';
+import { init, locale, addMessages } from 'svelte-i18n';
 
-register('fr', () => import('../locales/fr.json'));
-register('en', () => import('../locales/en.json'));
+import fr from '../locales/fr.json';
+import en from '../locales/en.json';
+
+const STORAGE_KEY = 'locale';
+const FALLBACK_LOCALE = 'fr';
+
+addMessages('fr', fr);
+addMessages('en', en);
+
+const initialLocale = browser ? (localStorage.getItem(STORAGE_KEY) || FALLBACK_LOCALE) : FALLBACK_LOCALE;
 
 init({
-  fallbackLocale: 'fr',
-  initialLocale: 'fr' // Force FR par défaut pour éviter les erreurs
-});
-
-// Attendre que la locale soit chargée avant de continuer
-waitLocale('fr').then(() => {
-  console.log('i18n initialized with locale: fr');
+  fallbackLocale: FALLBACK_LOCALE,
+  initialLocale
 });
 
 export const setLocale = (value: string) => {
-  locale.set(value);
+  const next = value || FALLBACK_LOCALE;
+  if (browser) localStorage.setItem(STORAGE_KEY, next);
+  locale.set(next);
 };
