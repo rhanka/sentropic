@@ -10,6 +10,7 @@
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
   import { initializeSession, session } from '$lib/stores/session';
+  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
   import { foldersStore, currentFolderId } from '$lib/stores/folders';
   import { useCasesStore } from '$lib/stores/useCases';
@@ -89,6 +90,12 @@
   let showSpinner = false;
   let showSpinnerTimer: ReturnType<typeof setTimeout> | null = null;
   let hideSpinnerTimer: ReturnType<typeof setTimeout> | null = null;
+  let chatDockPaddingRight = '0px';
+
+  $: chatDockPaddingRight =
+    $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss !== '100vw'
+      ? $chatWidgetLayout.dockWidthCss
+      : '0px';
 
   // Gérer l'affichage du spinner avec délai de 0.5s
   $: {
@@ -194,23 +201,25 @@
 </svelte:head>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
-  {#if !hideHeader && canShowContent && !showSpinner}
-    <Header />
-  {/if}
-  <main class="mx-auto max-w-7xl px-4 py-8">
-    {#if showSpinner}
-      <!-- Afficher un loader pendant la vérification de session -->
-      <div class="flex items-center justify-center min-h-[60vh]">
-        <div class="text-center">
-          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-          <p class="text-sm text-slate-600">Vérification de la session...</p>
-        </div>
-      </div>
-    {:else if canShowContent}
-      <slot />
+  <div class="box-border transition-[padding-right] duration-200" style:padding-right={chatDockPaddingRight}>
+    {#if !hideHeader && canShowContent && !showSpinner}
+      <Header />
     {/if}
-  </main>
-  <Toast />
-  <NavigationGuard />
+    <main class="mx-auto max-w-7xl px-4 py-8">
+      {#if showSpinner}
+        <!-- Afficher un loader pendant la vérification de session -->
+        <div class="flex items-center justify-center min-h-[60vh]">
+          <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+            <p class="text-sm text-slate-600">Vérification de la session...</p>
+          </div>
+        </div>
+      {:else if canShowContent}
+        <slot />
+      {/if}
+    </main>
+    <Toast />
+    <NavigationGuard />
+  </div>
   <ChatWidget />
 </div>
