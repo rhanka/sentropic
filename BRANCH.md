@@ -25,7 +25,9 @@ Notes:
 - [x] **Commit 1** (5c5936f): UI: show organization badge on use case detail
 - [x] **Commit 2** (874e56c): UI: make folder name editable on use cases page (2/3 editable + 1/3 tags)
 - [x] **Commit 3** (6749d83): UI: folder cards show organization name in blue
-- [x] **Commit 4** (bdb7371): Fix: prevent chat response blink on stream completion
+- [x] **Commit 4** (bdb7371): Fix: prevent chat response blink on stream completion (keep chat bubble subtree stable)
+- [x] **Commit 5** (167d160): Fix: refresh chat history silently on stream completion (avoid unmounting message list)
+- [x] **Commit 6** (ba7ffbd): Fix: avoid null folder reference in use cases header (typecheck)
 
 ## Status
 ## Follow-up: UI Fix post stream "blink" (chat)
