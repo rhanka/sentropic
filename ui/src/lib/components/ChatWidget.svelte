@@ -6,7 +6,7 @@
   import { addToast } from '$lib/stores/toast';
   import { isAuthenticated, session } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
-  import { MessageCircle, Loader2, Clock, X, Plus, Trash2, Minus, Maximize2, Minimize2 } from '@lucide/svelte';
+  import { MessageCircle, Loader2, Clock, X, Plus, Trash2, Minus, Maximize2, Minimize2, Menu } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
@@ -429,9 +429,20 @@
       class:hidden={!isVisible}
     >
       <!-- Header commun (sélecteur unique: sessions + jobs) -->
-      <div class="p-3 border-b border-gray-200">
-        <div class="flex items-center justify-between gap-2">
+      <div class="px-4 h-14 border-b border-gray-200 flex items-center">
+        <div class="flex w-full items-center justify-between gap-2">
           <!-- Session / Jobs -->
+          {#if isDocked && isMobileViewport}
+            <button
+              class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
+              on:click={() => window.dispatchEvent(new CustomEvent('topai:toggle-burger-menu'))}
+              aria-label="Menu"
+              type="button"
+            >
+              <Menu class="h-5 w-5" aria-hidden="true" />
+            </button>
+          {/if}
+
           <select
             class="w-52 min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs"
             bind:value={headerSelection}
@@ -453,9 +464,9 @@
           </select>
 
           <div class="flex items-center gap-2">
-            <!-- Desktop-only: hide on mobile via CSS to avoid a hydration flash -->
+            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
             <button
-              class="hidden sm:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+              class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
               on:click={toggleDisplayMode}
               title={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
               aria-label={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
