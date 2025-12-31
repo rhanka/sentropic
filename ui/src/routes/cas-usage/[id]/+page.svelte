@@ -17,6 +17,8 @@
   let error = '';
   let matrix: MatrixConfig | null = null;
   let calculatedScores: any = null;
+  let organizationId: string | null = null;
+  let organizationName: string | null = null;
   let hubKey: string | null = null;
 
   $: useCaseId = $page.params.id;
@@ -45,8 +47,12 @@
         if (!useCase?.folderId || folderId !== useCase.folderId) return;
         if (data?.folder?.matrixConfig) {
           matrix = data.folder.matrixConfig;
-          void loadMatrixAndCalculateScores();
         }
+        if (data?.folder) {
+          organizationId = data.folder.organizationId ?? organizationId;
+          organizationName = data.folder.organizationName ?? organizationName;
+        }
+        void loadMatrixAndCalculateScores();
       }
     });
     
@@ -151,8 +157,10 @@
       // Charger la matrice depuis le dossier
       const scoped = getScopedWorkspaceIdForAdmin();
       const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder = await apiGet(`/folders/${useCase.folderId}${qs}`);
-      matrix = folder.matrixConfig;
+      const folderResp: any = await apiGet(`/folders/${useCase.folderId}${qs}`);
+      matrix = folderResp?.matrixConfig ?? null;
+      organizationId = folderResp?.organizationId ?? null;
+      organizationName = folderResp?.organizationName ?? null;
       
       // Extraire les scores depuis data (avec fallback rétrocompatibilité)
       const valueScores = useCase?.data?.valueScores || useCase?.valueScores || [];
@@ -196,6 +204,8 @@
       {useCase}
       {matrix}
       {calculatedScores}
+      {organizationId}
+      {organizationName}
       isEditing={false}
     >
       <svelte:fragment slot="actions-view">

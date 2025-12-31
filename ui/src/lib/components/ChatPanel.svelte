@@ -179,8 +179,9 @@
     }
   };
 
-  const loadMessages = async (id: string, opts?: { scrollToBottom?: boolean }) => {
-    loadingMessages = true;
+  const loadMessages = async (id: string, opts?: { scrollToBottom?: boolean; silent?: boolean }) => {
+    const shouldShowLoader = !opts?.silent;
+    if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
       const res = await apiGet<{ sessionId: string; messages: ChatMessage[] }>(`/chat/sessions/${id}/messages`);
@@ -219,7 +220,7 @@
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors du chargement des messages');
     } finally {
-      loadingMessages = false;
+      if (shouldShowLoader) loadingMessages = false;
     }
   };
 
@@ -257,7 +258,8 @@
     messages = messages.map((m) =>
       (m._streamId ?? m.id) === streamId ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' } : m
     );
-    if (sessionId) await loadMessages(sessionId, { scrollToBottom: true });
+    // Silent refresh: keep the message list mounted to avoid a visible "blink" at stream completion.
+    if (sessionId) await loadMessages(sessionId, { scrollToBottom: true, silent: true });
     scheduleScrollToBottom({ force: true });
     // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
     await tick();

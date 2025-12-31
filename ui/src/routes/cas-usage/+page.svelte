@@ -2,7 +2,7 @@
   /* eslint-disable svelte/no-at-html-tags */
   // {@html} is only used with sanitized HTML produced by renderInlineMarkdown().
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
-  import { currentFolderId } from '$lib/stores/folders';
+  import { foldersStore, currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { page } from '$app/stores';
@@ -16,10 +16,14 @@
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
+  import EditableInput from '$lib/components/EditableInput.svelte';
   import { Trash2, Star, X, Minus, Loader2 } from '@lucide/svelte';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
+  let currentFolder: Folder | null = null;
+  let editedFolderName = '';
+  let lastFolderId: string | null = null;
   const HUB_KEY = 'useCasesPage';
 
   // Helper to create array of indices for iteration
@@ -123,11 +127,22 @@
         try {
           const scoped = getScopedWorkspaceIdForAdmin();
           const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-          const folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
+          const folder: Folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
+          currentFolder = folder;
           matrix = folder.matrixConfig;
+
+          if (folder.id !== lastFolderId) {
+            lastFolderId = folder.id;
+            editedFolderName = folder.name || '';
+          }
+
+          foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
         } catch (err) {
           console.error('Failed to load matrix:', err);
+          currentFolder = null;
         }
+      } else {
+        currentFolder = null;
       }
       
       // Si aucun dossier n'est sélectionné, afficher un message
@@ -149,6 +164,20 @@
   };
 
   // Polling désactivé: cas d'usage se mettent à jour via SSE (usecase_update)
+
+  const handleFolderNameSaved = async () => {
+    if (!$currentFolderId) return;
+    try {
+      const scoped = getScopedWorkspaceIdForAdmin();
+      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
+      const folder: Folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
+      currentFolder = folder;
+      editedFolderName = folder.name || '';
+      foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
+    } catch (err) {
+      console.error('Failed to reload folder after name saved:', err);
+    }
+  };
 
   const startGeneration = async (context: string, createNewFolder: boolean, organizationId: string | null) => {
     let progressToastId = '';
@@ -235,7 +264,52 @@
       Mode admin — workspace partagé : <b>lecture seule</b> (suppression / génération désactivées).
     </div>
   {/if}
-  <h1 class="text-3xl font-semibold">Cas d'usage</h1>
+  {#if $currentFolderId && currentFolder}
+    <div class="grid grid-cols-12 gap-4 items-start">
+      <div class="col-span-8 min-w-0">
+        {#if $adminReadOnlyScope}
+          <h1 class="text-3xl font-semibold mb-0 break-words">
+            {currentFolder.name || 'Dossier'}
+          </h1>
+        {:else}
+          <h1 class="text-3xl font-semibold mb-0 break-words">
+            <EditableInput
+              label=""
+              value={editedFolderName}
+              markdown={false}
+              multiline={true}
+              apiEndpoint={`/folders/${currentFolder.id}`}
+              fullData={{ name: editedFolderName }}
+              changeId={`folder-name-${currentFolder.id}`}
+              originalValue={currentFolder.name || ''}
+              on:change={(e) => editedFolderName = e.detail.value}
+              on:saved={handleFolderNameSaved}
+            />
+          </h1>
+        {/if}
+      </div>
+      <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
+        {#if currentFolder.organizationId}
+          {@const orgId = currentFolder.organizationId as string}
+          <button
+            type="button"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
+            on:click={() => goto(`/organisations/${orgId}`)}
+            title="Voir l'organisation"
+          >
+            {currentFolder.organizationName || 'Organisation'}
+          </button>
+        {/if}
+        {#if currentFolder.model}
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+            {currentFolder.model}
+          </span>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <h1 class="text-3xl font-semibold">Cas d'usage</h1>
+  {/if}
   
   {#if isLoading}
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
