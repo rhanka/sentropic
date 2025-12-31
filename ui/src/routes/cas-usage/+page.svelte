@@ -290,10 +290,11 @@
       </div>
       <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
         {#if currentFolder.organizationId}
+          {@const orgId = currentFolder.organizationId as string}
           <button
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
-            on:click={() => goto(`/organisations/${currentFolder.organizationId}`)}
+            on:click={() => goto(`/organisations/${orgId}`)}
             title="Voir l'organisation"
           >
             {currentFolder.organizationName || 'Organisation'}
