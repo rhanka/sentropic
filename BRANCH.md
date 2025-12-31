@@ -18,9 +18,12 @@ This branch is explicitly organized to enable early UAT in `make dev` before dee
 - [x] **UI step 3 (UAT)**: Desktop “docked panel” mode (~1/3 right side) toggleable with the current floating widget; persist the chosen mode in browser storage (localStorage).
 - [x] **Local gates (before UAT)**: `make typecheck-ui` and `make lint-ui`, sanity via `make logs-ui`.
 - [x] **UAT 3 (you, in `make dev`)**: Validate docked mode usability + persistence across reload + no layout regressions.
-- [ ] **UI step 4 (UAT)**: Add a responsive Header burger menu (includes nav + language + user) starting at tablet width; also force burger when ChatWidget is docked to preserve header readability.
-- [ ] **Local gates (before UAT)**: `make typecheck-ui` and `make lint-ui`, sanity via `make logs-ui`.
-- [ ] **UAT 4 (you, in `make dev`)**: Validate header burger behavior (tablet + when docked) and that it never shows the old full nav when space is constrained.
+- [x] **UI step 4 (UAT)**: Fix Header i18n by using `svelte-i18n` directly in `Header.svelte` (reuse `src/locales/*.json` dictionaries; avoid deeper refactor).
+- [x] **Local gates (before UAT)**: `make typecheck-ui` and `make lint-ui`.
+- [x] **UAT 4 (you, in `make dev`)**: Validate language switcher affects Header labels reliably (FR default; EN switching works; persists after reload).
+- [x] **UI step 5 (UAT)**: Header responsive burger menu (tablet breakpoint + forced when chat is docked) including language + identity inside the burger drawer.
+- [x] **Local gates (before UAT)**: `make typecheck-ui` and `make lint-ui`.
+- [x] **UAT 5 (you, in `make dev`)**: Validate burger behavior on tablet + when chat is docked (menu not cramped; drawer contains lang + identity accordion + actions).
 - [ ] **After UAT approval**: Add/adjust UI tests (targeted) if applicable.
 - [ ] **Production gates**: `make build-ui-image build-api` then `make test-e2e`.
 
@@ -41,11 +44,14 @@ This branch is explicitly organized to enable early UAT in `make dev` before dee
 - [ ] **Commit 1**: Responsive layout (mobile bottom-sheet + desktop max sizing)
 - [ ] **Commit 2**: Accessibility (ESC + focus trap + aria)
 - [ ] **Commit 3**: Desktop docked panel mode + local persistence
-- [ ] **Commit 4**: Tests (UI/E2E adjustments if needed)
+- [ ] **Commit 4**: Header i18n via svelte-i18n (UAT 4)
+- [ ] **Commit 5**: Header responsive burger menu (UAT 5)
+- [ ] **Commit 6**: Tests (UI/E2E adjustments if needed)
 
 ## Status
-- **Progress**: Waiting for UAT 2 + UAT 3 feedback
-- **Current**: Ready for UAT (no further UI changes planned until feedback)
+- **Progress**: UAT 1–5 done (ready to commit)
+- **Current**: Preparing atomic commits for Step 4 + Step 5 changes
+- **Next**: After commits, wait for approval before any UI/E2E tests
 - **Notes**:
   - Mobile: bottom-sheet + dimmed backdrop implemented
   - Desktop: viewport-safe sizing implemented (max width/height to avoid overflow)
