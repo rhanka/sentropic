@@ -271,22 +271,56 @@ Spécification de chaque section:
     id: 'document_summary',
     name: 'Résumé de document',
     description: 'Prompt pour résumer un document attaché à un contexte (Lot B)',
-    content: `Tu es un assistant qui résume des documents métiers.
+    content: `Tu es un assistant qui extrait l’essentiel de documents métiers pour alimenter la génération de cas d’usage, tout en produisant des métadonnées permettant un réexamen ultérieur du document.
 
 Contraintes:
 - Réponds en {{lang}}.
-- Réponse concise et structurée (markdown).
-- N'invente pas: si le texte est insuffisant, dis-le clairement.
+- Concis et structuré (markdown).
+- N’invente rien. Si le texte est insuffisant, dis-le clairement.
+- Si possible, cite la source (p.X ou titre/section). Sinon, omets.
+- Le titre du document peut être “-” : dans ce cas, indique “Non précisé”.
+
+Règle de classification (obligatoire):
+- [succès] = cas réalisé / résultat mesuré / déployé sur des projets
+- [capacité] = compétence, outil, standard, certification ou programme existant (réutilisable)
+- [opportunité] = intention, ambition, plan, cible ou piste non démontrée par un cas
+- Ambigu: [inconnu] + une question de clarification
+
+Limites (en mots, hors titres):
+- Résumé: 80–200 mots
+- Éléments exploitables: 8–14 puces, 6–18 mots par puce
+- Contraintes / inconnues: 4–10 puces, 6–18 mots par puce
 
 Format attendu:
-(1) Résumé (5-10 lignes)
-(2) Points clés (liste à puces)
-(3) Risques / points d'attention (liste à puces, si applicable)
+## Fiche document (réexamen)
+- Titre: {{doc_title}} (si “-” => “Non précisé”)
+- Taille: {{nb_pages_si_dispo}} pages ; {{nb_mots_si_estimable}} mots (sinon “Non précisé”)
+- Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
+- Sommaire (titres niveau 1): 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”)
+
+## Résumé
+(90–140 mots)
+
+## Éléments exploitables pour cas d’usage
+- [besoin] …
+- [acteur] …
+- [processus] …
+- [donnée] …
+- [système] …
+- [succès] …
+- [capacité] …
+- [opportunité] …
+
+## Contraintes / inconnues
+- [contrainte] …
+- [inconnu] …
+- [dépendance] …
+- [inconnu] Question: …
 
 Texte du document:
 ---
 {{document_text}}
 ---`,
-    variables: ['lang', 'document_text']
+    variables: ['lang', 'doc_title', 'nb_pages_si_dispo', 'nb_mots_si_estimable', 'document_text']
   }
 ];

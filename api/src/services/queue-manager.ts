@@ -583,37 +583,35 @@ export class QueueManager {
 
     const template = defaultPrompts.find((p) => p.id === 'document_summary')?.content || '';
     if (!template) throw new Error('Prompt document_summary non trouvé');
-    const userPrompt = template.replace('{{lang}}', lang).replace('{{document_text}}', clipped);
+    const docTitle = (doc.filename || '-').trim() || '-';
+    const nbPages = 'Non précisé';
+    const nbWords = (() => {
+      const words = clipped.split(/\s+/).filter(Boolean).length;
+      return Number.isFinite(words) && words > 0 ? String(words) : 'Non précisé';
+    })();
+
+    const userPrompt = template
+      .replace('{{lang}}', lang)
+      .replace('{{doc_title}}', docTitle)
+      .replace('{{nb_pages_si_dispo}}', nbPages)
+      .replace('{{nb_mots_si_estimable}}', nbWords)
+      .replace('{{document_text}}', clipped);
 
     const completion = await callOpenAI({
       messages: [
         { role: 'user', content: userPrompt },
       ],
       model: data.model,
-      responseFormat: 'json_object',
       signal,
     });
 
     const summaryRaw = completion.choices?.[0]?.message?.content ?? '';
-    const summaryStr = typeof summaryRaw === 'string' ? summaryRaw : String(summaryRaw ?? '');
-    let detectedLang: string | null = null;
-    let summary: string;
-    try {
-      const parsed = JSON.parse(summaryStr) as unknown;
-      const langMaybe =
-        typeof parsed === 'object' && parsed !== null
-          ? (parsed as { meta?: { language?: unknown } }).meta?.language
-          : undefined;
-      detectedLang = typeof langMaybe === 'string' ? langMaybe.trim() : null;
-      summary = this.sanitizePgText(JSON.stringify(parsed, null, 2)).trim();
-    } catch {
-      summary = this.sanitizePgText(summaryStr).trim();
-    }
+    const summary = this.sanitizePgText(typeof summaryRaw === 'string' ? summaryRaw : String(summaryRaw ?? '')).trim();
     if (!summary) throw new Error('Empty summary');
 
     await db
       .update(contextDocuments)
-      .set({ status: 'ready', summary, summaryLang: detectedLang || lang, updatedAt: new Date() })
+      .set({ status: 'ready', summary, summaryLang: lang, updatedAt: new Date() })
       .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
     // History event
