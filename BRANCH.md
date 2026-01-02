@@ -49,8 +49,6 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - `uploaded` → `processing` → `ready` | `failed`
 - Streaming:
   - `document_summary` emits stream events using the same SSE infra as other generations, with deterministic `streamId = document_<documentId>`.
-- Streaming:
-  - `document_summary` emits SSE stream events with deterministic `streamId = document_<documentId>` (same infra as other generations).
 
 ### Summary policy (MVP)
 - One summary per document, stored in DB:
@@ -86,7 +84,54 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 - [x] Implement API routes with auth + workspace scoping. ✅ (see commit: `e77b8ff`)
 - [x] Implement queue job `document_summary` and modification history events. ✅ (see commit: `e77b8ff`)
 - [x] Implement UI “Documents” block with i18n FR-first. ✅ (see commit: `4eee944`)
-- [ ] UAT (checklist avant tests)
+
+- [ ] Tool “documents” (pour le chat)
+  - [ ] Implémenter un tool configurable permettant à l’IA de récupérer:
+    - [ ] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
+    - [ ] un résumé (si dispo) et/ou le contenu complet (si autorisé)
+  - [ ] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
+  - [ ] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler)
+  - [ ] Partial UAT
+
+- [ ] Bloc “Documents” (UX)
+  - [ ] Retirer le bouton “Rafraîchir”
+  - [ ] Remplacer “Ajouter un document” par l’icône `circle-plus`
+  - [ ] Table des documents
+    - [ ] Ajouter 2 colonnes sans titre à gauche:
+      - [ ] colonne 1: icône `eye` (voir/masquer le résumé)
+      - [ ] colonne 2: icône `download` (télécharger)
+    - [ ] Retirer le titre “Actions” et ne garder que l’icône `trash-2` pour supprimer
+    - [ ] Élargir la colonne “Statut” pour éviter les changements de largeur lors des transitions
+  - [ ] Partial UAT
+
+- [ ] Amélioration “Organization”
+  - [ ] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)
+  - [ ] Remplacer les boutons par des icônes:
+    - [ ] `[id]`: Supprimer = `trash-2`
+    - [ ] `new`: IA = `brain`, Créer = `save`, Annuler = `trash-2`
+  - [ ] Sur `new`, rendre le bouton IA disponible si un document est uploadé; indisponible pendant l’upload
+  - [ ] Adapter le prompt:
+    - [ ] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
+    - [ ] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
+  - [ ] Partial UAT
+
+- [ ] Amélioration “Folder & Use case generation”
+  - [ ] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
+  - [ ] Déplacer `/home` vers `/dossier/new` et retirer la création “modal”
+  - [ ] Dans `dossier/new`
+    - [ ] Renommer “Générez vos cas d’usage” → “Créer un dossier”
+    - [ ] Même set d’icônes que `organization/new`: IA = `brain`, Créer = `save`, Annuler = `trash-2` (même disposition)
+    - [ ] Ajouter “Nom du dossier” (EditableInput multiligne)
+    - [ ] Transformer le contexte en EditableInput (markdown)
+    - [ ] Ajouter un champ numérique “nombre de cas d’usage” (défaut: 10) + adapter prompt
+    - [ ] Ajouter le bloc documents - permettre l'upload (sur un id dossier temporaire du coup)
+    - [ ] Si l’utilisateur annule ou quitte la vue, supprimer le “to be” folder + ses documents (avec altert pour éviter de quitter et supprimer par erreur)
+    - [ ] Les boutons IA/Créer sont disponibles uniquement si contexte renseigné OU document présent
+    - [ ] Si l’utilisateur a renseigné un nom, le prompt doit l’utiliser (correction/mise en forme OK)
+  - [ ] Déplacer la vue cas-usage vers `dossier/[id]` et afficher le contexte (entre le titre et le bloc documents)
+  - [ ] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
+  - [ ] Partial UAT
+- [ ] Full UAT (checklist avant tests)
   - [ ] UAT-1 (démarrage): en mode dev, l’app démarre et la page cible charge sans erreur.
   - [ ] UAT-2 (accès): en tant qu’utilisateur connecté, je vois un bloc “Documents” sur une page contexte (Entreprise / Dossier / Cas d’usage).
   - [ ] UAT-3 (upload): je peux sélectionner un fichier et l’uploader; il apparaît dans la liste avec un statut (ex: “En cours”).
@@ -96,6 +141,16 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-7 (garde-fous): un fichier trop volumineux ou non supporté affiche une erreur UX (sans casser la page).
   - [ ] UAT-8 (multi-docs): je peux ajouter 2+ documents sur le même contexte; la liste reste cohérente (tri, statuts).
   - [ ] UAT-9 (droits): un utilisateur sans droits sur le contexte ne voit pas les documents / ne peut pas télécharger.
+  - [ ] UAT-10 (UX table): la table n’a pas de “refresh”, le bouton add est `circle-plus`, et les colonnes (eye/download) sont à gauche; la colonne statut ne “saute” pas.
+  - [ ] UAT-11 (suppression): clic `trash-2` → confirmation → le document disparaît; le download/summary n’est plus accessible.
+  - [ ] UAT-12 (résumé plein large): l’affichage du résumé prend toute la largeur (pas de resize colonnes).
+  - [ ] UAT-13 (tool docs - disponibilité): en chat (org/folder/usecase), l’IA peut lister les documents + statuts et afficher un résumé si dispo.
+  - [ ] UAT-14 (tool docs - garde-fous): si aucun document n’est disponible, l’IA ne tente pas d’appeler le tool et explique qu’elle n’a pas de source doc.
+  - [ ] UAT-15 (tool docs - permissions): en rôle restreint, l’IA ne peut pas accéder au contenu complet; elle peut au mieux lister des métadonnées autorisées.
+  - [ ] UAT-16 (/home → dossier/new): la création de dossier ne passe plus par une modal; navigation OK; retour arrière/annulation ne laisse pas d’artefacts.
+  - [ ] UAT-17 (dossier futur): upload documents avant création du dossier → puis création OK; annulation → nettoyage du “to be” folder + documents.
+  - [ ] UAT-18 (organization/new): bouton IA activé seulement si document présent; désactivé pendant upload; icônes conformes.
+  - [ ] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress
