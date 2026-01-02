@@ -645,8 +645,11 @@ export class QueueManager {
       .replace('{{document_text}}', clipped);
 
     await write('status', { state: 'summarizing' });
+    // Align with other generations: use admin-configured default model unless job explicitly overrides it.
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = data.model || aiSettings.defaultModel || 'gpt-4.1-nano';
     const { content: streamedContent } = await executeWithToolsStream(userPrompt, {
-      model: data.model || 'gpt-4.1-nano',
+      model: selectedModel,
       streamId,
       promptId: 'document_summary',
       signal,
