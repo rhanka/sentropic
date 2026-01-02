@@ -76,8 +76,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 ## Plan / Todo
 - [x] Confirm storage approach (MinIO local vs Scaleway S3) and env variables to standardize.
 - [x] Add DB tables + migration + update `spec/DATA_MODEL.md`.
-- [ ] Implement storage adapter (S3-compatible) + size/mime validation.
-- [ ] Implement API routes with auth + workspace scoping.
+- [x] Implement storage adapter (S3-compatible) + size/mime validation. ✅ (see commit: `4952bae`)
+- [ ] Implement API routes with auth + workspace scoping. (after storage)
 - [ ] Implement queue job `document_summary` and modification history events.
 - [ ] Implement UI “Documents” block with i18n FR-first.
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
@@ -92,52 +92,11 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 
 ## Status
 - **Progress**: 2/6 commits completed
-- **Current**: start API routes (documents list/meta/upload/download)
-- **Next**: implement `api/src/routes/api/documents.ts` and mount it under `/api/v1/documents`
+- **Current**: implement S3-compatible storage adapter (MinIO dev + Scaleway S3 prod)
+- **Next**: implement `/api/v1/documents` routes (upload + list + meta + download)
 
 ### Notes (branch constraints)
 - This branch intentionally uses a **single migration file** for the DB change: `api/drizzle/0017_context_documents.sql`.
-| P4 | UX bug (public route) | `ui/src/routes/+layout.svelte` | Chat bubble visible on `/` even when user is not authenticated | ✅ Fixed (UI): only render `ChatWidget` when `$session.user` is present | `ui/src/routes/+layout.svelte` |
-
-### Current state
-- **P1/P2/P3**: ✅ stabilized locally (see Status / E2E local section above)
-
-### P2 — Context + hypotheses + proposed fixes (no changes yet)
-- **Observed (local repro)**:
-  - E2E run: `E2E_SPEC=tests/app.spec.ts make test-e2e`
-  - failing step: click `"Dossiers"` then `expect(page).toHaveURL('/dossiers')` (URL stays `/`)
-  - evidence file: `e2e/test-results/app-Application-principale-e762e--vers-les-différentes-pages-chromium/error-context.md`
-  - snapshot shows:
-    - header user button visible: `"E2E Admin"`
-    - but nav links are rendered with `/url: "#"` (disabled) for `"Dossiers"`, `"Organisations"`, `"Cas d'usage"`, `"Évaluation"`, `"Dashboard"`
-- **Why this points to UI (not data)**:
-  - DB is seeded (folders exist); the failure is before `/dossiers` loads.
-  - The link is literally `href="#"` in the DOM snapshot.
-- **Diff-based analysis (what changed vs `origin/main`)**
-  - **Important**: the *exact* “disable links” mechanism already exists on `origin/main`:
-    - `{@const isDisabled = isMenuDisabled(item.href)}`
-    - `href={isDisabled ? '#' : item.href}`
-    - and `isMenuDisabled()` reads `$isAuthenticated` / `$currentFolderId`
-  - Therefore, we **cannot** claim “we introduced that logic” in this branch.
-  - What we **did** change in this branch is the **Header structure + lifecycle around it**:
-    - added responsive/burger state (`showBurgerMenu`, `showCompactHeader`, `forceBurger`)
-    - added `onMount` / `onDestroy` with `matchMedia` listeners + global keydown + custom event listener
-    - changed i18n wiring in-header (direct `$_(...)` usage + `currentLocale` binding)
-    - moved `"Paramètres"` out of `navItems` (main nav) into the Identity menu
-  - `ui/src/lib/stores/session.ts` is **unchanged** in this branch vs `origin/main` (so not an auth logic regression).
-- **Root cause hypothesis (must be confirmed; analysis-only)**
-  - The Playwright snapshot proves a contradictory UI state:
-    - user button is visible (so `$isAuthenticated` is effectively true in at least one place),
-    - but nav links are still rendered as disabled (`href="#"`) as if `$isAuthenticated` was false at the time `isDisabled` was computed.
-  - That strongly suggests a **stale computation** of `isDisabled` (computed earlier, not recomputed later).
-  - The most suspicious pattern (present in main but potentially “exposed” by our Header refactor) is:
-    - computing `isDisabled` once via `{@const ... = isMenuDisabled(...)}` where the function reads `$store` values.
-    - If the nav block isn’t recreated after session becomes ready, `isDisabled` can remain stuck on the initial non-auth value.
-  - To be totally rigorous about “what changed”, the actionable statement is:
-    - **the branch refactor changed update/mount timing** of Header (extra state + listeners), and this now **exposes** a stale-disabled-nav behavior reproducible in E2E.
-    - We need to confirm by instrumenting or inspecting compiled output (not done yet, since we are not changing code in this phase).
-- **Fix proposals (UI)**:
-  - **Option 1 (preferred)**: inline the disabled expression so it depends directly on `$isAuthenticated` / `$currentFolderId` in the template (no helper function call).
   - **Option 2**: compute a reactive boolean map in script with `$:` that explicitly references `$isAuthenticated` / `$currentFolderId`, then use that value in the template.
   - **Option 3**: make `isMenuDisabled` accept plain booleans (e.g. `isMenuDisabled(href, $isAuthenticated, $currentFolderId)`) so the template references the stores directly.
 - **Validation plan**:
