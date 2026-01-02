@@ -57,6 +57,7 @@ documentsRouter.get('/', async (c) => {
       status: r.status,
       summary: r.summary,
       summary_lang: r.summaryLang,
+      job_id: r.jobId,
       created_at: r.createdAt,
       updated_at: r.updatedAt,
     })),
@@ -92,6 +93,7 @@ documentsRouter.get('/:id', async (c) => {
     status: doc.status,
     summary: doc.summary,
     summary_lang: doc.summaryLang,
+    job_id: doc.jobId,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
   });

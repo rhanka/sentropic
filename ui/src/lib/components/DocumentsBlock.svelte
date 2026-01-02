@@ -3,6 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
   import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '$lib/utils/documents';
   import { Trash2, Download, Eye, EyeOff } from '@lucide/svelte';
@@ -18,6 +19,8 @@
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let lastContextKey = '';
+  let sseKey = '';
+  let sseReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   const formatBytes = (bytes: number) => {
     if (!Number.isFinite(bytes) || bytes < 0) return '-';
@@ -92,12 +95,29 @@
   }
 
   onMount(() => {
+    // Subscribe to job updates: when a related job completes/fails, reload immediately.
+    sseKey = `documents:${Math.random().toString(36).slice(2)}`;
+    streamHub.setJobUpdates(sseKey, (ev: StreamHubEvent) => {
+      if (ev.type !== 'job_update') return;
+      const jobIds = new Set(items.map((d) => d.job_id).filter(Boolean) as string[]);
+      if (jobIds.size === 0) return;
+      if (!jobIds.has(ev.jobId)) return;
+
+      if (sseReloadTimer) clearTimeout(sseReloadTimer);
+      sseReloadTimer = setTimeout(() => {
+        void load({ silent: true });
+      }, 150);
+    });
     void load();
   });
 
   onDestroy(() => {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
+    if (sseReloadTimer) clearTimeout(sseReloadTimer);
+    sseReloadTimer = null;
+    if (sseKey) streamHub.delete(sseKey);
+    sseKey = '';
   });
 
   const onPickFile = async (e: Event) => {

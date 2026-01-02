@@ -434,6 +434,34 @@ export class QueueManager {
         WHERE id = ${jobId}
       `);
       await this.notifyJobEvent(jobId);
+
+      // Best-effort: also propagate failure to context_documents for document_summary jobs,
+      // so the UI can show `failed` without having to inspect job_queue.
+      if (jobType === 'document_summary') {
+        try {
+          const docId =
+            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
+              ? (jobData as { documentId: string }).documentId
+              : null;
+          const wsId =
+            typeof (jobData as { workspaceId?: unknown })?.workspaceId === 'string'
+              ? (jobData as { workspaceId: string }).workspaceId
+              : null;
+          if (docId && wsId) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            await db
+              .update(contextDocuments)
+              .set({
+                status: 'failed',
+                summary: this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000),
+                updatedAt: new Date(),
+              })
+              .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, wsId)));
+          }
+        } catch {
+          // ignore
+        }
+      }
     } finally {
       this.jobControllers.delete(jobId);
     }
