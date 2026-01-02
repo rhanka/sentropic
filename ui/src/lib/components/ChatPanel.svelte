@@ -43,6 +43,7 @@
   let errorMsg: string | null = null;
   let input = '';
   let listEl: HTMLDivElement | null = null;
+  let composerEl: HTMLTextAreaElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
   let scrollForcePending = false;
@@ -134,6 +135,11 @@
       e.preventDefault();
       void sendMessage();
     }
+  };
+
+  export const focusComposer = async () => {
+    await tick();
+    composerEl?.focus();
   };
 
   const scrollChatToBottomStable = async () => {
@@ -446,6 +452,7 @@
         class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none h-10"
         rows="1"
         bind:value={input}
+        bind:this={composerEl}
         placeholder="Écrire un message…"
         on:keydown={handleKeyDown}
       ></textarea>

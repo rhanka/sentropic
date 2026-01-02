@@ -51,10 +51,11 @@
 - [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
 - [ ] Choisir le modele GPT par prompt
 - [x] UI Fix streaming (change postgres prod + update stream for local mode)
-- [ ] Améliorer la vue cas d'usage
+- [x] Améliorer la vue cas d'usage
   - [x] Afficher le nom du dossier (branche: `feat/usecase-show-folder-organization`)
   - [x] Afficher l'entreprise (branche: `feat/usecase-show-folder-organization`)
   - [x] UI Fix post stream 'blink' (when message finished in chat) (branche: `feat/usecase-show-folder-organization`)
+- [ ] Remplacer Tavily par DataForSeo + Jina
 - [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
   - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
