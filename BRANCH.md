@@ -45,6 +45,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - `documentId`, `workspaceId`, `contextType`, `contextId`, `lang` (default FR), and storage pointer.
 - Status transitions on `context_documents`:
   - `uploaded` → `processing` → `ready` | `failed`
+- Streaming:
+  - `document_summary` emits SSE stream events with deterministic `streamId = document_<documentId>` (same infra as other generations).
 
 ### Summary policy (MVP)
 - One summary per document, stored in DB:

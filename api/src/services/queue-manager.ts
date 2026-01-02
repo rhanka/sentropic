@@ -19,10 +19,12 @@ import {
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
-import { callOpenAI } from './openai';
+import type { StreamEventType } from './openai';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { defaultPrompts } from '../config/default-prompts';
+import { executeWithToolsStream } from './tools';
+import { getNextSequence, writeStreamEvent } from './stream-service';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -407,7 +409,6 @@ export class QueueManager {
           await this.processDocumentSummary(
             jobData as DocumentSummaryJobData,
             jobId,
-            job.workspaceId ?? ADMIN_WORKSPACE_ID,
             controller.signal
           );
           break;
@@ -443,11 +444,7 @@ export class QueueManager {
             typeof (jobData as { documentId?: unknown })?.documentId === 'string'
               ? (jobData as { documentId: string }).documentId
               : null;
-          const wsId =
-            typeof (jobData as { workspaceId?: unknown })?.workspaceId === 'string'
-              ? (jobData as { workspaceId: string }).workspaceId
-              : null;
-          if (docId && wsId) {
+          if (docId) {
             const msg = error instanceof Error ? error.message : 'Unknown error';
             await db
               .update(contextDocuments)
@@ -456,7 +453,12 @@ export class QueueManager {
                 summary: this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000),
                 updatedAt: new Date(),
               })
-              .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, wsId)));
+              .where(eq(contextDocuments.id, docId));
+
+            // Best-effort: also stream an error for observers (streamId derived from documentId).
+            const streamId = `document_${docId}`;
+            const seq = await getNextSequence(streamId);
+            await writeStreamEvent(streamId, 'error', { message: msg }, seq);
           }
         } catch {
           // ignore
@@ -566,18 +568,27 @@ export class QueueManager {
   private async processDocumentSummary(
     data: DocumentSummaryJobData,
     jobId: string,
-    workspaceId: string,
     signal?: AbortSignal
   ): Promise<void> {
     const { documentId } = data;
     const lang = (data.lang || 'fr').trim() || 'fr';
+    const streamId = `document_${documentId}`;
+
+    const write = async (eventType: StreamEventType, payload: unknown) => {
+      const seq = await getNextSequence(streamId);
+      await writeStreamEvent(streamId, eventType, payload, seq);
+    };
+
+    // Ensure a deterministic "started" exists for monitors and any UI observers.
+    await write('status', { state: 'started', jobType: 'document_summary', documentId });
 
     const [doc] = await db
       .select()
       .from(contextDocuments)
-      .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)))
+      .where(eq(contextDocuments.id, documentId))
       .limit(1);
     if (!doc) throw new Error('Document not found');
+    const workspaceId = doc.workspaceId;
 
     await db
       .update(contextDocuments)
@@ -590,6 +601,7 @@ export class QueueManager {
     let extractedMetaTitle: string | undefined;
     let extractedMetaPages: number | undefined;
     try {
+      await write('status', { state: 'extracting' });
       const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
       text = extracted.text;
       extractedMetaTitle = extracted.metadata.title;
@@ -632,22 +644,23 @@ export class QueueManager {
       .replace('{{nb_mots}}', nbWords)
       .replace('{{document_text}}', clipped);
 
-    const completion = await callOpenAI({
-      messages: [
-        { role: 'user', content: userPrompt },
-      ],
-      model: data.model,
+    await write('status', { state: 'summarizing' });
+    const { content: streamedContent } = await executeWithToolsStream(userPrompt, {
+      model: data.model || 'gpt-4.1-nano',
+      streamId,
+      promptId: 'document_summary',
       signal,
     });
 
-    const summaryRaw = completion.choices?.[0]?.message?.content ?? '';
-    const summary = this.sanitizePgText(typeof summaryRaw === 'string' ? summaryRaw : String(summaryRaw ?? '')).trim();
+    const summary = this.sanitizePgText(streamedContent).trim();
     if (!summary) throw new Error('Empty summary');
 
     await db
       .update(contextDocuments)
       .set({ status: 'ready', summary, summaryLang: lang, updatedAt: new Date() })
       .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+
+    await write('done', { state: 'done' });
 
     // History event
     let seq = await this.getNextModificationSequence(doc.contextType, doc.contextId);
