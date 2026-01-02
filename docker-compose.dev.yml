@@ -8,6 +8,12 @@ services:
       # Chat tracing (dev: enabled by default)
       - CHAT_TRACE_ENABLED=${CHAT_TRACE_ENABLED:-true}
       - CHAT_TRACE_RETENTION_DAYS=${CHAT_TRACE_RETENTION_DAYS:-7}
+      # S3-compatible storage (dev): MinIO
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_REGION=${S3_REGION:-fr-par-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-top-ai-ideas-dev}
+      - SCW_ACCESS_KEY=${SCW_ACCESS_KEY:-minioadmin}
+      - SCW_SECRET_KEY=${SCW_SECRET_KEY:-minioadmin}
 
   ui:
     volumes:
@@ -20,6 +26,32 @@ services:
     volumes:
       - ./data/backup:/backups
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
+        echo "waiting for minio..." && sleep 1;
+      done &&
+      mc mb --ignore-existing local/${S3_BUCKET_NAME:-top-ai-ideas-dev} &&
+      mc anonymous set none local/${S3_BUCKET_NAME:-top-ai-ideas-dev} || true
+    restart: "no"
+
 volumes:
   api_node_modules:
   ui_node_modules:
+  minio_data:

@@ -8,7 +8,7 @@ export type S3ObjectPointer = {
 
 export function getS3Client(): S3Client {
   // Scaleway S3 and MinIO are S3-compatible. We support custom endpoint for local/dev.
-  const region = env.S3_REGION || 'fr-par';
+  const region = env.S3_REGION || 'fr-par-1';
 
   const accessKeyId = env.SCW_ACCESS_KEY;
   const secretAccessKey = env.SCW_SECRET_KEY;
