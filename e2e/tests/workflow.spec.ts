@@ -80,8 +80,8 @@ test.describe('Workflow métier complet', () => {
     }
     
     // Vérifier le graphique scatter plot (nouvelle structure)
-    const scatterPlotContainer = page.locator('.report-scatter-plot-container, canvas, svg');
-    await expect(scatterPlotContainer.first()).toBeVisible({ timeout: 10000 });
+    const scatterPlotContainer = page.locator('.report-scatter-plot-container');
+    await expect(scatterPlotContainer).toBeVisible({ timeout: 10000 });
   });
 
   test('devrait gérer la génération asynchrone des cas d\'usage', async ({ page }) => {

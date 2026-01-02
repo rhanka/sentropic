@@ -40,12 +40,19 @@ test.describe('Application principale', () => {
       'Cas d\'usage',
       'Évaluation',
       'Dashboard',
-      'Paramètres'
     ];
     
     for (const item of navItems) {
       await expect(page.getByRole('link', { name: item })).toBeVisible();
     }
+
+    // "Paramètres" est désormais sous le menu Identité (pas dans la nav principale)
+    const identityButton = page.getByRole('button', { name: /E2E Admin/i });
+    await expect(identityButton).toBeVisible();
+    await identityButton.click();
+
+    // Le lien Paramètres doit être présent dans ce menu
+    await expect(page.getByRole('link', { name: 'Paramètres' })).toBeVisible();
   });
 
   test('devrait changer de langue', async ({ page }) => {

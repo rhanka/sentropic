@@ -38,8 +38,8 @@ test.describe('Dashboard', () => {
 
   test('devrait afficher le graphique scatter plot', async ({ page }) => {
     // Le scatter plot est maintenant dans un conteneur avec classe report-scatter-plot-container
-    const scatterPlotContainer = page.locator('.report-scatter-plot-container, canvas, svg');
-    await expect(scatterPlotContainer.first()).toBeVisible({ timeout: 10000 });
+    const scatterPlotContainer = page.locator('.report-scatter-plot-container');
+    await expect(scatterPlotContainer).toBeVisible({ timeout: 10000 });
   });
 
   test.skip('devrait changer de dossier et mettre à jour les données', async ({ page }) => {
