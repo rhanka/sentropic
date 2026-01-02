@@ -284,7 +284,6 @@ Règle de classification (obligatoire):
 - [succès] = cas réalisé / résultat mesuré / déployé sur des projets
 - [capacité] = compétence, outil, standard, certification ou programme existant (réutilisable)
 - [opportunité] = intention, ambition, plan, cible ou piste non démontrée par un cas
-- Ambigu: [inconnu] + une question de clarification
 
 Limites (en mots, hors titres):
 - Résumé: 100–200 mots
@@ -296,10 +295,13 @@ Format attendu:
 - Titre: {{doc_title}} (si “-” => “Non précisé”)
 - Taille: {{nb_pages}} pages ; {{nb_mots}} mots (sinon “Non précisé”)
 - Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
-- Sommaire (titres niveau 1): 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”)
 
 ## Résumé
 (100-200 mots)
+
+## Sommaire
+Titres niveau 1: 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”
+
 
 ## Éléments exploitables pour cas d’usage
 - [besoin] …
@@ -311,11 +313,12 @@ Format attendu:
 - [capacité] …
 - [opportunité] …
 
-## Contraintes / inconnues
+## Contraintes / dépendances (faits)
 - [contrainte] …
-- [inconnu] …
 - [dépendance] …
-- [inconnu] Question: …
+
+## Autres informations
+- [information] informations supplémentaires, contextuelles, etc. …
 
 Texte du document:
 ---

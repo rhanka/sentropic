@@ -41,10 +41,14 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 
 ### Queue integration
 - Reuse `QueueManager` and `job_queue` with a new `type='document_summary'`.
-- Job payload includes:
-  - `documentId`, `workspaceId`, `contextType`, `contextId`, `lang` (default FR), and storage pointer.
+- Job payload includes (MVP):
+  - `documentId`, `lang` (default FR) and optional `model`.
+- Workspace scoping:
+  - `workspaceId` is derived from `context_documents.workspace_id` (source of truth), not from the job payload.
 - Status transitions on `context_documents`:
   - `uploaded` → `processing` → `ready` | `failed`
+- Streaming:
+  - `document_summary` emits stream events using the same SSE infra as other generations, with deterministic `streamId = document_<documentId>`.
 - Streaming:
   - `document_summary` emits SSE stream events with deterministic `streamId = document_<documentId>` (same infra as other generations).
 

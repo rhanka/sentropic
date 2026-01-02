@@ -70,6 +70,35 @@ function extractHeadingsH1FromAst(ast: unknown): string[] {
   return out;
 }
 
+function extractPdfPageCountFromAst(ast: unknown): number | undefined {
+  if (!isRecord(ast)) return undefined;
+  if (ast.type !== 'pdf') return undefined;
+  const content = ast.content;
+  if (!Array.isArray(content)) return undefined;
+
+  // officeparser PDF parser commonly returns `content` as an array of page nodes, with metadata.pageNumber.
+  const pageNums = new Set<number>();
+  for (const node of content) {
+    if (!isRecord(node)) continue;
+    const md = node.metadata;
+    if (isRecord(md)) {
+      const pn = md.pageNumber;
+      if (typeof pn === 'number' && Number.isFinite(pn) && pn > 0) pageNums.add(pn);
+    }
+  }
+  if (pageNums.size > 0) {
+    const max = Math.max(...pageNums);
+    return max;
+  }
+
+  // Fallback: count top-level nodes if they look like pages.
+  const pageLike = content.filter((n) => isRecord(n) && n.type === 'page').length;
+  if (pageLike > 0) {
+    return pageLike;
+  }
+  return undefined;
+}
+
 export async function extractDocumentInfoFromDocument(params: {
   bytes: Uint8Array;
   filename?: string | null;
@@ -113,6 +142,12 @@ export async function extractDocumentInfoFromDocument(params: {
     metadata.pages = coerceNumber(m.pages);
     metadata.created = coerceDateIso(m.created);
     metadata.modified = coerceDateIso(m.modified);
+  }
+
+  // Best-effort PDF pages fallback: if officeparser didn't populate metadata.pages, infer from AST.
+  if (metadata.pages === undefined) {
+    const inferredPages = extractPdfPageCountFromAst(ast);
+    if (typeof inferredPages === 'number' && inferredPages > 0) metadata.pages = inferredPages;
   }
 
   const headingsH1 = extractHeadingsH1FromAst(ast);

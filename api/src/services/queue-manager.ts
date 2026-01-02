@@ -633,8 +633,11 @@ export class QueueManager {
     const nbPages =
       typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
     const nbWords = (() => {
-      const words = text.split(/\s+/).filter(Boolean).length;
-      return Number.isFinite(words) && words > 0 ? String(words) : 'Non précisé';
+      // Use full extracted text when available; fallback to clipped (aligned with what we send to the model).
+      const fromFull = text.split(/\s+/).filter(Boolean).length;
+      if (Number.isFinite(fromFull) && fromFull > 0) return String(fromFull);
+      const fromClipped = clipped.split(/\s+/).filter(Boolean).length;
+      return Number.isFinite(fromClipped) && fromClipped > 0 ? String(fromClipped) : 'Non précisé';
     })();
 
     const userPrompt = template
@@ -644,11 +647,15 @@ export class QueueManager {
       .replace('{{nb_mots}}', nbWords)
       .replace('{{document_text}}', clipped);
 
+    // Reinforce: provide deterministic metadata and require copying them verbatim in the "Fiche document" section.
+    const providedMetaBlock = `\n\nDONNÉES FOURNIES (à recopier telles quelles dans "## Fiche document (réexamen)")\n- doc_title: ${docTitle}\n- nb_pages: ${nbPages}\n- nb_mots: ${nbWords}\n\nRègle stricte:\n- Dans la section "## Fiche document (réexamen)", le champ **Titre** doit être exactement doc_title.\n- Dans la section "## Fiche document (réexamen)", le champ **Taille** doit être exactement "${nbPages} pages ; ${nbWords} mots" (et uniquement "Non précisé" si nb_pages/nb_mots valent "Non précisé").\n`;
+    const finalPrompt = userPrompt + providedMetaBlock;
+
     await write('status', { state: 'summarizing' });
     // Align with other generations: use admin-configured default model unless job explicitly overrides it.
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = data.model || aiSettings.defaultModel || 'gpt-4.1-nano';
-    const { content: streamedContent } = await executeWithToolsStream(userPrompt, {
+    const { content: streamedContent } = await executeWithToolsStream(finalPrompt, {
       model: selectedModel,
       streamId,
       promptId: 'document_summary',
