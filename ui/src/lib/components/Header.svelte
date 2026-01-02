@@ -64,20 +64,27 @@
     return p === '/parametres' || p.startsWith('/parametres/') || p === '/auth/devices' || p.startsWith('/auth/devices/');
   });
 
-  // Logique pour déterminer si les menus doivent être grisés
-  const isMenuDisabled = (href: string) => {
+  // Logique pour déterminer si les menus doivent être grisés (réactif)
+  const computeIsMenuDisabled = (href: string, authed: boolean, folderId: string | null) => {
     // Si l'utilisateur n'est pas authentifié, griser tous les menus sauf l'accueil (/)
-    if (!$isAuthenticated) {
-      return href !== '/';
-    }
-    
+    if (!authed) return href !== '/';
+
     // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
-    if (!$currentFolderId) {
-      return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';
-    }
-    
+    if (!folderId) return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';
+
     // Si un dossier est sélectionné, ne pas griser (même s'il n'y a pas encore de cas d'usage)
     return false;
+  };
+
+  let navDisabledByHref: Record<string, boolean> = {};
+  $: navDisabledByHref = Object.fromEntries(
+    navItems.map((item) => [item.href, computeIsMenuDisabled(item.href, $isAuthenticated, $currentFolderId)])
+  );
+
+  const onClickNavItem = (e: MouseEvent, href: string) => {
+    if (!navDisabledByHref[href]) return;
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const onLocaleChange = (event: Event) => {
@@ -130,12 +137,14 @@
     <!-- Desktop nav (hidden in compact mode) -->
     <nav class:hidden={showCompactHeader} class="flex flex-1 flex-wrap items-center gap-4 text-sm font-medium">
       {#each navItems as item}
-        {@const isDisabled = isMenuDisabled(item.href)}
+        {@const isDisabled = !!navDisabledByHref[item.href]}
         <a
-          href={isDisabled ? '#' : item.href}
+          href={item.href}
+          aria-disabled={isDisabled}
+          tabindex={isDisabled ? -1 : 0}
           class:active-link={$currentPath === item.href}
           class="rounded px-2 py-1 transition {isDisabled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-100'}"
-          on:click={isDisabled ? (e) => e.preventDefault() : undefined}
+          on:click={(e) => onClickNavItem(e, item.href)}
           >{$_(item.label)}</a
         >
       {/each}
@@ -238,29 +247,34 @@
     transition:fly={{ x: -320, duration: 180 }}
   >
     <div class="px-4 h-14 flex items-center justify-start border-b border-slate-200">
-      <button
-        class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
-        on:click={closeAllMenus}
-        aria-label="Close menu"
-        type="button"
-      >
-        <X class="h-5 w-5" aria-hidden="true" />
-      </button>
-    </div>
+        <button
+          class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
+          on:click={closeAllMenus}
+          aria-label="Close menu"
+          type="button"
+        >
+          <X class="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
 
     <div class="p-3 space-y-4">
-      <nav class="grid gap-1 text-sm font-medium">
-        {#each navItems as item}
-          {@const isDisabled = isMenuDisabled(item.href)}
-          <a
-            href={isDisabled ? '#' : item.href}
-            class:active-link={$currentPath === item.href}
+        <nav class="grid gap-1 text-sm font-medium">
+          {#each navItems as item}
+            {@const isDisabled = !!navDisabledByHref[item.href]}
+            <a
+              href={item.href}
+              aria-disabled={isDisabled}
+              tabindex={isDisabled ? -1 : 0}
+              class:active-link={$currentPath === item.href}
             class="rounded px-3 py-2 transition {isDisabled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-100'}"
-            on:click={isDisabled ? (e) => e.preventDefault() : () => closeAllMenus()}
+              on:click={(e) => {
+                onClickNavItem(e, item.href);
+                if (!navDisabledByHref[item.href]) closeAllMenus();
+              }}
             >{$_(item.label)}</a
-          >
-        {/each}
-      </nav>
+            >
+          {/each}
+        </nav>
 
       <!-- Language accordion -->
       <div class="border-t border-slate-200 pt-3">
@@ -298,7 +312,7 @@
             </div>
           </div>
         {/if}
-      </div>
+        </div>
 
       <!-- Identity (bottom of menu content, not bottom of screen) -->
       <div class="border-t border-slate-200 pt-3">
@@ -310,15 +324,15 @@
             type="button"
             class:active-link={$isIdentityRoute}
           >
-            <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
-              {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
-            </div>
-            <div class="min-w-0 flex-1 text-left">
-              <div class="truncate text-sm font-medium text-slate-800">
-                {$session.user.displayName || $session.user.email || 'User'}
+              <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
+                {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
               </div>
-              <div class="truncate text-xs text-slate-500">{$session.user.email}</div>
-            </div>
+            <div class="min-w-0 flex-1 text-left">
+                <div class="truncate text-sm font-medium text-slate-800">
+                  {$session.user.displayName || $session.user.email || 'User'}
+                </div>
+                <div class="truncate text-xs text-slate-500">{$session.user.email}</div>
+              </div>
             <ChevronDown
               class="h-4 w-4 text-slate-400 transition-transform {showIdentityAccordion ? 'rotate-180' : ''}"
               aria-hidden="true"
