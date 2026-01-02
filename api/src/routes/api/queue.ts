@@ -160,6 +160,7 @@ queueRouter.get('/stats', async (c) => {
         organization_enrich: jobs.filter(j => j.type === 'organization_enrich').length,
         usecase_list: jobs.filter(j => j.type === 'usecase_list').length,
         usecase_detail: jobs.filter(j => j.type === 'usecase_detail').length,
+        document_summary: jobs.filter(j => j.type === 'document_summary').length,
       }
     };
     

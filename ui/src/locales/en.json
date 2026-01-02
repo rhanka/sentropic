@@ -10,5 +10,43 @@
     "data": "Data",
     "settings": "Settings",
     "admin": "Admin"
+  },
+  "documents": {
+    "title": "Documents",
+    "subtitle": "Attach documents to the context. A summary is generated automatically.",
+    "refresh": "Refresh",
+    "loading": "Loading…",
+    "empty": "No documents yet.",
+    "table": {
+      "name": "Name",
+      "size": "Size",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "upload": {
+      "cta": "Add document",
+      "loading": "Uploading…",
+      "success": "Document uploaded. Summary will be generated."
+    },
+    "action": {
+      "download": "Download",
+      "showSummary": "Show summary",
+      "hideSummary": "Hide summary"
+    },
+    "summary": {
+      "empty": "No summary available."
+    },
+    "status": {
+      "uploaded": "Uploaded",
+      "processing": "Processing",
+      "ready": "Ready",
+      "failed": "Failed",
+      "unknown": "Unknown"
+    },
+    "delete": {
+      "cta": "Delete",
+      "confirm": "Delete this document?",
+      "success": "Document deleted."
+    }
   }
 }

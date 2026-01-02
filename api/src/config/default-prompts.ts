@@ -266,4 +266,27 @@ Spécification de chaque section:
 `,
     variables: ['folder_description', 'organization_info', 'top_cas', 'use_cases']
   }
+  ,
+  {
+    id: 'document_summary',
+    name: 'Résumé de document',
+    description: 'Prompt pour résumer un document attaché à un contexte (Lot B)',
+    content: `Tu es un assistant qui résume des documents métiers.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Réponse concise et structurée (markdown).
+- N'invente pas: si le texte est insuffisant, dis-le clairement.
+
+Format attendu:
+(1) Résumé (5-10 lignes)
+(2) Points clés (liste à puces)
+(3) Risques / points d'attention (liste à puces, si applicable)
+
+Texte du document:
+---
+{{document_text}}
+---`,
+    variables: ['lang', 'document_text']
+  }
 ];

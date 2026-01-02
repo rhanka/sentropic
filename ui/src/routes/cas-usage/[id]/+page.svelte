@@ -12,6 +12,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { Printer, Trash2 } from '@lucide/svelte';
+  import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let useCase: any = undefined;
   let error = '';
@@ -225,5 +226,7 @@
             </button>
       </svelte:fragment>
     </UseCaseDetail>
+
+    <DocumentsBlock contextType="usecase" contextId={useCase.id} />
   {/if}
 </section>

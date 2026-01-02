@@ -76,24 +76,34 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 ## Plan / Todo
 - [x] Confirm storage approach (MinIO local vs Scaleway S3) and env variables to standardize.
 - [x] Add DB tables + migration + update `spec/DATA_MODEL.md`.
-- [x] Implement storage adapter (S3-compatible) + size/mime validation. ✅ (see commit: `4952bae`)
-- [ ] Implement API routes with auth + workspace scoping. (after storage)
-- [ ] Implement queue job `document_summary` and modification history events.
-- [ ] Implement UI “Documents” block with i18n FR-first.
+- [x] Implement storage adapter (S3-compatible) + size/mime validation. ✅ (see commits: `143cf25`, `7430b69`)
+- [x] Implement API routes with auth + workspace scoping. ✅ (see commit: `e77b8ff`)
+- [x] Implement queue job `document_summary` and modification history events. ✅ (see commit: `e77b8ff`)
+- [x] Implement UI “Documents” block with i18n FR-first. ✅ (see commit: `4eee944`)
+- [ ] UAT (checklist avant tests)
+  - [ ] UAT-1 (démarrage): en mode dev, l’app démarre et la page cible charge sans erreur.
+  - [ ] UAT-2 (accès): en tant qu’utilisateur connecté, je vois un bloc “Documents” sur une page contexte (Entreprise / Dossier / Cas d’usage).
+  - [ ] UAT-3 (upload): je peux sélectionner un fichier et l’uploader; il apparaît dans la liste avec un statut (ex: “En cours”).
+  - [ ] UAT-4 (statut): le statut évolue automatiquement jusqu’à “Prêt” (ou “Échec” avec un message clair).
+  - [ ] UAT-5 (résumé): quand “Prêt”, je vois un résumé lisible (FR) directement dans le bloc.
+  - [ ] UAT-6 (download): je peux télécharger le document et je récupère bien le même fichier.
+  - [ ] UAT-7 (garde-fous): un fichier trop volumineux ou non supporté affiche une erreur UX (sans casser la page).
+  - [ ] UAT-8 (multi-docs): je peux ajouter 2+ documents sur le même contexte; la liste reste cohérente (tri, statuts).
+  - [ ] UAT-9 (droits): un utilisateur sans droits sur le contexte ne voit pas les documents / ne peut pas télécharger.
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress
 - [x] **Commit 1** (`7a8eae5`): docs branch setup (this file) + design skeleton
-- [x] **Commit 2** (`5ba4c6d`): DB schema + **single migration** + `spec/DATA_MODEL.md` update
-- [ ] **Commit 3**: storage adapter + API upload/list/get/download
-- [ ] **Commit 4**: queue job `document_summary` + history events
-- [ ] **Commit 5**: UI documents block
+- [x] **Commit 2** (`68e0150`): DB schema + **single migration** + `spec/DATA_MODEL.md` update
+- [x] **Commit 3** (`143cf25`, `7430b69`): storage adapter + MinIO wiring (dev + test)
+- [x] **Commit 4** (`e77b8ff`): API documents routes + queue job `document_summary` + history events
+- [x] **Commit 5** (`4eee944`): UI documents block
 - [ ] **Commit 6**: tests + hardening
 
 ## Status
-- **Progress**: 2/6 commits completed
-- **Current**: implement S3-compatible storage adapter (MinIO dev + Scaleway S3 prod)
-- **Next**: implement `/api/v1/documents` routes (upload + list + meta + download)
+- **Progress**: 5/6 commits completed
+- **Current**: tests + hardening
+- **Next**: tests + hardening
 
 ### Notes (branch constraints)
 - This branch intentionally uses a **single migration file** for the DB change: `api/drizzle/0017_context_documents.sql`.

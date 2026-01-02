@@ -18,6 +18,7 @@
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Trash2, Star, X, Minus, Loader2 } from '@lucide/svelte';
+  import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -307,6 +308,9 @@
         {/if}
       </div>
     </div>
+
+    <!-- Documents du dossier (vue dossier = /cas-usage) -->
+    <DocumentsBlock contextType="folder" contextId={currentFolder.id} />
   {:else}
     <h1 class="text-3xl font-semibold">Cas d'usage</h1>
   {/if}

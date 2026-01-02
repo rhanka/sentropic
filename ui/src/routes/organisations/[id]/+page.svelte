@@ -8,6 +8,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
   import References from '$lib/components/References.svelte';
+  import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let organization: Organization | null = null;
   let error = '';
@@ -289,6 +290,9 @@
         />
       </div>
     </div>
+
+    <!-- Documents (en bas de page) -->
+    <DocumentsBlock contextType="organization" contextId={organization.id} />
   </div>
 {:else if !error}
   <div class="text-center py-12">
