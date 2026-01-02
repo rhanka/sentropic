@@ -6,7 +6,11 @@
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
   import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '$lib/utils/documents';
-  import { Trash2, Download, Eye, EyeOff } from '@lucide/svelte';
+  import { Trash2, Download, Eye, EyeOff, CirclePlus, Loader2 } from '@lucide/svelte';
+
+  const iconButtonPrimary = 'rounded p-1 transition text-primary hover:bg-slate-100';
+  const iconButtonWarning = 'rounded p-1 transition text-warning hover:bg-slate-100';
+  const iconButtonDisabled = 'rounded p-1 text-slate-300 cursor-not-allowed';
 
   export let contextType: DocumentContextType;
   export let contextId: string;
@@ -172,22 +176,27 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <button
-        class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-        on:click={() => load()}
-        disabled={loading || uploading}
+      <label
+        class={"inline-flex items-center justify-center " +
+          iconButtonPrimary +
+          " cursor-pointer " +
+          (uploading ? 'opacity-50 pointer-events-none' : '')}
+        title={$_('documents.upload.cta')}
+        aria-label={$_('documents.upload.cta')}
       >
-        {$_('documents.refresh')}
-      </button>
-
-      <label class="rounded bg-primary px-3 py-2 text-sm text-white hover:opacity-90 cursor-pointer disabled:opacity-50">
         <input
           class="hidden"
           type="file"
           on:change={onPickFile}
           disabled={uploading}
+          accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
         />
-        {uploading ? $_('documents.upload.loading') : $_('documents.upload.cta')}
+        {#if uploading}
+          <Loader2 class="w-5 h-5 animate-spin" />
+        {:else}
+          <CirclePlus class="w-5 h-5" />
+        {/if}
+        <span class="sr-only">{$_('documents.upload.cta')}</span>
       </label>
     </div>
   </div>
@@ -208,70 +217,83 @@
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-slate-500">
+              <th class="py-2 pr-2 w-10"><span class="sr-only">Résumé</span></th>
+              <th class="py-2 pr-2 w-10"><span class="sr-only">Télécharger</span></th>
               <th class="py-2 pr-4">{$_('documents.table.name')}</th>
-              <th class="py-2 pr-4">{$_('documents.table.size')}</th>
-              <th class="py-2 pr-4">{$_('documents.table.status')}</th>
-              <th class="py-2">{$_('documents.table.actions')}</th>
+              <th class="py-2 pr-4 text-center">{$_('documents.table.size')}</th>
+              <th class="py-2 pr-4 w-36 whitespace-nowrap text-center">{$_('documents.table.status')}</th>
+              <th class="py-2 w-10"><span class="sr-only">{$_('documents.table.actions')}</span></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             {#each items as doc (doc.id)}
               <tr class="align-top">
+                <td class="py-3 pr-2">
+                  {#if doc.status === 'ready'}
+                    <button
+                      class={iconButtonPrimary}
+                      on:click={() => toggleSummary(doc.id)}
+                      title={expandedSummaryById[doc.id]
+                        ? $_('documents.action.hideSummary')
+                        : $_('documents.action.showSummary')}
+                      aria-label={expandedSummaryById[doc.id]
+                        ? $_('documents.action.hideSummary')
+                        : $_('documents.action.showSummary')}
+                    >
+                      {#if expandedSummaryById[doc.id]}
+                        <EyeOff class="w-4 h-4" />
+                      {:else}
+                        <Eye class="w-4 h-4" />
+                      {/if}
+                    </button>
+                  {:else}
+                    <button
+                      class={iconButtonDisabled}
+                      disabled
+                      title={$_(statusLabelKey(doc.status))}
+                      aria-label={$_(statusLabelKey(doc.status))}
+                    >
+                      <Eye class="w-4 h-4" />
+                    </button>
+                  {/if}
+                </td>
+
+                <td class="py-3 pr-2">
+                  <button
+                    class={iconButtonPrimary}
+                    on:click={() => download(doc.id)}
+                    title={$_('documents.action.download')}
+                    aria-label={$_('documents.action.download')}
+                  >
+                    <Download class="w-4 h-4" />
+                  </button>
+                </td>
+
                 <td class="py-3 pr-4">
                   <div class="font-medium text-slate-900">{doc.filename}</div>
                   <div class="text-xs text-slate-500">{doc.mime_type}</div>
                 </td>
-                <td class="py-3 pr-4 text-slate-700">{formatBytes(doc.size_bytes)}</td>
-                <td class="py-3 pr-4">
+                <td class="py-3 pr-4 text-slate-700 text-center">{formatBytes(doc.size_bytes)}</td>
+                <td class="py-3 pr-4 whitespace-nowrap text-center">
                   <span class={"inline-flex items-center rounded-full border px-2 py-1 text-xs " + statusPillClass(doc.status)}>
                     {$_(statusLabelKey(doc.status))}
                   </span>
                 </td>
                 <td class="py-3">
-                  <div class="flex flex-wrap items-center gap-2">
-                    {#if doc.status === 'ready'}
-                      <button
-                        class="text-slate-600 hover:text-slate-900"
-                        on:click={() => toggleSummary(doc.id)}
-                        title={expandedSummaryById[doc.id]
-                          ? $_('documents.action.hideSummary')
-                          : $_('documents.action.showSummary')}
-                        aria-label={expandedSummaryById[doc.id]
-                          ? $_('documents.action.hideSummary')
-                          : $_('documents.action.showSummary')}
-                      >
-                        {#if expandedSummaryById[doc.id]}
-                          <EyeOff class="w-4 h-4" />
-                        {:else}
-                          <Eye class="w-4 h-4" />
-                        {/if}
-                      </button>
-                    {/if}
-
-                    <button
-                      class="text-slate-600 hover:text-slate-900"
-                      on:click={() => download(doc.id)}
-                      title={$_('documents.action.download')}
-                      aria-label={$_('documents.action.download')}
-                    >
-                      <Download class="w-4 h-4" />
-                    </button>
-
-                    <button
-                      class="text-red-600 hover:text-red-700"
-                      on:click={() => remove(doc)}
-                      title={$_('documents.delete.cta')}
-                      aria-label={$_('documents.delete.cta')}
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  </div>
+                  <button
+                    class={iconButtonWarning}
+                    on:click={() => remove(doc)}
+                    title={$_('documents.delete.cta')}
+                    aria-label={$_('documents.delete.cta')}
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
                 </td>
               </tr>
 
               {#if expandedSummaryById[doc.id]}
                 <tr class="align-top">
-                  <td colspan="4" class="pb-3">
+                  <td colspan="6" class="pb-3">
                     <div class="rounded bg-slate-50 border border-slate-200 p-3 text-sm text-slate-800 whitespace-pre-wrap">
                       {doc.summary || $_('documents.summary.empty')}
                     </div>

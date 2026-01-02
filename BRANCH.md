@@ -85,24 +85,23 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 - [x] Implement queue job `document_summary` and modification history events. ✅ (see commit: `e77b8ff`)
 - [x] Implement UI “Documents” block with i18n FR-first. ✅ (see commit: `4eee944`)
 
-- [ ] Tool “documents” (pour le chat)
-  - [ ] Implémenter un tool configurable permettant à l’IA de récupérer:
-    - [ ] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
-    - [ ] un résumé (si dispo) et/ou le contenu complet (si autorisé)
-  - [ ] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
-  - [ ] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler)
-  - [ ] Partial UAT
-
 - [ ] Bloc “Documents” (UX)
-  - [ ] Retirer le bouton “Rafraîchir”
-  - [ ] Remplacer “Ajouter un document” par l’icône `circle-plus`
-  - [ ] Table des documents
-    - [ ] Ajouter 2 colonnes sans titre à gauche:
-      - [ ] colonne 1: icône `eye` (voir/masquer le résumé)
-      - [ ] colonne 2: icône `download` (télécharger)
-    - [ ] Retirer le titre “Actions” et ne garder que l’icône `trash-2` pour supprimer
-    - [ ] Élargir la colonne “Statut” pour éviter les changements de largeur lors des transitions
-  - [ ] Partial UAT
+  - [x] Retirer le bouton “Rafraîchir”
+  - [x] Remplacer “Ajouter un document” par l’icône `circle-plus`
+  - [x] Table des documents
+    - [x] Ajouter 2 colonnes sans titre à gauche:
+      - [x] colonne 1: icône `eye` (voir/masquer le résumé)
+      - [x] colonne 2: icône `download` (télécharger)
+    - [x] Retirer le titre “Actions” et ne garder que l’icône `trash-2` pour supprimer
+    - [x] Élargir la colonne “Statut” pour éviter les changements de largeur lors des transitions
+  - [x] Partial UAT
+
+- [ ] Tool “documents” (pour le chat)
+  - [ ] Implémenter un (et UN SEUL) tool configurable permettant à l’IA de récupérer:
+    - [ ] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
+    - [ ] un résumé (si dispo) et/ou le contenu complet (borné; selon autorisation)
+  - [ ] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
+  - [ ] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler) — tool non exposé si aucun document
 
 - [ ] Amélioration “Organization”
   - [ ] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)
@@ -141,9 +140,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-7 (garde-fous): un fichier trop volumineux ou non supporté affiche une erreur UX (sans casser la page).
   - [ ] UAT-8 (multi-docs): je peux ajouter 2+ documents sur le même contexte; la liste reste cohérente (tri, statuts).
   - [ ] UAT-9 (droits): un utilisateur sans droits sur le contexte ne voit pas les documents / ne peut pas télécharger.
-  - [ ] UAT-10 (UX table): la table n’a pas de “refresh”, le bouton add est `circle-plus`, et les colonnes (eye/download) sont à gauche; la colonne statut ne “saute” pas.
-  - [ ] UAT-11 (suppression): clic `trash-2` → confirmation → le document disparaît; le download/summary n’est plus accessible.
-  - [ ] UAT-12 (résumé plein large): l’affichage du résumé prend toute la largeur (pas de resize colonnes).
+  - [x] UAT-10 (UX table): la table n’a pas de “refresh”, le bouton add est `circle-plus`, et les colonnes (eye/download) sont à gauche; la colonne statut ne “saute” pas.
+  - [x] UAT-11 (suppression): clic `trash-2` → confirmation → le document disparaît; le download/summary n’est plus accessible.
+  - [x] UAT-12 (résumé plein large): l’affichage du résumé prend toute la largeur (pas de resize colonnes).
   - [ ] UAT-13 (tool docs - disponibilité): en chat (org/folder/usecase), l’IA peut lister les documents + statuts et afficher un résumé si dispo.
   - [ ] UAT-14 (tool docs - garde-fous): si aucun document n’est disponible, l’IA ne tente pas d’appeler le tool et explique qu’elle n’a pas de source doc.
   - [ ] UAT-15 (tool docs - permissions): en rôle restreint, l’IA ne peut pas accéder au contenu complet; elle peut au mieux lister des métadonnées autorisées.
