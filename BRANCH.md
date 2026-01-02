@@ -121,6 +121,7 @@ This branch is explicitly organized to enable early UAT in `make dev` before dee
 | P1 | Evolution (expected UI change) | `e2e/tests/app.spec.ts` | `"Paramètres"` moved from main nav into Identity menu | ✅ Fixed: test asserts it under Identity menu | E2E only |
 | P2 | UI regression (links disabled on `/`) | `e2e/tests/app.spec.ts` | Header links rendered as disabled (`href="#"`) while user visible | ✅ Fixed (UI): keep real `href`, add `aria-disabled`, reactive disabled map | `Header.svelte` |
 | P3 | UI regression / mismatch | `e2e/tests/workflow.spec.ts` | Scatter plot container not always rendered (was conditional to executive summary) | ✅ Fixed (UI): scatter plot container rendered independent of executive summary | `ui/src/routes/dashboard/+page.svelte` |
+| P4 | UX bug (public route) | `ui/src/routes/+layout.svelte` | Chat bubble visible on `/` even when user is not authenticated | ✅ Fixed (UI): only render `ChatWidget` when `$session.user` is present | `ui/src/routes/+layout.svelte` |
 
 ### Current state
 - **P1/P2/P3**: ✅ stabilized locally (see Status / E2E local section above)

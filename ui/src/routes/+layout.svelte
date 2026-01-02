@@ -222,5 +222,7 @@
     <Toast />
     <NavigationGuard />
   </div>
-  <ChatWidget />
+  {#if $session.user}
+    <ChatWidget />
+  {/if}
 </div>
