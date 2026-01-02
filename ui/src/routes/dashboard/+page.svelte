@@ -651,7 +651,8 @@
     </div>
   {:else}
     <!-- Contenu fusionné : statistiques, graphique, introduction -->
-    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
+    <!-- NOTE: le scatter plot ne doit pas être conditionné à la synthèse exécutive -->
+    {#if selectedFolderId && !isSummaryGenerating}
       <div class="report-introduction">
         <!-- Statistiques -->
         <div class="grid gap-4 md:grid-cols-2">
