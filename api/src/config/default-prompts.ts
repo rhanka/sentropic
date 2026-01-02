@@ -287,19 +287,19 @@ Règle de classification (obligatoire):
 - Ambigu: [inconnu] + une question de clarification
 
 Limites (en mots, hors titres):
-- Résumé: 80–200 mots
+- Résumé: 100–200 mots
 - Éléments exploitables: 8–14 puces, 6–18 mots par puce
 - Contraintes / inconnues: 4–10 puces, 6–18 mots par puce
 
 Format attendu:
 ## Fiche document (réexamen)
 - Titre: {{doc_title}} (si “-” => “Non précisé”)
-- Taille: {{nb_pages_si_dispo}} pages ; {{nb_mots_si_estimable}} mots (sinon “Non précisé”)
+- Taille: {{nb_pages}} pages ; {{nb_mots}} mots (sinon “Non précisé”)
 - Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
 - Sommaire (titres niveau 1): 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”)
 
 ## Résumé
-(90–140 mots)
+(100-200 mots)
 
 ## Éléments exploitables pour cas d’usage
 - [besoin] …
@@ -321,6 +321,6 @@ Texte du document:
 ---
 {{document_text}}
 ---`,
-    variables: ['lang', 'doc_title', 'nb_pages_si_dispo', 'nb_mots_si_estimable', 'document_text']
+    variables: ['lang', 'doc_title', 'nb_pages', 'nb_mots', 'document_text']
   }
 ];

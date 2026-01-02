@@ -21,7 +21,7 @@ import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
 import { callOpenAI } from './openai';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
-import { extractTextFromDocument } from './document-text';
+import { extractDocumentInfoFromDocument } from './document-text';
 import { defaultPrompts } from '../config/default-prompts';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
@@ -587,8 +587,13 @@ export class QueueManager {
     const bucket = getDocumentsBucketName();
     const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
     let text: string;
+    let extractedMetaTitle: string | undefined;
+    let extractedMetaPages: number | undefined;
     try {
-      text = await extractTextFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
+      const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
+      text = extracted.text;
+      extractedMetaTitle = extracted.metadata.title;
+      extractedMetaPages = extracted.metadata.pages;
     } catch (e) {
       await db
         .update(contextDocuments)
@@ -611,18 +616,20 @@ export class QueueManager {
 
     const template = defaultPrompts.find((p) => p.id === 'document_summary')?.content || '';
     if (!template) throw new Error('Prompt document_summary non trouvé');
-    const docTitle = (doc.filename || '-').trim() || '-';
-    const nbPages = 'Non précisé';
+    const docTitleRaw = (extractedMetaTitle || doc.filename || '-').trim() || '-';
+    const docTitle = docTitleRaw === '-' ? 'Non précisé' : docTitleRaw;
+    const nbPages =
+      typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
     const nbWords = (() => {
-      const words = clipped.split(/\s+/).filter(Boolean).length;
+      const words = text.split(/\s+/).filter(Boolean).length;
       return Number.isFinite(words) && words > 0 ? String(words) : 'Non précisé';
     })();
 
     const userPrompt = template
       .replace('{{lang}}', lang)
       .replace('{{doc_title}}', docTitle)
-      .replace('{{nb_pages_si_dispo}}', nbPages)
-      .replace('{{nb_mots_si_estimable}}', nbWords)
+      .replace('{{nb_pages}}', nbPages)
+      .replace('{{nb_mots}}', nbWords)
       .replace('{{document_text}}', clipped);
 
     const completion = await callOpenAI({
