@@ -1,5 +1,5 @@
 import { db, pool } from '../db/client';
-import { and, sql, eq, desc, asc } from 'drizzle-orm';
+import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
@@ -303,33 +303,71 @@ export class QueueManager {
     try {
       const inFlight = new Set<Promise<void>>();
 
-      const pickPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
-        if (limit <= 0) return [];
-        // Priority: chat > usecase_list > others, then FIFO by created_at.
-        // This avoids chat starvation when long jobs (usecase_detail/executive_summary) are running.
-        return db
-          .select()
+      const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const getGlobalProcessingCount = async (): Promise<number> => {
+        try {
+          const rows = (await db.all(sql`
+            SELECT COUNT(*)::int AS count
+            FROM job_queue
+            WHERE status = 'processing'
+          `)) as Array<{ count: number }>;
+          return rows?.[0]?.count ?? 0;
+        } catch {
+          return 0;
+        }
+      };
+
+      const hasAnyPending = async (): Promise<boolean> => {
+        const rows = await db
+          .select({ id: sql<string>`id` })
           .from(jobQueue)
           .where(eq(jobQueue.status, 'pending'))
-          .orderBy(
-            sql`CASE ${jobQueue.type}
+          .limit(1);
+        return rows.length > 0;
+      };
+
+      const claimPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
+        if (limit <= 0) return [];
+        // GLOBAL concurrency: we claim jobs in DB atomically. This prevents over-parallelization across workers
+        // and ensures the configured limit applies to the sum of all job types.
+        const now = new Date();
+        const rows = (await db.all(sql`
+          WITH picked AS (
+            SELECT id
+            FROM job_queue
+          WHERE status = 'pending'
+          ORDER BY
+            CASE type
               WHEN 'chat_message' THEN 0
               WHEN 'usecase_list' THEN 1
               ELSE 2
-            END`,
-            asc(jobQueue.createdAt)
+            END,
+            created_at ASC
+          LIMIT ${limit}
+            FOR UPDATE SKIP LOCKED
           )
-          .limit(limit);
+          UPDATE job_queue q
+          SET status = 'processing', started_at = ${now}
+          FROM picked
+          WHERE q.id = picked.id
+          RETURNING q.*
+        `)) as JobQueueRow[];
+        return rows ?? [];
       };
 
       while (!this.paused) {
         if (this.cancelAllInProgress) break;
 
         // Fill available slots continuously (don't wait for a whole batch to finish).
-        const slots = Math.max(0, this.maxConcurrentJobs - inFlight.size);
+        // IMPORTANT: slots are computed from the GLOBAL processing count in DB,
+        // so the configured limit applies to the sum of all queues (all types) and across workers.
+        const globalProcessing = await getGlobalProcessingCount();
+        const slots = Math.max(0, this.maxConcurrentJobs - globalProcessing);
         if (slots > 0) {
-          const pendingJobs = await pickPendingJobs(slots);
-          for (const job of pendingJobs) {
+          const claimedJobs = await claimPendingJobs(slots);
+          for (const job of claimedJobs) {
+            await this.notifyJobEvent(job.id);
             const p = this.processJob(job).finally(() => {
               inFlight.delete(p);
             });
@@ -339,14 +377,18 @@ export class QueueManager {
 
         // If nothing is running and nothing is pending, we're done.
         if (inFlight.size === 0) {
-          const more = await pickPendingJobs(1);
-          if (more.length === 0) break;
-          // else loop will pick it next iteration
+          const more = await hasAnyPending();
+          if (!more) break;
+          // No local work but pending exists: either slots=0 (global limit reached) or a race. Wait briefly.
+          await sleep(200);
           continue;
         }
 
         // Wait for at least one job to finish, then continue filling.
-        await Promise.race(inFlight);
+        // IMPORTANT: do not block indefinitely on long-running jobs.
+        // New jobs can be enqueued while we are waiting; we must periodically wake up to claim
+        // additional pending jobs (up to the configured global concurrency).
+        await Promise.race([Promise.race(inFlight), sleep(this.processingInterval)]);
       }
     } finally {
       this.isProcessing = false;
@@ -365,25 +407,17 @@ export class QueueManager {
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
 
-      // Safety: the job may have been purged between SELECT and processing start.
-      // If it no longer exists (or is no longer pending), don't execute any expensive work.
+      // Safety: the job may have been purged between claim and processing start.
+      // Also protects against any unexpected double-processing: only proceed if job is still processing.
       const [current] = await db
         .select({ status: jobQueue.status })
         .from(jobQueue)
         .where(eq(jobQueue.id, jobId))
         .limit(1);
-      if (!current || current.status !== 'pending') {
-        console.log(`⏭️ Skipping job ${jobId}: missing or not pending (likely purged)`);
+      if (!current || current.status !== 'processing') {
+        console.log(`⏭️ Skipping job ${jobId}: missing or not processing (likely purged/claimed elsewhere)`);
         return;
       }
-      
-      // Marquer comme en cours
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'processing', started_at = ${new Date()}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
 
       const controller = new AbortController();
       this.jobControllers.set(jobId, controller);
@@ -481,9 +515,37 @@ export class QueueManager {
     // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
     const streamId = `organization_${organizationId}`;
     
-    // Enrichir l'organisation avec streaming
-    // enrichOrganization utilise le streaming si streamId est fourni
-    const enrichedData: OrganizationData = await enrichOrganization(organizationName, model, signal, streamId);
+    // Fetch current org row (needed for workspace scope + preserve user-entered fields)
+    const [existingOrg] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    const workspaceId = typeof existingOrg?.workspaceId === 'string' ? existingOrg.workspaceId : '';
+    const existingData = parseOrgData(existingOrg?.data);
+    const effectiveName = (existingOrg?.name || organizationName || '').trim() || organizationName;
+
+    // Only expose documents tool if this organization has attached documents.
+    const hasOrgDocs = await (async () => {
+      if (!workspaceId) return false;
+      const rows = await db
+        .select({ id: sql<string>`id` })
+        .from(contextDocuments)
+        .where(
+          and(
+            eq(contextDocuments.workspaceId, workspaceId),
+            eq(contextDocuments.contextType, 'organization'),
+            eq(contextDocuments.contextId, organizationId)
+          )
+        )
+        .limit(1);
+      return rows.length > 0;
+    })();
+
+    // Enrichir l'organisation avec streaming.
+    // IMPORTANT: `documents` tool is enabled only when docs exist; otherwise the model must not call it.
+    const enrichedData: OrganizationData = await enrichOrganization(effectiveName, model, signal, streamId, {
+      organizationId,
+      workspaceId,
+      existingData,
+      useDocuments: hasOrgDocs
+    });
 
     // Safety: PostgreSQL text/json cannot contain NUL (\u0000). Strip control chars before DB write.
     const sanitizePgText = (input: string): string => {
@@ -518,21 +580,52 @@ export class QueueManager {
       references: cleanedReferences,
     };
     
-    // Store enriched profile in organizations.data JSONB (legacy prompt shape)
+    // Merge: preserve user-entered fields already present in organizations.data.
+    const pickStr = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const keepIfFilled = (existing: unknown, next: string) => (pickStr(existing) ? pickStr(existing) : next);
+    const mergeRefs = (
+      existingRefs: unknown,
+      nextRefs: Array<{ title: string; url: string; excerpt?: string }>
+    ): Array<{ title: string; url: string; excerpt?: string }> => {
+      const base = Array.isArray(existingRefs)
+        ? existingRefs
+            .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
+            .filter((r): r is Record<string, unknown> => !!r)
+            .map((r) => ({
+              title: clean(typeof r.title === 'string' ? r.title : String(r.title ?? '')),
+              url: clean(typeof r.url === 'string' ? r.url : String(r.url ?? '')),
+              excerpt: typeof r.excerpt === 'string' ? clean(r.excerpt) : undefined,
+            }))
+            .filter((r) => r.title.trim() && r.url.trim())
+        : [];
+      const byUrl = new Set(base.map((r) => r.url));
+      const merged = [...base];
+      for (const r of nextRefs || []) {
+        if (!r?.url) continue;
+        if (byUrl.has(r.url)) continue;
+        merged.push(r);
+        byUrl.add(r.url);
+      }
+      return merged;
+    };
+
+    const mergedData: OrganizationData = {
+      industry: keepIfFilled(existingData.industry, cleanedData.industry),
+      size: keepIfFilled(existingData.size, cleanedData.size),
+      products: keepIfFilled(existingData.products, cleanedData.products),
+      processes: keepIfFilled(existingData.processes, cleanedData.processes),
+      kpis: keepIfFilled(existingData.kpis, cleanedData.kpis),
+      challenges: keepIfFilled(existingData.challenges, cleanedData.challenges),
+      objectives: keepIfFilled(existingData.objectives, cleanedData.objectives),
+      technologies: keepIfFilled(existingData.technologies, cleanedData.technologies),
+      references: mergeRefs(existingData.references, cleanedData.references ?? []),
+    };
+
+    // Store enriched profile in organizations.data JSONB
     await db
       .update(organizations)
       .set({
-        data: {
-          industry: cleanedData.industry,
-          size: cleanedData.size,
-          products: cleanedData.products,
-          processes: cleanedData.processes,
-          kpis: cleanedData.kpis,
-          challenges: cleanedData.challenges,
-          objectives: cleanedData.objectives,
-          technologies: cleanedData.technologies,
-          references: cleanedData.references ?? [],
-        },
+        data: mergedData,
         status: 'completed',
         updatedAt: new Date(),
       })
@@ -746,9 +839,12 @@ export class QueueManager {
     const finalPrompt = userPrompt + providedMetaBlock;
 
     await write('status', { state: 'summarizing' });
-    // Align with other generations: use admin-configured default model unless job explicitly overrides it.
-    const aiSettings = await settingsService.getAISettings();
-    const selectedModel = data.model || aiSettings.defaultModel || 'gpt-4.1-nano';
+    // IMPORTANT (temporary): for document summary + sub-summaries, we force a dedicated model.
+    // We intentionally IGNORE:
+    // - the admin-configured default model (settingsService.getAISettings().defaultModel)
+    // - any model passed via job payload
+    // Until prompts/models are versioned in DB and selectable per prompt.
+    const selectedModel = 'gpt-4.1-nano';
     const { content: streamedContent } = await executeWithToolsStream(finalPrompt, {
       model: selectedModel,
       streamId,
@@ -792,21 +888,22 @@ export class QueueManager {
       }
     };
 
-    if (detailedSummary) {
-      // Store both camelCase + snake_case to ease db-query / ad-hoc SQL checks.
-      // Source of truth for app code remains camelCase for now.
-      (nextData as any).detailedSummary = detailedSummary;
-      (nextData as any).detailedSummaryLang = lang;
-      (nextData as any).detailedSummaryWords = detailedSummaryWords;
-      (nextData as any).detailed_summary = detailedSummary;
-      (nextData as any).detailed_summary_lang = lang;
-      (nextData as any).detailed_summary_words = detailedSummaryWords;
-      (nextData as any).prompts = { ...(nextData as any).prompts, detailedPromptId: 'document_detailed_summary' };
-    }
+    const dataWithDetailed: Record<string, unknown> = detailedSummary
+      ? {
+          ...nextData,
+          detailedSummary,
+          detailedSummaryLang: lang,
+          detailedSummaryWords,
+          detailed_summary: detailedSummary,
+          detailed_summary_lang: lang,
+          detailed_summary_words: detailedSummaryWords,
+          prompts: { ...(nextData.prompts as Record<string, unknown>), detailedPromptId: 'document_detailed_summary' }
+        }
+      : nextData;
 
     await db
       .update(contextDocuments)
-      .set({ status: 'ready', data: nextData as any, updatedAt: new Date() })
+      .set({ status: 'ready', data: dataWithDetailed, updatedAt: new Date() })
       .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
     await write('done', { state: 'done' });
