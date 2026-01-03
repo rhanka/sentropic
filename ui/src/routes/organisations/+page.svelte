@@ -90,6 +90,16 @@
       });
     }
   };
+
+  const openOrganization = (organization: { id: string; status?: string }) => {
+    const isDraft = organization.status === 'draft';
+    // UX: un brouillon se reprend via la vue `new` (icônes IA / save / annuler).
+    if (isDraft) {
+      goto(`/organisations/new?draft=${encodeURIComponent(organization.id)}`);
+      return;
+    }
+    goto(`/organisations/${organization.id}`);
+  };
 </script>
 
 <section class="space-y-6">
@@ -115,8 +125,8 @@
       <article
         {...(canClick ? { role: 'button', tabindex: 0 } : {})}
         class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
-        on:click={() => { if (canClick) goto(`/organisations/${organization.id}`); }}
-        on:keydown={(e) => { if (canClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goto(`/organisations/${organization.id}`); } }}
+        on:click={() => { if (canClick) openOrganization(organization); }}
+        on:keydown={(e) => { if (canClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openOrganization(organization); } }}
       >
         {#if isEnriching}
           <div class="flex justify-between items-start p-3 sm:p-4 pb-2 border-b border-purple-200 bg-purple-50 gap-2 rounded-t-lg">

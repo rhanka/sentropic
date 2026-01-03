@@ -2,6 +2,7 @@
   import {
     createOrganization,
     createDraftOrganization,
+    fetchOrganizationById,
     updateOrganization,
     startOrganizationEnrichment,
     deleteOrganization,
@@ -9,6 +10,8 @@
   } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
   import { addToast } from '$lib/stores/toast';
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -34,6 +37,31 @@
   let draftError: string | null = null;
   let draftTimer: ReturnType<typeof setTimeout> | null = null;
   let docsUploading = false;
+
+  const loadDraftIfAny = async () => {
+    const draftId = $page.url.searchParams.get('draft');
+    if (!draftId) return;
+    try {
+      const existing = await fetchOrganizationById(draftId);
+      // Si ce n'est plus un brouillon, on bascule vers la vue [id]
+      if (existing?.status && existing.status !== 'draft') {
+        goto(`/organisations/${existing.id}`);
+        return;
+      }
+      organization = { ...existing };
+    } catch (err) {
+      console.error('Failed to load draft organization:', err);
+      addToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Impossible de charger le brouillon'
+      });
+      goto('/organisations');
+    }
+  };
+
+  onMount(() => {
+    void loadDraftIfAny();
+  });
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
