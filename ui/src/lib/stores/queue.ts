@@ -1,7 +1,13 @@
 import { writable } from 'svelte/store';
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
-export type JobType = 'organization_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
+export type JobType =
+  | 'organization_enrich'
+  | 'usecase_list'
+  | 'usecase_detail'
+  | 'executive_summary'
+  | 'document_summary'
+  | 'chat_message';
 
 export interface Job {
   id: string;
@@ -74,7 +80,9 @@ export const deleteJob = async (jobId: string): Promise<void> => {
 export const loadJobs = async () => {
   queueStore.update(state => ({ ...state, isLoading: true }));
   try {
-    const jobs = (await fetchAllJobs()).filter((j) => j?.type !== 'chat_message');
+    // IMPORTANT: ne pas filtrer `chat_message` ici.
+    // Sinon on masque des jobs (potentiellement bloqués) qui consomment la concurrence globale.
+    const jobs = await fetchAllJobs();
     queueStore.update(state => ({
       ...state,
       jobs,

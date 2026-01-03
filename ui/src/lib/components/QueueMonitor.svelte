@@ -48,6 +48,8 @@
       case 'usecase_list': return 'Génération cas d\'usage';
       case 'usecase_detail': return 'Détail cas d\'usage';
       case 'executive_summary': return 'Synthèse exécutive';
+      case 'document_summary': return 'Résumé document';
+      case 'chat_message': return 'Chat';
       default: return type;
     }
   };
@@ -71,6 +73,15 @@
     if (job?.type === 'executive_summary' && (job?.data?.folderId || job?.data?.folder_id)) {
       const folderId = job.data.folderId ?? job.data.folder_id;
       return `folder_${folderId}`;
+    }
+    // Pour document_summary: streamId déterministe basé sur le document (document_<documentId>)
+    if (job?.type === 'document_summary' && (job?.data?.documentId || job?.data?.document_id)) {
+      const documentId = job.data.documentId ?? job.data.document_id;
+      return `document_${documentId}`;
+    }
+    // Pour chat_message: le SSE chat est sur streamId == assistantMessageId
+    if (job?.type === 'chat_message' && job?.data?.assistantMessageId) {
+      return String(job.data.assistantMessageId);
     }
     // Fallback générique: streamId basé sur jobId
     return `job_${job?.id}`;

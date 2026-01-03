@@ -173,11 +173,13 @@ queueRouter.get('/stats', async (c) => {
 
 // POST /queue/purge - Purger les jobs
 queueRouter.post('/purge', requireRole('admin_app'), async (c) => {
+  let paused = false;
   try {
     const targetWorkspaceId = await resolveTargetWorkspaceId(c);
     const { status } = await c.req.json().catch(() => ({ status: 'pending' }));
     // Mettre en pause pour empêcher de nouveaux départs
     queueManager.pause();
+    paused = true;
     // Avant toute purge, annuler les jobs en cours et drainer
     await queueManager.cancelAllProcessing('purge');
     
@@ -203,6 +205,7 @@ queueRouter.post('/purge', requireRole('admin_app'), async (c) => {
       const purgedCount = (del as { changes?: number }).changes ?? 0;
       console.log(`🧹 Purged ALL jobs: ${purgedCount}`);
       queueManager.resume();
+      paused = false;
       return c.json({ success: true, message: `${purgedCount} jobs purgés avec succès (toute la queue)`, purgedCount });
     } else {
       jobsToPurge = jobs.filter(job => job.status === status);
@@ -249,6 +252,71 @@ queueRouter.post('/purge', requireRole('admin_app'), async (c) => {
   } catch (error) {
     console.error('Error purging queue:', error);
     return c.json({ message: 'Failed to purge queue' }, 500);
+  } finally {
+    // Safety: never leave the queue paused after an admin action.
+    if (paused) queueManager.resume();
+  }
+});
+
+// POST /queue/purge-global - Purger les jobs (tous workspaces)
+queueRouter.post('/purge-global', requireRole('admin_app'), async (c) => {
+  let paused = false;
+  try {
+    const { status } = await c.req.json().catch(() => ({ status: 'all' as string }));
+
+    queueManager.pause();
+    paused = true;
+    await queueManager.cancelAllProcessing('purge-global');
+
+    if (status === 'force' || status === 'all') {
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = 'Job cancelled by purge-global'
+        WHERE status IN ('pending','processing')
+      `);
+      const del = await db.run(sql`DELETE FROM job_queue`);
+      const purgedCount = (del as { changes?: number }).changes ?? 0;
+      console.log(`🧹 Purged GLOBAL ALL jobs: ${purgedCount}`);
+      return c.json({
+        success: true,
+        message: `${purgedCount} jobs purgés avec succès (global, tous workspaces)`,
+        purgedCount
+      });
+    }
+
+    if (status === 'processing') {
+      // Purger les jobs en cours depuis plus de 2h (probablement bloqués)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const del = await db.run(sql`
+        DELETE FROM job_queue
+        WHERE status = 'processing' AND started_at IS NOT NULL AND started_at < ${twoHoursAgo}
+      `);
+      const purgedCount = (del as { changes?: number }).changes ?? 0;
+      console.log(`🧹 Purged GLOBAL stuck processing jobs: ${purgedCount}`);
+      return c.json({
+        success: true,
+        message: `${purgedCount} jobs en cours bloqués purgés (global)`,
+        purgedCount
+      });
+    }
+
+    // Purge by exact status, globally
+    const del = await db.run(sql`
+      DELETE FROM job_queue
+      WHERE status = ${status}
+    `);
+    const purgedCount = (del as { changes?: number }).changes ?? 0;
+    console.log(`🧹 Purged GLOBAL jobs (status=${status}): ${purgedCount}`);
+    return c.json({
+      success: true,
+      message: `${purgedCount} jobs purgés (global, statut: ${status})`,
+      purgedCount
+    });
+  } catch (error) {
+    console.error('Error purging queue globally:', error);
+    return c.json({ message: 'Failed to purge queue globally' }, 500);
+  } finally {
+    if (paused) queueManager.resume();
   }
 });
 

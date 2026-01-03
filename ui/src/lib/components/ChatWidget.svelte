@@ -337,7 +337,8 @@
       return;
     }
     try {
-      const result = await apiPost('/queue/purge', { status: 'all' });
+      // Admin-only: purge across ALL workspaces
+      const result = await apiPost('/queue/purge-global', { status: 'all' });
       addToast({ type: 'success', message: result.message });
       await loadJobs();
     } catch (error) {
