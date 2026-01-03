@@ -112,11 +112,11 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] `[id]`: Supprimer = `trash-2`
     - [x] `new`: IA = `brain`, Créer = `save`, Annuler = `trash-2`
   - [x] Sur `new`, rendre le bouton IA disponible dès que le nom est renseigné; indisponible pendant l’upload d’un doc
-  - [x] Déplacer le bloc document sous le nom de l'organization
-  - [ ] Adapter le prompt:
-    - [ ] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
-    - [ ] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
-  - [ ] Partial UAT
+  - [x] Déplacer le bloc document sous le nom de l'organisation
+  - [x] Adapter le prompt de génération de l'organisation
+    - [x] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
+    - [x] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
+  - [x] Partial UAT
 
 - Amélioration tool documentaire
   - [x] L'outil `documents` peut faire une requête spécialisée à un sous-agent (contexte autonome) via `action=analyze`:
@@ -126,6 +126,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - `get_content` ne renvoie **pas** le texte complet
     - l'outil renvoie à la place un **résumé détaillé** (objectif ~10000 mots) + le **résumé général** (si dispo)
   - [x] Générer automatiquement (côté job `document_summary`) le résumé détaillé pour les gros documents et le stocker en DB dans `context_documents.data` (`detailedSummary` / `detailed_summary`).
+  - [x] Modèle forcé (temporaire): `gpt-4.1-nano` pour `document_summary` + résumé détaillé + `documents.analyze` (en attendant le versioning DB des prompts/modèles).
+  - [x] Queue: la limite de parallélisation est désormais **globale** (somme de tous les types) via une prise atomique (`FOR UPDATE SKIP LOCKED`) + slots calculés depuis le nombre global de jobs `processing`.
+  - [x] Queue: pendant qu’un job long tourne, le scheduler se réveille périodiquement (via `processingInterval`) pour démarrer d’autres jobs (jusqu’au quota admin), au lieu d’attendre uniquement la fin d’un job.
 
 - [ ] Amélioration “Folder & Use case generation”
   - [ ] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
