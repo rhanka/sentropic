@@ -41,7 +41,6 @@
       const urlParams = new URLSearchParams($page.url.search);
       const shouldGenerate = urlParams.get('generate') === 'true';
       const context = urlParams.get('context');
-      const createNewFolder = urlParams.get('createNewFolder') === 'true';
       const organizationId = urlParams.get('organizationId');
       const folderId = urlParams.get('folder');
 
@@ -60,7 +59,7 @@
           return;
         }
         // Lancer la génération
-        await startGeneration(context, createNewFolder, organizationId);
+        await startGeneration(context, organizationId);
       } else if ($currentFolderId) {
         // Charger les cas existants seulement si un dossier est sélectionné
         await loadUseCases();
@@ -180,7 +179,7 @@
     }
   };
 
-  const startGeneration = async (context: string, createNewFolder: boolean, organizationId: string | null) => {
+  const startGeneration = async (context: string, organizationId: string | null) => {
     let progressToastId = '';
     
     try {
@@ -194,7 +193,6 @@
       // Appeler l'API de génération
       const result = await apiPost('/use-cases/generate', {
         input: context,
-        create_new_folder: createNewFolder,
         organization_id: organizationId
       });
 

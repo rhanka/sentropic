@@ -35,6 +35,7 @@
     '/home',
     '/organisations',
     '/dossiers',
+    '/dossier',
     '/cas-usage',
     '/matrice',
     '/dashboard',
@@ -55,6 +56,7 @@
     if (
       path.startsWith('/organisations/') ||
       path.startsWith('/dossiers/') || 
+      path.startsWith('/dossier/') ||
       path.startsWith('/cas-usage/')
     ) {
       return true;
