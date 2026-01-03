@@ -141,6 +141,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Admin: purge **globale** de la queue (tous workspaces) + sécurité pour ne jamais laisser la queue en pause après une action admin
   - [x] UI paramètres: valeur initiale de `processingInterval` à **1000ms** (sans écraser la valeur existante en base)
   - [x] Documents: modèle forcé temporaire **`gpt-4.1-nano`** (résumé court, résumé détaillé auto, `documents.analyze`)
+  - [x] Générations: empêcher les “pseudo tool calls” (JSON collés dans la réponse) en renforçant le prompt système de l’orchestrateur tools
 
 - [ ] Amélioration “Folder & Use case generation”
   - [x] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
