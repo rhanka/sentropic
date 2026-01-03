@@ -191,6 +191,7 @@
     apiEndpoint={organization.id ? `${API_BASE_URL}/organizations/${organization.id}` : ''}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
+    nameLabel="Nom de l'organisation"
   >
     <div slot="actions" class="flex items-center gap-2">
         <button
