@@ -10,7 +10,7 @@
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
-  import { Trash2 } from '@lucide/svelte';
+  import { Trash2, CirclePlus } from '@lucide/svelte';
 
   const HUB_KEY = 'organizationsList';
 
@@ -111,8 +111,14 @@
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Organisations</h1>
     {#if !$adminReadOnlyScope}
-      <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => goto('/organisations/new')}>
-        Ajouter
+      <button
+        class="rounded p-2 transition text-primary hover:bg-slate-100"
+        on:click={() => goto('/organisations/new')}
+        title="Créer une organisation"
+        aria-label="Créer une organisation"
+        type="button"
+      >
+        <CirclePlus class="w-5 h-5" />
       </button>
     {/if}
   </div>
