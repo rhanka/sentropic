@@ -130,6 +130,14 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Queue: la limite de parallélisation est désormais **globale** (somme de tous les types) via une prise atomique (`FOR UPDATE SKIP LOCKED`) + slots calculés depuis le nombre global de jobs `processing`.
   - [x] Queue: pendant qu’un job long tourne, le scheduler se réveille périodiquement (via `processingInterval`) pour démarrer d’autres jobs (jusqu’au quota admin), au lieu d’attendre uniquement la fin d’un job.
 
+- [x] Divers fix
+  - [x] Queue: parallélisation réellement effective (le scheduler se réveille périodiquement pendant un job long pour lancer d’autres jobs, tout en respectant `ai_concurrency`)
+  - [x] Queue: limite de parallélisation **globale** (somme de tous les types) via claim atomique (`FOR UPDATE SKIP LOCKED`) + slots calculés depuis le nombre global de jobs `processing`
+  - [x] Jobs IA: afficher **tous** les jobs (incl. `chat_message`) pour diagnostiquer/purger les jobs “morts”
+  - [x] Admin: purge **globale** de la queue (tous workspaces) + sécurité pour ne jamais laisser la queue en pause après une action admin
+  - [x] UI paramètres: valeur initiale de `processingInterval` à **1000ms** (sans écraser la valeur existante en base)
+  - [x] Documents: modèle forcé temporaire **`gpt-4.1-nano`** (résumé court, résumé détaillé auto, `documents.analyze`)
+
 - [ ] Amélioration “Folder & Use case generation”
   - [ ] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
   - [ ] Déplacer `/home` vers `/dossier/new` et retirer la création “modal”
