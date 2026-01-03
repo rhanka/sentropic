@@ -88,7 +88,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 - [x] Implement queue job `document_summary` and modification history events. ✅ (see commit: `e77b8ff`)
 - [x] Implement UI “Documents” block with i18n FR-first. ✅ (see commit: `4eee944`)
 
-- [ ] Bloc “Documents” (UX)
+- [x] Bloc “Documents” (UX)
   - [x] Retirer le bouton “Rafraîchir”
   - [x] Remplacer “Ajouter un document” par l’icône `circle-plus`
   - [x] Table des documents
@@ -106,7 +106,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
   - [x] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler) — tool non exposé si aucun document
 
-- [ ] Amélioration “Organization”
+- [x] Amélioration “Organization”
   - [x] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)
   - [x] Remplacer les boutons par des icônes:
     - [x] `[id]`: Supprimer = `trash-2`
@@ -116,6 +116,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Adapter le prompt de génération de l'organisation
     - [x] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
     - [x] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
+  - [ ] migrer le bouton ajouter (vue organization) vers circle-plus (même style sur sur dossiers)
+  - [ ] sur la vue "new" dans orga, mettre un label "Nom de l'organisation" (le supprimer dans la vue [id])
+  - [ ] sur les deux vues new et [id] remplacer les valeurs par défaut en utilisant le placehodler nouvellement ajouté pour EditableInput (en profite pour mettre un placehodler aussi pour Secteur, il en manquait un). Préférer "Saisir le nom de l'organisation" (au lieu de Nouvelle organisaiton). Et "Non renseigné" va très bien pour les autres
   - [x] Partial UAT
 
 - Amélioration tool documentaire
@@ -129,6 +132,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Modèle forcé (temporaire): `gpt-4.1-nano` pour `document_summary` + résumé détaillé + `documents.analyze` (en attendant le versioning DB des prompts/modèles).
   - [x] Queue: la limite de parallélisation est désormais **globale** (somme de tous les types) via une prise atomique (`FOR UPDATE SKIP LOCKED`) + slots calculés depuis le nombre global de jobs `processing`.
   - [x] Queue: pendant qu’un job long tourne, le scheduler se réveille périodiquement (via `processingInterval`) pour démarrer d’autres jobs (jusqu’au quota admin), au lieu d’attendre uniquement la fin d’un job.
+  - [x] Partial UAT
 
 - [x] Divers fix
   - [x] Queue: parallélisation réellement effective (le scheduler se réveille périodiquement pendant un job long pour lancer d’autres jobs, tout en respectant `ai_concurrency`)
@@ -139,21 +143,22 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Documents: modèle forcé temporaire **`gpt-4.1-nano`** (résumé court, résumé détaillé auto, `documents.analyze`)
 
 - [ ] Amélioration “Folder & Use case generation”
-  - [ ] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
-  - [ ] Déplacer `/home` vers `/dossier/new` et retirer la création “modal”
-  - [ ] Dans `dossier/new`
-    - [ ] Renommer “Générez vos cas d’usage” → “Créer un dossier”
-    - [ ] Même set d’icônes que `organization/new`: IA = `brain`, Créer = `save`, Annuler = `trash-2` (même disposition)
-    - [ ] Ajouter “Nom du dossier” (EditableInput multiligne)
-    - [ ] Transformer le contexte en EditableInput (markdown)
-    - [ ] Ajouter un champ numérique “nombre de cas d’usage” (défaut: 10) + adapter prompt
-    - [ ] Ajouter le bloc documents - permettre l'upload (sur un id dossier temporaire du coup)
+  - [x] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
+  - [x] Déplacer `/home` vers `/dossier/new` et retirer la création “modal”
+  - [~] Dans `dossier/new`
+    - [x] Renommer “Générez vos cas d’usage” → “Créer un dossier”
+    - [x] Même set d’icônes que `organization/new`: IA = `brain`, Créer = `save`, Annuler = `trash-2` (même disposition)
+    - [x] Ajouter “Nom du dossier” (saisie multiligne)
+    - [x] Transformer le contexte en EditableInput (markdown) une fois le brouillon créé
+    - [x] Ajouter un champ numérique “nombre de cas d’usage” (défaut: 10) — (prompt à adapter ensuite)
+    - [x] Ajouter le bloc documents - permettre l'upload (via dossier brouillon)
     - [ ] Si l’utilisateur annule ou quitte la vue, supprimer le “to be” folder + ses documents (avec altert pour éviter de quitter et supprimer par erreur)
-    - [ ] Les boutons IA/Créer sont disponibles uniquement si contexte renseigné OU document présent
+    - [x] Les boutons IA/Créer sont disponibles uniquement si contexte renseigné OU document présent
     - [ ] Si l’utilisateur a renseigné un nom, le prompt doit l’utiliser (correction/mise en forme OK)
-  - [ ] Déplacer la vue cas-usage vers `dossier/[id]` et afficher le contexte (entre le titre et le bloc documents)
+  - [ ] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
   - [ ] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
   - [ ] Partial UAT
+
 - [ ] Full UAT (checklist avant tests)
   - [ ] UAT-1 (démarrage): en mode dev, l’app démarre et la page cible charge sans erreur.
   - [ ] UAT-2 (accès): en tant qu’utilisateur connecté, je vois un bloc “Documents” sur une page contexte (Entreprise / Dossier / Cas d’usage).
