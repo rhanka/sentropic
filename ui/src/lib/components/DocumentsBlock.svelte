@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
@@ -25,6 +26,10 @@
   let lastContextKey = '';
   let sseKey = '';
   let sseReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const dispatch = createEventDispatcher<{
+    state: { items: ContextDocumentItem[]; uploading: boolean };
+  }>();
 
   const formatBytes = (bytes: number) => {
     if (!Number.isFinite(bytes) || bytes < 0) return '-';
@@ -62,6 +67,7 @@
       const scopedWs = getScopedWorkspaceIdForAdmin();
       const res = await listDocuments({ contextType, contextId, workspaceId: scopedWs });
       items = res.items || [];
+      dispatch('state', { items, uploading });
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -131,6 +137,7 @@
     if (!file) return;
 
     uploading = true;
+    dispatch('state', { items, uploading });
     try {
       const scopedWs = getScopedWorkspaceIdForAdmin();
       await uploadDocument({ contextType, contextId, file, workspaceId: scopedWs });
@@ -141,6 +148,7 @@
       addToast({ type: 'error', message: msg });
     } finally {
       uploading = false;
+      dispatch('state', { items, uploading });
     }
   };
 

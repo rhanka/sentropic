@@ -96,7 +96,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] Élargir la colonne “Statut” pour éviter les changements de largeur lors des transitions
   - [x] Partial UAT
 
-- [ ] Tool “documents” (pour le chat et les générations par la suite)
+- [x] Tool “documents” (pour le chat et les générations par la suite)
   - [x] Implémenter un (et UN SEUL) tool configurable permettant à l’IA de récupérer:
     - [x] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
     - [x] un résumé (si dispo) et/ou le contenu complet (borné; selon autorisation)
@@ -104,11 +104,12 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler) — tool non exposé si aucun document
 
 - [ ] Amélioration “Organization”
-  - [ ] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)
-  - [ ] Remplacer les boutons par des icônes:
-    - [ ] `[id]`: Supprimer = `trash-2`
-    - [ ] `new`: IA = `brain`, Créer = `save`, Annuler = `trash-2`
-  - [ ] Sur `new`, rendre le bouton IA disponible si un document est uploadé; indisponible pendant l’upload
+  - [x] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)
+  - [x] Remplacer les boutons par des icônes:
+    - [x] `[id]`: Supprimer = `trash-2`
+    - [x] `new`: IA = `brain`, Créer = `save`, Annuler = `trash-2`
+  - [x] Sur `new`, rendre le bouton IA disponible si un document est uploadé; indisponible pendant l’upload
+  - [x] Déplacer le bloc document sous le nom de l'organization
   - [ ] Adapter le prompt:
     - [ ] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
     - [ ] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
