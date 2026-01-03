@@ -157,6 +157,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [ ] Si l’utilisateur a renseigné un nom, le prompt doit l’utiliser (correction/mise en forme OK)
   - [ ] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
   - [ ] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
+  - [ ] Dashboard: afficher le ScatterPlot dès qu’un premier cas d’usage est disponible (même si le dossier / la synthèse sont en cours de génération)
   - [ ] Partial UAT
 
 - [ ] Full UAT (checklist avant tests)
