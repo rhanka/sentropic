@@ -340,6 +340,9 @@
     ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
     : $useCasesStore;
 
+  // Scatter plot: n'afficher que les cas finalisés
+  $: completedUseCases = filteredUseCases.filter((uc) => uc.status === 'completed');
+
   // Statistiques
   $: stats = {
     total: filteredUseCases.length,
@@ -797,7 +800,7 @@
           
           <div class="flex justify-center">
             <UseCaseScatterPlot 
-              useCases={filteredUseCases} 
+              useCases={completedUseCases} 
               {matrix} 
               bind:roiStats 
               bind:showROIQuadrant
