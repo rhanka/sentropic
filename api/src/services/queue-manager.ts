@@ -291,17 +291,37 @@ export class QueueManager {
   /**
    * Ajouter un job à la queue
    */
-  async addJob(type: JobType, data: JobData, opts?: { workspaceId?: string }): Promise<string> {
+  async addJob(
+    type: JobType,
+    data: JobData,
+    opts?: {
+      workspaceId?: string;
+      /**
+       * Max number of retries after the initial attempt.
+       * - 0 => 1 total attempt (default)
+       * - 1 => up to 2 total attempts
+       */
+      maxRetries?: number;
+    }
+  ): Promise<string> {
     if (this.cancelAllInProgress || this.paused) {
       console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
       throw new Error('Queue is paused or cancelling; job not accepted');
     }
     const jobId = createId();
     const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
+    const maxRetries = Number.isFinite(opts?.maxRetries as number) ? Number(opts?.maxRetries) : 0;
+    const payload = {
+      ...(data as unknown as Record<string, unknown>),
+      _retry: {
+        attempt: 0,
+        maxRetries: Math.max(0, Math.floor(maxRetries)),
+      },
+    };
     
     await db.run(sql`
       INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()}, ${workspaceId})
+      VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
     `);
     await this.notifyJobEvent(jobId);
     
@@ -433,7 +453,48 @@ export class QueueManager {
   private async processJob(job: JobQueueRow): Promise<void> {
     const jobId = job.id;
     const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data);
+    const jobData = JSON.parse(job.data) as unknown;
+
+    const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
+      if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
+      const retry = (value as { _retry?: unknown })._retry;
+      if (!retry || typeof retry !== 'object') return { attempt: 0, maxRetries: 0 };
+      const attemptRaw = (retry as { attempt?: unknown }).attempt;
+      const maxRaw = (retry as { maxRetries?: unknown }).maxRetries;
+      const attempt = typeof attemptRaw === 'number' && Number.isFinite(attemptRaw) ? attemptRaw : Number(attemptRaw);
+      const maxRetries = typeof maxRaw === 'number' && Number.isFinite(maxRaw) ? maxRaw : Number(maxRaw);
+      return {
+        attempt: Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0,
+        maxRetries: Number.isFinite(maxRetries) ? Math.max(0, Math.floor(maxRetries)) : 0,
+      };
+    };
+
+    const { attempt: retryAttempt, maxRetries: retryMax } = getRetryMeta(jobData);
+
+    const isAbort = (err: unknown): boolean => {
+      if (!err) return false;
+      if (err instanceof DOMException && err.name === 'AbortError') return true;
+      if (err instanceof Error && err.name === 'AbortError') return true;
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg.includes('AbortError') || msg.includes('aborted') || msg.includes('Request was aborted');
+    };
+
+    const isRetryableUseCaseError = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // JSON/format issues (LLM returned non-JSON or concatenated junk)
+      if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
+        return true;
+      }
+      // Missing scores arrays leading to validateScores crash
+      if (msg.includes("Cannot read properties of undefined (reading 'map')")) {
+        return true;
+      }
+      // Transient network/OpenAI-ish issues (best-effort)
+      if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('ENOTFOUND')) {
+        return true;
+      }
+      return false;
+    };
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
@@ -456,23 +517,23 @@ export class QueueManager {
       // Traiter selon le type
       switch (jobType) {
         case 'organization_enrich':
-          await this.processOrganizationEnrich(jobData as OrganizationEnrichJobData, jobId, controller.signal);
+          await this.processOrganizationEnrich(jobData as unknown as OrganizationEnrichJobData, jobId, controller.signal);
           break;
         case 'usecase_list':
-          await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
+          await this.processUseCaseList(jobData as unknown as UseCaseListJobData, controller.signal);
           break;
         case 'usecase_detail':
-          await this.processUseCaseDetail(jobData as UseCaseDetailJobData, controller.signal);
+          await this.processUseCaseDetail(jobData as unknown as UseCaseDetailJobData, controller.signal);
           break;
         case 'executive_summary':
-          await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
+          await this.processExecutiveSummary(jobData as unknown as ExecutiveSummaryJobData, controller.signal);
           break;
         case 'chat_message':
-          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
+          await this.processChatMessage(jobData as unknown as ChatMessageJobData, controller.signal);
           break;
         case 'document_summary':
           await this.processDocumentSummary(
-            jobData as DocumentSummaryJobData,
+            jobData as unknown as DocumentSummaryJobData,
             jobId,
             controller.signal
           );
@@ -492,6 +553,29 @@ export class QueueManager {
       console.log(`✅ Job ${jobId} completed successfully`);
     } catch (error) {
       console.error(`❌ Job ${jobId} failed:`, error);
+
+      // Retry logic (bounded) for use case generation jobs only.
+      // IMPORTANT: never retry on AbortError (user/admin cancel).
+      if ((jobType === 'usecase_list' || jobType === 'usecase_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableUseCaseError(error)) {
+        const nextAttempt = retryAttempt + 1;
+        const nextData =
+          jobData && typeof jobData === 'object'
+            ? { ...(jobData as Record<string, unknown>), _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'pending',
+              data = ${JSON.stringify(nextData)},
+              error = ${`retry ${nextAttempt}/${retryMax}: ${msg}`},
+              started_at = NULL,
+              completed_at = NULL
+          WHERE id = ${jobId}
+        `);
+        await this.notifyJobEvent(jobId);
+        console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
+        return;
+      }
       
       // Marquer comme échoué
       await db.run(sql`
@@ -1121,7 +1205,7 @@ export class QueueManager {
             useCaseName: useCaseName,
             folderId: folderId,
             model: selectedModel
-          }, { workspaceId });
+          }, { workspaceId, maxRetries: 1 });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
         }

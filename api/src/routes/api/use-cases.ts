@@ -582,7 +582,7 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
       organizationId,
       model: selectedModel,
       useCaseCount: use_case_count
-    }, { workspaceId });
+    }, { workspaceId, maxRetries: 1 });
     
     return c.json({
       success: true,
@@ -664,7 +664,7 @@ useCasesRouter.post('/:id/detail', requireEditor, zValidator('json', detailInput
       useCaseName,
       folderId: useCase.folderId,
       model: selectedModel
-    }, { workspaceId });
+    }, { workspaceId, maxRetries: 1 });
     
     return c.json({
       success: true,
