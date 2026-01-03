@@ -96,12 +96,12 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] Élargir la colonne “Statut” pour éviter les changements de largeur lors des transitions
   - [x] Partial UAT
 
-- [ ] Tool “documents” (pour le chat)
-  - [ ] Implémenter un (et UN SEUL) tool configurable permettant à l’IA de récupérer:
-    - [ ] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
-    - [ ] un résumé (si dispo) et/ou le contenu complet (borné; selon autorisation)
-  - [ ] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
-  - [ ] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler) — tool non exposé si aucun document
+- [ ] Tool “documents” (pour le chat et les générations par la suite)
+  - [x] Implémenter un (et UN SEUL) tool configurable permettant à l’IA de récupérer:
+    - [x] la liste des documents attachés à un objet (organization/folder/usecase) + statuts (uploaded/processing/ready/failed)
+    - [x] un résumé (si dispo) et/ou le contenu complet (borné; selon autorisation)
+  - [x] Brancher le tool dans tous les contextes de chat (organization / folder / usecase)
+  - [x] Adapter les prompts pour utiliser le tool **uniquement** si documents disponibles (sinon ne pas l’appeler) — tool non exposé si aucun document
 
 - [ ] Amélioration “Organization”
   - [ ] Mutualiser `organisations/new` et `organisations/[id]` via un composant (boutons spécifiques selon page)

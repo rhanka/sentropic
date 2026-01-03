@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents } from '../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents, contextDocuments } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -25,7 +25,8 @@ import {
   executiveSummaryGetTool,
   executiveSummaryUpdateTool,
   matrixGetTool,
-  matrixUpdateTool
+  matrixUpdateTool,
+  documentsTool
 } from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
@@ -342,6 +343,28 @@ export class ChatService {
     const primaryContextType = session.primaryContextType;
     const primaryContextId = session.primaryContextId;
 
+    // Documents tool is only exposed if there are documents attached to the current context.
+    const hasDocuments = await (async () => {
+      if (!primaryContextId) return false;
+      if (primaryContextType !== 'organization' && primaryContextType !== 'folder' && primaryContextType !== 'usecase') return false;
+      try {
+        const rows = await db
+          .select({ id: sql<string>`id` })
+          .from(contextDocuments)
+          .where(
+            and(
+              eq(contextDocuments.workspaceId, sessionWorkspaceId),
+              eq(contextDocuments.contextType, primaryContextType),
+              eq(contextDocuments.contextId, primaryContextId)
+            )
+          )
+          .limit(1);
+        return rows.length > 0;
+      } catch {
+        return false;
+      }
+    })();
+
     // Prepare tools based on primary context type (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
@@ -351,6 +374,7 @@ export class ChatService {
         useCaseGetTool,
         readUseCaseTool,
         ...(readOnly ? [] : [useCaseUpdateTool, updateUseCaseFieldTool]),
+        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
       ];
@@ -360,6 +384,7 @@ export class ChatService {
         organizationGetTool,
         ...(readOnly ? [] : [organizationUpdateTool]),
         foldersListTool,
+        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
       ];
@@ -374,6 +399,7 @@ export class ChatService {
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
         organizationGetTool,
+        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
       ];
@@ -985,6 +1011,60 @@ Règles :
             const extractResult = await extractUrlContent(urls, options.signal);
             const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
             result = { status: 'completed', results: resultsArray };
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'documents') {
+            // Security: documents tool must match the session primary context exactly
+            if (primaryContextType !== 'organization' && primaryContextType !== 'folder' && primaryContextType !== 'usecase') {
+              throw new Error('Security: documents tool is only available in organization/folder/usecase context');
+            }
+            if (!primaryContextId) {
+              throw new Error('Security: documents tool requires a selected context id');
+            }
+            if (args.contextType !== primaryContextType || args.contextId !== primaryContextId) {
+              throw new Error('Security: context does not match session context');
+            }
+
+            const action = typeof args.action === 'string' ? args.action : '';
+            if (action === 'list') {
+              const list = await toolService.listContextDocuments({
+                workspaceId: sessionWorkspaceId,
+                contextType: primaryContextType,
+                contextId: primaryContextId,
+              });
+              result = { status: 'completed', ...list };
+            } else if (action === 'get_summary') {
+              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+              if (!documentId) throw new Error('documents.get_summary: documentId is required');
+              const summary = await toolService.getDocumentSummary({
+                workspaceId: sessionWorkspaceId,
+                contextType: primaryContextType,
+                contextId: primaryContextId,
+                documentId,
+              });
+              result = { status: 'completed', ...summary };
+            } else if (action === 'get_content') {
+              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+              if (!documentId) throw new Error('documents.get_content: documentId is required');
+              const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
+              const content = await toolService.getDocumentContent({
+                workspaceId: sessionWorkspaceId,
+                contextType: primaryContextType,
+                contextId: primaryContextId,
+                documentId,
+                maxChars,
+              });
+              result = { status: 'completed', ...content };
+            } else {
+              throw new Error(`documents: unknown action ${action}`);
+            }
+
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',

@@ -449,6 +449,41 @@ export const matrixUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+/**
+ * Documents tool (single tool) — list documents + fetch summary/content (bounded).
+ * IMPORTANT: Security checks are enforced in ChatService (context match + workspace scope).
+ */
+export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'documents',
+    description:
+      'Accède aux documents attachés à un contexte (organization/folder/usecase). Permet: lister les documents + statuts, lire un résumé (si dispo), ou lire le contenu texte (borné).',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['list', 'get_summary', 'get_content'],
+          description: 'Action à effectuer.'
+        },
+        contextType: {
+          type: 'string',
+          enum: ['organization', 'folder', 'usecase'],
+          description: 'Type du contexte.'
+        },
+        contextId: { type: 'string', description: 'ID du contexte.' },
+        documentId: { type: 'string', description: 'ID du document (requis pour get_summary/get_content).' },
+        maxChars: {
+          type: 'number',
+          description: 'Optionnel: borne de caractères pour get_content (max 50000).'
+        }
+      },
+      required: ['action', 'contextType', 'contextId']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

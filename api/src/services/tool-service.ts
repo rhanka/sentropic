@@ -1,7 +1,10 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
+import { chatContexts, contextDocuments, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
 import { createId } from '../utils/id';
+import { and, desc } from 'drizzle-orm';
+import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import { extractDocumentInfoFromDocument } from './document-text';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -1007,6 +1010,125 @@ export class ToolService {
     } finally {
       client.release();
     }
+  }
+
+  // ---------------------------
+  // Context Documents (Lot B)
+  // ---------------------------
+
+  async listContextDocuments(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  }): Promise<{
+    items: Array<{
+      id: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      status: string;
+      summaryAvailable: boolean;
+      createdAt: Date;
+      updatedAt: Date | null;
+    }>;
+  }> {
+    const rows = await db
+      .select()
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, opts.workspaceId),
+          eq(contextDocuments.contextType, opts.contextType),
+          eq(contextDocuments.contextId, opts.contextId)
+        )
+      )
+      .orderBy(desc(contextDocuments.createdAt));
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        filename: r.filename,
+        mimeType: r.mimeType,
+        sizeBytes: r.sizeBytes,
+        status: r.status,
+        summaryAvailable: !!(r.summary && r.summary.trim()),
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt ?? null,
+      })),
+    };
+  }
+
+  async getDocumentSummary(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    summary: string | null;
+  }> {
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+    return {
+      documentId: row.id,
+      documentStatus: row.status,
+      summary: row.summary ?? null,
+    };
+  }
+
+  async getDocumentContent(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+    maxChars?: number | null;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    filename: string;
+    mimeType: string;
+    pages: number | null;
+    title: string | null;
+    content: string;
+    clipped: boolean;
+  }> {
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+
+    const bucket = getDocumentsBucketName();
+    const bytes = await getObjectBytes({ bucket, key: row.storageKey });
+    const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+    const maxChars = typeof opts.maxChars === 'number' ? opts.maxChars : 30_000;
+    const max = Math.max(1000, Math.min(50_000, Number.isFinite(maxChars) ? maxChars : 30_000));
+    const full = (extracted.text || '').trim();
+    const clipped = full.length > max;
+    const content = clipped ? full.slice(0, max) + '\n…(tronqué)…' : full;
+
+    return {
+      documentId: row.id,
+      documentStatus: row.status,
+      filename: row.filename,
+      mimeType: row.mimeType,
+      pages: typeof extracted.metadata.pages === 'number' ? extracted.metadata.pages : null,
+      title: typeof extracted.metadata.title === 'string' ? extracted.metadata.title : null,
+      content,
+      clipped,
+    };
   }
 }
 
