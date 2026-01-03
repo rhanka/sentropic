@@ -12,10 +12,7 @@ CREATE TABLE IF NOT EXISTS "context_documents" (
 	"size_bytes" integer NOT NULL,
 	"storage_key" text NOT NULL,
 	"status" text DEFAULT 'uploaded' NOT NULL,
-	"summary" text,
-	"summary_lang" text DEFAULT 'fr',
-	"prompt_id" text,
-	"prompt_version_id" text,
+	"data" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"job_id" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now(),
@@ -52,10 +49,7 @@ CREATE TABLE IF NOT EXISTS "context_document_versions" (
 	"mime_type" text NOT NULL,
 	"size_bytes" integer NOT NULL,
 	"storage_key" text NOT NULL,
-	"summary" text,
-	"summary_lang" text,
-	"prompt_id" text,
-	"prompt_version_id" text,
+	"data" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

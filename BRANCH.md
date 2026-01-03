@@ -27,6 +27,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
 - Document chunking/search (RAG) and retrieval in prompts.
 - Multi-file merge summaries or “ask questions about docs” chat behavior.
 
+## DB note (schema churn avoidance)
+- Comme `organizations.data` et `use_cases.data`, les données métier des documents (résumés, métadonnées extraites, traces prompt) sont stockées dans `context_documents.data` (**JSONB**) afin d'éviter la démultiplication de colonnes.
+
 ## Design / Architecture decisions (must be validated before deep implementation)
 ### Storage backend: MinIO (dev/test) vs Scaleway S3 (prod)
 - Use a **single S3-compatible client** configured via env:
@@ -108,12 +111,21 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Remplacer les boutons par des icônes:
     - [x] `[id]`: Supprimer = `trash-2`
     - [x] `new`: IA = `brain`, Créer = `save`, Annuler = `trash-2`
-  - [x] Sur `new`, rendre le bouton IA disponible si un document est uploadé; indisponible pendant l’upload
+  - [x] Sur `new`, rendre le bouton IA disponible dès que le nom est renseigné; indisponible pendant l’upload d’un doc
   - [x] Déplacer le bloc document sous le nom de l'organization
   - [ ] Adapter le prompt:
     - [ ] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
     - [ ] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
   - [ ] Partial UAT
+
+- Amélioration tool documentaire
+  - [x] L'outil `documents` peut faire une requête spécialisée à un sous-agent (contexte autonome) via `action=analyze`:
+    - le modèle maître fournit un `prompt` ciblé via l'outil
+    - la réponse est bornée à **10000 mots max**
+  - [x] Si un document dépasse **10000 mots**:
+    - `get_content` ne renvoie **pas** le texte complet
+    - l'outil renvoie à la place un **résumé détaillé** (objectif ~10000 mots) + le **résumé général** (si dispo)
+  - [x] Générer automatiquement (côté job `document_summary`) le résumé détaillé pour les gros documents et le stocker en DB dans `context_documents.data` (`detailedSummary` / `detailed_summary`).
 
 - [ ] Amélioration “Folder & Use case generation”
   - [ ] Remplacer “Nouveau dossier” par un bouton icône `circle-plus`
@@ -149,8 +161,10 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-15 (tool docs - permissions): en rôle restreint, l’IA ne peut pas accéder au contenu complet; elle peut au mieux lister des métadonnées autorisées.
   - [ ] UAT-16 (/home → dossier/new): la création de dossier ne passe plus par une modal; navigation OK; retour arrière/annulation ne laisse pas d’artefacts.
   - [ ] UAT-17 (dossier futur): upload documents avant création du dossier → puis création OK; annulation → nettoyage du “to be” folder + documents.
-  - [ ] UAT-18 (organization/new): bouton IA activé seulement si document présent; désactivé pendant upload; icônes conformes.
+  - [ ] UAT-18 (organization/new): bouton IA activé si nom présent; désactivé pendant upload; icônes conformes.
   - [ ] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
+  - [ ] UAT-20 (tool docs - analyze): l’IA peut appeler `documents.analyze` avec un prompt ciblé et la réponse est bornée à 10000 mots.
+  - [ ] UAT-21 (tool docs - 10k words): si un doc >10000 mots, `get_content` renvoie un résumé détaillé (pas de contenu complet).
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress

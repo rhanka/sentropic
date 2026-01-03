@@ -552,6 +552,100 @@ export class QueueManager {
     return out;
   }
 
+  private countWords(text: string): number {
+    const t = (text || '').trim();
+    if (!t) return 0;
+    return t.split(/\s+/g).filter(Boolean).length;
+  }
+
+  private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
+    const t = (text || '').trim();
+    if (!t) return { text: '', trimmed: false, words: 0 };
+    const words = t.split(/\s+/g).filter(Boolean);
+    const max = Math.max(1, Math.min(10_000, Math.floor(maxWords || 10_000)));
+    if (words.length <= max) return { text: t, trimmed: false, words: words.length };
+    return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
+  }
+
+  private chunkByWords(text: string, chunkWords: number): string[] {
+    const t = (text || '').trim();
+    if (!t) return [];
+    const words = t.split(/\s+/g).filter(Boolean);
+    const size = Math.max(500, Math.min(8000, Math.floor(chunkWords || 4500)));
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i += size) {
+      out.push(words.slice(i, i + size).join(' '));
+    }
+    return out;
+  }
+
+  private async generateDetailedSummaryFromText(opts: {
+    text: string;
+    filename: string;
+    lang: string;
+    model: string;
+    streamId: string;
+    signal?: AbortSignal;
+  }): Promise<{ detailedSummary: string; words: number; clipped: boolean }> {
+    const maxWords = 10_000;
+    const fullText = (opts.text || '').trim();
+    const chunks = this.chunkByWords(fullText, 4500);
+
+    // 1) Summarize each chunk (best-effort, bounded)
+    const chunkSummaries: string[] = [];
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunkText = chunks[i]!;
+      const chunkPrompt =
+        `Tu es un assistant qui résume fidèlement un extrait de document métier.\n` +
+        `Contraintes:\n` +
+        `- Réponds en ${opts.lang}.\n` +
+        `- Format: markdown.\n` +
+        `- Pas d'invention.\n` +
+        `- Vise ~800-1200 mots max.\n\n` +
+        `Document: ${opts.filename}\n` +
+        `Partie ${i + 1}/${chunks.length}\n\n` +
+        `TEXTE:\n---\n${chunkText}\n---\n\n` +
+        `Résume cette partie de façon détaillée (faits, chiffres, obligations, risques, acteurs, échéances).`;
+
+      const { content: chunkContent } = await executeWithToolsStream(chunkPrompt, {
+        model: opts.model,
+        streamId: opts.streamId,
+        promptId: 'document_detailed_summary_part',
+        signal: opts.signal
+      });
+      chunkSummaries.push(this.sanitizePgText(chunkContent).trim());
+    }
+
+    // 2) Merge chunk summaries into a single detailed summary (strict maxWords)
+    const mergeInput = chunkSummaries.map((s, i) => `### Partie ${i + 1}\n${s}`).join('\n\n');
+    const finalPrompt =
+      `Tu es un assistant qui produit un résumé détaillé et fidèle d'un document métier.\n` +
+      `Contraintes:\n` +
+      `- Réponds en ${opts.lang}.\n` +
+      `- Format: markdown.\n` +
+      `- Pas d'invention: si l'info n'est pas dans le texte, dis-le.\n` +
+      `- Longueur: maximum ${maxWords} mots.\n\n` +
+      `Document: ${opts.filename}\n\n` +
+      `Source (résumés de parties):\n---\n${mergeInput}\n---\n\n` +
+      `Produit un résumé détaillé fidèle du document.\n` +
+      `Format recommandé:\n` +
+      `1) Résumé détaillé\n` +
+      `2) Faits & chiffres clés\n` +
+      `3) Obligations / exigences\n` +
+      `4) Risques / points d'attention\n` +
+      `5) Points actionnables (si applicable)\n`;
+
+    const { content: merged } = await executeWithToolsStream(finalPrompt, {
+      model: opts.model,
+      streamId: opts.streamId,
+      promptId: 'document_detailed_summary',
+      signal: opts.signal
+    });
+    const raw = this.sanitizePgText(merged).trim();
+    const trimmed = this.trimToMaxWords(raw, maxWords);
+    return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
+  }
+
   private async getNextModificationSequence(contextType: string, contextId: string): Promise<number> {
     const result = await db
       .select({ maxSequence: sql<number>`MAX(${contextModificationHistory.sequence})` })
@@ -665,9 +759,54 @@ export class QueueManager {
     const summary = this.sanitizePgText(streamedContent).trim();
     if (!summary) throw new Error('Empty summary');
 
+    // For large documents: auto-generate a detailed summary (~10k words) and store it in data.
+    // This is persisted so it is visible in db-query and reusable by tools.
+    const wordsAsNumber = Number(nbWords);
+    let detailedSummary: string | null = null;
+    let detailedSummaryWords: number | null = null;
+    if (Number.isFinite(wordsAsNumber) && wordsAsNumber > 10_000) {
+      await write('status', { state: 'summarizing_detailed' });
+      const detailed = await this.generateDetailedSummaryFromText({
+        text,
+        filename: doc.filename,
+        lang,
+        model: selectedModel,
+        streamId,
+        signal
+      });
+      detailedSummary = detailed.detailedSummary;
+      detailedSummaryWords = detailed.words;
+    }
+
+    const nextData = {
+      ...(doc.data && typeof doc.data === 'object' ? (doc.data as Record<string, unknown>) : {}),
+      summary,
+      summaryLang: lang,
+      extracted: {
+        title: docTitle,
+        pages: nbPages === 'Non précisé' ? null : Number(nbPages),
+        words: nbWords === 'Non précisé' ? null : Number(nbWords),
+      },
+      prompts: {
+        summaryPromptId: 'document_summary',
+      }
+    };
+
+    if (detailedSummary) {
+      // Store both camelCase + snake_case to ease db-query / ad-hoc SQL checks.
+      // Source of truth for app code remains camelCase for now.
+      (nextData as any).detailedSummary = detailedSummary;
+      (nextData as any).detailedSummaryLang = lang;
+      (nextData as any).detailedSummaryWords = detailedSummaryWords;
+      (nextData as any).detailed_summary = detailedSummary;
+      (nextData as any).detailed_summary_lang = lang;
+      (nextData as any).detailed_summary_words = detailedSummaryWords;
+      (nextData as any).prompts = { ...(nextData as any).prompts, detailedPromptId: 'document_detailed_summary' };
+    }
+
     await db
       .update(contextDocuments)
-      .set({ status: 'ready', summary, summaryLang: lang, updatedAt: new Date() })
+      .set({ status: 'ready', data: nextData as any, updatedAt: new Date() })
       .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
     await write('done', { state: 'done' });

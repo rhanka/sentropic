@@ -41,14 +41,16 @@ services:
 
   minio-init:
     image: minio/mc:latest
+    profiles: ["init"]
     depends_on:
       minio:
         condition: service_started
-    entrypoint: ["/bin/sh", "-lc"]
+    entrypoint: ["/bin/sh", "-c"]
     command: >
       until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
         echo "waiting for minio..." && sleep 1;
-      done &&
-      mc mb --ignore-existing local/${S3_BUCKET_NAME:-top-ai-ideas-test} &&
-      mc anonymous set none local/${S3_BUCKET_NAME:-top-ai-ideas-test} || true
+      done;
+      mc mb --ignore-existing local/${S3_BUCKET_NAME:-top-ai-ideas-test} || true;
+      mc anonymous set none local/${S3_BUCKET_NAME:-top-ai-ideas-test} || true;
+      exit 0
     restart: "no"

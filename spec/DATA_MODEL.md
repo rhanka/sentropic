@@ -291,10 +291,7 @@ erDiagram
         int size_bytes
         text storage_key
         text status
-        text summary
-        text summary_lang
-        text prompt_id
-        text prompt_version_id
+        jsonb data
         text job_id "FK job_queue.id (nullable)"
         int version
         timestamp created_at
@@ -309,10 +306,7 @@ erDiagram
         text mime_type
         int size_bytes
         text storage_key
-        text summary
-        text summary_lang
-        text prompt_id
-        text prompt_version_id
+        jsonb data
         timestamp created_at
     }
 ```

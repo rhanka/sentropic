@@ -353,10 +353,15 @@ export const contextDocuments = pgTable('context_documents', {
   sizeBytes: integer('size_bytes').notNull(),
   storageKey: text('storage_key').notNull(), // object key in S3-compatible storage
   status: text('status').notNull().default('uploaded'), // 'uploaded' | 'processing' | 'ready' | 'failed'
-  summary: text('summary'),
-  summaryLang: text('summary_lang').default('fr'),
-  promptId: text('prompt_id'),
-  promptVersionId: text('prompt_version_id'),
+  // Document metadata / summaries are stored in JSONB to avoid schema churn (like organizations/use_cases)
+  // Suggested structure:
+  // - summary: string (résumé général)
+  // - summaryLang: 'fr' | 'en'
+  // - detailedSummary: string (optionnel, ~10k mots)
+  // - detailedSummaryLang: 'fr' | 'en'
+  // - extracted: { title?: string; pages?: number; words?: number }
+  // - prompts: { summaryPromptId?: string; summaryPromptVersionId?: string; detailedPromptId?: string; detailedPromptVersionId?: string }
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
   jobId: text('job_id').references(() => jobQueue.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
@@ -378,10 +383,7 @@ export const contextDocumentVersions = pgTable('context_document_versions', {
   mimeType: text('mime_type').notNull(),
   sizeBytes: integer('size_bytes').notNull(),
   storageKey: text('storage_key').notNull(),
-  summary: text('summary'),
-  summaryLang: text('summary_lang'),
-  promptId: text('prompt_id'),
-  promptVersionId: text('prompt_version_id'),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
 }, (table) => ({
   documentIdIdx: index('context_document_versions_document_id_idx').on(table.documentId),

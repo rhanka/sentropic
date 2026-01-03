@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents, contextDocuments } from '../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -297,6 +297,59 @@ export class ChatService {
     };
   }
 
+  private async getAllowedDocumentsContexts(opts: {
+    primaryContextType: ChatContextType | null | undefined;
+    primaryContextId: string | null | undefined;
+    workspaceId: string;
+  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>> {
+    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
+    const type = opts.primaryContextType ?? null;
+    const id = (opts.primaryContextId ?? '').trim();
+    if (!type || !id) return out;
+
+    if (type === 'organization' || type === 'usecase') {
+      out.push({ contextType: type, contextId: id });
+      return out;
+    }
+
+    if (type === 'folder') {
+      // Folder view can use folder docs + organization docs (if folder is linked to an org).
+      out.push({ contextType: 'folder', contextId: id });
+      try {
+        const [row] = await db
+          .select({ organizationId: folders.organizationId })
+          .from(folders)
+          .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
+          .limit(1);
+        const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
+        if (orgId) out.push({ contextType: 'organization', contextId: orgId });
+      } catch {
+        // ignore (no org)
+      }
+      return out;
+    }
+
+    if (type === 'executive_summary') {
+      // Executive summary is a folder-scoped view.
+      out.push({ contextType: 'folder', contextId: id });
+      // Also allow organization docs (folder.organizationId) to be used from this view.
+      try {
+        const [row] = await db
+          .select({ organizationId: folders.organizationId })
+          .from(folders)
+          .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
+          .limit(1);
+        const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
+        if (orgId) out.push({ contextType: 'organization', contextId: orgId });
+      } catch {
+        // ignore (no org)
+      }
+      return out;
+    }
+
+    return out;
+  }
+
   /**
    * Exécute la génération assistant pour un message placeholder déjà créé.
    * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
@@ -344,22 +397,30 @@ export class ChatService {
     const primaryContextId = session.primaryContextId;
 
     // Documents tool is only exposed if there are documents attached to the current context.
+    const allowedDocContexts = await this.getAllowedDocumentsContexts({
+      primaryContextType,
+      primaryContextId,
+      workspaceId: sessionWorkspaceId
+    });
+
     const hasDocuments = await (async () => {
-      if (!primaryContextId) return false;
-      if (primaryContextType !== 'organization' && primaryContextType !== 'folder' && primaryContextType !== 'usecase') return false;
+      if (allowedDocContexts.length === 0) return false;
       try {
-        const rows = await db
-          .select({ id: sql<string>`id` })
-          .from(contextDocuments)
-          .where(
-            and(
-              eq(contextDocuments.workspaceId, sessionWorkspaceId),
-              eq(contextDocuments.contextType, primaryContextType),
-              eq(contextDocuments.contextId, primaryContextId)
+        for (const ctx of allowedDocContexts) {
+          const rows = await db
+            .select({ id: sql<string>`id` })
+            .from(contextDocuments)
+            .where(
+              and(
+                eq(contextDocuments.workspaceId, sessionWorkspaceId),
+                eq(contextDocuments.contextType, ctx.contextType),
+                eq(contextDocuments.contextId, ctx.contextId)
+              )
             )
-          )
-          .limit(1);
-        return rows.length > 0;
+            .limit(1);
+          if (rows.length > 0) return true;
+        }
+        return false;
       } catch {
         return false;
       }
@@ -411,6 +472,7 @@ export class ChatService {
         folderGetTool,
         matrixGetTool,
         organizationGetTool,
+        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
       ];
@@ -489,6 +551,7 @@ Tools disponibles :
 - \`executive_summary_get\` : Lit la synthèse exécutive du dossier courant
 - \`executive_summary_update\` : Met à jour la synthèse exécutive du dossier courant${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`organization_get\` : Lit l'organisation rattachée au dossier (si le dossier a un organizationId)
+- \`documents\` : Accède aux documents du **dossier** et/ou de **l'organisation liée** (liste / résumé / contenu borné / analyse) — uniquement si des documents sont présents
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
 
@@ -507,6 +570,7 @@ Tools disponibles :
 - \`folder_get\` : Lit le dossier (contexte général)
 - \`matrix_get\` : Lit la matrice (matrixConfig) du dossier
 - \`organization_get\` : Lit l'organisation rattachée au dossier (si le dossier a un organizationId)
+- \`documents\` : Accède aux documents du **dossier** et/ou de **l'organisation liée** (liste / résumé / contenu borné / analyse) — uniquement si des documents sont présents
 - \`web_search\` : Recherche d'informations récentes sur le web
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes (si plusieurs URLs, les passer en une seule fois via \`urls: []\`)
 
@@ -1020,14 +1084,20 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'documents') {
-            // Security: documents tool must match the session primary context exactly
-            if (primaryContextType !== 'organization' && primaryContextType !== 'folder' && primaryContextType !== 'usecase') {
-              throw new Error('Security: documents tool is only available in organization/folder/usecase context');
+            // Security: documents tool must match the effective session context exactly.
+            if (
+              primaryContextType !== 'organization' &&
+              primaryContextType !== 'folder' &&
+              primaryContextType !== 'usecase' &&
+              primaryContextType !== 'executive_summary'
+            ) {
+              throw new Error('Security: documents tool is only available in organization/folder/usecase/executive_summary context');
             }
-            if (!primaryContextId) {
-              throw new Error('Security: documents tool requires a selected context id');
-            }
-            if (args.contextType !== primaryContextType || args.contextId !== primaryContextId) {
+            if (!primaryContextId) throw new Error('Security: documents tool requires a selected context id');
+
+            const allowed = allowedDocContexts;
+            const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
+            if (!isAllowed) {
               throw new Error('Security: context does not match session context');
             }
 
@@ -1035,8 +1105,8 @@ Règles :
             if (action === 'list') {
               const list = await toolService.listContextDocuments({
                 workspaceId: sessionWorkspaceId,
-                contextType: primaryContextType,
-                contextId: primaryContextId,
+                contextType: args.contextType,
+                contextId: args.contextId,
               });
               result = { status: 'completed', ...list };
             } else if (action === 'get_summary') {
@@ -1044,8 +1114,8 @@ Règles :
               if (!documentId) throw new Error('documents.get_summary: documentId is required');
               const summary = await toolService.getDocumentSummary({
                 workspaceId: sessionWorkspaceId,
-                contextType: primaryContextType,
-                contextId: primaryContextId,
+                contextType: args.contextType,
+                contextId: args.contextId,
                 documentId,
               });
               result = { status: 'completed', ...summary };
@@ -1055,12 +1125,36 @@ Règles :
               const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
               const content = await toolService.getDocumentContent({
                 workspaceId: sessionWorkspaceId,
-                contextType: primaryContextType,
-                contextId: primaryContextId,
+                contextType: args.contextType,
+                contextId: args.contextId,
                 documentId,
                 maxChars,
               });
               result = { status: 'completed', ...content };
+            } else if (action === 'analyze') {
+              await writeStreamEvent(
+                options.assistantMessageId,
+                'tool_call_result',
+                { tool_call_id: toolCall.id, result: { status: 'executing' } },
+                streamSeq,
+                options.assistantMessageId
+              );
+              streamSeq += 1;
+              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+              if (!documentId) throw new Error('documents.analyze: documentId is required');
+              const prompt = typeof args.prompt === 'string' ? args.prompt : '';
+              if (!prompt.trim()) throw new Error('documents.analyze: prompt is required');
+              const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
+              const analysis = await toolService.analyzeDocument({
+                workspaceId: sessionWorkspaceId,
+                contextType: args.contextType,
+                contextId: args.contextId,
+                documentId,
+                prompt,
+                maxWords,
+                signal: options.signal
+              });
+              result = { status: 'completed', ...analysis };
             } else {
               throw new Error(`documents: unknown action ${action}`);
             }

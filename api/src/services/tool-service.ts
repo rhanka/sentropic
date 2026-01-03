@@ -1,10 +1,10 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { chatContexts, contextDocuments, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
 import { createId } from '../utils/id';
-import { and, desc } from 'drizzle-orm';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
+import { callOpenAI } from './openai';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -1016,6 +1016,118 @@ export class ToolService {
   // Context Documents (Lot B)
   // ---------------------------
 
+  private countWords(text: string): number {
+    const t = (text || '').trim();
+    if (!t) return 0;
+    // Split on whitespace; good enough for FR/EN.
+    return t.split(/\s+/g).filter(Boolean).length;
+  }
+
+  private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
+    const t = (text || '').trim();
+    if (!t) return { text: '', trimmed: false, words: 0 };
+    const words = t.split(/\s+/g).filter(Boolean);
+    const max = Math.max(1, Math.min(10_000, Math.floor(maxWords || 10_000)));
+    if (words.length <= max) return { text: t, trimmed: false, words: words.length };
+    return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
+  }
+
+  private chunkByWords(text: string, chunkWords: number): string[] {
+    const t = (text || '').trim();
+    if (!t) return [];
+    const words = t.split(/\s+/g).filter(Boolean);
+    const size = Math.max(500, Math.min(8000, Math.floor(chunkWords || 4000)));
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i += size) {
+      out.push(words.slice(i, i + size).join(' '));
+    }
+    return out;
+  }
+
+  private async generateDetailedSummaryFromText(opts: {
+    text: string;
+    filename: string;
+    lang: 'fr' | 'en';
+    maxWords: number;
+    signal?: AbortSignal;
+  }): Promise<{ detailedSummary: string; trimmed: boolean; words: number; chunks: number }> {
+    const maxWords = Math.max(1000, Math.min(10_000, Math.floor(opts.maxWords || 10_000)));
+    const wordCount = this.countWords(opts.text);
+    const chunks = wordCount > 15_000 ? this.chunkByWords(opts.text, 4500) : [opts.text];
+
+    const chunkSummaries: string[] = [];
+    if (chunks.length > 1) {
+      for (let i = 0; i < chunks.length; i += 1) {
+        const chunkText = chunks[i]!;
+        const resp = await callOpenAI({
+          messages: [
+            {
+              role: 'system',
+              content:
+                `Tu es un sous-agent qui résume fidèlement un extrait de document métier.\n` +
+                `Contraintes:\n` +
+                `- Réponds en ${opts.lang === 'fr' ? 'français' : 'anglais'}.\n` +
+                `- Format: markdown.\n` +
+                `- Pas d'invention.\n` +
+                `- Vise ~800-1200 mots max.\n`
+            },
+            {
+              role: 'user',
+              content:
+                `Document: ${opts.filename}\n` +
+                `Partie ${i + 1}/${chunks.length}\n\n` +
+                `TEXTE:\n---\n${chunkText}\n---\n\n` +
+                `Résume cette partie de façon détaillée (faits, chiffres, obligations, risques, acteurs, échéances).`
+            }
+          ],
+          signal: opts.signal
+        });
+        const content = resp.choices?.[0]?.message?.content ?? '';
+        chunkSummaries.push(String(content || '').trim());
+      }
+    } else {
+      chunkSummaries.push(opts.text);
+    }
+
+    const mergeInput =
+      chunks.length > 1
+        ? chunkSummaries.map((s, i) => `### Partie ${i + 1}\n${s}`).join('\n\n')
+        : chunkSummaries[0]!;
+
+    const finalResp = await callOpenAI({
+      messages: [
+        {
+          role: 'system',
+          content:
+            `Tu es un sous-agent qui produit un résumé détaillé et fidèle d'un document métier.\n` +
+            `Contraintes:\n` +
+            `- Réponds en ${opts.lang === 'fr' ? 'français' : 'anglais'}.\n` +
+            `- Format: markdown.\n` +
+            `- Pas d'invention: si l'info n'est pas dans le texte, dis-le.\n` +
+            `- Limite stricte: maximum ${maxWords} mots.\n`
+        },
+        {
+          role: 'user',
+          content:
+            `Document: ${opts.filename}\n\n` +
+            `Source (résumés de parties ou texte complet):\n---\n${mergeInput}\n---\n\n` +
+            `Produit un résumé détaillé fidèle du document.\n` +
+            `Format recommandé:\n` +
+            `1) Résumé détaillé\n` +
+            `2) Faits & chiffres clés\n` +
+            `3) Obligations / exigences\n` +
+            `4) Risques / points d'attention\n` +
+            `5) Points actionnables (si applicable)\n`
+        }
+      ],
+      signal: opts.signal
+    });
+
+    const raw = String(finalResp.choices?.[0]?.message?.content ?? '').trim();
+    const trimmed = this.trimToMaxWords(raw, maxWords);
+    return { detailedSummary: trimmed.text, trimmed: trimmed.trimmed, words: trimmed.words, chunks: chunks.length };
+  }
+
   async listContextDocuments(opts: {
     workspaceId: string;
     contextType: 'organization' | 'folder' | 'usecase';
@@ -1051,7 +1163,7 @@ export class ToolService {
         mimeType: r.mimeType,
         sizeBytes: r.sizeBytes,
         status: r.status,
-        summaryAvailable: !!(r.summary && r.summary.trim()),
+        summaryAvailable: !!(typeof (r.data as any)?.summary === 'string' && (r.data as any).summary.trim()),
         createdAt: r.createdAt,
         updatedAt: r.updatedAt ?? null,
       })),
@@ -1080,7 +1192,7 @@ export class ToolService {
     return {
       documentId: row.id,
       documentStatus: row.status,
-      summary: row.summary ?? null,
+      summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null,
     };
   }
 
@@ -1099,6 +1211,9 @@ export class ToolService {
     title: string | null;
     content: string;
     clipped: boolean;
+    contentMode: 'full_text' | 'detailed_summary';
+    words: number;
+    summary: string | null;
   }> {
     const [row] = await db
       .select()
@@ -1110,14 +1225,74 @@ export class ToolService {
       throw new Error('Security: document does not match context');
     }
 
+    // Security / spec: do NOT return full content if doc is larger than 10k words.
+    const WORDS_FULL_CONTENT_LIMIT = 10_000;
+    const lang: 'fr' | 'en' =
+      typeof (row.data as any)?.summaryLang === 'string' && (row.data as any).summaryLang === 'en' ? 'en' : 'fr';
+
+    const storedWords = (() => {
+      const n = (row.data as any)?.extracted?.words;
+      return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
+    })();
+
+    const storedDetailed = (() => {
+      const v = (row.data as any)?.detailedSummary;
+      return typeof v === 'string' && v.trim() ? v : null;
+    })();
+
+    // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
+    // return it without downloading/extracting the file again.
+    if (storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT && storedDetailed) {
+      return {
+        documentId: row.id,
+        documentStatus: row.status,
+        filename: row.filename,
+        mimeType: row.mimeType,
+        pages: typeof (row.data as any)?.extracted?.pages === 'number' ? (row.data as any).extracted.pages : null,
+        title: typeof (row.data as any)?.extracted?.title === 'string' ? (row.data as any).extracted.title : null,
+        content: storedDetailed,
+        clipped: false,
+        contentMode: 'detailed_summary',
+        words: storedWords,
+        summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null
+      };
+    }
+
     const bucket = getDocumentsBucketName();
     const bytes = await getObjectBytes({ bucket, key: row.storageKey });
     const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
-    const maxChars = typeof opts.maxChars === 'number' ? opts.maxChars : 30_000;
-    const max = Math.max(1000, Math.min(50_000, Number.isFinite(maxChars) ? maxChars : 30_000));
     const full = (extracted.text || '').trim();
-    const clipped = full.length > max;
-    const content = clipped ? full.slice(0, max) + '\n…(tronqué)…' : full;
+    const words = this.countWords(full);
+
+    let contentMode: 'full_text' | 'detailed_summary' = 'full_text';
+    let content = full;
+    let clipped = false;
+
+    if (words > WORDS_FULL_CONTENT_LIMIT) {
+      contentMode = 'detailed_summary';
+      // Prefer persisted detailed summary when available.
+      if (storedDetailed) {
+        content = storedDetailed;
+        clipped = false;
+      } else {
+      const detailed = await this.generateDetailedSummaryFromText({
+        text: full,
+        filename: row.filename,
+        lang,
+        maxWords: WORDS_FULL_CONTENT_LIMIT
+      });
+        content = detailed.detailedSummary;
+        clipped = detailed.trimmed;
+      }
+    } else {
+      // Optional: allow callers to bound by chars (legacy), but default is full text.
+      const maxChars = typeof opts.maxChars === 'number' ? opts.maxChars : null;
+      if (typeof maxChars === 'number') {
+        const max = Math.max(1000, Math.min(50_000, Number.isFinite(maxChars) ? maxChars : 30_000));
+        clipped = content.length > max;
+        content = clipped ? content.slice(0, max) + '\n…(tronqué)…' : content;
+      }
+    }
 
     return {
       documentId: row.id,
@@ -1128,6 +1303,79 @@ export class ToolService {
       title: typeof extracted.metadata.title === 'string' ? extracted.metadata.title : null,
       content,
       clipped,
+      contentMode,
+      words,
+      summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null
+    };
+  }
+
+  async analyzeDocument(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+    prompt: string;
+    maxWords?: number | null;
+    signal?: AbortSignal;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    filename: string;
+    mode: 'full_text' | 'detailed_summary';
+    analysis: string;
+    analysisWords: number;
+    clipped: boolean;
+    summary: string | null;
+  }> {
+    const p = (opts.prompt || '').trim();
+    if (!p) throw new Error('documents.analyze: prompt is required');
+    const maxWords = Math.max(500, Math.min(10_000, Math.floor(opts.maxWords ?? 10_000)));
+
+    const contentRes = await this.getDocumentContent({
+      workspaceId: opts.workspaceId,
+      contextType: opts.contextType,
+      contextId: opts.contextId,
+      documentId: opts.documentId,
+      // For analysis: avoid char clipping on small docs.
+      maxChars: null
+    });
+
+    const system =
+      `Tu es un sous-agent d'analyse documentaire (contexte autonome).\n` +
+      `Objectif: répondre à une requête spécialisée à partir d'un document (ou d'un résumé détaillé si le document est trop long).\n` +
+      `Contraintes:\n` +
+      `- Réponds en français.\n` +
+      `- Format: markdown.\n` +
+      `- Pas d'invention.\n` +
+      `- Longueur: maximum ${maxWords} mots.\n`;
+
+    const user =
+      `Document: ${contentRes.filename}\n` +
+      `Mode source: ${contentRes.contentMode}\n` +
+      `Résumé général (si dispo):\n${contentRes.summary ? contentRes.summary : '(non disponible)'}\n\n` +
+      `SOURCE:\n---\n${contentRes.content}\n---\n\n` +
+      `INSTRUCTION (du modèle maître):\n---\n${p}\n---\n\n` +
+      `Réponds uniquement avec l'analyse demandée.`;
+
+    const resp = await callOpenAI({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      signal: opts.signal
+    });
+
+    const raw = String(resp.choices?.[0]?.message?.content ?? '').trim();
+    const trimmed = this.trimToMaxWords(raw, maxWords);
+    return {
+      documentId: contentRes.documentId,
+      documentStatus: contentRes.documentStatus,
+      filename: contentRes.filename,
+      mode: contentRes.contentMode,
+      analysis: trimmed.text,
+      analysisWords: trimmed.words,
+      clipped: trimmed.trimmed,
+      summary: contentRes.summary
     };
   }
 }

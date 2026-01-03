@@ -458,13 +458,13 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: 'documents',
     description:
-      'Accède aux documents attachés à un contexte (organization/folder/usecase). Permet: lister les documents + statuts, lire un résumé (si dispo), ou lire le contenu texte (borné).',
+      "Accède aux documents attachés à un contexte (organization/folder/usecase). Permet: lister les documents + statuts, lire un résumé (si dispo), lire le contenu texte (si le document fait <= 10000 mots), ou lancer une analyse ciblée via un sous-agent (réponse max 10000 mots).",
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['list', 'get_summary', 'get_content'],
+          enum: ['list', 'get_summary', 'get_content', 'analyze'],
           description: 'Action à effectuer.'
         },
         contextType: {
@@ -477,6 +477,15 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         maxChars: {
           type: 'number',
           description: 'Optionnel: borne de caractères pour get_content (max 50000).'
+        },
+        prompt: {
+          type: 'string',
+          description:
+            "Requis pour analyze: prompt/instruction ciblée à exécuter par un sous-agent à partir du document (ou d'un résumé détaillé si le doc dépasse 10000 mots)."
+        },
+        maxWords: {
+          type: 'number',
+          description: 'Optionnel: borne en mots pour analyze (max 10000, défaut 10000).'
         }
       },
       required: ['action', 'contextType', 'contextId']
