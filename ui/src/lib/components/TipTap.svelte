@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
+  import Placeholder from '@tiptap/extension-placeholder';
     import { Markdown } from 'tiptap-markdown';
     import { 
       BulletListWithClasses, 
@@ -13,6 +14,7 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
 
     export let value;
     export let forceList = false;
+    export let placeholder = '';
     let editor, element;
     let lastValue;
     const dispatch = createEventDispatcher();
@@ -85,6 +87,11 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
         HeadingWithClasses,
         // Extension Markdown
         Markdown,
+        // Placeholder when empty (for better UX in forms)
+        Placeholder.configure({
+          placeholder: placeholder || '',
+          showOnlyWhenEditable: true,
+        }),
       ],
       content: initialContent,
       onUpdate: ({ editor }) => {
@@ -177,9 +184,19 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
         outline: none!important;
     }
 
-    /* Masquer le paragraphe vide que TipTap ajoute après une liste */
-    :global(.markdown-wrapper .ProseMirror > p:last-child:empty),
-    :global(.markdown-wrapper .ProseMirror > p:last-child:has(> br:only-child)) {
+    /* Placeholder (tiptap/extension-placeholder) */
+    :global(.markdown-wrapper .ProseMirror p.is-editor-empty:first-child::before) {
+        content: attr(data-placeholder);
+        float: left;
+        color: #94a3b8; /* text-slate-400 */
+        pointer-events: none;
+        height: 0;
+    }
+
+    /* Masquer le paragraphe vide que TipTap ajoute après une liste
+       IMPORTANT: ne pas masquer l'unique paragraphe vide, sinon le placeholder ne peut pas s'afficher. */
+    :global(.markdown-wrapper .ProseMirror > p:last-child:empty:not(:first-child)),
+    :global(.markdown-wrapper .ProseMirror > p:last-child:not(:first-child):has(> br:only-child)) {
         display: none;
     }
 

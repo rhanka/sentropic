@@ -244,7 +244,7 @@
         />
       {:else}
         <div class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          Renseigne un nom d’organisation pour activer l’ajout de documents.
+          Renseigner un nom d’organisation pour activer l’ajout de documents.
         </div>
       {/if}
     </div>
