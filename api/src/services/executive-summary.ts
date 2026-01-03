@@ -1,6 +1,6 @@
 import { db } from '../db/client';
-import { useCases, folders, organizations } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { useCases, folders, organizations, contextDocuments } from '../db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { executeWithToolsStream } from './tools';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
@@ -75,6 +75,7 @@ export async function generateExecutiveSummary(
   // Récupérer le dossier
   const [folder] = await db.select({
     id: folders.id,
+    workspaceId: folders.workspaceId,
     name: folders.name,
     description: folders.description,
     organizationId: folders.organizationId,
@@ -167,11 +168,64 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   }
 
   // Remplacer les variables du prompt
-  const prompt = executiveSummaryPrompt
+  const basePrompt = executiveSummaryPrompt
     .replace('{{folder_description}}', folder.description || folder.name)
     .replace('{{organization_info}}', organizationInfo)
     .replace('{{top_cas}}', topCasesFormatted)
     .replace('{{use_cases}}', useCasesFormatted);
+
+  // Documents: autoriser l'outil documents pour le dossier, l'organisation, et les cas d'usage du dossier (si des documents existent).
+  const documentsContexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
+  const workspaceId = folder.workspaceId;
+
+  const [folderDoc] = await db
+    .select({ id: contextDocuments.id })
+    .from(contextDocuments)
+    .where(and(eq(contextDocuments.workspaceId, workspaceId), eq(contextDocuments.contextType, 'folder'), eq(contextDocuments.contextId, folderId)))
+    .limit(1);
+  if (folderDoc?.id) documentsContexts.push({ workspaceId, contextType: 'folder', contextId: folderId });
+
+  if (folder.organizationId) {
+    const [orgDoc] = await db
+      .select({ id: contextDocuments.id })
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, workspaceId),
+          eq(contextDocuments.contextType, 'organization'),
+          eq(contextDocuments.contextId, folder.organizationId)
+        )
+      )
+      .limit(1);
+    if (orgDoc?.id) documentsContexts.push({ workspaceId, contextType: 'organization', contextId: folder.organizationId });
+  }
+
+  const useCaseIds = useCasesList.map((uc) => uc.id).filter(Boolean);
+  if (useCaseIds.length > 0) {
+    const useCaseDocRows = await db
+      .select({ contextId: contextDocuments.contextId })
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, workspaceId),
+          eq(contextDocuments.contextType, 'usecase'),
+          inArray(contextDocuments.contextId, useCaseIds)
+        )
+      )
+      .groupBy(contextDocuments.contextId);
+    for (const r of useCaseDocRows) {
+      if (r.contextId) documentsContexts.push({ workspaceId, contextType: 'usecase', contextId: r.contextId });
+    }
+  }
+
+  const docsDirective =
+    documentsContexts.length > 0
+      ? `\n\nDOCUMENTS DISPONIBLES (outil documents)\n- Tu as accès à l'outil "documents" pour consulter des documents existants.\n- Contextes autorisés:\n${documentsContexts
+          .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
+          .join('\n')}\n- Si utile, commence par action=list, puis action=get_summary ou get_content.\n- Ne pas inventer: s'appuyer sur les documents uniquement si tu les appelles.`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}`;
 
   // Récupérer le modèle (fourni ou par défaut)
   const aiSettings = await settingsService.getAISettings();
@@ -182,6 +236,8 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   const result = await executeWithToolsStream(prompt, {
     model: selectedModel,
     useWebSearch: true,
+    useDocuments: documentsContexts.length > 0,
+    documentsContexts,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
     promptId: 'executive_summary',
