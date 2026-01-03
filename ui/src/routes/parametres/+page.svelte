@@ -37,7 +37,7 @@
   let aiSettings = {
     concurrency: 10,
     defaultModel: 'gpt-5',
-    processingInterval: 5000
+    processingInterval: 1000
   };
   let isLoadingAISettings = false;
   let isSavingAISettings = false;
