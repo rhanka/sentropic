@@ -155,6 +155,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [ ] Si l’utilisateur annule ou quitte la vue, supprimer le “to be” folder + ses documents (avec altert pour éviter de quitter et supprimer par erreur)
     - [x] Les boutons IA/Créer sont disponibles uniquement si contexte renseigné OU document présent
     - [x] Si l’utilisateur a renseigné un nom de dossier, le prompt doit l’utiliser (correction/mise en forme par l'IA OK)
+    - [x] Bug: si aucun titre n’est saisi, ne pas laisser “Brouillon” devenir le titre final; laisser l’IA nommer le dossier
   - [ ] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
   - [x] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
   - [x] Synthèse exécutive: permettre l’accès aux documents (dossier + organisation + cas d’usage) via le tool `documents` si au moins un document existe

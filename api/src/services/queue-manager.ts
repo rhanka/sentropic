@@ -972,6 +972,7 @@ export class QueueManager {
         id: folders.id,
         workspaceId: folders.workspaceId,
         name: folders.name,
+        description: folders.description,
         organizationId: folders.organizationId,
       })
       .from(folders)
@@ -1043,14 +1044,23 @@ export class QueueManager {
     );
     
     // Mettre à jour le nom du dossier
-    if (useCaseList.dossier) {
-      await db.update(folders)
+    // - si l'utilisateur a fourni un nom: le préserver
+    // - sinon: utiliser le nom généré par l'IA (et ne jamais conserver "Brouillon" comme titre final)
+    const generatedFolderName =
+      typeof useCaseList.dossier === 'string' && useCaseList.dossier.trim() && useCaseList.dossier.trim() !== 'Brouillon'
+        ? useCaseList.dossier.trim()
+        : '';
+    const nextFolderName = userFolderName || generatedFolderName;
+    if (nextFolderName) {
+      const shouldFillDescription = !folder.description || !folder.description.trim();
+      await db
+        .update(folders)
         .set({
-          name: useCaseList.dossier,
-          description: `Dossier généré automatiquement pour: ${input}`
+          name: nextFolderName,
+          ...(shouldFillDescription ? { description: input } : {}),
         })
         .where(eq(folders.id, folderId));
-      console.log(`📁 Folder updated: ${useCaseList.dossier} (ID: ${folderId}, Org: ${organizationId || 'None'})`);
+      console.log(`📁 Folder updated: ${nextFolderName} (ID: ${folderId}, Org: ${resolvedOrganizationId || 'None'})`);
       await this.notifyFolderEvent(folderId);
     }
 

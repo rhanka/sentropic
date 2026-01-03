@@ -72,6 +72,7 @@ Format: JSON
 IMPORTANT: 
 - Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
 - Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
+- Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
 - Base-toi sur des exemples concrets et des technologies actuelles
 - Génère le titre et la description pour chaque cas d'usage
