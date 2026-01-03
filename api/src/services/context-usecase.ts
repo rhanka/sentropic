@@ -183,6 +183,8 @@ export const generateUseCaseList = async (
   organizationInfo?: string, 
   model?: string,
   useCaseCount?: number,
+  folderName?: string,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseList> => {
@@ -192,10 +194,20 @@ export const generateUseCaseList = async (
     throw new Error('Prompt use_case_list non trouvé');
   }
 
-  const prompt = useCaseListPrompt
+  const basePrompt = useCaseListPrompt
     .replace('{{user_input}}', input)
+    .replace('{{folder_name}}', folderName || '')
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{use_case_count}}', String(useCaseCount ?? defaultUseCaseCount));
+
+  const docsDirective =
+    documentsContexts && documentsContexts.length > 0
+      ? `\n\nDOCUMENTS DISPONIBLES (outil documents)\n- Tu as accès à l'outil "documents" pour consulter des documents existants.\n- Contextes autorisés:\n${documentsContexts
+          .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
+          .join('\n')}\n- Si utile, commence par action=list, puis action=get_summary ou get_content.\n- Ne pas inventer: s'appuyer sur les documents uniquement si tu les appelles.`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}`;
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
@@ -203,6 +215,8 @@ export const generateUseCaseList = async (
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
+    useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
+    documentsContexts,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
     promptId: 'use_case_list',
@@ -230,6 +244,7 @@ export const generateUseCaseDetail = async (
   matrix: MatrixConfig,
   organizationInfo?: string,
   model?: string,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseDetail> => {
@@ -239,11 +254,20 @@ export const generateUseCaseDetail = async (
     throw new Error('Prompt use_case_detail non trouvé');
   }
 
-  const prompt = useCaseDetailPrompt
+  const basePrompt = useCaseDetailPrompt
     .replace(/\{\{use_case\}\}/g, useCase)
     .replace('{{user_input}}', context)
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
+
+  const docsDirective =
+    documentsContexts && documentsContexts.length > 0
+      ? `\n\nDOCUMENTS DISPONIBLES (outil documents)\n- Tu as accès à l'outil "documents" pour consulter des documents existants.\n- Contextes autorisés:\n${documentsContexts
+          .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
+          .join('\n')}\n- Si utile, commence par action=list, puis action=get_summary ou get_content.\n- Ne pas inventer: s'appuyer sur les documents uniquement si tu les appelles.`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}`;
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
@@ -251,6 +275,8 @@ export const generateUseCaseDetail = async (
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
+    useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
+    documentsContexts,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
     promptId: 'use_case_detail',

@@ -63,6 +63,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     description: 'Prompt pour générer une liste de cas d\'usage',
     content: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
+    - le nom de dossier fourni par l'utilisateur (si non vide): {{folder_name}},
     - les informations de l'organisation: {{organization_info}},
     - le nombre de cas d'usage à générer: {{use_case_count}}
 Pour chaque cas d'usage, propose un titre court et explicite.
@@ -70,6 +71,7 @@ Format: JSON
 
 IMPORTANT: 
 - Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
+- Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
 - Base-toi sur des exemples concrets et des technologies actuelles
 - Génère le titre et la description pour chaque cas d'usage
@@ -93,7 +95,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     ...
   ]
 }`,
-    variables: ['user_input', 'organization_info', 'use_case_count']
+    variables: ['user_input', 'folder_name', 'organization_info', 'use_case_count']
   },
   {
     id: 'use_case_detail',

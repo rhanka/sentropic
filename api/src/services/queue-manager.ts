@@ -161,6 +161,36 @@ export class QueueManager {
     }
   }
 
+  private async hasAnyContextDocuments(
+    workspaceId: string,
+    contextType: 'organization' | 'folder' | 'usecase',
+    contextId: string
+  ): Promise<boolean> {
+    const [row] = await db
+      .select({ id: contextDocuments.id })
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.workspaceId, workspaceId), eq(contextDocuments.contextType, contextType), eq(contextDocuments.contextId, contextId)))
+      .limit(1);
+    return Boolean(row?.id);
+  }
+
+  private async getDocumentsContextsForGeneration(opts: {
+    workspaceId: string;
+    folderId: string;
+    organizationId?: string | null;
+  }): Promise<Array<{ workspaceId: string; contextType: 'organization' | 'folder'; contextId: string }>> {
+    const { workspaceId, folderId, organizationId } = opts;
+    const contexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder'; contextId: string }> = [];
+
+    if (await this.hasAnyContextDocuments(workspaceId, 'folder', folderId)) {
+      contexts.push({ workspaceId, contextType: 'folder', contextId: folderId });
+    }
+    if (organizationId && (await this.hasAnyContextDocuments(workspaceId, 'organization', organizationId))) {
+      contexts.push({ workspaceId, contextType: 'organization', contextId: organizationId });
+    }
+    return contexts;
+  }
+
   /**
    * Charger les paramètres de configuration
    */
@@ -938,7 +968,12 @@ export class QueueManager {
     const { folderId, input, organizationId, model, useCaseCount } = data;
 
     const [folder] = await db
-      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .select({
+        id: folders.id,
+        workspaceId: folders.workspaceId,
+        name: folders.name,
+        organizationId: folders.organizationId,
+      })
       .from(folders)
       .where(eq(folders.id, folderId))
       .limit(1);
@@ -946,6 +981,7 @@ export class QueueManager {
       throw new Error('Folder not found');
     }
     const workspaceId = folder.workspaceId;
+    const resolvedOrganizationId = organizationId ?? folder.organizationId ?? undefined;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -953,12 +989,12 @@ export class QueueManager {
     
     // Récupérer les informations de l'organisation si nécessaire
     let organizationInfo = '';
-    if (organizationId) {
+    if (resolvedOrganizationId) {
       try {
         const [org] = await db
           .select()
           .from(organizations)
-          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)));
+          .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, workspaceId)));
         if (org) {
           const orgData = parseOrgData(org.data);
           organizationInfo = JSON.stringify({
@@ -973,7 +1009,7 @@ export class QueueManager {
           }, null, 2);
           console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
         } else {
-          console.warn(`⚠️ Organization not found with id: ${organizationId}`);
+          console.warn(`⚠️ Organization not found with id: ${resolvedOrganizationId}`);
         }
       } catch (error) {
         console.warn('Error fetching organization info:', error);
@@ -982,9 +1018,29 @@ export class QueueManager {
       console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
     }
 
+    const documentsContexts = await this.getDocumentsContextsForGeneration({
+      workspaceId,
+      folderId,
+      organizationId: resolvedOrganizationId,
+    });
+
+    const userFolderName =
+      typeof folder.name === 'string' && folder.name.trim() && folder.name.trim() !== 'Brouillon' && !folder.name.startsWith('Génération -')
+        ? folder.name.trim()
+        : '';
+
     // Générer la liste de cas d'usage
     const streamId = `folder_${folderId}`;
-    const useCaseList = await generateUseCaseList(input, organizationInfo, selectedModel, useCaseCount, signal, streamId);
+    const useCaseList = await generateUseCaseList(
+      input,
+      organizationInfo,
+      selectedModel,
+      useCaseCount,
+      userFolderName,
+      documentsContexts,
+      signal,
+      streamId
+    );
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {
@@ -1117,6 +1173,12 @@ export class QueueManager {
     }
     
     const context = folder.description || '';
+
+    const documentsContexts = await this.getDocumentsContextsForGeneration({
+      workspaceId: folder.workspaceId,
+      folderId,
+      organizationId: folder.organizationId,
+    });
     
     // Générer le détail
     const streamId = `usecase_${useCaseId}`;
@@ -1126,6 +1188,7 @@ export class QueueManager {
       matrixConfig,
       organizationInfo,
       selectedModel,
+      documentsContexts,
       signal,
       streamId
     );
