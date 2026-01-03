@@ -79,6 +79,18 @@ export const createFolder = async (folder: Omit<Folder, 'id' | 'createdAt'>): Pr
   return apiPost<Folder>('/folders', folder);
 };
 
+export const createDraftFolder = async (payload: {
+  name: string;
+  description?: string;
+  organizationId?: string | null;
+}): Promise<Folder> => {
+  return apiPost<Folder>('/folders/draft', {
+    name: payload.name,
+    description: payload.description,
+    organizationId: payload.organizationId || undefined,
+  });
+};
+
 export const updateFolder = async (id: string, folder: Partial<Folder>): Promise<Folder> => {
   return apiPut<Folder>(`/folders/${id}`, folder);
 };
