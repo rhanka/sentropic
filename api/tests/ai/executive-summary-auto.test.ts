@@ -55,7 +55,6 @@ describe('Executive Summary - Automatic Generation', () => {
     // 1. Generate use cases (this will create a folder and usecase_list/usecase_detail jobs)
     const generateRes = await authenticatedRequest(app, 'POST', '/api/v1/use-cases/generate', user.sessionToken!, {
       input: 'Test use case generation for automatic executive summary',
-      create_new_folder: true,
       model: getTestModel()
     });
     expect(generateRes.status).toBe(200);

@@ -34,7 +34,6 @@ describe('Use Case Generation - Sync (no waiting)', () => {
       user.sessionToken!,
       {
         input,
-        create_new_folder: true,
         model: getTestModel()
       }
     );
