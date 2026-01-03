@@ -640,6 +640,15 @@ export interface ExecuteWithToolsStreamOptions {
     contextType: 'organization' | 'folder' | 'usecase';
     contextId: string;
   };
+  /**
+   * Multi-context variant for the `documents` tool (e.g., allow folder + organization in the same execution).
+   * Security: the model may only call documents for the exact (contextType, contextId) pairs listed here.
+   */
+  documentsContexts?: Array<{
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  }>;
   responseFormat?: 'json_object';
   signal?: AbortSignal;
 /**
@@ -676,6 +685,7 @@ export const executeWithToolsStream = async (
     useWebSearch = false,
     useDocuments = false,
     documentsContext,
+    documentsContexts,
     responseFormat,
     reasoningSummary,
     streamId,
@@ -713,10 +723,14 @@ export const executeWithToolsStream = async (
 
   // 1er appel (streaming) pour déclencher tools
   const toolCalls: Array<{ id: string; name: string; args: string }> = [];
+  const allowedDocumentsContexts =
+    (Array.isArray(documentsContexts) && documentsContexts.length > 0)
+      ? documentsContexts
+      : (documentsContext ? [documentsContext] : []);
   const enabledTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     webSearchTool,
     webExtractTool,
-    ...(useDocuments && documentsContext ? [documentsTool] : [])
+    ...(useDocuments && allowedDocumentsContexts.length > 0 ? [documentsTool] : [])
   ];
 
   for await (const event of callOpenAIResponseStream({
@@ -805,7 +819,7 @@ export const executeWithToolsStream = async (
         allExtractResults.push(...resultsArray);
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
         } else if (toolCall.name === 'documents') {
-          if (!useDocuments || !documentsContext) {
+          if (!useDocuments || allowedDocumentsContexts.length === 0) {
             await write('tool_call_result', {
               tool_call_id: toolCall.id,
               result: { status: 'error', error: 'documents tool is not enabled for this execution' }
@@ -816,10 +830,11 @@ export const executeWithToolsStream = async (
           const action = typeof args.action === 'string' ? args.action : '';
           const ctxType = typeof args.contextType === 'string' ? args.contextType : '';
           const ctxId = typeof args.contextId === 'string' ? args.contextId : '';
-          if (ctxType !== documentsContext.contextType || ctxId !== documentsContext.contextId) {
+          const matched = allowedDocumentsContexts.find((c) => c.contextType === ctxType && c.contextId === ctxId);
+          if (!matched) {
             await write('tool_call_result', {
               tool_call_id: toolCall.id,
-              result: { status: 'error', error: 'Security: context does not match authorized documentsContext' }
+              result: { status: 'error', error: 'Security: context does not match authorized documentsContexts' }
             });
             continue;
           }
@@ -828,17 +843,17 @@ export const executeWithToolsStream = async (
           let result: unknown;
           if (action === 'list') {
             result = await toolService.listContextDocuments({
-              workspaceId: documentsContext.workspaceId,
-              contextType: documentsContext.contextType,
-              contextId: documentsContext.contextId,
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
             });
           } else if (action === 'get_summary') {
             const documentId = typeof args.documentId === 'string' ? args.documentId : '';
             if (!documentId) throw new Error('documents.get_summary: documentId is required');
             result = await toolService.getDocumentSummary({
-              workspaceId: documentsContext.workspaceId,
-              contextType: documentsContext.contextType,
-              contextId: documentsContext.contextId,
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
               documentId,
             });
           } else if (action === 'get_content') {
@@ -846,9 +861,9 @@ export const executeWithToolsStream = async (
             if (!documentId) throw new Error('documents.get_content: documentId is required');
             const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
             result = await toolService.getDocumentContent({
-              workspaceId: documentsContext.workspaceId,
-              contextType: documentsContext.contextType,
-              contextId: documentsContext.contextId,
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
               documentId,
               maxChars,
             });
@@ -859,9 +874,9 @@ export const executeWithToolsStream = async (
             if (!promptText.trim()) throw new Error('documents.analyze: prompt is required');
             const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
             result = await toolService.analyzeDocument({
-              workspaceId: documentsContext.workspaceId,
-              contextType: documentsContext.contextType,
-              contextId: documentsContext.contextId,
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
               documentId,
               prompt: promptText,
               maxWords,
