@@ -116,9 +116,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Adapter le prompt de génération de l'organisation
     - [x] Utiliser les documents via tool si disponibles (sinon ne pas appeler le tool)
     - [x] Réutiliser/compléter toute information saisie par l’utilisateur (ne pas l’écraser; reformuler proprement si demandé)
-  - [ ] migrer le bouton ajouter (vue organization) vers circle-plus (même style sur sur dossiers)
-  - [ ] sur la vue "new" dans orga, mettre un label "Nom de l'organisation" (le supprimer dans la vue [id])
-  - [ ] sur les deux vues new et [id] remplacer les valeurs par défaut en utilisant le placehodler nouvellement ajouté pour EditableInput (en profite pour mettre un placehodler aussi pour Secteur, il en manquait un). Préférer "Saisir le nom de l'organisation" (au lieu de Nouvelle organisaiton). Et "Non renseigné" va très bien pour les autres
+  - [x] migrer le bouton ajouter (vue organization) vers circle-plus (même style sur sur dossiers)
+  - [x] sur la vue "new" dans orga, mettre un label "Nom de l'organisation" (le supprimer dans la vue [id])
+  - [x] sur les deux vues new et [id] remplacer les valeurs par défaut en utilisant le placehodler nouvellement ajouté pour EditableInput (en profite pour mettre un placehodler aussi pour Secteur, il en manquait un). Préférer "Saisir le nom de l'organisation" (au lieu de Nouvelle organisaiton). Et "Non renseigné" va très bien pour les autres
   - [x] Partial UAT
 
 - Amélioration tool documentaire
