@@ -1016,6 +1016,22 @@ export class ToolService {
   // Context Documents (Lot B)
   // ---------------------------
 
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  }
+
+  private getDataString(data: unknown, key: string): string | null {
+    const rec = this.asRecord(data);
+    const v = rec[key];
+    return typeof v === 'string' ? v : null;
+  }
+
+  private getDataNumber(data: unknown, key: string): number | null {
+    const rec = this.asRecord(data);
+    const v = rec[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+
   private countWords(text: string): number {
     const t = (text || '').trim();
     if (!t) return 0;
@@ -1051,6 +1067,9 @@ export class ToolService {
     maxWords: number;
     signal?: AbortSignal;
   }): Promise<{ detailedSummary: string; trimmed: boolean; words: number; chunks: number }> {
+    // IMPORTANT (temporary): force a dedicated model for document detailed summaries.
+    // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
+    const model = 'gpt-4.1-nano';
     const maxWords = Math.max(1000, Math.min(10_000, Math.floor(opts.maxWords || 10_000)));
     const wordCount = this.countWords(opts.text);
     const chunks = wordCount > 15_000 ? this.chunkByWords(opts.text, 4500) : [opts.text];
@@ -1080,6 +1099,7 @@ export class ToolService {
                 `Résume cette partie de façon détaillée (faits, chiffres, obligations, risques, acteurs, échéances).`
             }
           ],
+          model,
           signal: opts.signal
         });
         const content = resp.choices?.[0]?.message?.content ?? '';
@@ -1120,6 +1140,7 @@ export class ToolService {
             `5) Points actionnables (si applicable)\n`
         }
       ],
+      model,
       signal: opts.signal
     });
 
@@ -1163,7 +1184,7 @@ export class ToolService {
         mimeType: r.mimeType,
         sizeBytes: r.sizeBytes,
         status: r.status,
-        summaryAvailable: !!(typeof (r.data as any)?.summary === 'string' && (r.data as any).summary.trim()),
+        summaryAvailable: !!(this.getDataString(r.data, 'summary')?.trim()),
         createdAt: r.createdAt,
         updatedAt: r.updatedAt ?? null,
       })),
@@ -1192,7 +1213,7 @@ export class ToolService {
     return {
       documentId: row.id,
       documentStatus: row.status,
-      summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null,
+      summary: this.getDataString(row.data, 'summary'),
     };
   }
 
@@ -1227,34 +1248,35 @@ export class ToolService {
 
     // Security / spec: do NOT return full content if doc is larger than 10k words.
     const WORDS_FULL_CONTENT_LIMIT = 10_000;
-    const lang: 'fr' | 'en' =
-      typeof (row.data as any)?.summaryLang === 'string' && (row.data as any).summaryLang === 'en' ? 'en' : 'fr';
+    const lang: 'fr' | 'en' = this.getDataString(row.data, 'summaryLang') === 'en' ? 'en' : 'fr';
 
     const storedWords = (() => {
-      const n = (row.data as any)?.extracted?.words;
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
+      const n = extracted.words;
       return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
     })();
 
     const storedDetailed = (() => {
-      const v = (row.data as any)?.detailedSummary;
-      return typeof v === 'string' && v.trim() ? v : null;
+      const v = this.getDataString(row.data, 'detailedSummary');
+      return v && v.trim() ? v : null;
     })();
 
     // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
     // return it without downloading/extracting the file again.
     if (storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT && storedDetailed) {
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
       return {
         documentId: row.id,
         documentStatus: row.status,
         filename: row.filename,
         mimeType: row.mimeType,
-        pages: typeof (row.data as any)?.extracted?.pages === 'number' ? (row.data as any).extracted.pages : null,
-        title: typeof (row.data as any)?.extracted?.title === 'string' ? (row.data as any).extracted.title : null,
+        pages: typeof extracted.pages === 'number' ? extracted.pages : null,
+        title: typeof extracted.title === 'string' ? extracted.title : null,
         content: storedDetailed,
         clipped: false,
         contentMode: 'detailed_summary',
         words: storedWords,
-        summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null
+        summary: this.getDataString(row.data, 'summary')
       };
     }
 
@@ -1305,7 +1327,7 @@ export class ToolService {
       clipped,
       contentMode,
       words,
-      summary: typeof (row.data as any)?.summary === 'string' ? (row.data as any).summary : null
+      summary: this.getDataString(row.data, 'summary')
     };
   }
 
@@ -1327,6 +1349,9 @@ export class ToolService {
     clipped: boolean;
     summary: string | null;
   }> {
+    // IMPORTANT (temporary): force a dedicated model for document analysis sub-agent.
+    // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
+    const model = 'gpt-4.1-nano';
     const p = (opts.prompt || '').trim();
     if (!p) throw new Error('documents.analyze: prompt is required');
     const maxWords = Math.max(500, Math.min(10_000, Math.floor(opts.maxWords ?? 10_000)));
@@ -1362,6 +1387,7 @@ export class ToolService {
         { role: 'system', content: system },
         { role: 'user', content: user }
       ],
+      model,
       signal: opts.signal
     });
 

@@ -12,6 +12,16 @@ export const documentsRouter = new Hono();
 
 const contextTypeSchema = z.enum(['organization', 'folder', 'usecase']);
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function getDataString(data: unknown, key: string): string | null {
+  const rec = asRecord(data);
+  const v = rec[key];
+  return typeof v === 'string' ? v : null;
+}
+
 const listQuerySchema = z.object({
   context_type: contextTypeSchema,
   context_id: z.string().min(1),
@@ -55,8 +65,8 @@ documentsRouter.get('/', async (c) => {
       mime_type: r.mimeType,
       size_bytes: r.sizeBytes,
       status: r.status,
-      summary: typeof (r.data as any)?.summary === 'string' ? (r.data as any).summary : null,
-      summary_lang: typeof (r.data as any)?.summaryLang === 'string' ? (r.data as any).summaryLang : null,
+      summary: getDataString(r.data, 'summary'),
+      summary_lang: getDataString(r.data, 'summaryLang'),
       job_id: r.jobId,
       created_at: r.createdAt,
       updated_at: r.updatedAt,
@@ -91,8 +101,8 @@ documentsRouter.get('/:id', async (c) => {
     size_bytes: doc.sizeBytes,
     storage_key: doc.storageKey,
     status: doc.status,
-    summary: typeof (doc.data as any)?.summary === 'string' ? (doc.data as any).summary : null,
-    summary_lang: typeof (doc.data as any)?.summaryLang === 'string' ? (doc.data as any).summaryLang : null,
+    summary: getDataString(doc.data, 'summary'),
+    summary_lang: getDataString(doc.data, 'summaryLang'),
     job_id: doc.jobId,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
@@ -231,7 +241,7 @@ documentsRouter.post('/', async (c) => {
       sizeBytes: file.size,
       storageKey,
       status: 'uploaded',
-      data: { summaryLang: 'fr' } as any,
+      data: { summaryLang: 'fr' },
       createdAt: new Date(),
       updatedAt: new Date(),
       version: 1,

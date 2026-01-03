@@ -4,6 +4,7 @@ import { callOpenAIResponseStream } from './openai';
 import type { StreamEventType } from './openai';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
+import { toolService } from './tool-service';
 
 // Fonction pour Tavily Search
 const TAVILY_API_KEY = env.TAVILY_API_KEY;
@@ -629,6 +630,16 @@ export const extractUrlContent = async (
 export interface ExecuteWithToolsStreamOptions {
   model?: string;
   useWebSearch?: boolean;
+  /**
+   * Enable the `documents` tool (executed server-side) and attach it to a single authorized context.
+   * IMPORTANT: The model must call `documents` with the exact contextType/contextId provided here.
+   */
+  useDocuments?: boolean;
+  documentsContext?: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  };
   responseFormat?: 'json_object';
   signal?: AbortSignal;
 /**
@@ -663,6 +674,8 @@ export const executeWithToolsStream = async (
   const {
     model = 'gpt-4.1-nano',
     useWebSearch = false,
+    useDocuments = false,
+    documentsContext,
     responseFormat,
     reasoningSummary,
     streamId,
@@ -700,6 +713,11 @@ export const executeWithToolsStream = async (
 
   // 1er appel (streaming) pour déclencher tools
   const toolCalls: Array<{ id: string; name: string; args: string }> = [];
+  const enabledTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+    webSearchTool,
+    webExtractTool,
+    ...(useDocuments && documentsContext ? [documentsTool] : [])
+  ];
 
   for await (const event of callOpenAIResponseStream({
     messages: [
@@ -707,7 +725,7 @@ export const executeWithToolsStream = async (
       { role: 'user', content: prompt }
     ],
     model,
-    tools: [webSearchTool, webExtractTool],
+    tools: enabledTools,
     responseFormat,
     reasoningSummary,
     signal
@@ -754,6 +772,7 @@ export const executeWithToolsStream = async (
   // Exécuter les tools (hors OpenAI) + streamer les résultats via tool_call_result
     const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
     const allExtractResults: ExtractResult[] = [];
+    const allDocumentsResults: Array<{ action: string; result: unknown }> = [];
 
   for (const toolCall of toolCalls) {
     if (signal?.aborted) throw new Error('AbortError');
@@ -785,6 +804,79 @@ export const executeWithToolsStream = async (
         const resultsArray = Array.isArray(extractResults) ? extractResults : [extractResults];
         allExtractResults.push(...resultsArray);
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
+        } else if (toolCall.name === 'documents') {
+          if (!useDocuments || !documentsContext) {
+            await write('tool_call_result', {
+              tool_call_id: toolCall.id,
+              result: { status: 'error', error: 'documents tool is not enabled for this execution' }
+            });
+            continue;
+          }
+
+          const action = typeof args.action === 'string' ? args.action : '';
+          const ctxType = typeof args.contextType === 'string' ? args.contextType : '';
+          const ctxId = typeof args.contextId === 'string' ? args.contextId : '';
+          if (ctxType !== documentsContext.contextType || ctxId !== documentsContext.contextId) {
+            await write('tool_call_result', {
+              tool_call_id: toolCall.id,
+              result: { status: 'error', error: 'Security: context does not match authorized documentsContext' }
+            });
+            continue;
+          }
+
+          await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
+          let result: unknown;
+          if (action === 'list') {
+            result = await toolService.listContextDocuments({
+              workspaceId: documentsContext.workspaceId,
+              contextType: documentsContext.contextType,
+              contextId: documentsContext.contextId,
+            });
+          } else if (action === 'get_summary') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.get_summary: documentId is required');
+            result = await toolService.getDocumentSummary({
+              workspaceId: documentsContext.workspaceId,
+              contextType: documentsContext.contextType,
+              contextId: documentsContext.contextId,
+              documentId,
+            });
+          } else if (action === 'get_content') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.get_content: documentId is required');
+            const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
+            result = await toolService.getDocumentContent({
+              workspaceId: documentsContext.workspaceId,
+              contextType: documentsContext.contextType,
+              contextId: documentsContext.contextId,
+              documentId,
+              maxChars,
+            });
+          } else if (action === 'analyze') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.analyze: documentId is required');
+            const promptText = typeof args.prompt === 'string' ? args.prompt : '';
+            if (!promptText.trim()) throw new Error('documents.analyze: prompt is required');
+            const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
+            result = await toolService.analyzeDocument({
+              workspaceId: documentsContext.workspaceId,
+              contextType: documentsContext.contextType,
+              contextId: documentsContext.contextId,
+              documentId,
+              prompt: promptText,
+              maxWords,
+              signal
+            });
+          } else {
+            throw new Error(`documents: unknown action ${action}`);
+          }
+
+          allDocumentsResults.push({ action, result });
+          const payload =
+            result && typeof result === 'object' && !Array.isArray(result)
+              ? (result as Record<string, unknown>)
+              : { value: result };
+          await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', ...payload } });
         }
     } catch (error) {
       await write('tool_call_result', {
@@ -801,6 +893,9 @@ export const executeWithToolsStream = async (
     }
     if (allExtractResults.length > 0) {
       resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
+    }
+    if (allDocumentsResults.length > 0) {
+      resultsMessage += `Voici les résultats documents (outil documents):\n${JSON.stringify(allDocumentsResults, null, 2)}\n\n`;
     }
   resultsMessage += WEB_TOOLS_RESULTS_SUFFIX;
 
