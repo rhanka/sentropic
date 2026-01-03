@@ -4,7 +4,10 @@ export const defaultPrompts = [
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',
-    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
+    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}.
+Informations déjà renseignées (peuvent être partielles / vides): {{existing_data}}
+ID d'organisation (si connu): {{organization_id}}
+
 Les secteurs d'activité disponibles sont: {{industries}}.
 Normalisez le nom de l'organisation selon son usage officiel.
 La date actuelle est ${new Date().toISOString()}.
@@ -29,11 +32,15 @@ IMPORTANT:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
-- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. 
+- Si l'outil \`documents\` est disponible, commence par l'utiliser UNIQUEMENT ainsi:
+  1) \`documents\` action=list (contextType=organization, contextId={{organization_id}}) pour voir les documents.
+  2) Pour chaque document pertinent, appelle \`documents\` action=get_summary (évite get_content sauf nécessité).
+  3) Utilise ensuite ces informations documentaires comme source prioritaire (plus fiable que le web).
+- Fais une recherche avec le tool web_search pour compléter (ou si aucun document n'est disponible).
 - Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes s'il le faut
 - Chacun des champs, en particulier taille (nombre employés et chiffre d'affaires), technologies IT (regarder les recrutements) et kpis doivent être fondés sur des informations référencées (web) et récentes, et peuvent chacun faire l'objet d'une recherche web_searchspécifique.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
-    variables: ['organization_name', 'industries']
+    variables: ['organization_name', 'industries', 'organization_id', 'existing_data']
   },
   {
     id: 'folder_name',

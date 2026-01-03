@@ -329,7 +329,12 @@ const aiEnrichInput = z.object({
 organizationsRouter.post('/ai-enrich', requireEditor, zValidator('json', aiEnrichInput), async (c) => {
   const { name, model } = c.req.valid('json');
   const selectedModel = model || 'gpt-4.1-nano';
-  const enrichedData = await enrichOrganization(name, selectedModel);
+  const enrichedData = await enrichOrganization(name, selectedModel, undefined, undefined, {
+    organizationId: undefined,
+    workspaceId: undefined,
+    existingData: {},
+    useDocuments: false
+  });
   return c.json(enrichedData);
 });
 

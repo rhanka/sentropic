@@ -92,13 +92,19 @@ export const enrichOrganization = async (
   organizationName: string,
   model?: string,
   signal?: AbortSignal,
-  streamId?: string
+  streamId?: string,
+  opts?: {
+    organizationId?: string;
+    workspaceId?: string;
+    existingData?: unknown;
+    useDocuments?: boolean;
+  }
 ): Promise<OrganizationData> => {
   // Si streamId est fourni, utiliser la version streaming
   if (streamId) {
     // enrichOrganizationStream attend : (organizationName, streamId, model, signal)
     // enrichOrganization reçoit : (organizationName, model, signal, streamId)
-    return enrichOrganizationStream(organizationName, streamId, model, signal);
+    return enrichOrganizationStream(organizationName, streamId, model, signal, opts);
   }
 
   const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
@@ -109,12 +115,21 @@ export const enrichOrganization = async (
   const industriesList = industries.industries.map(i => i.name).join(', ');
   const prompt = organizationInfoPrompt
     .replace('{{organization_name}}', organizationName)
-    .replace('{{industries}}', industriesList);
+    .replace('{{industries}}', industriesList)
+    .replace('{{organization_id}}', (opts?.organizationId || '').trim() || 'Non précisé')
+    .replace('{{existing_data}}', (() => {
+      try { return JSON.stringify(opts?.existingData ?? {}, null, 2); } catch { return '{}'; }
+    })());
 
   const finalStreamId = streamId || `organization_enrich_${Date.now()}`;
   const { content } = await executeWithToolsStream(prompt, {
     model: model || 'gpt-4.1-nano',
     useWebSearch: true,
+    useDocuments: !!opts?.useDocuments,
+    documentsContext:
+      opts?.useDocuments && opts?.workspaceId && opts?.organizationId
+        ? { workspaceId: opts.workspaceId, contextType: 'organization', contextId: opts.organizationId }
+        : undefined,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
     promptId: 'organization_info',
@@ -143,7 +158,13 @@ export const enrichOrganizationStream = async (
   organizationName: string,
   streamId?: string,
   model?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: {
+    organizationId?: string;
+    workspaceId?: string;
+    existingData?: unknown;
+    useDocuments?: boolean;
+  }
 ): Promise<OrganizationData> => {
   const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
   if (!organizationInfoPrompt) {
@@ -153,11 +174,20 @@ export const enrichOrganizationStream = async (
   const industriesList = industries.industries.map(i => i.name).join(', ');
   const prompt = organizationInfoPrompt
     .replace('{{organization_name}}', organizationName)
-    .replace('{{industries}}', industriesList);
+    .replace('{{industries}}', industriesList)
+    .replace('{{organization_id}}', (opts?.organizationId || '').trim() || 'Non précisé')
+    .replace('{{existing_data}}', (() => {
+      try { return JSON.stringify(opts?.existingData ?? {}, null, 2); } catch { return '{}'; }
+    })());
 
   const { content: accumulatedContent } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
+    useDocuments: !!opts?.useDocuments,
+    documentsContext:
+      opts?.useDocuments && opts?.workspaceId && opts?.organizationId
+        ? { workspaceId: opts.workspaceId, contextType: 'organization', contextId: opts.organizationId }
+        : undefined,
     responseFormat: 'json_object',
     reasoningSummary: 'detailed',
     promptId: 'organization_info',

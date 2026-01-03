@@ -122,11 +122,11 @@
       const id = await ensureDraftOrganization();
       if (!id) {
         // fallback: create directly if draft couldn't be created
-        const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
+      const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
         addToast({ type: 'success', message: 'Organisation créée avec succès !' });
         if (newOrganization?.id) {
-          unsavedChangesStore.reset();
-          goto(`/organisations/${newOrganization.id}`);
+        unsavedChangesStore.reset();
+        goto(`/organisations/${newOrganization.id}`);
         }
         return;
       }
@@ -165,27 +165,27 @@
     showKpis={true}
   >
     <div slot="actions" class="flex items-center gap-2">
-      <button
+        <button
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
-        data-testid="enrich-organization"
-        on:click={handleEnrichOrganization}
+          data-testid="enrich-organization"
+          on:click={handleEnrichOrganization}
         disabled={isEnriching || !organization.name?.trim() || docsUploading}
         title="IA"
         aria-label="IA"
-      >
+        >
         {#if isEnriching}
           <Loader2 class="w-5 h-5 animate-spin" />
         {:else}
           <Brain class="w-5 h-5" />
         {/if}
-      </button>
-      <button
+        </button>
+        <button
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
-        title="Créer"
+          title="Créer"
         aria-label="Créer"
-        on:click={handleCreateOrganization}
-        disabled={!organization.name?.trim() || isCreating}
-      >
+          on:click={handleCreateOrganization}
+          disabled={!organization.name?.trim() || isCreating}
+        >
         {#if isCreating}
           <Loader2 class="w-5 h-5 animate-spin" />
         {:else}
@@ -199,7 +199,7 @@
         aria-label="Annuler"
       >
         <Trash2 class="w-5 h-5" />
-      </button>
+        </button>
     </div>
 
     <div slot="underHeader" class="space-y-4">
@@ -223,12 +223,12 @@
 
     <div slot="afterProcesses">
       {#if organization.references && organization.references.length > 0}
-        <div class="rounded border border-slate-200 bg-white p-4">
+    <div class="rounded border border-slate-200 bg-white p-4">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
             <h3 class="font-semibold">Références</h3>
-          </div>
+      </div>
           <References references={organization.references} referencesScaleFactor={1} />
-        </div>
+    </div>
       {/if}
     </div>
   </OrganizationForm>
