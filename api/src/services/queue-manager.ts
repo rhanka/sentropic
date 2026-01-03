@@ -59,6 +59,7 @@ export interface UseCaseListJobData {
   input: string;
   organizationId?: string;
   model?: string;
+  useCaseCount?: number;
 }
 
 export interface UseCaseDetailJobData {
@@ -934,7 +935,7 @@ export class QueueManager {
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, model } = data;
+    const { folderId, input, organizationId, model, useCaseCount } = data;
 
     const [folder] = await db
       .select({ id: folders.id, workspaceId: folders.workspaceId })
@@ -983,7 +984,7 @@ export class QueueManager {
 
     // Générer la liste de cas d'usage
     const streamId = `folder_${folderId}`;
-    const useCaseList = await generateUseCaseList(input, organizationInfo, selectedModel, signal, streamId);
+    const useCaseList = await generateUseCaseList(input, organizationInfo, selectedModel, useCaseCount, signal, streamId);
     
     // Mettre à jour le nom du dossier
     if (useCaseList.dossier) {

@@ -48,7 +48,8 @@ export interface UseCaseDetail {
   }>;
 }
 
-const defaultUseCaseCount = 6;
+// UI (/dossier/new) default is 10; keep backend consistent.
+const defaultUseCaseCount = 10;
 
 const UNICODE_BULLETS = '[\\u2022\\u2023\\u25e6\\u25aa\\u25ab\\u2023\\u25cf\\u25e6]'; // • ▣ ◦ ▪ ▫ ‣ ● ◦
 const BULLET_PREFIX_RE = new RegExp(`^\\s*(?:[-*+]|(?:\\d+\\.)|${UNICODE_BULLETS})\\s+`);
@@ -181,6 +182,7 @@ export const generateUseCaseList = async (
   input: string, 
   organizationInfo?: string, 
   model?: string,
+  useCaseCount?: number,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseList> => {
@@ -193,7 +195,7 @@ export const generateUseCaseList = async (
   const prompt = useCaseListPrompt
     .replace('{{user_input}}', input)
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
-    .replace('{{use_case_count}}', String(defaultUseCaseCount));
+    .replace('{{use_case_count}}', String(useCaseCount ?? defaultUseCaseCount));
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
