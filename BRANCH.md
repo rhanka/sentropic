@@ -192,6 +192,17 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
   - [ ] UAT-23 (générations - escalade): si une info nécessaire n’est pas dans les résumés, la génération déclenche `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée) avant d’envisager `web_search`.
   - [ ] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
+    - Préconditions:
+      - Avoir au moins 1 document `ready` sur le **dossier** ET au moins 1 document `ready` sur l'**organisation**.
+      - Préférer un doc “source de vérité” (ex: rapport interne) avec des éléments vérifiables.
+    - Action:
+      - Lancer une génération de dossier (`usecase_list`) puis laisser enchaîner 1+ `usecase_detail`.
+    - Attendus:
+      - UAT-22: le prompt de génération inclut un bloc `DOCUMENTS_CONTEXT_JSON` (liste + résumés, `truncated` possible) couvrant **dossier + organisation**.
+      - UAT-23:
+        - Cas “résumé suffisant”: aucune utilisation de `documents.*` nécessaire.
+        - Cas “résumé insuffisant” (ex: chiffre/section précise): un appel `documents.get_content(maxChars=30000)` ou `documents.analyze` intervient **avant** `web_search`.
+      - UAT-24: la réponse finale est **uniquement** un JSON (aucun texte avant/après, pas de pseudo tool calls, pas de JSON parasite).
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress
