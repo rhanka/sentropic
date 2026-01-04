@@ -837,6 +837,102 @@ export class QueueManager {
     return t.split(/\s+/g).filter(Boolean).length;
   }
 
+  private estimateTokensFromText(text: string): number {
+    // Heuristic: tokens ≈ chars / 4. Good enough for gating & chunk sizing (FR/EN).
+    const chars = (text || '').length;
+    return Math.ceil(chars / 4);
+  }
+
+  private async expandDetailedSummaryIfTooShort(opts: {
+    basePrompt: string;
+    // The source is either the full extracted text (<=700k est tokens) or the merged chunk summaries.
+    sourceLabel: string;
+    sourceText: string;
+    currentSummary: string;
+    filename: string;
+    lang: string;
+    model: string;
+    streamId: string;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const minWordsTarget = 8000;
+    const maxWords = 10_000;
+    let current = (opts.currentSummary || '').trim();
+    if (!current) return current;
+
+    // Up to 2 controlled expansions (rewrite), to avoid infinite loops and cost explosion.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const currentWords = this.countWords(current);
+      if (currentWords >= minWordsTarget) break;
+
+      const prompt =
+        `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.\n` +
+        `Contraintes:\n` +
+        `- Réponds en ${opts.lang}.\n` +
+        `- Format: markdown.\n` +
+        `- Pas d'invention: si l'info n'est pas dans la source, dis-le.\n` +
+        `- Objectif de longueur: produire un résumé COMPLET entre ${minWordsTarget} et ${maxWords} mots.\n` +
+        `- Éviter les redites; ajouter de la granularité (sections, mécanismes, acteurs, processus, chiffres).\n` +
+        `- Conserver les chiffres (avec unités) et les rattacher à leur contexte.\n\n` +
+        `Document: ${opts.filename}\n` +
+        `Source: ${opts.sourceLabel}\n` +
+        `Résumé actuel: ~${currentWords} mots (trop court)\n\n` +
+        `SOURCE:\n---\n${opts.sourceText}\n---\n\n` +
+        `RÉSUMÉ ACTUEL:\n---\n${current}\n---\n\n` +
+        `TÂCHE:\n` +
+        `- Réécrire un résumé détaillé unique, plus long et plus précis.\n` +
+        `- Réécrire sous forme LINÉAIRE (dans l'ordre du document), pas une fiche.\n` +
+        `- Utiliser une suite de paragraphes numérotés (1., 2., 3., ...).\n`;
+
+      const { content } = await executeWithToolsStream(prompt, {
+        model: opts.model,
+        streamId: opts.streamId,
+        promptId: `document_detailed_summary_expand_${attempt}`,
+        maxOutputTokens: 20000,
+        signal: opts.signal
+      });
+      const next = this.sanitizePgText(content).trim();
+      if (!next) break;
+      // If it doesn't grow, stop.
+      if (this.countWords(next) <= currentWords + 200) break;
+      current = next;
+    }
+
+    return current;
+  }
+
+  private chunkTextByApproxTokens(text: string, targetTokens: number): string[] {
+    const t = (text || '').trim();
+    if (!t) return [];
+    const target = Math.max(10_000, Math.floor(targetTokens || 300_000));
+    const targetChars = target * 4;
+    const out: string[] = [];
+    let i = 0;
+
+    while (i < t.length) {
+      const end = Math.min(t.length, i + targetChars);
+      if (end >= t.length) {
+        out.push(t.slice(i));
+        break;
+      }
+
+      const windowStart = Math.max(i + Math.floor(targetChars * 0.7), i + 1);
+      const window = t.slice(windowStart, end);
+      const lastWs = window.search(/\s(?![\s\S]*\s)/);
+      const cut =
+        lastWs >= 0
+          ? windowStart + lastWs + 1
+          : t.lastIndexOf(' ', end) > i
+            ? t.lastIndexOf(' ', end)
+            : end;
+
+      out.push(t.slice(i, cut).trim());
+      i = cut;
+    }
+
+    return out.filter((s) => s.trim());
+  }
+
   private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
     const t = (text || '').trim();
     if (!t) return { text: '', trimmed: false, words: 0 };
@@ -868,7 +964,91 @@ export class QueueManager {
   }): Promise<{ detailedSummary: string; words: number; clipped: boolean }> {
     const maxWords = 10_000;
     const fullText = (opts.text || '').trim();
-    const chunks = this.chunkByWords(fullText, 4500);
+    const estTokens = this.estimateTokensFromText(fullText);
+
+    // If the document is "only" moderately long, send the full text directly.
+    // This avoids the lossy chunk-summarize-then-merge path and enables a truly detailed ~10k-words summary.
+    if (estTokens > 0 && estTokens <= 700_000) {
+      const directPrompt =
+        `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.\n` +
+        `Contraintes:\n` +
+        `- Réponds en ${opts.lang}.\n` +
+        `- Format: markdown.\n` +
+        `- Pas d'invention: si l'info n'est pas dans le texte, dis-le.\n` +
+        `- Objectif de longueur: viser ~${maxWords} mots, idéalement entre 8000 et ${maxWords} mots (si le texte source le permet).\n` +
+        `- Limite stricte: maximum ${maxWords} mots.\n` +
+        `- Conserver les chiffres (avec unités) et les rattacher à leur contexte.\n\n` +
+        `Document: ${opts.filename}\n\n` +
+        `SOURCE (texte intégral extrait):\n---\n${fullText}\n---\n\n` +
+        `TÂCHE:\n` +
+        `- Produire un résumé détaillé LINÉAIRE qui suit l'ordre du document.\n` +
+        `- Éviter le format "fiche de synthèse".\n` +
+        `- Écrire une suite de paragraphes numérotés (1., 2., 3., ...), chacun résumant un passage consécutif.\n` +
+        `- Inclure les chiffres quand ils apparaissent.\n`;
+
+      const { content } = await executeWithToolsStream(directPrompt, {
+        model: opts.model,
+        streamId: opts.streamId,
+        promptId: 'document_detailed_summary_full',
+        // Ensure the model can actually emit ~10k words.
+        maxOutputTokens: 20000,
+        signal: opts.signal
+      });
+      const raw0 = this.sanitizePgText(content).trim();
+      const raw = await this.expandDetailedSummaryIfTooShort({
+        basePrompt: directPrompt,
+        sourceLabel: 'texte intégral extrait',
+        sourceText: fullText,
+        currentSummary: raw0,
+        filename: opts.filename,
+        lang: opts.lang,
+        model: opts.model,
+        streamId: opts.streamId,
+        signal: opts.signal
+      });
+      const trimmed = this.trimToMaxWords(raw, maxWords);
+      // If the one-shot (and expansion) is still too short, fall back to scan-complete segmentation.
+      if (trimmed.words >= 8000) {
+        return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
+      }
+
+      const fallbackChunks = this.chunkTextByApproxTokens(fullText, 100_000);
+      const fallbackParts: string[] = [];
+      for (let i = 0; i < fallbackChunks.length; i += 1) {
+        const chunkText = fallbackChunks[i]!;
+        const chunkPrompt =
+          `Tu es un assistant qui résume fidèlement un extrait de document métier.\n` +
+          `Contraintes:\n` +
+          `- Réponds en ${opts.lang}.\n` +
+          `- Format: markdown.\n` +
+          `- Pas d'invention.\n` +
+          `- Résumé LINÉAIRE (dans l'ordre du texte).\n` +
+          `- Conserver les chiffres (avec unités) et leur contexte.\n` +
+          `- Viser 1200–1800 mots pour cet extrait.\n\n` +
+          `Document: ${opts.filename}\n` +
+          `Extrait ${i + 1}/${fallbackChunks.length}\n\n` +
+          `TEXTE:\n---\n${chunkText}\n---\n`;
+
+        const { content: part } = await executeWithToolsStream(chunkPrompt, {
+          model: opts.model,
+          streamId: opts.streamId,
+          promptId: 'document_detailed_summary_fallback_part',
+          maxOutputTokens: 6000,
+          signal: opts.signal
+        });
+        fallbackParts.push(this.sanitizePgText(part).trim());
+      }
+
+      const concatenated = fallbackParts
+        .map((s, i) => `### Partie ${i + 1}/${fallbackParts.length}\n${s}`)
+        .join('\n\n')
+        .trim();
+      const trimmedFallback = this.trimToMaxWords(concatenated, maxWords);
+      return { detailedSummary: trimmedFallback.text, words: trimmedFallback.words, clipped: trimmedFallback.trimmed };
+    }
+
+    // Large doc: scan ALL chunks (no retrieval/RAG), then consolidate.
+    const chunks = this.chunkTextByApproxTokens(fullText, 300_000);
 
     // 1) Summarize each chunk (best-effort, bounded)
     const chunkSummaries: string[] = [];
@@ -880,48 +1060,32 @@ export class QueueManager {
         `- Réponds en ${opts.lang}.\n` +
         `- Format: markdown.\n` +
         `- Pas d'invention.\n` +
-        `- Vise ~800-1200 mots max.\n\n` +
+        `- Conserver les chiffres importants (avec unités) et leur contexte.\n` +
+        `- Produire un résumé linéaire (dans l'ordre) pour cet extrait.\n` +
+        `- Viser 2000–3500 mots pour cet extrait.\n\n` +
         `Document: ${opts.filename}\n` +
         `Partie ${i + 1}/${chunks.length}\n\n` +
         `TEXTE:\n---\n${chunkText}\n---\n\n` +
-        `Résume cette partie de façon détaillée (faits, chiffres, obligations, risques, acteurs, échéances).`;
+        `Résumer cet extrait de façon détaillée (faits, chiffres, exigences, risques, acteurs, échéances), en suivant l'ordre du texte.`;
 
       const { content: chunkContent } = await executeWithToolsStream(chunkPrompt, {
         model: opts.model,
         streamId: opts.streamId,
         promptId: 'document_detailed_summary_part',
+        maxOutputTokens: 9000,
         signal: opts.signal
       });
       chunkSummaries.push(this.sanitizePgText(chunkContent).trim());
     }
 
-    // 2) Merge chunk summaries into a single detailed summary (strict maxWords)
-    const mergeInput = chunkSummaries.map((s, i) => `### Partie ${i + 1}\n${s}`).join('\n\n');
-    const finalPrompt =
-      `Tu es un assistant qui produit un résumé détaillé et fidèle d'un document métier.\n` +
-      `Contraintes:\n` +
-      `- Réponds en ${opts.lang}.\n` +
-      `- Format: markdown.\n` +
-      `- Pas d'invention: si l'info n'est pas dans le texte, dis-le.\n` +
-      `- Longueur: maximum ${maxWords} mots.\n\n` +
-      `Document: ${opts.filename}\n\n` +
-      `Source (résumés de parties):\n---\n${mergeInput}\n---\n\n` +
-      `Produit un résumé détaillé fidèle du document.\n` +
-      `Format recommandé:\n` +
-      `1) Résumé détaillé\n` +
-      `2) Faits & chiffres clés\n` +
-      `3) Obligations / exigences\n` +
-      `4) Risques / points d'attention\n` +
-      `5) Points actionnables (si applicable)\n`;
-
-    const { content: merged } = await executeWithToolsStream(finalPrompt, {
-      model: opts.model,
-      streamId: opts.streamId,
-      promptId: 'document_detailed_summary',
-      signal: opts.signal
-    });
-    const raw = this.sanitizePgText(merged).trim();
-    const trimmed = this.trimToMaxWords(raw, maxWords);
+    // 2) Deterministic consolidation:
+    // Avoid an extra "merge" call that tends to compress too much.
+    // We concatenate the linear chunk summaries (scan complet) then trim to maxWords.
+    const concatenated = chunkSummaries
+      .map((s, i) => `### Partie ${i + 1}/${chunkSummaries.length}\n${s}`)
+      .join('\n\n')
+      .trim();
+    const trimmed = this.trimToMaxWords(concatenated, maxWords);
     return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
   }
 

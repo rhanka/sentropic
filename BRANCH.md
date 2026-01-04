@@ -188,11 +188,11 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-16 (/home → dossier/new): la création de dossier ne passe plus par une modal; navigation OK; retour arrière/annulation ne laisse pas d’artefacts.
   - [ ] UAT-17 (dossier futur): upload documents avant création du dossier → puis création OK; annulation → nettoyage du “to be” folder + documents.
   - [ ] UAT-18 (organization/new): bouton IA activé si nom présent; désactivé pendant upload; icônes conformes.
-  - [ ] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
-  - [ ] UAT-20 (tool docs - analyze): l’IA peut appeler `documents.analyze` avec un prompt ciblé et la réponse est bornée à 10000 mots.
-  - [ ] UAT-21 (tool docs - 10k words): si un doc >10000 mots, `get_content` renvoie un résumé détaillé (pas de contenu complet).
-  - [ ] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
-  - [ ] UAT-23 (générations - docs + web): la génération exploite d’abord les documents (et `documents.get_content`/`documents.analyze` si nécessaire) puis effectue **au moins un `web_search`** pour consolider les références externes lorsque la demande le requiert.
+  - [x] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
+  - [x] UAT-20 (tool docs - analyze / doc complet): `documents.analyze` interroge le **texte intégral extrait** du document (même si >10000 mots), et la réponse est bornée à 10000 mots.
+  - [x] UAT-21 (tool docs - 10k words / detailed summary): si un doc >10000 mots, `get_content` renvoie un **résumé détaillé d’environ 10000 mots** (idéalement 8000–10000) — pas de contenu complet.
+  - [x] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
+  - [x] UAT-23 (générations - docs + web): la génération exploite d’abord les documents (et `documents.get_content`/`documents.analyze` si nécessaire) puis effectue **au moins un `web_search`** pour consolider les références externes lorsque la demande le requiert.
   - [ ] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
     - Préconditions:
       - Avoir au moins 1 document `ready` sur le **dossier** ET au moins 1 document `ready` sur l'**organisation**.
@@ -209,6 +209,12 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-25 (UseCaseDetail - layout): “Bénéfices” a la même hauteur que “Risques + Mesures du succès” (même si Risques/Mesures n'ont qu’un seul item).
   - [ ] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
+  - **Note collaboration**: ne pas implémenter ces tests tant que la DB n'est pas stabilisée côté équipe (les exécutions peuvent perturber la base locale).
+  - **API (à ajouter)**:
+    - `documents.analyze`: vérifier que l’analyse utilise le texte intégral (y compris si doc > 10k mots) et que la réponse est bornée.
+    - `document_summary`: vérifier que `detailed_summary` est généré et atteint une granularité ~10k mots pour docs > 10k mots.
+  - **E2E (à ajouter)**:
+    - Upload d’un document long → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent.
 
 ## Commits & Progress
 - [x] **Commit 1** (`7a8eae5`): docs branch setup (this file) + design skeleton

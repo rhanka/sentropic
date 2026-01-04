@@ -458,8 +458,17 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
     name: 'documents',
-    description:
-      "Accède aux documents attachés à un contexte (organization/folder/usecase). Permet: lister les documents + statuts, lire un résumé (si dispo), lire le contenu texte (si le document fait <= 10000 mots), ou lancer une analyse ciblée via un sous-agent (réponse max 10000 mots).",
+    description: `
+      Accède aux documents attachés à un contexte (organization/folder/usecase).
+      
+      Les documents sont fournis par l'utilisateurs et supposés être une source importante d'information.
+
+      Permet de:
+       - lister les documents + statuts,
+       - lire un RÉSUMÉ COURT (get_summary) pour une information de surface,
+       - lire le CONTENU (get_content) : soit le text complet (petit doc) soit un résumé (10k mots si le document est long) - pour une information détaillée
+       - lancer une analyse ciblée (analyze) - pour une requête ciblée (recherche d'un contenu).
+       `,
     parameters: {
       type: 'object',
       properties: {
@@ -482,7 +491,7 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         prompt: {
           type: 'string',
           description:
-            "Requis pour analyze: prompt/instruction ciblée à exécuter par un sous-agent à partir du document (ou d'un résumé détaillé si le doc dépasse 10000 mots)."
+            "Requis pour analyze: prompt/instruction ciblée à exécuter par un sous-agent à partir du document (texte intégral si possible; sinon scan complet par extraits + consolidation)."
         },
         maxWords: {
           type: 'number',
@@ -672,6 +681,11 @@ export interface ExecuteWithToolsStreamOptions {
    * Résumé de reasoning (Responses API). Default: auto
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
+  /**
+   * Max output tokens for the model output (Responses API).
+   * IMPORTANT: required for long-form outputs; otherwise OpenAI may use a small default.
+   */
+  maxOutputTokens?: number;
 }
 
 export interface ExecuteWithToolsStreamResult {
@@ -699,6 +713,7 @@ export const executeWithToolsStream = async (
     responseFormat,
     structuredOutput,
     reasoningSummary,
+    maxOutputTokens,
     streamId,
     promptId,
     jobId,
@@ -722,6 +737,7 @@ export const executeWithToolsStream = async (
       model,
       responseFormat,
       reasoningSummary,
+      maxOutputTokens,
       signal
     })) {
       const data = (event.data ?? {}) as Record<string, unknown>;
@@ -753,6 +769,7 @@ export const executeWithToolsStream = async (
     tools: enabledTools,
     responseFormat,
     reasoningSummary,
+    maxOutputTokens,
     signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;

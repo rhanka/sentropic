@@ -11,6 +11,11 @@ export interface CallOpenAIOptions {
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   toolChoice?: 'auto' | 'required' | 'none';
   responseFormat?: 'json_object';
+  /**
+   * Chat Completions: max output tokens for the assistant message.
+   * If not set, OpenAI may use a small default which can truncate long outputs.
+   */
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 }
 
@@ -40,6 +45,11 @@ export interface CallOpenAIResponseOptions {
     strict?: boolean;
   };
   toolChoice?: 'auto' | 'required' | 'none'; // laissé pour compat mais on n'impose rien (auto)
+  /**
+   * Responses API: max output tokens for the assistant output.
+   * If not set, OpenAI may use a small default which can truncate long outputs.
+   */
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 }
 
@@ -71,6 +81,7 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     tools,
     toolChoice = 'auto',
     responseFormat,
+    maxOutputTokens,
     signal
   } = options;
 
@@ -83,7 +94,10 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     messages,
     ...(tools && { tools }),
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
-    ...(responseFormat && { response_format: { type: responseFormat } })
+    ...(responseFormat && { response_format: { type: responseFormat } }),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   // Pass AbortSignal through request options to enable cooperative cancellation
@@ -103,6 +117,7 @@ export async function* callOpenAIStream(
     tools,
     toolChoice = 'auto',
     responseFormat,
+    maxOutputTokens,
     signal
   } = options;
 
@@ -116,7 +131,10 @@ export async function* callOpenAIStream(
     stream: true,
     ...(tools && { tools }),
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
-    ...(responseFormat && { response_format: { type: responseFormat } })
+    ...(responseFormat && { response_format: { type: responseFormat } }),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   // État pour tracker les tool calls en cours
@@ -247,7 +265,19 @@ export async function* callOpenAIStream(
 export async function* callOpenAIResponseStream(
   options: CallOpenAIResponseOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { messages, model, reasoningEffort, reasoningSummary, tools, responseFormat, structuredOutput, signal, previousResponseId, rawInput } = options;
+  const {
+    messages,
+    model,
+    reasoningEffort,
+    reasoningSummary,
+    tools,
+    responseFormat,
+    structuredOutput,
+    maxOutputTokens,
+    signal,
+    previousResponseId,
+    rawInput
+  } = options;
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -318,7 +348,10 @@ export async function* callOpenAIResponseStream(
     ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(responseTools ? { tools: responseTools } : {}),
-    ...(textConfig ? { text: textConfig } : {})
+    ...(textConfig ? { text: textConfig } : {}),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_output_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   try {

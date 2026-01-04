@@ -300,6 +300,10 @@ Limites (en mots, hors titres):
 - Éléments exploitables: 8–14 puces, 6–18 mots par puce
 - Contraintes / inconnues: 4–10 puces, 6–18 mots par puce
 
+Règles de qualité (obligatoires):
+- Quand des chiffres existent dans le texte, les inclure (avec unités) dans le Résumé et/ou les Éléments exploitables.
+- Chaque puce “Éléments exploitables” doit, si possible, contenir un ordre de grandeur ou une valeur chiffrée (%, €, volumes, effectifs, délais, etc.) ou préciser qu’aucun chiffre n’est donné.
+
 Format attendu:
 ## Fiche document (réexamen)
 - Titre: {{doc_title}} (si “-” => “Non précisé”)
@@ -307,7 +311,7 @@ Format attendu:
 - Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
 
 ## Résumé
-(100-200 mots)
+(100-200 mots, inclure 3–8 faits chiffrés si disponibles)
 
 ## Sommaire
 Titres niveau 1: 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”
