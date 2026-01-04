@@ -107,13 +107,14 @@
   const canUseAI = () => {
     const name = isAutoName ? '' : (folder.name || '').trim();
     const context = (folder.description || '').trim();
-    return Boolean(name || context || hasAnyDoc);
+    return Boolean(name || context || hasAnyDoc || $currentOrganizationId);
   };
 
   // Derived flags (avoid relying on function calls for UI enablement).
   $: realName = isAutoName ? '' : (folder.name || '').trim();
   $: hasContext = Boolean((folder.description || '').trim());
-  $: canUseAIUi = Boolean(realName || hasContext || hasAnyDoc);
+  $: hasOrganization = Boolean($currentOrganizationId);
+  $: canUseAIUi = Boolean(realName || hasContext || hasAnyDoc || hasOrganization);
 
   const handleSave = async () => {
     if (isAutoName) return;
@@ -153,7 +154,11 @@
       if (!id) throw new Error('Impossible de créer le brouillon');
 
       const context = (folder.description || '').trim();
-      const input = context || (hasAnyDoc ? 'Utiliser les documents du dossier comme contexte principal.' : '');
+      const input =
+        context ||
+        (hasAnyDoc
+          ? 'Utiliser les documents du dossier comme contexte principal.'
+          : ($currentOrganizationId ? "Utiliser les informations de l'organisation sélectionnée comme contexte principal." : ''));
       if (!input) throw new Error('Renseigner un contexte, un nom, ou ajouter un document');
 
       await apiPost('/use-cases/generate', {
