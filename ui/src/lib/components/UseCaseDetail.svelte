@@ -332,6 +332,7 @@ $: complexityStars = calculatedScores?.complexityStars !== undefined
   // quand useCase.data.references change via SSE (sans Ctrl+R).
   let references = [];
   $: references = useCase?.data?.references || useCase?.references || [];
+  $: showReferences = !isEditing && references.length > 0;
 
   // Fonction pour obtenir le HTML de la description avec références parsées
 $: descriptionHtml = (useCase?.data?.description || useCase?.description)
@@ -1020,9 +1021,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   </div>
 
   <!-- Matrice détaillée en 2 colonnes séparées -->
-  <div class="grid gap-6 md:grid-cols-2 layout-bottom">
+  <div class={`grid gap-6 md:grid-cols-2 layout-bottom ${showReferences ? '' : 'no-references'}`}>
     <!-- Prochaines étapes -->
-    <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div class={`layout-bottom-nextsteps rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${showReferences ? '' : 'md:col-span-2'}`}>
       <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
         <h3 class="font-semibold flex items-center gap-2">
           <ClipboardList class="w-5 h-5" />
@@ -1059,7 +1060,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
     </div>
 
     <!-- Références (désormais en 1/3, sous Données) -->
-    {#if !isEditing && references.length > 0}
+    {#if showReferences}
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">

@@ -144,6 +144,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Générations: empêcher les “pseudo tool calls” (JSON collés dans la réponse) en renforçant le prompt système de l’orchestrateur tools
   - [x] Générations: précharger les documents (dossier + organisation) dans le prompt via `DOCUMENTS_CONTEXT_JSON` (liste + résumés) avec un budget unique en **chars** (approx. 100k mots) et une politique d’escalade: si les résumés suffisent ne pas appeler `documents`, sinon `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée).
   - [x] Générations: forcer la réponse finale en `json_schema` strict (Structured Outputs) en phase 2 pour sécuriser le parsing JSON et rapprocher la contrainte de format de la dernière demande.
+  - [x] UI (UseCaseDetail): alignement “Bénéfices” vs “Risques + Mesures du succès” rétabli (stretch), y compris quand Risques/Mesures n'ont qu’un seul item.
+  - [x] UI (UseCaseDetail): si la section “Références” est vide (non rendue), “Prochaines étapes” passe en pleine largeur (desktop + print/preview print).
   - [x] Use cases: retry automatique (borné) sur `usecase_list` / `usecase_detail` en cas d’échec “retryable” (parsing JSON / champs manquants / erreurs transitoires)
 
 - [ ] Amélioration “Folder & Use case generation”
@@ -203,6 +205,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
         - Cas “résumé suffisant”: aucune utilisation de `documents.*` nécessaire.
         - Cas “résumé insuffisant” (ex: chiffre/section précise): un appel `documents.get_content(maxChars=30000)` ou `documents.analyze` intervient **avant** `web_search`.
       - UAT-24: la réponse finale est **uniquement** un JSON (aucun texte avant/après, pas de pseudo tool calls, pas de JSON parasite).
+  - [ ] UAT-25 (UseCaseDetail - layout): “Bénéfices” a la même hauteur que “Risques + Mesures du succès” (même si Risques/Mesures n'ont qu’un seul item).
+  - [ ] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress
