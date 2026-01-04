@@ -733,7 +733,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
 
         <!-- Autes (COL A, chacun 1/3 de page) -->
         <!-- Groupe Bénéfices + (Risques + Mesures du succès) (span 2 colonnes, lui-même en 2 colonnes) -->
-        <div class="grid gap-6 lg:grid-cols-2">
+        <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2">
           <!-- Bénéfices -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
