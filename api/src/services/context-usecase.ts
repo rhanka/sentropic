@@ -203,9 +203,9 @@ export const generateUseCaseList = async (
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0
-      ? `\n\nDOCUMENTS (contexte préchargé)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
+      ? `\n\nDOCUMENTS & WEB (règles)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
           .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
-          .join('\n')}\n- Si les résumés suffisent, NE PAS appeler l'outil documents.\n- Si besoin de détails (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- Ne pas lancer web_search tant que les documents n'ont pas été exploités quand ils existent.`
+          .join('\n')}\n- Commencer par exploiter les documents fournis (résumés, puis outil documents si nécessaire).\n  - Si les résumés suffisent, NE PAS appeler l'outil documents.\n  - Si besoin de détails factuels (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- En complément, effectuer AU MOINS un web_search pour consolider les références externes pertinentes des cas d'usage (surtout si la demande exige un panachage “rapport + web”).\n- Utiliser web_extract uniquement si besoin de détails complémentaires spécifiques, et uniquement avec des URLs valides (obtenues via web_search).`
       : '';
 
   const docsJsonBlock =
@@ -294,9 +294,9 @@ export const generateUseCaseDetail = async (
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0
-      ? `\n\nDOCUMENTS (contexte préchargé)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
+      ? `\n\nDOCUMENTS & WEB (règles)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
           .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
-          .join('\n')}\n- Si les résumés suffisent, NE PAS appeler l'outil documents.\n- Si besoin de détails (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- Ne pas lancer web_search tant que les documents n'ont pas été exploités quand ils existent.`
+          .join('\n')}\n- Commencer par exploiter les documents fournis (résumés, puis outil documents si nécessaire).\n  - Si les résumés suffisent, NE PAS appeler l'outil documents.\n  - Si besoin de détails factuels (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- En complément, effectuer AU MOINS un web_search pour consolider les références externes pertinentes des cas d'usage (surtout si la demande exige un panachage “rapport + web”).\n- Utiliser web_extract uniquement si besoin de détails complémentaires spécifiques, et uniquement avec des URLs valides (obtenues via web_search).`
       : '';
 
   const docsJsonBlock =

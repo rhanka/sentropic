@@ -192,7 +192,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-20 (tool docs - analyze): l’IA peut appeler `documents.analyze` avec un prompt ciblé et la réponse est bornée à 10000 mots.
   - [ ] UAT-21 (tool docs - 10k words): si un doc >10000 mots, `get_content` renvoie un résumé détaillé (pas de contenu complet).
   - [ ] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
-  - [ ] UAT-23 (générations - escalade): si une info nécessaire n’est pas dans les résumés, la génération déclenche `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée) avant d’envisager `web_search`.
+  - [ ] UAT-23 (générations - docs + web): la génération exploite d’abord les documents (et `documents.get_content`/`documents.analyze` si nécessaire) puis effectue **au moins un `web_search`** pour consolider les références externes lorsque la demande le requiert.
   - [ ] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
     - Préconditions:
       - Avoir au moins 1 document `ready` sur le **dossier** ET au moins 1 document `ready` sur l'**organisation**.
@@ -203,7 +203,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
       - UAT-22: le prompt de génération inclut un bloc `DOCUMENTS_CONTEXT_JSON` (liste + résumés, `truncated` possible) couvrant **dossier + organisation**.
       - UAT-23:
         - Cas “résumé suffisant”: aucune utilisation de `documents.*` nécessaire.
-        - Cas “résumé insuffisant” (ex: chiffre/section précise): un appel `documents.get_content(maxChars=30000)` ou `documents.analyze` intervient **avant** `web_search`.
+        - Cas “résumé insuffisant” (ex: chiffre/section précise): un appel `documents.get_content(maxChars=30000)` ou `documents.analyze` intervient avant consolidation web.
+        - En complément (si demandé): au moins un `web_search`; `web_extract` uniquement si besoin de détails complémentaires spécifiques avec URLs valides issues du `web_search`.
       - UAT-24: la réponse finale est **uniquement** un JSON (aucun texte avant/après, pas de pseudo tool calls, pas de JSON parasite).
   - [ ] UAT-25 (UseCaseDetail - layout): “Bénéfices” a la même hauteur que “Risques + Mesures du succès” (même si Risques/Mesures n'ont qu’un seul item).
   - [ ] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
