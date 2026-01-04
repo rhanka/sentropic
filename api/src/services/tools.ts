@@ -14,13 +14,13 @@ const WEB_TOOLS_SYSTEM_PROMPT =
   "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes. CRITICAL: Si tu dois extraire plusieurs URLs avec web_extract, tu DOIS passer TOUTES les URLs dans un seul appel en utilisant le paramètre urls (array). NE FAIS JAMAIS plusieurs appels séparés pour chaque URL. Exemple: si tu as 9 URLs, appelle une fois avec {\"urls\": [\"url1\", \"url2\", ..., \"url9\"]} au lieu d'appeler 9 fois avec une URL chacune. Ne JAMAIS appeler web_extract avec un array vide: JAMAIS web_extract avec {\"urls\":[]}. IMPORTANT: Ne JAMAIS écrire des pseudo-appels d'outils dans le texte (ex: du JSON du type {\"tool\":\"documents\"...} ou {\"action\":\"web_extract\"...}). Si tu as besoin d'un outil, tu dois l'appeler via un tool call (function call) — pas en le décrivant. Lorsque `responseFormat` demande un JSON, la réponse finale doit être un UNIQUE objet JSON valide (aucun texte ou JSON parasite avant/après).";
 
 const WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT =
-  "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs.";
+  "Tu es un assistant qui fournit une réponse finale basée sur les résultats fournis. IMPORTANT: aucun outil n'est disponible à cette étape. Ne JAMAIS écrire de pseudo-appels d'outils dans le texte. Si un JSON est demandé, la sortie doit être un UNIQUE objet JSON valide, sans texte avant/après.";
 
 const WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT =
-  "Je vais rechercher et extraire des informations récentes pour vous.";
+  "Je vais maintenant produire la réponse finale à partir des résultats fournis.";
 
 const WEB_TOOLS_RESULTS_SUFFIX =
-  "Réponds à la question originale en utilisant ces informations récentes.";
+  "Produis maintenant la réponse finale. IMPORTANT: si un JSON est demandé, renvoie uniquement l'objet JSON final (aucun texte ou JSON parasite).";
 
 // Tools (définition unique)
 export const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
@@ -650,6 +650,16 @@ export interface ExecuteWithToolsStreamOptions {
     contextId: string;
   }>;
   responseFormat?: 'json_object';
+  /**
+   * Structured Outputs (Responses API): JSON Schema strict for the FINAL answer (phase 2).
+   * When set, it overrides responseFormat for phase 2.
+   */
+  structuredOutput?: {
+    name: string;
+    schema: Record<string, unknown>;
+    description?: string;
+    strict?: boolean;
+  };
   signal?: AbortSignal;
 /**
    * ID du stream à utiliser (si non fourni, généré à partir des champs ci-dessous).
@@ -687,6 +697,7 @@ export const executeWithToolsStream = async (
     documentsContext,
     documentsContexts,
     responseFormat,
+    structuredOutput,
     reasoningSummary,
     streamId,
     promptId,
@@ -924,7 +935,7 @@ export const executeWithToolsStream = async (
       { role: 'user', content: resultsMessage }
       ],
       model,
-      responseFormat,
+      ...(structuredOutput ? { structuredOutput } : (responseFormat ? { responseFormat } : {})),
     reasoningSummary,
       signal
   })) {

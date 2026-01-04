@@ -4,7 +4,7 @@ export const defaultPrompts = [
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',
-    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}.
+    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
 Informations déjà renseignées (peuvent être partielles / vides): {{existing_data}}
 ID d'organisation (si connu): {{organization_id}}
 

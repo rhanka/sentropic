@@ -185,6 +185,7 @@ export const generateUseCaseList = async (
   useCaseCount?: number,
   folderName?: string,
   documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseList> => {
@@ -202,12 +203,17 @@ export const generateUseCaseList = async (
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0
-      ? `\n\nDOCUMENTS DISPONIBLES (outil documents)\n- Tu as accès à l'outil "documents" pour consulter des documents existants.\n- Contextes autorisés:\n${documentsContexts
+      ? `\n\nDOCUMENTS (contexte préchargé)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
           .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
-          .join('\n')}\n- Si utile, commence par action=list, puis action=get_summary ou get_content.\n- Ne pas inventer: s'appuyer sur les documents uniquement si tu les appelles.`
+          .join('\n')}\n- Si les résumés suffisent, NE PAS appeler l'outil documents.\n- Si besoin de détails (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- Ne pas lancer web_search tant que les documents n'ont pas été exploités quand ils existent.`
       : '';
 
-  const prompt = `${basePrompt}${docsDirective}`;
+  const docsJsonBlock =
+    documentsContextJson && documentsContextJson.trim()
+      ? `\n\nDOCUMENTS_CONTEXT_JSON:\n${documentsContextJson}\n`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}${docsJsonBlock}`;
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
@@ -218,6 +224,31 @@ export const generateUseCaseList = async (
     useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
     documentsContexts,
     responseFormat: 'json_object',
+    structuredOutput: {
+      name: 'use_case_list',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          dossier: { type: 'string' },
+          useCases: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                titre: { type: 'string' },
+                description: { type: 'string' },
+                ref: { type: 'string' }
+              },
+              required: ['titre', 'description', 'ref']
+            }
+          }
+        },
+        required: ['dossier', 'useCases']
+      }
+    },
     reasoningSummary: 'auto',
     promptId: 'use_case_list',
     streamId: finalStreamId,
@@ -245,6 +276,7 @@ export const generateUseCaseDetail = async (
   organizationInfo?: string,
   model?: string,
   documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseDetail> => {
@@ -262,12 +294,17 @@ export const generateUseCaseDetail = async (
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0
-      ? `\n\nDOCUMENTS DISPONIBLES (outil documents)\n- Tu as accès à l'outil "documents" pour consulter des documents existants.\n- Contextes autorisés:\n${documentsContexts
+      ? `\n\nDOCUMENTS (contexte préchargé)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
           .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
-          .join('\n')}\n- Si utile, commence par action=list, puis action=get_summary ou get_content.\n- Ne pas inventer: s'appuyer sur les documents uniquement si tu les appelles.`
+          .join('\n')}\n- Si les résumés suffisent, NE PAS appeler l'outil documents.\n- Si besoin de détails (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- Ne pas lancer web_search tant que les documents n'ont pas été exploités quand ils existent.`
       : '';
 
-  const prompt = `${basePrompt}${docsDirective}`;
+  const docsJsonBlock =
+    documentsContextJson && documentsContextJson.trim()
+      ? `\n\nDOCUMENTS_CONTEXT_JSON:\n${documentsContextJson}\n`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}${docsJsonBlock}`;
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
@@ -278,6 +315,90 @@ export const generateUseCaseDetail = async (
     useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
     documentsContexts,
     responseFormat: 'json_object',
+    structuredOutput: {
+      name: 'use_case_detail',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          problem: { type: 'string' },
+          solution: { type: 'string' },
+          domain: { type: 'string' },
+          technologies: { type: 'array', items: { type: 'string' } },
+          leadtime: { type: 'string' },
+          prerequisites: { type: 'string' },
+          contact: { type: 'string' },
+          benefits: { type: 'array', items: { type: 'string' } },
+          metrics: { type: 'array', items: { type: 'string' } },
+          risks: { type: 'array', items: { type: 'string' } },
+          nextSteps: { type: 'array', items: { type: 'string' } },
+          dataSources: { type: 'array', items: { type: 'string' } },
+          dataObjects: { type: 'array', items: { type: 'string' } },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                title: { type: 'string' },
+                url: { type: 'string' },
+                excerpt: { type: 'string' }
+              },
+              required: ['title', 'url', 'excerpt']
+            }
+          },
+          valueScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' }
+              },
+              required: ['axisId', 'rating', 'description']
+            }
+          },
+          complexityScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' }
+              },
+              required: ['axisId', 'rating', 'description']
+            }
+          }
+        },
+        required: [
+          'name',
+          'description',
+          'problem',
+          'solution',
+          'domain',
+          'technologies',
+          'leadtime',
+          'prerequisites',
+          'contact',
+          'benefits',
+          'metrics',
+          'risks',
+          'nextSteps',
+          'dataSources',
+          'dataObjects',
+          'references',
+          'valueScores',
+          'complexityScores'
+        ]
+      }
+    },
     reasoningSummary: 'auto',
     promptId: 'use_case_detail',
     streamId: finalStreamId,

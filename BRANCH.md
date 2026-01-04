@@ -142,6 +142,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] UI paramètres: valeur initiale de `processingInterval` à **1000ms** (sans écraser la valeur existante en base)
   - [x] Documents: modèle forcé temporaire **`gpt-4.1-nano`** (résumé court, résumé détaillé auto, `documents.analyze`)
   - [x] Générations: empêcher les “pseudo tool calls” (JSON collés dans la réponse) en renforçant le prompt système de l’orchestrateur tools
+  - [x] Générations: précharger les documents (dossier + organisation) dans le prompt via `DOCUMENTS_CONTEXT_JSON` (liste + résumés) avec un budget unique en **chars** (approx. 100k mots) et une politique d’escalade: si les résumés suffisent ne pas appeler `documents`, sinon `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée).
+  - [x] Générations: forcer la réponse finale en `json_schema` strict (Structured Outputs) en phase 2 pour sécuriser le parsing JSON et rapprocher la contrainte de format de la dernière demande.
   - [x] Use cases: retry automatique (borné) sur `usecase_list` / `usecase_detail` en cas d’échec “retryable” (parsing JSON / champs manquants / erreurs transitoires)
 
 - [ ] Amélioration “Folder & Use case generation”
@@ -187,6 +189,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [ ] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
   - [ ] UAT-20 (tool docs - analyze): l’IA peut appeler `documents.analyze` avec un prompt ciblé et la réponse est bornée à 10000 mots.
   - [ ] UAT-21 (tool docs - 10k words): si un doc >10000 mots, `get_content` renvoie un résumé détaillé (pas de contenu complet).
+  - [ ] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
+  - [ ] UAT-23 (générations - escalade): si une info nécessaire n’est pas dans les résumés, la génération déclenche `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée) avant d’envisager `web_search`.
+  - [ ] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
 
 ## Commits & Progress

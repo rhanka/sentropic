@@ -192,6 +192,77 @@ export class QueueManager {
   }
 
   /**
+   * Build a preloaded documents context (list + summaries) to inject in generation prompts.
+   * Budget is enforced in characters to avoid overly large prompts.
+   */
+  private async buildDocumentsContextJsonForGeneration(opts: {
+    workspaceId: string;
+    contexts: Array<{ contextType: 'organization' | 'folder'; contextId: string }>;
+    maxChars: number;
+  }): Promise<string> {
+    const { workspaceId, contexts, maxChars } = opts;
+    if (!contexts || contexts.length === 0) return '';
+
+    // Load docs from DB (summary is stored in context_documents.data.summary).
+    const rows = await db.select({
+      id: contextDocuments.id,
+      contextType: contextDocuments.contextType,
+      contextId: contextDocuments.contextId,
+      filename: contextDocuments.filename,
+      mimeType: contextDocuments.mimeType,
+      status: contextDocuments.status,
+      sizeBytes: contextDocuments.sizeBytes,
+      createdAt: contextDocuments.createdAt,
+      updatedAt: contextDocuments.updatedAt,
+      data: contextDocuments.data,
+    })
+      .from(contextDocuments)
+      .where(eq(contextDocuments.workspaceId, workspaceId));
+
+    const allowed = new Set(contexts.map((c) => `${c.contextType}:${c.contextId}`));
+    const candidates = rows
+      .filter((r) => allowed.has(`${r.contextType}:${r.contextId}`))
+      .map((r) => {
+        const dataObj = r.data && typeof r.data === 'object' ? (r.data as Record<string, unknown>) : {};
+        const summary = typeof dataObj.summary === 'string' ? dataObj.summary : '';
+        return {
+          id: r.id,
+          contextType: r.contextType,
+          contextId: r.contextId,
+          filename: r.filename,
+          mimeType: r.mimeType,
+          status: r.status,
+          sizeBytes: r.sizeBytes ?? null,
+          updatedAt: (r.updatedAt ?? r.createdAt ?? null) ? new Date(r.updatedAt ?? r.createdAt ?? new Date()).toISOString() : null,
+          summary,
+        };
+      })
+      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+
+    const picked: Array<unknown> = [];
+    let usedChars = 0;
+    const reserve = 400; // headroom for wrapper fields
+    const effectiveMax = Math.max(5_000, Math.floor(maxChars));
+
+    for (const item of candidates) {
+      const s = JSON.stringify(item);
+      const next = usedChars + s.length + 2;
+      if (next + reserve > effectiveMax) break;
+      picked.push(item);
+      usedChars = next;
+    }
+
+    const truncated = picked.length < candidates.length;
+    const payload = {
+      version: 1,
+      limits: { maxChars: effectiveMax },
+      truncated,
+      items: picked,
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  /**
    * Charger les paramètres de configuration
    */
   private async loadSettings(): Promise<void> {
@@ -595,14 +666,14 @@ export class QueueManager {
               : null;
           if (docId) {
             const msg = error instanceof Error ? error.message : 'Unknown error';
-            await db
-              .update(contextDocuments)
-              .set({
-                status: 'failed',
-                summary: this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000),
-                updatedAt: new Date(),
-              })
-              .where(eq(contextDocuments.id, docId));
+            const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
+            await db.run(sql`
+              UPDATE context_documents
+              SET status = 'failed',
+                  data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ${docId}
+            `);
 
             // Best-effort: also stream an error for observers (streamId derived from documentId).
             const streamId = `document_${docId}`;
@@ -674,7 +745,7 @@ export class QueueManager {
       return out;
     };
     const clean = (s: string) => sanitizePgText(typeof s === 'string' ? s : String(s ?? ''));
-    const cleanedReferences = Array.isArray(enrichedData.references)
+    const cleanedReferences: Array<{ title: string; url: string; excerpt: string | undefined }> = Array.isArray(enrichedData.references)
       ? enrichedData.references
           .map((r) => ({
             title: clean(r.title),
@@ -700,8 +771,8 @@ export class QueueManager {
     const keepIfFilled = (existing: unknown, next: string) => (pickStr(existing) ? pickStr(existing) : next);
     const mergeRefs = (
       existingRefs: unknown,
-      nextRefs: Array<{ title: string; url: string; excerpt?: string }>
-    ): Array<{ title: string; url: string; excerpt?: string }> => {
+      nextRefs: Array<{ title: string; url: string; excerpt: string | undefined }>
+    ): Array<{ title: string; url: string; excerpt: string | undefined }> => {
       const base = Array.isArray(existingRefs)
         ? existingRefs
             .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
@@ -718,7 +789,7 @@ export class QueueManager {
       for (const r of nextRefs || []) {
         if (!r?.url) continue;
         if (byUrl.has(r.url)) continue;
-        merged.push(r);
+        merged.push({ title: r.title, url: r.url, excerpt: r.excerpt });
         byUrl.add(r.url);
       }
       return merged;
@@ -733,7 +804,7 @@ export class QueueManager {
       challenges: keepIfFilled(existingData.challenges, cleanedData.challenges),
       objectives: keepIfFilled(existingData.objectives, cleanedData.objectives),
       technologies: keepIfFilled(existingData.technologies, cleanedData.technologies),
-      references: mergeRefs(existingData.references, cleanedData.references ?? []),
+      references: mergeRefs(existingData.references, cleanedReferences),
     };
 
     // Store enriched profile in organizations.data JSONB
@@ -1108,6 +1179,12 @@ export class QueueManager {
       folderId,
       organizationId: resolvedOrganizationId,
     });
+    const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
+      workspaceId,
+      contexts: documentsContexts.map((c) => ({ contextType: c.contextType, contextId: c.contextId })),
+      // Single budget only (no separate doc-count cap): ~100k words equivalent in chars.
+      maxChars: 600_000,
+    });
 
     const userFolderName =
       typeof folder.name === 'string' && folder.name.trim() && folder.name.trim() !== 'Brouillon' && !folder.name.startsWith('Génération -')
@@ -1123,6 +1200,7 @@ export class QueueManager {
       useCaseCount,
       userFolderName,
       documentsContexts,
+      documentsContextJson,
       signal,
       streamId
     );
@@ -1273,6 +1351,12 @@ export class QueueManager {
       folderId,
       organizationId: folder.organizationId,
     });
+    const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
+      workspaceId: folder.workspaceId,
+      contexts: documentsContexts.map((c) => ({ contextType: c.contextType, contextId: c.contextId })),
+      // Single budget only (no separate doc-count cap): ~100k words equivalent in chars.
+      maxChars: 600_000,
+    });
     
     // Générer le détail
     const streamId = `usecase_${useCaseId}`;
@@ -1283,6 +1367,7 @@ export class QueueManager {
       organizationInfo,
       selectedModel,
       documentsContexts,
+      documentsContextJson,
       signal,
       streamId
     );
