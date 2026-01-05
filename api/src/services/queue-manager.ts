@@ -865,24 +865,34 @@ export class QueueManager {
       const currentWords = this.countWords(current);
       if (currentWords >= minWordsTarget) break;
 
-      const prompt =
-        `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.\n` +
-        `Contraintes:\n` +
-        `- Réponds en ${opts.lang}.\n` +
-        `- Format: markdown.\n` +
-        `- Pas d'invention: si l'info n'est pas dans la source, dis-le.\n` +
-        `- Objectif de longueur: produire un résumé COMPLET entre ${minWordsTarget} et ${maxWords} mots.\n` +
-        `- Éviter les redites; ajouter de la granularité (sections, mécanismes, acteurs, processus, chiffres).\n` +
-        `- Conserver les chiffres (avec unités) et les rattacher à leur contexte.\n\n` +
-        `Document: ${opts.filename}\n` +
-        `Source: ${opts.sourceLabel}\n` +
-        `Résumé actuel: ~${currentWords} mots (trop court)\n\n` +
-        `SOURCE:\n---\n${opts.sourceText}\n---\n\n` +
-        `RÉSUMÉ ACTUEL:\n---\n${current}\n---\n\n` +
-        `TÂCHE:\n` +
-        `- Réécrire un résumé détaillé unique, plus long et plus précis.\n` +
-        `- Réécrire sous forme LINÉAIRE (dans l'ordre du document), pas une fiche.\n` +
-        `- Utiliser une suite de paragraphes numérotés (1., 2., 3., ...).\n`;
+      const prompt = `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.
+
+Contraintes:
+- Réponds en ${opts.lang}.
+- Format: markdown.
+- Pas d'invention: si l'info n'est pas dans la source, dis-le.
+- Objectif de longueur: produire un résumé COMPLET entre ${minWordsTarget} et ${maxWords} mots.
+- Éviter les redites; ajouter de la granularité (sections, mécanismes, acteurs, processus, chiffres).
+- Conserver les chiffres (avec unités) et les rattacher à leur contexte.
+
+Document: ${opts.filename}
+Source: ${opts.sourceLabel}
+Résumé actuel: ~${currentWords} mots (trop court)
+
+SOURCE:
+---
+${opts.sourceText}
+---
+
+RÉSUMÉ ACTUEL:
+---
+${current}
+---
+
+TÂCHE:
+- Réécrire un résumé détaillé unique, plus long et plus précis.
+- Réécrire sous forme LINÉAIRE (dans l'ordre du document), pas une fiche.
+- Utiliser une suite de paragraphes numérotés (1., 2., 3., ...).`;
 
       const { content } = await executeWithToolsStream(prompt, {
         model: opts.model,
@@ -969,22 +979,28 @@ export class QueueManager {
     // If the document is "only" moderately long, send the full text directly.
     // This avoids the lossy chunk-summarize-then-merge path and enables a truly detailed ~10k-words summary.
     if (estTokens > 0 && estTokens <= 700_000) {
-      const directPrompt =
-        `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.\n` +
-        `Contraintes:\n` +
-        `- Réponds en ${opts.lang}.\n` +
-        `- Format: markdown.\n` +
-        `- Pas d'invention: si l'info n'est pas dans le texte, dis-le.\n` +
-        `- Objectif de longueur: viser ~${maxWords} mots, idéalement entre 8000 et ${maxWords} mots (si le texte source le permet).\n` +
-        `- Limite stricte: maximum ${maxWords} mots.\n` +
-        `- Conserver les chiffres (avec unités) et les rattacher à leur contexte.\n\n` +
-        `Document: ${opts.filename}\n\n` +
-        `SOURCE (texte intégral extrait):\n---\n${fullText}\n---\n\n` +
-        `TÂCHE:\n` +
-        `- Produire un résumé détaillé LINÉAIRE qui suit l'ordre du document.\n` +
-        `- Éviter le format "fiche de synthèse".\n` +
-        `- Écrire une suite de paragraphes numérotés (1., 2., 3., ...), chacun résumant un passage consécutif.\n` +
-        `- Inclure les chiffres quand ils apparaissent.\n`;
+      const directPrompt = `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.
+
+Contraintes:
+- Réponds en ${opts.lang}.
+- Format: markdown.
+- Pas d'invention: si l'info n'est pas dans le texte, dis-le.
+- Objectif de longueur: viser ~${maxWords} mots, idéalement entre 8000 et ${maxWords} mots (si le texte source le permet).
+- Limite stricte: maximum ${maxWords} mots.
+- Conserver les chiffres (avec unités) et les rattacher à leur contexte.
+
+Document: ${opts.filename}
+
+SOURCE (texte intégral extrait):
+---
+${fullText}
+---
+
+TÂCHE:
+- Produire un résumé détaillé LINÉAIRE qui suit l'ordre du document.
+- Éviter le format "fiche de synthèse".
+- Écrire une suite de paragraphes numérotés (1., 2., 3., ...), chacun résumant un passage consécutif.
+- Inclure les chiffres quand ils apparaissent.`;
 
       const { content } = await executeWithToolsStream(directPrompt, {
         model: opts.model,
@@ -1016,18 +1032,23 @@ export class QueueManager {
       const fallbackParts: string[] = [];
       for (let i = 0; i < fallbackChunks.length; i += 1) {
         const chunkText = fallbackChunks[i]!;
-        const chunkPrompt =
-          `Tu es un assistant qui résume fidèlement un extrait de document métier.\n` +
-          `Contraintes:\n` +
-          `- Réponds en ${opts.lang}.\n` +
-          `- Format: markdown.\n` +
-          `- Pas d'invention.\n` +
-          `- Résumé LINÉAIRE (dans l'ordre du texte).\n` +
-          `- Conserver les chiffres (avec unités) et leur contexte.\n` +
-          `- Viser 1200–1800 mots pour cet extrait.\n\n` +
-          `Document: ${opts.filename}\n` +
-          `Extrait ${i + 1}/${fallbackChunks.length}\n\n` +
-          `TEXTE:\n---\n${chunkText}\n---\n`;
+        const chunkPrompt = `Tu es un assistant qui résume fidèlement un extrait de document métier.
+
+Contraintes:
+- Réponds en ${opts.lang}.
+- Format: markdown.
+- Pas d'invention.
+- Résumé LINÉAIRE (dans l'ordre du texte).
+- Conserver les chiffres (avec unités) et leur contexte.
+- Viser 1200–1800 mots pour cet extrait.
+
+Document: ${opts.filename}
+Extrait ${i + 1}/${fallbackChunks.length}
+
+TEXTE:
+---
+${chunkText}
+---`;
 
         const { content: part } = await executeWithToolsStream(chunkPrompt, {
           model: opts.model,
@@ -1054,19 +1075,25 @@ export class QueueManager {
     const chunkSummaries: string[] = [];
     for (let i = 0; i < chunks.length; i += 1) {
       const chunkText = chunks[i]!;
-      const chunkPrompt =
-        `Tu es un assistant qui résume fidèlement un extrait de document métier.\n` +
-        `Contraintes:\n` +
-        `- Réponds en ${opts.lang}.\n` +
-        `- Format: markdown.\n` +
-        `- Pas d'invention.\n` +
-        `- Conserver les chiffres importants (avec unités) et leur contexte.\n` +
-        `- Produire un résumé linéaire (dans l'ordre) pour cet extrait.\n` +
-        `- Viser 2000–3500 mots pour cet extrait.\n\n` +
-        `Document: ${opts.filename}\n` +
-        `Partie ${i + 1}/${chunks.length}\n\n` +
-        `TEXTE:\n---\n${chunkText}\n---\n\n` +
-        `Résumer cet extrait de façon détaillée (faits, chiffres, exigences, risques, acteurs, échéances), en suivant l'ordre du texte.`;
+      const chunkPrompt = `Tu es un assistant qui résume fidèlement un extrait de document métier.
+
+Contraintes:
+- Réponds en ${opts.lang}.
+- Format: markdown.
+- Pas d'invention.
+- Conserver les chiffres importants (avec unités) et leur contexte.
+- Produire un résumé linéaire (dans l'ordre) pour cet extrait.
+- Viser 2000–3500 mots pour cet extrait.
+
+Document: ${opts.filename}
+Partie ${i + 1}/${chunks.length}
+
+TEXTE:
+---
+${chunkText}
+---
+
+Résumer cet extrait de façon détaillée (faits, chiffres, exigences, risques, acteurs, échéances), en suivant l'ordre du texte.`;
 
       const { content: chunkContent } = await executeWithToolsStream(chunkPrompt, {
         model: opts.model,
