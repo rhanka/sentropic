@@ -205,6 +205,7 @@
         <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {#each $foldersStore as folder}
             {@const isGenerating = folder.status === 'generating'}
+            {@const isDraft = folder.status === 'draft'}
             {@const useCaseCount = getUseCaseCount(folder.id)}
             {@const canClick = !isGenerating || useCaseCount > 0}
             <article 
@@ -263,10 +264,10 @@
               <!-- Footer -->
               <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
                 <span class="text-xs text-slate-400 whitespace-nowrap">
-                  {#if $currentFolderId === folder.id}
-                    Sélectionné
+                  {#if isDraft}
+                    Brouillon
                   {:else}
-                  Cliquez pour sélectionner
+                    Ouvrir
                   {/if}
                 </span>
                 <div class="flex items-center gap-2 flex-wrap">

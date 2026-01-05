@@ -163,38 +163,39 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] Bug: si aucun titre n’est saisi, ne pas laisser “Brouillon” devenir le titre final; laisser l’IA nommer le dossier
   - [x] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
     - [x] Si l’utilisateur annule ou quitte la vue pendant un new (sans appuyer sur "créer" ou "génération), on reste en mode "draft" et en cliquand dessus on reste sur la vue "new" (avec icones génération etc)
-    - [ ] mutualiser `dossiers/[id]` et `dossiers/new` via un composant 
   - [x] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
   - [x] Synthèse exécutive: permettre l’accès aux documents (dossier + organisation + cas d’usage) via le tool `documents` si au moins un document existe
   - [x] Dashboard: afficher le ScatterPlot dès qu’un premier cas d’usage est disponible (même si le dossier / la synthèse sont en cours de génération)
   - [x] Dashboard: n’afficher dans le ScatterPlot que les cas d’usage **finalisés** (pas ceux “en cours”)
-  - [ ] Partial UAT
+  - [x] Partial UAT
 
 - [ ] Full UAT (checklist avant tests)
-  - [ ] UAT-1 (démarrage): en mode dev, l’app démarre et la page cible charge sans erreur.
-  - [ ] UAT-2 (accès): en tant qu’utilisateur connecté, je vois un bloc “Documents” sur une page contexte (Entreprise / Dossier / Cas d’usage).
-  - [ ] UAT-3 (upload): je peux sélectionner un fichier et l’uploader; il apparaît dans la liste avec un statut (ex: “En cours”).
-  - [ ] UAT-4 (statut): le statut évolue automatiquement jusqu’à “Prêt” (ou “Échec” avec un message clair).
-  - [ ] UAT-5 (résumé): quand “Prêt”, je vois un résumé lisible (FR) directement dans le bloc.
-  - [ ] UAT-6 (download): je peux télécharger le document et je récupère bien le même fichier.
-  - [ ] UAT-7 (garde-fous): un fichier trop volumineux ou non supporté affiche une erreur UX (sans casser la page).
-  - [ ] UAT-8 (multi-docs): je peux ajouter 2+ documents sur le même contexte; la liste reste cohérente (tri, statuts).
-  - [ ] UAT-9 (droits): un utilisateur sans droits sur le contexte ne voit pas les documents / ne peut pas télécharger.
+  - [x] UAT-1 (démarrage): en mode dev, l’app démarre et la page cible charge sans erreur.
+  - [x] UAT-2 (accès): en tant qu’utilisateur connecté, je vois un bloc “Documents” sur une page contexte (Entreprise / Dossier / Cas d’usage).
+  - [x] UAT-3 (upload): je peux sélectionner un fichier et l’uploader; il apparaît dans la liste avec un statut (ex: “En cours”).
+  - [x] UAT-4 (statut): le statut évolue automatiquement jusqu’à “Prêt” (ou “Échec” avec un message clair).
+  - [x] UAT-5 (résumé): quand “Prêt”, je vois un résumé lisible (FR) directement dans le bloc.
+  - [x] UAT-6 (download): je peux télécharger le document et je récupère bien le même fichier.
+  - [-] UAT-7 (garde-fous): un fichier trop volumineux ou non supporté affiche une erreur UX (sans casser la page).
+  - [x] UAT-8 (multi-docs): je peux ajouter 2+ documents sur le même contexte; la liste reste cohérente (tri, statuts).
+  - [x] UAT-9 (droits): un utilisateur sans droits sur le contexte ne voit pas les documents / ne peut pas télécharger.
   - [x] UAT-10 (UX table): la table n’a pas de “refresh”, le bouton add est `circle-plus`, et les colonnes (eye/download) sont à gauche; la colonne statut ne “saute” pas.
   - [x] UAT-11 (suppression): clic `trash-2` → confirmation → le document disparaît; le download/summary n’est plus accessible.
   - [x] UAT-12 (résumé plein large): l’affichage du résumé prend toute la largeur (pas de resize colonnes).
-  - [ ] UAT-13 (tool docs - disponibilité): en chat (org/folder/usecase), l’IA peut lister les documents + statuts et afficher un résumé si dispo.
-  - [ ] UAT-14 (tool docs - garde-fous): si aucun document n’est disponible, l’IA ne tente pas d’appeler le tool et explique qu’elle n’a pas de source doc.
-  - [ ] UAT-15 (tool docs - permissions): en rôle restreint, l’IA ne peut pas accéder au contenu complet; elle peut au mieux lister des métadonnées autorisées.
-  - [ ] UAT-16 (/home → dossier/new): la création de dossier ne passe plus par une modal; navigation OK; retour arrière/annulation ne laisse pas d’artefacts.
-  - [ ] UAT-17 (dossier futur): upload documents avant création du dossier → puis création OK; annulation → nettoyage du “to be” folder + documents.
-  - [ ] UAT-18 (organization/new): bouton IA activé si nom présent; désactivé pendant upload; icônes conformes.
+  - [x] UAT-13 (tool docs - disponibilité): en chat (org/folder/usecase), l’IA peut lister les documents + statuts et afficher un résumé si dispo.
+  - [x] UAT-14 (tool docs - garde-fous): si aucun document n’est disponible, l’IA ne tente pas d’appeler le tool et explique qu’elle n’a pas de source doc.
+  - [-] UAT-15 (tool docs - permissions): en rôle restreint, l’IA ne peut pas accéder au contenu complet; elle peut au mieux lister des métadonnées autorisées.
+  - [x] UAT-16 (dossier/new + draft): la création de dossier ne passe plus par une modal; navigation OK; création du brouillon automatique; retour à `/dossiers` conserve le brouillon (pas de suppression).
+    - [x] Vérifier affichage: un dossier en `draft` affiche “Brouillon” dans le footer de la carte (pas besoin d’indiquer actif).
+    - [x] Vérifier reprise: clic sur une carte `draft` renvoie vers `/dossier/new?draft=<id>` (édition + icônes IA/Créer/Annuler).
+  - [x] UAT-17 (routes cas d’usage): `/cas-usage` redirige vers `dossiers/[id]` (ou `/dossiers` si aucun dossier), et `CTRL+R` sur `dossiers/[id]` ne casse pas (fallback SPA).
+  - [x] UAT-18 (organization/new): bouton IA activé si nom présent; désactivé pendant upload; icônes conformes.
   - [x] UAT-19 (prompts): si l’utilisateur a rempli des champs (nom/contexte), l’IA réutilise ces infos et ne les écrase pas.
   - [x] UAT-20 (tool docs - analyze / doc complet): `documents.analyze` interroge le **texte intégral extrait** du document (même si >10000 mots), et la réponse est bornée à 10000 mots.
   - [x] UAT-21 (tool docs - 10k words / detailed summary): si un doc >10000 mots, `get_content` renvoie un **résumé détaillé d’environ 10000 mots** (idéalement 8000–10000) — pas de contenu complet.
   - [x] UAT-22 (générations - docs préchargés): si des documents existent sur dossier + organisation, le prompt contient un `DOCUMENTS_CONTEXT_JSON` (liste + résumés) et la génération peut s’appuyer dessus sans appeler `documents` si suffisant.
   - [x] UAT-23 (générations - docs + web): la génération exploite d’abord les documents (et `documents.get_content`/`documents.analyze` si nécessaire) puis effectue **au moins un `web_search`** pour consolider les références externes lorsque la demande le requiert.
-  - [ ] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
+  - [x] UAT-24 (générations - JSON strict): la sortie finale `usecase_list` / `usecase_detail` reste un unique JSON conforme (pas de texte avant/après, pas de “JSON parasite”).
     - Préconditions:
       - Avoir au moins 1 document `ready` sur le **dossier** ET au moins 1 document `ready` sur l'**organisation**.
       - Préférer un doc “source de vérité” (ex: rapport interne) avec des éléments vérifiables.
@@ -207,15 +208,21 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
         - Cas “résumé insuffisant” (ex: chiffre/section précise): un appel `documents.get_content(maxChars=30000)` ou `documents.analyze` intervient avant consolidation web.
         - En complément (si demandé): au moins un `web_search`; `web_extract` uniquement si besoin de détails complémentaires spécifiques avec URLs valides issues du `web_search`.
       - UAT-24: la réponse finale est **uniquement** un JSON (aucun texte avant/après, pas de pseudo tool calls, pas de JSON parasite).
-  - [ ] UAT-25 (UseCaseDetail - layout): “Bénéfices” a la même hauteur que “Risques + Mesures du succès” (même si Risques/Mesures n'ont qu’un seul item).
-  - [ ] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
+  - [x] UAT-25 (UseCaseDetail - layout): “Bénéfices” a la même hauteur que “Risques + Mesures du succès” (même si Risques/Mesures n'ont qu’un seul item).
+  - [x] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
+
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
-  - **Note collaboration**: ne pas implémenter ces tests tant que la DB n'est pas stabilisée côté équipe (les exécutions peuvent perturber la base locale).
-  - **API (à ajouter)**:
-    - `documents.analyze`: vérifier que l’analyse utilise le texte intégral (y compris si doc > 10k mots) et que la réponse est bornée.
-    - `document_summary`: vérifier que `detailed_summary` est généré et atteint une granularité ~10k mots pour docs > 10k mots.
-  - **E2E (à ajouter)**:
-    - Upload d’un document long → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent.
+  - [ ] ui (make test-ui)
+  - [ ] api (make test-api)
+    Note: le api/services est à déplacer, sa création doit être déplacée (a priori dans ai)
+   - [ ] api (endpoints) make test-api-endpoints
+   - [ ] queue make test-api-queue
+   - [ ] security make test-api-security
+   - [ ] ai make test-api-ai
+  - [ ] e2e make test-e2e (après avoir fait make build-ui-image build-api)
+    - [ ] to be updated
+    - [ ] to be added
+      - [ ] Upload d’un document long → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent.
 
 ## Commits & Progress
 - [x] **Commit 1** (`7a8eae5`): docs branch setup (this file) + design skeleton
