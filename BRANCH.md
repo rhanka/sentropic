@@ -222,14 +222,14 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] queue: `make test-api-queue` (OK: 1 fichier / 5 tests)
     - [x] security: `make test-api-security` (OK: 5 fichiers / 42 tests)
     - [x] limit: `make test-api-limit` (OK: 1 fichier / 3 tests)
-    - [ ] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
+    - [x] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
       - [x] `getDocumentContent`: si > 10k mots => `contentMode=detailed_summary` + `contentWords`
       - [x] `getDocumentContent`: auto-repair si `data.detailedSummary` existe mais < 8000 mots (regen + persist)
       - [x] `analyzeDocument`: lit le texte intégral extrait + respecte `maxWords`
       - [x] `analyzeDocument`: cas doc très long (chunking: scan tous les chunks + merge)
       - [x] `listContextDocuments`: `summaryAvailable` cohérent (selon `data.summary`)
       - [x] `getDocumentSummary`: vérification match contexte (contextType/contextId) + `documentStatus`
-    - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
+    - [x] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
       - [x] `POST /documents` (upload): crée `context_documents` + enqueue `document_summary`
       - [x] `GET /documents?context_type=&context_id=`: liste + mapping champs
       - [x] `GET /documents/:id`: metadata
@@ -245,7 +245,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
       - [x] `document_summary`: en cas d'erreur extraction/S3 => `status=failed` + message exploitable
     - [ ] security: N/A pour “role restreint” tant que RBAC n'existe pas (UAT-15) — garder tests de scoping workspace
   - [ ] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
-    - [ ] Déplacer `api/tests/services/documents-tool.service.test.ts` vers `api/tests/ai/` (éviter la catégorie `services/`), ou `api/tests/unit/` si 100% mocké et rapide.
+    - [x] Supprimer la catégorie inutile `api/tests/services/documents-tool.service.test.ts` (remplacé par `api/tests/unit/documents-tool-service.test.ts` + `api/tests/api/documents.test.ts` + `api/tests/queue/document-summary.test.ts`).
     - [ ] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI)
     - [ ] `documents.analyze`: possibilité de scanner tout le texte (chunking interne OK tant que tous les chunks sont lus)
     - [ ] `documents.get_content`: si doc long => retourner `detailed_summary` trim ~10k mots (pas 2k) + `clipped/contentWords`
