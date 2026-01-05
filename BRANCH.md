@@ -255,6 +255,7 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [ ] À ajouter:
       - [x] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA) — `e2e/tests/dossiers-reload-draft.spec.ts`
       - [x] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...` — `e2e/tests/dossiers-reload-draft.spec.ts`
+      - [x] Résumés documents: upload **court** (README) + **long** (concat `spec/*.md`) → statut `ready` + résumé non vide — `e2e/tests/documents-summary.spec.ts`
       - [ ] Documents long: upload → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent
       - [ ] Documents: ordre icônes (œil → download → poubelle) + styles hover (bg transparent + hover:bg-slate-100)
       - [ ] Documents: suppression (poubelle) => disparition ligne + pas de régression sur compteur/état
