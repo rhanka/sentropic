@@ -35,6 +35,11 @@ import { writeChatGenerationTrace } from './chat-trace';
 
 export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
+const CHAT_CONTEXT_TYPES = ['organization', 'folder', 'usecase', 'executive_summary'] as const;
+function isChatContextType(value: unknown): value is ChatContextType {
+  return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
+}
+
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type CreateChatSessionInput = {
@@ -393,8 +398,8 @@ export class ChatService {
       }));
 
     // Récupérer le contexte depuis la session
-    const primaryContextType = session.primaryContextType;
-    const primaryContextId = session.primaryContextId;
+    const primaryContextType = isChatContextType(session.primaryContextType) ? session.primaryContextType : null;
+    const primaryContextId = typeof session.primaryContextId === 'string' ? session.primaryContextId : null;
 
     // Documents tool is only exposed if there are documents attached to the current context.
     const allowedDocContexts = await this.getAllowedDocumentsContexts({

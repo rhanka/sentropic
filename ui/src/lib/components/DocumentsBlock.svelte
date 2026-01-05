@@ -108,7 +108,9 @@
     // Subscribe to job updates: when a related job completes/fails, reload immediately.
     sseKey = `documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sseKey, (ev: StreamHubEvent) => {
-      if (ev.type !== 'job_update') return;
+      // StreamHubEvent includes generic stream events (type: string) which prevents
+      // TypeScript from narrowing on `ev.type === 'job_update'` alone.
+      if (ev.type !== 'job_update' || !('jobId' in ev)) return;
       const jobIds = new Set(items.map((d) => d.job_id).filter(Boolean) as string[]);
       if (jobIds.size === 0) return;
       if (!jobIds.has(ev.jobId)) return;
