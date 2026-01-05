@@ -221,19 +221,42 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] api (endpoints): `make test-api-endpoints` (OK: 19 fichiers / 160 tests)
     - [x] queue: `make test-api-queue` (OK: 1 fichier / 5 tests)
     - [x] security: `make test-api-security` (OK: 5 fichiers / 42 tests)
+    - [x] limit: `make test-api-limit` (OK: 1 fichier / 3 tests)
     - [ ] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
+      - [ ] `getDocumentContent`: si > 10k mots => `contentMode=detailed_summary` + `contentWords` + `clipped=true` si trim
+      - [ ] `getDocumentContent`: auto-repair si `data.detailedSummary` existe mais < 8000 mots (regen + persist)
+      - [ ] `analyzeDocument`: mode `full_text` sur petits docs + respect `maxWords`
+      - [ ] `analyzeDocument`: sur docs longs => analyse sur **texte intégral extrait** (pas sur résumé détaillé)
+      - [ ] `listContextDocuments`: `summaryAvailable` cohérent (selon `data.summary`)
+      - [ ] `getDocumentSummary`: vérification match contexte (contextType/contextId) + `documentStatus`
     - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
+      - [ ] `POST /documents` (upload): crée `context_documents` + `status=uploaded/processing` + enqueue `document_summary`
+      - [ ] `GET /documents?context_type=&context_id=`: liste + mapping champs (`data.summary`, `createdAt/updatedAt`, `jobId`)
+      - [ ] `GET /documents/:id`: metadata (scoping workspace + contexte)
+      - [ ] `GET /documents/:id/content`: download bytes (S3) + headers; scoping workspace; 404 si absent
+      - [ ] `DELETE /documents/:id`: suppression doc + versions; suppression objet S3; idempotence (si déjà supprimé)
+      - [ ] Admin scope: `workspace_id` query param pris en compte (si admin workspace scope activé)
     - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
+      - [ ] `document_summary`: `workspaceId` dérivé du document (pas param job)
+      - [ ] `document_summary`: `streamId=document_<documentId>` + events streaming cohérents
+      - [ ] `document_summary`: modèle forcé `gpt-4.1-nano`
+      - [ ] `document_summary`: met à jour `context_documents.data.summary` (+ `summaryLang`, `nbWords`, etc.)
+      - [ ] `document_summary`: si doc long => génère + persiste `data.detailedSummary` (~8k–10k mots)
+      - [ ] `document_summary`: en cas d'erreur extraction/S3 => `status=failed` + message exploitable
     - [ ] security: N/A pour “role restreint” tant que RBAC n'existe pas (UAT-15) — garder tests de scoping workspace
   - [ ] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
     - [ ] Déplacer `api/tests/services/documents-tool.service.test.ts` vers `api/tests/ai/` (éviter la catégorie `services/`), ou `api/tests/unit/` si 100% mocké et rapide.
     - [ ] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI)
+    - [ ] `documents.analyze`: possibilité de scanner tout le texte (chunking interne OK tant que tous les chunks sont lus)
+    - [ ] `documents.get_content`: si doc long => retourner `detailed_summary` trim ~10k mots (pas 2k) + `clipped/contentWords`
   - [ ] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
     - [ ] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
     - [ ] À ajouter:
       - [ ] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA)
       - [ ] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...`
       - [ ] Documents long: upload → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent
+      - [ ] Documents: ordre icônes (œil → download → poubelle) + styles hover (bg transparent + hover:bg-slate-100)
+      - [ ] Documents: suppression (poubelle) => disparition ligne + pas de régression sur compteur/état
 
 ## Commits & Progress
 - [x] **Commit 1** (`7a8eae5`): docs branch setup (this file) + design skeleton
