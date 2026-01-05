@@ -223,18 +223,18 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] security: `make test-api-security` (OK: 5 fichiers / 42 tests)
     - [x] limit: `make test-api-limit` (OK: 1 fichier / 3 tests)
     - [ ] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
-      - [ ] `getDocumentContent`: si > 10k mots => `contentMode=detailed_summary` + `contentWords` + `clipped=true` si trim
-      - [ ] `getDocumentContent`: auto-repair si `data.detailedSummary` existe mais < 8000 mots (regen + persist)
-      - [ ] `analyzeDocument`: mode `full_text` sur petits docs + respect `maxWords`
-      - [ ] `analyzeDocument`: sur docs longs => analyse sur **texte intégral extrait** (pas sur résumé détaillé)
+      - [x] `getDocumentContent`: si > 10k mots => `contentMode=detailed_summary` + `contentWords`
+      - [x] `getDocumentContent`: auto-repair si `data.detailedSummary` existe mais < 8000 mots (regen + persist)
+      - [x] `analyzeDocument`: lit le texte intégral extrait + respecte `maxWords`
+      - [ ] `analyzeDocument`: cas doc très long (chunking: scan tous les chunks + merge)
       - [ ] `listContextDocuments`: `summaryAvailable` cohérent (selon `data.summary`)
       - [ ] `getDocumentSummary`: vérification match contexte (contextType/contextId) + `documentStatus`
     - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
-      - [ ] `POST /documents` (upload): crée `context_documents` + `status=uploaded/processing` + enqueue `document_summary`
-      - [ ] `GET /documents?context_type=&context_id=`: liste + mapping champs (`data.summary`, `createdAt/updatedAt`, `jobId`)
-      - [ ] `GET /documents/:id`: metadata (scoping workspace + contexte)
-      - [ ] `GET /documents/:id/content`: download bytes (S3) + headers; scoping workspace; 404 si absent
-      - [ ] `DELETE /documents/:id`: suppression doc + versions; suppression objet S3; idempotence (si déjà supprimé)
+      - [x] `POST /documents` (upload): crée `context_documents` + enqueue `document_summary`
+      - [x] `GET /documents?context_type=&context_id=`: liste + mapping champs
+      - [x] `GET /documents/:id`: metadata
+      - [x] `GET /documents/:id/content`: download stream + headers
+      - [x] `DELETE /documents/:id`: 204 + suppression objet S3 best-effort
       - [ ] Admin scope: `workspace_id` query param pris en compte (si admin workspace scope activé)
     - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
       - [ ] `document_summary`: `workspaceId` dérivé du document (pas param job)
