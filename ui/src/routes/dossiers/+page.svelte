@@ -118,6 +118,13 @@
   // Polling désactivé: dossiers/cas d'usage se mettent à jour via SSE (folder_update/usecase_update)
 
   const handleFolderClick = (folderId: string, folderStatus: string) => {
+    // Draft: retourner sur la vue "new" (édition brouillon + icônes IA/Créer/Annuler)
+    if (folderStatus === 'draft') {
+      currentFolderId.set(folderId);
+      goto(`/dossier/new?draft=${encodeURIComponent(folderId)}`);
+      return;
+    }
+
     // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
     if (folderStatus === 'generating') {
       const folderUseCases = $useCasesStore.filter(uc => uc.folderId === folderId);
@@ -126,8 +133,9 @@
       }
     }
     
-    // Naviguer vers la vue des cas d'usage
-    goto(`/cas-usage?folder=${folderId}`);
+    // Naviguer vers la vue dossier (qui contient la liste des cas d'usage)
+    currentFolderId.set(folderId);
+    goto(`/dossiers/${folderId}`);
   };
 
   const getUseCaseCount = (folderId: string) => {

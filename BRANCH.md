@@ -158,11 +158,12 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] Transformer le contexte en EditableInput (markdown) une fois le brouillon créé
     - [x] Ajouter un champ numérique “nombre de cas d’usage” (défaut: 10) — (prompt à adapter ensuite)
     - [x] Ajouter le bloc documents - permettre l'upload (via dossier brouillon)
-    - [ ] Si l’utilisateur annule ou quitte la vue, supprimer le “to be” folder + ses documents (avec altert pour éviter de quitter et supprimer par erreur)
     - [x] Les boutons IA/Créer sont disponibles uniquement si contexte renseigné OU document présent
     - [x] Si l’utilisateur a renseigné un nom de dossier, le prompt doit l’utiliser (correction/mise en forme par l'IA OK)
     - [x] Bug: si aucun titre n’est saisi, ne pas laisser “Brouillon” devenir le titre final; laisser l’IA nommer le dossier
-  - [ ] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
+  - [x] Déplacer la vue /cas-usage (liste) vers `dossiers/[id]` et afficher le contexte (entre le titre et le bloc documents), et rebrancher la redirection vers /dossiers/ lors de la soumission IA
+    - [x] Si l’utilisateur annule ou quitte la vue pendant un new (sans appuyer sur "créer" ou "génération), on reste en mode "draft" et en cliquand dessus on reste sur la vue "new" (avec icones génération etc)
+    - [ ] mutualiser `dossiers/[id]` et `dossiers/new` via un composant 
   - [x] Adapter prompts/workflow pour utiliser documents (résumé ou contenu) depuis dossier + organisation (si dispo)
   - [x] Synthèse exécutive: permettre l’accès aux documents (dossier + organisation + cas d’usage) via le tool `documents` si au moins un document existe
   - [x] Dashboard: afficher le ScatterPlot dès qu’un premier cas d’usage est disponible (même si le dossier / la synthèse sont en cours de génération)

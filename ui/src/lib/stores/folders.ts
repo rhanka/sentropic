@@ -17,7 +17,7 @@ export type Folder = {
     synthese_executive?: string;
     references?: Array<{ title: string; url: string }>;
   } | null;
-  status?: 'generating' | 'completed';
+  status?: 'draft' | 'generating' | 'completed';
   createdAt: string;
 };
 

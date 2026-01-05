@@ -144,7 +144,11 @@
     try {
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
-      goto('/cas-usage');
+      if (useCase.folderId) {
+        goto(`/dossiers/${useCase.folderId}`);
+      } else {
+        goto('/dossiers');
+      }
     } catch (err) {
       console.error('Failed to delete use case:', err);
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });

@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { addToast } from '$lib/stores/toast';
   import { currentOrganizationId, organizationsStore, fetchOrganizations } from '$lib/stores/organizations';
-  import { createDraftFolder, updateFolder, deleteFolder, currentFolderId, type Folder } from '$lib/stores/folders';
-  import { apiPost } from '$lib/utils/api';
+  import { createDraftFolder, updateFolder, currentFolderId, type Folder } from '$lib/stores/folders';
+  import { apiGet, apiPost } from '$lib/utils/api';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Brain, Save, Trash2, Loader2, CirclePlus } from '@lucide/svelte';
@@ -47,6 +48,28 @@
 
   onMount(() => {
     void loadOrganizations();
+
+    // Si arrivée depuis la liste en cliquant sur un brouillon
+    void (async () => {
+      const urlParams = new URLSearchParams($page.url.search);
+      const draftId = urlParams.get('draft');
+      if (!draftId) return;
+      try {
+        const loaded = await apiGet<Folder>(`/folders/${draftId}`);
+        folder = { ...folder, ...loaded };
+        currentFolderId.set(loaded.id);
+        // Reprendre la sélection organisation si présente
+        if (loaded.organizationId) currentOrganizationId.set(loaded.organizationId);
+        lastOrgIdApplied = loaded.organizationId ?? null;
+        // Si le nom est le nom automatique, rester en mode auto-name (save désactivé tant que nom réel pas fourni)
+        isAutoName = (loaded.name || '').trim() === AUTO_DRAFT_NAME;
+        originalName = loaded.name ?? AUTO_DRAFT_NAME;
+        originalContext = loaded.description ?? '';
+      } catch (err) {
+        console.error('Failed to load draft folder:', err);
+        addToast({ type: 'error', message: 'Impossible de charger le brouillon' });
+      }
+    })();
   });
 
   const syncSelectedOrganizationToDraft = () => {
@@ -181,15 +204,7 @@
   };
 
   const handleCancel = async () => {
-    const id = folder.id;
-    if (id) {
-      if (!confirm('Annuler et supprimer le brouillon (et ses documents) ?')) return;
-      try {
-        await deleteFolder(id);
-      } catch {
-        // ignore
-      }
-    }
+    // Conserver le brouillon (collaboration): retour à la liste sans suppression.
     goto('/dossiers');
   };
 
