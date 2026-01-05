@@ -6,6 +6,7 @@ import {
   settings, 
   users, 
   workspaces,
+  contextDocuments,
   webauthnCredentials, 
   sessions,
   userSessions,
@@ -53,6 +54,7 @@ export async function seedTestData() {
     // 3. Delete other tables
     await db.delete(jobQueue); // Clean job queue to avoid interference
     await db.delete(settings); // Clean settings to ensure clean state
+    await db.delete(contextDocuments); // FK -> workspaces (documents are workspace-scoped)
     await db.delete(workspaces); // After all workspace-scoped tables are deleted
     
     // Note: businessConfig is kept as it contains business configuration

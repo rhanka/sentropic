@@ -250,8 +250,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
     - [x] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI) — `api/tests/ai/documents-tool.test.ts`
     - [x] `documents.analyze`: possibilité de scanner tout le texte (chunking interne OK tant que tous les chunks sont lus) — `api/tests/ai/documents-tool.test.ts`
     - [x] `documents.get_content`: si doc long => retourner `detailed_summary` trim ~10k mots (pas 2k) + `clipped/contentWords` — `api/tests/ai/documents-tool.test.ts`
-  - [ ] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
-    - [ ] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
+  - [x] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
+    - [x] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
     - [ ] À ajouter:
       - [ ] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA)
       - [ ] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...`

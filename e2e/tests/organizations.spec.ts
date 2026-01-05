@@ -5,6 +5,23 @@ import { debug, setupDebugBuffer } from '../helpers/debug';
 setupDebugBuffer();
 
 test.describe('Gestion des organisations', () => {
+  const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+  test.beforeEach(async ({ page }) => {
+    // Stabiliser: forcer le scope admin sur la workspace admin (sinon le mode "lecture seule" cache le bouton +).
+    await page.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('adminWorkspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, ADMIN_WORKSPACE_ID);
+  });
+
+  const createOrgButton = (page: any) => page.getByRole('button', { name: 'Créer une organisation' });
+  const createButton = (page: any) => page.getByRole('button', { name: 'Créer' });
+  const deleteButton = (page: any) => page.getByRole('button', { name: 'Supprimer' });
+
   test('devrait afficher la page des organisations', async ({ page }) => {
     await page.goto('/organisations');
     
@@ -14,8 +31,8 @@ test.describe('Gestion des organisations', () => {
     // Vérifier le titre
     await expect(page.locator('h1')).toContainText('Organisations');
     
-    // Vérifier le bouton d'ajout
-    await expect(page.locator('button:has-text("Ajouter")')).toBeVisible();
+    // Vérifier le bouton d'ajout (icône + aria-label)
+    await expect(createOrgButton(page)).toBeVisible();
   });
 
   test('devrait permettre de créer une organisation', async ({ page }) => {
@@ -23,7 +40,7 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Cliquer sur le bouton d'ajout et attendre la page de création
-    await page.click('button:has-text("Ajouter")');
+    await createOrgButton(page).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Renseigner le nom via l'EditableInput dans le H1 (textarea pour multiline)
@@ -34,7 +51,7 @@ test.describe('Gestion des organisations', () => {
     await page.waitForTimeout(500);
     
     // Créer l'organisation puis attendre la redirection vers la page détail
-    const createBtn = page.locator('button[title="Créer"], button:has-text("Créer")');
+    const createBtn = page.locator('button[title="Créer"], button[aria-label="Créer"], button:has-text("Créer")');
     // Debug réseau: tracer le POST /organizations
     const disposeNet1 = page.on('request', (r) => {
       if (r.url().includes('/api/v1/organizations') && r.method() === 'POST') debug('POST /organizations started');
@@ -87,10 +104,10 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Aller à la page de création
-    await page.click('button:has-text("Ajouter")');
+    await createOrgButton(page).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
-    const aiButton = page.locator('[data-testid="enrich-organization"], button:has-text("IA")');
+    const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]');
     await expect(aiButton).toBeVisible();
     await expect(aiButton).toBeDisabled();
     
@@ -105,12 +122,12 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Créer une organisation d'abord
-    await page.click('button:has-text("Ajouter")');
+    await createOrgButton(page).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Organization to Delete');
     await page.waitForTimeout(75);
-    const createBtn2 = page.locator('button[title="Créer"], button:has-text("Créer")');
+    const createBtn2 = page.locator('button[title="Créer"], button[aria-label="Créer"], button:has-text("Créer")');
     await expect(createBtn2).toBeVisible();
     await expect(createBtn2).toBeEnabled();
     await createBtn2.scrollIntoViewIfNeeded();
@@ -127,7 +144,7 @@ test.describe('Gestion des organisations', () => {
 
     // Supprimer via l'UI: cliquer sur le bouton Supprimer et confirmer
     page.on('dialog', dialog => dialog.accept());
-    const deleteBtn = page.locator('button:has-text("Supprimer")').first();
+    const deleteBtn = deleteButton(page).first();
     await expect(deleteBtn).toBeVisible({ timeout: 10_000 });
     await deleteBtn.click();
     // Attendre la redirection
@@ -170,11 +187,11 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Créer une organisation et lancer l'enrichissement IA depuis la page New
-    await page.click('button:has-text("Ajouter")');
+    await createOrgButton(page).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     const nameInput2 = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput2.fill('MicrosoftAITest');
-    const aiButton = page.locator('[data-testid="enrich-organization"], button:has-text("IA")');
+    const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]');
     await expect(aiButton).toBeEnabled();
     
     // Vérifier que le bouton IA est visible et actif (test minimal fonctionnel)
@@ -186,11 +203,11 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers la page de création sans renseigner de nom
-    await page.click('button:has-text("Ajouter")');
+    await createOrgButton(page).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Vérifier que le bouton "Créer" est désactivé tant que le nom est vide
-    const createBtn2 = page.locator('button:has-text("Créer")');
+    const createBtn2 = createButton(page);
     await expect(createBtn2).toBeDisabled();
   });
 });

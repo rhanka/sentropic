@@ -1,13 +1,30 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Workflow métier complet', () => {
+test.describe.serial('Workflow métier complet', () => {
+  // Ce spec crée du contenu et enchaîne plusieurs pages: le laisser plus de marge + éviter la concurrence.
+  test.setTimeout(4 * 60_000);
+
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+  test.beforeEach(async ({ page }) => {
+    // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule")
+    await page.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('adminWorkspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, ADMIN_WORKSPACE_ID);
+  });
+
   test('devrait exécuter le workflow complet : organisation → génération → dossiers → cas d\'usage → dashboard', async ({ page }) => {
     // Étape 1: Créer une organisation
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
     // Cliquer sur le bouton d'ajout (redirige vers /organisations/new)
-    await page.click('button:has-text("Ajouter")');
+    await page.getByRole('button', { name: 'Créer une organisation' }).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Remplir le nom via l'EditableInput dans le H1 (textarea pour multiline)
@@ -16,19 +33,46 @@ test.describe('Workflow métier complet', () => {
     await nameInput.fill('TestOrganizationE2E');
     
     // Créer l'organisation
-    await page.click('button:has-text("Créer")');
+    await page.getByRole('button', { name: 'Créer' }).click();
     await expect(page).toHaveURL(/\/organisations\/[a-zA-Z0-9-]+$/);
     
     // Vérifier sur la page détail
     const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(detailNameInput).toHaveValue('TestOrganizationE2E');
-    
-    // Étape 2: Générer des cas d'usage
-    await page.goto('/cas-usage');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Vérifier qu'on est sur la page des cas d'usage
-    await expect(page.locator('h1')).toContainText('Cas d\'usage');
+
+    // IMPORTANT: la suite E2E contient des tests destructifs (suppression dossiers).
+    // Pour éviter la dépendance au seed global, créer un dossier + un cas d’usage dédiés via API.
+    const orgUrl = page.url();
+    const organizationId = new URL(orgUrl).pathname.split('/').filter(Boolean).pop() || '';
+    expect(organizationId).toBeTruthy();
+
+    const folderName = `Workflow Folder ${Date.now()}`;
+    // NOTE: ne pas lier explicitement l’organisation au dossier ici:
+    // le scope workspace admin peut varier (admin_app), ce qui rend la validation org->workspace flaky en E2E.
+    const createFolderRes = await page.request.post(`${API_BASE_URL}/api/v1/folders`, {
+      timeout: 30_000,
+      data: { name: folderName, description: 'Folder created by workflow.spec.ts' }
+    });
+    if (!createFolderRes.ok()) {
+      const body = await createFolderRes.text().catch(() => '');
+      throw new Error(`POST /folders failed: status=${createFolderRes.status()} body=${body}`);
+    }
+    const createdFolder = await createFolderRes.json();
+    const folderId = String(createdFolder?.id || '');
+    expect(folderId).toBeTruthy();
+
+    const useCaseName = `Workflow UC ${Date.now()}`;
+    const createUseCaseRes = await page.request.post(`${API_BASE_URL}/api/v1/use-cases`, {
+      timeout: 30_000,
+      data: { name: useCaseName, description: 'Use case created by workflow.spec.ts', folderId }
+    });
+    if (!createUseCaseRes.ok()) {
+      const body = await createUseCaseRes.text().catch(() => '');
+      throw new Error(`POST /use-cases failed: status=${createUseCaseRes.status()} body=${body}`);
+    }
+    const createdUseCase = await createUseCaseRes.json();
+    const useCaseId = String(createdUseCase?.id || '');
+    expect(useCaseId).toBeTruthy();
     
     // Étape 3: Aller dans les dossiers pour voir l'avancement
     await page.goto('/dossiers');
@@ -40,28 +84,18 @@ test.describe('Workflow métier complet', () => {
     // Vérifier qu'on est sur la page dossiers (assertion h1 suffit)
     await expect(page.locator('h1')).toContainText('Dossiers');
     
-    // Étape 4: Cliquer sur un dossier pour voir les cas d'usage
-    const firstFolder = page.locator('article, .folder-item, [data-testid="folder-item"]').first();
-    if (await firstFolder.isVisible()) {
-      await firstFolder.click();
-      
-      // Attendre la redirection vers les cas d'usage
-      await page.waitForLoadState('domcontentloaded');
-      
-      // Vérifier qu'on voit les cas d'usage
-      await expect(page.locator('h1')).toContainText('Cas d\'usage');
-      
-      // Vérifier qu'il y a des cas d'usage (peut être en cours de génération)
-      const useCaseCards = page.locator('article, .use-case-card, [data-testid="use-case-card"]');
-      await expect(useCaseCards.first()).toBeVisible();
-      
-      // Attendre que la génération se termine (avec timeout)
-      await page.waitForTimeout(5000);
-      
-      // Vérifier les statuts des cas d'usage
-      const statusBadges = page.locator('.inline-flex.items-center.px-2.py-1.rounded-full');
-      await expect(statusBadges.first()).toBeVisible();
-    }
+    // Étape 4: Ouvrir le dossier dédié (liste cas d’usage sur /dossiers/[id])
+    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const useCaseCard = page.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
+    await expect(useCaseCard).toBeVisible({ timeout: 10_000 });
+
+    await Promise.all([
+      page.waitForURL(new RegExp(`/cas-usage/${useCaseId}$`), { timeout: 10_000 }),
+      useCaseCard.click()
+    ]);
+    await page.waitForLoadState('domcontentloaded');
     
     // Étape 5: Aller au dashboard pour voir les métriques
     await page.goto('/dashboard');
