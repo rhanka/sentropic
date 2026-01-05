@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, jobQueue } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { contextDocuments, jobQueue, workspaces } from '../../src/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 const mockPutObject = vi.fn();
 const mockDeleteObject = vi.fn();
@@ -34,6 +34,7 @@ async function authenticatedMultipartRequest(app: any, path: string, sessionToke
 
 describe('Documents API', () => {
   let user: any;
+  let admin: any;
   let app: any;
   let createdDocId: string | null = null;
   let createdJobId: string | null = null;
@@ -42,6 +43,7 @@ describe('Documents API', () => {
   beforeEach(async () => {
     app = await importApp();
     user = await createAuthenticatedUser('editor');
+    admin = await createAuthenticatedUser('admin_app');
     mockPutObject.mockReset();
     mockDeleteObject.mockReset();
     mockGetObjectBodyStream.mockReset();
@@ -75,6 +77,7 @@ describe('Documents API', () => {
       await db.delete(jobQueue).where(eq(jobQueue.id, createdJobId));
     }
     if (addJobSpy) addJobSpy.mockRestore();
+    await cleanupAuthData(); // deletes users/sessions for both users
     await cleanupAuthData();
   });
 
@@ -200,6 +203,47 @@ describe('Documents API', () => {
 
     // already deleted in DB; prevent afterEach from trying again
     createdDocId = null;
+  });
+
+  it('admin_app can read documents from a shared workspace via workspace_id query param', async () => {
+    // Upload as editor in their own workspace
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc 6.pdf', { type: 'application/pdf' }));
+    const up = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(up.status).toBe(201);
+    const created = await up.json();
+    createdDocId = created.id;
+
+    // Find editor workspace and mark it shareWithAdmin=true
+    const [ws] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.ownerUserId, user.id))
+      .limit(1);
+    expect(ws?.id).toBeTruthy();
+    const editorWorkspaceId = ws!.id;
+    await db
+      .update(workspaces)
+      .set({ shareWithAdmin: true })
+      .where(eq(workspaces.id, editorWorkspaceId));
+
+    // Admin lists docs in that workspace
+    const list = await app.request(`/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`, {
+      method: 'GET',
+      headers: { Cookie: `session=${admin.sessionToken}` },
+    });
+    expect(list.status).toBe(200);
+    const payload = await list.json();
+    expect(payload.items.some((d: any) => d.id === createdDocId)).toBe(true);
+
+    // Admin can GET metadata too
+    const meta = await app.request(`/api/v1/documents/${createdDocId}?workspace_id=${encodeURIComponent(editorWorkspaceId)}`, {
+      method: 'GET',
+      headers: { Cookie: `session=${admin.sessionToken}` },
+    });
+    expect(meta.status).toBe(200);
   });
 });
 

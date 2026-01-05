@@ -221,6 +221,110 @@ describe('ToolService (documents) - unit', () => {
     expect(res.analysis.length).toBeGreaterThan(0);
     expect(mockExtract).toHaveBeenCalledTimes(1);
   });
+
+  it('listContextDocuments: summaryAvailable reflects presence of data.summary', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'doc.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/doc.pdf',
+      status: 'ready',
+      data: { summary: 'Résumé', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const res = await toolService.listContextDocuments({ workspaceId, contextType, contextId });
+    expect(res.items.length).toBeGreaterThan(0);
+    const item = res.items.find((d) => d.id === docId);
+    expect(item?.summaryAvailable).toBe(true);
+  });
+
+  it('getDocumentSummary: enforces context match and returns status+summary', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'doc.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/doc.pdf',
+      status: 'ready',
+      data: { summary: 'Résumé', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const ok = await toolService.getDocumentSummary({ workspaceId, contextType, contextId, documentId: docId });
+    expect(ok.documentStatus).toBe('ready');
+    expect(ok.summary).toBe('Résumé');
+
+    await expect(
+      toolService.getDocumentSummary({ workspaceId, contextType: 'folder', contextId, documentId: docId } as any)
+    ).rejects.toThrow(/does not match context/i);
+  });
+
+  it('analyzeDocument: very long doc uses scan-all-chunks path (no retrieval) and merges', async () => {
+    // Force the "very long doc" branch without creating a multi-million char payload.
+    const estimateSpy = vi.spyOn(toolService as any, 'estimateTokensFromText').mockReturnValue(700_001);
+    const chunkSpy = vi
+      .spyOn(toolService as any, 'chunkTextByApproxTokens')
+      .mockReturnValue(['chunk_1', 'chunk_2']);
+
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'huge.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/huge.pdf',
+      status: 'ready',
+      data: { summary: 'Résumé', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    mockExtract.mockResolvedValueOnce({
+      text: 'texte court (mais forcé en très long)',
+      metadata: { pages: 200, title: 'Huge' },
+      headingsH1: [],
+    });
+
+    // 2 chunk calls + 1 merge call
+    mockCallOpenAI
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 1' } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 2' } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'réponse finale' } }] });
+
+    const res = await toolService.analyzeDocument({
+      workspaceId,
+      contextType,
+      contextId,
+      documentId: docId,
+      prompt: 'Extraire les chiffres',
+      maxWords: 500,
+    });
+
+    expect(res.mode).toBe('full_text');
+    expect(res.analysis.length).toBeGreaterThan(0);
+    expect(mockCallOpenAI).toHaveBeenCalledTimes(3);
+
+    estimateSpy.mockRestore();
+    chunkSpy.mockRestore();
+  });
 });
 
 

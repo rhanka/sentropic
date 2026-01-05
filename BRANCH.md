@@ -226,16 +226,16 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
       - [x] `getDocumentContent`: si > 10k mots => `contentMode=detailed_summary` + `contentWords`
       - [x] `getDocumentContent`: auto-repair si `data.detailedSummary` existe mais < 8000 mots (regen + persist)
       - [x] `analyzeDocument`: lit le texte intégral extrait + respecte `maxWords`
-      - [ ] `analyzeDocument`: cas doc très long (chunking: scan tous les chunks + merge)
-      - [ ] `listContextDocuments`: `summaryAvailable` cohérent (selon `data.summary`)
-      - [ ] `getDocumentSummary`: vérification match contexte (contextType/contextId) + `documentStatus`
+      - [x] `analyzeDocument`: cas doc très long (chunking: scan tous les chunks + merge)
+      - [x] `listContextDocuments`: `summaryAvailable` cohérent (selon `data.summary`)
+      - [x] `getDocumentSummary`: vérification match contexte (contextType/contextId) + `documentStatus`
     - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
       - [x] `POST /documents` (upload): crée `context_documents` + enqueue `document_summary`
       - [x] `GET /documents?context_type=&context_id=`: liste + mapping champs
       - [x] `GET /documents/:id`: metadata
       - [x] `GET /documents/:id/content`: download stream + headers
       - [x] `DELETE /documents/:id`: 204 + suppression objet S3 best-effort
-      - [ ] Admin scope: `workspace_id` query param pris en compte (si admin workspace scope activé)
+      - [x] Admin scope: `workspace_id` query param pris en compte (si admin workspace scope activé)
     - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
       - [x] `document_summary`: `workspaceId` dérivé du document (pas param job)
       - [x] `document_summary`: `streamId=document_<documentId>` + events streaming cohérents
