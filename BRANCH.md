@@ -245,11 +245,11 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
       - [x] `document_summary`: en cas d'erreur extraction/S3 => `status=failed` + message exploitable
     - [x] security (RBAC): N/A (pas de rôle restreint aujourd’hui) — à réactiver quand un rôle read-only existe
     - [x] security: scoping workspace (admin_app via `workspace_id` si `shareWithAdmin=true`, sinon 404) — couvert dans `api/tests/api/documents.test.ts`
-  - [ ] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
+  - [x] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
     - [x] Supprimer la catégorie inutile `api/tests/services/documents-tool.service.test.ts` (remplacé par `api/tests/unit/documents-tool-service.test.ts` + `api/tests/api/documents.test.ts` + `api/tests/queue/document-summary.test.ts`).
-    - [ ] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI)
-    - [ ] `documents.analyze`: possibilité de scanner tout le texte (chunking interne OK tant que tous les chunks sont lus)
-    - [ ] `documents.get_content`: si doc long => retourner `detailed_summary` trim ~10k mots (pas 2k) + `clipped/contentWords`
+    - [x] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI) — `api/tests/ai/documents-tool.test.ts`
+    - [x] `documents.analyze`: possibilité de scanner tout le texte (chunking interne OK tant que tous les chunks sont lus) — `api/tests/ai/documents-tool.test.ts`
+    - [x] `documents.get_content`: si doc long => retourner `detailed_summary` trim ~10k mots (pas 2k) + `clipped/contentWords` — `api/tests/ai/documents-tool.test.ts`
   - [ ] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
     - [ ] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
     - [ ] À ajouter:

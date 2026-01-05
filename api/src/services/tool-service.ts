@@ -1587,6 +1587,8 @@ export class ToolService {
           { role: 'user', content: user }
         ],
         model,
+        // Avoid truncation for long analyses; still trimmed by maxWords at the end.
+        maxOutputTokens: 20000,
         signal: opts.signal
       });
 
@@ -1630,6 +1632,8 @@ export class ToolService {
           { role: 'user', content: perChunkUser }
         ],
         model,
+        // Per-chunk notes; bounded for cost and determinism. The final merge is also bounded.
+        maxOutputTokens: 6000,
         signal: opts.signal
       });
       chunkAnalyses.push(String(resp.choices?.[0]?.message?.content ?? '').trim());
@@ -1650,6 +1654,7 @@ export class ToolService {
         { role: 'user', content: mergeUser }
       ],
       model,
+      maxOutputTokens: 20000,
       signal: opts.signal
     });
 
