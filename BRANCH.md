@@ -212,17 +212,23 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
 
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
-  - [ ] ui (make test-ui)
-  - [ ] api (make test-api)
-    Note: le api/services est à déplacer, sa création doit être déplacée (a priori dans ai)
-   - [ ] api (endpoints) make test-api-endpoints
-   - [ ] queue make test-api-queue
-   - [ ] security make test-api-security
-   - [ ] ai make test-api-ai
-  - [ ] e2e make test-e2e (après avoir fait make build-ui-image build-api)
-    - [ ] to be updated
-    - [ ] to be added
-      - [ ] Upload d’un document long → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent.
+  - [ ] **ui (Vitest)** — `make test-ui` (scoper avec `SCOPE=...`)
+    - [ ] Ajouter/mettre à jour des tests autour des nouveaux flux dossier:
+      - [ ] `ui/tests/stores/folders.test.ts`: `status` supporte `draft` + sélection/reprise (si applicable)
+  - [ ] **api (Vitest – hors IA)** — `make test-api-unit`, `make test-api-endpoints`, `make test-api-queue`, `make test-api-security`, `make test-api-limit`
+    - [ ] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
+    - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
+    - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
+    - [ ] security: N/A pour “role restreint” tant que RBAC n'existe pas (UAT-15) — garder tests de scoping workspace
+  - [ ] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
+    - [ ] Déplacer `api/tests/services/documents-tool.service.test.ts` vers `api/tests/ai/` (éviter la catégorie `services/`), ou `api/tests/unit/` si 100% mocké et rapide.
+    - [ ] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI)
+  - [ ] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
+    - [ ] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
+    - [ ] À ajouter:
+      - [ ] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA)
+      - [ ] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...`
+      - [ ] Documents long: upload → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent
 
 ## Commits & Progress
 - [x] **Commit 1** (`7a8eae5`): docs branch setup (this file) + design skeleton
