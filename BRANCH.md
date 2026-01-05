@@ -253,8 +253,8 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] **e2e (Playwright)** — `make test-e2e` (scoper avec `E2E_SPEC=...`)
     - [x] À mettre à jour (routes): scénarios qui pointaient `/cas-usage` doivent désormais pointer `dossiers/[id]` (liste)
     - [ ] À ajouter:
-      - [ ] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA)
-      - [ ] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...`
+      - [x] `CTRL+R` (reload) sur `dossiers/[id]` ne casse pas (fallback SPA) — `e2e/tests/dossiers-reload-draft.spec.ts`
+      - [x] Draft: créer un draft via `/dossier/new`, revenir à `/dossiers`, cliquer la carte “Brouillon” → retour `/dossier/new?draft=...` — `e2e/tests/dossiers-reload-draft.spec.ts`
       - [ ] Documents long: upload → statut `ready` → affichage résumé court + `get_content` (résumé détaillé) cohérent
       - [ ] Documents: ordre icônes (œil → download → poubelle) + styles hover (bg transparent + hover:bg-slate-100)
       - [ ] Documents: suppression (poubelle) => disparition ligne + pas de régression sur compteur/état
