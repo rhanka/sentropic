@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 test.describe('Documents — résumés (court + long)', () => {
+  test.describe.configure({ retries: 0 });
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
