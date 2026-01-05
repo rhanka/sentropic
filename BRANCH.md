@@ -212,10 +212,15 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] UAT-26 (UseCaseDetail - layout): si “Références” est vide (non rendue), “Prochaines étapes” occupe 100% de la largeur (desktop + print/preview print).
 
 - [ ] Add tests (unit/integration/E2E) and run via `make`.
-  - [ ] **ui (Vitest)** — `make test-ui` (scoper avec `SCOPE=...`)
-    - [ ] Ajouter/mettre à jour des tests autour des nouveaux flux dossier:
-      - [ ] `ui/tests/stores/folders.test.ts`: `status` supporte `draft` + sélection/reprise (si applicable)
+  - [x] **ui (Vitest)** — `make test-ui` (scoper avec `SCOPE=...`)
+    - [x] Ajouter/mettre à jour des tests autour des nouveaux flux dossier:
+      - [x] `ui/tests/stores/folders.test.ts`: `status` supporte `draft` + sélection/reprise (si applicable)
+    - [x] `ui/tests/utils/documents.test.ts`: utils documents (list/upload/download/delete) + gestion `workspace_id`
   - [ ] **api (Vitest – hors IA)** — `make test-api-unit`, `make test-api-endpoints`, `make test-api-queue`, `make test-api-security`, `make test-api-limit`
+    - [x] api (unit): `make up-api-test` puis `make test-api-unit` (OK: 20 fichiers / 201 tests)
+    - [x] api (endpoints): `make test-api-endpoints` (OK: 19 fichiers / 160 tests)
+    - [x] queue: `make test-api-queue` (OK: 1 fichier / 5 tests)
+    - [x] security: `make test-api-security` (OK: 5 fichiers / 42 tests)
     - [ ] api (unit): compléter `tool-service` documents (bornage `get_content`, champs `contentWords/clipped`, auto-repair)
     - [ ] api (endpoints): étendre `documents` endpoints (list/get/content/delete + enqueue job)
     - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
