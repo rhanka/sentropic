@@ -245,6 +245,37 @@ describe('Documents API', () => {
     });
     expect(meta.status).toBe(200);
   });
+
+  it('admin_app cannot read documents from a non-shared workspace via workspace_id (opaque 404)', async () => {
+    // Upload as editor in their own workspace
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc 7.pdf', { type: 'application/pdf' }));
+    const up = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(up.status).toBe(201);
+    const created = await up.json();
+    createdDocId = created.id;
+
+    // Find editor workspace and ensure shareWithAdmin=false
+    const [ws] = await db
+      .select({ id: workspaces.id, shareWithAdmin: workspaces.shareWithAdmin })
+      .from(workspaces)
+      .where(eq(workspaces.ownerUserId, user.id))
+      .limit(1);
+    expect(ws?.id).toBeTruthy();
+    const editorWorkspaceId = ws!.id;
+    await db.update(workspaces).set({ shareWithAdmin: false }).where(eq(workspaces.id, editorWorkspaceId));
+
+    const list = await app.request(
+      `/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`,
+      {
+        method: 'GET',
+        headers: { Cookie: `session=${admin.sessionToken}` },
+      }
+    );
+    expect(list.status).toBe(404);
+  });
 });
 
 

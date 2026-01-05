@@ -236,14 +236,15 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
       - [x] `GET /documents/:id/content`: download stream + headers
       - [x] `DELETE /documents/:id`: 204 + suppression objet S3 best-effort
       - [x] Admin scope: `workspace_id` query param pris en compte (si admin workspace scope activé)
-    - [ ] queue: `document_summary` (statuts + persistance summary/detailed_summary)
+    - [x] queue: `document_summary` (statuts + persistance summary/detailed_summary)
       - [x] `document_summary`: `workspaceId` dérivé du document (pas param job)
       - [x] `document_summary`: `streamId=document_<documentId>` + events streaming cohérents
       - [x] `document_summary`: modèle forcé `gpt-4.1-nano`
       - [x] `document_summary`: met à jour `context_documents.data.summary` (+ `summaryLang`, `nbWords`, etc.)
       - [x] `document_summary`: si doc long => génère + persiste `data.detailedSummary` (~8k–10k mots)
       - [x] `document_summary`: en cas d'erreur extraction/S3 => `status=failed` + message exploitable
-    - [ ] security: N/A pour “role restreint” tant que RBAC n'existe pas (UAT-15) — garder tests de scoping workspace
+    - [x] security (RBAC): N/A (pas de rôle restreint aujourd’hui) — à réactiver quand un rôle read-only existe
+    - [x] security: scoping workspace (admin_app via `workspace_id` si `shareWithAdmin=true`, sinon 404) — couvert dans `api/tests/api/documents.test.ts`
   - [ ] **ai (Vitest – isolés car plus lents)** — `make test-api-ai`
     - [x] Supprimer la catégorie inutile `api/tests/services/documents-tool.service.test.ts` (remplacé par `api/tests/unit/documents-tool-service.test.ts` + `api/tests/api/documents.test.ts` + `api/tests/queue/document-summary.test.ts`).
     - [ ] Couvrir `documents.get_content` / `documents.analyze` (bornes + max output tokens) sans appels réseau (mocks OpenAI)
