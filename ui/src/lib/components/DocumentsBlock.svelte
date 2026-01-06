@@ -239,7 +239,7 @@
             {#each items as doc (doc.id)}
               <tr class="align-top">
                 <td class="py-3 pr-2">
-                  {#if doc.status === 'ready'}
+                  {#if doc.status === 'ready' || doc.status === 'failed'}
                     <button
                       class={iconButtonPrimary}
                       on:click={() => toggleSummary(doc.id)}
