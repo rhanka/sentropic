@@ -5,6 +5,7 @@ import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callOpenAI } from './openai';
+import { defaultPrompts } from '../config/default-prompts';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -1045,65 +1046,6 @@ export class ToolService {
     return Math.ceil(chars / 4);
   }
 
-  private async expandDetailedSummaryIfTooShort(opts: {
-    sourceLabel: string;
-    sourceText: string;
-    currentSummary: string;
-    filename: string;
-    lang: 'fr' | 'en';
-    model: string;
-    signal?: AbortSignal;
-  }): Promise<string> {
-    const minWordsTarget = 8000;
-    const maxWords = 10_000;
-    let current = (opts.currentSummary || '').trim();
-    if (!current) return current;
-
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const currentWords = this.countWords(current);
-      if (currentWords >= minWordsTarget) break;
-
-      const resp = await callOpenAI({
-        messages: [
-          {
-            role: 'system',
-            content:
-              `Tu es un sous-agent qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.\n` +
-              `Contraintes:\n` +
-              `- Réponds en ${opts.lang === 'fr' ? 'français' : 'anglais'}.\n` +
-              `- Format: markdown.\n` +
-              `- Pas d'invention: si l'info n'est pas dans la source, dis-le.\n` +
-              `- Objectif de longueur: produire un résumé COMPLET entre ${minWordsTarget} et ${maxWords} mots.\n` +
-              `- Éviter les redites; ajouter de la granularité (sections, mécanismes, acteurs, processus, chiffres).\n` +
-              `- Conserver les chiffres (avec unités) et les rattacher à leur contexte.\n`
-          },
-          {
-            role: 'user',
-            content:
-              `Document: ${opts.filename}\n` +
-              `Source: ${opts.sourceLabel}\n` +
-              `Résumé actuel: ~${currentWords} mots (trop court)\n\n` +
-              `SOURCE:\n---\n${opts.sourceText}\n---\n\n` +
-              `RÉSUMÉ ACTUEL:\n---\n${current}\n---\n\n` +
-              `TÂCHE:\n` +
-              `- Réécrire un résumé détaillé unique, plus long et plus précis.\n` +
-              `- Réécrire sous forme LINÉAIRE (dans l'ordre du document), pas une fiche.\n` +
-              `- Utiliser une suite de paragraphes numérotés (1., 2., 3., ...).\n`
-          }
-        ],
-        model: opts.model,
-        maxOutputTokens: 20000,
-        signal: opts.signal
-      });
-      const next = String(resp.choices?.[0]?.message?.content ?? '').trim();
-      if (!next) break;
-      if (this.countWords(next) <= currentWords + 200) break;
-      current = next;
-    }
-
-    return current;
-  }
-
   private chunkTextByApproxTokens(text: string, targetTokens: number): string[] {
     const t = (text || '').trim();
     if (!t) return [];
@@ -1144,130 +1086,6 @@ export class ToolService {
     const max = Math.max(1, Math.min(10_000, Math.floor(maxWords || 10_000)));
     if (words.length <= max) return { text: t, trimmed: false, words: words.length };
     return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
-  }
-
-  private chunkByWords(text: string, chunkWords: number): string[] {
-    const t = (text || '').trim();
-    if (!t) return [];
-    const words = t.split(/\s+/g).filter(Boolean);
-    const size = Math.max(500, Math.min(8000, Math.floor(chunkWords || 4000)));
-    const out: string[] = [];
-    for (let i = 0; i < words.length; i += size) {
-      out.push(words.slice(i, i + size).join(' '));
-    }
-    return out;
-  }
-
-  private async generateDetailedSummaryFromText(opts: {
-    text: string;
-    filename: string;
-    lang: 'fr' | 'en';
-    maxWords: number;
-    signal?: AbortSignal;
-  }): Promise<{ detailedSummary: string; trimmed: boolean; words: number; chunks: number }> {
-    // IMPORTANT (temporary): force a dedicated model for document detailed summaries.
-    // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
-    const model = 'gpt-4.1-nano';
-    const maxWords = Math.max(1000, Math.min(10_000, Math.floor(opts.maxWords || 10_000)));
-    const fullText = (opts.text || '').trim();
-    const estTokens = this.estimateTokensFromText(fullText);
-
-    // Prefer a direct full-text summary when the document fits comfortably in one call.
-    // Model context is large; keep a safety margin for prompt + output.
-    if (estTokens > 0 && estTokens <= 700_000) {
-      const finalResp = await callOpenAI({
-        messages: [
-          {
-            role: 'user',
-            content: `Document: ${opts.filename}
-            SOURCE (texte intégral extrait):
-            <source>
-            ${fullText}
-            </source>
-
-          TÂCHE:
-          - Objectif de longueur: viser ~${maxWords} mots et minimum ${Math.floor(maxWords*0.8)} mots.
-          - Produire un résumé détaillé LINÉAIRE exhaustif qui suit l'ordre du document.
-          
-          CONTRAINTES:
-          - Réponds en ${opts.lang === 'fr' ? 'français' : 'anglais'}.
-          - Format: markdown.
-          - Pas d'invention: si l'info n'est pas dans le texte, dis-le.
-          - Conserver les chiffres (avec unités) et les rattacher à leur contexte.
-          `
-          }
-        ],
-        model,
-        maxOutputTokens: 20000,
-        signal: opts.signal
-      });
-      const raw0 = String(finalResp.choices?.[0]?.message?.content ?? '').trim();
-      const raw = await this.expandDetailedSummaryIfTooShort({
-        sourceLabel: 'texte intégral extrait',
-        sourceText: fullText,
-        currentSummary: raw0,
-        filename: opts.filename,
-        lang: opts.lang,
-        model,
-        signal: opts.signal
-      });
-      const trimmed = this.trimToMaxWords(raw, maxWords);
-      // If still too short, fall back to scan-complete chunking (no merge compression).
-      if (trimmed.words >= 8000) {
-        return { detailedSummary: trimmed.text, trimmed: trimmed.trimmed, words: trimmed.words, chunks: 1 };
-      }
-    }
-
-    // Large doc: scan ALL chunks (no retrieval/RAG), then consolidate.
-    const chunks = this.chunkTextByApproxTokens(fullText, estTokens > 0 && estTokens <= 700_000 ? 100_000 : 300_000);
-
-    const chunkSummaries: string[] = [];
-    if (chunks.length > 1) {
-      for (let i = 0; i < chunks.length; i += 1) {
-        const chunkText = chunks[i]!;
-        const resp = await callOpenAI({
-          messages: [
-            {
-              role: 'system',
-              content:
-                `Tu es un sous-agent qui résume fidèlement un extrait de document métier.\n` +
-                `Contraintes:\n` +
-                `- Réponds en ${opts.lang === 'fr' ? 'français' : 'anglais'}.\n` +
-                `- Format: markdown.\n` +
-                `- Pas d'invention.\n` +
-            `- Conserver les chiffres importants (avec unités) et leur contexte.\n` +
-                `- Résumer de façon LINÉAIRE (dans l'ordre) pour cet extrait.\n` +
-                `- Viser 1200–1800 mots pour cet extrait.\n`
-            },
-            {
-              role: 'user',
-              content:
-                `Document: ${opts.filename}\n` +
-                `Partie ${i + 1}/${chunks.length}\n\n` +
-                `TEXTE:\n---\n${chunkText}\n---\n\n` +
-                `Résumer cette partie de façon détaillée (faits, chiffres, obligations, risques, acteurs, échéances) en suivant l'ordre du texte.`
-            }
-          ],
-          model,
-          maxOutputTokens: 6000,
-          signal: opts.signal
-        });
-        const content = resp.choices?.[0]?.message?.content ?? '';
-        chunkSummaries.push(String(content || '').trim());
-      }
-    } else {
-      chunkSummaries.push(opts.text);
-    }
-
-    // Deterministic consolidation:
-    // Avoid an extra "merge" call that tends to compress too much.
-    // We concatenate the linear chunk summaries (scan complet) then trim to maxWords.
-    const concatenated = chunkSummaries
-      .map((s, i) => `### Partie ${i + 1}/${chunkSummaries.length}\n${s}`)
-      .join('\n\n')
-      .trim();
-    const trimmed = this.trimToMaxWords(concatenated, maxWords);
-    return { detailedSummary: trimmed.text, trimmed: trimmed.trimmed, words: trimmed.words, chunks: chunks.length };
   }
 
   async listContextDocuments(opts: {
@@ -1370,8 +1188,6 @@ export class ToolService {
 
     // Security / spec: do NOT return full content if doc is larger than 10k words.
     const WORDS_FULL_CONTENT_LIMIT = 10_000;
-    const DETAILED_SUMMARY_MIN_WORDS = 8000;
-    const lang: 'fr' | 'en' = this.getDataString(row.data, 'summaryLang') === 'en' ? 'en' : 'fr';
 
     const storedWords = (() => {
       const extracted = this.asRecord(this.asRecord(row.data).extracted);
@@ -1384,47 +1200,11 @@ export class ToolService {
       return v && v.trim() ? v : null;
     })();
 
-    // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
-    // return it without downloading/extracting the file again.
-    if (storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT && storedDetailed) {
+    // If the document is not ready yet, do not attempt to download/extract or regenerate anything here.
+    // Tools must remain read-only: job `document_summary` is the single writer for summaries.
+    if (row.status !== 'ready') {
       const extracted = this.asRecord(this.asRecord(row.data).extracted);
-      const storedDetailedWords = this.countWords(storedDetailed);
-
-      // Auto-repair: if an old/short detailed summary exists (e.g. generated before the 8k–10k policy),
-      // regenerate a proper detailed summary from the full extracted text and persist it.
-      if (storedDetailedWords > 0 && storedDetailedWords < DETAILED_SUMMARY_MIN_WORDS) {
-        const bucket = getDocumentsBucketName();
-        const bytes = await getObjectBytes({ bucket, key: row.storageKey });
-        const extractedDoc = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
-        const full = (extractedDoc.text || '').trim();
-        if (full) {
-          const regenerated = await this.generateDetailedSummaryFromText({
-            text: full,
-            filename: row.filename,
-            lang,
-            maxWords: WORDS_FULL_CONTENT_LIMIT,
-          });
-
-          const nextData = {
-            ...(row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : {}),
-            detailedSummary: regenerated.detailedSummary,
-            detailedSummaryLang: lang,
-            detailedSummaryWords: regenerated.words,
-            detailed_summary: regenerated.detailedSummary,
-            detailed_summary_lang: lang,
-            detailed_summary_words: regenerated.words,
-            prompts: {
-              ...(this.asRecord(this.asRecord(row.data).prompts)),
-              detailedPromptId: 'document_detailed_summary_repair',
-            },
-          };
-
-          await db
-            .update(contextDocuments)
-            .set({ data: nextData, updatedAt: new Date() })
-            .where(and(eq(contextDocuments.id, row.id), eq(contextDocuments.workspaceId, row.workspaceId)));
-
-          const trimmedRegen = this.trimToMaxWords(regenerated.detailedSummary, WORDS_FULL_CONTENT_LIMIT);
+      const isLong = storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT;
           return {
             documentId: row.id,
             documentStatus: row.status,
@@ -1432,15 +1212,21 @@ export class ToolService {
             mimeType: row.mimeType,
             pages: typeof extracted.pages === 'number' ? extracted.pages : null,
             title: typeof extracted.title === 'string' ? extracted.title : null,
-            content: trimmedRegen.text,
-            clipped: trimmedRegen.trimmed,
-            contentMode: 'detailed_summary',
-            words: storedWords,
-            contentWords: trimmedRegen.words,
-            summary: this.getDataString(row.data, 'summary')
+        content:
+          `Contenu indisponible: document en cours de traitement (status="${row.status}"). ` +
+          `Réessayer une fois le statut "ready".`,
+        clipped: true,
+        contentMode: isLong ? 'detailed_summary' : 'full_text',
+        words: storedWords ?? 0,
+        contentWords: isLong ? 0 : undefined,
+        summary: this.getDataString(row.data, 'summary'),
           };
         }
-      }
+
+    // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
+    // return it without downloading/extracting the file again.
+    if (storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT && storedDetailed) {
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
 
       const trimmedStored = this.trimToMaxWords(storedDetailed, WORDS_FULL_CONTENT_LIMIT);
       return {
@@ -1477,14 +1263,10 @@ export class ToolService {
         content = trimmedStored.text;
         clipped = trimmedStored.trimmed;
       } else {
-      const detailed = await this.generateDetailedSummaryFromText({
-        text: full,
-        filename: row.filename,
-        lang,
-        maxWords: WORDS_FULL_CONTENT_LIMIT
-      });
-        content = detailed.detailedSummary;
-        clipped = detailed.trimmed;
+        content =
+          'Résumé détaillé indisponible: le job de résumé n’a pas encore produit ce champ. ' +
+          'Relancer le job document_summary ou attendre sa fin.';
+        clipped = true;
       }
     } else {
       // Optional: allow callers to bound by chars (legacy), but default is full text.
@@ -1558,37 +1340,34 @@ export class ToolService {
     const fullWords = this.countWords(fullText);
     const estTokens = this.estimateTokensFromText(fullText);
 
-    const system =
-      `Tu es un sous-agent d'analyse documentaire (contexte autonome).\n` +
-      `Objectif: répondre à une requête spécialisée à partir du TEXTE INTÉGRAL du document fourni.\n` +
-      `Contraintes:\n` +
-      `- Réponds en français.\n` +
-      `- Format: markdown.\n` +
-      `- Pas d'invention.\n` +
-      `- Longueur: maximum ${maxWords} mots.\n`;
+    const template = defaultPrompts.find((p0) => p0.id === 'documents_analyze')?.content || '';
+    if (!template) throw new Error('Prompt documents_analyze non trouvé');
 
-    const baseMeta =
-      `Document: ${row.filename}\n` +
-      `Taille (estimée): ~${fullWords} mots ; ~${estTokens} tokens (heuristique)\n` +
-      `Pages (si dispo): ${typeof extracted.metadata.pages === 'number' ? extracted.metadata.pages : 'Non précisé'}\n` +
-      `Titre (si dispo): ${typeof extracted.metadata.title === 'string' && extracted.metadata.title.trim() ? extracted.metadata.title : 'Non précisé'}\n\n`;
+    const pageValue = typeof extracted.metadata.pages === 'number' ? String(extracted.metadata.pages) : 'Non précisé';
+    const titleValue =
+      typeof extracted.metadata.title === 'string' && extracted.metadata.title.trim() ? extracted.metadata.title.trim() : 'Non précisé';
 
     // If it fits: single-call analysis on full extracted text.
     if (estTokens > 0 && estTokens <= 700_000) {
-      const user =
-        baseMeta +
-        `SOURCE (texte intégral extrait):\n---\n${fullText}\n---\n\n` +
-        `INSTRUCTION (du modèle maître):\n---\n${p}\n---\n\n` +
-        `Réponds uniquement avec l'analyse demandée.`;
+      const user = template
+        .replace('{{lang}}', 'français')
+        .replace('{{max_words}}', String(maxWords))
+        .replace('{{filename}}', row.filename)
+        .replace('{{pages}}', pageValue)
+        .replace('{{title}}', titleValue)
+        .replace('{{full_words}}', String(fullWords))
+        .replace('{{est_tokens}}', String(estTokens))
+        .replace('{{scope}}', 'texte intégral extrait')
+        .replace('{{document_text}}', fullText)
+        .replace('{{instruction}}', p);
 
       const resp = await callOpenAI({
         messages: [
-          { role: 'system', content: system },
           { role: 'user', content: user }
         ],
         model,
         // Avoid truncation for long analyses; still trimmed by maxWords at the end.
-        maxOutputTokens: 20000,
+        maxOutputTokens: 25000,
         signal: opts.signal
       });
 
@@ -1611,24 +1390,20 @@ export class ToolService {
     const chunkAnalyses: string[] = [];
     for (let i = 0; i < chunks.length; i += 1) {
       const chunk = chunks[i]!;
-      const perChunkSystem =
-        `Tu es un sous-agent d'analyse documentaire.\n` +
-        `Objectif: extraire TOUT élément pertinent pour répondre à l'instruction, à partir d'UN EXTRAIT du document.\n` +
-        `Contraintes:\n` +
-        `- Réponds en français.\n` +
-        `- Format: markdown.\n` +
-        `- Pas d'invention.\n` +
-        `- Réponds sous forme de notes: faits, chiffres, sections, éléments probants.\n` +
-        `- Longueur: maximum 1500 mots.\n`;
-      const perChunkUser =
-        baseMeta +
-        `EXTRAIT ${i + 1}/${chunks.length}:\n---\n${chunk}\n---\n\n` +
-        `INSTRUCTION (du modèle maître):\n---\n${p}\n---\n\n` +
-        `Produire des notes factuelles pertinentes pour aider à répondre à l'instruction.`;
+      const perChunkUser = template
+        .replace('{{lang}}', 'français')
+        .replace('{{max_words}}', String(1500))
+        .replace('{{filename}}', row.filename)
+        .replace('{{pages}}', pageValue)
+        .replace('{{title}}', titleValue)
+        .replace('{{full_words}}', String(fullWords))
+        .replace('{{est_tokens}}', String(estTokens))
+        .replace('{{scope}}', `extrait ${i + 1}/${chunks.length}`)
+        .replace('{{document_text}}', chunk)
+        .replace('{{instruction}}', p);
 
       const resp = await callOpenAI({
         messages: [
-          { role: 'system', content: perChunkSystem },
           { role: 'user', content: perChunkUser }
         ],
         model,
@@ -1639,18 +1414,22 @@ export class ToolService {
       chunkAnalyses.push(String(resp.choices?.[0]?.message?.content ?? '').trim());
     }
 
-    const mergeSystem = system;
-    const mergeUser =
-      baseMeta +
-      `NOTES PAR EXTRAIT (scan complet, sans retrieval):\n---\n${chunkAnalyses
-        .map((a, i) => `### Extrait ${i + 1}/${chunkAnalyses.length}\n${a}`)
-        .join('\n\n')}\n---\n\n` +
-      `INSTRUCTION (du modèle maître):\n---\n${p}\n---\n\n` +
-      `Consolider une réponse finale unique, fidèle, et bornée. Si une information n'apparaît dans aucun extrait, le dire explicitement.`;
+    const mergeTemplate = defaultPrompts.find((p0) => p0.id === 'documents_analyze_merge')?.content || '';
+    if (!mergeTemplate) throw new Error('Prompt documents_analyze_merge non trouvé');
+    const notes = chunkAnalyses.map((a, i) => `### Extrait ${i + 1}/${chunkAnalyses.length}\n${a}`).join('\n\n');
+    const mergeUser = mergeTemplate
+      .replace('{{lang}}', 'français')
+      .replace('{{max_words}}', String(maxWords))
+      .replace('{{filename}}', row.filename)
+      .replace('{{pages}}', pageValue)
+      .replace('{{title}}', titleValue)
+      .replace('{{full_words}}', String(fullWords))
+      .replace('{{est_tokens}}', String(estTokens))
+      .replace('{{notes}}', notes)
+      .replace('{{instruction}}', p);
 
     const merged = await callOpenAI({
       messages: [
-        { role: 'system', content: mergeSystem },
         { role: 'user', content: mergeUser }
       ],
       model,

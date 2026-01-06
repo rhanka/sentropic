@@ -22,8 +22,7 @@ import { chatService } from './chat-service';
 import type { StreamEventType } from './openai';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
-import { defaultPrompts } from '../config/default-prompts';
-import { executeWithToolsStream } from './tools';
+import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
@@ -831,118 +830,6 @@ export class QueueManager {
     return out;
   }
 
-  private countWords(text: string): number {
-    const t = (text || '').trim();
-    if (!t) return 0;
-    return t.split(/\s+/g).filter(Boolean).length;
-  }
-
-  private estimateTokensFromText(text: string): number {
-    // Heuristic: tokens ≈ chars / 4. Good enough for gating & chunk sizing (FR/EN).
-    const chars = (text || '').length;
-    return Math.ceil(chars / 4);
-  }
-
-  private async expandDetailedSummaryIfTooShort(opts: {
-    basePrompt: string;
-    // The source is either the full extracted text (<=700k est tokens) or the merged chunk summaries.
-    sourceLabel: string;
-    sourceText: string;
-    currentSummary: string;
-    filename: string;
-    lang: string;
-    model: string;
-    streamId: string;
-    signal?: AbortSignal;
-  }): Promise<string> {
-    const minWordsTarget = 8000;
-    const maxWords = 10_000;
-    let current = (opts.currentSummary || '').trim();
-    if (!current) return current;
-
-    // Up to 2 controlled expansions (rewrite), to avoid infinite loops and cost explosion.
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const currentWords = this.countWords(current);
-      if (currentWords >= minWordsTarget) break;
-
-      const prompt = `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.
-
-Contraintes:
-- Réponds en ${opts.lang}.
-- Format: markdown.
-- Pas d'invention: si l'info n'est pas dans la source, dis-le.
-- Objectif de longueur: produire un résumé COMPLET entre ${minWordsTarget} et ${maxWords} mots.
-- Éviter les redites; ajouter de la granularité (sections, mécanismes, acteurs, processus, chiffres).
-- Conserver les chiffres (avec unités) et les rattacher à leur contexte.
-
-Document: ${opts.filename}
-Source: ${opts.sourceLabel}
-Résumé actuel: ~${currentWords} mots (trop court)
-
-SOURCE:
----
-${opts.sourceText}
----
-
-RÉSUMÉ ACTUEL:
----
-${current}
----
-
-TÂCHE:
-- Réécrire un résumé détaillé unique, plus long et plus précis.
-- Réécrire sous forme LINÉAIRE (dans l'ordre du document), pas une fiche.
-- Utiliser une suite de paragraphes numérotés (1., 2., 3., ...).`;
-
-      const { content } = await executeWithToolsStream(prompt, {
-        model: opts.model,
-        streamId: opts.streamId,
-        promptId: `document_detailed_summary_expand_${attempt}`,
-        maxOutputTokens: 20000,
-        signal: opts.signal
-      });
-      const next = this.sanitizePgText(content).trim();
-      if (!next) break;
-      // If it doesn't grow, stop.
-      if (this.countWords(next) <= currentWords + 200) break;
-      current = next;
-    }
-
-    return current;
-  }
-
-  private chunkTextByApproxTokens(text: string, targetTokens: number): string[] {
-    const t = (text || '').trim();
-    if (!t) return [];
-    const target = Math.max(10_000, Math.floor(targetTokens || 300_000));
-    const targetChars = target * 4;
-    const out: string[] = [];
-    let i = 0;
-
-    while (i < t.length) {
-      const end = Math.min(t.length, i + targetChars);
-      if (end >= t.length) {
-        out.push(t.slice(i));
-        break;
-      }
-
-      const windowStart = Math.max(i + Math.floor(targetChars * 0.7), i + 1);
-      const window = t.slice(windowStart, end);
-      const lastWs = window.search(/\s(?![\s\S]*\s)/);
-      const cut =
-        lastWs >= 0
-          ? windowStart + lastWs + 1
-          : t.lastIndexOf(' ', end) > i
-            ? t.lastIndexOf(' ', end)
-            : end;
-
-      out.push(t.slice(i, cut).trim());
-      i = cut;
-    }
-
-    return out.filter((s) => s.trim());
-  }
-
   private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
     const t = (text || '').trim();
     if (!t) return { text: '', trimmed: false, words: 0 };
@@ -962,158 +849,6 @@ TÂCHE:
       out.push(words.slice(i, i + size).join(' '));
     }
     return out;
-  }
-
-  private async generateDetailedSummaryFromText(opts: {
-    text: string;
-    filename: string;
-    lang: string;
-    model: string;
-    streamId: string;
-    signal?: AbortSignal;
-  }): Promise<{ detailedSummary: string; words: number; clipped: boolean }> {
-    const maxWords = 10_000;
-    const fullText = (opts.text || '').trim();
-    const estTokens = this.estimateTokensFromText(fullText);
-
-    // If the document is "only" moderately long, send the full text directly.
-    // This avoids the lossy chunk-summarize-then-merge path and enables a truly detailed ~10k-words summary.
-    if (estTokens > 0 && estTokens <= 700_000) {
-      const directPrompt = `Tu es un assistant qui produit un résumé détaillé LINÉAIRE et fidèle d'un document métier.
-
-Contraintes:
-- Réponds en ${opts.lang}.
-- Format: markdown.
-- Pas d'invention: si l'info n'est pas dans le texte, dis-le.
-- Objectif de longueur: viser ~${maxWords} mots, idéalement entre 8000 et ${maxWords} mots (si le texte source le permet).
-- Limite stricte: maximum ${maxWords} mots.
-- Conserver les chiffres (avec unités) et les rattacher à leur contexte.
-
-Document: ${opts.filename}
-
-SOURCE (texte intégral extrait):
----
-${fullText}
----
-
-TÂCHE:
-- Produire un résumé détaillé LINÉAIRE qui suit l'ordre du document.
-- Éviter le format "fiche de synthèse".
-- Écrire une suite de paragraphes numérotés (1., 2., 3., ...), chacun résumant un passage consécutif.
-- Inclure les chiffres quand ils apparaissent.`;
-
-      const { content } = await executeWithToolsStream(directPrompt, {
-        model: opts.model,
-        streamId: opts.streamId,
-        promptId: 'document_detailed_summary_full',
-        // Ensure the model can actually emit ~10k words.
-        maxOutputTokens: 20000,
-        signal: opts.signal
-      });
-      const raw0 = this.sanitizePgText(content).trim();
-      const raw = await this.expandDetailedSummaryIfTooShort({
-        basePrompt: directPrompt,
-        sourceLabel: 'texte intégral extrait',
-        sourceText: fullText,
-        currentSummary: raw0,
-        filename: opts.filename,
-        lang: opts.lang,
-        model: opts.model,
-        streamId: opts.streamId,
-        signal: opts.signal
-      });
-      const trimmed = this.trimToMaxWords(raw, maxWords);
-      // If the one-shot (and expansion) is still too short, fall back to scan-complete segmentation.
-      if (trimmed.words >= 8000) {
-        return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
-      }
-
-      const fallbackChunks = this.chunkTextByApproxTokens(fullText, 100_000);
-      const fallbackParts: string[] = [];
-      for (let i = 0; i < fallbackChunks.length; i += 1) {
-        const chunkText = fallbackChunks[i]!;
-        const chunkPrompt = `Tu es un assistant qui résume fidèlement un extrait de document métier.
-
-Contraintes:
-- Réponds en ${opts.lang}.
-- Format: markdown.
-- Pas d'invention.
-- Résumé LINÉAIRE (dans l'ordre du texte).
-- Conserver les chiffres (avec unités) et leur contexte.
-- Viser 1200–1800 mots pour cet extrait.
-
-Document: ${opts.filename}
-Extrait ${i + 1}/${fallbackChunks.length}
-
-TEXTE:
----
-${chunkText}
----`;
-
-        const { content: part } = await executeWithToolsStream(chunkPrompt, {
-          model: opts.model,
-          streamId: opts.streamId,
-          promptId: 'document_detailed_summary_fallback_part',
-          maxOutputTokens: 6000,
-          signal: opts.signal
-        });
-        fallbackParts.push(this.sanitizePgText(part).trim());
-      }
-
-      const concatenated = fallbackParts
-        .map((s, i) => `### Partie ${i + 1}/${fallbackParts.length}\n${s}`)
-        .join('\n\n')
-        .trim();
-      const trimmedFallback = this.trimToMaxWords(concatenated, maxWords);
-      return { detailedSummary: trimmedFallback.text, words: trimmedFallback.words, clipped: trimmedFallback.trimmed };
-    }
-
-    // Large doc: scan ALL chunks (no retrieval/RAG), then consolidate.
-    const chunks = this.chunkTextByApproxTokens(fullText, 300_000);
-
-    // 1) Summarize each chunk (best-effort, bounded)
-    const chunkSummaries: string[] = [];
-    for (let i = 0; i < chunks.length; i += 1) {
-      const chunkText = chunks[i]!;
-      const chunkPrompt = `Tu es un assistant qui résume fidèlement un extrait de document métier.
-
-Contraintes:
-- Réponds en ${opts.lang}.
-- Format: markdown.
-- Pas d'invention.
-- Conserver les chiffres importants (avec unités) et leur contexte.
-- Produire un résumé linéaire (dans l'ordre) pour cet extrait.
-- Viser 2000–3500 mots pour cet extrait.
-
-Document: ${opts.filename}
-Partie ${i + 1}/${chunks.length}
-
-TEXTE:
----
-${chunkText}
----
-
-Résumer cet extrait de façon détaillée (faits, chiffres, exigences, risques, acteurs, échéances), en suivant l'ordre du texte.`;
-
-      const { content: chunkContent } = await executeWithToolsStream(chunkPrompt, {
-        model: opts.model,
-        streamId: opts.streamId,
-        promptId: 'document_detailed_summary_part',
-        maxOutputTokens: 9000,
-        signal: opts.signal
-      });
-      chunkSummaries.push(this.sanitizePgText(chunkContent).trim());
-    }
-
-    // 2) Deterministic consolidation:
-    // Avoid an extra "merge" call that tends to compress too much.
-    // We concatenate the linear chunk summaries (scan complet) then trim to maxWords.
-    const concatenated = chunkSummaries
-      .map((s, i) => `### Partie ${i + 1}/${chunkSummaries.length}\n${s}`)
-      .join('\n\n')
-      .trim();
-    const trimmed = this.trimToMaxWords(concatenated, maxWords);
-    return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
   }
 
   private async getNextModificationSequence(contextType: string, contextId: string): Promise<number> {
@@ -1154,136 +889,140 @@ Résumer cet extrait de façon détaillée (faits, chiffres, exigences, risques,
     if (!doc) throw new Error('Document not found');
     const workspaceId = doc.workspaceId;
 
-    await db
-      .update(contextDocuments)
-      .set({ status: 'processing', jobId, updatedAt: new Date() })
-      .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
-
-    const bucket = getDocumentsBucketName();
-    const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
-    let text: string;
-    let extractedMetaTitle: string | undefined;
-    let extractedMetaPages: number | undefined;
     try {
-      await write('status', { state: 'extracting' });
-      const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
-      text = extracted.text;
-      extractedMetaTitle = extracted.metadata.title;
-      extractedMetaPages = extracted.metadata.pages;
-    } catch (e) {
       await db
         .update(contextDocuments)
-        .set({ status: 'failed', updatedAt: new Date() })
+        .set({ status: 'processing', jobId, updatedAt: new Date() })
         .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
-    }
 
-    const trimmed = text.trim();
-    if (trimmed.length < 80) {
-      await db
-        .update(contextDocuments)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
-      throw new Error('No text extracted from document (empty or image-only PDF).');
-    }
-
-    const clipped = trimmed.length > 50_000 ? trimmed.slice(0, 50_000) : trimmed;
-
-    const template = defaultPrompts.find((p) => p.id === 'document_summary')?.content || '';
-    if (!template) throw new Error('Prompt document_summary non trouvé');
-    const docTitleRaw = (extractedMetaTitle || doc.filename || '-').trim() || '-';
-    const docTitle = docTitleRaw === '-' ? 'Non précisé' : docTitleRaw;
-    const nbPages =
-      typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
-    const nbWords = (() => {
-      // Use full extracted text when available; fallback to clipped (aligned with what we send to the model).
-      const fromFull = text.split(/\s+/).filter(Boolean).length;
-      if (Number.isFinite(fromFull) && fromFull > 0) return String(fromFull);
-      const fromClipped = clipped.split(/\s+/).filter(Boolean).length;
-      return Number.isFinite(fromClipped) && fromClipped > 0 ? String(fromClipped) : 'Non précisé';
-    })();
-
-    const userPrompt = template
-      .replace('{{lang}}', lang)
-      .replace('{{doc_title}}', docTitle)
-      .replace('{{nb_pages}}', nbPages)
-      .replace('{{nb_mots}}', nbWords)
-      .replace('{{document_text}}', clipped);
-
-    // Reinforce: provide deterministic metadata and require copying them verbatim in the "Fiche document" section.
-    const providedMetaBlock = `\n\nDONNÉES FOURNIES (à recopier telles quelles dans "## Fiche document (réexamen)")\n- doc_title: ${docTitle}\n- nb_pages: ${nbPages}\n- nb_mots: ${nbWords}\n\nRègle stricte:\n- Dans la section "## Fiche document (réexamen)", le champ **Titre** doit être exactement doc_title.\n- Dans la section "## Fiche document (réexamen)", le champ **Taille** doit être exactement "${nbPages} pages ; ${nbWords} mots" (et uniquement "Non précisé" si nb_pages/nb_mots valent "Non précisé").\n`;
-    const finalPrompt = userPrompt + providedMetaBlock;
-
-    await write('status', { state: 'summarizing' });
-    // IMPORTANT (temporary): for document summary + sub-summaries, we force a dedicated model.
-    // We intentionally IGNORE:
-    // - the admin-configured default model (settingsService.getAISettings().defaultModel)
-    // - any model passed via job payload
-    // Until prompts/models are versioned in DB and selectable per prompt.
-    const selectedModel = 'gpt-4.1-nano';
-    const { content: streamedContent } = await executeWithToolsStream(finalPrompt, {
-      model: selectedModel,
-      streamId,
-      promptId: 'document_summary',
-      signal,
-    });
-
-    const summary = this.sanitizePgText(streamedContent).trim();
-    if (!summary) throw new Error('Empty summary');
-
-    // For large documents: auto-generate a detailed summary (~10k words) and store it in data.
-    // This is persisted so it is visible in db-query and reusable by tools.
-    const wordsAsNumber = Number(nbWords);
-    let detailedSummary: string | null = null;
-    let detailedSummaryWords: number | null = null;
-    if (Number.isFinite(wordsAsNumber) && wordsAsNumber > 10_000) {
-      await write('status', { state: 'summarizing_detailed' });
-      const detailed = await this.generateDetailedSummaryFromText({
-        text,
-        filename: doc.filename,
-        lang,
-        model: selectedModel,
-        streamId,
-        signal
-      });
-      detailedSummary = detailed.detailedSummary;
-      detailedSummaryWords = detailed.words;
-    }
-
-    const nextData = {
-      ...(doc.data && typeof doc.data === 'object' ? (doc.data as Record<string, unknown>) : {}),
-      summary,
-      summaryLang: lang,
-      extracted: {
-        title: docTitle,
-        pages: nbPages === 'Non précisé' ? null : Number(nbPages),
-        words: nbWords === 'Non précisé' ? null : Number(nbWords),
-      },
-      prompts: {
-        summaryPromptId: 'document_summary',
+      const bucket = getDocumentsBucketName();
+      const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
+      let text: string;
+      let extractedMetaTitle: string | undefined;
+      let extractedMetaPages: number | undefined;
+      try {
+        await write('status', { state: 'extracting' });
+        const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
+        text = extracted.text;
+        extractedMetaTitle = extracted.metadata.title;
+        extractedMetaPages = extracted.metadata.pages;
+      } catch (e) {
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
       }
-    };
 
-    const dataWithDetailed: Record<string, unknown> = detailedSummary
-      ? {
-          ...nextData,
-          detailedSummary,
-          detailedSummaryLang: lang,
-          detailedSummaryWords,
-          detailed_summary: detailedSummary,
-          detailed_summary_lang: lang,
-          detailed_summary_words: detailedSummaryWords,
-          prompts: { ...(nextData.prompts as Record<string, unknown>), detailedPromptId: 'document_detailed_summary' }
+      const trimmed = text.trim();
+      if (trimmed.length < 80) {
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+        throw new Error('No text extracted from document (empty or image-only PDF).');
+      }
+
+      const clipped = trimmed.length > 50_000 ? trimmed.slice(0, 50_000) : trimmed;
+      const docTitleRaw = (extractedMetaTitle || doc.filename || '-').trim() || '-';
+      const docTitle = docTitleRaw === '-' ? 'Non précisé' : docTitleRaw;
+      const nbPages =
+        typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
+      const nbWords = (() => {
+        // Use full extracted text when available; fallback to clipped (aligned with what we send to the model).
+        const fromFull = text.split(/\s+/).filter(Boolean).length;
+        if (Number.isFinite(fromFull) && fromFull > 0) return String(fromFull);
+        const fromClipped = clipped.split(/\s+/).filter(Boolean).length;
+        return Number.isFinite(fromClipped) && fromClipped > 0 ? String(fromClipped) : 'Non précisé';
+      })();
+
+      await write('status', { state: 'summarizing' });
+      const summary = await generateDocumentSummary({
+        lang: lang === 'en' ? 'en' : 'fr',
+        docTitle,
+        nbPages,
+        nbWords,
+        documentText: clipped,
+        streamId,
+        signal,
+      });
+
+      // For large documents: auto-generate a detailed summary (~10k words) and store it in data.
+      // This is persisted so it is visible in db-query and reusable by tools.
+      const wordsAsNumber = Number(nbWords);
+      let detailedSummary: string | null = null;
+      let detailedSummaryWords: number | null = null;
+      if (Number.isFinite(wordsAsNumber) && wordsAsNumber > 10_000) {
+        await write('status', { state: 'summarizing_detailed' });
+        const detailed = await generateDocumentDetailedSummary({
+          text,
+          filename: doc.filename,
+          lang: lang === 'en' ? 'en' : 'fr',
+          streamId,
+          signal,
+        });
+        const policy = getDocumentDetailedSummaryPolicy();
+        if (!detailed.detailedSummary.trim() || detailed.words < policy.detailedSummaryMinWords) {
+          throw new Error(
+            `Résumé détaillé insuffisant: ${detailed.words} mots (min ${policy.detailedSummaryMinWords}). Relancer le job.`
+          );
         }
-      : nextData;
+        detailedSummary = detailed.detailedSummary;
+        detailedSummaryWords = detailed.words;
+      }
 
-    await db
-      .update(contextDocuments)
-      .set({ status: 'ready', data: dataWithDetailed, updatedAt: new Date() })
-      .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+      const nextData = {
+        ...(doc.data && typeof doc.data === 'object' ? (doc.data as Record<string, unknown>) : {}),
+        summary,
+        summaryLang: lang,
+        extracted: {
+          title: docTitle,
+          pages: nbPages === 'Non précisé' ? null : Number(nbPages),
+          words: nbWords === 'Non précisé' ? null : Number(nbWords),
+        },
+        prompts: {
+          summaryPromptId: 'document_summary',
+        }
+      };
 
-    await write('done', { state: 'done' });
+      const dataWithDetailed: Record<string, unknown> = detailedSummary
+        ? {
+            ...nextData,
+            detailedSummary,
+            detailedSummaryLang: lang,
+            detailedSummaryWords,
+            detailed_summary: detailedSummary,
+            detailed_summary_lang: lang,
+            detailed_summary_words: detailedSummaryWords,
+            prompts: { ...(nextData.prompts as Record<string, unknown>), detailedPromptId: 'document_detailed_summary' }
+          }
+        : nextData;
+
+      await db
+        .update(contextDocuments)
+        .set({ status: 'ready', data: dataWithDetailed, updatedAt: new Date() })
+        .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+
+      await write('done', { state: 'done' });
+    } catch (error) {
+      // IMPORTANT: always reflect failure on the document row itself so the UI can show `failed`
+      // even if the outer job error propagation fails for any reason.
+      try {
+        const msg = error instanceof Error ? error.message : String(error);
+        const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
+        await db.run(sql`
+          UPDATE context_documents
+          SET status = 'failed',
+              data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${documentId} AND workspace_id = ${workspaceId}
+        `);
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
 
     // History event
     let seq = await this.getNextModificationSequence(doc.contextType, doc.contextId);

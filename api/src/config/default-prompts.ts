@@ -353,14 +353,9 @@ TEXTE:
 {{document_text}}
 </source>
 
-CONTINUATION (peut être vide):
-{{continuation_context}}
-
 TÂCHE:
 - Objectif de longueur: viser ~{{max_words}} mots et un minimum strict de {{min_words}} mots.
 - Produire une contraction (résumé détaillé) LINÉAIRE exhaustif qui suit l'ordre du document, section par section par section.
-- Si la sortie risque d'être interrompue avant d'atteindre le minimum, continuer à écrire (sans conclusion) jusqu'à dépasser {{min_words}} mots.
-{{continuation_instructions}}
 
 CONTRAINTES:
 - Réponds en {{lang}}.
@@ -369,7 +364,68 @@ CONTRAINTES:
 - Pas moins de {{min_words}} mots.
 - Respecte les numero de sections du document source, pas d'addition ni suppression.
 - Conserver les chiffres (avec unités) et les rattacher à leur contexte.`,
-    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words', 'min_words', 'continuation_context', 'continuation_instructions']
+    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words', 'min_words']
+  },
+  {
+    id: 'document_detailed_summary_expand',
+    name: 'Résumé détaillé — expansion (réécriture plus longue)',
+    description: 'Réécrire un résumé détaillé trop court en une version plus longue (toujours basée uniquement sur le texte source).',
+    content: `Document: {{filename}}
+Source: {{source_label}}
+Portée: {{scope}}
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: n'utiliser que les informations présentes dans le texte source.
+- Objectif de longueur: produire un résumé COMPLET entre {{min_words}} et {{max_words}} mots.
+- Conserver les chiffres (avec unités) et leur contexte.
+- Réécrire en suivant l'ordre du document (linéaire), pas une fiche.
+
+TEXTE SOURCE:
+---
+{{document_text}}
+---
+
+RÉSUMÉ ACTUEL (trop court: ~{{current_words}} mots):
+---
+{{current_summary}}
+---
+
+TÂCHE:
+- Réécrire un résumé détaillé unique, plus long et plus précis.
+- Ajouter de la granularité (mécanismes, acteurs, processus, chiffres, contraintes) sans répéter inutilement.
+- Si des sections/titres sont visibles, respecter leur ordre.`,
+    variables: [
+      'filename',
+      'source_label',
+      'scope',
+      'document_text',
+      'lang',
+      'max_words',
+      'min_words',
+      'current_words',
+      'current_summary'
+    ]
+  },
+  {
+    id: 'document_detailed_summary_continue',
+    name: 'Résumé détaillé — continuation (parties)',
+    description: 'Instruction courte pour continuer la génération en plusieurs parties via previous_response_id (sans renvoyer le texte source).',
+    content: `CONTINUATION — RÉSUMÉ DÉTAILLÉ (PARTIES)
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention.
+- Ne pas répéter ce qui a déjà été écrit.
+- Continuer exactement là où la partie précédente s'est arrêtée.
+
+TÂCHE:
+- Produire la partie {{part_index}}/{{part_total}} du résumé détaillé.
+- Longueur cible pour cette partie: {{part_min_words}}–{{part_max_words}} mots.
+- S'arrêter proprement à la fin de la partie {{part_index}}/{{part_total}} (ne pas entamer la partie suivante).`,
+    variables: ['lang', 'part_index', 'part_total', 'part_min_words', 'part_max_words']
   },
   {
     id: 'documents_analyze',
