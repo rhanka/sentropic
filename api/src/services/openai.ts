@@ -89,6 +89,11 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
 
+  // NOTE:
+  // - Some newer models (e.g. gpt-5-*) do not support `max_tokens` on Chat Completions.
+  //   They require `max_completion_tokens` instead.
+  // - Other models still accept `max_tokens`.
+  const supportsMaxCompletionTokens = selectedModel.startsWith('gpt-5');
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selectedModel,
     messages,
@@ -96,7 +101,9 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
     ...(responseFormat && { response_format: { type: responseFormat } }),
     ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
-      ? { max_tokens: Math.floor(maxOutputTokens) }
+      ? (supportsMaxCompletionTokens
+          ? ({ max_completion_tokens: Math.floor(maxOutputTokens) } as unknown as Record<string, unknown>)
+          : ({ max_tokens: Math.floor(maxOutputTokens) } as unknown as Record<string, unknown>))
       : {})
   };
 
@@ -125,6 +132,7 @@ export async function* callOpenAIStream(
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
 
+  const supportsMaxCompletionTokens = selectedModel.startsWith('gpt-5');
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
     model: selectedModel,
     messages,
@@ -133,7 +141,9 @@ export async function* callOpenAIStream(
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
     ...(responseFormat && { response_format: { type: responseFormat } }),
     ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
-      ? { max_tokens: Math.floor(maxOutputTokens) }
+      ? (supportsMaxCompletionTokens
+          ? ({ max_completion_tokens: Math.floor(maxOutputTokens) } as unknown as Record<string, unknown>)
+          : ({ max_tokens: Math.floor(maxOutputTokens) } as unknown as Record<string, unknown>))
       : {})
   };
 

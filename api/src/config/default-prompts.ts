@@ -339,5 +339,103 @@ Texte du document:
 {{document_text}}
 ---`,
     variables: ['lang', 'doc_title', 'nb_pages', 'nb_mots', 'document_text']
+  },
+  {
+    id: 'document_detailed_summary',
+    name: 'Résumé détaillé de document (long)',
+    description: 'Prompt de référence (ex-tool-service) pour produire un résumé détaillé linéaire (~10k mots) à partir du texte intégral extrait',
+    content: `Document: {{filename}}
+Source: {{source_label}}
+Portée: {{scope}}
+
+TEXTE:
+<source>
+{{document_text}}
+</source>
+
+CONTINUATION (peut être vide):
+{{continuation_context}}
+
+TÂCHE:
+- Objectif de longueur: viser ~{{max_words}} mots et un minimum strict de {{min_words}} mots.
+- Produire une contraction (résumé détaillé) LINÉAIRE exhaustif qui suit l'ordre du document, section par section par section.
+- Si la sortie risque d'être interrompue avant d'atteindre le minimum, continuer à écrire (sans conclusion) jusqu'à dépasser {{min_words}} mots.
+{{continuation_instructions}}
+
+CONTRAINTES:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention, uniquement les information du texte source.
+- Pas moins de {{min_words}} mots.
+- Respecte les numero de sections du document source, pas d'addition ni suppression.
+- Conserver les chiffres (avec unités) et les rattacher à leur contexte.`,
+    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words', 'min_words', 'continuation_context', 'continuation_instructions']
+  },
+  {
+    id: 'documents_analyze',
+    name: 'Documents — Analyze',
+    description: 'Template pour documents.analyze (outil): analyser un document à partir du texte intégral extrait, selon une instruction fournie',
+    content: `Tu es un sous-agent d'analyse documentaire.
+
+Objectif: répondre à une instruction spécialisée à partir du TEXTE (intégral ou extrait) fourni.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si l'information n'apparaît pas dans le texte, le dire explicitement.
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Document: {{filename}}
+- Pages (si dispo): {{pages}}
+- Titre (si dispo): {{title}}
+- Taille (estimée): ~{{full_words}} mots ; ~{{est_tokens}} tokens (heuristique)
+- Portée du texte fourni: {{scope}}
+
+TEXTE:
+---
+{{document_text}}
+---
+
+INSTRUCTION (du modèle maître):
+---
+{{instruction}}
+---
+
+Répondre uniquement avec l'analyse demandée.`,
+    variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'scope', 'document_text', 'instruction']
+  },
+  {
+    id: 'documents_analyze_merge',
+    name: 'Documents — Analyze (merge)',
+    description: 'Template pour fusionner les notes par extrait en une réponse unique et bornée pour documents.analyze',
+    content: `Tu es un sous-agent d'analyse documentaire.
+
+Objectif: consolider une réponse finale unique et fidèle à partir de notes factuelles produites sur des extraits du document.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si une information n'apparaît dans aucun extrait, le dire explicitement.
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Document: {{filename}}
+- Pages (si dispo): {{pages}}
+- Titre (si dispo): {{title}}
+- Taille (estimée): ~{{full_words}} mots ; ~{{est_tokens}} tokens (heuristique)
+
+NOTES PAR EXTRAIT (scan complet, sans retrieval):
+---
+{{notes}}
+---
+
+INSTRUCTION (du modèle maître):
+---
+{{instruction}}
+---
+
+Consolider une réponse finale unique, structurée, et bornée.`,
+    variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'notes', 'instruction']
   }
 ];
