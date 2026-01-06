@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
-import { contextDocuments, contextModificationHistory } from '../../db/schema';
+import { contextDocuments, contextModificationHistory, jobQueue } from '../../db/schema';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
@@ -56,15 +56,54 @@ documentsRouter.get('/', async (c) => {
     )
     .orderBy(desc(contextDocuments.createdAt));
 
+  // Heal/override document status from the linked job when the row is stale:
+  // - if document is still `uploaded|processing` but job is `failed`, expose `failed` so UI can render it.
+  // This can happen for historical rows created before we guaranteed failure propagation.
+  const jobIds = rows.map((r) => r.jobId).filter((v): v is string => typeof v === 'string' && v.length > 0);
+  const jobById = new Map<string, { status: string | null; error: string | null }>();
+  if (jobIds.length > 0) {
+    const jobRows = await db
+      .select({ id: jobQueue.id, status: jobQueue.status, error: jobQueue.error })
+      .from(jobQueue)
+      .where(and(eq(jobQueue.workspaceId, targetWorkspaceId), inArray(jobQueue.id, jobIds)));
+    for (const j of jobRows) {
+      jobById.set(j.id, { status: j.status ?? null, error: j.error ?? null });
+    }
+  }
+
+  const idsToMarkFailed: string[] = [];
+  for (const r of rows) {
+    if ((r.status === 'uploaded' || r.status === 'processing') && r.jobId) {
+      const j = jobById.get(r.jobId);
+      if (j?.status === 'failed') idsToMarkFailed.push(r.id);
+    }
+  }
+  if (idsToMarkFailed.length > 0) {
+    // Best-effort persist (so subsequent reads and tools see consistent status).
+    // Do not touch summaries here; the queue worker already writes a failure message when possible.
+    try {
+      await db
+        .update(contextDocuments)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(and(eq(contextDocuments.workspaceId, targetWorkspaceId), inArray(contextDocuments.id, idsToMarkFailed)));
+    } catch {
+      // ignore
+    }
+  }
+
   return c.json({
     items: rows.map((r) => ({
+      // Override status for response if job has failed (even if DB heal failed).
+      status:
+        (r.status === 'uploaded' || r.status === 'processing') && r.jobId && jobById.get(r.jobId)?.status === 'failed'
+          ? 'failed'
+          : r.status,
       id: r.id,
       context_type: r.contextType,
       context_id: r.contextId,
       filename: r.filename,
       mime_type: r.mimeType,
       size_bytes: r.sizeBytes,
-      status: r.status,
       summary: getDataString(r.data, 'summary'),
       summary_lang: getDataString(r.data, 'summaryLang'),
       job_id: r.jobId,
