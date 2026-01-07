@@ -35,10 +35,14 @@ vi.mock('../../src/services/document-text', async () => {
   };
 });
 
-const mockExecuteWithToolsStream = vi.fn();
-vi.mock('../../src/services/tools', async () => {
+const mockGenerateDocumentSummary = vi.fn();
+const mockGenerateDocumentDetailedSummary = vi.fn();
+vi.mock('../../src/services/context-document', async () => {
   return {
-    executeWithToolsStream: (prompt: string, opts: any) => mockExecuteWithToolsStream(prompt, opts),
+    // Keep the queue test deterministic: do not call OpenAI, just return fixed summaries.
+    generateDocumentSummary: (opts: any) => mockGenerateDocumentSummary(opts),
+    generateDocumentDetailedSummary: (opts: any) => mockGenerateDocumentDetailedSummary(opts),
+    getDocumentDetailedSummaryPolicy: () => ({ detailedSummaryMinWords: 4000 }),
   };
 });
 
@@ -59,7 +63,8 @@ describe('Queue - document_summary', () => {
     seqByStream = new Map<string, number>();
     mockGetObjectBytes.mockReset();
     mockExtract.mockReset();
-    mockExecuteWithToolsStream.mockReset();
+    mockGenerateDocumentSummary.mockReset();
+    mockGenerateDocumentDetailedSummary.mockReset();
     docId = '';
     jobId = '';
   });
@@ -109,17 +114,11 @@ describe('Queue - document_summary', () => {
       headingsH1: [],
     });
 
-    mockExecuteWithToolsStream.mockImplementation(async (_prompt: string, opts: any) => {
-      if (opts?.promptId === 'document_summary') {
-        return { content: 'Résumé court (test).' };
-      }
-      if (String(opts?.promptId || '').startsWith('document_detailed_summary')) {
-        return { content: 'détails '.repeat(9000).trim() };
-      }
-      if (String(opts?.promptId || '').startsWith('document_detailed_summary_expand_')) {
-        return { content: 'détails '.repeat(9000).trim() };
-      }
-      return { content: 'ok' };
+    mockGenerateDocumentSummary.mockResolvedValueOnce('Résumé court (test).');
+    mockGenerateDocumentDetailedSummary.mockResolvedValueOnce({
+      detailedSummary: 'détails '.repeat(9000).trim(),
+      words: 9000,
+      clipped: false
     });
 
     await queueManager.processJobs();
