@@ -483,4 +483,24 @@
     margin: 0.25rem 0 0.1rem;
     font-weight: 700;
   }
+
+  /* Tables: Streamdown can render tables with a larger default size; force chat size (0.75rem). */
+  .chatMarkdown :global(table),
+  .chatMarkdown :global(th),
+  .chatMarkdown :global(td) {
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+
+  .chatMarkdown :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.35rem 0;
+  }
+
+  .chatMarkdown :global(th),
+  .chatMarkdown :global(td) {
+    padding: 0.2rem 0.35rem;
+    vertical-align: top;
+  }
 </style>
