@@ -1,6 +1,35 @@
 // Configuration des prompts par défaut
 export const defaultPrompts = [
   {
+    id: 'chat_reasoning_effort_eval',
+    name: 'Chat — Évaluer le besoin d’effort de raisonnement',
+    description: 'Sous-prompt interne: estimer (low/medium/high) le reasoningEffort nécessaire pour répondre à la dernière question utilisateur, à partir du contexte récent',
+    content: `Tu es un classificateur. Objectif: estimer l'effort de raisonnement nécessaire pour répondre correctement à la DERNIÈRE question utilisateur.
+
+Définitions:
+- low: question simple, réponse directe, peu d'ambiguïté, faible risque d'erreur.
+- medium: plusieurs contraintes/étapes, nécessite synthèse/raisonnement modéré, mais reste maîtrisable.
+- high: question complexe ou à fort enjeu; nécessite raisonnement poussé, vérifications, ou orchestration (outils, documents, calculs, multi-critères).
+
+Dernière question utilisateur:
+---
+{{last_user_message}}
+---
+
+Contexte récent (extrait):
+---
+{{context_excerpt}}
+---
+
+Répondre UNIQUEMENT avec un JSON:
+{
+  "effort": "low|medium|high",
+  "confidence": 0.0,
+  "notes": "1-2 phrases max"
+}`,
+    variables: ['last_user_message', 'context_excerpt']
+  },
+  {
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',

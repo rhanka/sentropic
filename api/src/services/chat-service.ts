@@ -6,6 +6,7 @@ import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
+import { defaultPrompts } from '../config/default-prompts';
 import {
   readUseCaseTool,
   updateUseCaseFieldTool,
@@ -602,6 +603,83 @@ Règles :
     let previousResponseId: string | null = null;
     let pendingResponsesRawInput: unknown[] | null = null;
 
+    // If the selected model is gpt-5*, dynamically evaluate the reasoning effort needed for the last user question
+    // using gpt-5-nano (cheap classifier). This value (low/medium/high) is then passed as `reasoning.effort`.
+    const selectedModel = options.model || assistantRow.model || '';
+    const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
+    let reasoningEffortForThisMessage: 'low' | 'medium' | 'high' | undefined;
+    if (isGpt5) {
+      try {
+        const evalTemplate = defaultPrompts.find((p) => p.id === 'chat_reasoning_effort_eval')?.content || '';
+        if (evalTemplate) {
+          const lastUserMessage =
+            [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+          const excerpt = conversation
+            .slice(-8)
+            .map((m) => `${m.role.toUpperCase()}: ${(m.content || '').slice(0, 2000)}`)
+            .join('\n\n')
+            .trim();
+          const evalPrompt = evalTemplate
+            .replace('{{last_user_message}}', lastUserMessage || '(vide)')
+            .replace('{{context_excerpt}}', excerpt || '(vide)');
+
+          let out = '';
+          for await (const ev of callOpenAIResponseStream({
+            model: 'gpt-5-nano',
+            messages: [{ role: 'user', content: evalPrompt }],
+            structuredOutput: {
+              name: 'chat_reasoning_effort_eval',
+              strict: true,
+              schema: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  effort: { type: 'string', enum: ['low', 'medium', 'high'] },
+                  confidence: { type: 'number' },
+                  notes: { type: 'string' }
+                },
+                required: ['effort']
+              }
+            },
+            maxOutputTokens: 800,
+            signal: options.signal
+          })) {
+            if (ev.type === 'content_delta') {
+              const d = (ev.data ?? {}) as Record<string, unknown>;
+              const delta = typeof d.delta === 'string' ? d.delta : '';
+              if (delta) out += delta;
+            } else if (ev.type === 'error') {
+              const d = (ev.data ?? {}) as Record<string, unknown>;
+              throw new Error(typeof d.message === 'string' ? d.message : 'Erreur OpenAI (effort eval)');
+            }
+          }
+
+          const cleaned = out
+            .trim()
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/```\s*$/i, '')
+            .trim();
+          const parsed = JSON.parse(cleaned) as unknown;
+          const effort =
+            parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>).effort : undefined;
+          if (effort === 'low' || effort === 'medium' || effort === 'high') {
+            reasoningEffortForThisMessage = effort;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'status',
+              { state: 'reasoning_effort_selected', effort, by: 'gpt-5-nano' },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          }
+        }
+      } catch {
+        // Best-effort only: do not block the chat if the classifier fails.
+      }
+    }
+
     while (iteration < maxIterations) {
       iteration++;
       toolCalls.length = 0; // Réinitialiser pour chaque round
@@ -644,6 +722,7 @@ Règles :
         tools,
         // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
         reasoningSummary: 'detailed',
+        reasoningEffort: reasoningEffortForThisMessage,
         previousResponseId: previousResponseId ?? undefined,
         rawInput: pendingResponsesRawInput ?? undefined,
         signal: options.signal
@@ -1320,6 +1399,7 @@ Règles :
           tools: undefined,
           toolChoice: 'none',
           reasoningSummary: 'detailed',
+          reasoningEffort: reasoningEffortForThisMessage,
           signal: options.signal
         })) {
           const eventType = event.type as StreamEventType;
