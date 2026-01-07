@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 test.describe('Documents — résumés (court + long)', () => {
   test.describe.configure({ retries: 0 });
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const LONG_PDF_URL =
+    'https://www.scaleai.ca/wp-content/uploads/2025/12/SCALE-AI_Annual-Report_2024-2025.pdf';
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
@@ -14,8 +16,8 @@ test.describe('Documents — résumés (court + long)', () => {
     return fs.readFileSync(p);
   }
 
-  test('README.md (court) + spec/*.md concat (long): upload → statut ready → résumé non vide', async ({ page }) => {
-    test.setTimeout(240_000);
+  test('README.md (court) + PDF Scale AI (long): upload → statut ready → résumé non vide', async ({ page }) => {
+    test.setTimeout(360_000);
     // Désactiver confirm() au cas où (robustesse)
     await page.addInitScript(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,7 +36,7 @@ test.describe('Documents — résumés (court + long)', () => {
 
     // Upload court + long via API (multipart)
     const shortName = `README-${Date.now()}.md`;
-    const longName = `spec-concat-${Date.now()}.md`;
+    const longName = `scaleai-annual-report-${Date.now()}.pdf`;
 
     const upShort = await page.request.post(`${API_BASE_URL}/api/v1/documents`, {
       multipart: {
@@ -45,11 +47,16 @@ test.describe('Documents — résumés (court + long)', () => {
     });
     expect(upShort.ok()).toBeTruthy();
 
+    // Download long PDF at runtime (do NOT commit binaries in repo).
+    const pdfRes = await page.request.get(LONG_PDF_URL);
+    expect(pdfRes.ok()).toBeTruthy();
+    const pdfBuf = await pdfRes.body();
+
     const upLong = await page.request.post(`${API_BASE_URL}/api/v1/documents`, {
       multipart: {
         context_type: 'folder',
         context_id: folderId,
-        file: { name: longName, mimeType: 'text/markdown', buffer: readFixture('spec-concat.md') },
+        file: { name: longName, mimeType: 'application/pdf', buffer: pdfBuf },
       },
     });
     expect(upLong.ok()).toBeTruthy();
