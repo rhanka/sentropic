@@ -250,8 +250,7 @@ export const generateUseCaseList = async (
         required: ['dossier', 'useCases']
       }
     },
-    reasoningSummary: 'auto',
-    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
+    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_list',
     streamId: finalStreamId,
     signal
@@ -402,8 +401,7 @@ export const generateUseCaseDetail = async (
         ]
       }
     },
-    reasoningSummary: 'auto',
-    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
+    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_detail',
     streamId: finalStreamId,
     signal

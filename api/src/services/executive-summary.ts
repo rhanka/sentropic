@@ -240,8 +240,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     useDocuments: documentsContexts.length > 0,
     documentsContexts,
     responseFormat: 'json_object',
-    reasoningSummary: 'auto',
-    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
+    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'executive_summary',
     streamId: finalStreamId,
     signal

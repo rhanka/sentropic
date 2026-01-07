@@ -334,15 +334,16 @@ export async function* callOpenAIResponseStream(
         : undefined;
 
   // Reasoning (Responses API):
-  // - Historique du projet: injecter `reasoning.summary` par défaut (auto) pour les modèles qui supportent reasoning.
-  // - `reasoningEffort` reste un override (ex: documents: 'low').
-  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined =
-    supportsReasoningParams
-      ? {
-          summary: reasoningSummary ?? 'auto',
-          ...(reasoningEffort ? { effort: reasoningEffort } : {})
-        }
-      : undefined;
+  // - Ne pas injecter `reasoning` par défaut.
+  // - N'envoyer `reasoning.summary`/`reasoning.effort` que si explicitement demandé par l'appelant.
+  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined = (() => {
+    if (!supportsReasoningParams) return undefined;
+    if (!reasoningSummary && !reasoningEffort) return undefined;
+    return {
+      ...(reasoningSummary ? { summary: reasoningSummary } : {}),
+      ...(reasoningEffort ? { effort: reasoningEffort } : {})
+    };
+  })();
 
   const requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming = {
     model: selectedModel,

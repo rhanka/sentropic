@@ -678,7 +678,8 @@ export interface ExecuteWithToolsStreamOptions {
   jobId?: string;
   messageId?: string;
   /**
-   * Résumé de reasoning (Responses API). Default: auto
+   * Résumé de reasoning (Responses API).
+   * IMPORTANT: si non fourni, on n'envoie pas de paramètre `reasoning` à OpenAI (comportement explicite).
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   /**
@@ -717,10 +718,7 @@ export const executeWithToolsStream = async (
     documentsContexts,
     responseFormat,
     structuredOutput,
-    // Conserver le comportement historique: activer un résumé de reasoning par défaut.
-    // (Le service OpenAI n'injecte plus `reasoning` par défaut pour éviter des latences sur certains jobs,
-    // notamment les résumés de documents.)
-    reasoningSummary = 'auto',
+    reasoningSummary,
     reasoningEffort,
     maxOutputTokens,
     streamId,
