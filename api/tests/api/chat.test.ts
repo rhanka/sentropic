@@ -9,16 +9,32 @@ import {
 import { db } from '../../src/db/client';
 import { chatSessions, chatMessages, jobQueue } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { queueManager } from '../../src/services/queue-manager';
+import { vi } from 'vitest';
 
 describe('Chat API Endpoints', () => {
   let user: any;
+  let processJobsSpy: any;
 
   beforeEach(async () => {
+    // Important: endpoint tests should validate enqueueing without running async workers.
+    // Running the queue during tests can introduce cross-test races (sessions/messages cleaned up while jobs still run).
+    if (!processJobsSpy) {
+      processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue(undefined);
+    }
     user = await createAuthenticatedUser('editor');
   });
 
   afterEach(async () => {
     await cleanupAuthData();
+  });
+
+  afterAll(async () => {
+    try {
+      processJobsSpy?.mockRestore?.();
+    } catch {
+      // ignore
+    }
   });
 
   describe('POST /api/v1/chat/messages', () => {
