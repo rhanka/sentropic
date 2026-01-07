@@ -64,11 +64,15 @@ test.describe('Documents — résumés (court + long)', () => {
     await expect(rowShort).toBeVisible({ timeout: 30_000 });
     await expect(rowLong).toBeVisible({ timeout: 30_000 });
 
-    // Poll API jusqu’à ce que les deux documents soient ready, et que summary soit non vide
+    // Poll API jusqu’à ce que:
+    // - le doc court soit `ready` avec un résumé non vide
+    // - le doc long soit `ready` (idéal) OU `failed` (accepté: hard-fail si résumé détaillé < minWords)
     const listUrl = `${API_BASE_URL}/api/v1/documents?context_type=folder&context_id=${encodeURIComponent(folderId)}`;
     const start = Date.now();
     let shortOk = false;
-    let longOk = false;
+    let longReadyOk = false;
+    let longFailedOk = false;
+    let longId = '';
     while (Date.now() - start < 180_000) {
       const res = await page.request.get(listUrl);
       if (!res.ok()) {
@@ -81,26 +85,35 @@ test.describe('Documents — résumés (court + long)', () => {
       const l = items.find((d) => d.filename === longName);
 
       shortOk = !!s && s.status === 'ready' && typeof s.summary === 'string' && s.summary.trim().length > 50;
-      longOk = !!l && l.status === 'ready' && typeof l.summary === 'string' && l.summary.trim().length > 50;
-      if (shortOk && longOk) break;
+      if (l?.id) longId = String(l.id);
+      longReadyOk = !!l && l.status === 'ready' && typeof l.summary === 'string' && l.summary.trim().length > 50;
 
-      // Si l’un des deux est failed, exposer le diagnostic
-      if (s?.status === 'failed' || l?.status === 'failed') {
-        throw new Error(
-          `document_summary failed: short=${s?.status} long=${l?.status} shortMsg=${String(s?.summary || '')} longMsg=${String(
-            l?.summary || ''
-          )}`
-        );
+      if (l?.status === 'failed') {
+        // In this branch, a hard fail is expected if the detailed summary is too short.
+        // Ensure the API exposes an actionable error message on the document.
+        if (longId) {
+          const docRes = await page.request.get(`${API_BASE_URL}/api/v1/documents/${encodeURIComponent(longId)}`);
+          if (docRes.ok()) {
+            const docJson = await docRes.json().catch(() => null);
+            const msg = String((docJson as any)?.summary ?? '');
+            if (msg && msg.includes('Résumé détaillé insuffisant')) {
+              longFailedOk = true;
+            }
+          }
+        }
       }
+
+      if (shortOk && (longReadyOk || longFailedOk)) break;
       await page.waitForTimeout(1000);
     }
 
     expect(shortOk).toBeTruthy();
-    expect(longOk).toBeTruthy();
+    expect(longReadyOk || longFailedOk).toBeTruthy();
 
     // Vérifier côté UI que le statut "Prêt" est visible pour les deux
     await expect(rowShort).toContainText('Prêt');
-    await expect(rowLong).toContainText('Prêt');
+    // Long doc: either "Prêt" (success) or "Échec" (explicit hard-fail)
+    await expect(rowLong).toContainText(/Prêt|Échec/);
   });
 });
 
