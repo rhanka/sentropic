@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { app } from '../../src/app';
 import { createTestId } from '../utils/test-helpers';
 import { 
@@ -10,7 +10,6 @@ import { db } from '../../src/db/client';
 import { chatSessions, chatMessages, jobQueue } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
-import { vi } from 'vitest';
 
 describe('Chat API Endpoints', () => {
   let user: any;
