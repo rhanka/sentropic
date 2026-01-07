@@ -218,6 +218,7 @@ export const generateUseCaseList = async (
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
   
+  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
@@ -250,6 +251,7 @@ export const generateUseCaseList = async (
       }
     },
     reasoningSummary: 'auto',
+    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_list',
     streamId: finalStreamId,
     signal
@@ -309,6 +311,7 @@ export const generateUseCaseDetail = async (
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
   
+  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
@@ -400,6 +403,7 @@ export const generateUseCaseDetail = async (
       }
     },
     reasoningSummary: 'auto',
+    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_detail',
     streamId: finalStreamId,
     signal

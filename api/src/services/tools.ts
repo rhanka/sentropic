@@ -682,6 +682,11 @@ export interface ExecuteWithToolsStreamOptions {
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   /**
+   * Effort de reasoning (Responses API). Optionnel (override).
+   * Ex: 'high' pour des tâches complexes si modèle gpt-5.
+   */
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
    * Max output tokens for the model output (Responses API).
    * IMPORTANT: required for long-form outputs; otherwise OpenAI may use a small default.
    */
@@ -716,6 +721,7 @@ export const executeWithToolsStream = async (
     // (Le service OpenAI n'injecte plus `reasoning` par défaut pour éviter des latences sur certains jobs,
     // notamment les résumés de documents.)
     reasoningSummary = 'auto',
+    reasoningEffort,
     maxOutputTokens,
     streamId,
     promptId,
@@ -740,6 +746,7 @@ export const executeWithToolsStream = async (
       model,
       responseFormat,
       reasoningSummary,
+      reasoningEffort,
       maxOutputTokens,
       signal
     })) {
@@ -772,6 +779,7 @@ export const executeWithToolsStream = async (
     tools: enabledTools,
     responseFormat,
     reasoningSummary,
+    reasoningEffort,
     maxOutputTokens,
     signal
   })) {
@@ -957,6 +965,7 @@ export const executeWithToolsStream = async (
       model,
       ...(structuredOutput ? { structuredOutput } : (responseFormat ? { responseFormat } : {})),
     reasoningSummary,
+    reasoningEffort,
       signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;
