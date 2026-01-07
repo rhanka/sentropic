@@ -311,7 +311,7 @@ Format attendu:
 - Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
 
 ## Résumé
-(100-200 mots, inclure 3–8 faits chiffrés si disponibles)
+(500-1000 mots, inclure 3–8 faits chiffrés si disponibles)
 
 ## Sommaire
 Titres niveau 1: 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”
@@ -343,7 +343,7 @@ Texte du document:
   {
     id: 'document_detailed_summary',
     name: 'Résumé détaillé de document (long)',
-    description: 'Prompt de référence (ex-tool-service) pour produire un résumé détaillé linéaire (~10k mots) à partir du texte intégral extrait',
+    description: 'Prompt de référence (ex-tool-service) pour produire une contraction (résumé détaillé) linéaire à partir du texte intégral extrait',
     content: `Document: {{filename}}
 Source: {{source_label}}
 Portée: {{scope}}
@@ -354,78 +354,17 @@ TEXTE:
 </source>
 
 TÂCHE:
-- Objectif de longueur: viser ~{{max_words}} mots et un minimum strict de {{min_words}} mots.
-- Produire une contraction (résumé détaillé) LINÉAIRE exhaustif qui suit l'ordre du document, section par section par section.
+- Produire une contraction (résumé détaillé) LINÉAIRE exhaustive qui suit l'ordre du document, section par section par section.
+- Objectif de longueur: minimum {{max_words}} - c'est une contraction pour fournir à un LLM un résumé détaillé linéaire sans explosion de contexte et perdre le minimum de contenu.
 
 CONTRAINTES:
 - Réponds en {{lang}}.
 - Format: markdown.
-- Pas d'invention, uniquement les information du texte source.
-- Pas moins de {{min_words}} mots.
-- Respecte les numero de sections du document source, pas d'addition ni suppression.
-- Conserver les chiffres (avec unités) et les rattacher à leur contexte.`,
+- Pas d'invention, uniquement les informations du texte source.
+- Respecte les numero de sections du document source.
+- Respecte absolument la longueur minimale {{max_words}}
+- Conserver les informations chiffrées.`,
     variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words', 'min_words']
-  },
-  {
-    id: 'document_detailed_summary_expand',
-    name: 'Résumé détaillé — expansion (réécriture plus longue)',
-    description: 'Réécrire un résumé détaillé trop court en une version plus longue (toujours basée uniquement sur le texte source).',
-    content: `Document: {{filename}}
-Source: {{source_label}}
-Portée: {{scope}}
-
-Contraintes:
-- Réponds en {{lang}}.
-- Format: markdown.
-- Pas d'invention: n'utiliser que les informations présentes dans le texte source.
-- Objectif de longueur: produire un résumé COMPLET entre {{min_words}} et {{max_words}} mots.
-- Conserver les chiffres (avec unités) et leur contexte.
-- Réécrire en suivant l'ordre du document (linéaire), pas une fiche.
-
-TEXTE SOURCE:
----
-{{document_text}}
----
-
-RÉSUMÉ ACTUEL (trop court: ~{{current_words}} mots):
----
-{{current_summary}}
----
-
-TÂCHE:
-- Réécrire un résumé détaillé unique, plus long et plus précis.
-- Ajouter de la granularité (mécanismes, acteurs, processus, chiffres, contraintes) sans répéter inutilement.
-- Si des sections/titres sont visibles, respecter leur ordre.`,
-    variables: [
-      'filename',
-      'source_label',
-      'scope',
-      'document_text',
-      'lang',
-      'max_words',
-      'min_words',
-      'current_words',
-      'current_summary'
-    ]
-  },
-  {
-    id: 'document_detailed_summary_continue',
-    name: 'Résumé détaillé — continuation (parties)',
-    description: 'Instruction courte pour continuer la génération en plusieurs parties via previous_response_id (sans renvoyer le texte source).',
-    content: `CONTINUATION — RÉSUMÉ DÉTAILLÉ (PARTIES)
-
-Contraintes:
-- Réponds en {{lang}}.
-- Format: markdown.
-- Pas d'invention.
-- Ne pas répéter ce qui a déjà été écrit.
-- Continuer exactement là où la partie précédente s'est arrêtée.
-
-TÂCHE:
-- Produire la partie {{part_index}}/{{part_total}} du résumé détaillé.
-- Longueur cible pour cette partie: {{part_min_words}}–{{part_max_words}} mots.
-- S'arrêter proprement à la fin de la partie {{part_index}}/{{part_total}} (ne pas entamer la partie suivante).`,
-    variables: ['lang', 'part_index', 'part_total', 'part_min_words', 'part_max_words']
   },
   {
     id: 'documents_analyze',
@@ -445,7 +384,7 @@ Métadonnées:
 - Document: {{filename}}
 - Pages (si dispo): {{pages}}
 - Titre (si dispo): {{title}}
-- Taille (estimée): ~{{full_words}} mots ; ~{{est_tokens}} tokens (heuristique)
+- Taille (estimée): ~{{full_words}} mots ; 
 - Portée du texte fourni: {{scope}}
 
 TEXTE:

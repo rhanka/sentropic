@@ -712,7 +712,10 @@ export const executeWithToolsStream = async (
     documentsContexts,
     responseFormat,
     structuredOutput,
-    reasoningSummary,
+    // Conserver le comportement historique: activer un résumé de reasoning par défaut.
+    // (Le service OpenAI n'injecte plus `reasoning` par défaut pour éviter des latences sur certains jobs,
+    // notamment les résumés de documents.)
+    reasoningSummary = 'auto',
     maxOutputTokens,
     streamId,
     promptId,

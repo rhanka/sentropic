@@ -1,11 +1,13 @@
 import { defaultPrompts } from '../config/default-prompts';
 import { executeWithToolsStream } from './tools';
-import { callOpenAI } from './openai';
 import { callOpenAIResponseStream } from './openai';
+import { getNextSequence, writeStreamEvent } from './stream-service';
+import type { StreamEventType } from './openai';
 
-const FORCED_DOCUMENT_MODEL = 'gpt-4.1-nano';
-const WORDS_FULL_CONTENT_LIMIT = 10_000;
-const DETAILED_SUMMARY_MIN_WORDS = 8_000;
+const FORCED_DOCUMENT_MODEL = 'gpt-5-nano';
+const WORDS_FULL_CONTENT_LIMIT = 15_000;
+const DETAILED_SUMMARY_MIN_WORDS = 4_000;
+const DOCUMENT_MAX_INPUT_TOKENS_EST = 272_000;
 
 function sanitizePgText(input: string): string {
   // PostgreSQL text/JSON cannot contain NUL (\u0000). Also strip other control chars that can break JSON ingestion.
@@ -70,6 +72,70 @@ function chunkTextByApproxTokens(text: string, targetTokens: number): string[] {
   return out.filter((s) => s.trim());
 }
 
+function splitByTopLevelHeading(text: string): string[] {
+  // Prefer splitting on Markdown top-level headings (# ...), if present.
+  const t = (text || '').replace(/\r\n/g, '\n').trim();
+  if (!t) return [];
+  const lines = t.split('\n');
+  const out: string[] = [];
+  let cur: string[] = [];
+  const headingRe = /^#\s+\S+/;
+  for (const line of lines) {
+    if (headingRe.test(line) && cur.length > 0) {
+      out.push(cur.join('\n').trim());
+      cur = [line];
+    } else {
+      cur.push(line);
+    }
+  }
+  if (cur.length > 0) out.push(cur.join('\n').trim());
+  // If we didn't really split, return empty to signal "not applicable".
+  if (out.length <= 1) return [];
+  return out.filter(Boolean);
+}
+
+function packSectionsToTokenBudget(sections: string[], maxTokensEst: number): string[] {
+  const chunks: string[] = [];
+  let cur = '';
+  let curTokens = 0;
+  const max = Math.max(10_000, Math.floor(maxTokensEst || DOCUMENT_MAX_INPUT_TOKENS_EST));
+
+  const flush = () => {
+    const t = cur.trim();
+    if (t) chunks.push(t);
+    cur = '';
+    curTokens = 0;
+  };
+
+  for (const sec of sections) {
+    const s = (sec || '').trim();
+    if (!s) continue;
+    const t = estimateTokensFromText(s);
+    if (t > max) {
+      // Single section too large: flush current and split this section by token chunks.
+      flush();
+      const sub = chunkTextByApproxTokens(s, max);
+      for (const c of sub) chunks.push(c.trim());
+      continue;
+    }
+    if (!cur) {
+      cur = s;
+      curTokens = t;
+      continue;
+    }
+    if (curTokens + t <= max) {
+      cur = `${cur}\n\n${s}`;
+      curTokens += t;
+      continue;
+    }
+    flush();
+    cur = s;
+    curTokens = t;
+  }
+  flush();
+  return chunks.filter(Boolean);
+}
+
 function buildDetailedSummaryPrompt(opts: {
   template: string;
   filename: string;
@@ -90,36 +156,15 @@ function buildDetailedSummaryPrompt(opts: {
     .replace('{{lang}}', opts.lang === 'fr' ? 'français' : 'anglais');
 }
 
-function buildDetailedSummaryExpandPrompt(opts: {
-  template: string;
-  filename: string;
-  lang: 'fr' | 'en';
-  sourceLabel: string;
-  scope: string;
-  documentText: string;
-  maxWords: number;
-  minWords: number;
-  currentWords: number;
-  currentSummary: string;
-}): string {
-  return opts.template
-    .replace('{{filename}}', opts.filename)
-    .replace('{{source_label}}', opts.sourceLabel)
-    .replace('{{scope}}', opts.scope)
-    .replace('{{document_text}}', opts.documentText)
-    .replace('{{max_words}}', String(opts.maxWords))
-    .replace('{{min_words}}', String(opts.minWords))
-    .replace('{{current_words}}', String(opts.currentWords))
-    .replace('{{current_summary}}', opts.currentSummary)
-    .replace('{{lang}}', opts.lang === 'fr' ? 'français' : 'anglais');
-}
-
 async function runResponsesContinuation(opts: {
   model: string;
   userPrompt: string;
   maxOutputTokens: number;
   previousResponseId?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed';
   signal?: AbortSignal;
+  onStreamEvent?: (eventType: StreamEventType, data: unknown) => Promise<void> | void;
 }): Promise<{ text: string; responseId: string }> {
   let text = '';
   let responseId = opts.previousResponseId || '';
@@ -129,6 +174,8 @@ async function runResponsesContinuation(opts: {
     model: opts.model,
     maxOutputTokens: opts.maxOutputTokens,
     previousResponseId: opts.previousResponseId,
+    reasoningEffort: opts.reasoningEffort,
+    reasoningSummary: opts.reasoningSummary,
     signal: opts.signal,
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;
@@ -136,15 +183,18 @@ async function runResponsesContinuation(opts: {
       if (data.state === 'response_created' && typeof data.response_id === 'string' && data.response_id) {
         responseId = data.response_id;
       }
+      await opts.onStreamEvent?.('status', data);
       continue;
     }
     if (event.type === 'content_delta') {
       const delta = typeof data.delta === 'string' ? data.delta : '';
       if (delta) text += delta;
+      await opts.onStreamEvent?.('content_delta', { delta });
       continue;
     }
     if (event.type === 'error') {
       const msg = typeof data.message === 'string' ? data.message : 'Erreur OpenAI';
+      await opts.onStreamEvent?.('error', { message: msg });
       throw new Error(msg);
     }
   }
@@ -190,144 +240,108 @@ export async function generateDocumentDetailedSummary(opts: {
   streamId: string;
   signal?: AbortSignal;
 }): Promise<{ detailedSummary: string; words: number; clipped: boolean }> {
+  const write = async (eventType: StreamEventType, payload: unknown) => {
+    const seq = await getNextSequence(opts.streamId);
+    await writeStreamEvent(opts.streamId, eventType, payload, seq);
+  };
+
+  const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
+
   const maxWords = WORDS_FULL_CONTENT_LIMIT;
-  const minWords = Math.floor(maxWords * 0.8);
   const fullText = (opts.text || '').trim();
   if (!fullText) throw new Error('Aucun texte à résumer (détaillé)');
 
   const template = defaultPrompts.find((p) => p.id === 'document_detailed_summary')?.content || '';
   if (!template) throw new Error('Prompt document_detailed_summary non trouvé');
-  const expandTemplate = defaultPrompts.find((p) => p.id === 'document_detailed_summary_expand')?.content || '';
-  if (!expandTemplate) throw new Error('Prompt document_detailed_summary_expand non trouvé');
-  const continueTemplate = defaultPrompts.find((p) => p.id === 'document_detailed_summary_continue')?.content || '';
-  if (!continueTemplate) throw new Error('Prompt document_detailed_summary_continue non trouvé');
 
   const estTokens = estimateTokensFromText(fullText);
 
-  // Prefer a direct full-text summary when it fits comfortably in one call.
-  if (estTokens > 0 && estTokens <= 700_000) {
-    // Strategy: generate in 4 parts using Responses API continuation (previous_response_id).
-    // This avoids the model "stopping early" on long single-shot outputs.
-    const partTotal = 4;
-
-    const basePrompt = buildDetailedSummaryPrompt({
+  // 1-shot policy: no continuation, no expansion. If input fits, do a single generation.
+  if (estTokens > 0 && estTokens <= DOCUMENT_MAX_INPUT_TOKENS_EST) {
+    const prompt = buildDetailedSummaryPrompt({
       template,
       filename: opts.filename,
       lang: opts.lang,
       sourceLabel: 'texte intégral extrait',
-      scope: `texte intégral (partie 1/${partTotal})`,
-      documentText: fullText,
-      maxWords: maxWords,
-      minWords: minWords,
-    });
-
-    // Part 1 (creates a response_id)
-    const partTexts: string[] = [];
-    let responseId = '';
-    {
-      const r1 = await runResponsesContinuation({
-        model: FORCED_DOCUMENT_MODEL,
-        userPrompt: basePrompt,
-        maxOutputTokens: 12000,
-        signal: opts.signal,
-      });
-      responseId = r1.responseId;
-      partTexts.push(sanitizePgText(r1.text).trim());
-    }
-
-    // Parts 2..4 via continuation (no re-sending the document text)
-    for (let partIndex = 2; partIndex <= partTotal; partIndex += 1) {
-      const continuePrompt = continueTemplate
-        .replace('{{lang}}', opts.lang === 'fr' ? 'français' : 'anglais')
-        .replace('{{part_index}}', String(partIndex))
-        .replace('{{part_total}}', String(partTotal))
-        .replace('{{part_min_words}}', String(minWords))
-        .replace('{{part_max_words}}', String(maxWords));
-
-      const r = await runResponsesContinuation({
-        model: FORCED_DOCUMENT_MODEL,
-        userPrompt: continuePrompt,
-        maxOutputTokens: 32000,
-        previousResponseId: responseId || undefined,
-        signal: opts.signal,
-      });
-      responseId = r.responseId || responseId;
-      partTexts.push(sanitizePgText(r.text).trim());
-    }
-
-    const concatenated = partTexts
-      .map((t, i) => `### Partie ${i + 1}/${partTotal}\n${t}`.trim())
-      .join('\n\n')
-      .trim();
-
-    const trimmed = trimToMaxWords(concatenated, maxWords);
-    if (trimmed.words >= DETAILED_SUMMARY_MIN_WORDS) {
-      return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
-    }
-
-    // If still too short, try a bounded rewrite (expansion) on the full text as a last resort (still no chunking).
-    const currentWords = trimmed.words;
-    const expandPrompt = buildDetailedSummaryExpandPrompt({
-      template: expandTemplate,
-      filename: opts.filename,
-      lang: opts.lang,
-      sourceLabel: 'texte intégral extrait',
-      scope: 'texte intégral (réécriture finale)',
+      scope: `texte intégral (~${estTokens} tokens estimés)`,
       documentText: fullText,
       maxWords,
-      minWords,
-      currentWords,
-      currentSummary: trimmed.text,
+      minWords: DETAILED_SUMMARY_MIN_WORDS,
     });
-    const resp3 = await callOpenAI({
-      messages: [{ role: 'user', content: expandPrompt }],
+
+    await write('status', { state: 'summarizing_detailed_one_shot_start', estTokens });
+    const r = await runResponsesContinuation({
       model: FORCED_DOCUMENT_MODEL,
+      userPrompt: prompt,
       maxOutputTokens: 32000,
+      reasoningEffort: 'low',
+      reasoningSummary: 'concise',
       signal: opts.signal,
+      onStreamEvent: async (eventType, data) => {
+        await write(eventType, { ...asRecord(data), phase: 'one_shot' });
+      },
     });
-    const raw3 = sanitizePgText(String(resp3.choices?.[0]?.message?.content ?? '')).trim();
-    const trimmed3 = trimToMaxWords(raw3, maxWords);
-    if (trimmed3.words >= DETAILED_SUMMARY_MIN_WORDS) {
-      return { detailedSummary: trimmed3.text, words: trimmed3.words, clipped: trimmed3.trimmed };
+    const out = sanitizePgText(r.text).trim();
+    const trimmed = trimToMaxWords(out, maxWords);
+    await write('status', { state: 'summarizing_detailed_one_shot_end', words: trimmed.words, clipped: trimmed.trimmed });
+    if (trimmed.words < DETAILED_SUMMARY_MIN_WORDS) {
+      await write('status', { state: 'summarizing_detailed_failed', words: trimmed.words, minWords: DETAILED_SUMMARY_MIN_WORDS });
+      throw new Error(`Résumé détaillé insuffisant: ${trimmed.words} mots (min ${DETAILED_SUMMARY_MIN_WORDS}).`);
     }
-
-    throw new Error(`Résumé détaillé insuffisant: ${trimmed3.words} mots (min ${DETAILED_SUMMARY_MIN_WORDS}).`);
+    return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
   }
 
-  // Only for very large inputs: scan ALL chunks (no retrieval/RAG), then consolidate deterministically.
-  // Policy: chunking is allowed ONLY when the input doesn't fit in one call (>~800k tokens estimated).
-  if (!(estTokens > 800_000)) {
-    throw new Error(
-      `Résumé détaillé insuffisant: entrée estimée à ${estTokens} tokens (≤800k) mais génération trop courte.`
-    );
-  }
+  // Input too large: split (prefer top-level headings when possible), then 1-shot per chunk and concatenate.
+  const sections = splitByTopLevelHeading(fullText);
+  const chunks =
+    sections.length > 0 ? packSectionsToTokenBudget(sections, DOCUMENT_MAX_INPUT_TOKENS_EST) : chunkTextByApproxTokens(fullText, DOCUMENT_MAX_INPUT_TOKENS_EST);
 
-  // For huge docs only: split near the model budget (~800k est tokens).
-  const chunks = chunkTextByApproxTokens(fullText, 800_000);
   const chunkSummaries: string[] = [];
-  // Policy for huge docs: accumulate ~10k words PER chunk (no division by number of chunks).
-  const perChunkMaxWords = WORDS_FULL_CONTENT_LIMIT;
-  const perChunkMinWords = DETAILED_SUMMARY_MIN_WORDS;
+  // Policy for split:
+  // - Ask ~10k words per chunk (maxWords=10k) to maximize chance of reaching the global target.
+  // - Validate with a dynamic per-chunk minimum: global_min / nbChunks (rounded up).
+  const perChunkMaxWords = WORDS_FULL_CONTENT_LIMIT; // 10k
+  const perChunkMinWords = Math.max(800, Math.ceil(DETAILED_SUMMARY_MIN_WORDS / Math.max(1, chunks.length)));
   for (let i = 0; i < chunks.length; i += 1) {
     const chunkText = chunks[i]!;
+    const chunkTokens = estimateTokensFromText(chunkText);
     const chunkPrompt = buildDetailedSummaryPrompt({
       template,
       filename: opts.filename,
       lang: opts.lang,
       sourceLabel: 'extrait du document',
-      scope: `extrait ${i + 1}/${chunks.length}`,
+      scope: `extrait ${i + 1}/${chunks.length} (~${chunkTokens} tokens estimés)`,
       documentText: chunkText,
       maxWords: perChunkMaxWords,
       minWords: perChunkMinWords,
     });
 
-    const resp = await callOpenAI({
-      messages: [{ role: 'user', content: chunkPrompt }],
+    await write('status', { state: 'summarizing_detailed_chunk_start', chunkIndex: i + 1, chunkTotal: chunks.length });
+    const r = await runResponsesContinuation({
       model: FORCED_DOCUMENT_MODEL,
+      userPrompt: chunkPrompt,
       maxOutputTokens: 32000,
+      reasoningEffort: 'low',
+      reasoningSummary: 'concise',
       signal: opts.signal,
+      onStreamEvent: async (eventType, data) => {
+        await write(eventType, {
+          ...asRecord(data),
+          chunkIndex: i + 1,
+          chunkTotal: chunks.length,
+        });
+      },
     });
-    chunkSummaries.push(sanitizePgText(String(resp.choices?.[0]?.message?.content ?? '')).trim());
+    const chunkOut = sanitizePgText(String(r.text ?? '')).trim();
+    const chunkTrimmed = trimToMaxWords(chunkOut, perChunkMaxWords);
+    await write('status', { state: 'summarizing_detailed_chunk_end', chunkIndex: i + 1, chunkTotal: chunks.length, words: chunkTrimmed.words });
+    if (chunkTrimmed.words < perChunkMinWords) {
+      await write('status', { state: 'summarizing_detailed_failed', chunkIndex: i + 1, words: chunkTrimmed.words, minWords: perChunkMinWords });
+      throw new Error(
+        `Résumé détaillé insuffisant (chunk ${i + 1}/${chunks.length}): ${chunkTrimmed.words} mots (min ${perChunkMinWords}).`
+      );
+    }
+    chunkSummaries.push(chunkTrimmed.text);
   }
 
   const concatenated = chunkSummaries
@@ -338,6 +352,11 @@ export async function generateDocumentDetailedSummary(opts: {
   // Allow accumulating ~10k words per chunk; compute words without clamping to 10k.
   const maxAccumulatedWords = Math.max(WORDS_FULL_CONTENT_LIMIT, WORDS_FULL_CONTENT_LIMIT * Math.max(1, chunkSummaries.length));
   const trimmed = trimToMaxWords(concatenated, maxAccumulatedWords);
+  await write('status', { state: 'summarizing_detailed_concat', words: trimmed.words, clipped: trimmed.trimmed, chunkTotal: chunkSummaries.length });
+  if (trimmed.words < DETAILED_SUMMARY_MIN_WORDS) {
+    await write('status', { state: 'summarizing_detailed_failed', words: trimmed.words, minWords: DETAILED_SUMMARY_MIN_WORDS, chunkTotal: chunkSummaries.length });
+    throw new Error(`Résumé détaillé insuffisant: ${trimmed.words} mots (min ${DETAILED_SUMMARY_MIN_WORDS}).`);
+  }
   return { detailedSummary: trimmed.text, words: trimmed.words, clipped: trimmed.trimmed };
 }
 
