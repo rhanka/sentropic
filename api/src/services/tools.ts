@@ -686,7 +686,7 @@ export interface ExecuteWithToolsStreamOptions {
    * Effort de reasoning (Responses API). Optionnel (override).
    * Ex: 'high' pour des tâches complexes si modèle gpt-5.
    */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Max output tokens for the model output (Responses API).
    * IMPORTANT: required for long-form outputs; otherwise OpenAI may use a small default.

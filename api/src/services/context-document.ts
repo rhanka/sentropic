@@ -160,7 +160,7 @@ async function runResponsesContinuation(opts: {
   userPrompt: string;
   maxOutputTokens: number;
   previousResponseId?: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   signal?: AbortSignal;
   onStreamEvent?: (eventType: StreamEventType, data: unknown) => Promise<void> | void;

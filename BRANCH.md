@@ -144,6 +144,9 @@ This implements **CU-022** as defined in `spec/SPEC_CHATBOT.md` (source of truth
   - [x] Générations: empêcher les “pseudo tool calls” (JSON collés dans la réponse) en renforçant le prompt système de l’orchestrateur tools
   - [x] Générations: précharger les documents (dossier + organisation) dans le prompt via `DOCUMENTS_CONTEXT_JSON` (liste + résumés) avec un budget unique en **chars** (approx. 100k mots) et une politique d’escalade: si les résumés suffisent ne pas appeler `documents`, sinon `documents.get_content(maxChars=30000)` ou `documents.analyze` (question ciblée).
   - [x] Générations: forcer la réponse finale en `json_schema` strict (Structured Outputs) en phase 2 pour sécuriser le parsing JSON et rapprocher la contrainte de format de la dernière demande.
+  - [x] Chat: tracer l’effort de raisonnement **une seule fois** par message (`reasoning_effort_selected`), sans répéter `pass/iteration`.
+  - [x] Chat: évaluer `reasoningEffort` via `gpt-4.1-nano` (au lieu de `gpt-5-nano`) pour éviter des `server_error` observés avec `reasoning.effort="minimal"`.
+  - [x] OpenAI: propager `request_id` dans les events d’erreur du stream Responses API (diagnostic “Effort de raisonnement (échec)” plus exploitable).
   - [x] UI (UseCaseDetail): alignement “Bénéfices” vs “Risques + Mesures du succès” rétabli (stretch), y compris quand Risques/Mesures n'ont qu’un seul item.
   - [x] UI (UseCaseDetail): si la section “Références” est vide (non rendue), “Prochaines étapes” passe en pleine largeur (desktop + print/preview print).
   - [x] Use cases: retry automatique (borné) sur `usecase_list` / `usecase_detail` en cas d’échec “retryable” (parsing JSON / champs manquants / erreurs transitoires)

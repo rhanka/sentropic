@@ -607,7 +607,10 @@ Règles :
     // using gpt-5-nano (cheap classifier). This value (low/medium/high) is then passed as `reasoning.effort`.
     const selectedModel = options.model || assistantRow.model || '';
     const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
-    let reasoningEffortForThisMessage: 'low' | 'medium' | 'high' | undefined;
+    let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
+    // Default fallback if evaluator fails: medium.
+    let reasoningEffortLabel: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'medium';
+    let reasoningEffortBy: string | undefined;
     if (isGpt5) {
       try {
         const evalTemplate = defaultPrompts.find((p) => p.id === 'chat_reasoning_effort_eval')?.content || '';
@@ -623,25 +626,16 @@ Règles :
             .replace('{{last_user_message}}', lastUserMessage || '(vide)')
             .replace('{{context_excerpt}}', excerpt || '(vide)');
 
+          // Evaluator model: prefer robustness over reasoning controls.
+          // gpt-4.1-nano does not support reasoning params (we already skip them in openai.ts),
+          // and avoids the server_error observed with gpt-5-nano effort=minimal.
+          const evaluatorModel = 'gpt-4.1-nano';
           let out = '';
           for await (const ev of callOpenAIResponseStream({
-            model: 'gpt-5-nano',
+            model: evaluatorModel,
             messages: [{ role: 'user', content: evalPrompt }],
-            structuredOutput: {
-              name: 'chat_reasoning_effort_eval',
-              strict: true,
-              schema: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  effort: { type: 'string', enum: ['low', 'medium', 'high'] },
-                  confidence: { type: 'number' },
-                  notes: { type: 'string' }
-                },
-                required: ['effort']
-              }
-            },
-            maxOutputTokens: 800,
+            // Ask for a single token (none|low|medium|high|xhigh).
+            maxOutputTokens: 64,
             signal: options.signal
           })) {
             if (ev.type === 'content_delta') {
@@ -650,35 +644,59 @@ Règles :
               if (delta) out += delta;
             } else if (ev.type === 'error') {
               const d = (ev.data ?? {}) as Record<string, unknown>;
-              throw new Error(typeof d.message === 'string' ? d.message : 'Erreur OpenAI (effort eval)');
+              const reqId = typeof d.request_id === 'string' ? d.request_id : '';
+              const msg = typeof d.message === 'string' ? d.message : 'Erreur OpenAI (effort eval)';
+              throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
             }
           }
 
-          const cleaned = out
-            .trim()
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/```\s*$/i, '')
-            .trim();
-          const parsed = JSON.parse(cleaned) as unknown;
-          const effort =
-            parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>).effort : undefined;
-          if (effort === 'low' || effort === 'medium' || effort === 'high') {
-            reasoningEffortForThisMessage = effort;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'status',
-              { state: 'reasoning_effort_selected', effort, by: 'gpt-5-nano' },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+          const token = out.trim().split(/\s+/g)[0]?.toLowerCase() || '';
+          if (token === 'none' || token === 'low' || token === 'medium' || token === 'high' || token === 'xhigh') {
+            reasoningEffortForThisMessage = token;
+            reasoningEffortLabel = token;
+            reasoningEffortBy = evaluatorModel;
+          } else {
+            const preview = out.trim().slice(0, 200);
+            throw new Error(`Invalid effort token from ${evaluatorModel}: "${preview}"`);
           }
         }
-      } catch {
+      } catch (e) {
         // Best-effort only: do not block the chat if the classifier fails.
+        // But trace the failure for debugging in the UI timeline.
+        const msg = e instanceof Error ? e.message : String(e ?? 'unknown');
+        const safeMsg = msg.slice(0, 500);
+        // Also log to API logs for debugging (user requested).
+        try {
+          console.error('[chat] reasoning_effort_eval_failed', {
+            assistantMessageId: options.assistantMessageId,
+            sessionId: options.sessionId,
+            model: selectedModel,
+            evaluatorModel: 'gpt-4.1-nano',
+            error: safeMsg,
+          });
+        } catch {
+          // ignore
+        }
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          { state: 'reasoning_effort_eval_failed', message: safeMsg },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
       }
     }
+    // Always emit a "selected" status so the UI can display what was used.
+    if (!reasoningEffortBy) reasoningEffortBy = isGpt5 ? 'fallback' : 'non-gpt-5';
+    await writeStreamEvent(
+      options.assistantMessageId,
+      'status',
+      { state: 'reasoning_effort_selected', effort: reasoningEffortLabel, by: reasoningEffortBy },
+      streamSeq,
+      options.assistantMessageId
+    );
+    streamSeq += 1;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -786,6 +804,24 @@ Règles :
           }
         }
         // Note: eventType 'done' est volontairement retardé (voir plus haut)
+      }
+
+      // Debug (requested): if we asked for reasoningSummary=detailed but saw none, log it.
+      if (isGpt5 && reasoningParts.length === 0) {
+        try {
+          console.warn('[chat] no_reasoning_delta_observed', {
+            assistantMessageId: options.assistantMessageId,
+            sessionId: options.sessionId,
+            model: selectedModel,
+            phase: 'pass1',
+            iteration,
+            reasoningSummary: 'detailed',
+            reasoningEffort: reasoningEffortForThisMessage ?? null,
+            toolCalls: toolCalls.length,
+          });
+        } catch {
+          // ignore
+        }
       }
       // rawInput consommé pour ce tour (si présent)
       pendingResponsesRawInput = null;

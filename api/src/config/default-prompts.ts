@@ -3,13 +3,15 @@ export const defaultPrompts = [
   {
     id: 'chat_reasoning_effort_eval',
     name: 'Chat — Évaluer le besoin d’effort de raisonnement',
-    description: 'Sous-prompt interne: estimer (low/medium/high) le reasoningEffort nécessaire pour répondre à la dernière question utilisateur, à partir du contexte récent',
+    description: 'Sous-prompt interne: estimer (none/low/medium/high/xhigh) le reasoningEffort nécessaire pour répondre à la dernière question utilisateur, à partir du contexte récent',
     content: `Tu es un classificateur. Objectif: estimer l'effort de raisonnement nécessaire pour répondre correctement à la DERNIÈRE question utilisateur.
 
 Définitions:
+- none: ne pas produire de reasoning (réponse immédiate/évidente, ou simple exécution). IMPORTANT: c'est plus faible que low.
 - low: question simple, réponse directe, peu d'ambiguïté, faible risque d'erreur.
-- medium: plusieurs contraintes/étapes, nécessite synthèse/raisonnement modéré, mais reste maîtrisable.
-- high: question complexe ou à fort enjeu; nécessite raisonnement poussé, vérifications, ou orchestration (outils, documents, calculs, multi-critères).
+- medium: nécessite synthèse/raisonnement modéré, un type de tool appelé, mais reste maîtrisable.
+- high: question complexe ou à fort enjeu; nécessite raisonnement poussé, vérifications, ou d'organiser l'orchestration de plusieurs tools (cas d'usage, recherche web, documents).
+- xhigh: demande explicite de l'utilisateur de faire un effort de raisonnement (suite à première réponse ou erreur); question très complexe/à très fort enjeu; nécessite raisonnement maximal, attention aux erreurs, et validations supplémentaires.
 
 Dernière question utilisateur:
 ---
@@ -21,12 +23,8 @@ Contexte récent (extrait):
 {{context_excerpt}}
 ---
 
-Répondre UNIQUEMENT avec un JSON:
-{
-  "effort": "low|medium|high",
-  "confidence": 0.0,
-  "notes": "1-2 phrases max"
-}`,
+Répondre avec EXACTEMENT UN SEUL TOKEN (sans guillemets, sans JSON, sans ponctuation, sans nouvelle ligne):
+none|low|medium|high|xhigh`,
     variables: ['last_user_message', 'context_excerpt']
   },
   {

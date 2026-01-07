@@ -128,6 +128,26 @@
         // Option B: libellé explicite pour la phase de démarrage
         st.stepTitle = 'Préparation…';
         st.startedAtMs = ts;
+      } else if (state === 'reasoning_effort_selected') {
+        const effort = String(data?.effort ?? '').trim() || 'unknown';
+        const by = String(data?.by ?? '').trim();
+        const label = by ? `${effort} (via ${by})` : effort;
+        st.stepTitle = 'Effort de raisonnement';
+        st.auxText = label;
+        upsertStep('Effort de raisonnement', label);
+      } else if (state === 'reasoning_effort') {
+        const effort = String(data?.effort ?? '').trim() || 'unknown';
+        const phase = String(data?.phase ?? '').trim();
+        const it = data?.iteration != null ? String(data.iteration) : '';
+        const label = `${effort}${phase ? ` — ${phase}${it ? ` #${it}` : ''}` : ''}`;
+        st.stepTitle = 'Effort de raisonnement';
+        st.auxText = label;
+        upsertStep('Effort de raisonnement', label);
+      } else if (state === 'reasoning_effort_eval_failed') {
+        const msg = String(data?.message ?? '').trim() || 'Erreur inconnue';
+        st.stepTitle = 'Effort de raisonnement (échec)';
+        st.auxText = msg;
+        upsertStep('Effort de raisonnement (échec)', msg);
       } else {
         st.stepTitle = `Statut: ${state}`;
       }
