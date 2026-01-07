@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --sourcemap",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -40,6 +40,7 @@
     "openapi:html": "tsx src/openapi/html.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.958.0",
     "@hono/node-server": "^1.10.3",
     "@hono/zod-validator": "^0.1.11",
     "@simplewebauthn/server": "^13.2.2",
@@ -50,6 +51,7 @@
     "knex": "^3.1.0",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.1",
+    "officeparser": "^6.0.1",
     "openai": "^6.1.0",
     "pg": "^8.12.0",
     "pino": "^9.1.0",

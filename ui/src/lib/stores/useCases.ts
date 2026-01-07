@@ -69,13 +69,15 @@ export const fetchUseCases = async (folderId?: string): Promise<UseCase[]> => {
 
 export const generateUseCases = async (
   input: string,
-  createNewFolder: boolean,
-  organizationId?: string
+  organizationId?: string,
+  folderId?: string,
+  useCaseCount?: number
 ): Promise<{ created_folder_id?: string; created_use_case_ids: string[]; summary: string }> => {
   return apiPost('/use-cases/generate', {
     input,
-    create_new_folder: createNewFolder,
-    organization_id: organizationId
+    organization_id: organizationId,
+    folder_id: folderId,
+    use_case_count: useCaseCount
   });
 };
 

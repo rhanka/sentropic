@@ -93,7 +93,7 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
   - GET `/api/v1/organizations`
     - Response 200: `{ items: Organization[] }`
   - POST `/api/v1/use-cases/generate`
-    - Request JSON: `{ input: string; create_new_folder: boolean; organization_id?: string }`
+    - Request JSON: `{ input: string; folder_id?: string; organization_id?: string }`
     - Response 200: `{ success: true; status: "generating"; created_folder_id?: string; jobId: string }`
     - Effets serveur: création éventuelle d'un dossier (`folders.status="generating"`), enqueue job `usecase_list` (puis `usecase_detail`), persistance, streaming via `chat_stream_events` + SSE global.
   - Erreurs: 400 si `input` vide, 429/5xx pour OpenAI/serveur; UI affiche toasts d'erreur.
@@ -389,7 +389,7 @@ Endpoints principaux (API v1):
   - GET `/api/v1/use-cases/{id}` → retrieve
   - PUT `/api/v1/use-cases/{id}` → update
   - DELETE `/api/v1/use-cases/{id}` → delete
-  - POST `/api/v1/use-cases/generate` → démarre une génération (job queue): body `{ input, create_new_folder, organization_id? }` → retourne `{ created_folder_id, jobId }`
+  - POST `/api/v1/use-cases/generate` → démarre une génération (job queue): body `{ input, folder_id?, organization_id? }` → retourne `{ created_folder_id, jobId }`
 
 - Analytics
   - GET `/api/v1/analytics/summary?folder_id=...` → résumé statistiques
@@ -452,7 +452,7 @@ Paramètres: prompts, modèles, limites (retries/file parallèle) stockés en DB
 
 **Association prompts ↔ endpoints :**
 - `/api/v1/use-cases/generate` :
-  - Si `create_new_folder=true` : crée un dossier `folders.status="generating"` (nom/description peuvent être générés via prompt)
+  - Si `folder_id` n’est pas fourni : crée un dossier `folders.status="generating"` (nom/description peuvent être générés via prompt)
   - Enqueue job `usecase_list` (prompt liste), puis jobs `usecase_detail` (prompt détail)
   - Persistance dans `use_cases.data` (JSONB) + events de stream `chat_stream_events`
 - `/api/v1/organizations/{id}/enrich` : enqueue job `organization_enrich` (prompt organisation)
@@ -462,7 +462,7 @@ Paramètres: prompts, modèles, limites (retries/file parallèle) stockés en DB
 
 ```mermaid
 flowchart TD
-  A[Home form submit] -->|input, create_new_folder, organization_id?| B{create_new_folder?}
+  A[Home form submit] -->|input, folder_id?, organization_id?| B{folder_id?}
   B -- yes --> C[Prompt: folder_name_prompt]
   C --> D[POST /api/v1/folders]
   B -- no --> D

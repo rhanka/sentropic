@@ -10,6 +10,7 @@ import { adminRouter } from './admin';
 import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { chatRouter } from './chat';
+import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
@@ -45,6 +46,10 @@ apiRouter.route('/streams', streamsRouter);
 // Chat routes (require editor role or higher)
 apiRouter.use('/chat/*', requireAuth, requireEditor);
 apiRouter.route('/chat', chatRouter);
+
+// Documents routes (require editor role or higher)
+apiRouter.use('/documents/*', requireAuth, requireEditor);
+apiRouter.route('/documents', documentsRouter);
 
 // Admin routes (require admin_org or admin_app)
 apiRouter.use('/settings/*', requireAuth, requireAdmin);

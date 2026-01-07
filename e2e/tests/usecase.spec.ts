@@ -1,159 +1,64 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Gestion des cas d\'usage', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/cas-usage');
-    await page.waitForLoadState('domcontentloaded');
-  });
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 
-  test('devrait afficher la page des cas d\'usage', async ({ page }) => {
-    await expect(page).toHaveURL('/cas-usage');
-    await expect(page.locator('h1')).toContainText('Cas d\'usage');
-  });
-
-  test('devrait afficher la liste des cas d\'usage', async ({ page }) => {
-    // Aller à la page des cas d'usage
-    await page.goto('/cas-usage');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Attendre que la page se charge complètement
-    await page.waitForSelector('h1:has-text("Cas d\'usage")', { timeout: 2000 });
-    
-    // Vérifier qu'on est sur la bonne page
-    await expect(page.locator('h1')).toContainText('Cas d\'usage');
-    
-    // Vérifier que la page contient du contenu (au minimum le titre)
-    await expect(page.locator('h1')).toBeVisible();
-  });
-
-  test('devrait afficher les cartes de cas d\'usage avec les bonnes informations', async ({ page }) => {
-    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
-    
-    if (await useCaseCards.count() > 0) {
-      const firstCard = useCaseCards.first();
-      
-      // Vérifier les éléments de base
-      await expect(firstCard.locator('h2.text-xl.font-medium')).toBeVisible();
-      
-      // Vérifier les scores de valeur et complexité
-      await expect(firstCard.locator('text=Valeur:')).toBeVisible();
-      await expect(firstCard.locator('text=Complexité:')).toBeVisible();
-      
-      // Vérifier les boutons d'action
-      await expect(firstCard.locator('button[title="Voir les détails"]')).toBeVisible();
-      await expect(firstCard.locator('button[title="Modifier"]')).toBeVisible();
-      await expect(firstCard.locator('button[title="Supprimer"]')).toBeVisible();
-    }
-  });
-
-  test('devrait afficher les différents statuts des cas d\'usage', async ({ page }) => {
-    const statusBadges = page.locator('.inline-flex.items-center.px-2.py-1.rounded-full');
-    
-    if (await statusBadges.count() > 0) {
-      // Vérifier qu'il y a au moins un badge de statut
-      await expect(statusBadges.first()).toBeVisible();
-      
-      // Vérifier les différents types de statuts possibles
-      const statusTexts = await statusBadges.allTextContents();
-      const possibleStatuses = ['Actif', 'Brouillon', 'Génération...', 'Détail en cours'];
-      
-      const hasValidStatus = statusTexts.some(text => 
-        possibleStatuses.some(status => text.includes(status))
-      );
-      
-      expect(hasValidStatus).toBeTruthy();
-    }
-  });
-
-  test('devrait permettre de cliquer sur un cas d\'usage pour voir les détails', async ({ page }) => {
-    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
-    
-    if (await useCaseCards.count() > 0) {
-      const firstCard = useCaseCards.first();
-      
-      // Vérifier que la carte n'est pas en état de génération
-      const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible();
-      
-      if (!isGenerating) {
-        // Cliquer sur la carte
-        await firstCard.click();
-        
-        // Attendre la redirection
-        await page.waitForLoadState('domcontentloaded');
-        
-        // Vérifier qu'on est sur une page de détail
-        const currentUrl = page.url();
-        expect(currentUrl).toMatch(/\/cas-usage\/[a-zA-Z0-9-]+/);
+  const waitForUseCaseInApi = async (page: any, folderId: string, useCaseId: string, timeoutMs = 30_000) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const res = await page.request.get(`${API_BASE_URL}/api/v1/use-cases?folder_id=${encodeURIComponent(folderId)}`);
+      if (res.ok()) {
+        const body = await res.json().catch(() => null);
+        const items: any[] = (body as any)?.items ?? [];
+        if (items.some((uc) => String(uc?.id ?? '') === useCaseId)) return;
       }
+      await page.waitForTimeout(500);
     }
+    throw new Error(`Use case ${useCaseId} introuvable via API après ${timeoutMs}ms`);
+  };
+
+  test('redirige /cas-usage vers la nouvelle liste /dossiers (ou /dossiers/[id])', async ({ page }) => {
+    await page.goto('/cas-usage');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForURL(/\/dossiers(\/[^/]+)?$/, { timeout: 10_000 });
+    expect(page.url()).toMatch(/\/dossiers(\/[^/]+)?$/);
   });
 
-  test('devrait permettre de supprimer un cas d\'usage', async ({ page }) => {
-    const deleteButtons = page.locator('button[title="Supprimer"]');
-    
-    if (await deleteButtons.count() > 0) {
-      const firstDeleteButton = deleteButtons.first();
-      
-      // Cliquer sur supprimer
-      await firstDeleteButton.click();
-      
-      // Vérifier que la confirmation apparaît
-      page.on('dialog', dialog => {
-        expect(dialog.type()).toBe('confirm');
-        expect(dialog.message()).toContain('supprimer');
-        dialog.accept();
-      });
-    }
-  });
+  test('affiche la liste de cas d’usage sur /dossiers/[id] et permet d’ouvrir un détail', async ({ page }) => {
+    // IMPORTANT: le suite E2E contient des tests destructifs (suppression dossiers).
+    // Pour éviter la dépendance au seed global et les flaky, on crée un dossier + un cas d’usage dédiés.
+    const folderName = `E2E UseCases ${Date.now()}`;
+    const createFolderRes = await page.request.post(`${API_BASE_URL}/api/v1/folders`, {
+      data: { name: folderName, description: 'Folder created by usecase.spec.ts' }
+    });
+    expect(createFolderRes.ok()).toBeTruthy();
+    const createdFolder = await createFolderRes.json();
+    const folderId = String(createdFolder?.id || '');
+    expect(folderId).toBeTruthy();
 
-  test('devrait afficher les étoiles de valeur et complexité', async ({ page }) => {
-    const useCaseCards = page.locator('article.rounded.border.border-slate-200');
-    
-    if (await useCaseCards.count() > 0) {
-      const firstCard = useCaseCards.first();
-      
-      // Vérifier les étoiles de valeur (jaunes)
-      const valueStars = firstCard.locator('svg.text-yellow-400');
-      await expect(valueStars).toHaveCount(5);
-      
-      // Vérifier les étoiles de complexité (rouges)
-      const complexityStars = firstCard.locator('svg.text-red-500');
-      await expect(complexityStars).toHaveCount(5);
-    }
-  });
+    const useCaseName = `UC ${Date.now()}`;
+    const createUseCaseRes = await page.request.post(`${API_BASE_URL}/api/v1/use-cases`, {
+      data: { name: useCaseName, description: 'Use case created by usecase.spec.ts', folderId }
+    });
+    expect(createUseCaseRes.ok()).toBeTruthy();
+    const createdUseCase = await createUseCaseRes.json();
+    const useCaseId = String(createdUseCase?.id || '');
+    expect(useCaseId).toBeTruthy();
 
-  test('devrait gérer les cas d\'usage en cours de génération', async ({ page }) => {
-    const generatingCards = page.locator('article.opacity-60.cursor-not-allowed');
-    
-    if (await generatingCards.count() > 0) {
-      const firstGeneratingCard = generatingCards.first();
-      
-      // Vérifier que la carte est désactivée
-      await expect(firstGeneratingCard).toHaveClass(/opacity-60/);
-      await expect(firstGeneratingCard).toHaveClass(/cursor-not-allowed/);
-      
-      // Vérifier le badge de génération
-      const generatingBadge = firstGeneratingCard.locator('text=Génération...');
-      await expect(generatingBadge).toBeVisible();
-    }
-  });
+    // Stabiliser: attendre que l’API liste bien le cas d’usage (évite les flakys en charge)
+    await waitForUseCaseInApi(page, folderId, useCaseId, 30_000);
 
-  test('devrait afficher un message si aucun dossier n\'est sélectionné', async ({ page }) => {
-    // Vérifier s'il y a un message d'information
-    const infoMessage = page.locator('text=Veuillez sélectionner un dossier pour voir ses cas d\'usage');
-    
-    if (await infoMessage.isVisible()) {
-      await expect(infoMessage).toBeVisible();
-    }
-  });
+    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await page.waitForLoadState('domcontentloaded');
 
-  test('devrait gérer le chargement des cas d\'usage', async ({ page }) => {
-    // Vérifier s'il y a un indicateur de chargement
-    const loadingIndicator = page.locator('.animate-spin');
-    const loadingText = page.locator('text=Chargement des cas d\'usage...');
-    
-    if (await loadingIndicator.isVisible()) {
-      await expect(loadingText).toBeVisible();
-    }
+    // La liste des cas d’usage est sur la page dossier
+    const useCaseCard = page.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
+    await expect(useCaseCard).toBeVisible({ timeout: 30_000 });
+
+    await Promise.all([
+      page.waitForURL(new RegExp(`/cas-usage/${useCaseId}$`), { timeout: 10_000 }),
+      useCaseCard.click()
+    ]);
+    expect(page.url()).toMatch(new RegExp(`/cas-usage/${useCaseId}$`));
   });
 });

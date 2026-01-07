@@ -4,6 +4,11 @@ import { generateTestVerificationToken } from '../utils/auth-helper';
 
 describe('Rate Limiting Tests', () => {
   it('should enforce rate limiting on auth login options', async () => {
+    // Rate limiting is disabled by default in test env (see env.ts: NODE_ENV=test => DISABLE_RATE_LIMIT=true)
+    // so this test is only meaningful when explicitly enabled.
+    if (process.env.DISABLE_RATE_LIMIT && process.env.DISABLE_RATE_LIMIT !== 'false' && process.env.DISABLE_RATE_LIMIT !== '0') {
+      return;
+    }
     // Make multiple rapid requests to trigger rate limiting
     const responses = [];
     for (let i = 0; i < 15; i++) { // More than the 10 limit
@@ -24,6 +29,9 @@ describe('Rate Limiting Tests', () => {
   });
 
   it('should enforce rate limiting on auth register options', async () => {
+    if (process.env.DISABLE_RATE_LIMIT && process.env.DISABLE_RATE_LIMIT !== 'false' && process.env.DISABLE_RATE_LIMIT !== '0') {
+      return;
+    }
     // Make multiple rapid requests to trigger rate limiting
     // Note: For new users, we need verification tokens, but rate limiting is checked first
     const responses = [];
@@ -50,6 +58,9 @@ describe('Rate Limiting Tests', () => {
   });
 
   it('should enforce rate limiting on magic link requests', async () => {
+    if (process.env.DISABLE_RATE_LIMIT && process.env.DISABLE_RATE_LIMIT !== 'false' && process.env.DISABLE_RATE_LIMIT !== '0') {
+      return;
+    }
     // Make multiple rapid requests to trigger rate limiting
     const responses = [];
     for (let i = 0; i < 5; i++) { // More than the 3 limit

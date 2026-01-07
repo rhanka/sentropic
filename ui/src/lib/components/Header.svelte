@@ -87,6 +87,16 @@
     e.stopPropagation();
   };
 
+  const closeDockedChatIfMobileFullScreen = () => {
+    // When the chat is docked in mobile mode, it takes 100vw and hides the newly navigated page.
+    // Close the chat so the user can immediately see the destination.
+    if (typeof window === 'undefined') return;
+    const isMobileFullScreenDock =
+      $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss === '100vw';
+    if (!isMobileFullScreenDock) return;
+    window.dispatchEvent(new CustomEvent('topai:close-chat'));
+  };
+
   const onLocaleChange = (event: Event) => {
     const target = event.target as HTMLSelectElement;
     setLocale(target.value);
@@ -269,7 +279,10 @@
             class="rounded px-3 py-2 transition {isDisabled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-100'}"
               on:click={(e) => {
                 onClickNavItem(e, item.href);
-                if (!navDisabledByHref[item.href]) closeAllMenus();
+                if (!navDisabledByHref[item.href]) {
+                  closeDockedChatIfMobileFullScreen();
+                  closeAllMenus();
+                }
               }}
             >{$_(item.label)}</a
             >
@@ -343,7 +356,7 @@
             <div class="mt-2 grid gap-1 px-3 pb-2">
               {#if $session.user?.id === 'unknown'}
                 <button
-                  on:click={() => { closeAllMenus(); retrySessionInit(); }}
+                  on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); retrySessionInit(); }}
                   class="block w-full text-left rounded px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
                 >
                   🔄 Actualiser les informations
@@ -353,7 +366,7 @@
                 href="/auth/devices"
                 class="block rounded px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 class:active-link={$currentPath === '/auth/devices'}
-                on:click={closeAllMenus}
+                on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
               >
                 Mes appareils
               </a>
@@ -361,12 +374,12 @@
                 href="/parametres"
                 class="block rounded px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 class:active-link={$currentPath === '/parametres'}
-                on:click={closeAllMenus}
+                on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
               >
                 Paramètres
               </a>
               <button
-                on:click={() => { closeAllMenus(); logout(); }}
+                on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); logout(); }}
                 class="block w-full text-left rounded px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 Déconnexion
@@ -374,7 +387,11 @@
             </div>
           {/if}
         {:else}
-          <a href="/auth/login" class="block rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 transition" on:click={closeAllMenus}>
+          <a
+            href="/auth/login"
+            class="block rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 transition"
+            on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
+          >
             Connexion
           </a>
         {/if}

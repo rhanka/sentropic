@@ -20,6 +20,14 @@ help:
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z0-9_.-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32m%-25s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: ps
+ps: ## Show docker compose services status (dev stack)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml ps
+
+.PHONY: ps-all
+ps-all: ## Show docker compose services status (dev + test overrides)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml ps
+
 version:
 	@echo "API_VERSION: $(API_VERSION)"
 	@echo "UI_VERSION: $(UI_VERSION)"
@@ -436,7 +444,7 @@ db-generate: ## Generate migration files from schema.ts changes (uses exec if co
 	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate; \
 	else \
-		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api npm run db:generate; \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate"; \
 	fi
 
 .PHONY: db-migrate

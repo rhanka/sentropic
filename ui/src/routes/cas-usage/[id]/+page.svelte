@@ -12,6 +12,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { Printer, Trash2 } from '@lucide/svelte';
+  import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let useCase: any = undefined;
   let error = '';
@@ -143,7 +144,11 @@
     try {
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
-      goto('/cas-usage');
+      if (useCase.folderId) {
+        goto(`/dossiers/${useCase.folderId}`);
+      } else {
+        goto('/dossiers');
+      }
     } catch (err) {
       console.error('Failed to delete use case:', err);
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
@@ -225,5 +230,7 @@
             </button>
       </svelte:fragment>
     </UseCaseDetail>
+
+    <DocumentsBlock contextType="usecase" contextId={useCase.id} />
   {/if}
 </section>

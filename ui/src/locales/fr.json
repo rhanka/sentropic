@@ -10,5 +10,43 @@
     "data": "Données",
     "settings": "Paramètres",
     "admin": "Admin"
+  },
+  "documents": {
+    "title": "Documents",
+    "subtitle": "Ajoutez des documents au contexte. Un résumé est généré automatiquement.",
+    "refresh": "Rafraîchir",
+    "loading": "Chargement…",
+    "empty": "Aucun document pour le moment.",
+    "table": {
+      "name": "Nom",
+      "size": "Taille",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "upload": {
+      "cta": "Ajouter un document",
+      "loading": "Upload…",
+      "success": "Document envoyé. Le résumé va être généré."
+    },
+    "action": {
+      "download": "Télécharger",
+      "showSummary": "Afficher le résumé",
+      "hideSummary": "Masquer le résumé"
+    },
+    "summary": {
+      "empty": "Résumé indisponible."
+    },
+    "status": {
+      "uploaded": "Envoyé",
+      "processing": "En cours",
+      "ready": "Prêt",
+      "failed": "Échec",
+      "unknown": "Inconnu"
+    },
+    "delete": {
+      "cta": "Supprimer",
+      "confirm": "Supprimer ce document ?",
+      "success": "Document supprimé."
+    }
   }
 }

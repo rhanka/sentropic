@@ -2,18 +2,15 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { apiPost, apiDelete } from '$lib/utils/api';
+  import { apiDelete } from '$lib/utils/api';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { FileText, Trash2 } from '@lucide/svelte';
+  import { FileText, Trash2, CirclePlus } from '@lucide/svelte';
 
-  let showCreate = false;
-  let name = '';
-  let description = '';
   let isLoading = false;
   const HUB_KEY = 'foldersPage';
 
@@ -121,6 +118,13 @@
   // Polling désactivé: dossiers/cas d'usage se mettent à jour via SSE (folder_update/usecase_update)
 
   const handleFolderClick = (folderId: string, folderStatus: string) => {
+    // Draft: retourner sur la vue "new" (édition brouillon + icônes IA/Créer/Annuler)
+    if (folderStatus === 'draft') {
+      currentFolderId.set(folderId);
+      goto(`/dossier/new?draft=${encodeURIComponent(folderId)}`);
+      return;
+    }
+
     // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
     if (folderStatus === 'generating') {
       const folderUseCases = $useCasesStore.filter(uc => uc.folderId === folderId);
@@ -129,44 +133,13 @@
       }
     }
     
-    // Naviguer vers la vue des cas d'usage
-    goto(`/cas-usage?folder=${folderId}`);
+    // Naviguer vers la vue dossier (qui contient la liste des cas d'usage)
+    currentFolderId.set(folderId);
+    goto(`/dossiers/${folderId}`);
   };
 
   const getUseCaseCount = (folderId: string) => {
     return $useCasesStore.filter(uc => uc.folderId === folderId).length;
-  };
-
-  const createFolder = async () => {
-    if (!name.trim()) {
-      addToast({
-        type: 'error',
-        message: 'Veuillez saisir un nom pour le dossier'
-      });
-      return;
-    }
-    
-    try {
-      const newFolder = await apiPost('/folders', { name, description });
-      foldersStore.update((items) => [...items, newFolder]);
-      
-      // Sélectionner automatiquement le nouveau dossier
-      currentFolderId.set(newFolder.id);
-      
-      name = '';
-      description = '';
-      showCreate = false;
-      addToast({
-        type: 'success',
-        message: 'Dossier créé avec succès !'
-      });
-    } catch (error) {
-      console.error('Failed to create folder:', error);
-      addToast({
-        type: 'error',
-        message: 'Erreur lors de la création du dossier'
-      });
-    }
   };
 
   const handleDeleteFolder = async (id: string) => {
@@ -214,8 +187,13 @@
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Dossiers</h1>
     {#if !$adminReadOnlyScope}
-      <button class="rounded bg-primary px-4 py-2 text-white" on:click={() => (showCreate = true)}>
-        Nouveau dossier
+      <button
+        class="rounded p-2 transition text-primary hover:bg-slate-100"
+        on:click={() => goto('/dossier/new')}
+        title="Nouveau dossier"
+        aria-label="Nouveau dossier"
+      >
+        <CirclePlus class="w-5 h-5" />
       </button>
     {/if}
   </div>
@@ -227,6 +205,7 @@
         <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {#each $foldersStore as folder}
             {@const isGenerating = folder.status === 'generating'}
+            {@const isDraft = folder.status === 'draft'}
             {@const useCaseCount = getUseCaseCount(folder.id)}
             {@const canClick = !isGenerating || useCaseCount > 0}
             <article 
@@ -285,10 +264,10 @@
               <!-- Footer -->
               <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
                 <span class="text-xs text-slate-400 whitespace-nowrap">
-                  {#if $currentFolderId === folder.id}
-                    Sélectionné
+                  {#if isDraft}
+                    Brouillon
                   {:else}
-                  Cliquez pour sélectionner
+                    Ouvrir
                   {/if}
                 </span>
                 <div class="flex items-center gap-2 flex-wrap">
@@ -304,31 +283,5 @@
         </div>
       {/if}
 
-  {#if showCreate}
-    <div class="fixed inset-0 bg-slate-900/40">
-      <div class="mx-auto mt-24 max-w-lg rounded bg-white p-6 shadow-lg">
-        <h2 class="text-lg font-semibold">Créer un dossier</h2>
-        <div class="mt-4 space-y-3">
-          <input
-            class="w-full rounded border border-slate-300 p-2"
-            placeholder="Nom du dossier"
-            bind:value={name}
-          />
-          <textarea
-            class="h-32 w-full rounded border border-slate-300 p-2"
-            placeholder="Description"
-            bind:value={description}
-          ></textarea>
-        </div>
-        <div class="mt-6 flex justify-end gap-2">
-          <button class="rounded border border-slate-200 px-4 py-2" on:click={() => (showCreate = false)}>
-            Annuler
-          </button>
-          <button class="rounded bg-primary px-4 py-2 text-white" on:click={createFolder}>
-            Créer
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+  <!-- Création déplacée vers /dossier/new (plus de modal ici) -->
 </section>

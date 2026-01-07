@@ -17,7 +17,7 @@ export type Folder = {
     synthese_executive?: string;
     references?: Array<{ title: string; url: string }>;
   } | null;
-  status?: 'generating' | 'completed';
+  status?: 'draft' | 'generating' | 'completed';
   createdAt: string;
 };
 
@@ -77,6 +77,18 @@ export const fetchFolders = async (): Promise<Folder[]> => {
 
 export const createFolder = async (folder: Omit<Folder, 'id' | 'createdAt'>): Promise<Folder> => {
   return apiPost<Folder>('/folders', folder);
+};
+
+export const createDraftFolder = async (payload: {
+  name: string;
+  description?: string;
+  organizationId?: string | null;
+}): Promise<Folder> => {
+  return apiPost<Folder>('/folders/draft', {
+    name: payload.name,
+    description: payload.description,
+    organizationId: payload.organizationId || undefined,
+  });
 };
 
 export const updateFolder = async (id: string, folder: Partial<Folder>): Promise<Folder> => {

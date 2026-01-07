@@ -499,7 +499,8 @@ useCasesRouter.delete('/:id', requireEditor, async (c) => {
 
 const generateInput = z.object({
   input: z.string().min(1),
-  create_new_folder: z.boolean(),
+  folder_id: z.string().optional(),
+  use_case_count: z.coerce.number().int().min(1).max(25).optional(),
   organization_id: z.string().optional(),
   model: z.string().optional()
 });
@@ -507,7 +508,7 @@ const generateInput = z.object({
 useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId } = c.get('user') as { workspaceId: string };
-    const { input, create_new_folder, organization_id, model } = c.req.valid('json');
+    const { input, folder_id, use_case_count, organization_id, model } = c.req.valid('json');
     const organizationId = organization_id;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
@@ -516,8 +517,37 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
     
     let folderId: string | undefined;
     
-    // Créer un dossier si demandé
-    if (create_new_folder) {
+    // Générer sur un dossier existant si fourni (ex: /dossier/new crée un brouillon)
+    if (folder_id) {
+      folderId = folder_id;
+
+      const [folder] = await db
+        .select({ id: folders.id })
+        .from(folders)
+        .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+        .limit(1);
+      if (!folder) return c.json({ message: 'Not found' }, 404);
+
+      if (organizationId) {
+        const [org] = await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
+          .limit(1);
+        if (!org) return c.json({ message: 'Not found' }, 404);
+      }
+
+      await db
+        .update(folders)
+        .set({
+          status: 'generating',
+          // Garder la description synchronisée avec l'input (source de vérité côté UI pour /dossier/new)
+          description: input
+        })
+        .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)));
+      await notifyFolderEvent(folderId);
+    } else {
+      // Sinon, créer un nouveau dossier (comportement par défaut de /use-cases/generate)
       const folderName = `Génération - ${new Date().toLocaleDateString('fr-FR')}`;
       const folderDescription = `Dossier généré automatiquement pour: ${input}`;
       
@@ -550,14 +580,16 @@ useCasesRouter.post('/generate', requireEditor, zValidator('json', generateInput
       folderId: folderId!,
       input,
       organizationId,
-      model: selectedModel
-    }, { workspaceId });
+      model: selectedModel,
+      useCaseCount: use_case_count
+    }, { workspaceId, maxRetries: 1 });
     
     return c.json({
       success: true,
       message: 'Génération démarrée',
       status: 'generating',
-      created_folder_id: folderId,
+      folder_id: folderId,
+      created_folder_id: folder_id ? undefined : folderId,
       jobId
     });
     
@@ -632,7 +664,7 @@ useCasesRouter.post('/:id/detail', requireEditor, zValidator('json', detailInput
       useCaseName,
       folderId: useCase.folderId,
       model: selectedModel
-    }, { workspaceId });
+    }, { workspaceId, maxRetries: 1 });
     
     return c.json({
       success: true,

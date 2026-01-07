@@ -338,6 +338,58 @@ export const contextModificationHistory = pgTable('context_modification_history'
   sequenceIdx: index('context_modification_history_sequence_idx').on(table.contextType, table.contextId, table.sequence),
 }));
 
+// Chatbot Lot B: attach documents to a business context (organization/folder/usecase).
+// Storage is external (S3-compatible); DB stores metadata + summary + status.
+export const contextDocuments = pgTable('context_documents', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id)
+    .default(ADMIN_WORKSPACE_ID),
+  contextType: text('context_type').notNull(), // 'organization' | 'folder' | 'usecase'
+  contextId: text('context_id').notNull(),
+  filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  storageKey: text('storage_key').notNull(), // object key in S3-compatible storage
+  status: text('status').notNull().default('uploaded'), // 'uploaded' | 'processing' | 'ready' | 'failed'
+  // Document metadata / summaries are stored in JSONB to avoid schema churn (like organizations/use_cases)
+  // Suggested structure:
+  // - summary: string (résumé général)
+  // - summaryLang: 'fr' | 'en'
+  // - detailedSummary: string (optionnel, ~10k mots)
+  // - detailedSummaryLang: 'fr' | 'en'
+  // - extracted: { title?: string; pages?: number; words?: number }
+  // - prompts: { summaryPromptId?: string; summaryPromptVersionId?: string; detailedPromptId?: string; detailedPromptVersionId?: string }
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
+  jobId: text('job_id').references(() => jobQueue.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  version: integer('version').notNull().default(1),
+}, (table) => ({
+  workspaceIdIdx: index('context_documents_workspace_id_idx').on(table.workspaceId),
+  contextIdx: index('context_documents_context_idx').on(table.contextType, table.contextId),
+  statusIdx: index('context_documents_status_idx').on(table.status),
+}));
+
+// Optional: keep history of uploads/summaries per document.
+export const contextDocumentVersions = pgTable('context_document_versions', {
+  id: text('id').primaryKey(),
+  documentId: text('document_id')
+    .notNull()
+    .references(() => contextDocuments.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  storageKey: text('storage_key').notNull(),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  documentIdIdx: index('context_document_versions_document_id_idx').on(table.documentId),
+  documentVersionUnique: uniqueIndex('context_document_versions_document_id_version_unique').on(table.documentId, table.version),
+}));
+
 export type UserRow = typeof users.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type UserSessionRow = typeof userSessions.$inferSelect;
@@ -350,3 +402,5 @@ export type ChatContextRow = typeof chatContexts.$inferSelect;
 export type ChatStreamEventRow = typeof chatStreamEvents.$inferSelect;
 export type ChatGenerationTraceRow = typeof chatGenerationTraces.$inferSelect;
 export type ContextModificationHistoryRow = typeof contextModificationHistory.$inferSelect;
+export type ContextDocumentRow = typeof contextDocuments.$inferSelect;
+export type ContextDocumentVersionRow = typeof contextDocumentVersions.$inferSelect;

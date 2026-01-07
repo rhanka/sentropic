@@ -5,6 +5,7 @@ import {
   currentFolderId, 
   fetchFolders, 
   createFolder, 
+  createDraftFolder,
   updateFolder, 
   deleteFolder
 } from '../../src/lib/stores/folders';
@@ -83,7 +84,8 @@ describe('Folders Store', () => {
 
   describe('createFolder', () => {
     it('should create folder successfully', async () => {
-      const newFolder = { name: 'New Folder', companyId: 'company1' };
+      // Note: backend stores organizationId; keep payload minimal here
+      const newFolder = { name: 'New Folder', description: '' };
       const createdFolder = { id: '1', ...newFolder };
       
       mockFetchJsonOnce(createdFolder);
@@ -94,10 +96,34 @@ describe('Folders Store', () => {
     });
   });
 
+  describe('createDraftFolder', () => {
+    it('should create a draft folder successfully', async () => {
+      const createdFolder = {
+        id: 'draft_1',
+        name: 'Brouillon',
+        description: 'Contexte',
+        organizationId: 'org_1',
+        status: 'draft',
+        createdAt: new Date().toISOString()
+      };
+
+      mockFetchJsonOnce(createdFolder);
+
+      const result = await createDraftFolder({
+        name: 'Brouillon',
+        description: 'Contexte',
+        organizationId: 'org_1'
+      });
+
+      expect(result).toEqual(createdFolder);
+      expect(result.status).toBe('draft');
+    });
+  });
+
   describe('updateFolder', () => {
     it('should update folder successfully', async () => {
       const updates = { name: 'Updated Folder' };
-      const updatedFolder = { id: '1', name: 'Updated Folder', companyId: 'company1' };
+      const updatedFolder = { id: '1', name: 'Updated Folder', description: '', createdAt: new Date().toISOString() };
       
       mockFetchJsonOnce(updatedFolder);
 
@@ -157,7 +183,7 @@ describe('Folders Store', () => {
     });
 
     it('should update folders store', () => {
-      const folders = [{ id: '1', name: 'Folder 1', companyId: 'company1' }];
+      const folders = [{ id: '1', name: 'Folder 1', description: '', createdAt: new Date().toISOString() }];
       foldersStore.set(folders);
       expect(get(foldersStore)).toEqual(folders);
     });

@@ -9,6 +9,23 @@ setupDebugBuffer();
 test.setTimeout(8 * 60_000);
 
 test.describe.serial('Génération IA', () => {
+  // Ces tests sont coûteux (jobs async, appels externes mockés/ratelimités). Les retries globales (retries: 2)
+  // triplent inutilement la durée et masquent les flakys. On les désactive pour ce fichier.
+  test.describe.configure({ retries: 0 });
+
+  const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+  test.beforeEach(async ({ page }) => {
+    // Stabiliser: éviter que d'autres specs laissent l'admin en scope "lecture seule"
+    await page.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('adminWorkspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, ADMIN_WORKSPACE_ID);
+  });
+
   const waitForJobTerminal = async (
     page: any,
     jobId: string,
@@ -65,23 +82,21 @@ test.describe.serial('Génération IA', () => {
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
 
-    // Cliquer sur le bouton Ajouter
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    // Aller à la page de création (bouton icône + aria-label)
+    await page.getByRole('button', { name: 'Créer une organisation' }).click();
     await page.waitForURL('/organisations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
-    // Remplir le nom de l'entreprise (BRP - déjà modifié par l'utilisateur)
-    const titleEl = page.locator('h1').first();
-    await expect(titleEl).toBeVisible();
-    await titleEl.click();
-    await page.keyboard.type('BRP (Bombardier)');
-    await page.keyboard.press('Enter');
+    // Remplir le nom de l'entreprise (EditableInput)
+    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
+    await expect(nameInput).toBeVisible();
+    await nameInput.fill('BRP (Bombardier)');
     
     // Attendre que la valeur soit propagée (réactivité Svelte)
     await page.waitForTimeout(500);
     
-    // Utiliser le title pour cibler le bouton IA
-    const aiButton = page.locator('button[title="Enrichir automatiquement avec l\'IA"]');
+    // Bouton IA (icône)
+    const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]').first();
     await expect(aiButton).toBeEnabled({ timeout: 30_000 });
 
     const enrichResPromise = page.waitForResponse((res) => {
@@ -145,33 +160,41 @@ test.describe.serial('Génération IA', () => {
     await expect(commencerLink).toBeVisible({ timeout: 30_000 });
     debug('Lien Commencer trouvé, clic...');
     await commencerLink.click();
-    await page.waitForURL('/home', { timeout: 30_000 });
-    debug(`Après clic - URL: ${page.url()}`);
+    // /home redirige désormais vers /dossier/new
+    await page.waitForURL(/\/dossier\/new$/, { timeout: 30_000 });
+    debug(`Après clic + redirection - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
-    debug('Page /home chargée');
+    debug('Page /dossier/new chargée');
     
     // Vérifier à nouveau la session
-    const urlAfterHome = page.url();
-    debug(`URL après chargement /home: ${urlAfterHome}`);
-    if (urlAfterHome.includes('/auth/login')) {
-      debug('ERROR: Session révoquée après navigation vers /home');
+    const urlAfterStart = page.url();
+    debug(`URL après chargement /dossier/new: ${urlAfterStart}`);
+    if (urlAfterStart.includes('/auth/login')) {
+      debug('ERROR: Session révoquée après navigation');
       throw new Error('Session révoquée - utilisateur non authentifié');
     }
     
     // Attendre que les organisations soient chargées (le select n'est visible que quand isLoading = false)
-    debug('Recherche de la textarea...');
-    const textarea = page.locator('textarea').first();
-    await expect(textarea).toBeVisible({ timeout: 30_000 });
-    debug('Textarea trouvée, remplissage...');
-    await textarea.fill('Génère 3 cas d\'usage pour l\'extension de l\'usine de Boucherville');
-    debug('Textarea remplie');
+    debug('Recherche de l’éditeur Contexte (TipTap / ProseMirror)...');
+    const contextSection = page.locator('div.space-y-2').filter({ hasText: 'Contexte' }).first();
+    const proseMirror = contextSection.locator('.ProseMirror').first();
+    await expect(proseMirror).toBeVisible({ timeout: 30_000 });
+    debug('Éditeur trouvé, remplissage...');
+    await proseMirror.click();
+    // TipTap utilise contenteditable; fill peut être capricieux selon le navigateur => keyboard.
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type("Génère 3 cas d'usage pour l'extension de l'usine de Boucherville");
+    debug('Contexte rempli');
     
     // Sélectionner l'organisation contenant Delpharm
     // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
     debug('Recherche du select organisation...');
-    // Note: on the /home page the "label" is a <span> inside a <label> without for/id,
-    // so Playwright getByLabel() is not reliable here. Target the select inside that label.
-    const organizationSelect = page.locator('label:has-text("Organisation (optionnel)") select');
+    // /dossier/new: label visuel (div) + select dans le même bloc
+    const organizationSelect = page
+      .locator('div.space-y-2')
+      .filter({ hasText: 'Organisation (optionnel)' })
+      .locator('select')
+      .first();
     await expect(organizationSelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading organizations
     debug('Select trouvé');
     
@@ -207,9 +230,11 @@ test.describe.serial('Génération IA', () => {
       throw new Error('Option Delpharm trouvée mais sans valeur');
     }
     
-    // Cliquer sur "Générer vos cas d'usage"
-    debug('Recherche du bouton "Générer vos cas d\'usage"...');
-    const generateButton = page.getByRole('button', { name: 'Générer vos cas d\'usage' });
+    // Démarrer la génération via le bouton IA (icône)
+    debug('Recherche du bouton "IA"...');
+    // Attention: le widget "Chat / Jobs IA" contient aussi "IA" dans son nom accessible.
+    // On cible donc explicitement le bouton de génération (title/aria-label "IA").
+    const generateButton = page.locator('button[title="IA"][aria-label="IA"]').first();
     await expect(generateButton).toBeVisible({ timeout: 30_000 });
 
     const generateResPromise = page.waitForResponse((res) => {
@@ -225,7 +250,7 @@ test.describe.serial('Génération IA', () => {
     const generateRes = await generateResPromise;
     const genJson = await generateRes.json().catch(() => null);
     const genJobId = String((genJson as any)?.jobId ?? '').trim();
-    const folderId = String((genJson as any)?.created_folder_id ?? '').trim();
+    const folderId = String((genJson as any)?.folder_id ?? (genJson as any)?.created_folder_id ?? '').trim();
     debug(`Réponse /use-cases/generate: jobId=${genJobId} folderId=${folderId}`);
     if (!genJobId || !folderId) throw new Error(`Réponse generate invalide: ${JSON.stringify(genJson)}`);
     
@@ -242,15 +267,12 @@ test.describe.serial('Génération IA', () => {
     debug(`Job ${genJobId} terminal, attente d'au moins un use case terminé (folder=${folderId})...`);
     await waitForAnyUseCaseCompleted(page, folderId, 6 * 60_000);
 
-    // Navigation déterministe vers le listing des cas d'usage du dossier.
-    await page.goto(`/cas-usage?folder=${encodeURIComponent(folderId)}`);
+    // Navigation déterministe vers la page dossier (liste cas d'usage est sur /dossiers/[id])
+    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
     
-    // Vérifier le titre "Cas d'usage"
-    await expect(page.locator('h1')).toContainText('Cas d\'usage');
-    
     // Attendre une carte terminée et y naviguer
-    const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Cliquez pour voir les détails' }).first();
+    const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Valeur:' }).first();
     await expect(firstUseCaseCard).toBeVisible({ timeout: 60_000 });
     await firstUseCaseCard.click();
     await page.waitForURL(/\/cas-usage\/[a-zA-Z0-9-]+/, { timeout: 30_000 });

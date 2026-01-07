@@ -126,7 +126,6 @@ describe('AI Workflow - Complete Integration Test', () => {
       user.sessionToken!,
       {
         input,
-        create_new_folder: true,
         organization_id: createdOrganizationId,
         model: getTestModel()
       }

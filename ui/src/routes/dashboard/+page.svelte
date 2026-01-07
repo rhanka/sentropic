@@ -340,6 +340,9 @@
     ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
     : $useCasesStore;
 
+  // Scatter plot: n'afficher que les cas finalisés
+  $: completedUseCases = filteredUseCases.filter((uc) => uc.status === 'completed');
+
   // Statistiques
   $: stats = {
     total: filteredUseCases.length,
@@ -651,8 +654,8 @@
     </div>
   {:else}
     <!-- Contenu fusionné : statistiques, graphique, introduction -->
-    <!-- NOTE: le scatter plot ne doit pas être conditionné à la synthèse exécutive -->
-    {#if selectedFolderId && !isSummaryGenerating}
+    <!-- NOTE: le scatter plot doit être visible dès qu'un premier cas est disponible (même si le dossier / la synthèse sont en cours de génération). -->
+    {#if selectedFolderId}
       <div class="report-introduction">
         <!-- Statistiques -->
         <div class="grid gap-4 md:grid-cols-2">
@@ -797,7 +800,7 @@
           
           <div class="flex justify-center">
             <UseCaseScatterPlot 
-              useCases={filteredUseCases} 
+              useCases={completedUseCases} 
               {matrix} 
               bind:roiStats 
               bind:showROIQuadrant

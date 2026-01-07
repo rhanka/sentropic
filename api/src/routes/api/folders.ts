@@ -73,7 +73,10 @@ const folderInput = z.object({
   // Preferred naming
   organizationId: z.string().optional(),
   matrixConfig: matrixSchema.optional(),
-  executiveSummary: executiveSummaryDataSchema.optional()
+  executiveSummary: executiveSummaryDataSchema.optional(),
+  // Status is intentionally optional; default remains 'completed'.
+  // Used by the "draft folder" flow in UI (similar to organizations draft).
+  status: z.enum(['draft', 'generating', 'completed']).optional(),
 });
 
 export const foldersRouter = new Hono();
@@ -185,7 +188,8 @@ foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c
     name: payload.name,
     description: payload.description,
     organizationId,
-    matrixConfig: JSON.stringify(matrixToUse)
+    matrixConfig: JSON.stringify(matrixToUse),
+    status: payload.status ?? 'completed',
   });
   const [folder] = await db
     .select()
@@ -197,6 +201,60 @@ foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c
     matrixConfig: parseMatrix(folder.matrixConfig ?? null)
   }, 201);
 });
+
+// POST /api/v1/folders/draft - Create a folder as draft (so documents can be attached before generation)
+foldersRouter.post(
+  '/draft',
+  requireEditor,
+  zValidator(
+    'json',
+    z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      organizationId: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { name, description, organizationId } = c.req.valid('json');
+    const id = createId();
+
+    // Validate organization belongs to workspace (if provided)
+    if (organizationId) {
+      const [org] = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
+        .limit(1);
+      if (!org) {
+        return c.json({ message: 'Not found' }, 404);
+      }
+    }
+
+    await db.insert(folders).values({
+      id,
+      workspaceId,
+      name,
+      description,
+      organizationId,
+      matrixConfig: JSON.stringify(defaultMatrixConfig),
+      status: 'draft',
+    });
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, id), eq(folders.workspaceId, workspaceId)));
+    await notifyFolderEvent(id);
+    return c.json(
+      {
+        ...folder,
+        matrixConfig: parseMatrix(folder.matrixConfig ?? null),
+      },
+      201
+    );
+  }
+);
 
 foldersRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };

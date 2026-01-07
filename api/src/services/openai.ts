@@ -11,13 +11,18 @@ export interface CallOpenAIOptions {
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   toolChoice?: 'auto' | 'required' | 'none';
   responseFormat?: 'json_object';
+  /**
+   * Chat Completions: max output tokens for the assistant message.
+   * If not set, OpenAI may use a small default which can truncate long outputs.
+   */
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 }
 
 export interface CallOpenAIResponseOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   model?: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   /**
@@ -40,6 +45,11 @@ export interface CallOpenAIResponseOptions {
     strict?: boolean;
   };
   toolChoice?: 'auto' | 'required' | 'none'; // laissé pour compat mais on n'impose rien (auto)
+  /**
+   * Responses API: max output tokens for the assistant output.
+   * If not set, OpenAI may use a small default which can truncate long outputs.
+   */
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 }
 
@@ -71,6 +81,7 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     tools,
     toolChoice = 'auto',
     responseFormat,
+    maxOutputTokens,
     signal
   } = options;
 
@@ -83,7 +94,10 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     messages,
     ...(tools && { tools }),
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
-    ...(responseFormat && { response_format: { type: responseFormat } })
+    ...(responseFormat && { response_format: { type: responseFormat } }),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   // Pass AbortSignal through request options to enable cooperative cancellation
@@ -103,6 +117,7 @@ export async function* callOpenAIStream(
     tools,
     toolChoice = 'auto',
     responseFormat,
+    maxOutputTokens,
     signal
   } = options;
 
@@ -116,7 +131,10 @@ export async function* callOpenAIStream(
     stream: true,
     ...(tools && { tools }),
     ...(toolChoice !== 'auto' && { tool_choice: toolChoice }),
-    ...(responseFormat && { response_format: { type: responseFormat } })
+    ...(responseFormat && { response_format: { type: responseFormat } }),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   // État pour tracker les tool calls en cours
@@ -247,7 +265,19 @@ export async function* callOpenAIStream(
 export async function* callOpenAIResponseStream(
   options: CallOpenAIResponseOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { messages, model, reasoningEffort, reasoningSummary, tools, responseFormat, structuredOutput, signal, previousResponseId, rawInput } = options;
+  const {
+    messages,
+    model,
+    reasoningEffort,
+    reasoningSummary,
+    tools,
+    responseFormat,
+    structuredOutput,
+    maxOutputTokens,
+    signal,
+    previousResponseId,
+    rawInput
+  } = options;
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -255,6 +285,19 @@ export async function* callOpenAIResponseStream(
   // Certains modèles (ex: gpt-4.1-nano-*) ne supportent pas `reasoning.summary`.
   // On désactive complètement `reasoning` pour ces familles afin d'éviter un 400.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
+
+  const mapReasoningEffort = (effort: CallOpenAIResponseOptions['reasoningEffort']): unknown => {
+    if (!effort) return undefined;
+    // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
+    // App-level accepts: none|low|medium|high|xhigh.
+    // Map to avoid 400s:
+    // - none  -> minimal (ONLY for gpt-5-nano; gpt-5.2 appears to accept "none")
+    // - xhigh -> high
+    // - low/medium/high passthrough
+    if (effort === 'none') return selectedModel.startsWith('gpt-5-nano') ? 'minimal' : 'none';
+    if (effort === 'xhigh') return 'high';
+    return effort;
+  };
 
   // Convertir les messages chat en format input du Responses API
   // IMPORTANT:
@@ -303,13 +346,18 @@ export async function* callOpenAIResponseStream(
         ? { format: { type: responseFormat } }
         : undefined;
 
-  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined =
-    supportsReasoningParams
-      ? {
-          summary: reasoningSummary ?? 'auto',
-          ...(reasoningEffort ? { effort: reasoningEffort } : {})
-        }
-      : undefined;
+  // Reasoning (Responses API):
+  // - Ne pas injecter `reasoning` par défaut.
+  // - N'envoyer `reasoning.summary`/`reasoning.effort` que si explicitement demandé par l'appelant.
+  const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined = (() => {
+    if (!supportsReasoningParams) return undefined;
+    if (!reasoningSummary && !reasoningEffort) return undefined;
+    const mappedEffort = mapReasoningEffort(reasoningEffort);
+    return {
+      ...(reasoningSummary ? { summary: reasoningSummary } : {}),
+      ...(mappedEffort ? { effort: mappedEffort } : {})
+    } as OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'];
+  })();
 
   const requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming = {
     model: selectedModel,
@@ -318,13 +366,20 @@ export async function* callOpenAIResponseStream(
     ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(responseTools ? { tools: responseTools } : {}),
-    ...(textConfig ? { text: textConfig } : {})
+    ...(textConfig ? { text: textConfig } : {}),
+    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+      ? { max_output_tokens: Math.floor(maxOutputTokens) }
+      : {})
   };
 
   try {
     yield { type: 'status', data: { state: 'started' } };
 
     const stream = await client.responses.create(requestOptions, { signal });
+
+    // Some streams can emit only `output_text.done` without `output_text.delta`.
+    // Track whether we've seen any output_text.delta so we can avoid duplicating the full text on .done.
+    let sawOutputTextDelta = false;
 
     // Suivre les tool calls par item_id (Responses API)
     const toolCallState = new Map<string, { started: boolean; sawDelta: boolean; name?: string }>();
@@ -362,8 +417,19 @@ export async function* callOpenAIResponseStream(
           if (delta) yield { type: 'reasoning_delta', data: { delta } };
           break;
         }
+        // Some models may emit alternate reasoning events (SDK/API drift).
+        case 'response.reasoning.delta': {
+          const delta = typeof record.delta === 'string' ? record.delta : (typeof record.text === 'string' ? record.text : undefined);
+          if (delta) yield { type: 'reasoning_delta', data: { delta } };
+          break;
+        }
         case 'response.reasoning_summary_text.delta': {
           const delta = typeof record.delta === 'string' ? record.delta : undefined;
+          if (delta) yield { type: 'reasoning_delta', data: { delta, kind: 'summary' } };
+          break;
+        }
+        case 'response.reasoning_summary.delta': {
+          const delta = typeof record.delta === 'string' ? record.delta : (typeof record.text === 'string' ? record.text : undefined);
           if (delta) yield { type: 'reasoning_delta', data: { delta, kind: 'summary' } };
           break;
         }
@@ -372,9 +438,25 @@ export async function* callOpenAIResponseStream(
           if (text) yield { type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } };
           break;
         }
+        case 'response.reasoning_summary.done': {
+          const text = typeof record.text === 'string' ? record.text : (typeof record.delta === 'string' ? record.delta : undefined);
+          if (text) yield { type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } };
+          break;
+        }
         case 'response.output_text.delta': {
           const delta = typeof record.delta === 'string' ? record.delta : undefined;
-          if (delta) yield { type: 'content_delta', data: { delta } };
+          if (delta) {
+            sawOutputTextDelta = true;
+            yield { type: 'content_delta', data: { delta } };
+          }
+          break;
+        }
+        case 'response.output_text.done': {
+          // Fallback: some flows only provide the full text in the `.done` event.
+          const text = typeof record.text === 'string' ? record.text : undefined;
+          if (!sawOutputTextDelta && text) {
+            yield { type: 'content_delta', data: { delta: text } };
+          }
           break;
         }
         case 'response.output_item.added': {
@@ -393,6 +475,26 @@ export async function* callOpenAIResponseStream(
             }
             if (toolCallId) toolCallState.set(toolCallId, { started: true, sawDelta: false, name });
             yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args } };
+          } else if (itemRec && itemRec.type === 'output_text') {
+            // Some responses may provide the full output text as an output item (especially with structured outputs),
+            // without streaming `response.output_text.delta`.
+            const text = typeof itemRec.text === 'string' ? itemRec.text : undefined;
+            if (!sawOutputTextDelta && text) {
+              sawOutputTextDelta = true;
+              yield { type: 'content_delta', data: { delta: text } };
+            }
+          }
+          break;
+        }
+        case 'response.output_item.done': {
+          const item = record.item as unknown;
+          const itemRec = item as Record<string, unknown> | null;
+          if (itemRec && itemRec.type === 'output_text') {
+            const text = typeof itemRec.text === 'string' ? itemRec.text : undefined;
+            if (!sawOutputTextDelta && text) {
+              sawOutputTextDelta = true;
+              yield { type: 'content_delta', data: { delta: text } };
+            }
           }
           break;
         }
@@ -428,7 +530,11 @@ export async function* callOpenAIResponseStream(
           const errRec = err as Record<string, unknown> | null;
           const message =
             (errRec && typeof errRec.message === 'string' && errRec.message) ? errRec.message : 'Unknown error';
-          yield { type: 'error', data: { message } };
+          const requestId =
+            (typeof (record as Record<string, unknown>).request_id === 'string' && ((record as Record<string, unknown>).request_id as string)) ||
+            (errRec && typeof errRec.request_id === 'string' && (errRec.request_id as string)) ||
+            '';
+          yield { type: 'error', data: { message, ...(requestId ? { request_id: requestId } : {}) } };
           break;
         }
         case 'response.completed': {

@@ -1,10 +1,40 @@
 // Configuration des prompts par défaut
 export const defaultPrompts = [
   {
+    id: 'chat_reasoning_effort_eval',
+    name: 'Chat — Évaluer le besoin d’effort de raisonnement',
+    description: 'Sous-prompt interne: estimer (none/low/medium/high/xhigh) le reasoningEffort nécessaire pour répondre à la dernière question utilisateur, à partir du contexte récent',
+    content: `Tu es un classificateur. Objectif: estimer l'effort de raisonnement nécessaire pour répondre correctement à la DERNIÈRE question utilisateur.
+
+Définitions:
+- none: ne pas produire de reasoning (réponse immédiate/évidente, ou simple exécution). IMPORTANT: c'est plus faible que low.
+- low: question simple, réponse directe, peu d'ambiguïté, faible risque d'erreur.
+- medium: nécessite synthèse/raisonnement modéré, un type de tool appelé, mais reste maîtrisable.
+- high: question complexe ou à fort enjeu; nécessite raisonnement poussé, vérifications, ou d'organiser l'orchestration de plusieurs tools (cas d'usage, recherche web, documents).
+- xhigh: demande explicite de l'utilisateur de faire un effort de raisonnement (suite à première réponse ou erreur); question très complexe/à très fort enjeu; nécessite raisonnement maximal, attention aux erreurs, et validations supplémentaires.
+
+Dernière question utilisateur:
+---
+{{last_user_message}}
+---
+
+Contexte récent (extrait):
+---
+{{context_excerpt}}
+---
+
+Répondre avec EXACTEMENT UN SEUL TOKEN (sans guillemets, sans JSON, sans ponctuation, sans nouvelle ligne):
+none|low|medium|high|xhigh`,
+    variables: ['last_user_message', 'context_excerpt']
+  },
+  {
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',
     content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
+Informations déjà renseignées (peuvent être partielles / vides): {{existing_data}}
+ID d'organisation (si connu): {{organization_id}}
+
 Les secteurs d'activité disponibles sont: {{industries}}.
 Normalisez le nom de l'organisation selon son usage officiel.
 La date actuelle est ${new Date().toISOString()}.
@@ -29,11 +59,15 @@ IMPORTANT:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
-- Fais une recherche avec le tool web_search pour trouver des informations précises et les plus récentes sur l'organisation. 
+- Si l'outil \`documents\` est disponible, commence par l'utiliser UNIQUEMENT ainsi:
+  1) \`documents\` action=list (contextType=organization, contextId={{organization_id}}) pour voir les documents.
+  2) Pour chaque document pertinent, appelle \`documents\` action=get_summary (évite get_content sauf nécessité).
+  3) Utilise ensuite ces informations documentaires comme source prioritaire (plus fiable que le web).
+- Fais une recherche avec le tool web_search pour compléter (ou si aucun document n'est disponible).
 - Utilise web_extract pour obtenir le contenu détaillé des URLs pertinentes s'il le faut
 - Chacun des champs, en particulier taille (nombre employés et chiffre d'affaires), technologies IT (regarder les recrutements) et kpis doivent être fondés sur des informations référencées (web) et récentes, et peuvent chacun faire l'objet d'une recherche web_searchspécifique.
 - Quand le texte est long dans les valeurs string du JSON, formatte en markdown et préfère les listes (markdown) aux points virgules`,
-    variables: ['organization_name', 'industries']
+    variables: ['organization_name', 'industries', 'organization_id', 'existing_data']
   },
   {
     id: 'folder_name',
@@ -56,13 +90,16 @@ Réponds UNIQUEMENT avec un JSON valide:
     description: 'Prompt pour générer une liste de cas d\'usage',
     content: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
+    - le nom de dossier fourni par l'utilisateur (si non vide): {{folder_name}},
     - les informations de l'organisation: {{organization_info}},
-    - le nombre de cas d'usage demandés par l'utilisateur, sinon génère {{use_case_count}} cas d'usages
+    - le nombre de cas d'usage à générer: {{use_case_count}}
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
 
 IMPORTANT: 
-- Génère le nombre de cas d'usage demandés par l'utilisateur, sinon génère 10 cas d'usages
+- Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
+- Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
+- Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
 - Base-toi sur des exemples concrets et des technologies actuelles
 - Génère le titre et la description pour chaque cas d'usage
@@ -86,7 +123,7 @@ Réponds UNIQUEMENT avec un JSON valide:
     ...
   ]
 }`,
-    variables: ['user_input', 'organization_info', 'use_case_count']
+    variables: ['user_input', 'folder_name', 'organization_info', 'use_case_count']
   },
   {
     id: 'use_case_detail',
@@ -265,5 +302,162 @@ Spécification de chaque section:
 - synthese_executive: Synthèse exécutive du dossier en markdown (2-3 paragraphes sans titre). Résumé concis et percutant pour les décideurs, mettant en avant les points clés, les recommandations principales et l'impact attendu.
 `,
     variables: ['folder_description', 'organization_info', 'top_cas', 'use_cases']
+  }
+  ,
+  {
+    id: 'document_summary',
+    name: 'Résumé de document',
+    description: 'Prompt pour résumer un document attaché à un contexte (Lot B)',
+    content: `Tu es un assistant qui extrait l’essentiel de documents métiers pour alimenter la génération de cas d’usage, tout en produisant des métadonnées permettant un réexamen ultérieur du document.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Concis et structuré (markdown).
+- N’invente rien. Si le texte est insuffisant, dis-le clairement.
+- Si possible, cite la source (p.X ou titre/section). Sinon, omets.
+- Le titre du document peut être “-” : dans ce cas, indique “Non précisé”.
+
+Règle de classification (obligatoire):
+- [succès] = cas réalisé / résultat mesuré / déployé sur des projets
+- [capacité] = compétence, outil, standard, certification ou programme existant (réutilisable)
+- [opportunité] = intention, ambition, plan, cible ou piste non démontrée par un cas
+
+Limites (en mots, hors titres):
+- Résumé: 100–200 mots
+- Éléments exploitables: 8–14 puces, 6–18 mots par puce
+- Contraintes / inconnues: 4–10 puces, 6–18 mots par puce
+
+Règles de qualité (obligatoires):
+- Quand des chiffres existent dans le texte, les inclure (avec unités) dans le Résumé et/ou les Éléments exploitables.
+- Chaque puce “Éléments exploitables” doit, si possible, contenir un ordre de grandeur ou une valeur chiffrée (%, €, volumes, effectifs, délais, etc.) ou préciser qu’aucun chiffre n’est donné.
+
+Format attendu:
+## Fiche document (réexamen)
+- Titre: {{doc_title}} (si “-” => “Non précisé”)
+- Taille: {{nb_pages}} pages ; {{full_words}} mots (sinon “Non précisé”)
+- Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
+
+## Résumé
+(500-1000 mots, inclure 3–8 faits chiffrés si disponibles)
+
+## Sommaire
+Titres niveau 1: 6–12 puces max (reprendre les titres existants ; sinon “Non précisé”
+
+
+## Éléments exploitables pour cas d’usage
+- [besoin] …
+- [acteur] …
+- [processus] …
+- [donnée] …
+- [système] …
+- [succès] …
+- [capacité] …
+- [opportunité] …
+
+## Contraintes / dépendances (faits)
+- [contrainte] …
+- [dépendance] …
+
+## Autres informations
+- [information] informations supplémentaires, contextuelles, etc. …
+
+Texte du document:
+---
+{{document_text}}
+---`,
+    variables: ['lang', 'doc_title', 'nb_pages', 'full_words', 'document_text']
+  },
+  {
+    id: 'document_detailed_summary',
+    name: 'Résumé détaillé de document (long)',
+    description: 'Prompt de référence (ex-tool-service) pour produire une contraction (résumé détaillé) linéaire à partir du texte intégral extrait',
+    content: `Document: {{filename}}
+Source: {{source_label}}
+Portée: {{scope}}
+
+TEXTE:
+<source>
+{{document_text}}
+</source>
+
+TÂCHE:
+- Produire une contraction (résumé détaillé) LINÉAIRE exhaustive qui suit l'ordre du document, section par section par section.
+- Objectif de longueur: minimum {{max_words}} - c'est une contraction pour fournir à un LLM un résumé détaillé linéaire sans explosion de contexte et perdre le minimum de contenu.
+
+CONTRAINTES:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention, uniquement les informations du texte source.
+- Respecte les numero de sections du document source.
+- Respecter une longueur minimale {{max_words}} (si le contenu le permet)
+- Conserver les informations chiffrées.`,
+    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words']
+  },
+  {
+    id: 'documents_analyze',
+    name: 'Documents — Analyze',
+    description: 'Template pour documents.analyze (outil): analyser un document à partir du texte intégral extrait, selon une instruction fournie',
+    content: `Tu es un sous-agent d'analyse documentaire.
+
+Objectif: répondre à une instruction spécialisée à partir du TEXTE (intégral ou extrait) fourni.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si l'information n'apparaît pas dans le texte, le dire explicitement.
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Document: {{filename}}
+- Pages (si dispo): {{pages}}
+- Titre (si dispo): {{title}}
+- Taille (estimée): ~{{full_words}} mots ; 
+- Portée du texte fourni: {{scope}}
+
+TEXTE:
+---
+{{document_text}}
+---
+
+INSTRUCTION (du modèle maître):
+---
+{{instruction}}
+---
+
+Répondre uniquement avec l'analyse demandée.`,
+    variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'scope', 'document_text', 'instruction']
+  },
+  {
+    id: 'documents_analyze_merge',
+    name: 'Documents — Analyze (merge)',
+    description: 'Template pour fusionner les notes par extrait en une réponse unique et bornée pour documents.analyze',
+    content: `Tu es un sous-agent d'analyse documentaire.
+
+Objectif: consolider une réponse finale unique et fidèle à partir de notes factuelles produites sur des extraits du document.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si une information n'apparaît dans aucun extrait, le dire explicitement.
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Document: {{filename}}
+- Pages (si dispo): {{pages}}
+- Titre (si dispo): {{title}}
+- Taille (estimée): ~{{full_words}} mots ; ~{{est_tokens}} tokens (heuristique)
+
+NOTES PAR EXTRAIT (scan complet, sans retrieval):
+---
+{{notes}}
+---
+
+INSTRUCTION (du modèle maître):
+---
+{{instruction}}
+---
+
+Consolider une réponse finale unique, structurée, et bornée.`,
+    variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'notes', 'instruction']
   }
 ];

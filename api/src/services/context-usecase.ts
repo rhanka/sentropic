@@ -48,7 +48,8 @@ export interface UseCaseDetail {
   }>;
 }
 
-const defaultUseCaseCount = 6;
+// UI (/dossier/new) default is 10; keep backend consistent.
+const defaultUseCaseCount = 10;
 
 const UNICODE_BULLETS = '[\\u2022\\u2023\\u25e6\\u25aa\\u25ab\\u2023\\u25cf\\u25e6]'; // • ▣ ◦ ▪ ▫ ‣ ● ◦
 const BULLET_PREFIX_RE = new RegExp(`^\\s*(?:[-*+]|(?:\\d+\\.)|${UNICODE_BULLETS})\\s+`);
@@ -181,6 +182,10 @@ export const generateUseCaseList = async (
   input: string, 
   organizationInfo?: string, 
   model?: string,
+  useCaseCount?: number,
+  folderName?: string,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseList> => {
@@ -190,19 +195,62 @@ export const generateUseCaseList = async (
     throw new Error('Prompt use_case_list non trouvé');
   }
 
-  const prompt = useCaseListPrompt
+  const basePrompt = useCaseListPrompt
     .replace('{{user_input}}', input)
+    .replace('{{folder_name}}', folderName || '')
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
-    .replace('{{use_case_count}}', String(defaultUseCaseCount));
+    .replace('{{use_case_count}}', String(useCaseCount ?? defaultUseCaseCount));
+
+  const docsDirective =
+    documentsContexts && documentsContexts.length > 0
+      ? `\n\nDOCUMENTS & WEB (règles)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
+          .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
+          .join('\n')}\n- Commencer par exploiter les documents fournis (résumés, puis outil documents si nécessaire).\n  - Si les résumés suffisent, NE PAS appeler l'outil documents.\n  - Si besoin de détails factuels (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- En complément, effectuer AU MOINS un web_search pour consolider les références externes pertinentes des cas d'usage (surtout si la demande exige un panachage “rapport + web”).\n- Utiliser web_extract uniquement si besoin de détails complémentaires spécifiques, et uniquement avec des URLs valides (obtenues via web_search).`
+      : '';
+
+  const docsJsonBlock =
+    documentsContextJson && documentsContextJson.trim()
+      ? `\n\nDOCUMENTS_CONTEXT_JSON:\n${documentsContextJson}\n`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}${docsJsonBlock}`;
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
   
+  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
+    useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
+    documentsContexts,
     responseFormat: 'json_object',
-    reasoningSummary: 'auto',
+    structuredOutput: {
+      name: 'use_case_list',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          dossier: { type: 'string' },
+          useCases: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                titre: { type: 'string' },
+                description: { type: 'string' },
+                ref: { type: 'string' }
+              },
+              required: ['titre', 'description', 'ref']
+            }
+          }
+        },
+        required: ['dossier', 'useCases']
+      }
+    },
+    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_list',
     streamId: finalStreamId,
     signal
@@ -228,6 +276,8 @@ export const generateUseCaseDetail = async (
   matrix: MatrixConfig,
   organizationInfo?: string,
   model?: string,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string
 ): Promise<UseCaseDetail> => {
@@ -237,20 +287,121 @@ export const generateUseCaseDetail = async (
     throw new Error('Prompt use_case_detail non trouvé');
   }
 
-  const prompt = useCaseDetailPrompt
+  const basePrompt = useCaseDetailPrompt
     .replace(/\{\{use_case\}\}/g, useCase)
     .replace('{{user_input}}', context)
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
 
+  const docsDirective =
+    documentsContexts && documentsContexts.length > 0
+      ? `\n\nDOCUMENTS & WEB (règles)\n- Les documents (liste + résumés) sont fournis dans DOCUMENTS_CONTEXT_JSON ci-dessous.\n- Contextes autorisés si un approfondissement est nécessaire:\n${documentsContexts
+          .map((c) => `  - contextType="${c.contextType}" contextId="${c.contextId}"`)
+          .join('\n')}\n- Commencer par exploiter les documents fournis (résumés, puis outil documents si nécessaire).\n  - Si les résumés suffisent, NE PAS appeler l'outil documents.\n  - Si besoin de détails factuels (chiffres, citations, sections précises), appeler documents.get_content (maxChars=30000) ou documents.analyze (question ciblée).\n- En complément, effectuer AU MOINS un web_search pour consolider les références externes pertinentes des cas d'usage (surtout si la demande exige un panachage “rapport + web”).\n- Utiliser web_extract uniquement si besoin de détails complémentaires spécifiques, et uniquement avec des URLs valides (obtenues via web_search).`
+      : '';
+
+  const docsJsonBlock =
+    documentsContextJson && documentsContextJson.trim()
+      ? `\n\nDOCUMENTS_CONTEXT_JSON:\n${documentsContextJson}\n`
+      : '';
+
+  const prompt = `${basePrompt}${docsDirective}${docsJsonBlock}`;
+
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
   
+  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const { content } = await executeWithToolsStream(prompt, {
     model,
     useWebSearch: true,
+    useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
+    documentsContexts,
     responseFormat: 'json_object',
-    reasoningSummary: 'auto',
+    structuredOutput: {
+      name: 'use_case_detail',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          problem: { type: 'string' },
+          solution: { type: 'string' },
+          domain: { type: 'string' },
+          technologies: { type: 'array', items: { type: 'string' } },
+          leadtime: { type: 'string' },
+          prerequisites: { type: 'string' },
+          contact: { type: 'string' },
+          benefits: { type: 'array', items: { type: 'string' } },
+          metrics: { type: 'array', items: { type: 'string' } },
+          risks: { type: 'array', items: { type: 'string' } },
+          nextSteps: { type: 'array', items: { type: 'string' } },
+          dataSources: { type: 'array', items: { type: 'string' } },
+          dataObjects: { type: 'array', items: { type: 'string' } },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                title: { type: 'string' },
+                url: { type: 'string' },
+                excerpt: { type: 'string' }
+              },
+              required: ['title', 'url', 'excerpt']
+            }
+          },
+          valueScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' }
+              },
+              required: ['axisId', 'rating', 'description']
+            }
+          },
+          complexityScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' }
+              },
+              required: ['axisId', 'rating', 'description']
+            }
+          }
+        },
+        required: [
+          'name',
+          'description',
+          'problem',
+          'solution',
+          'domain',
+          'technologies',
+          'leadtime',
+          'prerequisites',
+          'contact',
+          'benefits',
+          'metrics',
+          'risks',
+          'nextSteps',
+          'dataSources',
+          'dataObjects',
+          'references',
+          'valueScores',
+          'complexityScores'
+        ]
+      }
+    },
+    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_detail',
     streamId: finalStreamId,
     signal

@@ -11,6 +11,7 @@
   export let markdown = false;
   export let apiEndpoint = ""; // Endpoint API pour la sauvegarde
   export let saveDelay = 5000; // Délai en ms avant sauvegarde (défaut: 5s)
+  export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
@@ -526,8 +527,6 @@
     if (!originalValue) {
       originalValue = value;
     }
-  } else if (markdown) {
-    value = "Please provide description";
   }
   
   // Exposer la fonction pour les composants parents
@@ -551,6 +550,7 @@
           disabled={disabled}
           rows="1"
           aria-label={label || undefined}
+          placeholder={placeholder || undefined}
           on:input={handleInput}
           on:blur={toggleEditing}
         ></textarea>
@@ -568,6 +568,7 @@
               class:is-saving={isSaving}
               disabled={disabled}
               aria-label={label || undefined}
+              placeholder={placeholder || undefined}
               on:input={handleInput}
               on:blur={toggleEditing}
             />
@@ -583,6 +584,7 @@
             class:is-saving={isSaving}
             disabled={disabled}
             aria-label={label || undefined}
+            placeholder={placeholder || undefined}
             on:input={handleInput}
             on:blur={toggleEditing}
           />
@@ -599,7 +601,7 @@
     <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges} role="textbox" aria-label={label || undefined}>
       <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList}/>
+          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder}/>
         </div>
       </div>
       {#if isSaving}
@@ -623,12 +625,12 @@
     margin-bottom: 0;
   }
 
-  label {
+  .editable-container label {
     display: block;
-    font-size: 0.5rem;
-    font-weight: 100;
-    color: #555;
-    margin-bottom: 0rem;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* font-medium */
+    color: #334155; /* text-slate-700 */
+    margin-bottom: 0.25rem;
   }
 
   .input-wrapper {

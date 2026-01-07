@@ -1,7 +1,11 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
+import { chatContexts, contextDocuments, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
 import { createId } from '../utils/id';
+import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import { extractDocumentInfoFromDocument } from './document-text';
+import { callOpenAI } from './openai';
+import { defaultPrompts } from '../config/default-prompts';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -1007,6 +1011,444 @@ export class ToolService {
     } finally {
       client.release();
     }
+  }
+
+  // ---------------------------
+  // Context Documents (Lot B)
+  // ---------------------------
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  }
+
+  private getDataString(data: unknown, key: string): string | null {
+    const rec = this.asRecord(data);
+    const v = rec[key];
+    return typeof v === 'string' ? v : null;
+  }
+
+  private getDataNumber(data: unknown, key: string): number | null {
+    const rec = this.asRecord(data);
+    const v = rec[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+
+  private countWords(text: string): number {
+    const t = (text || '').trim();
+    if (!t) return 0;
+    // Split on whitespace; good enough for FR/EN.
+    return t.split(/\s+/g).filter(Boolean).length;
+  }
+
+  private estimateTokensFromText(text: string): number {
+    // Heuristic: tokens ≈ chars / 4. Good enough for gating & chunk sizing (FR/EN).
+    const chars = (text || '').length;
+    return Math.ceil(chars / 4);
+  }
+
+  private chunkTextByApproxTokens(text: string, targetTokens: number): string[] {
+    const t = (text || '').trim();
+    if (!t) return [];
+    const target = Math.max(10_000, Math.floor(targetTokens || 300_000));
+    const targetChars = target * 4;
+    const out: string[] = [];
+    let i = 0;
+
+    while (i < t.length) {
+      const end = Math.min(t.length, i + targetChars);
+      if (end >= t.length) {
+        out.push(t.slice(i));
+        break;
+      }
+
+      // Try not to cut in the middle of a word: backtrack to the last whitespace in a small window.
+      const windowStart = Math.max(i + Math.floor(targetChars * 0.7), i + 1);
+      const window = t.slice(windowStart, end);
+      const lastWs = window.search(/\s(?![\s\S]*\s)/); // last whitespace in window (via reverse-ish trick)
+      const cut =
+        lastWs >= 0
+          ? windowStart + lastWs + 1
+          : t.lastIndexOf(' ', end) > i
+            ? t.lastIndexOf(' ', end)
+            : end;
+
+      out.push(t.slice(i, cut).trim());
+      i = cut;
+    }
+
+    return out.filter((s) => s.trim());
+  }
+
+  private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
+    const t = (text || '').trim();
+    if (!t) return { text: '', trimmed: false, words: 0 };
+    const words = t.split(/\s+/g).filter(Boolean);
+    const max = Math.max(1, Math.min(10_000, Math.floor(maxWords || 10_000)));
+    if (words.length <= max) return { text: t, trimmed: false, words: words.length };
+    return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
+  }
+
+  async listContextDocuments(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  }): Promise<{
+    items: Array<{
+      id: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      status: string;
+      summaryAvailable: boolean;
+      createdAt: Date;
+      updatedAt: Date | null;
+    }>;
+  }> {
+    const rows = await db
+      .select()
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, opts.workspaceId),
+          eq(contextDocuments.contextType, opts.contextType),
+          eq(contextDocuments.contextId, opts.contextId)
+        )
+      )
+      .orderBy(desc(contextDocuments.createdAt));
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        filename: r.filename,
+        mimeType: r.mimeType,
+        sizeBytes: r.sizeBytes,
+        status: r.status,
+        summaryAvailable: !!(this.getDataString(r.data, 'summary')?.trim()),
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt ?? null,
+      })),
+    };
+  }
+
+  async getDocumentSummary(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    summary: string | null;
+  }> {
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+    return {
+      documentId: row.id,
+      documentStatus: row.status,
+      summary: this.getDataString(row.data, 'summary'),
+    };
+  }
+
+  async getDocumentContent(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+    maxChars?: number | null;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    filename: string;
+    mimeType: string;
+    pages: number | null;
+    title: string | null;
+    content: string;
+    clipped: boolean;
+    contentMode: 'full_text' | 'detailed_summary';
+    words: number;
+    contentWords?: number;
+    summary: string | null;
+  }> {
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+
+    // Security / spec: do NOT return full content if doc is larger than 10k words.
+    const WORDS_FULL_CONTENT_LIMIT = 10_000;
+
+    const storedWords = (() => {
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
+      const n = extracted.words;
+      return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
+    })();
+
+    const storedDetailed = (() => {
+      const v = this.getDataString(row.data, 'detailedSummary');
+      return v && v.trim() ? v : null;
+    })();
+
+    // If the document is not ready yet, do not attempt to download/extract or regenerate anything here.
+    // Tools must remain read-only: job `document_summary` is the single writer for summaries.
+    if (row.status !== 'ready') {
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
+      const isLong = storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT;
+          return {
+            documentId: row.id,
+            documentStatus: row.status,
+            filename: row.filename,
+            mimeType: row.mimeType,
+            pages: typeof extracted.pages === 'number' ? extracted.pages : null,
+            title: typeof extracted.title === 'string' ? extracted.title : null,
+        content:
+          `Contenu indisponible: document en cours de traitement (status="${row.status}"). ` +
+          `Réessayer une fois le statut "ready".`,
+        clipped: true,
+        contentMode: isLong ? 'detailed_summary' : 'full_text',
+        words: storedWords ?? 0,
+        contentWords: isLong ? 0 : undefined,
+        summary: this.getDataString(row.data, 'summary'),
+          };
+        }
+
+    // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
+    // return it without downloading/extracting the file again.
+    if (storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT && storedDetailed) {
+      const extracted = this.asRecord(this.asRecord(row.data).extracted);
+
+      const trimmedStored = this.trimToMaxWords(storedDetailed, WORDS_FULL_CONTENT_LIMIT);
+      return {
+        documentId: row.id,
+        documentStatus: row.status,
+        filename: row.filename,
+        mimeType: row.mimeType,
+        pages: typeof extracted.pages === 'number' ? extracted.pages : null,
+        title: typeof extracted.title === 'string' ? extracted.title : null,
+        content: trimmedStored.text,
+        clipped: trimmedStored.trimmed,
+        contentMode: 'detailed_summary',
+        words: storedWords,
+        contentWords: trimmedStored.words,
+        summary: this.getDataString(row.data, 'summary')
+      };
+    }
+
+    const bucket = getDocumentsBucketName();
+    const bytes = await getObjectBytes({ bucket, key: row.storageKey });
+    const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+    const full = (extracted.text || '').trim();
+    const words = this.countWords(full);
+
+    let contentMode: 'full_text' | 'detailed_summary' = 'full_text';
+    let content = full;
+    let clipped = false;
+
+    if (words > WORDS_FULL_CONTENT_LIMIT) {
+      contentMode = 'detailed_summary';
+      // Prefer persisted detailed summary when available.
+      if (storedDetailed) {
+        const trimmedStored = this.trimToMaxWords(storedDetailed, WORDS_FULL_CONTENT_LIMIT);
+        content = trimmedStored.text;
+        clipped = trimmedStored.trimmed;
+      } else {
+        content =
+          'Résumé détaillé indisponible: le job de résumé n’a pas encore produit ce champ. ' +
+          'Relancer le job document_summary ou attendre sa fin.';
+        clipped = true;
+      }
+    } else {
+      // Optional: allow callers to bound by chars (legacy), but default is full text.
+      const maxChars = typeof opts.maxChars === 'number' ? opts.maxChars : null;
+      if (typeof maxChars === 'number') {
+        const max = Math.max(1000, Math.min(50_000, Number.isFinite(maxChars) ? maxChars : 30_000));
+        clipped = content.length > max;
+        content = clipped ? content.slice(0, max) + '\n…(tronqué)…' : content;
+      }
+    }
+
+    return {
+      documentId: row.id,
+      documentStatus: row.status,
+      filename: row.filename,
+      mimeType: row.mimeType,
+      pages: typeof extracted.metadata.pages === 'number' ? extracted.metadata.pages : null,
+      title: typeof extracted.metadata.title === 'string' ? extracted.metadata.title : null,
+      content,
+      clipped,
+      contentMode,
+      words,
+      contentWords: contentMode === 'detailed_summary' ? this.countWords(content) : undefined,
+      summary: this.getDataString(row.data, 'summary')
+    };
+  }
+
+  async analyzeDocument(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+    documentId: string;
+    prompt: string;
+    maxWords?: number | null;
+    signal?: AbortSignal;
+  }): Promise<{
+    documentId: string;
+    documentStatus: string;
+    filename: string;
+    mode: 'full_text' | 'detailed_summary';
+    analysis: string;
+    analysisWords: number;
+    clipped: boolean;
+    summary: string | null;
+  }> {
+    // IMPORTANT (temporary): force a dedicated model for document analysis sub-agent.
+    // We intentionally ignore the admin default model until prompts/models are versioned per prompt in DB.
+    const model = 'gpt-4.1-nano';
+    const p = (opts.prompt || '').trim();
+    if (!p) throw new Error('documents.analyze: prompt is required');
+    const maxWords = Math.max(500, Math.min(10_000, Math.floor(opts.maxWords ?? 10_000)));
+
+    // IMPORTANT:
+    // documents.analyze must be able to question the FULL extracted text, even for very long documents.
+    // It must NOT fallback to the detailed summary (that behavior is reserved for documents.get_content).
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+
+    const bucket = getDocumentsBucketName();
+    const bytes = await getObjectBytes({ bucket, key: row.storageKey });
+    const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+    const fullText = (extracted.text || '').trim();
+    if (!fullText) throw new Error('No text extracted from document (empty or image-only PDF).');
+    const fullWords = this.countWords(fullText);
+    const estTokens = this.estimateTokensFromText(fullText);
+
+    const template = defaultPrompts.find((p0) => p0.id === 'documents_analyze')?.content || '';
+    if (!template) throw new Error('Prompt documents_analyze non trouvé');
+
+    const pageValue = typeof extracted.metadata.pages === 'number' ? String(extracted.metadata.pages) : 'Non précisé';
+    const titleValue =
+      typeof extracted.metadata.title === 'string' && extracted.metadata.title.trim() ? extracted.metadata.title.trim() : 'Non précisé';
+
+    // If it fits: single-call analysis on full extracted text.
+    if (estTokens > 0 && estTokens <= 700_000) {
+      const user = template
+        .replace('{{lang}}', 'français')
+        .replace('{{max_words}}', String(maxWords))
+        .replace('{{filename}}', row.filename)
+        .replace('{{pages}}', pageValue)
+        .replace('{{title}}', titleValue)
+        .replace('{{full_words}}', String(fullWords))
+        .replace('{{est_tokens}}', String(estTokens))
+        .replace('{{scope}}', 'texte intégral extrait')
+        .replace('{{document_text}}', fullText)
+        .replace('{{instruction}}', p);
+
+      const resp = await callOpenAI({
+        messages: [
+          { role: 'user', content: user }
+        ],
+        model,
+        // Avoid truncation for long analyses; still trimmed by maxWords at the end.
+        maxOutputTokens: 25000,
+        signal: opts.signal
+      });
+
+      const raw = String(resp.choices?.[0]?.message?.content ?? '').trim();
+      const trimmed = this.trimToMaxWords(raw, maxWords);
+      return {
+        documentId: row.id,
+        documentStatus: row.status,
+        filename: row.filename,
+        mode: 'full_text',
+        analysis: trimmed.text,
+        analysisWords: trimmed.words,
+        clipped: trimmed.trimmed,
+        summary: this.getDataString(row.data, 'summary')
+      };
+    }
+
+    // Large doc: scan ALL chunks (no retrieval/RAG), then consolidate.
+    const chunks = this.chunkTextByApproxTokens(fullText, 300_000);
+    const chunkAnalyses: string[] = [];
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunk = chunks[i]!;
+      const perChunkUser = template
+        .replace('{{lang}}', 'français')
+        .replace('{{max_words}}', String(1500))
+        .replace('{{filename}}', row.filename)
+        .replace('{{pages}}', pageValue)
+        .replace('{{title}}', titleValue)
+        .replace('{{full_words}}', String(fullWords))
+        .replace('{{est_tokens}}', String(estTokens))
+        .replace('{{scope}}', `extrait ${i + 1}/${chunks.length}`)
+        .replace('{{document_text}}', chunk)
+        .replace('{{instruction}}', p);
+
+      const resp = await callOpenAI({
+        messages: [
+          { role: 'user', content: perChunkUser }
+        ],
+        model,
+        // Per-chunk notes; bounded for cost and determinism. The final merge is also bounded.
+        maxOutputTokens: 6000,
+        signal: opts.signal
+      });
+      chunkAnalyses.push(String(resp.choices?.[0]?.message?.content ?? '').trim());
+    }
+
+    const mergeTemplate = defaultPrompts.find((p0) => p0.id === 'documents_analyze_merge')?.content || '';
+    if (!mergeTemplate) throw new Error('Prompt documents_analyze_merge non trouvé');
+    const notes = chunkAnalyses.map((a, i) => `### Extrait ${i + 1}/${chunkAnalyses.length}\n${a}`).join('\n\n');
+    const mergeUser = mergeTemplate
+      .replace('{{lang}}', 'français')
+      .replace('{{max_words}}', String(maxWords))
+      .replace('{{filename}}', row.filename)
+      .replace('{{pages}}', pageValue)
+      .replace('{{title}}', titleValue)
+      .replace('{{full_words}}', String(fullWords))
+      .replace('{{est_tokens}}', String(estTokens))
+      .replace('{{notes}}', notes)
+      .replace('{{instruction}}', p);
+
+    const merged = await callOpenAI({
+      messages: [
+        { role: 'user', content: mergeUser }
+      ],
+      model,
+      maxOutputTokens: 20000,
+      signal: opts.signal
+    });
+
+    const raw = String(merged.choices?.[0]?.message?.content ?? '').trim();
+    const trimmed = this.trimToMaxWords(raw, maxWords);
+    return {
+      documentId: row.id,
+      documentStatus: row.status,
+      filename: row.filename,
+      mode: 'full_text',
+      analysis: trimmed.text,
+      analysisWords: trimmed.words,
+      clipped: trimmed.trimmed,
+      summary: this.getDataString(row.data, 'summary')
+    };
   }
 }
 

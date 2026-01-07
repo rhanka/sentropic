@@ -128,6 +128,26 @@
         // Option B: libellé explicite pour la phase de démarrage
         st.stepTitle = 'Préparation…';
         st.startedAtMs = ts;
+      } else if (state === 'reasoning_effort_selected') {
+        const effort = String(data?.effort ?? '').trim() || 'unknown';
+        const by = String(data?.by ?? '').trim();
+        const label = by ? `${effort} (via ${by})` : effort;
+        st.stepTitle = 'Effort de raisonnement';
+        st.auxText = label;
+        upsertStep('Effort de raisonnement', label);
+      } else if (state === 'reasoning_effort') {
+        const effort = String(data?.effort ?? '').trim() || 'unknown';
+        const phase = String(data?.phase ?? '').trim();
+        const it = data?.iteration != null ? String(data.iteration) : '';
+        const label = `${effort}${phase ? ` — ${phase}${it ? ` #${it}` : ''}` : ''}`;
+        st.stepTitle = 'Effort de raisonnement';
+        st.auxText = label;
+        upsertStep('Effort de raisonnement', label);
+      } else if (state === 'reasoning_effort_eval_failed') {
+        const msg = String(data?.message ?? '').trim() || 'Erreur inconnue';
+        st.stepTitle = 'Effort de raisonnement (échec)';
+        st.auxText = msg;
+        upsertStep('Effort de raisonnement (échec)', msg);
       } else {
         st.stepTitle = `Statut: ${state}`;
       }
@@ -462,5 +482,25 @@
     line-height: 1.35;
     margin: 0.25rem 0 0.1rem;
     font-weight: 700;
+  }
+
+  /* Tables: Streamdown can render tables with a larger default size; force chat size (0.75rem). */
+  .chatMarkdown :global(table),
+  .chatMarkdown :global(th),
+  .chatMarkdown :global(td) {
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+
+  .chatMarkdown :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.35rem 0;
+  }
+
+  .chatMarkdown :global(th),
+  .chatMarkdown :global(td) {
+    padding: 0.2rem 0.35rem;
+    vertical-align: top;
   }
 </style>

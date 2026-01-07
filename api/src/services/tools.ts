@@ -4,22 +4,23 @@ import { callOpenAIResponseStream } from './openai';
 import type { StreamEventType } from './openai';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
+import { toolService } from './tool-service';
 
 // Fonction pour Tavily Search
 const TAVILY_API_KEY = env.TAVILY_API_KEY;
 
 // Prompts d'orchestration web tools (DOIVENT rester identiques entre non-streaming et streaming)
 const WEB_TOOLS_SYSTEM_PROMPT =
-  "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes. CRITICAL: Si tu dois extraire plusieurs URLs avec web_extract, tu DOIS passer TOUTES les URLs dans un seul appel en utilisant le paramètre urls (array). NE FAIS JAMAIS plusieurs appels séparés pour chaque URL. Exemple: si tu as 9 URLs, appelle une fois avec {\"urls\": [\"url1\", \"url2\", ..., \"url9\"]} au lieu d'appeler 9 fois avec une URL chacune. Ne JAMAIS appeler web_extract avec un array vide: JAMAIS web_extract avec {\"urls\":[]}.";
+  "Tu es un assistant qui utilise la recherche web et l'extraction de contenu pour fournir des informations récentes et précises. Utilise l'outil de recherche web pour trouver des informations, puis l'outil d'extraction pour obtenir le contenu détaillé des URLs pertinentes. CRITICAL: Si tu dois extraire plusieurs URLs avec web_extract, tu DOIS passer TOUTES les URLs dans un seul appel en utilisant le paramètre urls (array). NE FAIS JAMAIS plusieurs appels séparés pour chaque URL. Exemple: si tu as 9 URLs, appelle une fois avec {\"urls\": [\"url1\", \"url2\", ..., \"url9\"]} au lieu d'appeler 9 fois avec une URL chacune. Ne JAMAIS appeler web_extract avec un array vide: JAMAIS web_extract avec {\"urls\":[]}. IMPORTANT: Ne JAMAIS écrire des pseudo-appels d'outils dans le texte (ex: du JSON du type {\"tool\":\"documents\"...} ou {\"action\":\"web_extract\"...}). Si tu as besoin d'un outil, tu dois l'appeler via un tool call (function call) — pas en le décrivant. Lorsque `responseFormat` demande un JSON, la réponse finale doit être un UNIQUE objet JSON valide (aucun texte ou JSON parasite avant/après).";
 
 const WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT =
-  "Tu es un assistant qui fournit des réponses basées sur les résultats de recherche web et les contenus extraits d'URLs.";
+  "Tu es un assistant qui fournit une réponse finale basée sur les résultats fournis. IMPORTANT: aucun outil n'est disponible à cette étape. Ne JAMAIS écrire de pseudo-appels d'outils dans le texte. Si un JSON est demandé, la sortie doit être un UNIQUE objet JSON valide, sans texte avant/après.";
 
 const WEB_TOOLS_FOLLOWUP_ASSISTANT_PROMPT =
-  "Je vais rechercher et extraire des informations récentes pour vous.";
+  "Je vais maintenant produire la réponse finale à partir des résultats fournis.";
 
 const WEB_TOOLS_RESULTS_SUFFIX =
-  "Réponds à la question originale en utilisant ces informations récentes.";
+  "Produis maintenant la réponse finale. IMPORTANT: si un JSON est demandé, renvoie uniquement l'objet JSON final (aucun texte ou JSON parasite).";
 
 // Tools (définition unique)
 export const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
@@ -449,6 +450,59 @@ export const matrixUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+/**
+ * Documents tool (single tool) — list documents + fetch summary/content (bounded).
+ * IMPORTANT: Security checks are enforced in ChatService (context match + workspace scope).
+ */
+export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'documents',
+    description: `
+      Accède aux documents attachés à un contexte (organization/folder/usecase).
+      
+      Les documents sont fournis par l'utilisateurs et supposés être une source importante d'information.
+
+      Permet de:
+       - lister les documents + statuts,
+       - lire un RÉSUMÉ COURT (get_summary) pour une information de surface,
+       - lire le CONTENU (get_content) : soit le text complet (petit doc) soit un résumé (10k mots si le document est long) - pour une information détaillée
+       - lancer une analyse ciblée (analyze) - pour une requête ciblée (recherche d'un contenu).
+       `,
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['list', 'get_summary', 'get_content', 'analyze'],
+          description: 'Action à effectuer.'
+        },
+        contextType: {
+          type: 'string',
+          enum: ['organization', 'folder', 'usecase'],
+          description: 'Type du contexte.'
+        },
+        contextId: { type: 'string', description: 'ID du contexte.' },
+        documentId: { type: 'string', description: 'ID du document (requis pour get_summary/get_content).' },
+        maxChars: {
+          type: 'number',
+          description: 'Optionnel: borne de caractères pour get_content (max 50000).'
+        },
+        prompt: {
+          type: 'string',
+          description:
+            "Requis pour analyze: prompt/instruction ciblée à exécuter par un sous-agent à partir du document (texte intégral si possible; sinon scan complet par extraits + consolidation)."
+        },
+        maxWords: {
+          type: 'number',
+          description: 'Optionnel: borne en mots pour analyze (max 10000, défaut 10000).'
+        }
+      },
+      required: ['action', 'contextType', 'contextId']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;
@@ -585,7 +639,36 @@ export const extractUrlContent = async (
 export interface ExecuteWithToolsStreamOptions {
   model?: string;
   useWebSearch?: boolean;
+  /**
+   * Enable the `documents` tool (executed server-side) and attach it to a single authorized context.
+   * IMPORTANT: The model must call `documents` with the exact contextType/contextId provided here.
+   */
+  useDocuments?: boolean;
+  documentsContext?: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  };
+  /**
+   * Multi-context variant for the `documents` tool (e.g., allow folder + organization in the same execution).
+   * Security: the model may only call documents for the exact (contextType, contextId) pairs listed here.
+   */
+  documentsContexts?: Array<{
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'usecase';
+    contextId: string;
+  }>;
   responseFormat?: 'json_object';
+  /**
+   * Structured Outputs (Responses API): JSON Schema strict for the FINAL answer (phase 2).
+   * When set, it overrides responseFormat for phase 2.
+   */
+  structuredOutput?: {
+    name: string;
+    schema: Record<string, unknown>;
+    description?: string;
+    strict?: boolean;
+  };
   signal?: AbortSignal;
 /**
    * ID du stream à utiliser (si non fourni, généré à partir des champs ci-dessous).
@@ -595,9 +678,20 @@ export interface ExecuteWithToolsStreamOptions {
   jobId?: string;
   messageId?: string;
   /**
-   * Résumé de reasoning (Responses API). Default: auto
+   * Résumé de reasoning (Responses API).
+   * IMPORTANT: si non fourni, on n'envoie pas de paramètre `reasoning` à OpenAI (comportement explicite).
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
+  /**
+   * Effort de reasoning (Responses API). Optionnel (override).
+   * Ex: 'high' pour des tâches complexes si modèle gpt-5.
+   */
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  /**
+   * Max output tokens for the model output (Responses API).
+   * IMPORTANT: required for long-form outputs; otherwise OpenAI may use a small default.
+   */
+  maxOutputTokens?: number;
 }
 
 export interface ExecuteWithToolsStreamResult {
@@ -619,8 +713,14 @@ export const executeWithToolsStream = async (
   const {
     model = 'gpt-4.1-nano',
     useWebSearch = false,
+    useDocuments = false,
+    documentsContext,
+    documentsContexts,
     responseFormat,
+    structuredOutput,
     reasoningSummary,
+    reasoningEffort,
+    maxOutputTokens,
     streamId,
     promptId,
     jobId,
@@ -644,6 +744,8 @@ export const executeWithToolsStream = async (
       model,
       responseFormat,
       reasoningSummary,
+      reasoningEffort,
+      maxOutputTokens,
       signal
     })) {
       const data = (event.data ?? {}) as Record<string, unknown>;
@@ -656,6 +758,15 @@ export const executeWithToolsStream = async (
 
   // 1er appel (streaming) pour déclencher tools
   const toolCalls: Array<{ id: string; name: string; args: string }> = [];
+  const allowedDocumentsContexts =
+    (Array.isArray(documentsContexts) && documentsContexts.length > 0)
+      ? documentsContexts
+      : (documentsContext ? [documentsContext] : []);
+  const enabledTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+    webSearchTool,
+    webExtractTool,
+    ...(useDocuments && allowedDocumentsContexts.length > 0 ? [documentsTool] : [])
+  ];
 
   for await (const event of callOpenAIResponseStream({
     messages: [
@@ -663,9 +774,11 @@ export const executeWithToolsStream = async (
       { role: 'user', content: prompt }
     ],
     model,
-    tools: [webSearchTool, webExtractTool],
+    tools: enabledTools,
     responseFormat,
     reasoningSummary,
+    reasoningEffort,
+    maxOutputTokens,
     signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;
@@ -710,6 +823,7 @@ export const executeWithToolsStream = async (
   // Exécuter les tools (hors OpenAI) + streamer les résultats via tool_call_result
     const allSearchResults: Array<{ query: string; results: SearchResult[] }> = [];
     const allExtractResults: ExtractResult[] = [];
+    const allDocumentsResults: Array<{ action: string; result: unknown }> = [];
 
   for (const toolCall of toolCalls) {
     if (signal?.aborted) throw new Error('AbortError');
@@ -741,6 +855,80 @@ export const executeWithToolsStream = async (
         const resultsArray = Array.isArray(extractResults) ? extractResults : [extractResults];
         allExtractResults.push(...resultsArray);
         await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', results: resultsArray } });
+        } else if (toolCall.name === 'documents') {
+          if (!useDocuments || allowedDocumentsContexts.length === 0) {
+            await write('tool_call_result', {
+              tool_call_id: toolCall.id,
+              result: { status: 'error', error: 'documents tool is not enabled for this execution' }
+            });
+            continue;
+          }
+
+          const action = typeof args.action === 'string' ? args.action : '';
+          const ctxType = typeof args.contextType === 'string' ? args.contextType : '';
+          const ctxId = typeof args.contextId === 'string' ? args.contextId : '';
+          const matched = allowedDocumentsContexts.find((c) => c.contextType === ctxType && c.contextId === ctxId);
+          if (!matched) {
+            await write('tool_call_result', {
+              tool_call_id: toolCall.id,
+              result: { status: 'error', error: 'Security: context does not match authorized documentsContexts' }
+            });
+            continue;
+          }
+
+          await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'executing' } });
+          let result: unknown;
+          if (action === 'list') {
+            result = await toolService.listContextDocuments({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+            });
+          } else if (action === 'get_summary') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.get_summary: documentId is required');
+            result = await toolService.getDocumentSummary({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+              documentId,
+            });
+          } else if (action === 'get_content') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.get_content: documentId is required');
+            const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
+            result = await toolService.getDocumentContent({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+              documentId,
+              maxChars,
+            });
+          } else if (action === 'analyze') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.analyze: documentId is required');
+            const promptText = typeof args.prompt === 'string' ? args.prompt : '';
+            if (!promptText.trim()) throw new Error('documents.analyze: prompt is required');
+            const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
+            result = await toolService.analyzeDocument({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+              documentId,
+              prompt: promptText,
+              maxWords,
+              signal
+            });
+          } else {
+            throw new Error(`documents: unknown action ${action}`);
+          }
+
+          allDocumentsResults.push({ action, result });
+          const payload =
+            result && typeof result === 'object' && !Array.isArray(result)
+              ? (result as Record<string, unknown>)
+              : { value: result };
+          await write('tool_call_result', { tool_call_id: toolCall.id, result: { status: 'completed', ...payload } });
         }
     } catch (error) {
       await write('tool_call_result', {
@@ -758,6 +946,9 @@ export const executeWithToolsStream = async (
     if (allExtractResults.length > 0) {
       resultsMessage += `Voici les contenus extraits des URLs:\n${JSON.stringify(allExtractResults, null, 2)}\n\n`;
     }
+    if (allDocumentsResults.length > 0) {
+      resultsMessage += `Voici les résultats documents (outil documents):\n${JSON.stringify(allDocumentsResults, null, 2)}\n\n`;
+    }
   resultsMessage += WEB_TOOLS_RESULTS_SUFFIX;
 
   // 2e appel (streaming) avec les résultats — identique à executeWithTools
@@ -770,8 +961,9 @@ export const executeWithToolsStream = async (
       { role: 'user', content: resultsMessage }
       ],
       model,
-      responseFormat,
+      ...(structuredOutput ? { structuredOutput } : (responseFormat ? { responseFormat } : {})),
     reasoningSummary,
+    reasoningEffort,
       signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;

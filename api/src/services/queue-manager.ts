@@ -6,10 +6,24 @@ import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from
 import { parseMatrixConfig } from '../utils/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
-import { folders, organizations, useCases, jobQueue, ADMIN_WORKSPACE_ID, type JobQueueRow } from '../db/schema';
+import {
+  folders,
+  organizations,
+  useCases,
+  jobQueue,
+  ADMIN_WORKSPACE_ID,
+  type JobQueueRow,
+  contextDocuments,
+  contextModificationHistory,
+} from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
+import type { StreamEventType } from './openai';
+import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import { extractDocumentInfoFromDocument } from './document-text';
+import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
+import { getNextSequence, writeStreamEvent } from './stream-service';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -25,7 +39,13 @@ function parseOrgData(value: unknown): Record<string, unknown> {
   return {};
 }
 
-export type JobType = 'organization_enrich' | 'usecase_list' | 'usecase_detail' | 'executive_summary' | 'chat_message';
+export type JobType =
+  | 'organization_enrich'
+  | 'usecase_list'
+  | 'usecase_detail'
+  | 'executive_summary'
+  | 'chat_message'
+  | 'document_summary';
 
 export interface OrganizationEnrichJobData {
   organizationId: string;
@@ -38,6 +58,7 @@ export interface UseCaseListJobData {
   input: string;
   organizationId?: string;
   model?: string;
+  useCaseCount?: number;
 }
 
 export interface UseCaseDetailJobData {
@@ -61,12 +82,19 @@ export interface ChatMessageJobData {
   model?: string;
 }
 
+export interface DocumentSummaryJobData {
+  documentId: string;
+  lang?: string; // default: 'fr'
+  model?: string;
+}
+
 export type JobData =
   | OrganizationEnrichJobData
   | UseCaseListJobData
   | UseCaseDetailJobData
   | ExecutiveSummaryJobData
-  | ChatMessageJobData;
+  | ChatMessageJobData
+  | DocumentSummaryJobData;
 
 export interface Job {
   id: string;
@@ -130,6 +158,107 @@ export class QueueManager {
     } finally {
       client.release();
     }
+  }
+
+  private async hasAnyContextDocuments(
+    workspaceId: string,
+    contextType: 'organization' | 'folder' | 'usecase',
+    contextId: string
+  ): Promise<boolean> {
+    const [row] = await db
+      .select({ id: contextDocuments.id })
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.workspaceId, workspaceId), eq(contextDocuments.contextType, contextType), eq(contextDocuments.contextId, contextId)))
+      .limit(1);
+    return Boolean(row?.id);
+  }
+
+  private async getDocumentsContextsForGeneration(opts: {
+    workspaceId: string;
+    folderId: string;
+    organizationId?: string | null;
+  }): Promise<Array<{ workspaceId: string; contextType: 'organization' | 'folder'; contextId: string }>> {
+    const { workspaceId, folderId, organizationId } = opts;
+    const contexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder'; contextId: string }> = [];
+
+    if (await this.hasAnyContextDocuments(workspaceId, 'folder', folderId)) {
+      contexts.push({ workspaceId, contextType: 'folder', contextId: folderId });
+    }
+    if (organizationId && (await this.hasAnyContextDocuments(workspaceId, 'organization', organizationId))) {
+      contexts.push({ workspaceId, contextType: 'organization', contextId: organizationId });
+    }
+    return contexts;
+  }
+
+  /**
+   * Build a preloaded documents context (list + summaries) to inject in generation prompts.
+   * Budget is enforced in characters to avoid overly large prompts.
+   */
+  private async buildDocumentsContextJsonForGeneration(opts: {
+    workspaceId: string;
+    contexts: Array<{ contextType: 'organization' | 'folder'; contextId: string }>;
+    maxChars: number;
+  }): Promise<string> {
+    const { workspaceId, contexts, maxChars } = opts;
+    if (!contexts || contexts.length === 0) return '';
+
+    // Load docs from DB (summary is stored in context_documents.data.summary).
+    const rows = await db.select({
+      id: contextDocuments.id,
+      contextType: contextDocuments.contextType,
+      contextId: contextDocuments.contextId,
+      filename: contextDocuments.filename,
+      mimeType: contextDocuments.mimeType,
+      status: contextDocuments.status,
+      sizeBytes: contextDocuments.sizeBytes,
+      createdAt: contextDocuments.createdAt,
+      updatedAt: contextDocuments.updatedAt,
+      data: contextDocuments.data,
+    })
+      .from(contextDocuments)
+      .where(eq(contextDocuments.workspaceId, workspaceId));
+
+    const allowed = new Set(contexts.map((c) => `${c.contextType}:${c.contextId}`));
+    const candidates = rows
+      .filter((r) => allowed.has(`${r.contextType}:${r.contextId}`))
+      .map((r) => {
+        const dataObj = r.data && typeof r.data === 'object' ? (r.data as Record<string, unknown>) : {};
+        const summary = typeof dataObj.summary === 'string' ? dataObj.summary : '';
+        return {
+          id: r.id,
+          contextType: r.contextType,
+          contextId: r.contextId,
+          filename: r.filename,
+          mimeType: r.mimeType,
+          status: r.status,
+          sizeBytes: r.sizeBytes ?? null,
+          updatedAt: (r.updatedAt ?? r.createdAt ?? null) ? new Date(r.updatedAt ?? r.createdAt ?? new Date()).toISOString() : null,
+          summary,
+        };
+      })
+      .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+
+    const picked: Array<unknown> = [];
+    let usedChars = 0;
+    const reserve = 400; // headroom for wrapper fields
+    const effectiveMax = Math.max(5_000, Math.floor(maxChars));
+
+    for (const item of candidates) {
+      const s = JSON.stringify(item);
+      const next = usedChars + s.length + 2;
+      if (next + reserve > effectiveMax) break;
+      picked.push(item);
+      usedChars = next;
+    }
+
+    const truncated = picked.length < candidates.length;
+    const payload = {
+      version: 1,
+      limits: { maxChars: effectiveMax },
+      truncated,
+      items: picked,
+    };
+    return JSON.stringify(payload, null, 2);
   }
 
   /**
@@ -232,17 +361,37 @@ export class QueueManager {
   /**
    * Ajouter un job à la queue
    */
-  async addJob(type: JobType, data: JobData, opts?: { workspaceId?: string }): Promise<string> {
+  async addJob(
+    type: JobType,
+    data: JobData,
+    opts?: {
+      workspaceId?: string;
+      /**
+       * Max number of retries after the initial attempt.
+       * - 0 => 1 total attempt (default)
+       * - 1 => up to 2 total attempts
+       */
+      maxRetries?: number;
+    }
+  ): Promise<string> {
     if (this.cancelAllInProgress || this.paused) {
       console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
       throw new Error('Queue is paused or cancelling; job not accepted');
     }
     const jobId = createId();
     const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
+    const maxRetries = Number.isFinite(opts?.maxRetries as number) ? Number(opts?.maxRetries) : 0;
+    const payload = {
+      ...(data as unknown as Record<string, unknown>),
+      _retry: {
+        attempt: 0,
+        maxRetries: Math.max(0, Math.floor(maxRetries)),
+      },
+    };
     
     await db.run(sql`
       INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'pending', ${new Date()}, ${workspaceId})
+      VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
     `);
     await this.notifyJobEvent(jobId);
     
@@ -275,12 +424,39 @@ export class QueueManager {
     try {
       const inFlight = new Set<Promise<void>>();
 
-      const pickPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
+      const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const getGlobalProcessingCount = async (): Promise<number> => {
+        try {
+          const rows = (await db.all(sql`
+            SELECT COUNT(*)::int AS count
+            FROM job_queue
+            WHERE status = 'processing'
+          `)) as Array<{ count: number }>;
+          return rows?.[0]?.count ?? 0;
+        } catch {
+          return 0;
+        }
+      };
+
+      const hasAnyPending = async (): Promise<boolean> => {
+        const rows = await db
+          .select({ id: sql<string>`id` })
+          .from(jobQueue)
+          .where(eq(jobQueue.status, 'pending'))
+          .limit(1);
+        return rows.length > 0;
+      };
+
+      const claimPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
         if (limit <= 0) return [];
-        // Priority: chat > usecase_list > others, then FIFO by created_at.
-        // This avoids chat starvation when long jobs (usecase_detail/executive_summary) are running.
-        return (await db.all(sql`
-          SELECT * FROM job_queue
+        // GLOBAL concurrency: we claim jobs in DB atomically. This prevents over-parallelization across workers
+        // and ensures the configured limit applies to the sum of all job types.
+        const now = new Date();
+        const rows = (await db.all(sql`
+          WITH picked AS (
+            SELECT id
+            FROM job_queue
           WHERE status = 'pending'
           ORDER BY
             CASE type
@@ -290,17 +466,29 @@ export class QueueManager {
             END,
             created_at ASC
           LIMIT ${limit}
+            FOR UPDATE SKIP LOCKED
+          )
+          UPDATE job_queue q
+          SET status = 'processing', started_at = ${now}
+          FROM picked
+          WHERE q.id = picked.id
+          RETURNING q.*
         `)) as JobQueueRow[];
+        return rows ?? [];
       };
 
       while (!this.paused) {
         if (this.cancelAllInProgress) break;
 
         // Fill available slots continuously (don't wait for a whole batch to finish).
-        const slots = Math.max(0, this.maxConcurrentJobs - inFlight.size);
+        // IMPORTANT: slots are computed from the GLOBAL processing count in DB,
+        // so the configured limit applies to the sum of all queues (all types) and across workers.
+        const globalProcessing = await getGlobalProcessingCount();
+        const slots = Math.max(0, this.maxConcurrentJobs - globalProcessing);
         if (slots > 0) {
-          const pendingJobs = await pickPendingJobs(slots);
-          for (const job of pendingJobs) {
+          const claimedJobs = await claimPendingJobs(slots);
+          for (const job of claimedJobs) {
+            await this.notifyJobEvent(job.id);
             const p = this.processJob(job).finally(() => {
               inFlight.delete(p);
             });
@@ -310,14 +498,18 @@ export class QueueManager {
 
         // If nothing is running and nothing is pending, we're done.
         if (inFlight.size === 0) {
-          const more = await pickPendingJobs(1);
-          if (more.length === 0) break;
-          // else loop will pick it next iteration
+          const more = await hasAnyPending();
+          if (!more) break;
+          // No local work but pending exists: either slots=0 (global limit reached) or a race. Wait briefly.
+          await sleep(200);
           continue;
         }
 
         // Wait for at least one job to finish, then continue filling.
-        await Promise.race(inFlight);
+        // IMPORTANT: do not block indefinitely on long-running jobs.
+        // New jobs can be enqueued while we are waiting; we must periodically wake up to claim
+        // additional pending jobs (up to the configured global concurrency).
+        await Promise.race([Promise.race(inFlight), sleep(this.processingInterval)]);
       }
     } finally {
       this.isProcessing = false;
@@ -331,30 +523,63 @@ export class QueueManager {
   private async processJob(job: JobQueueRow): Promise<void> {
     const jobId = job.id;
     const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data);
+    const jobData = JSON.parse(job.data) as unknown;
+
+    const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
+      if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
+      const retry = (value as { _retry?: unknown })._retry;
+      if (!retry || typeof retry !== 'object') return { attempt: 0, maxRetries: 0 };
+      const attemptRaw = (retry as { attempt?: unknown }).attempt;
+      const maxRaw = (retry as { maxRetries?: unknown }).maxRetries;
+      const attempt = typeof attemptRaw === 'number' && Number.isFinite(attemptRaw) ? attemptRaw : Number(attemptRaw);
+      const maxRetries = typeof maxRaw === 'number' && Number.isFinite(maxRaw) ? maxRaw : Number(maxRaw);
+      return {
+        attempt: Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0,
+        maxRetries: Number.isFinite(maxRetries) ? Math.max(0, Math.floor(maxRetries)) : 0,
+      };
+    };
+
+    const { attempt: retryAttempt, maxRetries: retryMax } = getRetryMeta(jobData);
+
+    const isAbort = (err: unknown): boolean => {
+      if (!err) return false;
+      if (err instanceof DOMException && err.name === 'AbortError') return true;
+      if (err instanceof Error && err.name === 'AbortError') return true;
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg.includes('AbortError') || msg.includes('aborted') || msg.includes('Request was aborted');
+    };
+
+    const isRetryableUseCaseError = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // JSON/format issues (LLM returned non-JSON or concatenated junk)
+      if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
+        return true;
+      }
+      // Missing scores arrays leading to validateScores crash
+      if (msg.includes("Cannot read properties of undefined (reading 'map')")) {
+        return true;
+      }
+      // Transient network/OpenAI-ish issues (best-effort)
+      if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('ENOTFOUND')) {
+        return true;
+      }
+      return false;
+    };
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
 
-      // Safety: the job may have been purged between SELECT and processing start.
-      // If it no longer exists (or is no longer pending), don't execute any expensive work.
+      // Safety: the job may have been purged between claim and processing start.
+      // Also protects against any unexpected double-processing: only proceed if job is still processing.
       const [current] = await db
         .select({ status: jobQueue.status })
         .from(jobQueue)
         .where(eq(jobQueue.id, jobId))
         .limit(1);
-      if (!current || current.status !== 'pending') {
-        console.log(`⏭️ Skipping job ${jobId}: missing or not pending (likely purged)`);
+      if (!current || current.status !== 'processing') {
+        console.log(`⏭️ Skipping job ${jobId}: missing or not processing (likely purged/claimed elsewhere)`);
         return;
       }
-      
-      // Marquer comme en cours
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'processing', started_at = ${new Date()}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
 
       const controller = new AbortController();
       this.jobControllers.set(jobId, controller);
@@ -362,19 +587,26 @@ export class QueueManager {
       // Traiter selon le type
       switch (jobType) {
         case 'organization_enrich':
-          await this.processOrganizationEnrich(jobData as OrganizationEnrichJobData, jobId, controller.signal);
+          await this.processOrganizationEnrich(jobData as unknown as OrganizationEnrichJobData, jobId, controller.signal);
           break;
         case 'usecase_list':
-          await this.processUseCaseList(jobData as UseCaseListJobData, controller.signal);
+          await this.processUseCaseList(jobData as unknown as UseCaseListJobData, controller.signal);
           break;
         case 'usecase_detail':
-          await this.processUseCaseDetail(jobData as UseCaseDetailJobData, controller.signal);
+          await this.processUseCaseDetail(jobData as unknown as UseCaseDetailJobData, controller.signal);
           break;
         case 'executive_summary':
-          await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
+          await this.processExecutiveSummary(jobData as unknown as ExecutiveSummaryJobData, controller.signal);
           break;
         case 'chat_message':
-          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
+          await this.processChatMessage(jobData as unknown as ChatMessageJobData, controller.signal);
+          break;
+        case 'document_summary':
+          await this.processDocumentSummary(
+            jobData as unknown as DocumentSummaryJobData,
+            jobId,
+            controller.signal
+          );
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
@@ -391,6 +623,29 @@ export class QueueManager {
       console.log(`✅ Job ${jobId} completed successfully`);
     } catch (error) {
       console.error(`❌ Job ${jobId} failed:`, error);
+
+      // Retry logic (bounded) for use case generation jobs only.
+      // IMPORTANT: never retry on AbortError (user/admin cancel).
+      if ((jobType === 'usecase_list' || jobType === 'usecase_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableUseCaseError(error)) {
+        const nextAttempt = retryAttempt + 1;
+        const nextData =
+          jobData && typeof jobData === 'object'
+            ? { ...(jobData as Record<string, unknown>), _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'pending',
+              data = ${JSON.stringify(nextData)},
+              error = ${`retry ${nextAttempt}/${retryMax}: ${msg}`},
+              started_at = NULL,
+              completed_at = NULL
+          WHERE id = ${jobId}
+        `);
+        await this.notifyJobEvent(jobId);
+        console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
+        return;
+      }
       
       // Marquer comme échoué
       await db.run(sql`
@@ -399,6 +654,35 @@ export class QueueManager {
         WHERE id = ${jobId}
       `);
       await this.notifyJobEvent(jobId);
+
+      // Best-effort: also propagate failure to context_documents for document_summary jobs,
+      // so the UI can show `failed` without having to inspect job_queue.
+      if (jobType === 'document_summary') {
+        try {
+          const docId =
+            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
+              ? (jobData as { documentId: string }).documentId
+              : null;
+          if (docId) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
+            await db.run(sql`
+              UPDATE context_documents
+              SET status = 'failed',
+                  data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ${docId}
+            `);
+
+            // Best-effort: also stream an error for observers (streamId derived from documentId).
+            const streamId = `document_${docId}`;
+            const seq = await getNextSequence(streamId);
+            await writeStreamEvent(streamId, 'error', { message: msg }, seq);
+          }
+        } catch {
+          // ignore
+        }
+      }
     } finally {
       this.jobControllers.delete(jobId);
     }
@@ -416,9 +700,37 @@ export class QueueManager {
     // (les job_update peuvent être restreints). Donc on utilise un streamId déterministe basé sur l'entreprise.
     const streamId = `organization_${organizationId}`;
     
-    // Enrichir l'organisation avec streaming
-    // enrichOrganization utilise le streaming si streamId est fourni
-    const enrichedData: OrganizationData = await enrichOrganization(organizationName, model, signal, streamId);
+    // Fetch current org row (needed for workspace scope + preserve user-entered fields)
+    const [existingOrg] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    const workspaceId = typeof existingOrg?.workspaceId === 'string' ? existingOrg.workspaceId : '';
+    const existingData = parseOrgData(existingOrg?.data);
+    const effectiveName = (existingOrg?.name || organizationName || '').trim() || organizationName;
+
+    // Only expose documents tool if this organization has attached documents.
+    const hasOrgDocs = await (async () => {
+      if (!workspaceId) return false;
+      const rows = await db
+        .select({ id: sql<string>`id` })
+        .from(contextDocuments)
+        .where(
+          and(
+            eq(contextDocuments.workspaceId, workspaceId),
+            eq(contextDocuments.contextType, 'organization'),
+            eq(contextDocuments.contextId, organizationId)
+          )
+        )
+        .limit(1);
+      return rows.length > 0;
+    })();
+
+    // Enrichir l'organisation avec streaming.
+    // IMPORTANT: `documents` tool is enabled only when docs exist; otherwise the model must not call it.
+    const enrichedData: OrganizationData = await enrichOrganization(effectiveName, model, signal, streamId, {
+      organizationId,
+      workspaceId,
+      existingData,
+      useDocuments: hasOrgDocs
+    });
 
     // Safety: PostgreSQL text/json cannot contain NUL (\u0000). Strip control chars before DB write.
     const sanitizePgText = (input: string): string => {
@@ -432,7 +744,7 @@ export class QueueManager {
       return out;
     };
     const clean = (s: string) => sanitizePgText(typeof s === 'string' ? s : String(s ?? ''));
-    const cleanedReferences = Array.isArray(enrichedData.references)
+    const cleanedReferences: Array<{ title: string; url: string; excerpt: string | undefined }> = Array.isArray(enrichedData.references)
       ? enrichedData.references
           .map((r) => ({
             title: clean(r.title),
@@ -453,21 +765,52 @@ export class QueueManager {
       references: cleanedReferences,
     };
     
-    // Store enriched profile in organizations.data JSONB (legacy prompt shape)
+    // Merge: preserve user-entered fields already present in organizations.data.
+    const pickStr = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const keepIfFilled = (existing: unknown, next: string) => (pickStr(existing) ? pickStr(existing) : next);
+    const mergeRefs = (
+      existingRefs: unknown,
+      nextRefs: Array<{ title: string; url: string; excerpt: string | undefined }>
+    ): Array<{ title: string; url: string; excerpt: string | undefined }> => {
+      const base = Array.isArray(existingRefs)
+        ? existingRefs
+            .map((r) => (r && typeof r === 'object' ? (r as Record<string, unknown>) : null))
+            .filter((r): r is Record<string, unknown> => !!r)
+            .map((r) => ({
+              title: clean(typeof r.title === 'string' ? r.title : String(r.title ?? '')),
+              url: clean(typeof r.url === 'string' ? r.url : String(r.url ?? '')),
+              excerpt: typeof r.excerpt === 'string' ? clean(r.excerpt) : undefined,
+            }))
+            .filter((r) => r.title.trim() && r.url.trim())
+        : [];
+      const byUrl = new Set(base.map((r) => r.url));
+      const merged = [...base];
+      for (const r of nextRefs || []) {
+        if (!r?.url) continue;
+        if (byUrl.has(r.url)) continue;
+        merged.push({ title: r.title, url: r.url, excerpt: r.excerpt });
+        byUrl.add(r.url);
+      }
+      return merged;
+    };
+
+    const mergedData: OrganizationData = {
+      industry: keepIfFilled(existingData.industry, cleanedData.industry),
+      size: keepIfFilled(existingData.size, cleanedData.size),
+      products: keepIfFilled(existingData.products, cleanedData.products),
+      processes: keepIfFilled(existingData.processes, cleanedData.processes),
+      kpis: keepIfFilled(existingData.kpis, cleanedData.kpis),
+      challenges: keepIfFilled(existingData.challenges, cleanedData.challenges),
+      objectives: keepIfFilled(existingData.objectives, cleanedData.objectives),
+      technologies: keepIfFilled(existingData.technologies, cleanedData.technologies),
+      references: mergeRefs(existingData.references, cleanedReferences),
+    };
+
+    // Store enriched profile in organizations.data JSONB
     await db
       .update(organizations)
       .set({
-        data: {
-          industry: cleanedData.industry,
-          size: cleanedData.size,
-          products: cleanedData.products,
-          processes: cleanedData.processes,
-          kpis: cleanedData.kpis,
-          challenges: cleanedData.challenges,
-          objectives: cleanedData.objectives,
-          technologies: cleanedData.technologies,
-          references: cleanedData.references ?? [],
-        },
+        data: mergedData,
         status: 'completed',
         updatedAt: new Date(),
       })
@@ -476,14 +819,252 @@ export class QueueManager {
     await this.notifyOrganizationEvent(organizationId);
   }
 
+  private sanitizePgText(input: string): string {
+    let out = '';
+    for (let i = 0; i < input.length; i += 1) {
+      const code = input.charCodeAt(i);
+      if (code === 0) continue;
+      if (code < 32 && code !== 9 && code !== 10 && code !== 13) continue;
+      out += input[i];
+    }
+    return out;
+  }
+
+  private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
+    const t = (text || '').trim();
+    if (!t) return { text: '', trimmed: false, words: 0 };
+    const words = t.split(/\s+/g).filter(Boolean);
+    const max = Math.max(1, Math.min(10_000, Math.floor(maxWords || 10_000)));
+    if (words.length <= max) return { text: t, trimmed: false, words: words.length };
+    return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
+  }
+
+  private chunkByWords(text: string, chunkWords: number): string[] {
+    const t = (text || '').trim();
+    if (!t) return [];
+    const words = t.split(/\s+/g).filter(Boolean);
+    const size = Math.max(500, Math.min(8000, Math.floor(chunkWords || 4500)));
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i += size) {
+      out.push(words.slice(i, i + size).join(' '));
+    }
+    return out;
+  }
+
+  private async getNextModificationSequence(contextType: string, contextId: string): Promise<number> {
+    const result = await db
+      .select({ maxSequence: sql<number>`MAX(${contextModificationHistory.sequence})` })
+      .from(contextModificationHistory)
+      .where(and(eq(contextModificationHistory.contextType, contextType), eq(contextModificationHistory.contextId, contextId)));
+    const maxSequence = result[0]?.maxSequence ?? 0;
+    return maxSequence + 1;
+  }
+
+  /**
+   * Worker: summarize an uploaded document and update context_documents.
+   * MVP: supports text-like formats only (text/*, application/json).
+   */
+  private async processDocumentSummary(
+    data: DocumentSummaryJobData,
+    jobId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const { documentId } = data;
+    const lang = (data.lang || 'fr').trim() || 'fr';
+    const streamId = `document_${documentId}`;
+
+    const write = async (eventType: StreamEventType, payload: unknown) => {
+      const seq = await getNextSequence(streamId);
+      await writeStreamEvent(streamId, eventType, payload, seq);
+    };
+
+    // Ensure a deterministic "started" exists for monitors and any UI observers.
+    await write('status', { state: 'started', jobType: 'document_summary', documentId });
+
+    const [doc] = await db
+      .select()
+      .from(contextDocuments)
+      .where(eq(contextDocuments.id, documentId))
+      .limit(1);
+    if (!doc) throw new Error('Document not found');
+    const workspaceId = doc.workspaceId;
+
+    try {
+      await db
+        .update(contextDocuments)
+        .set({ status: 'processing', jobId, updatedAt: new Date() })
+        .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+
+      const bucket = getDocumentsBucketName();
+      const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
+      let text: string;
+      let extractedMetaTitle: string | undefined;
+      let extractedMetaPages: number | undefined;
+      let extractedMetaWords: number | undefined;
+      try {
+        await write('status', { state: 'extracting' });
+        const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
+        text = extracted.text;
+        extractedMetaTitle = extracted.metadata.title;
+        extractedMetaPages = extracted.metadata.pages;
+        extractedMetaWords = (extracted.metadata as unknown as { words?: unknown }).words as number | undefined;
+      } catch (e) {
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
+      }
+
+      const trimmed = text.trim();
+      if (trimmed.length < 80) {
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+        throw new Error('No text extracted from document (empty or image-only PDF).');
+      }
+
+      const clipped = trimmed.length > 50_000 ? trimmed.slice(0, 50_000) : trimmed;
+      const docTitleRaw = (extractedMetaTitle || doc.filename || '-').trim() || '-';
+      const docTitle = docTitleRaw === '-' ? 'Non précisé' : docTitleRaw;
+      const nbPages =
+        typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
+      const nbWords = (() => {
+        if (typeof extractedMetaWords === 'number' && Number.isFinite(extractedMetaWords) && extractedMetaWords > 0) {
+          return String(extractedMetaWords);
+        }
+        // Fallback: count on full extracted text; if unavailable, count on clipped (aligned with what we send to the model).
+        const fromFull = text.split(/\s+/).filter(Boolean).length;
+        if (Number.isFinite(fromFull) && fromFull > 0) return String(fromFull);
+        const fromClipped = clipped.split(/\s+/).filter(Boolean).length;
+        return Number.isFinite(fromClipped) && fromClipped > 0 ? String(fromClipped) : 'Non précisé';
+      })();
+
+      await write('status', { state: 'summarizing' });
+      const summary = await generateDocumentSummary({
+        lang: lang === 'en' ? 'en' : 'fr',
+        docTitle,
+        nbPages,
+        fullWords: nbWords,
+        documentText: clipped,
+        streamId,
+        signal,
+      });
+
+      // For large documents: auto-generate a detailed summary (~10k words) and store it in data.
+      // This is persisted so it is visible in db-query and reusable by tools.
+      const wordsAsNumber = Number(nbWords);
+      let detailedSummary: string | null = null;
+      let detailedSummaryWords: number | null = null;
+      if (Number.isFinite(wordsAsNumber) && wordsAsNumber > 10_000) {
+        await write('status', { state: 'summarizing_detailed' });
+        const detailed = await generateDocumentDetailedSummary({
+          text,
+          filename: doc.filename,
+          lang: lang === 'en' ? 'en' : 'fr',
+          streamId,
+          signal,
+        });
+        const policy = getDocumentDetailedSummaryPolicy();
+        if (!detailed.detailedSummary.trim() || detailed.words < policy.detailedSummaryMinWords) {
+          throw new Error(
+            `Résumé détaillé insuffisant: ${detailed.words} mots (min ${policy.detailedSummaryMinWords}). Relancer le job.`
+          );
+        }
+        detailedSummary = detailed.detailedSummary;
+        detailedSummaryWords = detailed.words;
+      }
+
+      const nextData = {
+        ...(doc.data && typeof doc.data === 'object' ? (doc.data as Record<string, unknown>) : {}),
+        summary,
+        summaryLang: lang,
+        extracted: {
+          title: docTitle,
+          pages: nbPages === 'Non précisé' ? null : Number(nbPages),
+          words: nbWords === 'Non précisé' ? null : Number(nbWords),
+        },
+        prompts: {
+          summaryPromptId: 'document_summary',
+        }
+      };
+
+      const dataWithDetailed: Record<string, unknown> = detailedSummary
+        ? {
+            ...nextData,
+            detailedSummary,
+            detailedSummaryLang: lang,
+            detailedSummaryWords,
+            detailed_summary: detailedSummary,
+            detailed_summary_lang: lang,
+            detailed_summary_words: detailedSummaryWords,
+            prompts: { ...(nextData.prompts as Record<string, unknown>), detailedPromptId: 'document_detailed_summary' }
+          }
+        : nextData;
+
+      await db
+        .update(contextDocuments)
+        .set({ status: 'ready', data: dataWithDetailed, updatedAt: new Date() })
+        .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
+
+      await write('done', { state: 'done' });
+    } catch (error) {
+      // IMPORTANT: always reflect failure on the document row itself so the UI can show `failed`
+      // even if the outer job error propagation fails for any reason.
+      try {
+        const msg = error instanceof Error ? error.message : String(error);
+        const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
+        await db.run(sql`
+          UPDATE context_documents
+          SET status = 'failed',
+              data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${documentId} AND workspace_id = ${workspaceId}
+        `);
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
+
+    // History event
+    let seq = await this.getNextModificationSequence(doc.contextType, doc.contextId);
+    await db.insert(contextModificationHistory).values({
+      id: createId(),
+      contextType: doc.contextType,
+      contextId: doc.contextId,
+      sessionId: null,
+      messageId: null,
+      field: 'document_summarized',
+      oldValue: null,
+      newValue: { documentId, status: 'ready', summaryLang: lang },
+      toolCallId: null,
+      promptId: null,
+      promptType: null,
+      promptVersionId: null,
+      jobId,
+      sequence: seq,
+      createdAt: new Date(),
+    });
+    seq += 1;
+  }
+
   /**
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, model } = data;
+    const { folderId, input, organizationId, model, useCaseCount } = data;
 
     const [folder] = await db
-      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .select({
+        id: folders.id,
+        workspaceId: folders.workspaceId,
+        name: folders.name,
+        description: folders.description,
+        organizationId: folders.organizationId,
+      })
       .from(folders)
       .where(eq(folders.id, folderId))
       .limit(1);
@@ -491,6 +1072,7 @@ export class QueueManager {
       throw new Error('Folder not found');
     }
     const workspaceId = folder.workspaceId;
+    const resolvedOrganizationId = organizationId ?? folder.organizationId ?? undefined;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -498,12 +1080,12 @@ export class QueueManager {
     
     // Récupérer les informations de l'organisation si nécessaire
     let organizationInfo = '';
-    if (organizationId) {
+    if (resolvedOrganizationId) {
       try {
         const [org] = await db
           .select()
           .from(organizations)
-          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)));
+          .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, workspaceId)));
         if (org) {
           const orgData = parseOrgData(org.data);
           organizationInfo = JSON.stringify({
@@ -518,7 +1100,7 @@ export class QueueManager {
           }, null, 2);
           console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
         } else {
-          console.warn(`⚠️ Organization not found with id: ${organizationId}`);
+          console.warn(`⚠️ Organization not found with id: ${resolvedOrganizationId}`);
         }
       } catch (error) {
         console.warn('Error fetching organization info:', error);
@@ -527,19 +1109,55 @@ export class QueueManager {
       console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
     }
 
+    const documentsContexts = await this.getDocumentsContextsForGeneration({
+      workspaceId,
+      folderId,
+      organizationId: resolvedOrganizationId,
+    });
+    const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
+      workspaceId,
+      contexts: documentsContexts.map((c) => ({ contextType: c.contextType, contextId: c.contextId })),
+      // Single budget only (no separate doc-count cap): ~100k words equivalent in chars.
+      maxChars: 600_000,
+    });
+
+    const userFolderName =
+      typeof folder.name === 'string' && folder.name.trim() && folder.name.trim() !== 'Brouillon' && !folder.name.startsWith('Génération -')
+        ? folder.name.trim()
+        : '';
+
     // Générer la liste de cas d'usage
     const streamId = `folder_${folderId}`;
-    const useCaseList = await generateUseCaseList(input, organizationInfo, selectedModel, signal, streamId);
+    const useCaseList = await generateUseCaseList(
+      input,
+      organizationInfo,
+      selectedModel,
+      useCaseCount,
+      userFolderName,
+      documentsContexts,
+      documentsContextJson,
+      signal,
+      streamId
+    );
     
     // Mettre à jour le nom du dossier
-    if (useCaseList.dossier) {
-      await db.update(folders)
+    // - si l'utilisateur a fourni un nom: le préserver
+    // - sinon: utiliser le nom généré par l'IA (et ne jamais conserver "Brouillon" comme titre final)
+    const generatedFolderName =
+      typeof useCaseList.dossier === 'string' && useCaseList.dossier.trim() && useCaseList.dossier.trim() !== 'Brouillon'
+        ? useCaseList.dossier.trim()
+        : '';
+    const nextFolderName = userFolderName || generatedFolderName;
+    if (nextFolderName) {
+      const shouldFillDescription = !folder.description || !folder.description.trim();
+      await db
+        .update(folders)
         .set({
-          name: useCaseList.dossier,
-          description: `Dossier généré automatiquement pour: ${input}`
+          name: nextFolderName,
+          ...(shouldFillDescription ? { description: input } : {}),
         })
         .where(eq(folders.id, folderId));
-      console.log(`📁 Folder updated: ${useCaseList.dossier} (ID: ${folderId}, Org: ${organizationId || 'None'})`);
+      console.log(`📁 Folder updated: ${nextFolderName} (ID: ${folderId}, Org: ${resolvedOrganizationId || 'None'})`);
       await this.notifyFolderEvent(folderId);
     }
 
@@ -600,7 +1218,7 @@ export class QueueManager {
             useCaseName: useCaseName,
             folderId: folderId,
             model: selectedModel
-          }, { workspaceId });
+          }, { workspaceId, maxRetries: 1 });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
         }
@@ -662,6 +1280,18 @@ export class QueueManager {
     }
     
     const context = folder.description || '';
+
+    const documentsContexts = await this.getDocumentsContextsForGeneration({
+      workspaceId: folder.workspaceId,
+      folderId,
+      organizationId: folder.organizationId,
+    });
+    const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
+      workspaceId: folder.workspaceId,
+      contexts: documentsContexts.map((c) => ({ contextType: c.contextType, contextId: c.contextId })),
+      // Single budget only (no separate doc-count cap): ~100k words equivalent in chars.
+      maxChars: 600_000,
+    });
     
     // Générer le détail
     const streamId = `usecase_${useCaseId}`;
@@ -671,6 +1301,8 @@ export class QueueManager {
       matrixConfig,
       organizationInfo,
       selectedModel,
+      documentsContexts,
+      documentsContextJson,
       signal,
       streamId
     );

@@ -1,6 +1,19 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Gestion des erreurs', () => {
+  const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+  test.beforeEach(async ({ page }) => {
+    // Stabiliser: éviter que des specs précédents laissent l'admin en scope "lecture seule"
+    await page.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('adminWorkspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, ADMIN_WORKSPACE_ID);
+  });
+
   test('devrait gérer les erreurs 404', async ({ page }) => {
     const resp = await page.goto('/page-inexistante');
     // Vérifier que SvelteKit gère la 404 (status ou contenu page)
@@ -12,9 +25,9 @@ test.describe('Gestion des erreurs', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers /new et vérifier que le bouton Créer est désactivé sans nom
-    await page.click('button:has-text("Ajouter")');
+    await page.getByRole('button', { name: 'Créer une organisation' }).click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
-    const createBtn = page.locator('button:has-text("Créer")');
+    const createBtn = page.getByRole('button', { name: 'Créer' });
     await expect(createBtn).toBeDisabled();
   });
 

@@ -200,6 +200,10 @@ erDiagram
     chat_messages ||--o{ context_modification_history : "message_id (nullable)"
     job_queue ||--o{ context_modification_history : "job_id (nullable)"
 
+    workspaces ||--o{ context_documents : "workspace_id"
+    job_queue ||--o{ context_documents : "job_id (nullable)"
+    context_documents ||--o{ context_document_versions : "document_id"
+
     chat_sessions {
         text id PK
         text user_id FK
@@ -276,10 +280,40 @@ erDiagram
         int sequence
         timestamp created_at
     }
+
+    context_documents {
+        text id PK
+        text workspace_id FK
+        text context_type
+        text context_id
+        text filename
+        text mime_type
+        int size_bytes
+        text storage_key
+        text status
+        jsonb data
+        text job_id "FK job_queue.id (nullable)"
+        int version
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    context_document_versions {
+        text id PK
+        text document_id FK
+        int version
+        text filename
+        text mime_type
+        int size_bytes
+        text storage_key
+        jsonb data
+        timestamp created_at
+    }
 ```
 
 Notes :
 - `context_modification_history.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases` (et `folders` pour `executive_summary`).
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
+- `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 
 

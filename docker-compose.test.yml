@@ -4,6 +4,13 @@ services:
       - ADMIN_EMAIL=e2e-admin@example.com
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:5173
+      # S3-compatible storage (CI/E2E): MinIO
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_REGION=${S3_REGION:-fr-par-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-top-ai-ideas-test}
+      # IMPORTANT: avoid leaking real Scaleway creds from host env into test MinIO.
+      - SCW_ACCESS_KEY=minioadmin
+      - SCW_SECRET_KEY=minioadmin
   e2e:
     network_mode: host
     image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
@@ -24,3 +31,26 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+
+  minio-init:
+    image: minio/mc:latest
+    profiles: ["init"]
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
+        echo "waiting for minio..." && sleep 1;
+      done;
+      mc mb --ignore-existing local/${S3_BUCKET_NAME:-top-ai-ideas-test} || true;
+      mc anonymous set none local/${S3_BUCKET_NAME:-top-ai-ideas-test} || true;
+      exit 0
+    restart: "no"

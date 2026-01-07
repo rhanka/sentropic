@@ -266,6 +266,7 @@
     };
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
+    window.addEventListener('topai:close-chat', onExternalCloseChat as any);
     syncScrollLock();
     if ($isAuthenticated) await loadJobs();
   });
@@ -292,6 +293,13 @@
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target as any)?.isContentEditable) return;
     e.preventDefault();
     void toggle();
+  };
+
+  const onExternalCloseChat = () => {
+    // Only close automatically when the chat is docked full screen on mobile.
+    if (!isDocked || !isMobileViewport) return;
+    if (!isVisible) return;
+    close();
   };
 
   const toggle = async () => {
@@ -337,7 +345,8 @@
       return;
     }
     try {
-      const result = await apiPost('/queue/purge', { status: 'all' });
+      // Admin-only: purge across ALL workspaces
+      const result = await apiPost('/queue/purge-global', { status: 'all' });
       addToast({ type: 'success', message: result.message });
       await loadJobs();
     } catch (error) {
@@ -356,6 +365,7 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
+    window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
     setBodyScrollLocked(false);
     publishLayout();
     streamHub.delete('chatWidgetJobs');

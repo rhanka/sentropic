@@ -1606,6 +1606,22 @@
     flex: 0 0 50% !important;
     box-sizing: border-box !important;
   }
+
+  /* Si Références n'est pas affiché: Prochaines étapes doit prendre 100% même en mode flex print */
+  .usecase-print .layout-bottom.no-references > .layout-bottom-nextsteps,
+  div.usecase-print div.layout-bottom.no-references > .layout-bottom-nextsteps {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
+
+  /* Cas particulier: si "Références" n'est pas affiché, "Prochaines étapes" doit prendre 100% */
+  .usecase-print .layout-bottom > *:only-child,
+  div.usecase-print div.layout-bottom > *:only-child {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
   
   /* S'assurer qu'aucune règle lg:grid-cols-3 ne s'applique à layout-bottom */
   .usecase-print .layout-bottom.lg\:grid-cols-3,
@@ -1824,6 +1840,16 @@
   /* Forcer les enfants directs à ne pas avoir de grid-column spécifique */
   .usecase-print .layout-bottom > * {
     grid-column: auto !important;
+  }
+
+  /* Cas particulier: si un seul bloc est rendu (ex: Références absent), occuper 100% */
+  .usecase-print .layout-bottom > *:only-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Si Références n'est pas affiché: Prochaines étapes doit occuper 100% en mode grid print aussi */
+  .usecase-print .layout-bottom.no-references > .layout-bottom-nextsteps {
+    grid-column: 1 / -1 !important;
   }
 }
 
