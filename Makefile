@@ -32,8 +32,66 @@ version:
 	@echo "API_VERSION: $(API_VERSION)"
 	@echo "UI_VERSION: $(UI_VERSION)"
 
-cloc:
+.PHONY: cloc
+cloc: ## Count lines of code (whole repo)
 	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$'
+
+.PHONY: test-cloc
+test-cloc: ## Count lines of code (tests only: api/tests ui/tests e2e/tests)
+	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$' api/tests ui/tests e2e/tests
+
+.PHONY: cloc-test
+cloc-test: ## (deprecated) Alias for test-cloc
+	@$(MAKE) --no-print-directory test-cloc
+
+.PHONY: test-count
+test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai), API integration (ai), E2E
+	@TEST_REGEX='(^|[^[:alnum:]_])(test|it)(\.(skip|only|each|concurrent|fails|todo|fixme))*[[:space:]]*[(]'; \
+	ui_files=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print | wc -l | tr -d ' '); \
+	ui_tests=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	api_unit_files=$$(find api/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) ! -path "api/tests/ai/*" -print | wc -l | tr -d ' '); \
+	api_unit_tests=$$(find api/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) ! -path "api/tests/ai/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	api_ai_files=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
+	api_ai_tests=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print | wc -l | tr -d ' '); \
+	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files)); \
+	total_tests=$$((ui_tests + api_unit_tests + api_ai_tests + e2e_tests)); \
+	echo "📊 Comptage des tests (approx.)"; \
+	echo ""; \
+	printf "%-28s %10s %10s\n" "Scope" "Fichiers" "Tests"; \
+	printf "%-28s %10s %10s\n" "----------------------------" "----------" "----------"; \
+	printf "%-28s %10s %10s\n" "UI (unitaires)" "$$ui_files" "$$ui_tests"; \
+	printf "%-28s %10s %10s\n" "API (unitaires, sans ai)" "$$api_unit_files" "$$api_unit_tests"; \
+	printf "%-28s %10s %10s\n" "API (integration = ai)" "$$api_ai_files" "$$api_ai_tests"; \
+	printf "%-28s %10s %10s\n" "E2E (Playwright)" "$$e2e_files" "$$e2e_tests"; \
+	printf "%-28s %10s %10s\n" "TOTAL" "$$total_files" "$$total_tests"; \
+	echo ""; \
+	echo "Note: comptage basé sur occurrences de test()/it() (+ .only/.skip/.each/.concurrent/.fails/.todo/.fixme)."
+
+.PHONY: git-stats
+git-stats: ## Show git stats (commits, merged PR via merge commits)
+	@set -euo pipefail; \
+	if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
+	  echo "❌ Not a git repository"; exit 1; \
+	fi; \
+	branch="$$(git rev-parse --abbrev-ref HEAD)"; \
+	commits="$$(git rev-list --count HEAD)"; \
+	merged_pr_merge_commits="$$(git log --merges --grep='Merge pull request #' --pretty=format:%s | wc -l | tr -d ' ')"; \
+	merged_pr_union="$$( ( \
+	  git log --merges --grep='Merge pull request #' --pretty=format:%s | sed -nE 's/.*#([0-9]+).*/\1/p'; \
+	  git log --pretty=format:%s | sed -nE 's/.*\(#([0-9]+)\)\s*$$/\1/p' \
+	) | sort -n | uniq | wc -l | tr -d ' ')"; \
+	last="$$(git log -1 --pretty=format:'%h %ad %s' --date=short)"; \
+	echo "📌 Branche: $$branch"; \
+	echo "🧱 Commits (HEAD): $$commits"; \
+	echo "🔀 PR mergées (merge commits 'Merge pull request #...'): $$merged_pr_merge_commits"; \
+	echo "🧮 PR mergées (approx, PR # uniques détectées): $$merged_pr_union"; \
+	echo "🕒 Dernier commit: $$last"; \
+	if [ "$$merged_pr_union" != "$$merged_pr_merge_commits" ]; then \
+	  echo ""; \
+	  echo "Note: les PR squash/rebase ne laissent pas toujours de trace fiable dans git; utiliser l’API GitHub pour un chiffre exact."; \
+	fi
 
 # -----------------------------------------------------------------------------
 # Installation & Build
