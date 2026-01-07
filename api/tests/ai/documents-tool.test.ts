@@ -51,7 +51,7 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     }
   });
 
-  it('documents.get_content (long doc): generates a ~10k words detailed summary and sets maxOutputTokens', async () => {
+  it('documents.get_content (long doc): does not generate; returns placeholder when detailedSummary is missing', async () => {
     docId = createId();
     await db.insert(contextDocuments).values({
       id: docId,
@@ -76,11 +76,6 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
       headingsH1: [],
     });
 
-    // OpenAI generates a sufficiently long detailed summary (no expansion fallback needed).
-    mockCallOpenAI.mockResolvedValueOnce({
-      choices: [{ message: { content: 'résumé '.repeat(9_500).trim() } }],
-    });
-
     const res = await toolService.getDocumentContent({
       workspaceId,
       contextType,
@@ -90,14 +85,10 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
 
     expect(res.contentMode).toBe('detailed_summary');
     expect(res.contentWords).toBeDefined();
-    expect(res.contentWords!).toBeGreaterThanOrEqual(8000);
-    expect(res.contentWords!).toBeLessThanOrEqual(10_000);
-    expect(res.clipped).toBe(false);
-
-    expect(mockCallOpenAI).toHaveBeenCalledTimes(1);
-    const args0 = mockCallOpenAI.mock.calls[0]?.[0];
-    expect(args0?.model).toBe('gpt-4.1-nano');
-    expect(args0?.maxOutputTokens).toBe(20000);
+    expect(res.clipped).toBe(true);
+    expect(res.content).toContain('Résumé détaillé indisponible');
+    expect(mockCallOpenAI).not.toHaveBeenCalled();
+    expect(mockExtract).toHaveBeenCalledTimes(1);
   });
 
   it('documents.analyze (very long doc): scans ALL chunks + merge, with bounded maxOutputTokens', async () => {
