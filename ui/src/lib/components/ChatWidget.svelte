@@ -266,6 +266,7 @@
     };
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
+    window.addEventListener('topai:close-chat', onExternalCloseChat as any);
     syncScrollLock();
     if ($isAuthenticated) await loadJobs();
   });
@@ -292,6 +293,13 @@
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target as any)?.isContentEditable) return;
     e.preventDefault();
     void toggle();
+  };
+
+  const onExternalCloseChat = () => {
+    // Only close automatically when the chat is docked full screen on mobile.
+    if (!isDocked || !isMobileViewport) return;
+    if (!isVisible) return;
+    close();
   };
 
   const toggle = async () => {
@@ -357,6 +365,7 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
+    window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
     setBodyScrollLocked(false);
     publishLayout();
     streamHub.delete('chatWidgetJobs');
