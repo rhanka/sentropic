@@ -117,7 +117,7 @@ describe('ToolService (documents) - unit', () => {
     expect(mockExtract).not.toHaveBeenCalled();
   });
 
-  it('getDocumentContent: auto-repair when stored detailed summary exists but is < 8000 words', async () => {
+  it('getDocumentContent: returns stored detailed summary even if short (tools are read-only)', async () => {
     docId = createId();
     const tooShort = 'court '.repeat(2000).trim();
     await db.insert(contextDocuments).values({
@@ -141,19 +141,6 @@ describe('ToolService (documents) - unit', () => {
       version: 1,
     });
 
-    // Full extracted text (long doc)
-    mockExtract.mockResolvedValueOnce({
-      text: 'mot '.repeat(20050).trim(),
-      metadata: { pages: 20, title: 'Old' },
-      headingsH1: [],
-    });
-
-    // GenerateDetailedSummaryFromText uses callOpenAI under the hood.
-    const repaired = 'réparé '.repeat(9000).trim(); // 9k words
-    mockCallOpenAI.mockImplementation(async () => ({
-      choices: [{ message: { content: repaired } }],
-    }));
-
     const res = await toolService.getDocumentContent({
       workspaceId,
       contextType,
@@ -162,17 +149,19 @@ describe('ToolService (documents) - unit', () => {
     });
 
     expect(res.contentMode).toBe('detailed_summary');
-    expect(res.contentWords).toBeGreaterThan(8000);
+    expect(res.contentWords).toBeGreaterThan(0);
+    expect(res.contentWords).toBeLessThan(8000);
     expect(res.clipped).toBe(false);
-    expect(res.content).toContain('réparé');
+    expect(res.content).toContain('court');
+    expect(mockExtract).not.toHaveBeenCalled();
+    expect(mockCallOpenAI).not.toHaveBeenCalled();
 
-    // Persisted in DB (both keys are written for backward compatibility)
+    // Tools must not persist/modify anything in DB.
     const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     const data = (row?.data ?? {}) as any;
     expect(typeof data.detailedSummary).toBe('string');
     expect((data.detailedSummary as string).length).toBeGreaterThan(0);
-    expect(typeof data.detailed_summary).toBe('string');
-    expect((data.detailed_summary as string).length).toBeGreaterThan(0);
+    expect(data.detailed_summary).toBeUndefined();
   });
 
   it('analyzeDocument: always reads full extracted text (even if detailedSummary exists)', async () => {
