@@ -5,7 +5,8 @@ import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { StreamEventType } from './openai';
 
 const FORCED_DOCUMENT_MODEL = 'gpt-5-nano';
-const WORDS_FULL_CONTENT_LIMIT = 15_000;
+const WORDS_FULL_CONTENT_LIMIT = 10_000;
+const DETAILED_SUMMARY_TARGET_WORDS = 15_000;
 const DETAILED_SUMMARY_MIN_WORDS = 4_000;
 const DOCUMENT_MAX_INPUT_TOKENS_EST = 272_000;
 
@@ -143,16 +144,14 @@ function buildDetailedSummaryPrompt(opts: {
   sourceLabel: string;
   scope: string;
   documentText: string;
-  maxWords: number;
-  minWords: number;
+  targetWords: number;
 }): string {
   return opts.template
     .replace('{{filename}}', opts.filename)
     .replace('{{source_label}}', opts.sourceLabel)
     .replace('{{scope}}', opts.scope)
     .replace('{{document_text}}', opts.documentText)
-    .replace('{{max_words}}', String(opts.maxWords))
-    .replace('{{min_words}}', String(opts.minWords))
+    .replace('{{max_words}}', String(opts.targetWords))
     .replace('{{lang}}', opts.lang === 'fr' ? 'français' : 'anglais');
 }
 
@@ -247,7 +246,7 @@ export async function generateDocumentDetailedSummary(opts: {
 
   const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
-  const maxWords = WORDS_FULL_CONTENT_LIMIT;
+  const targetWords = DETAILED_SUMMARY_TARGET_WORDS;
   const fullText = (opts.text || '').trim();
   if (!fullText) throw new Error('Aucun texte à résumer (détaillé)');
 
@@ -265,8 +264,7 @@ export async function generateDocumentDetailedSummary(opts: {
       sourceLabel: 'texte intégral extrait',
       scope: `texte intégral (~${estTokens} tokens estimés)`,
       documentText: fullText,
-      maxWords,
-      minWords: DETAILED_SUMMARY_MIN_WORDS,
+      targetWords,
     });
 
     await write('status', { state: 'summarizing_detailed_one_shot_start', estTokens });
@@ -282,7 +280,8 @@ export async function generateDocumentDetailedSummary(opts: {
       },
     });
     const out = sanitizePgText(r.text).trim();
-    const trimmed = trimToMaxWords(out, maxWords);
+    // The detailed summary can be longer than WORDS_FULL_CONTENT_LIMIT; use the target as a soft cap.
+    const trimmed = trimToMaxWords(out, targetWords);
     await write('status', { state: 'summarizing_detailed_one_shot_end', words: trimmed.words, clipped: trimmed.trimmed });
     if (trimmed.words < DETAILED_SUMMARY_MIN_WORDS) {
       await write('status', { state: 'summarizing_detailed_failed', words: trimmed.words, minWords: DETAILED_SUMMARY_MIN_WORDS });
@@ -300,7 +299,6 @@ export async function generateDocumentDetailedSummary(opts: {
   // Policy for split:
   // - Ask ~10k words per chunk (maxWords=10k) to maximize chance of reaching the global target.
   // - Validate with a dynamic per-chunk minimum: global_min / nbChunks (rounded up).
-  const perChunkMaxWords = WORDS_FULL_CONTENT_LIMIT; // 10k
   const perChunkMinWords = Math.max(800, Math.ceil(DETAILED_SUMMARY_MIN_WORDS / Math.max(1, chunks.length)));
   for (let i = 0; i < chunks.length; i += 1) {
     const chunkText = chunks[i]!;
@@ -312,8 +310,7 @@ export async function generateDocumentDetailedSummary(opts: {
       sourceLabel: 'extrait du document',
       scope: `extrait ${i + 1}/${chunks.length} (~${chunkTokens} tokens estimés)`,
       documentText: chunkText,
-      maxWords: perChunkMaxWords,
-      minWords: perChunkMinWords,
+      targetWords,
     });
 
     await write('status', { state: 'summarizing_detailed_chunk_start', chunkIndex: i + 1, chunkTotal: chunks.length });
@@ -333,7 +330,7 @@ export async function generateDocumentDetailedSummary(opts: {
       },
     });
     const chunkOut = sanitizePgText(String(r.text ?? '')).trim();
-    const chunkTrimmed = trimToMaxWords(chunkOut, perChunkMaxWords);
+    const chunkTrimmed = trimToMaxWords(chunkOut, targetWords);
     await write('status', { state: 'summarizing_detailed_chunk_end', chunkIndex: i + 1, chunkTotal: chunks.length, words: chunkTrimmed.words });
     if (chunkTrimmed.words < perChunkMinWords) {
       await write('status', { state: 'summarizing_detailed_failed', chunkIndex: i + 1, words: chunkTrimmed.words, minWords: perChunkMinWords });
