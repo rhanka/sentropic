@@ -91,13 +91,15 @@ test.describe('Documents — résumés (court + long)', () => {
       if (l?.status === 'ready') {
         longOk = typeof l.summary === 'string' && l.summary.trim().length > 50;
       } else if (l?.status === 'failed' && longId) {
-        // Échec accepté uniquement si le message d'échec indique un résumé détaillé insuffisant.
-        const docRes = await page.request.get(`${API_BASE_URL}/api/v1/documents/${encodeURIComponent(longId)}`);
-        if (docRes.ok()) {
-          const docJson = await docRes.json().catch(() => null);
-          const msg = String((docJson as any)?.summary ?? '');
-          if (msg.includes('Résumé détaillé insuffisant')) {
-            longOk = true;
+        // Échec accepté uniquement si la cause est "Résumé détaillé insuffisant".
+        // Ne pas relancer de génération (pas d'appel "content-text"): on lit l'erreur du job via job_id.
+        const jobId = String(l?.job_id ?? '');
+        if (jobId) {
+          const jobRes = await page.request.get(`${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+          if (jobRes.ok()) {
+            const jobJson = await jobRes.json().catch(() => null);
+            const err = String((jobJson as any)?.error ?? '');
+            if (err.includes('Résumé détaillé insuffisant')) longOk = true;
           }
         }
       }
