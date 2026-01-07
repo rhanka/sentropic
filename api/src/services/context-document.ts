@@ -206,7 +206,7 @@ export async function generateDocumentSummary(opts: {
   lang: 'fr' | 'en';
   docTitle: string;
   nbPages: string;
-  nbWords: string;
+  fullWords: string;
   documentText: string;
   streamId: string;
   signal?: AbortSignal;
@@ -218,7 +218,7 @@ export async function generateDocumentSummary(opts: {
     .replace('{{lang}}', opts.lang)
     .replace('{{doc_title}}', opts.docTitle)
     .replace('{{nb_pages}}', opts.nbPages)
-    .replace('{{nb_mots}}', opts.nbWords)
+    .replace('{{full_words}}', opts.fullWords)
     .replace('{{document_text}}', opts.documentText);
 
   const { content } = await executeWithToolsStream(userPrompt, {

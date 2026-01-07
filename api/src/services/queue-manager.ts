@@ -900,12 +900,14 @@ export class QueueManager {
       let text: string;
       let extractedMetaTitle: string | undefined;
       let extractedMetaPages: number | undefined;
+      let extractedMetaWords: number | undefined;
       try {
         await write('status', { state: 'extracting' });
         const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
         text = extracted.text;
         extractedMetaTitle = extracted.metadata.title;
         extractedMetaPages = extracted.metadata.pages;
+        extractedMetaWords = (extracted.metadata as unknown as { words?: unknown }).words as number | undefined;
       } catch (e) {
         await db
           .update(contextDocuments)
@@ -930,7 +932,10 @@ export class QueueManager {
       const nbPages =
         typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
       const nbWords = (() => {
-        // Use full extracted text when available; fallback to clipped (aligned with what we send to the model).
+        if (typeof extractedMetaWords === 'number' && Number.isFinite(extractedMetaWords) && extractedMetaWords > 0) {
+          return String(extractedMetaWords);
+        }
+        // Fallback: count on full extracted text; if unavailable, count on clipped (aligned with what we send to the model).
         const fromFull = text.split(/\s+/).filter(Boolean).length;
         if (Number.isFinite(fromFull) && fromFull > 0) return String(fromFull);
         const fromClipped = clipped.split(/\s+/).filter(Boolean).length;
@@ -942,7 +947,7 @@ export class QueueManager {
         lang: lang === 'en' ? 'en' : 'fr',
         docTitle,
         nbPages,
-        nbWords,
+        fullWords: nbWords,
         documentText: clipped,
         streamId,
         signal,

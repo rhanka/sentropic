@@ -307,7 +307,7 @@ Règles de qualité (obligatoires):
 Format attendu:
 ## Fiche document (réexamen)
 - Titre: {{doc_title}} (si “-” => “Non précisé”)
-- Taille: {{nb_pages}} pages ; {{nb_mots}} mots (sinon “Non précisé”)
+- Taille: {{nb_pages}} pages ; {{full_words}} mots (sinon “Non précisé”)
 - Nature: rapport / politique / procédure / etc. (si explicite, sinon “Non précisé”)
 
 ## Résumé
@@ -338,7 +338,7 @@ Texte du document:
 ---
 {{document_text}}
 ---`,
-    variables: ['lang', 'doc_title', 'nb_pages', 'nb_mots', 'document_text']
+    variables: ['lang', 'doc_title', 'nb_pages', 'full_words', 'document_text']
   },
   {
     id: 'document_detailed_summary',
@@ -362,9 +362,9 @@ CONTRAINTES:
 - Format: markdown.
 - Pas d'invention, uniquement les informations du texte source.
 - Respecte les numero de sections du document source.
-- Respecte absolument la longueur minimale {{max_words}}
+- Respecter une longueur minimale {{max_words}} (si le contenu le permet)
 - Conserver les informations chiffrées.`,
-    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words', 'min_words']
+    variables: ['filename', 'source_label', 'scope', 'document_text', 'lang', 'max_words']
   },
   {
     id: 'documents_analyze',

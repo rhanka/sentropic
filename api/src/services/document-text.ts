@@ -11,6 +11,7 @@ type ExtractedDocumentMetadata = {
   description?: string;
   subject?: string;
   pages?: number;
+  words?: number;
 };
 
 export type ExtractedDocumentInfo = {
@@ -34,6 +35,12 @@ function coerceNumber(value: unknown): number | undefined {
 function coerceDateIso(value: unknown): string | undefined {
   if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
   return undefined;
+}
+
+function countWords(text: string): number {
+  const t = (text || '').trim();
+  if (!t) return 0;
+  return t.split(/\s+/g).filter(Boolean).length;
 }
 
 function extractHeadingsH1FromAst(ast: unknown): string[] {
@@ -112,7 +119,10 @@ export async function extractDocumentInfoFromDocument(params: {
 
   if (isTextLike) {
     const text = new TextDecoder('utf-8', { fatal: false }).decode(params.bytes);
-    return { text, metadata: {}, headingsH1: [] };
+    const metadata: ExtractedDocumentMetadata = {};
+    const words = countWords(text);
+    if (words > 0) metadata.words = words;
+    return { text, metadata, headingsH1: [] };
   }
 
   // Office / PDF via officeparser@6
@@ -140,6 +150,7 @@ export async function extractDocumentInfoFromDocument(params: {
     metadata.description = coerceString(m.description);
     metadata.subject = coerceString(m.subject);
     metadata.pages = coerceNumber(m.pages);
+    metadata.words = coerceNumber((m as Record<string, unknown>).words);
     metadata.created = coerceDateIso(m.created);
     metadata.modified = coerceDateIso(m.modified);
   }
@@ -148,6 +159,12 @@ export async function extractDocumentInfoFromDocument(params: {
   if (metadata.pages === undefined) {
     const inferredPages = extractPdfPageCountFromAst(ast);
     if (typeof inferredPages === 'number' && inferredPages > 0) metadata.pages = inferredPages;
+  }
+
+  // Best-effort words fallback: compute from extracted text when metadata isn't available.
+  if (metadata.words === undefined) {
+    const words = countWords(text);
+    if (words > 0) metadata.words = words;
   }
 
   const headingsH1 = extractHeadingsH1FromAst(ast);
