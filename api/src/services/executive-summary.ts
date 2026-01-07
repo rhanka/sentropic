@@ -230,6 +230,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   // Récupérer le modèle (fourni ou par défaut)
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
+  const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
 
   // Appeler OpenAI (toujours avec streaming)
   const finalStreamId = streamId || `executive_summary_${folderId}_${Date.now()}`;
@@ -240,6 +241,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     documentsContexts,
     responseFormat: 'json_object',
     reasoningSummary: 'auto',
+    ...(isGpt5 ? { reasoningEffort: 'high' as const } : {}),
     promptId: 'executive_summary',
     streamId: finalStreamId,
     signal
