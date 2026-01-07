@@ -94,11 +94,19 @@
   let showSpinnerTimer: ReturnType<typeof setTimeout> | null = null;
   let hideSpinnerTimer: ReturnType<typeof setTimeout> | null = null;
   let chatDockPaddingRight = '0px';
+  let chatDockLeftWidth = '100%';
+  let lockBodyScrollForDock = false;
 
   $: chatDockPaddingRight =
     $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss !== '100vw'
       ? $chatWidgetLayout.dockWidthCss
       : '0px';
+
+  // Docked layout: keep the main page scrollbar on the LEFT pane (before the docked chat),
+  // not at the far right of the viewport.
+  $: lockBodyScrollForDock =
+    $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss !== '100vw';
+  $: chatDockLeftWidth = lockBodyScrollForDock ? `calc(100vw - ${$chatWidgetLayout.dockWidthCss})` : '100%';
 
   // Gérer l'affichage du spinner avec délai de 0.5s
   $: {
@@ -204,7 +212,13 @@
 </svelte:head>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
-  <div class="box-border transition-[padding-right] duration-200" style:padding-right={chatDockPaddingRight}>
+  <div
+    class={lockBodyScrollForDock
+      ? 'box-border transition-[width] duration-200 h-[100dvh] overflow-y-auto slim-scroll'
+      : 'box-border transition-[padding-right] duration-200'}
+    style:padding-right={lockBodyScrollForDock ? '0px' : chatDockPaddingRight}
+    style:width={lockBodyScrollForDock ? chatDockLeftWidth : undefined}
+  >
     {#if !hideHeader && canShowContent && !showSpinner}
       <Header />
     {/if}
