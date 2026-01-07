@@ -19,13 +19,18 @@ test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
     const composer = page.locator('textarea[placeholder="Écrire un message…"]');
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
-    // Open burger menu from chat header (visible only in docked+mobile)
-    const burgerInChatHeader = page.locator('button[aria-label="Menu"]').first();
+    // Ouvrir le menu du ChatWidget (et surtout PAS le burger du header sous-jacent)
+    // Le dialog du widget est identifié par l'id `chat-widget-dialog` (voir ChatWidget.svelte).
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    const burgerInChatHeader = chatDialog.locator('button[aria-label="Menu"]').first();
     await expect(burgerInChatHeader).toBeVisible({ timeout: 10_000 });
     await burgerInChatHeader.click();
 
-    // Click a navigation item (Organisations)
-    const orgLink = page.locator('a[href="/organisations"]').first();
+    // Click a navigation item (Organisations) dans le drawer (pas le header caché)
+    const burgerDrawer = page.getByRole('complementary');
+    await expect(burgerDrawer).toBeVisible({ timeout: 10_000 });
+    const orgLink = burgerDrawer.getByRole('link', { name: 'Organisations' }).first();
     await expect(orgLink).toBeVisible({ timeout: 10_000 });
     await orgLink.click();
 
