@@ -30,6 +30,21 @@ function getDocStorageConfig(): {
   return { bucket, region, endpoint, accessKeyId, secretAccessKey };
 }
 
+function isMinioEndpoint(endpoint?: string): boolean {
+  if (!endpoint) return false;
+  try {
+    const u = new URL(endpoint);
+    // Typical local/dev/test MinIO patterns.
+    if (u.hostname === 'minio') return true;
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
+    if (u.protocol === 'http:' && (u.port === '9000' || u.port === '9001')) return true;
+    return false;
+  } catch {
+    // If endpoint is not a valid URL, be conservative.
+    return false;
+  }
+}
+
 export function getS3Client(): S3Client {
   // Scaleway S3 and MinIO are S3-compatible. We support custom endpoint for local/dev.
   const { region, endpoint, accessKeyId, secretAccessKey } = getDocStorageConfig();
@@ -64,6 +79,7 @@ export async function putObject(params: {
   contentType?: string;
 }): Promise<void> {
   const client = getS3Client();
+  const { endpoint } = getDocStorageConfig();
   const cmd = () =>
     new PutObjectCommand({
       Bucket: params.bucket,
@@ -88,7 +104,7 @@ export async function putObject(params: {
 
     // Dev/Test (MinIO): auto-create bucket if missing, then retry once.
     // Prod: we do NOT auto-create buckets (should be provisioned).
-    if (isNoSuchBucket && env.NODE_ENV !== 'production') {
+    if (isNoSuchBucket && isMinioEndpoint(endpoint)) {
       try {
         await client.send(new CreateBucketCommand({ Bucket: params.bucket }));
       } catch (createErr) {
