@@ -13,14 +13,41 @@ export type S3ObjectPointer = {
   key: string;
 };
 
+function getDocStorageConfig(): {
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+} {
+  // Primary (new) names
+  const bucket = (env.DOC_STORAGE_BUCKET || '').trim();
+  const region = (env.DOC_STORAGE_REGION || 'fr-par-1').trim();
+  const endpoint = (env.DOC_STORAGE_ENDPOINT || '').trim() || undefined;
+  const accessKeyId = (env.DOC_STORAGE_ACCESS_KEY || '').trim() || undefined;
+  const secretAccessKey = (env.DOC_STORAGE_SECRET_KEY || '').trim() || undefined;
+
+  return { bucket, region, endpoint, accessKeyId, secretAccessKey };
+}
+
+function isMinioEndpoint(endpoint?: string): boolean {
+  if (!endpoint) return false;
+  try {
+    const u = new URL(endpoint);
+    // Typical local/dev/test MinIO patterns.
+    if (u.hostname === 'minio') return true;
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
+    if (u.protocol === 'http:' && (u.port === '9000' || u.port === '9001')) return true;
+    return false;
+  } catch {
+    // If endpoint is not a valid URL, be conservative.
+    return false;
+  }
+}
+
 export function getS3Client(): S3Client {
   // Scaleway S3 and MinIO are S3-compatible. We support custom endpoint for local/dev.
-  const region = env.S3_REGION || 'fr-par-1';
-
-  const accessKeyId = env.SCW_ACCESS_KEY;
-  const secretAccessKey = env.SCW_SECRET_KEY;
-
-  const endpoint = env.S3_ENDPOINT;
+  const { region, endpoint, accessKeyId, secretAccessKey } = getDocStorageConfig();
   const forcePathStyle = !!endpoint; // required for most MinIO setups
 
   return new S3Client({
@@ -38,9 +65,9 @@ export function getS3Client(): S3Client {
 }
 
 export function getDocumentsBucketName(): string {
-  const bucket = (env.S3_BUCKET_NAME || '').trim();
+  const { bucket } = getDocStorageConfig();
   if (!bucket) {
-    throw new Error('S3_BUCKET_NAME is not configured');
+    throw new Error('DOC_STORAGE_BUCKET is not configured');
   }
   return bucket;
 }
@@ -52,6 +79,7 @@ export async function putObject(params: {
   contentType?: string;
 }): Promise<void> {
   const client = getS3Client();
+  const { endpoint } = getDocStorageConfig();
   const cmd = () =>
     new PutObjectCommand({
       Bucket: params.bucket,
@@ -76,7 +104,7 @@ export async function putObject(params: {
 
     // Dev/Test (MinIO): auto-create bucket if missing, then retry once.
     // Prod: we do NOT auto-create buckets (should be provisioned).
-    if (isNoSuchBucket && env.S3_ENDPOINT) {
+    if (isNoSuchBucket && isMinioEndpoint(endpoint)) {
       try {
         await client.send(new CreateBucketCommand({ Bucket: params.bucket }));
       } catch (createErr) {
