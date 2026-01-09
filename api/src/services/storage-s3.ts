@@ -13,14 +13,26 @@ export type S3ObjectPointer = {
   key: string;
 };
 
+function getDocStorageConfig(): {
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+} {
+  // Primary (new) names
+  const bucket = (env.DOC_STORAGE_BUCKET || '').trim();
+  const region = (env.DOC_STORAGE_REGION || 'fr-par-1').trim();
+  const endpoint = (env.DOC_STORAGE_ENDPOINT || '').trim() || undefined;
+  const accessKeyId = (env.DOC_STORAGE_ACCESS_KEY || '').trim() || undefined;
+  const secretAccessKey = (env.DOC_STORAGE_SECRET_KEY || '').trim() || undefined;
+
+  return { bucket, region, endpoint, accessKeyId, secretAccessKey };
+}
+
 export function getS3Client(): S3Client {
   // Scaleway S3 and MinIO are S3-compatible. We support custom endpoint for local/dev.
-  const region = env.S3_REGION || 'fr-par-1';
-
-  const accessKeyId = env.SCW_ACCESS_KEY;
-  const secretAccessKey = env.SCW_SECRET_KEY;
-
-  const endpoint = env.S3_ENDPOINT;
+  const { region, endpoint, accessKeyId, secretAccessKey } = getDocStorageConfig();
   const forcePathStyle = !!endpoint; // required for most MinIO setups
 
   return new S3Client({
@@ -38,9 +50,9 @@ export function getS3Client(): S3Client {
 }
 
 export function getDocumentsBucketName(): string {
-  const bucket = (env.S3_BUCKET_NAME || '').trim();
+  const { bucket } = getDocStorageConfig();
   if (!bucket) {
-    throw new Error('S3_BUCKET_NAME is not configured');
+    throw new Error('DOC_STORAGE_BUCKET is not configured');
   }
   return bucket;
 }
@@ -76,7 +88,7 @@ export async function putObject(params: {
 
     // Dev/Test (MinIO): auto-create bucket if missing, then retry once.
     // Prod: we do NOT auto-create buckets (should be provisioned).
-    if (isNoSuchBucket && env.S3_ENDPOINT) {
+    if (isNoSuchBucket && env.NODE_ENV !== 'production') {
       try {
         await client.send(new CreateBucketCommand({ Bucket: params.bucket }));
       } catch (createErr) {

@@ -11,11 +11,14 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),
-  SCW_ACCESS_KEY: z.string().optional(),
-  SCW_SECRET_KEY: z.string().optional(),
-  S3_BUCKET_NAME: z.string().optional(),
-  S3_ENDPOINT: z.string().optional(),
-  S3_REGION: z.string().optional(),
+  // ---------------------------------------------------------------------------
+  // Document storage (S3-compatible: MinIO dev/test, Scaleway Object Storage prod)
+  // ---------------------------------------------------------------------------
+  DOC_STORAGE_BUCKET: z.string().optional(),
+  DOC_STORAGE_ENDPOINT: z.string().optional(),
+  DOC_STORAGE_REGION: z.string().optional(),
+  DOC_STORAGE_ACCESS_KEY: z.string().optional(),
+  DOC_STORAGE_SECRET_KEY: z.string().optional(),
   SCW_DEFAULT_ORGANIZATION_ID: z.string().optional(),
   SCW_DEFAULT_PROJECT_ID: z.string().optional(),
   SCW_NAMESPACE_ID: z.string().optional(),
