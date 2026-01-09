@@ -349,18 +349,52 @@ load-e2e:
 run-e2e:
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm e2e
 
+.PHONY: e2e-set-queue
+# Defaults for CI
+QUEUE_CONCURRENCY ?= 30
+
 .PHONY: test-e2e
-test-e2e: up-e2e wait-ready db-seed-test ## Run E2E tests with Playwright (scope with E2E_SPEC)
-	# If E2E_SPEC is set, run only that file/glob (e.g., tests/organizations.spec.ts)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps -e E2E_SPEC e2e sh -lc ' \
-	  if [ -n "$$E2E_SPEC" ]; then \
-	    echo "▶ Running scoped Playwright file: $$E2E_SPEC"; \
-	    npx playwright test "$$E2E_SPEC"; \
-	  else \
-	    npx playwright test; \
-	  fi'
+test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Playwright (scope with E2E_SPEC)
+	# Options:
+	# - WORKERS (default: 4)
+	# - RETRIES (default: 0)        -> force "fail fast" (no retries)
+	# - MAX_FAILURES (optional)    -> if set, pass --max-failures=<n> (otherwise show all failures)
+	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
+	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
+	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES \
+	  e2e sh -lc ' \
+	    workers="$${WORKERS:-4}"; \
+	    retries="$${RETRIES:-0}"; \
+	    max_fail="$${MAX_FAILURES:-}"; \
+	    extra=""; \
+	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
+	    if [ -n "$$E2E_SPEC" ]; then \
+	      echo "▶ Running scoped Playwright: $$E2E_SPEC (workers=$$workers retries=$$retries $${extra:-})"; \
+	      npx playwright test "$$E2E_SPEC" --workers="$$workers" --retries="$$retries" $$extra; \
+	    else \
+	      echo "▶ Running Playwright (workers=$$workers retries=$$retries $${extra:-})"; \
+	      npx playwright test --workers="$$workers" --retries="$$retries" $$extra; \
+	    fi'
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
+
+e2e-set-queue: ## (E2E) Tweak queue settings in DB (defaults: QUEUE_CONCURRENCY=30)
+	@set -e; \
+	echo "🔧 Updating queue settings in DB for E2E..."; \
+	echo " - ai_concurrency=$(QUEUE_CONCURRENCY)"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml exec -T postgres sh -lc '\
+	  psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c \
+	    "INSERT INTO settings (key,value,description,updated_at) VALUES (''ai_concurrency'',''$(QUEUE_CONCURRENCY)'',''E2E override: concurrent AI jobs'',NOW()) \
+	     ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at;"; \
+	  if [ -n "$(QUEUE_PROCESSING_INTERVAL)" ]; then \
+	    echo " - queue_processing_interval=$(QUEUE_PROCESSING_INTERVAL)"; \
+	    psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c \
+	      "INSERT INTO settings (key,value,description,updated_at) VALUES (''queue_processing_interval'',''$(QUEUE_PROCESSING_INTERVAL)'',''E2E override: queue tick (ms)'',NOW()) \
+	       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at;"; \
+	  fi'; \
+	echo "🔄 Restarting API to reload queue settings..."; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml restart api >/dev/null
 
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
