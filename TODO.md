@@ -40,11 +40,12 @@
   - [x] Extension aux autres objets (folder, company, executive_summary)
 - [x] Ajouter une fonction de validation des droits utilisateurs, avec un des profils. Ce profil doit permettre d'avoir accès à toutes les fonctions sans limite d'usage. Mais il n'a accès qu'à ses propres artefacts
 - [x] Licence
-- [ ] améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
-  - [ ] gérer mobile (panneau plein écran / bottom-sheet)
-  - [ ] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
-  - [ ] accessibilité (focus trap, ESC, aria, navigation clavier)
-- [x] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
+- [x] Chatbot lot B1
+  - [x] améliorer la responsiveness du widget flottant (bulle unique Chat/Queue + panneau)
+    - [x] gérer mobile (panneau plein écran / bottom-sheet)
+    - [x] gérer desktop (tailles max + scroll internes stables, pas de débordement, possibilité de basculer en panel)
+    - [x] accessibilité (focus trap, ESC, aria, navigation clavier)
+  - [x] chat / gérer le streaming "markdown" cf spec/MARKDOWN_STREAMING.md
 - [x] Utiliser une lib d'icones digne de ce nom (@lucide/svelte)
 - [x] Ajouter GPT 5.2
 - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
@@ -56,18 +57,69 @@
   - [x] Afficher l'entreprise (branche: `feat/usecase-show-folder-organization`)
   - [x] UI Fix post stream 'blink' (when message finished in chat) (branche: `feat/usecase-show-folder-organization`)
 - [ ] Remplacer Tavily par DataForSeo + Jina
-- [ ] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
-  - [ ] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
-  - [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
-  - [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
-  - [x] Tools/chat: prochain lot de màj tools (batch/AI-populate + migration naming usecase) — cf. `spec/TOOLS.md`
-  - [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, entreprises) : upload, liste, statut, résumé
+- [x] **Chatbot Lot B — Contexte documentaire (ingestion + résumé + consultation)** (cf. spec/SPEC_CHATBOT.md - source de vérité)
+  - [x] API : POST `/api/documents` (upload) ; GET `/api/documents` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
+  - [x] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
+  - [x] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
+  - [x] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, organization) : upload, liste, statut, résumé
   - **Couverture CU** : CU-022
+- [ ] Chatbot lot B2
+  - [ ] Feedback utilisateur (👍/👎) sur les suggestions
+  - [ ] icones sous le chat utilisateurs (visibles au hover sur la bulle de chat ou les icones)
+    - [ ] Modification d'un message utilisateur
+      - [ ] Propose l'annulation des modifications effectuées dans le chat (objets édités le cas échéant depuis le point du chat) ou de les garder (rollback) 
+    - [ ] Retry d'un message utilisateur (supprime la suite déjà effectuée) (idem propose annulation ou pas)
+    - [ ] Copie d'un message utilisateur
+  - [ ] icones soue le chat de réponse 
+    - [ ] Copie d'une réponse (visibles au hover sur la bulle de chat ou les icones)
+  - [ ] Amélioration de la bulle d'input utlisateur
+    - [ ] Mode monoligne
+      - [ ] Le texte (input est centré verticalement)
+      - [ ] Ajouter un + à gauche pour un pop up de menu
+        - [ ] Ajout d'upload de document dans la session de chat (trombone)
+          - [ ] Résumé automatique (court, long le cas échéant) pour attacher à la session
+          - [ ] Quand un doc est attaché à la session, le doc tool va pouvoir consultr le ou les docs de la session
+        - [ ] Liste (checkable) des tools et contextes de la session
+          - [ ] Ajout d'un mode multi contexte (lorsqu'on change de vue: les objets s'ajoutent) (les dernier objet est prioritaire dans l'activation des outils)
+          - [ ] Les contextes et tools sont listés et activables / désactivables dans le menu
+    - [ ] Mode multiligne
+      - [ ] Lorsqu'il y a plus d'une ligne, la hauteur de l'input s'étend automatiquement t maximum jusqu'à 30% de la hauteur de la box
+      - [ ] L'input est basculé sur Tiptap markdown (pas editableInput) pour permettre les copiers coller rich text
+- [ ] Citations objets et liens iconifiés dans le chat
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
+- Design system
+  - [ ] Créer un mdc pour le design system
+  - [ ] Normaliser les couleurs primary des boutons
+- API & UI Refacto
+  - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
+  - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
+- Collaboration
+  - [ ] Share workspace
+    - [ ] User can create additionnal workspaces (in param) and is granted admin of it
+    - [ ] User can delete any of the workspace which he admins
+    - [ ] User can provide access to any other user to any of the workspace with admin rights : he provides readonly or editor or admin access
+    - [ ] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension topw)
+  - [ ] Object editions
+    - [ ] When an editor (or admin) is first on a view/object, he puts a locker on dit and can only edit
+    - [ ] When an other editor is on it, the view is locker
+    - [ ] Other viewer or locked editor is on the view, he recieves updates through sse
+    - [ ] When a view is locked to an edit user, the UI ask to unlock It async. He recieves the answer through sse.
+    - [ ] When the API recieves an unlock demand, it refuses directly if another demand is already processing. Else it sends through sse to the current editor with the locker a demand. If no answer in 2 seconds, it transfers the locker to the asker and sends him through sse the unlock
+    - [ ] When an editor recieves through sso the demand, it refuses if still on the view, or accepts else.
+    - [ ] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension topf)
+    - [ ] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extensions topu et topo)
+  - [ ] Comments
+    - [ ] Each object and data part of object can have on or many comments
+    - [ ] There is a table of comments
+    - [ ] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
+    - [ ] A comment can be attributed to a user using @ (auto complete with users of the workspace).
+    - [ ] If no attribution, the user is the initial comment creator
+    - [ ] Each comment can be "closed" by the last attributed user
+    - [ ] Comments are visible on the header on the card of the data part
+    - [ ] Options d'export : avec ou sans commentaire
 - [ ] chat / json
   - [ ] ajouter le rendu de résultat des tools et l'historiser
   - [ ] gérer le streaming json (sortie de réponse, entree et sortie de tool même si ce dernier est en bloc) avec la complexité cf spec/MARKDOWN_STREAMING.md
-  - [ ] (Future) Sharing with admin per object (companies/folders/use cases), not only workspace-level
 - [x] Entreprise >> Organisation
   - [x] Renommer entreprise(s) / company.ies en organisation / organizations en profondeur (modèle de donnée, api, écrans).
   - [x] En profiter pour migrer vers data les données de l'entreprise
@@ -100,14 +152,12 @@
   - [ ] Switch de modèle dans les sessions (UI + API)
   - [ ] Approfondissement avec modèle supérieur
   - [ ] Création d'objets via chat (tools)
-  - [ ] Suggestions et recommandations (IA proactive)
   - [ ] Export et partage (JSON, Markdown, PDF)
-  - [ ] Feedback utilisateur (👍/👎) sur les suggestions
   - [ ] Retry automatique avec correction pour erreurs récupérables
+  - [ ] Suggestions et recommandations (IA proactive)
   - [ ] Extension voix : stub `audio_chunk` (type d'événement) côté SSE
   - [ ] Tests : Unit/int/E2E couvrant un flux complet (chat + structured + tool-calls + rollback)
   - **Couverture CU** : CU-006 (switch modèle), CU-007 (approfondissement), CU-009 (création objets), CU-013 (suggestions), CU-014 (export/partage), CU-017 (contexte long), CU-020 (feedback), CU-021 (gestion erreurs améliorée)
-- [ ] Implémenter la gestion d'organisation (multi utilisateur) et de partage entre utilisateurs (dossiers, organisation)
 - [ ] Fonctions de désactivation de dossier / cas d'usage / entreprise, de partage entre utilisateurs, de publication (publique)
 - [ ] Gestion des profils freemium / payant: gestion du nombre d'enrichissements / utilisateur / type de modèle
 - [ ] Mise en place poker planning
