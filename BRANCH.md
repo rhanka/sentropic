@@ -68,8 +68,35 @@ Out of scope:
   - Admin scope selector for `admin_app` (stored in `localStorage` and sent as `workspace_id`).
 - SSE (`/streams/sse`) already supports `workspace_id` for `admin_app` scoped reads.
 
+**Discovery findings (Lot 0):**
+- **Schema gaps (to add in single migration):**
+  - `workspaces` table exists but lacks `deleted_at` column (needed for soft delete + undelete).
+  - `workspaces.owner_user_id` has UNIQUE constraint (must drop to allow multiple workspaces per user).
+  - No `workspace_memberships` table exists (to create: `workspace_id`, `user_id`, `role` ('readonly'|'editor'|'admin'), `created_at`).
+  - No `object_locks` table exists (to create: `workspace_id`, `object_type`, `object_id`, `locked_by_user_id`, `locked_at`, `heartbeat_at`).
+  - No `unlock_requests` table exists (to create: tied to object locks, state machine + timeout).
+  - No `comments` table exists (to create: `workspace_id`, `context_type`, `context_id`, `section_key?`, `created_by`, `assigned_to?`, `status`, `parent_comment_id?`).
+- **Service layer status:**
+  - `workspace-service.ts` exists with `ensureWorkspaceForUser()` (creates 1:1 owned workspace).
+  - `workspace-access.ts` exists but references `workspaceMemberships` schema that doesn't exist yet (file created ahead of migration).
+  - `workspaces.ts` route exists but is empty (placeholder).
+- **SSE channel reuse strategy:**
+  - `/streams/sse` is the single SSE channel (confirmed: reuse it).
+  - Existing events: `job_update`, `organization_update`, `folder_update`, `usecase_update` (all workspace-scoped).
+  - Need to add collaboration events: `lock_acquired`, `lock_released`, `unlock_requested`, `unlock_granted`, `unlock_refused`, `user_presence` (display collaborator list top-right).
+- **Write endpoint enforcement:**
+  - All mutation endpoints (POST/PUT/DELETE) use `user.workspaceId` from auth middleware (not query param).
+  - This is correct and should be preserved for workspace-scoped access control.
+  - Need to add membership role checks in: `folders.ts`, `organizations.ts`, `use-cases.ts`, `documents.ts`, `chat.ts`, `tool-service.ts`.
+  - Readonly role blocks all mutations (403).
+  - Editor/admin roles allow mutations.
+  - Admin role additionally allows member management + workspace lifecycle (soft delete/undelete/final suppression/export).
+- **No soft delete/archive exists:** `workspaces` table has no `deleted_at` or `archived` column; need to add for soft delete + undelete flow.
+
 **Partial UAT (after Lot 0):**
-- [ ] None (documentation only)
+- [x] Document scope and constraints in `BRANCH.md` (this file)
+- [x] Identify existing "workspace" concepts in DB/API/UI (avoid duplicate concepts)
+- [x] Map existing SSE plumbing and event patterns to reuse
 
 ### Lot 1 — Workspace sharing fundamentals (create/delete, roles)
 - [ ] API: create additional workspace; creator becomes admin
