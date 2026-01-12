@@ -130,17 +130,17 @@ Out of scope:
 - [x] Map existing SSE plumbing and event patterns to reuse
 
 ### Lot 1 — Workspace sharing fundamentals (create/hide/delete, roles)
-- [ ] API: create additional workspace; creator becomes admin
-- [ ] API: hide a workspace (admin-only; sets `hidden_at` timestamp)
-- [ ] API: unhide a workspace (admin-only; clears `hidden_at`)
-- [ ] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade)
+- [x] API: create additional workspace; creator becomes admin
+- [x] API: hide a workspace (admin-only; sets `hidden_at` timestamp)
+- [x] API: unhide a workspace (admin-only; clears `hidden_at`)
+- [ ] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade) — WIP: need full cascade delete list for FK NO ACTION tables
 - [x] API: remove `shareWithAdmin` field and related logic (schema + code paths)
 - [x] DB: add `hidden_at`, drop UNIQUE on `owner_user_id`, create `workspace_memberships` (single migration file) + data migration (owners => admin memberships)
 - [x] API: introduce `workspace-access.ts` helpers (roles + default workspace selection)
 - [x] API: select current workspace from `workspace_id` query param (localStorage-driven) in auth middleware; block non-settings routes when selected workspace is hidden (409)
 - [x] API: `ensureWorkspaceForUser()` now resolves the default workspace from memberships (newest non-hidden), creates workspace + admin membership if none exist
-- [ ] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
-- [ ] API: list user's workspaces with membership roles
+- [x] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
+- [x] API: list user's workspaces with membership roles
 - [ ] UI (Settings/Paramètres): replace workspace selector with table showing (column order):
   - Selected state (checkmark if selected, empty otherwise)
   - Workspace name

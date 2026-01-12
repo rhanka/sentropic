@@ -14,6 +14,7 @@ import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
+import { workspacesRouter } from './workspaces';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin, requireEditor } from '../../middleware/rbac';
 
@@ -38,6 +39,10 @@ apiRouter.route('/analytics', analyticsRouter);
 // User self-service routes
 apiRouter.use('/me/*', requireAuth);
 apiRouter.route('/me', meRouter);
+
+// Workspace routes (authenticated; role checks are enforced per endpoint)
+apiRouter.use('/workspaces/*', requireAuth);
+apiRouter.route('/workspaces', workspacesRouter);
 
 // Streaming routes (require editor role or higher)
 apiRouter.use('/streams/*', requireAuth, requireEditor);

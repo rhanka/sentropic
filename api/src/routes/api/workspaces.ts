@@ -1,0 +1,236 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { zValidator } from '@hono/zod-validator';
+import { db } from '../../db/client';
+import { users, workspaceMemberships, workspaces } from '../../db/schema';
+import { and, desc, eq } from 'drizzle-orm';
+import { requireEditor } from '../../middleware/rbac';
+import { createId } from '../../utils/id';
+import { getUserWorkspaces, requireWorkspaceAdmin } from '../../services/workspace-access';
+
+export const workspacesRouter = new Hono();
+
+const roleSchema = z.enum(['viewer', 'editor', 'admin']);
+
+workspacesRouter.get('/', async (c) => {
+  const user = c.get('user') as { userId: string };
+  const items = await getUserWorkspaces(user.userId);
+  return c.json({ items });
+});
+
+const createWorkspaceSchema = z.object({
+  name: z.string().min(1).max(128),
+});
+
+// Create workspace: creator becomes admin member
+workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const { name } = c.req.valid('json');
+  const id = createId();
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id,
+      ownerUserId: user.userId,
+      name,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await tx.insert(workspaceMemberships).values({
+      workspaceId: id,
+      userId: user.userId,
+      role: 'admin',
+      createdAt: now,
+    });
+  });
+
+  return c.json({ id }, 201);
+});
+
+// --- Hide / Unhide / Delete (admin-only) ---
+
+workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const now = new Date();
+  await db.update(workspaces).set({ hiddenAt: now, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  return c.json({ success: true });
+});
+
+workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const now = new Date();
+  await db.update(workspaces).set({ hiddenAt: null, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  return c.json({ success: true });
+});
+
+// Hard delete (only if hidden)
+workspacesRouter.delete('/:id', requireEditor, async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const [ws] = await db
+    .select({ hiddenAt: workspaces.hiddenAt })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+
+  if (!ws) return c.json({ message: 'Not found' }, 404);
+  if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
+
+  await db.transaction(async (tx) => {
+    // Workspace-scoped content (keep this list tight; expand as collab lots land)
+    await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+
+    // Rely on existing schema cleanup elsewhere for the remaining tables for now.
+    // NOTE: Some tables have FK to workspaces with NO ACTION; if deletion fails, we will expand the cascade list here.
+    await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  });
+
+  return c.body(null, 204);
+});
+
+// --- Members management (admin-only) ---
+
+workspacesRouter.get('/:id/members', async (c) => {
+  const user = c.get('user') as { userId: string };
+  const workspaceId = c.req.param('id');
+
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      role: workspaceMemberships.role,
+      createdAt: workspaceMemberships.createdAt,
+    })
+    .from(workspaceMemberships)
+    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
+    .where(eq(workspaceMemberships.workspaceId, workspaceId))
+    .orderBy(desc(workspaceMemberships.createdAt));
+
+  return c.json({ items: rows });
+});
+
+const addMemberSchema = z.object({
+  email: z.string().email(),
+  role: roleSchema,
+});
+
+workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMemberSchema), async (c) => {
+  const actor = c.get('user') as { userId: string; role: string };
+  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  try {
+    await requireWorkspaceAdmin(actor.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const body = c.req.valid('json');
+  const normalizedEmail = body.email.trim().toLowerCase();
+
+  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  if (!target) return c.json({ message: 'User not found' }, 404);
+
+  const now = new Date();
+  await db
+    .insert(workspaceMemberships)
+    .values({
+      workspaceId,
+      userId: target.id,
+      role: body.role,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
+      set: { role: body.role },
+    });
+
+  return c.json({ success: true });
+});
+
+const updateMemberSchema = z.object({
+  role: roleSchema,
+});
+
+workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), async (c) => {
+  const actor = c.get('user') as { userId: string; role: string };
+  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  const targetUserId = c.req.param('userId');
+  if (targetUserId === actor.userId) return c.json({ message: 'Cannot change your own role' }, 400);
+
+  try {
+    await requireWorkspaceAdmin(actor.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { role } = c.req.valid('json');
+  await db
+    .update(workspaceMemberships)
+    .set({ role })
+    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
+
+  return c.json({ success: true });
+});
+
+workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
+  const actor = c.get('user') as { userId: string; role: string };
+  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  const targetUserId = c.req.param('userId');
+  if (targetUserId === actor.userId) return c.json({ message: 'Cannot remove yourself' }, 400);
+
+  try {
+    await requireWorkspaceAdmin(actor.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  await db
+    .delete(workspaceMemberships)
+    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
+
+  return c.body(null, 204);
+});
+
+
