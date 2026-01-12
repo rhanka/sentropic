@@ -137,6 +137,8 @@ Out of scope:
 - [x] API: remove `shareWithAdmin` field and related logic (schema + code paths)
 - [x] DB: add `hidden_at`, drop UNIQUE on `owner_user_id`, create `workspace_memberships` (single migration file) + data migration (owners => admin memberships)
 - [x] API: introduce `workspace-access.ts` helpers (roles + default workspace selection)
+- [x] API: select current workspace from `workspace_id` query param (localStorage-driven) in auth middleware; block non-settings routes when selected workspace is hidden (409)
+- [x] API: `ensureWorkspaceForUser()` now resolves the default workspace from memberships (newest non-hidden), creates workspace + admin membership if none exist
 - [ ] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
 - [ ] API: list user's workspaces with membership roles
 - [ ] UI (Settings/Paramètres): replace workspace selector with table showing (column order):

@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono';
 import { validateSession } from '../services/session-manager';
 import { logger } from '../logger';
 import { ensureWorkspaceForUser } from '../services/workspace-service';
+import { getWorkspaceRole, isWorkspaceDeleted } from '../services/workspace-access';
 
 /**
  * Authentication Middleware
@@ -56,8 +57,30 @@ export async function requireAuth(c: Context, next: Next) {
       return c.json({ error: 'Invalid or expired session' }, 401);
     }
     
-    // Attach user info to context
-    const { workspaceId } = await ensureWorkspaceForUser(session.userId);
+    const path = c.req.path || '';
+    const allowHiddenWorkspace =
+      path.includes('/me') || path.includes('/workspaces') || path.includes('/health');
+
+    // Attach user info to context (workspace is selected from query param if provided)
+    let { workspaceId } = await ensureWorkspaceForUser(session.userId);
+
+    const requested = (c.req.query('workspace_id') || '').trim();
+    if (requested) {
+      const role = await getWorkspaceRole(session.userId, requested);
+      if (!role) {
+        // opaque
+        return c.json({ message: 'Not found' }, 404);
+      }
+      workspaceId = requested;
+    }
+
+    if (!allowHiddenWorkspace) {
+      const hidden = await isWorkspaceDeleted(workspaceId);
+      if (hidden) {
+        return c.json({ message: 'Workspace is hidden', code: 'WORKSPACE_HIDDEN' }, 409);
+      }
+    }
+
     c.set('user', {
       userId: session.userId,
       sessionId: session.sessionId,

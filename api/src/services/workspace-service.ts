@@ -1,6 +1,6 @@
 import { db } from '../db/client';
-import { workspaces, users, ADMIN_WORKSPACE_ID } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { workspaceMemberships, workspaces, users, ADMIN_WORKSPACE_ID } from '../db/schema';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { logger } from '../logger';
 
 export const ADMIN_WORKSPACE_NAME = 'Admin Workspace';
@@ -66,21 +66,44 @@ export async function ensureWorkspaceForUser(userId: string): Promise<{ workspac
     return { workspaceId: ADMIN_WORKSPACE_ID };
   }
 
-  const [ws] = await db
+  // Prefer the most recently created non-hidden workspace the user is a member of.
+  const [active] = await db
     .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.ownerUserId, userId))
+    .from(workspaceMemberships)
+    .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
+    .where(and(eq(workspaceMemberships.userId, userId), isNull(workspaces.hiddenAt)))
+    .orderBy(desc(workspaces.createdAt))
     .limit(1);
 
-  if (ws) return { workspaceId: ws.id };
+  if (active) return { workspaceId: active.id };
+
+  // If all workspaces are hidden, still return the most recently created one (UI will redirect to settings).
+  const [anyWs] = await db
+    .select({ id: workspaces.id })
+    .from(workspaceMemberships)
+    .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
+    .where(eq(workspaceMemberships.userId, userId))
+    .orderBy(desc(workspaces.createdAt))
+    .limit(1);
+
+  if (anyWs) return { workspaceId: anyWs.id };
 
   const id = crypto.randomUUID();
-  await db.insert(workspaces).values({
-    id,
-    ownerUserId: userId,
-    name: 'My Workspace',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  await db.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id,
+      ownerUserId: userId,
+      name: 'My Workspace',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await tx.insert(workspaceMemberships).values({
+      workspaceId: id,
+      userId,
+      role: 'admin',
+      createdAt: new Date(),
+    });
   });
 
   return { workspaceId: id };
