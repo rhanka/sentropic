@@ -7,6 +7,7 @@ import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
+import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 export const documentsRouter = new Hono();
 
@@ -173,7 +174,7 @@ documentsRouter.get('/:id/content', async (c) => {
   return c.newResponse(stream, 200);
 });
 
-documentsRouter.delete('/:id', async (c) => {
+documentsRouter.delete('/:id', requireWorkspaceEditorRole(), async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   // Delete is write-scoped: only within user's own workspace for now.
   const workspaceId = user.workspaceId;
@@ -235,7 +236,7 @@ async function getNextModificationSequence(contextType: string, contextId: strin
   return maxSequence + 1;
 }
 
-documentsRouter.post('/', async (c) => {
+documentsRouter.post('/', requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
 
   const form = await c.req.raw.formData();

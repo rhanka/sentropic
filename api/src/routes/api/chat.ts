@@ -5,6 +5,7 @@ import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
+import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 export const chatRouter = new Hono();
 
@@ -92,7 +93,7 @@ chatRouter.get('/messages/:id/stream-events', async (c) => {
  * Crée un message user + un placeholder assistant, puis enfile un job `chat_message`.
  * Le SSE chat est sur streamId == assistantMessageId.
  */
-chatRouter.post('/messages', zValidator('json', createMessageInput), async (c) => {
+chatRouter.post('/messages', requireWorkspaceEditorRole(), zValidator('json', createMessageInput), async (c) => {
   const user = c.get('user');
   const body = c.req.valid('json');
 

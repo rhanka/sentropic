@@ -149,7 +149,7 @@ Out of scope:
   - Row clickable to select workspace (hover: "Click to select workspace")
   - Action buttons: icons only, no text/border (`@lucide/svelte` style)
 - [ ] UI: remove `shareWithAdmin` toggle
-- [ ] Enforce role checks in existing mutation endpoints/tools (viewer blocks writes; editor/admin allowed)
+- [x] Enforce role checks in existing mutation endpoints/tools (viewer blocks writes; editor/admin allowed)
 
 **Partial UAT (after Lot 1):**
 - [ ] **User A creates workspace:**

@@ -8,6 +8,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
+import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 const matrixSchema = z.object({
   valueAxes: z.array(
@@ -161,7 +162,7 @@ foldersRouter.get('/', async (c) => {
   return c.json({ items });
 });
 
-foldersRouter.post('/', requireEditor, zValidator('json', folderInput), async (c) => {
+foldersRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', folderInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
@@ -306,7 +307,7 @@ foldersRouter.get('/:id', async (c) => {
   });
 });
 
-foldersRouter.put('/:id', requireEditor, zValidator('json', folderInput.partial()), async (c) => {
+foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', folderInput.partial()), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
@@ -360,7 +361,7 @@ foldersRouter.put('/:id', requireEditor, zValidator('json', folderInput.partial(
   });
 });
 
-foldersRouter.delete('/:id', requireEditor, async (c) => {
+foldersRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   await db.delete(folders).where(and(eq(folders.id, id), eq(folders.workspaceId, workspaceId)));
@@ -420,7 +421,7 @@ foldersRouter.get('/list/with-matrices', async (c) => {
 });
 
 
-foldersRouter.put('/:id/matrix', requireEditor, zValidator('json', matrixSchema), async (c) => {
+foldersRouter.put('/:id/matrix', requireEditor, requireWorkspaceEditorRole(), zValidator('json', matrixSchema), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const id = c.req.param('id');
   const matrix = c.req.valid('json');
