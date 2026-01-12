@@ -400,6 +400,9 @@ Planned entities (to validate against current schema to avoid duplicates):
 ### Lot 1 progress notes
 - Migration `api/drizzle/0018_workspace_collaboration.sql` is now present and registered in `api/drizzle/meta/_journal.json`.
 - Work-in-progress code is kept compilable; no `shareWithAdmin` references remain in API/DB schema.
-- UI groundwork: added `workspaceScope` (localStorage) and now append `workspace_id` to API requests + SSE for non-admin users.
+- UI groundwork: added `workspaceScope` (localStorage) and append `workspace_id` to API requests + SSE for non-admin users.
+- Fix: avoid a bootstrap deadlock where a stale localStorage `workspace_id` prevents `/workspaces` from loading:
+  - API auth: ignore invalid `workspace_id` for `/workspaces` and `/me` instead of returning opaque 404
+  - UI API util: never attach `workspace_id` to `/workspaces` endpoints
 
 

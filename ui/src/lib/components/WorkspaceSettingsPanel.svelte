@@ -4,7 +4,7 @@
   import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import { loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
-  import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
+  import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
 
   let creatingWorkspace = false;
   let newWorkspaceName = '';
@@ -141,12 +141,12 @@
 
 {#if $session.user?.role === 'admin_app'}
   <div class="text-sm text-slate-600">
-    Workspace scope (collaboration) is not available for <code>admin_app</code>.
+    La gestion des workspaces (collaboration) n’est pas disponible pour <code>admin_app</code>.
   </div>
 {:else}
   {#if allWorkspacesHidden}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-      Tous vos workspaces sont cachés. Dé-cacher un workspace (si vous êtes admin) ou créez un nouveau workspace.
+      Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
     </div>
   {/if}
 
@@ -175,14 +175,14 @@
           <th class="w-10 px-3 py-2"></th>
           <th class="px-3 py-2">Nom</th>
           <th class="px-3 py-2">Rôle</th>
-          <th class="px-3 py-2 text-right">Actions</th>
+          <th class="px-3 py-2">Actions</th>
         </tr>
       </thead>
       <tbody>
         {#each $workspaceScope.items as ws (ws.id)}
           <tr
-            class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-            title="Click to select workspace"
+            class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === $workspaceScope.selectedId ? 'bg-blue-50' : ''}"
+            title="Cliquer pour sélectionner ce workspace"
             on:click={() => setWorkspaceScope(ws.id)}
           >
             <td class="px-3 py-2">
@@ -194,33 +194,33 @@
               <div class="flex items-center gap-2">
                 <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
                 {#if ws.hiddenAt}
-                  <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">hidden</span>
+                  <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">caché</span>
                 {/if}
               </div>
             </td>
             <td class="px-3 py-2">{ws.role}</td>
             <td class="px-3 py-2">
-              <div class="flex justify-end gap-2">
+              <div class="flex gap-2">
                 {#if ws.role === 'admin'}
                   {#if ws.hiddenAt}
                     <button
-                      class="p-1 text-slate-500 hover:text-slate-900"
-                      title="Unhide workspace"
+                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                      title="Restaurer le workspace"
                       on:click|stopPropagation={() => unhideWorkspace(ws.id)}
                     >
                       <Eye class="h-4 w-4" />
                     </button>
                     <button
-                      class="p-1 text-rose-600 hover:text-rose-700"
-                      title="Delete workspace (hidden only)"
+                      class="rounded-full p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
+                      title="Supprimer définitivement (workspace caché uniquement)"
                       on:click|stopPropagation={() => deleteWorkspace(ws.id)}
                     >
                       <Trash2 class="h-4 w-4" />
                     </button>
                   {:else}
                     <button
-                      class="p-1 text-slate-500 hover:text-slate-900"
-                      title="Hide workspace"
+                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                      title="Cacher le workspace"
                       on:click|stopPropagation={() => hideWorkspace(ws.id)}
                     >
                       <EyeOff class="h-4 w-4" />
@@ -282,6 +282,7 @@
                         class="rounded border border-slate-200 px-2 py-1"
                         value={m.role}
                         on:change={(e) => updateMember(m.userId, (e.currentTarget as HTMLSelectElement).value as any)}
+                        disabled={m.userId === $session.user?.id}
                       >
                         <option value="viewer">viewer</option>
                         <option value="editor">editor</option>
@@ -289,9 +290,15 @@
                       </select>
                     </td>
                     <td class="py-2 pr-3 text-right">
-                      <button class="p-1 text-rose-600 hover:text-rose-700" title="Remove member" on:click={() => removeMember(m.userId)}>
-                        <Trash2 class="h-4 w-4" />
-                      </button>
+                      {#if m.userId !== $session.user?.id}
+                        <button
+                          class="rounded-full p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
+                          title="Retirer ce membre"
+                          on:click={() => removeMember(m.userId)}
+                        >
+                          <X class="h-4 w-4" />
+                        </button>
+                      {/if}
                     </td>
                   </tr>
                 {/each}

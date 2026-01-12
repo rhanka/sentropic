@@ -41,6 +41,8 @@ export async function apiRequest<T = any>(
     if (!scoped) return rawUrl;
     // Never scope auth endpoints
     if (endpoint.startsWith('/auth') || rawUrl.includes('/auth/')) return rawUrl;
+    // Never scope workspace bootstrap endpoints, otherwise a stale localStorage workspace_id can block /workspaces itself
+    if (endpoint === '/workspaces' || endpoint.startsWith('/workspaces/')) return rawUrl;
     if (!browser) return rawUrl;
     const u = new URL(rawUrl, window.location.origin);
     if (!u.searchParams.has('workspace_id')) u.searchParams.set('workspace_id', scoped);

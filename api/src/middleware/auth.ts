@@ -58,8 +58,8 @@ export async function requireAuth(c: Context, next: Next) {
     }
     
     const path = c.req.path || '';
-    const allowHiddenWorkspace =
-      path.includes('/me') || path.includes('/workspaces') || path.includes('/health');
+    const isWorkspaceBootstrapPath = path.includes('/workspaces') || path.includes('/me');
+    const allowHiddenWorkspace = isWorkspaceBootstrapPath || path.includes('/health');
 
     // Attach user info to context (workspace is selected from query param if provided)
     let { workspaceId } = await ensureWorkspaceForUser(session.userId);
@@ -68,10 +68,13 @@ export async function requireAuth(c: Context, next: Next) {
     if (requested) {
       const role = await getWorkspaceRole(session.userId, requested);
       if (!role) {
-        // opaque
-        return c.json({ message: 'Not found' }, 404);
+        // If the client has a stale localStorage workspace_id, allow bootstrap endpoints to recover.
+        if (!isWorkspaceBootstrapPath) {
+          // opaque
+          return c.json({ message: 'Not found' }, 404);
+        }
       }
-      workspaceId = requested;
+      if (role) workspaceId = requested;
     }
 
     if (!allowHiddenWorkspace) {

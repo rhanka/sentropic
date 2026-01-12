@@ -31,10 +31,12 @@ export const workspaceScope = writable<State>({
   error: null
 });
 
-export function setWorkspaceScope(id: string) {
-  const next = id || '';
+export function setWorkspaceScope(id: string | null) {
+  const next = (id || '').trim();
   workspaceScope.update((s) => ({ ...s, selectedId: next || null }));
-  if (browser) localStorage.setItem(STORAGE_KEY, next);
+  if (!browser) return;
+  if (next) localStorage.setItem(STORAGE_KEY, next);
+  else localStorage.removeItem(STORAGE_KEY);
 }
 
 export function getScopedWorkspaceIdForUser(): string | null {
@@ -57,12 +59,17 @@ export async function loadUserWorkspaces(): Promise<void> {
 
     workspaceScope.update((st) => {
       const selectedIdRaw = st.selectedId || '';
-      const selectedOk = !!selectedIdRaw && items.some((w) => w.id === selectedIdRaw);
+      const selectedOk =
+        !!selectedIdRaw && items.some((w) => w.id === selectedIdRaw && !w.hiddenAt);
       const nonHidden = items.filter((w) => !w.hiddenAt);
-      const fallback = nonHidden[0]?.id || items[0]?.id || null;
-      const selectedId = selectedOk ? selectedIdRaw : fallback;
+      const allHidden = items.length > 0 && nonHidden.length === 0;
+      const fallback = nonHidden[0]?.id || null;
+      const selectedId = allHidden ? null : (selectedOk ? selectedIdRaw : fallback);
 
-      if (browser && selectedId) localStorage.setItem(STORAGE_KEY, selectedId);
+      if (browser) {
+        if (selectedId) localStorage.setItem(STORAGE_KEY, selectedId);
+        else localStorage.removeItem(STORAGE_KEY);
+      }
 
       return { ...st, loading: false, items, selectedId, error: null };
     });
