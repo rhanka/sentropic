@@ -48,7 +48,13 @@
     try {
       const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
       const data = await apiGet<{ items: AdminUserRow[] }>(`/admin/users${qs}`);
-      items = data.items;
+      // Defensive: avoid keyed each crash if server returns duplicates (e.g. multiple owned workspaces).
+      const uniq = new Map<string, AdminUserRow>();
+      for (const u of data.items ?? []) {
+        if (!u?.id) continue;
+        if (!uniq.has(u.id)) uniq.set(u.id, u);
+      }
+      items = Array.from(uniq.values());
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur de chargement admin' });
     } finally {
