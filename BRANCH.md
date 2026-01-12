@@ -148,7 +148,7 @@ Out of scope:
   - Action buttons (hide/unhide, delete if hidden)
   - Row clickable to select workspace (hover: "Click to select workspace")
   - Action buttons: icons only, no text/border (`@lucide/svelte` style)
-- [ ] UI: remove `shareWithAdmin` toggle
+- [x] UI: remove `shareWithAdmin` toggle
 - [x] Enforce role checks in existing mutation endpoints/tools (viewer blocks writes; editor/admin allowed)
 
 **Partial UAT (after Lot 1):**

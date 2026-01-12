@@ -5,7 +5,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { session } from '$lib/stores/session';
-  import { deactivateAccount, deleteAccount, loadMe, me, updateMe } from '$lib/stores/me';
+  import { deactivateAccount, deleteAccount, loadMe, me } from '$lib/stores/me';
   import {
     adminWorkspaceScope,
     loadAdminWorkspaces,
@@ -14,6 +14,7 @@
     adminReadOnlyScope
   } from '$lib/stores/adminWorkspaceScope';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
+  import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import { Edit, X } from '@lucide/svelte';
 
   interface Prompt {
@@ -79,29 +80,9 @@
     if (v) setAdminWorkspaceScope(v);
   };
 
-  let savingWorkspace = false;
   let deleting = false;
   let deactivating = false;
-  let workspaceName = '';
-  let shareWithAdmin = false;
-
-  $: if ($me.data?.workspace) {
-    workspaceName = $me.data.workspace.name;
-    shareWithAdmin = $me.data.workspace.shareWithAdmin;
-  }
-
-  const saveWorkspace = async () => {
-    if (!$me.data?.workspace) return;
-    savingWorkspace = true;
-    try {
-      await updateMe(isAdmin() ? { workspaceName } : { workspaceName, shareWithAdmin });
-      addToast({ type: 'success', message: 'Paramètres du workspace enregistrés' });
-    } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur enregistrement workspace' });
-    } finally {
-      savingWorkspace = false;
-    }
-  };
+  // Workspace management UI is handled by WorkspaceSettingsPanel (collaboration Lot 1)
 
   const handleDeactivate = async () => {
     if (!confirm('Désactiver votre compte ? Vous pourrez demander une réactivation.')) return;
@@ -385,21 +366,7 @@
               </label>
               <div class="border-t border-slate-100 pt-3"></div>
             {/if}
-            <label class="block text-sm">
-              <div class="text-slate-600">Nom</div>
-              <input class="mt-1 w-full rounded border border-slate-200 px-3 py-2" bind:value={workspaceName} />
-            </label>
-            {#if !isAdmin()}
-              <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" class="h-4 w-4" bind:checked={shareWithAdmin} />
-                <span>Partager mon workspace avec l’administrateur</span>
-              </label>
-            {/if}
-            <div class="flex gap-2">
-              <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white" on:click={saveWorkspace} disabled={savingWorkspace}>
-                Enregistrer
-              </button>
-            </div>
+            <WorkspaceSettingsPanel />
           </div>
         </div>
       </div>

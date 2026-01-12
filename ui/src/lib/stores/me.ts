@@ -29,7 +29,6 @@ export interface MeResponse {
   workspace: {
     id: string;
     name: string;
-    shareWithAdmin: boolean;
     ownerUserId: string | null;
     createdAt: string;
     updatedAt: string | null;
@@ -56,7 +55,7 @@ export async function loadMe(): Promise<void> {
   }
 }
 
-export async function updateMe(input: { shareWithAdmin?: boolean; workspaceName?: string }): Promise<void> {
+export async function updateMe(input: { workspaceName?: string }): Promise<void> {
   await apiPatch('/me', input);
   await loadMe();
 }
