@@ -387,6 +387,7 @@ Planned entities (to validate against current schema to avoid duplicates):
 ## Commits & Progress
 - [x] **docs:** add collaboration BRANCH.md plan with detailed UAT scenarios (commit 409808f)
 - [x] **docs:** complete Lot 0 discovery findings in BRANCH.md (commit 06fd208)
+- [x] **fix(collab):** unblock `/workspaces` bootstrap when localStorage scope is stale (commit fd4aa24)
 
 ## Related Documentation
 
