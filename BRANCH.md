@@ -84,9 +84,9 @@ Out of scope:
 ## Plan / Lots (implementation order)
 
 ### Lot 0 — Branch doc + discovery (no behavioral changes)
-- [ ] Document scope and constraints in `BRANCH.md` (this file)
-- [ ] Identify existing "workspace" concepts in DB/API/UI (avoid duplicate concepts)
-- [ ] Map existing SSE plumbing and event patterns to reuse
+- [x] Document scope and constraints in `BRANCH.md` (this file)
+- [x] Identify existing "workspace" concepts in DB/API/UI (avoid duplicate concepts)
+- [x] Map existing SSE plumbing and event patterns to reuse
 
 **Existing baseline (already in repo):**
 - DB already has a `workspaces` table and most business tables are `workspace_id` scoped.
@@ -130,11 +130,15 @@ Out of scope:
 - [x] Map existing SSE plumbing and event patterns to reuse
 
 ### Lot 1 — Workspace sharing fundamentals (create/hide/delete, roles)
+- [x] Schema: add `workspaceMemberships` table (for types)
+- [x] Schema: add `hiddenAt` to `workspaces`, remove `shareWithAdmin`, remove UNIQUE from `ownerUserId`
+- [x] Migration SQL: create `0018_workspace_collaboration.sql` with data migration for existing owners
+- [x] Service: create `workspace-access.ts` with membership/role functions
+- [x] API: remove `shareWithAdmin` field and related logic from existing routes
 - [ ] API: create additional workspace; creator becomes admin
 - [ ] API: hide a workspace (admin-only; sets `hidden_at` timestamp)
 - [ ] API: unhide a workspace (admin-only; clears `hidden_at`)
 - [ ] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade)
-- [ ] API: remove `shareWithAdmin` field and related logic
 - [ ] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
 - [ ] API: list user's workspaces with membership roles
 - [ ] UI (Settings/Paramètres): replace workspace selector with table showing (column order):
@@ -383,6 +387,10 @@ Planned entities (to validate against current schema to avoid duplicates):
 ## Commits & Progress
 - [x] **docs:** add collaboration BRANCH.md plan with detailed UAT scenarios (commit 409808f)
 - [x] **docs:** complete Lot 0 discovery findings in BRANCH.md (commit 06fd208)
+- [ ] **schema:** add workspaceMemberships table, modify workspaces (hiddenAt, remove shareWithAdmin, remove unique ownerUserId)
+- [ ] **migration:** create 0018_workspace_collaboration.sql with data migration
+- [ ] **service:** create workspace-access.ts for membership/role management
+- [ ] **refactor:** remove shareWithAdmin from existing routes (admin, me, queue, streams, workspace-service, workspace-scope)
 
 ## Related Documentation
 
