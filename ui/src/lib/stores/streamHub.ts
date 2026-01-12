@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '$lib/config';
 import { isAuthenticated } from '$lib/stores/session';
 import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => void }): T {
   let value!: T;
@@ -255,7 +256,7 @@ class StreamHub {
     // and proxies `/api/v1/*` to the API). `new URL('/api/v1/...')` throws in browsers unless a base is provided.
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
     const urlObj = new URL(`${API_BASE_URL}/streams/sse`, window.location.origin);
-    const scoped = getScopedWorkspaceIdForAdmin();
+    const scoped = getScopedWorkspaceIdForAdmin() ?? getScopedWorkspaceIdForUser();
     if (scoped) urlObj.searchParams.set('workspace_id', scoped);
     const url = urlObj.toString();
     if (this.es && this.currentUrl === url) return;

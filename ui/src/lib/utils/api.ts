@@ -4,7 +4,10 @@
  * Centralized API calling utilities with authentication support.
  */
 
+import { browser } from '$app/environment';
 import { API_BASE_URL } from '$lib/config';
+import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 /**
  * Custom error class for API errors that preserves error details
@@ -28,7 +31,21 @@ export async function apiRequest<T = any>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<T> {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const rawUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+
+  // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
+  // - admin_app uses admin scope store
+  // - regular users use workspace scope store
+  const scoped = getScopedWorkspaceIdForAdmin() ?? getScopedWorkspaceIdForUser();
+  const url = (() => {
+    if (!scoped) return rawUrl;
+    // Never scope auth endpoints
+    if (endpoint.startsWith('/auth') || rawUrl.includes('/auth/')) return rawUrl;
+    if (!browser) return rawUrl;
+    const u = new URL(rawUrl, window.location.origin);
+    if (!u.searchParams.has('workspace_id')) u.searchParams.set('workspace_id', scoped);
+    return u.toString();
+  })();
   
   const response = await fetch(url, {
     ...options,
