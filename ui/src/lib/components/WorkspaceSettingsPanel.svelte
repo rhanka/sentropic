@@ -175,7 +175,8 @@
           <th class="w-10 px-3 py-2"></th>
           <th class="px-3 py-2">Nom</th>
           <th class="px-3 py-2">Rôle</th>
-          <th class="px-3 py-2">Actions</th>
+          <th class="px-3 py-2">Visibilité</th>
+          <th class="w-10 px-3 py-2"></th>
         </tr>
       </thead>
       <tbody>
@@ -200,34 +201,37 @@
             </td>
             <td class="px-3 py-2">{ws.role}</td>
             <td class="px-3 py-2">
-              <div class="flex gap-2">
-                {#if ws.role === 'admin'}
-                  {#if ws.hiddenAt}
-                    <button
-                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                      title="Restaurer le workspace"
-                      on:click|stopPropagation={() => unhideWorkspace(ws.id)}
-                    >
-                      <Eye class="h-4 w-4" />
-                    </button>
-                    <button
-                      class="rounded-full p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
-                      title="Supprimer définitivement (workspace caché uniquement)"
-                      on:click|stopPropagation={() => deleteWorkspace(ws.id)}
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </button>
-                  {:else}
-                    <button
-                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                      title="Cacher le workspace"
-                      on:click|stopPropagation={() => hideWorkspace(ws.id)}
-                    >
-                      <EyeOff class="h-4 w-4" />
-                    </button>
-                  {/if}
+              {#if ws.role === 'admin'}
+                {#if ws.hiddenAt}
+                  <button
+                    class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                    title="Rendre visible (unhide)"
+                    on:click|stopPropagation={() => unhideWorkspace(ws.id)}
+                  >
+                    <EyeOff class="h-4 w-4" />
+                  </button>
+                {:else}
+                  <button
+                    class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                    title="Rendre invisible (hide)"
+                    on:click|stopPropagation={() => hideWorkspace(ws.id)}
+                  >
+                    <Eye class="h-4 w-4" />
+                  </button>
                 {/if}
-              </div>
+              {/if}
+            </td>
+            <td class="px-3 py-2">
+              {#if ws.role === 'admin'}
+                <button
+                  class="rounded-full p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
+                  title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
+                  disabled={!ws.hiddenAt}
+                  on:click|stopPropagation={() => deleteWorkspace(ws.id)}
+                >
+                  <Trash2 class="h-4 w-4" />
+                </button>
+              {/if}
             </td>
           </tr>
         {/each}
