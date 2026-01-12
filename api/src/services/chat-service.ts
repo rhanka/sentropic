@@ -31,6 +31,7 @@ import {
 } from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
+import { hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 
@@ -376,9 +377,16 @@ export class ChatService {
       session && typeof (session as { workspaceId?: unknown }).workspaceId === 'string'
         ? ((session as { workspaceId: string }).workspaceId as string)
         : ownerWs.workspaceId;
-    // Read-only mode when the chat session is scoped to a different workspace,
-    // except for the Admin Workspace (admin_app only can target it via API).
-    const readOnly = sessionWorkspaceId !== ownerWs.workspaceId && sessionWorkspaceId !== ADMIN_WORKSPACE_ID;
+    // Read-only mode:
+    // - Admin Workspace is always read-only (admin_app can target it)
+    // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)
+    // - Otherwise: writable if the user is editor/admin member of the session workspace
+    const hidden = sessionWorkspaceId !== ADMIN_WORKSPACE_ID ? await isWorkspaceDeleted(sessionWorkspaceId) : false;
+    const canWrite =
+      !hidden && sessionWorkspaceId !== ADMIN_WORKSPACE_ID
+        ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor')
+        : false;
+    const readOnly = sessionWorkspaceId === ADMIN_WORKSPACE_ID || hidden || !canWrite;
 
     // Charger messages (sans inclure le placeholder assistant)
     const messages = await db
