@@ -133,7 +133,7 @@ Out of scope:
 - [x] API: create additional workspace; creator becomes admin
 - [x] API: hide a workspace (admin-only; sets `hidden_at` timestamp)
 - [x] API: unhide a workspace (admin-only; clears `hidden_at`)
-- [ ] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade) — WIP: need full cascade delete list for FK NO ACTION tables
+- [x] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade)
 - [x] API: remove `shareWithAdmin` field and related logic (schema + code paths)
 - [x] DB: add `hidden_at`, drop UNIQUE on `owner_user_id`, create `workspace_memberships` (single migration file) + data migration (owners => admin memberships)
 - [x] API: introduce `workspace-access.ts` helpers (roles + default workspace selection)

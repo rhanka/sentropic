@@ -2,7 +2,18 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { users, workspaceMemberships, workspaces } from '../../db/schema';
+import {
+  chatGenerationTraces,
+  chatSessions,
+  contextDocuments,
+  jobQueue,
+  useCases,
+  folders,
+  organizations,
+  users,
+  workspaceMemberships,
+  workspaces
+} from '../../db/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
@@ -107,11 +118,27 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
   await db.transaction(async (tx) => {
-    // Workspace-scoped content (keep this list tight; expand as collab lots land)
+    // Detach traces that use workspace FK (optional; keep history)
+    await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
+
+    // Delete chat sessions scoped to workspace (cascades to messages/contexts/events via FK)
+    await tx.delete(chatSessions).where(eq(chatSessions.workspaceId, workspaceId));
+
+    // Documents (versions cascade)
+    await tx.delete(contextDocuments).where(eq(contextDocuments.workspaceId, workspaceId));
+
+    // Jobs (history references are set null)
+    await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
+
+    // Core business tables
+    await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+    await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
+    await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
+
+    // Memberships (FK cascade also applies, but explicit is fine)
     await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
 
-    // Rely on existing schema cleanup elsewhere for the remaining tables for now.
-    // NOTE: Some tables have FK to workspaces with NO ACTION; if deletion fails, we will expand the cascade list here.
+    // Finally delete workspace
     await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
   });
 
