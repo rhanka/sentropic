@@ -30,14 +30,18 @@ Replace dropdown selector with a table showing (column order):
 1. **Selected state**: Checkmark icon if selected, empty otherwise.
 2. **Workspace name**: Display name of the workspace.
 3. **Role**: User's role in workspace (`viewer`/`editor`/`admin`).
-4. **Action buttons** (icons only, no text/border, `@lucide/svelte` style):
-   - Hide/unhide button (visible for `admin` role only).
-   - Delete button (visible for `admin` role only, only when workspace is hidden).
+4. **Visibility**: state icon (`eye` = visible, `eye-off` = hidden). Click toggles (admin-only). Tooltip indicates the action (hide vs unhide).
+5. **(no title)**: delete/trash icon (admin-only). Always visible for admins, but enabled only when the workspace is hidden (server requires hidden before final deletion).
 
 **Interaction**:
 - Row is clickable to select workspace.
 - Hover message on row: "Click to select workspace" (hover disabled on action buttons).
-- Action buttons: icons only, no text/border (same style as existing icons).
+- Icons: icons only, no text/border (same style as existing icons).
+
+### Hidden Workspace Visibility
+
+- Hidden workspaces must be **invisible** to `viewer` and `editor` members (not shown in the workspace list/table).
+- Hidden workspaces are visible only to `admin` members of that workspace (so they can unhide or perform final deletion/export).
 
 ## Object Edition Locks
 

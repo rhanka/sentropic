@@ -159,13 +159,13 @@ Out of scope:
   - [x] Verify "Workspace Alpha" appears in User A's workspace list
 - [x] **User A adds User B with viewer role:**
   - [x] User A adds User B (by email) to "Workspace Alpha" with role `viewer`
-  - [ ] User B logs in and switches to "Workspace Alpha"
-  - [ ] UI: create actions are hidden/disabled (no "plus" buttons) for organizations/folders/use cases
-  - [ ] UI: User B cannot access creation pages (`/organisations/new`, `/dossier/new`) → redirected with a read-only message
-  - [ ] UI: inline editors (`EditableInput`) are locked (no typing, no save)
-  - [ ] UI: delete/trash actions are hidden on lists and detail views (no misleading "success" toast)
-  - [ ] API: if a mutation is still attempted (manual call), it is blocked (403)
-  - [ ] User B can view all objects (read-only works)
+  - [x] User B logs in and switches to "Workspace Alpha"
+  - [x] UI: create actions are hidden/disabled (no "plus" buttons) for organizations/folders/use cases
+  - [x] UI: User B cannot access creation pages (`/organisations/new`, `/dossier/new`) → redirected with a read-only message
+  - [x] UI: inline editors (`EditableInput`) are locked (no typing, no save)
+  - [x] UI: delete/trash actions are hidden on lists and detail views (no misleading "success" toast)
+  - [!] API: if a mutation is still attempted (manual call), it is blocked (403) - UAT result: not directly testable (previously work because UI was not locked)
+  - [x] User B can view all objects (read-only works)
 - [ ] **User A changes User B role to editor:**
   - [ ] User A updates User B membership to role `editor`
   - [ ] User B refreshes and tries to edit an organization → succeeds (200)
@@ -190,11 +190,14 @@ Out of scope:
   - [ ] User A confirms → workspace and all data cascade-deleted
 - [ ] **Workspace selector table:**
   - [ ] User A opens Settings and sees workspace table
-  - [ ] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), action buttons
+  - [ ] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
   - [ ] Verify hover on row shows "Click to select workspace"
   - [ ] Verify hover on action buttons does NOT show row message
   - [ ] User A clicks a row → workspace selected, checkmark updates
   - [ ] Verify action buttons are icons only (no text/border)
+  - [ ] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
+  - [ ] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)
+  - [ ] Verify hidden workspaces are not visible to viewer/editor members (only admins see them in the table)
 - [ ] **Workspace isolation:**
   - [ ] User A creates "Workspace Beta" (separate from "Workspace Alpha")
   - [ ] User A creates an organization in "Workspace Beta"
