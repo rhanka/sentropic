@@ -152,17 +152,19 @@ Out of scope:
 - [x] Enforce role checks in existing mutation endpoints/tools (viewer blocks writes; editor/admin allowed)
 
 **Partial UAT (after Lot 1):**
-- [ ] **User A creates workspace:**
-  - [ ] User A goes to Settings/Paramètres
-  - [ ] User A creates a new workspace "Workspace Alpha"
-  - [ ] Verify User A is automatically admin of "Workspace Alpha"
-  - [ ] Verify "Workspace Alpha" appears in User A's workspace list
-- [ ] **User A adds User B with viewer role:**
-  - [ ] User A adds User B (by email) to "Workspace Alpha" with role `viewer`
+- [x] **User A creates workspace:**
+  - [x] User A goes to Settings/Paramètres
+  - [x] User A creates a new workspace "Workspace Alpha"
+  - [x] Verify User A is automatically admin of "Workspace Alpha"
+  - [x] Verify "Workspace Alpha" appears in User A's workspace list
+- [x] **User A adds User B with viewer role:**
+  - [x] User A adds User B (by email) to "Workspace Alpha" with role `viewer`
   - [ ] User B logs in and switches to "Workspace Alpha"
-  - [ ] User B tries to create/edit an organization → blocked (403)
-  - [ ] User B tries to create/edit a folder → blocked (403)
-  - [ ] User B tries to create/edit a use case → blocked (403)
+  - [ ] UI: create actions are hidden/disabled (no "plus" buttons) for organizations/folders/use cases
+  - [ ] UI: User B cannot access creation pages (`/organisations/new`, `/dossier/new`) → redirected with a read-only message
+  - [ ] UI: inline editors (`EditableInput`) are locked (no typing, no save)
+  - [ ] UI: delete/trash actions are hidden on lists and detail views (no misleading "success" toast)
+  - [ ] API: if a mutation is still attempted (manual call), it is blocked (403)
   - [ ] User B can view all objects (read-only works)
 - [ ] **User A changes User B role to editor:**
   - [ ] User A updates User B membership to role `editor`
@@ -388,6 +390,9 @@ Planned entities (to validate against current schema to avoid duplicates):
 - [x] **docs:** add collaboration BRANCH.md plan with detailed UAT scenarios (commit 409808f)
 - [x] **docs:** complete Lot 0 discovery findings in BRANCH.md (commit 06fd208)
 - [x] **fix(collab):** unblock `/workspaces` bootstrap when localStorage scope is stale (commit fd4aa24)
+- [x] **fix(admin):** avoid duplicate users in `/admin/users` (commit df4ce2f)
+- [x] **feat(collab):** lock `EditableInput` in read-only workspace scope (commit 57392a1)
+- [x] **fix(collab):** enforce viewer read-only in UI (hide create/delete, block drafts) (commit 2323947)
 
 ## Related Documentation
 

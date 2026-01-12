@@ -113,6 +113,17 @@ All mutation endpoints (POST/PUT/DELETE) check workspace membership role:
 - **`editor`**: Allowed for object mutations (create/update/delete).
 - **`admin`**: Allowed for all mutations + member management + workspace lifecycle.
 
+### UI Enforcement (prevent attempts before API)
+
+For a good UX and to avoid misleading feedback:
+- **Viewer UI is read-only**:
+  - Create actions are hidden/disabled (no "+" entry points).
+  - Delete actions are hidden (no trash icon).
+  - Inline editors (`EditableInput` and TipTap markdown) are locked (no typing, no autosave).
+  - Direct navigation to creation pages is blocked (redirect with an explicit read-only message).
+- **403 handling**:
+  - If a mutation is still attempted (e.g. stale UI or manual calls), display a clear "read-only / insufficient permissions" message.
+
 **Endpoints to update**:
 - `folders.ts`, `organizations.ts`, `use-cases.ts`, `documents.ts`, `chat.ts`, `tool-service.ts`.
 
