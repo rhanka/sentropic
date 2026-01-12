@@ -13,6 +13,7 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
 
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -28,6 +29,8 @@
   let editedContext = '';
   let lastFolderId: string | null = null;
   const HUB_KEY = 'folderDetailUseCases';
+  let isReadOnly = false;
+  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
 
   $: folderId = $page.params.id;
 
@@ -87,7 +90,12 @@
       addToast({ type: 'success', message: "Cas d'usage supprimé avec succès !" });
     } catch (error) {
       console.error('Failed to delete use case:', error);
-      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      const anyErr = error as any;
+      if (anyErr?.status === 403) {
+        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      } else {
+        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      }
     }
   };
 
@@ -139,7 +147,7 @@
   {#if currentFolder}
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
-        {#if $adminReadOnlyScope}
+        {#if isReadOnly}
           <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || 'Dossier'}</h1>
         {:else}
           <h1 class="text-3xl font-semibold mb-0 break-words">
@@ -191,6 +199,7 @@
         originalValue={currentFolder.description || ''}
         changeId={`folder-context-${currentFolder.id}`}
         on:change={(e) => (editedContext = e.detail.value)}
+        locked={isReadOnly}
       />
     </div>
 
@@ -231,7 +240,7 @@
               {useCase?.data?.name || useCase?.name || "Cas d'usage sans nom"}
             </h2>
           </div>
-          {#if !$adminReadOnlyScope}
+          {#if !isReadOnly}
             <button
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}

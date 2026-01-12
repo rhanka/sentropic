@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
+  import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
   import { goto } from '$app/navigation';
@@ -10,7 +11,8 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
   import { Printer, Trash2 } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
@@ -139,9 +141,15 @@
   // Polling désactivé: mise à jour via SSE (usecase_update)
 
   const handleDelete = async () => {
-    if (!useCase || !confirm('Êtes-vous sûr de vouloir supprimer ce cas d\'usage ?')) return;
+    if (!useCase) return;
+    if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      return;
+    }
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
 
     try {
+      await deleteUseCase(useCase.id);
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
       if (useCase.folderId) {
@@ -151,7 +159,12 @@
       }
     } catch (err) {
       console.error('Failed to delete use case:', err);
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      const anyErr = err as any;
+      if (anyErr?.status === 403) {
+        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      } else {
+        addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      }
     }
   };
 
@@ -221,13 +234,15 @@
             >
               <Printer class="w-5 h-5" />
             </button>
-            <button 
-              on:click={handleDelete}
-              class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
-              title="Supprimer le cas d'usage"
-            >
-              <Trash2 class="w-5 h-5" />
-            </button>
+            {#if !($adminReadOnlyScope || $workspaceReadOnlyScope)}
+              <button 
+                on:click={handleDelete}
+                class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                title="Supprimer le cas d'usage"
+              >
+                <Trash2 class="w-5 h-5" />
+              </button>
+            {/if}
       </svelte:fragment>
     </UseCaseDetail>
 

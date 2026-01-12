@@ -9,6 +9,7 @@
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Brain, Save, Trash2, Loader2, CirclePlus } from '@lucide/svelte';
+  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
 
   let folder: Partial<Folder> = {
     name: '',
@@ -48,6 +49,11 @@
 
   onMount(() => {
     void loadOrganizations();
+    if ($workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
+      goto('/dossiers');
+      return;
+    }
 
     // Si arrivée depuis la liste en cliquant sur un brouillon
     void (async () => {
@@ -119,7 +125,7 @@
     const name = (folder.name || '').trim();
     const context = (folder.description || '').trim();
     // Draft can be created with either a name OR a context (or later when user wants to add docs).
-    if ((name || context) && !folder.id && !isCreatingDraft) {
+    if ((name || context) && !folder.id && !isCreatingDraft && !$workspaceReadOnlyScope) {
       if (draftTimer) clearTimeout(draftTimer);
       draftTimer = setTimeout(() => {
         void ensureDraftFolder();
@@ -140,6 +146,10 @@
   $: canUseAIUi = Boolean(realName || hasContext || hasAnyDoc || hasOrganization);
 
   const handleSave = async () => {
+    if ($workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      return;
+    }
     if (isAutoName) return;
     if (!folder.name?.trim()) return;
 
@@ -168,6 +178,10 @@
   };
 
   const handleGenerate = async () => {
+    if ($workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      return;
+    }
     if (!canUseAI()) return;
     if (docsUploading) return;
 

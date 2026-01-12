@@ -9,10 +9,13 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import { Trash2, CirclePlus } from '@lucide/svelte';
 
   const HUB_KEY = 'organizationsList';
+  let isReadOnly = false;
+  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
 
   onMount(() => {
     void (async () => {
@@ -103,14 +106,14 @@
 </script>
 
 <section class="space-y-6">
-  {#if $adminReadOnlyScope}
+  {#if isReadOnly}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-      Mode admin — workspace partagé : <b>lecture seule</b> (création / suppression désactivées).
+      Mode <b>lecture seule</b> : création / suppression désactivées.
     </div>
   {/if}
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Organisations</h1>
-    {#if !$adminReadOnlyScope}
+    {#if !isReadOnly}
       <button
         class="rounded p-2 transition text-primary hover:bg-slate-100"
         on:click={() => goto('/organisations/new')}
@@ -139,7 +142,7 @@
             <div class="flex-1 min-w-0">
                     <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800">{organization.name}</h2>
             </div>
-            {#if !$adminReadOnlyScope}
+            {#if !isReadOnly}
               <button
                 class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
                       on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
@@ -163,7 +166,7 @@
                     <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800 group-hover:text-purple-900 transition-colors">{organization.name}</h2>
             </div>
             <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              {#if !$adminReadOnlyScope}
+              {#if !isReadOnly}
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                           on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
