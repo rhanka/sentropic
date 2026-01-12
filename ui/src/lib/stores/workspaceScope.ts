@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, get, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { apiGet } from '$lib/utils/api';
 import { session } from '$lib/stores/session';
@@ -38,6 +38,21 @@ export function setWorkspaceScope(id: string | null) {
   if (next) localStorage.setItem(STORAGE_KEY, next);
   else localStorage.removeItem(STORAGE_KEY);
 }
+
+export const selectedWorkspace = derived(workspaceScope, ($s) => {
+  return ($s.items || []).find((w) => w.id === $s.selectedId) ?? null;
+});
+
+export const selectedWorkspaceRole = derived(selectedWorkspace, ($w) => {
+  return $w?.role ?? null;
+});
+
+// Read-only scope for regular users: viewer role (or no resolved role) => disable UI mutations.
+export const workspaceReadOnlyScope = derived([session, selectedWorkspaceRole], ([$session, role]) => {
+  if (!$session.user) return true;
+  if ($session.user.role === 'admin_app') return false;
+  return role !== 'editor' && role !== 'admin';
+});
 
 export function getScopedWorkspaceIdForUser(): string | null {
   const s = get(session);

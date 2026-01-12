@@ -5,6 +5,8 @@
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
   import { apiPut } from "$lib/utils/api";
+  import { adminReadOnlyScope } from "$lib/stores/adminWorkspaceScope";
+  import { workspaceReadOnlyScope } from "$lib/stores/workspaceScope";
   
   export let label = ""; // Le label affiché au-dessus
   export let value = ""; // La valeur de l'input
@@ -13,6 +15,7 @@
   export let saveDelay = 5000; // Délai en ms avant sauvegarde (défaut: 5s)
   export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
+  export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
@@ -26,6 +29,7 @@
   export let multiline = false; // Si true, utilise un textarea au lieu d'un input (pour permettre les retours à la ligne)
   
   let tiptapContainer;
+  $: isLocked = Boolean(locked || disabled || $adminReadOnlyScope || $workspaceReadOnlyScope);
   
   const dispatch = createEventDispatcher();
   
@@ -41,7 +45,7 @@
   
   // Basculer entre le mode édition et le mode affichage
   const toggleEditing = () => {
-    if (disabled) return;
+    if (isLocked) return;
     isEditing = !isEditing;
   };
   
@@ -64,6 +68,7 @@
   
   // Fonction de sauvegarde avec buffer
   const saveWithBuffer = async () => {
+    if (isLocked) return;
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
     
     // Annuler le timeout précédent s'il existe
@@ -79,6 +84,7 @@
   
   // Effectuer la sauvegarde réelle
   const performSave = async () => {
+    if (isLocked) return;
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
     
     isSaving = true;
@@ -112,6 +118,7 @@
   
   // Gérer les changements de valeur (pour les inputs HTML)
   const handleInput = (event) => {
+    if (isLocked) return;
     const newValue = event.target.value;
     value = newValue;
     
@@ -144,6 +151,7 @@
 
   // Gérer les changements de valeur (pour TipTap)
   const handleTipTapChange = (event) => {
+    if (isLocked) return;
     const newValue = event.detail.value;
     value = newValue;
     
@@ -172,6 +180,7 @@
   
   // Sauvegarder immédiatement si nécessaire (avant navigation)
   const saveImmediately = async () => {
+    if (isLocked) return;
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
@@ -547,7 +556,7 @@
           class="editable-textarea"
           class:has-unsaved-changes={hasUnsavedChanges}
           class:is-saving={isSaving}
-          disabled={disabled}
+          disabled={isLocked}
           rows="1"
           aria-label={label || undefined}
           placeholder={placeholder || undefined}
@@ -566,7 +575,7 @@
               class="editable-input"
               class:has-unsaved-changes={hasUnsavedChanges}
               class:is-saving={isSaving}
-              disabled={disabled}
+              disabled={isLocked}
               aria-label={label || undefined}
               placeholder={placeholder || undefined}
               on:input={handleInput}
@@ -582,7 +591,7 @@
             class="editable-input"
             class:has-unsaved-changes={hasUnsavedChanges}
             class:is-saving={isSaving}
-            disabled={disabled}
+            disabled={isLocked}
             aria-label={label || undefined}
             placeholder={placeholder || undefined}
             on:input={handleInput}
@@ -601,7 +610,7 @@
     <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges} role="textbox" aria-label={label || undefined}>
       <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder}/>
+          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder} disabled={isLocked}/>
         </div>
       </div>
       {#if isSaving}
