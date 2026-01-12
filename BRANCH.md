@@ -130,15 +130,13 @@ Out of scope:
 - [x] Map existing SSE plumbing and event patterns to reuse
 
 ### Lot 1 — Workspace sharing fundamentals (create/hide/delete, roles)
-- [x] Schema: add `workspaceMemberships` table (for types)
-- [x] Schema: add `hiddenAt` to `workspaces`, remove `shareWithAdmin`, remove UNIQUE from `ownerUserId`
-- [x] Migration SQL: create `0018_workspace_collaboration.sql` with data migration for existing owners
-- [x] Service: create `workspace-access.ts` with membership/role functions
-- [x] API: remove `shareWithAdmin` field and related logic from existing routes
 - [ ] API: create additional workspace; creator becomes admin
 - [ ] API: hide a workspace (admin-only; sets `hidden_at` timestamp)
 - [ ] API: unhide a workspace (admin-only; clears `hidden_at`)
 - [ ] API: delete a workspace (admin-only; only allowed if workspace is hidden; hard delete with cascade)
+- [x] API: remove `shareWithAdmin` field and related logic (schema + code paths)
+- [x] DB: add `hidden_at`, drop UNIQUE on `owner_user_id`, create `workspace_memberships` (single migration file) + data migration (owners => admin memberships)
+- [x] API: introduce `workspace-access.ts` helpers (roles + default workspace selection)
 - [ ] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
 - [ ] API: list user's workspaces with membership roles
 - [ ] UI (Settings/Paramètres): replace workspace selector with table showing (column order):
@@ -387,10 +385,6 @@ Planned entities (to validate against current schema to avoid duplicates):
 ## Commits & Progress
 - [x] **docs:** add collaboration BRANCH.md plan with detailed UAT scenarios (commit 409808f)
 - [x] **docs:** complete Lot 0 discovery findings in BRANCH.md (commit 06fd208)
-- [ ] **schema:** add workspaceMemberships table, modify workspaces (hiddenAt, remove shareWithAdmin, remove unique ownerUserId)
-- [ ] **migration:** create 0018_workspace_collaboration.sql with data migration
-- [ ] **service:** create workspace-access.ts for membership/role management
-- [ ] **refactor:** remove shareWithAdmin from existing routes (admin, me, queue, streams, workspace-service, workspace-scope)
 
 ## Related Documentation
 
@@ -400,5 +394,9 @@ Planned entities (to validate against current schema to avoid duplicates):
 - **Progress**: 1/6 lots completed (Lot 0 done)
 - **Current**: Lot 1 — workspace sharing fundamentals (create/hide/delete, memberships, roles)
 - **Next**: implement workspace CRUD + membership management + role enforcement + workspace selector table UI
+
+### Lot 1 progress notes
+- Migration `api/drizzle/0018_workspace_collaboration.sql` is now present and registered in `api/drizzle/meta/_journal.json`.
+- Work-in-progress code is kept compilable; no `shareWithAdmin` references remain in API/DB schema.
 
 

@@ -1,11 +1,9 @@
-import { and, eq } from 'drizzle-orm';
-import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, workspaces } from '../db/schema';
+import { ADMIN_WORKSPACE_ID } from '../db/schema';
 
 /**
  * Resolve a workspace scope for admin_app reads.
  * - Non-admins: always own workspace
- * - admin_app: can request another workspace only if share_with_admin=true (or Admin Workspace)
+ * - admin_app: can request Admin Workspace only
  */
 export async function resolveReadableWorkspaceId(params: {
   user: { role?: string; workspaceId: string };
@@ -18,18 +16,7 @@ export async function resolveReadableWorkspaceId(params: {
   if (user.role !== 'admin_app') return user.workspaceId;
   if (req === ADMIN_WORKSPACE_ID) return req;
 
-  const [ws] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(and(eq(workspaces.id, req), eq(workspaces.shareWithAdmin, true)))
-    .limit(1);
-
-  if (!ws) {
-    // opaque (avoid information leaks)
-    throw new Error('Workspace not accessible');
-  }
-
-  return req;
+  throw new Error('Workspace not accessible');
 }
 
 

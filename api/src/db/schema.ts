@@ -6,9 +6,9 @@ export const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
-  ownerUserId: text('owner_user_id').unique(), // nullable is allowed; unique permits multiple NULLs in Postgres
+  ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
-  shareWithAdmin: boolean('share_with_admin').notNull().default(false),
+  hiddenAt: timestamp('hidden_at', { withTimezone: false }), // nullable; timestamp when workspace was hidden
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 });
@@ -404,3 +404,21 @@ export type ChatGenerationTraceRow = typeof chatGenerationTraces.$inferSelect;
 export type ContextModificationHistoryRow = typeof contextModificationHistory.$inferSelect;
 export type ContextDocumentRow = typeof contextDocuments.$inferSelect;
 export type ContextDocumentVersionRow = typeof contextDocumentVersions.$inferSelect;
+
+// Collaboration tables (Lot 1-5) - Migration will be created at Lot 5
+export const workspaceMemberships = pgTable('workspace_memberships', {
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'viewer' | 'editor' | 'admin'
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  workspaceUserUnique: uniqueIndex('workspace_memberships_workspace_id_user_id_unique').on(table.workspaceId, table.userId),
+  workspaceIdIdx: index('workspace_memberships_workspace_id_idx').on(table.workspaceId),
+  userIdIdx: index('workspace_memberships_user_id_idx').on(table.userId),
+}));
+
+export type WorkspaceMembershipRow = typeof workspaceMemberships.$inferSelect;

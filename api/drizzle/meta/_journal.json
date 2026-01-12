@@ -127,6 +127,13 @@
       "when": 1767367200000,
       "tag": "0017_context_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1768183589637,
+      "tag": "0018_workspace_collaboration",
+      "breakpoints": true
     }
   ]
 }

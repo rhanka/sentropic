@@ -19,7 +19,6 @@ export async function ensureAdminWorkspaceExists(): Promise<void> {
       id: ADMIN_WORKSPACE_ID,
       ownerUserId: null,
       name: ADMIN_WORKSPACE_NAME,
-      shareWithAdmin: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -80,7 +79,6 @@ export async function ensureWorkspaceForUser(userId: string): Promise<{ workspac
     id,
     ownerUserId: userId,
     name: 'My Workspace',
-    shareWithAdmin: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   });

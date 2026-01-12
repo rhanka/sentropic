@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { and, eq } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, organizations, useCases, workspaces } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, organizations, useCases } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -169,14 +169,8 @@ async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
   if (user?.role !== 'admin_app') return user.workspaceId;
   if (requested === ADMIN_WORKSPACE_ID) return requested;
 
-  const [ws] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(and(eq(workspaces.id, requested), eq(workspaces.shareWithAdmin, true)))
-    .limit(1);
-
-  if (!ws) throw new Error('Workspace not accessible');
-  return requested;
+  // `shareWithAdmin` is removed in Collaboration. For now, admin_app can only scope to ADMIN_WORKSPACE_ID.
+  throw new Error('Workspace not accessible');
 }
 
 // GET /streams/events/:streamId?limit=2000&sinceSequence=123

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { ADMIN_WORKSPACE_ID, folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
+import { folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -96,7 +96,6 @@ adminRouter.get('/users', async (c) => {
       updatedAt: users.updatedAt,
       workspaceId: workspaces.id,
       workspaceName: workspaces.name,
-      shareWithAdmin: workspaces.shareWithAdmin,
     })
     .from(users)
     .leftJoin(workspaces, eq(workspaces.ownerUserId, users.id))
@@ -107,21 +106,16 @@ adminRouter.get('/users', async (c) => {
 });
 
 adminRouter.get('/workspaces', async (c) => {
-  // Admin workspace + all workspaces that are explicitly shared with admin
+  // List all workspaces (admin_app can see all)
   const rows = await db
     .select({
       id: workspaces.id,
       name: workspaces.name,
-      shareWithAdmin: workspaces.shareWithAdmin,
       ownerUserId: workspaces.ownerUserId,
       ownerEmail: users.email,
     })
     .from(workspaces)
     .leftJoin(users, eq(workspaces.ownerUserId, users.id))
-    .where(
-      // keep it simple: either admin workspace or shareWithAdmin=true
-      sql`${workspaces.id} = ${ADMIN_WORKSPACE_ID} OR ${workspaces.shareWithAdmin} = true`
-    )
     .orderBy(desc(workspaces.createdAt));
 
   return c.json({ items: rows });
