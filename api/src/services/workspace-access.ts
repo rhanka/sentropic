@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaceMemberships, workspaces } from '../db/schema';
 
@@ -88,7 +88,13 @@ export async function getUserWorkspaces(userId: string): Promise<
     })
     .from(workspaceMemberships)
     .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
-    .where(eq(workspaceMemberships.userId, userId))
+    // Hidden workspaces are only visible to workspace admins.
+    .where(
+      and(
+        eq(workspaceMemberships.userId, userId),
+        or(isNull(workspaces.hiddenAt), eq(workspaceMemberships.role, 'admin'))
+      )
+    )
     .orderBy(desc(workspaces.createdAt));
 
   return rows.map((r) => ({

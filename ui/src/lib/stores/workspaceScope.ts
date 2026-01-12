@@ -70,7 +70,9 @@ export async function loadUserWorkspaces(): Promise<void> {
   workspaceScope.update((st) => ({ ...st, loading: true, error: null }));
   try {
     const data = await apiGet<{ items: UserWorkspace[] }>('/workspaces');
-    const items = Array.isArray(data?.items) ? data.items : [];
+    const rawItems = Array.isArray(data?.items) ? data.items : [];
+    // Hidden workspaces are only visible to workspace admins (defensive client-side filter).
+    const items = rawItems.filter((w) => !w.hiddenAt || w.role === 'admin');
 
     workspaceScope.update((st) => {
       const selectedIdRaw = st.selectedId || '';
