@@ -48,7 +48,7 @@ Replace dropdown selector with a table showing (column order):
 When an `admin` selects a **hidden** workspace:
 - The user must be **restricted to the Settings/Paramètres page** until the workspace is made visible again.
 - If the user tries to navigate elsewhere (via URL or navigation), they are redirected to `/parametres`.
-- A persistent banner (same style as the read-only banner) must be shown to explain: "workspace hidden — unhide to access other views".
+- A persistent banner must be shown to explain: "workspace hidden — unhide to access other views".
 
 ## Object Edition Locks
 
