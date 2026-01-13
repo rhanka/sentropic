@@ -18,6 +18,7 @@
   let lastLoadedId: string | null = null;
   let hubKey: string | null = null;
   $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope;
+  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -123,6 +124,12 @@
 {#if error}
   <div class="rounded bg-red-50 border border-red-200 p-4 text-red-700 mb-6">
     {error}
+  </div>
+{/if}
+
+{#if showReadOnlyBanner}
+  <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-6">
+    Mode <b>lecture seule</b> : création / suppression désactivées.
   </div>
 {/if}
 

@@ -12,7 +12,7 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { Printer, Trash2 } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
@@ -23,6 +23,7 @@
   let organizationId: string | null = null;
   let organizationName: string | null = null;
   let hubKey: string | null = null;
+  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   $: useCaseId = $page.params.id;
 
@@ -211,6 +212,12 @@
   {#if error}
     <div class="rounded bg-red-50 border border-red-200 p-4 text-red-700 mb-6">
       {error}
+    </div>
+  {/if}
+
+  {#if showReadOnlyBanner}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Mode <b>lecture seule</b> : création / suppression désactivées.
     </div>
   {/if}
 
