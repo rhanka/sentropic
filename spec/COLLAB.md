@@ -129,12 +129,20 @@ All mutation endpoints (POST/PUT/DELETE) check workspace membership role:
 
 For a good UX and to avoid misleading feedback:
 - **Viewer UI is read-only**:
-  - Create actions are hidden/disabled (no "+" entry points).
-  - Delete actions are hidden (no trash icon).
+  - Create actions are hidden/disabled (no "+" entry points). A **lock icon** is shown in the actions area with a tooltip explaining the read-only state.
+  - Delete actions are hidden (no trash icon). A **lock icon** may replace destructive actions where relevant.
   - Inline editors (`EditableInput` and TipTap markdown) are locked (no typing, no autosave).
   - Direct navigation to creation pages is blocked (redirect with an explicit read-only message).
 - **403 handling**:
   - If a mutation is still attempted (e.g. stale UI or manual calls), display a clear "read-only / insufficient permissions" message.
+
+**Read-only lock icon placement (viewer UX)**:
+- Shown in the actions area (where `+` / trash normally is) on:
+  - `/organisations`, `/organisations/[id]`
+  - `/dossiers`, `/dossiers/[id]`
+  - `/cas-usage/[id]`
+  - `/matrice`, `/dashboard`
+- On `/dashboard`, the lock icon must be **hidden in print mode** (PDF export / printing).
 
 **Endpoints to update**:
 - `folders.ts`, `organizations.ts`, `use-cases.ts`, `documents.ts`, `chat.ts`, `tool-service.ts`.

@@ -164,7 +164,9 @@ Out of scope:
   - [x] UI: User B cannot access creation pages (`/organisations/new`, `/dossier/new`) → redirected with a read-only message
   - [x] UI: inline editors (`EditableInput`) are locked (no typing, no save)
   - [x] UI: delete/trash actions are hidden on lists and detail views (no misleading "success" toast)
-  - [x] API: if a mutation is still attempted (manual call), it is blocked (403) - UAT result: not directly testable (via forgottent trash button in organisation view)
+  - [x] UI: a lock icon (tooltip) replaces the usual destructive/create actions across the app (organisations, dossiers, cas-usage, matrice, dashboard) for viewer
+  - [x] UI: dashboard lock icon is not rendered in print mode (PDF/export)
+  - [x] API: if a mutation is still attempted (manual call), it is blocked (403) - UAT result: not directly testable (via forgotten trash button in organisation view)
   - [x] User B can view all objects (read-only works)
 - [ ] **User A changes User B role to editor:**
   - [ ] User A updates User B membership to role `editor`
