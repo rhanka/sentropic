@@ -73,3 +73,50 @@ WHERE "owner_user_id" IS NOT NULL
   )
 ON CONFLICT ("workspace_id", "user_id") DO NOTHING;
 
+--> statement-breakpoint
+
+-- 6) Lot 2: object edition locks (soft locks with TTL)
+CREATE TABLE IF NOT EXISTS "object_locks" (
+	"id" text PRIMARY KEY NOT NULL,
+	"workspace_id" text NOT NULL,
+	"object_type" text NOT NULL,
+	"object_id" text NOT NULL,
+	"locked_by_user_id" text NOT NULL,
+	"locked_at" timestamp DEFAULT now() NOT NULL,
+	"expires_at" timestamp NOT NULL,
+	"unlock_requested_at" timestamp,
+	"unlock_requested_by_user_id" text,
+	"unlock_request_message" text,
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+
+DO $$ BEGIN
+ ALTER TABLE "object_locks" ADD CONSTRAINT "object_locks_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+
+DO $$ BEGIN
+ ALTER TABLE "object_locks" ADD CONSTRAINT "object_locks_locked_by_user_id_users_id_fk" FOREIGN KEY ("locked_by_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+
+DO $$ BEGIN
+ ALTER TABLE "object_locks" ADD CONSTRAINT "object_locks_unlock_requested_by_user_id_users_id_fk" FOREIGN KEY ("unlock_requested_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+
+CREATE UNIQUE INDEX IF NOT EXISTS "object_locks_workspace_object_unique" ON "object_locks" USING btree ("workspace_id","object_type","object_id");
+--> statement-breakpoint
+
+CREATE INDEX IF NOT EXISTS "object_locks_workspace_id_idx" ON "object_locks" USING btree ("workspace_id");
+--> statement-breakpoint
+
+CREATE INDEX IF NOT EXISTS "object_locks_expires_at_idx" ON "object_locks" USING btree ("expires_at");
+
