@@ -11,14 +11,14 @@
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
-  import { Trash2 } from '@lucide/svelte';
+  import { Trash2, Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
   let lastLoadedId: string | null = null;
   let hubKey: string | null = null;
   $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope;
-  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -127,12 +127,6 @@
   </div>
 {/if}
 
-{#if showReadOnlyBanner}
-  <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-6">
-    Mode <b>lecture seule</b> : création / suppression désactivées.
-  </div>
-{/if}
-
 {#if organization}
   <OrganizationForm
     organization={organization as any}
@@ -151,6 +145,16 @@
           on:click={handleDelete}
         >
           <Trash2 class="w-5 h-5" />
+        </button>
+      {:else if showReadOnlyLock}
+        <button
+          class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+          title="Mode lecture seule : création / suppression désactivées."
+          aria-label="Mode lecture seule : création / suppression désactivées."
+          type="button"
+          disabled
+        >
+          <Lock class="w-5 h-5" />
         </button>
       {/if}
     </div>

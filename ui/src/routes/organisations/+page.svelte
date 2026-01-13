@@ -11,12 +11,12 @@
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
-  import { Trash2, CirclePlus } from '@lucide/svelte';
+  import { Trash2, CirclePlus, Lock } from '@lucide/svelte';
 
   const HUB_KEY = 'organizationsList';
   let isReadOnly = false;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
-  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   onMount(() => {
     void (async () => {
@@ -107,11 +107,6 @@
 </script>
 
 <section class="space-y-6">
-  {#if showReadOnlyBanner}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-      Mode <b>lecture seule</b> : création / suppression désactivées.
-    </div>
-  {/if}
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Organisations</h1>
     {#if !isReadOnly}
@@ -123,6 +118,16 @@
         type="button"
       >
         <CirclePlus class="w-5 h-5" />
+      </button>
+    {:else if showReadOnlyLock}
+      <button
+        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+        title="Mode lecture seule : création / suppression désactivées."
+        aria-label="Mode lecture seule : création / suppression désactivées."
+        type="button"
+        disabled
+      >
+        <Lock class="w-5 h-5" />
       </button>
     {/if}
   </div>

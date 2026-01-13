@@ -13,7 +13,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
-  import { Printer, Trash2 } from '@lucide/svelte';
+  import { Printer, Trash2, Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let useCase: any = undefined;
@@ -23,7 +23,7 @@
   let organizationId: string | null = null;
   let organizationName: string | null = null;
   let hubKey: string | null = null;
-  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   $: useCaseId = $page.params.id;
 
@@ -215,12 +215,6 @@
     </div>
   {/if}
 
-  {#if showReadOnlyBanner}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-      Mode <b>lecture seule</b> : création / suppression désactivées.
-    </div>
-  {/if}
-
   {#if useCase}
   {#if useCase.status === 'generating' || useCase.status === 'detailing'}
     <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={10} />
@@ -248,6 +242,16 @@
                 title="Supprimer le cas d'usage"
               >
                 <Trash2 class="w-5 h-5" />
+              </button>
+            {:else if showReadOnlyLock}
+              <button
+                class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
+                title="Mode lecture seule : création / suppression désactivées."
+                aria-label="Mode lecture seule : création / suppression désactivées."
+                type="button"
+                disabled
+              >
+                <Lock class="w-5 h-5" />
               </button>
             {/if}
       </svelte:fragment>

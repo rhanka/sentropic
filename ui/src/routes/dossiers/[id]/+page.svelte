@@ -20,7 +20,7 @@
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
-  import { Trash2, Star, X, Minus, Loader2 } from '@lucide/svelte';
+  import { Trash2, Star, X, Minus, Loader2, Lock } from '@lucide/svelte';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -31,7 +31,7 @@
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
-  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   $: folderId = $page.params.id;
 
@@ -145,12 +145,6 @@
 </script>
 
 <section class="space-y-6">
-  {#if showReadOnlyBanner}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-      Mode <b>lecture seule</b> : création / suppression désactivées.
-    </div>
-  {/if}
-
   {#if currentFolder}
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
@@ -189,6 +183,17 @@
           <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
             {currentFolder.model}
           </span>
+        {/if}
+        {#if showReadOnlyLock}
+          <button
+            class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+            title="Mode lecture seule : création / suppression désactivées."
+            aria-label="Mode lecture seule : création / suppression désactivées."
+            type="button"
+            disabled
+          >
+            <Lock class="w-5 h-5" />
+          </button>
         {/if}
       </div>
     </div>
