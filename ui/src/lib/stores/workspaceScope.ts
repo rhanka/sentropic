@@ -47,6 +47,18 @@ export const selectedWorkspaceRole = derived(selectedWorkspace, ($w) => {
   return $w?.role ?? null;
 });
 
+export const selectedWorkspaceHidden = derived(selectedWorkspace, ($w) => {
+  return Boolean($w?.hiddenAt);
+});
+
+// When a hidden workspace is selected, only /parametres should be accessible until the workspace is made visible again.
+export const hiddenWorkspaceLock = derived([session, selectedWorkspace], ([$session, ws]) => {
+  if (!$session.user) return false;
+  if ($session.user.role === 'admin_app') return false;
+  if (!ws) return false;
+  return ws.role === 'admin' && Boolean(ws.hiddenAt);
+});
+
 // Read-only scope for regular users: viewer role (or no resolved role) => disable UI mutations.
 export const workspaceReadOnlyScope = derived([session, selectedWorkspaceRole], ([$session, role]) => {
   if (!$session.user) return true;

@@ -6,6 +6,7 @@
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '$lib/i18n';
   import { currentFolderId } from '../stores/folders';
+  import { hiddenWorkspaceLock } from '$lib/stores/workspaceScope';
   import { ChevronDown, Menu, X } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { fly, fade } from 'svelte/transition';
@@ -68,6 +69,10 @@
   const computeIsMenuDisabled = (href: string, authed: boolean, folderId: string | null) => {
     // Si l'utilisateur n'est pas authentifié, griser tous les menus sauf l'accueil (/)
     if (!authed) return href !== '/';
+
+    // Si un workspace caché est sélectionné, restreindre la navigation (Paramètres uniquement).
+    // Le redirect est géré globalement dans +layout, mais on grise aussi la navigation pour le feedback UX.
+    if ($hiddenWorkspaceLock) return true;
 
     // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
     if (!folderId) return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';

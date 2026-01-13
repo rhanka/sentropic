@@ -198,6 +198,8 @@ Out of scope:
   - [ ] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
   - [ ] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)
   - [ ] Verify hidden workspaces are not visible to viewer/editor members (only admins see them in the table)
+  - [ ] Verify: if an admin selects a hidden workspace, all navigation (except /parametres) redirects to /parametres
+  - [ ] Verify: a persistent banner explains that the workspace must be made visible to access other views
 - [ ] **Workspace isolation:**
   - [ ] User A creates "Workspace Beta" (separate from "Workspace Alpha")
   - [ ] User A creates an organization in "Workspace Beta"

@@ -43,6 +43,13 @@ Replace dropdown selector with a table showing (column order):
 - Hidden workspaces must be **invisible** to `viewer` and `editor` members (not shown in the workspace list/table).
 - Hidden workspaces are visible only to `admin` members of that workspace (so they can unhide or perform final deletion/export).
 
+### Hidden Workspace Navigation Lock (UI)
+
+When an `admin` selects a **hidden** workspace:
+- The user must be **restricted to the Settings/Paramètres page** until the workspace is made visible again.
+- If the user tries to navigate elsewhere (via URL or navigation), they are redirected to `/parametres`.
+- A persistent banner (same style as the read-only banner) must be shown to explain: "workspace hidden — unhide to access other views".
+
 ## Object Edition Locks
 
 ### Lock Model
