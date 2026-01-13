@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast';
-  import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import { loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
@@ -116,7 +116,7 @@
   async function updateMember(userId: string, role: 'viewer' | 'editor' | 'admin') {
     if (!selectedWorkspace?.id) return;
     try {
-      await apiPut(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
+      await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
       addToast({ type: 'success', message: 'Rôle mis à jour' });
       await loadMembers();
       await loadUserWorkspaces();

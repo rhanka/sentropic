@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
@@ -216,7 +216,7 @@ const updateMemberSchema = z.object({
   role: roleSchema,
 });
 
-workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), async (c) => {
+async function updateMemberRoleHandler(c: Context) {
   const actor = c.get('user') as { userId: string; role: string };
   if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
@@ -230,14 +230,23 @@ workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json',
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
 
-  const { role } = c.req.valid('json');
+  // Avoid relying on typed `c.req.valid()` here: this handler is shared between PATCH and PUT,
+  // and TypeScript cannot infer the validated type through the function boundary.
+  const raw = await c.req.json().catch(() => null);
+  const parsed = updateMemberSchema.safeParse(raw);
+  if (!parsed.success) return c.json({ message: 'Invalid body' }, 400);
+  const { role } = parsed.data;
   await db
     .update(workspaceMemberships)
     .set({ role })
     .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
 
   return c.json({ success: true });
-});
+}
+
+// Support both PATCH and PUT for ergonomics/backward compatibility with UI callers.
+workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
+workspacesRouter.put('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
 
 workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
   const actor = c.get('user') as { userId: string; role: string };
