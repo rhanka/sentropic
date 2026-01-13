@@ -170,10 +170,10 @@ Out of scope:
   - [x] User B can view all objects (read-only works)
 - [ ] **User A changes User B role to editor:**
   - [x] User A updates User B membership to role `editor` (fix: endpoint supports PUT+PATCH; UI uses PATCH)
-  - [ ] User B refreshes and tries to edit an organization → succeeds (200)
-  - [ ] User B tries to delete a folder → succeeds (200)
-  - [ ] User B tries to manage workspace members → blocked (403, admin-only)
-  - [ ] User B tries to delete/archive workspace → blocked (403, admin-only)
+  - [x] User B refreshes and tries to edit an organization → succeeds (200)
+  - [x] User B tries to delete a folder → succeeds (200)
+  - [x] User B tries to manage workspace members → blocked (no access to user list in UI; API 403 covered by api/security tests)
+  - [x] User B tries to delete/archive workspace → blocked (no access to delete/archive functions in UI; API 403 covered by api/security tests)
 - [ ] **User A promotes User B to admin:**
   - [ ] User A updates User B membership to role `admin`
   - [ ] User B refreshes and can now manage members (add/remove/change roles)
