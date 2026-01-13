@@ -11,7 +11,8 @@
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X } from '@lucide/svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X, Lock } from '@lucide/svelte';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -31,6 +32,7 @@
   // Variables pour l'auto-save de la matrice (seuils, poids, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let isSavingMatrix = false;
+  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   onMount(async () => {
     await loadMatrix();
@@ -617,13 +619,20 @@
 </script>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
-
-  {#if $adminReadOnlyScope}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
-      Mode admin — workspace partagé : <b>lecture seule</b> (édition désactivée).
-    </div>
-  {/if}
+  <div class="mb-6 flex items-start justify-between gap-4">
+    <h1 class="text-3xl font-bold text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
+    {#if showReadOnlyLock}
+      <button
+        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+        title="Mode lecture seule : modification désactivée."
+        aria-label="Mode lecture seule : modification désactivée."
+        type="button"
+        disabled
+      >
+        <Lock class="w-5 h-5" />
+      </button>
+    {/if}
+  </div>
   
   {#if $currentFolderId}
     <p class="text-gray-600 -mt-4 mb-6">
