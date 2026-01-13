@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
-import { apiGet, apiDelete, ApiError } from '$lib/utils/api';
 import { goto } from '$app/navigation';
+import { API_BASE_URL } from '$lib/config';
 
 /**
  * Session Store
@@ -22,6 +22,42 @@ export interface User {
 export interface SessionState {
   user: User | null;
   loading: boolean;
+}
+
+class SessionApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public data?: unknown
+  ) {
+    super(message);
+    this.name = 'SessionApiError';
+  }
+}
+
+async function authRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const res = await fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers ?? {})
+    }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const rawMessage = (data as any)?.message ?? (data as any)?.error ?? `HTTP ${res.status}: ${res.statusText}`;
+    const msg = typeof rawMessage === 'string' ? rawMessage : (() => {
+      try {
+        return JSON.stringify(rawMessage);
+      } catch {
+        return String(rawMessage);
+      }
+    })();
+    throw new SessionApiError(msg, res.status, data);
+  }
+  return data as T;
 }
 
 // Create writable store
@@ -86,7 +122,9 @@ export async function initializeSession(): Promise<void> {
     }
     
     try {
-      const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
+      const data = await authRequest<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session', {
+        method: 'GET'
+      });
       
       const user: User = {
         id: data.userId,
@@ -104,7 +142,7 @@ export async function initializeSession(): Promise<void> {
       };
       localStorage.setItem('userSession', JSON.stringify(sessionData));
     } catch (error) {
-      if (error instanceof ApiError) {
+      if (error instanceof SessionApiError) {
         if (error.status === 401 || error.status === 403) {
           console.log('❌ Authentication error, clearing session');
           sessionStore.set({ user: null, loading: false });
@@ -148,7 +186,7 @@ export async function initializeSession(): Promise<void> {
           localStorage.removeItem('userSession');
         }
       } else {
-        // Erreur non-ApiError, traiter comme non authentifié
+        // Erreur non-SessionApiError, traiter comme non authentifié
         console.error('Failed to initialize session:', error);
         sessionStore.set({ user: null, loading: false });
         localStorage.removeItem('userSession');
@@ -167,7 +205,9 @@ export async function initializeSession(): Promise<void> {
 async function validateSessionInBackground(): Promise<void> {
   console.log('🔄 Background validation started...');
   try {
-    const data = await apiGet<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session');
+    const data = await authRequest<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session', {
+      method: 'GET'
+    });
     
     const user: User = {
       id: data.userId,
@@ -191,7 +231,7 @@ async function validateSessionInBackground(): Promise<void> {
       sessionStore.set({ user, loading: false });
     }
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (error instanceof SessionApiError) {
       if (error.status === 401 || error.status === 403) {
         console.warn('❌ Background validation: authentication error, clearing session');
         clearUser();
@@ -305,7 +345,7 @@ export function isAdmin(): boolean {
 export async function logout(): Promise<void> {
   try {
     // Call API to invalidate session on server
-    await apiDelete('/auth/session');
+    await authRequest('/auth/session', { method: 'DELETE' });
   } catch (error) {
     console.error('Logout request failed:', error);
     // Continue with logout even if API call fails (rate limiting, etc.)
@@ -333,7 +373,7 @@ export async function logout(): Promise<void> {
 export async function logoutAll(): Promise<void> {
   try {
     // Call API to invalidate all sessions on server
-    await apiDelete('/auth/session/all');
+    await authRequest('/auth/session/all', { method: 'DELETE' });
   } catch (error) {
     console.error('Logout all request failed:', error);
     // Continue with logout even if API call fails
