@@ -169,7 +169,7 @@ Out of scope:
   - [x] API: if a mutation is still attempted (manual call), it is blocked (403) - UAT result: not directly testable (via forgotten trash button in organisation view)
   - [x] User B can view all objects (read-only works)
 - [ ] **User A changes User B role to editor:**
-  - [ ] User A updates User B membership to role `editor`
+  - [x] User A updates User B membership to role `editor` (fix: endpoint supports PUT+PATCH; UI uses PATCH)
   - [ ] User B refreshes and tries to edit an organization → succeeds (200)
   - [ ] User B tries to delete a folder → succeeds (200)
   - [ ] User B tries to manage workspace members → blocked (403, admin-only)
