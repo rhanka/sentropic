@@ -16,6 +16,7 @@ import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 
 async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
@@ -420,7 +421,7 @@ useCasesRouter.get('/:id', async (c) => {
 });
 
 useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput.partial()), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
   const [record] = await db
@@ -429,6 +430,18 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
     .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
+  }
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'usecase',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
   }
   
   // Extraire data existant pour le merge
@@ -492,8 +505,19 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
 });
 
 useCasesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'usecase',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
   await db.delete(useCases).where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   return c.body(null, 204);
 });

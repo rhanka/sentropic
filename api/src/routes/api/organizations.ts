@@ -8,6 +8,7 @@ import { createId } from '../../utils/id';
 import { enrichOrganization } from '../../services/context-organization';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -283,7 +284,7 @@ organizationsRouter.get('/:id', async (c) => {
 });
 
 organizationsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput.partial()), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
 
@@ -292,6 +293,18 @@ organizationsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVa
     .from(organizations)
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   if (!existing) return c.json({ message: 'Not found' }, 404);
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'organization',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
 
   const currentData = parseOrganizationData(existing.data);
   const nextData: OrganizationData = {
@@ -340,7 +353,7 @@ organizationsRouter.post('/ai-enrich', requireEditor, requireWorkspaceEditorRole
 });
 
 organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
 
   const [org] = await db
@@ -348,6 +361,18 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
     .from(organizations)
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   if (!org) return c.json({ message: 'Not found' }, 404);
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'organization',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
 
   // Check dependencies
   const relatedFolders = await db

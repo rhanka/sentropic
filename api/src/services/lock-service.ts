@@ -32,6 +32,35 @@ function httpError(status: number, message: string): HttpError {
   return e;
 }
 
+export type ObjectLockedError = Error & {
+  status: 409;
+  code: 'OBJECT_LOCKED';
+  lock: LockSnapshot;
+};
+
+export function isObjectLockedError(e: unknown): e is ObjectLockedError {
+  if (!e || typeof e !== 'object') return false;
+  const r = e as Record<string, unknown>;
+  return r.status === 409 && r.code === 'OBJECT_LOCKED' && 'lock' in r;
+}
+
+export async function requireLockOwnershipForMutation(options: {
+  userId: string;
+  workspaceId: string;
+  objectType: LockObjectType;
+  objectId: string;
+}): Promise<void> {
+  const lock = await getActiveLock(options.workspaceId, options.objectType, options.objectId);
+  if (!lock) return;
+  if (lock.lockedBy.userId === options.userId) return;
+
+  const e = new Error('Object is locked') as ObjectLockedError;
+  e.status = 409;
+  e.code = 'OBJECT_LOCKED';
+  e.lock = lock;
+  throw e;
+}
+
 function normalizeObjectType(value: string): LockObjectType | null {
   const v = (value || '').trim().toLowerCase();
   if (v === 'organization') return 'organization';

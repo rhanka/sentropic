@@ -9,6 +9,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 
 const matrixSchema = z.object({
   valueAxes: z.array(
@@ -308,10 +309,22 @@ foldersRouter.get('/:id', async (c) => {
 });
 
 foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', folderInput.partial()), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
   const organizationId = payload.organizationId;
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'folder',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
 
   // Validate organization belongs to workspace (if provided)
   if (organizationId) {
@@ -362,8 +375,19 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
 });
 
 foldersRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'folder',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
   await db.delete(folders).where(and(eq(folders.id, id), eq(folders.workspaceId, workspaceId)));
   await notifyFolderEvent(id);
   return c.body(null, 204);
@@ -422,9 +446,20 @@ foldersRouter.get('/list/with-matrices', async (c) => {
 
 
 foldersRouter.put('/:id/matrix', requireEditor, requireWorkspaceEditorRole(), zValidator('json', matrixSchema), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const matrix = c.req.valid('json');
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'folder',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
   const updated = await db
     .update(folders)
     .set({ matrixConfig: JSON.stringify(matrix) })
