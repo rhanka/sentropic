@@ -9,12 +9,15 @@
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
+  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { Trash2 } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
   let lastLoadedId: string | null = null;
   let hubKey: string | null = null;
+  $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope;
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -103,6 +106,7 @@
 
   const handleDelete = async () => {
     if (!organization) return;
+    if (!canDelete) return;
 
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
 
@@ -132,14 +136,16 @@
     nameLabel=""
   >
     <div slot="actions" class="flex items-center gap-2">
-      <button
-        class="rounded p-2 transition text-warning hover:bg-slate-100"
-        title="Supprimer"
-        aria-label="Supprimer"
-        on:click={handleDelete}
-      >
-        <Trash2 class="w-5 h-5" />
-      </button>
+      {#if canDelete}
+        <button
+          class="rounded p-2 transition text-warning hover:bg-slate-100"
+          title="Supprimer"
+          aria-label="Supprimer"
+          on:click={handleDelete}
+        >
+          <Trash2 class="w-5 h-5" />
+        </button>
+      {/if}
     </div>
 
     <div slot="underHeader">

@@ -18,6 +18,7 @@
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
   import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
+  import { loadUserWorkspaces } from '$lib/stores/workspaceScope';
 
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
@@ -178,6 +179,11 @@
       }
       lastUserId = currentUserId;
       lastAdminScope = currentScope;
+
+      // Hydrate workspace roles early (prevents read-only banner flash on first navigation).
+      if (currentUserId && $session.user?.role !== 'admin_app') {
+        void loadUserWorkspaces();
+      }
     }
   }
 

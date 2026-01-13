@@ -31,6 +31,9 @@ export const workspaceScope = writable<State>({
   error: null
 });
 
+// Used to prevent "read-only banner" flicker on first app load before roles are fetched.
+export const workspaceScopeHydrated = writable(false);
+
 export function setWorkspaceScope(id: string | null) {
   const next = (id || '').trim();
   workspaceScope.update((s) => ({ ...s, selectedId: next || null }));
@@ -76,9 +79,16 @@ export function getScopedWorkspaceIdForUser(): string | null {
 
 export async function loadUserWorkspaces(): Promise<void> {
   const s = get(session);
-  if (!s.user) return;
-  if (s.user.role === 'admin_app') return;
+  if (!s.user) {
+    workspaceScopeHydrated.set(false);
+    return;
+  }
+  if (s.user.role === 'admin_app') {
+    workspaceScopeHydrated.set(false);
+    return;
+  }
 
+  workspaceScopeHydrated.set(false);
   workspaceScope.update((st) => ({ ...st, loading: true, error: null }));
   try {
     const data = await apiGet<{ items: UserWorkspace[] }>('/workspaces');
@@ -104,6 +114,8 @@ export async function loadUserWorkspaces(): Promise<void> {
     });
   } catch (e: any) {
     workspaceScope.update((st) => ({ ...st, loading: false, error: e?.message ?? 'Erreur chargement workspaces' }));
+  } finally {
+    workspaceScopeHydrated.set(true);
   }
 }
 

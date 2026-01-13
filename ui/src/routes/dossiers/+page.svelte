@@ -9,13 +9,14 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { FileText, Trash2, CirclePlus } from '@lucide/svelte';
 
   let isLoading = false;
   const HUB_KEY = 'foldersPage';
   let isReadOnly = false;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   onMount(() => {
     void (async () => {
@@ -182,7 +183,7 @@
 </script>
 
 <section class="space-y-6">
-  {#if isReadOnly}
+  {#if showReadOnlyBanner}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
       Mode <b>lecture seule</b> : création / suppression désactivées.
     </div>
