@@ -2,10 +2,10 @@ import { Hono, type Context } from 'hono';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, organizations, useCases } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, objectLocks, organizations, useCases, users } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -92,6 +92,11 @@ function sseFolderEvent(folderId: string, data: unknown): string {
 function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   const payload = JSON.stringify({ useCaseId, data });
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseLockEvent(objectType: string, objectId: string, data: unknown): string {
+  const payload = JSON.stringify({ objectType, objectId, data });
+  return `event: lock_update\nid: lock:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
 function parseOrgData(value: unknown): Record<string, unknown> {
@@ -434,6 +439,61 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
+      const emitLockSnapshot = async (objectType: string, objectId: string) => {
+        try {
+          const now = new Date();
+          const [row] = await db
+            .select({
+              id: objectLocks.id,
+              workspaceId: objectLocks.workspaceId,
+              objectType: objectLocks.objectType,
+              objectId: objectLocks.objectId,
+              lockedAt: objectLocks.lockedAt,
+              expiresAt: objectLocks.expiresAt,
+              lockedByUserId: objectLocks.lockedByUserId,
+              lockedByEmail: users.email,
+              lockedByDisplayName: users.displayName,
+              unlockRequestedAt: objectLocks.unlockRequestedAt,
+              unlockRequestedByUserId: objectLocks.unlockRequestedByUserId,
+              unlockRequestMessage: objectLocks.unlockRequestMessage,
+            })
+            .from(objectLocks)
+            .innerJoin(users, eq(objectLocks.lockedByUserId, users.id))
+            .where(
+              and(
+                eq(objectLocks.workspaceId, targetWorkspaceId),
+                eq(objectLocks.objectType, objectType),
+                eq(objectLocks.objectId, objectId),
+                gt(objectLocks.expiresAt, now)
+              )
+            )
+            .limit(1);
+
+          const lock = row?.id
+            ? {
+                id: row.id,
+                workspaceId: row.workspaceId,
+                objectType: row.objectType,
+                objectId: row.objectId,
+                lockedAt: row.lockedAt,
+                expiresAt: row.expiresAt,
+                lockedBy: {
+                  userId: row.lockedByUserId,
+                  email: row.lockedByEmail ?? null,
+                  displayName: row.lockedByDisplayName ?? null,
+                },
+                unlockRequestedAt: row.unlockRequestedAt ?? null,
+                unlockRequestedByUserId: row.unlockRequestedByUserId ?? null,
+                unlockRequestMessage: row.unlockRequestMessage ?? null,
+              }
+            : null;
+
+          push(sseLockEvent(objectType, objectId, { lock }));
+        } catch {
+          // ignore
+        }
+      };
+
       // headers de "connexion"
       push(`: connected\n\n`);
 
@@ -494,6 +554,7 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN organization_events');
           await client.query('UNLISTEN folder_events');
           await client.query('UNLISTEN usecase_events');
+          await client.query('UNLISTEN lock_events');
         } catch {
           // ignore
         } finally {
@@ -557,6 +618,12 @@ streamsRouter.get('/sse', async (c) => {
             const useCaseId = payload.use_case_id;
             if (!useCaseId || typeof useCaseId !== 'string') return;
             void emitUseCaseSnapshot(useCaseId);
+          } else if (msg.channel === 'lock_events') {
+            const objectType = payload.object_type;
+            const objectId = payload.object_id;
+            if (!objectType || typeof objectType !== 'string') return;
+            if (!objectId || typeof objectId !== 'string') return;
+            void emitLockSnapshot(objectType, objectId);
           }
         } catch {
           // ignore
@@ -569,6 +636,7 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN folder_events');
       await client.query('LISTEN usecase_events');
       await client.query('LISTEN stream_events');
+      await client.query('LISTEN lock_events');
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {

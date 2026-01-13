@@ -422,3 +422,28 @@ export const workspaceMemberships = pgTable('workspace_memberships', {
 }));
 
 export type WorkspaceMembershipRow = typeof workspaceMemberships.$inferSelect;
+
+// Lot 2: Object edition locks (soft locks with TTL, enforced on mutations)
+export const objectLocks = pgTable('object_locks', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  objectType: text('object_type').notNull(), // 'organization' | 'folder' | 'usecase'
+  objectId: text('object_id').notNull(),
+  lockedByUserId: text('locked_by_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  lockedAt: timestamp('locked_at', { withTimezone: false }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  unlockRequestedAt: timestamp('unlock_requested_at', { withTimezone: false }),
+  unlockRequestedByUserId: text('unlock_requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  unlockRequestMessage: text('unlock_request_message'),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  objectUnique: uniqueIndex('object_locks_workspace_object_unique').on(table.workspaceId, table.objectType, table.objectId),
+  workspaceIdIdx: index('object_locks_workspace_id_idx').on(table.workspaceId),
+  expiresAtIdx: index('object_locks_expires_at_idx').on(table.expiresAt),
+}));
+
+export type ObjectLockRow = typeof objectLocks.$inferSelect;

@@ -15,6 +15,7 @@ import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
+import { locksRouter } from './locks';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -43,6 +44,10 @@ apiRouter.route('/me', meRouter);
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);
 apiRouter.route('/workspaces', workspacesRouter);
+
+// Locks (authenticated; read is allowed, mutations require workspace editor/admin)
+apiRouter.use('/locks/*', requireAuth);
+apiRouter.route('/locks', locksRouter);
 
 // Streaming routes: read-only for users; allow any authenticated user.
 apiRouter.use('/streams/*', requireAuth);
