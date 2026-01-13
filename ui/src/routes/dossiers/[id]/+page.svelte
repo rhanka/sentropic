@@ -13,7 +13,7 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
 
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -31,6 +31,7 @@
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: showReadOnlyBanner = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
 
   $: folderId = $page.params.id;
 
@@ -144,6 +145,12 @@
 </script>
 
 <section class="space-y-6">
+  {#if showReadOnlyBanner}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Mode <b>lecture seule</b> : création / suppression désactivées.
+    </div>
+  {/if}
+
   {#if currentFolder}
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
