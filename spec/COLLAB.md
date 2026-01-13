@@ -52,31 +52,32 @@ When an `admin` selects a **hidden** workspace:
 
 ## Object Edition Locks
 
-### Lock Model
+### Lock Model (implemented - phase 1)
 
-- Lock scope: object-level (workspaceId + objectType + objectId).
-- Lock acquisition: Automatic when first editor/admin enters edit view.
-- Lock release: Automatic when user leaves view, or manual release, or unlock request granted.
+- **Scope**: object-level \(workspaceId + objectType + objectId\)
+- **Storage**: single table `object_locks` with TTL (`expires_at`)
+- **Write enforcement**: mutations (PUT/DELETE) are blocked if a lock exists and is held by another user → `409` with `{ code: 'OBJECT_LOCKED', lock }`
 
-### Unlock Request Flow
+### Lock API (implemented - phase 1)
 
-1. User B requests unlock from locked object.
-2. API checks if another unlock request is already processing → refuse immediately if yes.
-3. API sends SSE notification to current lock holder (User A): "User B requests unlock".
-4. **Timeout behavior**: If no answer from User A within 2 seconds (fixed timeout, centralized as variable or env param), lock auto-transfers to User B.
-5. **User A response**:
-   - Accept: lock transfers to User B immediately.
-   - Refuse: lock remains with User A.
+- `GET /api/v1/locks?objectType=...&objectId=...` → `{ lock }`
+- `POST /api/v1/locks` → acquire/refresh (editor/admin only)
+  - `201` `{ acquired: true, lock }`
+  - `409` `{ acquired: false, lock }` (locked by another user)
+- `DELETE /api/v1/locks?objectType=...&objectId=...` → release (owner or workspace admin)
+- `POST /api/v1/locks/request-unlock` → marks an unlock request on the lock (best-effort UX signal)
+- `POST /api/v1/locks/force-unlock` → admin-only force release
 
-### SSE Events
+### Unlock Request Flow (current behavior)
 
-Reuse existing `/streams/sse` channel, add collaboration events:
-- `lock_acquired`: Object is now locked by a user.
-- `lock_released`: Object lock has been released.
-- `unlock_requested`: Unlock request sent to current lock holder.
-- `unlock_granted`: Unlock request accepted, lock transferred.
-- `unlock_refused`: Unlock request refused, lock remains.
-- `user_presence`: Active users on object (display collaborator list top-right).
+- Unlock requests are stored directly on the lock row:
+  - `unlock_requested_at`, `unlock_requested_by_user_id`, `unlock_request_message`
+- No auto-transfer/timeout/accept/refuse workflow yet (planned in next phase of Lot 2).
+
+### SSE Events (implemented - phase 1)
+
+Reuse existing `/streams/sse` channel:
+- `lock_update` → `{ objectType, objectId, data: { lock } }`
 
 ## Comments
 
@@ -159,21 +160,19 @@ For a good UX and to avoid misleading feedback:
 - Unique index on (workspace_id, user_id)
 
 **Create `object_locks`**:
+- `id` (text, PK)
 - `workspace_id` (FK workspaces.id)
-- `object_type` ('organization'|'folder'|'usecase'|...)
+- `object_type` ('organization'|'folder'|'usecase')
 - `object_id` (text)
 - `locked_by_user_id` (FK users.id)
 - `locked_at` (timestamp)
-- `heartbeat_at` (timestamp, nullable): Updated every 30s when lock is active
+- `expires_at` (timestamp, TTL)
+- `unlock_requested_at` (timestamp, nullable)
+- `unlock_requested_by_user_id` (FK users.id, nullable, ON DELETE SET NULL)
+- `unlock_request_message` (text, nullable)
 - Unique index on (workspace_id, object_type, object_id)
-- **Cleanup**: PostgreSQL jobs (updated at API startup) clean up expired locks (heartbeat timeout: 30s)
 
-**Create `unlock_requests`**:
-- `lock_id` (FK object_locks.id)
-- `requested_by_user_id` (FK users.id)
-- `status` ('pending'|'granted'|'refused'|'timeout')
-- `requested_at` (timestamp)
-- `resolved_at` (timestamp, nullable)
+**Unlock requests table**: not created in phase 1 (currently stored on `object_locks`).
 
 **Create `comments`**:
 - `workspace_id` (FK workspaces.id)

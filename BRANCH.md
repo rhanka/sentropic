@@ -104,8 +104,8 @@ Out of scope:
   - `workspaces.share_with_admin` field will be removed (no longer useful with membership-based access).
   - `workspaces.owner_user_id` has UNIQUE constraint (must drop to allow multiple workspaces per user).
   - No `workspace_memberships` table exists (to create: `workspace_id`, `user_id`, `role` ('viewer'|'editor'|'admin'), `created_at`).
-  - No `object_locks` table exists (to create: `workspace_id`, `object_type`, `object_id`, `locked_by_user_id`, `locked_at`, `heartbeat_at`).
-  - No `unlock_requests` table exists (to create: tied to object locks, state machine + timeout).
+  - `object_locks` is required for Lot 2 (TTL-based locks + unlock request metadata).
+  - A dedicated `unlock_requests` table is optional (phase 1 stores unlock request fields on `object_locks`).
   - No `comments` table exists (to create: `workspace_id`, `context_type`, `context_id`, `section_key?`, `created_by`, `assigned_to?`, `status`, `parent_comment_id?`).
 - **Service layer status:**
   - `workspace-service.ts` exists with `ensureWorkspaceForUser()` (creates 1:1 owned workspace).
@@ -114,7 +114,7 @@ Out of scope:
 - **SSE channel reuse strategy:**
   - `/streams/sse` is the single SSE channel (confirmed: reuse it).
   - Existing events: `job_update`, `organization_update`, `folder_update`, `usecase_update` (all workspace-scoped).
-  - Need to add collaboration events: `lock_acquired`, `lock_released`, `unlock_requested`, `unlock_granted`, `unlock_refused`, `user_presence` (display collaborator list top-right).
+  - Add collaboration event (phase 1): `lock_update` (object lock snapshot).
 - **Write endpoint enforcement:**
   - All mutation endpoints (POST/PUT/DELETE) use `user.workspaceId` from auth middleware (not query param).
   - This is correct and should be preserved for workspace-scoped access control.
@@ -207,16 +207,15 @@ Out of scope:
   - [ ] User B tries to select "Workspace Beta" in table → access denied (not a member)
 
 ### Lot 2 — Object edition locks + unlock workflow (API + SSE + UI)
-- [ ] Define lock keys (workspaceId + objectType + objectId [+ optional sectionKey])
-- [ ] API: acquire lock on first editor entering view; block concurrent editors
-- [ ] API: publish lock state to SSE for viewers/locked editors
+- [x] Define lock keys (workspaceId + objectType + objectId)
+- [x] DB: extend single migration `0018_workspace_collaboration.sql` with `object_locks`
+- [x] API: lock endpoints (`/api/v1/locks`) + TTL refresh / conflict (409)
+- [x] API: enforce locks on mutations (org/folder/usecase) → `409 OBJECT_LOCKED` with lock payload
+- [x] SSE: publish lock snapshots via `/streams/sse` event `lock_update`
 - [ ] UI: lock indicator + disable editing when locked by another user
-- [ ] UI: "Request unlock" flow
-- [ ] API: handle unlock request:
-  - Refuse immediately if another unlock request is already processing
-  - Notify current lock holder via SSE
-  - If no answer in 2s: transfer lock to requester and notify via SSE
-  - If holder responds: accept (transfer) or refuse (keep)
+- [ ] UI: acquire/release lock lifecycle on page entry/exit
+- [ ] UI: "Request unlock" + "Force unlock" (admin) actions
+- [ ] API/UI: richer unlock workflow (accept/refuse/timeout + presence) (phase 2)
 
 **Partial UAT (after Lot 2):**
 - [ ] **User A locks an object:**
