@@ -348,6 +348,9 @@ Out of scope:
 - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
 - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
 - [ ] Create automated tests (only now):
+  - [ ] **Regression test (circular imports / Ctrl+R crash):** ensure importing core UI modules in different orders does not throw `Cannot access 'session' before initialization`
+    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/adminWorkspaceScope.ts`, `ui/src/lib/stores/workspaceScope.ts`
+    - Expected: no top-level import triggers store reads that require `session` initialization (Option B: scope passed explicitly to `apiRequest`)
   - `make test-api` coverage for roles/locks/comments/import-export
   - `make test-ui` coverage for core UI flows
   - `make test-e2e` for critical collaboration journeys
