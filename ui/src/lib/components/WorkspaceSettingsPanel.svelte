@@ -4,7 +4,8 @@
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
-  import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
+  import EditableInput from '$lib/components/EditableInput.svelte';
+  import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
 
   let creatingWorkspace = false;
   let newWorkspaceName = '';
@@ -12,6 +13,9 @@
   let selectedWorkspace: UserWorkspace | null = null;
   let isWorkspaceAdmin = false;
   let allWorkspacesHidden = false;
+  let editedSelectedWorkspaceName = '';
+  let originalSelectedWorkspaceName = '';
+  let lastWorkspaceIdForName: string | null = null;
 
   let membersLoading = false;
   let membersError: string | null = null;
@@ -22,6 +26,11 @@
   $: selectedWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId) ?? null;
   $: isWorkspaceAdmin = selectedWorkspace?.role === 'admin';
   $: allWorkspacesHidden = ($workspaceScope.items || []).length > 0 && ($workspaceScope.items || []).every((w) => !!w.hiddenAt);
+  $: if (selectedWorkspace?.id !== lastWorkspaceIdForName) {
+    lastWorkspaceIdForName = selectedWorkspace?.id ?? null;
+    editedSelectedWorkspaceName = selectedWorkspace?.name ?? '';
+    originalSelectedWorkspaceName = selectedWorkspace?.name ?? '';
+  }
 
   onMount(async () => {
     if ($session.user?.role === 'admin_app' || !$session.user) return;
@@ -137,6 +146,12 @@
       addToast({ type: 'error', message: e?.message ?? 'Erreur suppression membre' });
     }
   }
+
+  async function handleWorkspaceNameSaved() {
+    originalSelectedWorkspaceName = editedSelectedWorkspaceName;
+    addToast({ type: 'success', message: 'Nom du workspace mis à jour' });
+    await loadUserWorkspaces();
+  }
 </script>
 
 {#if $session.user?.role === 'admin_app'}
@@ -147,6 +162,26 @@
   {#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
+    </div>
+  {/if}
+
+  {#if selectedWorkspace && isWorkspaceAdmin}
+    <div class="rounded border border-slate-200 p-4">
+      <div class="text-sm text-slate-600 mb-1">Nom du workspace</div>
+      <div class="text-lg font-medium">
+        <EditableInput
+          label=""
+          value={editedSelectedWorkspaceName}
+          markdown={false}
+          multiline={false}
+          apiEndpoint={`/workspaces/${selectedWorkspace.id}`}
+          fullData={{ name: editedSelectedWorkspaceName }}
+          changeId={`workspace-name-${selectedWorkspace.id}`}
+          originalValue={originalSelectedWorkspaceName}
+          on:change={(e) => editedSelectedWorkspaceName = e.detail.value}
+          on:saved={handleWorkspaceNameSaved}
+        />
+      </div>
     </div>
   {/if}
 
@@ -306,7 +341,7 @@
                           title="Retirer ce membre"
                           on:click={() => removeMember(m.userId)}
                         >
-                          <X class="h-4 w-4" />
+                          <Trash2 class="h-4 w-4" />
                         </button>
                       {/if}
                     </td>
