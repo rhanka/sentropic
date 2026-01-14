@@ -62,6 +62,30 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
   return c.json({ id }, 201);
 });
 
+// Update workspace metadata (admin-only)
+const updateWorkspaceSchema = z.object({
+  name: z.string().min(1).max(128),
+});
+
+workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
+
+  const workspaceId = c.req.param('id');
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const { name } = c.req.valid('json');
+  const now = new Date();
+  const [ws] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!ws) return c.json({ message: 'Not found' }, 404);
+  await db.update(workspaces).set({ name, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  return c.json({ success: true });
+});
+
 // --- Hide / Unhide / Delete (admin-only) ---
 
 workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
