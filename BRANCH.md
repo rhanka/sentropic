@@ -222,8 +222,8 @@ Out of scope:
     - Timing:
       - Gate on `workspaceScopeHydrated === true` to avoid redirect flashes before roles/hiddenAt are loaded.
     - Options:
-      - Option 1 (recommended): hard redirect in `+layout.svelte` + ignore/reset unsaved changes (simple, robust).
-      - Option 2: integrate with `NavigationGuard` to attempt autosave before redirect (risk: deadlocks if save calls are blocked / slow).
+      - Option A (recommended): **redirect immédiat** en `+layout.svelte` + **autosave best-effort non bloquant** (fire-and-forget) si `unsavedChangesStore` contient des changements.
+      - Option B: redirect immédiat + **abandon explicite** des changements (`unsavedChangesStore.reset()`) + toast d’explication (plus simple, mais perte de drafts).
 - [ ] **Workspace isolation:**
   - [ ] User A creates "Workspace Beta" (separate from "Workspace Alpha")
   - [ ] User A creates an organization in "Workspace Beta"
