@@ -16,6 +16,7 @@
   export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
   export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)
+  export let fullWidth = false; // If true, input/textarea takes 100% width of its container (disables auto-size)
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
@@ -51,6 +52,19 @@
   
   // Fonction pour ajuster la largeur de l'input
   const adjustWidth = () => {
+    if (fullWidth) {
+      if (!markdown && !multiline && input) {
+        input.style.width = '100%';
+        input.style.maxWidth = '100%';
+      } else if (!markdown && multiline && textarea) {
+        textarea.style.width = '100%';
+        textarea.style.maxWidth = '100%';
+        // Ajuster aussi la hauteur automatiquement
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+      }
+      return;
+    }
     if (!markdown && !multiline && span && input) {
       span.textContent = value || " "; // Mise à jour du contenu du span
       const measuredWidth = span.offsetWidth + 4;
@@ -542,18 +556,19 @@
   export { saveImmediately, hasUnsavedChanges };
 </script>
 
-<div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={multiline && !markdown}>
+<div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={(fullWidth || multiline) && !markdown}>
   {#if label}
     <label for={inputId}>{label}</label>
   {/if}
   {#if !markdown}
-    <div class="input-wrapper" class:full-width={multiline}>
+    <div class="input-wrapper" class:full-width={multiline || fullWidth}>
       {#if multiline}
         <textarea
           id={inputId}
           bind:value
           bind:this={textarea}
           class="editable-textarea"
+          class:full-width={fullWidth}
           class:has-unsaved-changes={hasUnsavedChanges}
           class:is-saving={isSaving}
           disabled={isLocked}
@@ -573,6 +588,7 @@
               bind:value
               bind:this={input}
               class="editable-input"
+              class:full-width={fullWidth}
               class:has-unsaved-changes={hasUnsavedChanges}
               class:is-saving={isSaving}
               disabled={isLocked}
@@ -589,6 +605,7 @@
             bind:value
             bind:this={input}
             class="editable-input"
+            class:full-width={fullWidth}
             class:has-unsaved-changes={hasUnsavedChanges}
             class:is-saving={isSaving}
             disabled={isLocked}
