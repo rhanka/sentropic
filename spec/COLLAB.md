@@ -38,6 +38,7 @@ Replace dropdown selector with a table showing (column order):
 - Hover message on row: "Click to select workspace" (hover disabled on action buttons).
 - Icons: icons only, no text/border (same style as existing icons).
 - Workspace admins can rename the **selected** workspace in `/parametres` using an inline `EditableInput` (writes to `PUT /workspaces/:id`).
+- **Same UI for all roles**: admin, editor, viewer share the same table layout and columns; admin-only actions are rendered but disabled for non-admins (tooltip "Réservé aux admins").
 
 ### Workspace Members UI
 

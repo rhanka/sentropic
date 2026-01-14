@@ -275,6 +275,15 @@
                     <Eye class="h-4 w-4" />
                   </button>
                 {/if}
+              {:else}
+                <button
+                  class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                  title="Réservé aux admins"
+                  disabled
+                  data-ignore-row-click
+                >
+                  <Eye class="h-4 w-4" />
+                </button>
               {/if}
             </td>
             <td class="px-3 py-2">
@@ -284,6 +293,15 @@
                   title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
                   disabled={!ws.hiddenAt}
                   on:click|stopPropagation={() => deleteWorkspace(ws.id)}
+                >
+                  <Trash2 class="h-4 w-4" />
+                </button>
+              {:else}
+                <button
+                  class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                  title="Réservé aux admins"
+                  disabled
+                  data-ignore-row-click
                 >
                   <Trash2 class="h-4 w-4" />
                 </button>

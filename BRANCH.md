@@ -172,7 +172,7 @@ Out of scope:
   - [x] UI: dashboard lock icon is not rendered in print mode (PDF/export)
   - [x] API: if a mutation is still attempted (manual call), it is blocked (403) - UAT result: not directly testable (via forgotten trash button in organisation view)
   - [x] User B can view all objects (read-only works)
-- [ ] **User A changes User B role to editor:**
+- [x] **User A changes User B role to editor:**
   - [x] User A updates User B membership to role `editor` (fix: endpoint supports PUT+PATCH; UI uses PATCH)
   - [x] User B refreshes and tries to edit an organization → succeeds (200)
   - [x] User B tries to delete a folder → succeeds (200)
@@ -180,7 +180,7 @@ Out of scope:
   - [x] User B tries to delete/archive workspace → blocked (no access to delete/archive functions in UI; API 403 covered by api/security tests)
   - [x] User B can update an object (e.g. organization) through chat
 - [ ] **User A promotes User B to admin:**
-  - [ ] User A updates User B membership to role `admin`
+  - [x] User A updates User B membership to role `admin`
   - [ ] User B refreshes and can now manage members (add/remove/change roles)
   - [ ] User B can hide/unhide the workspace (action buttons visible in workspace table)
   - [ ] User B can perform final suppression/export of the workspace (only if hidden, delete button visible)
@@ -198,6 +198,7 @@ Out of scope:
 - [ ] **Workspace selector table:**
   - [ ] User A opens Settings and sees workspace table
   - [ ] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
+  - [ ] Verify admin has the same table layout as viewer/editor (same columns, same row behavior); admin-only actions are disabled for non-admins
   - [ ] Verify hover on row shows "Click to select workspace"
   - [ ] Verify hover on action buttons does NOT show row message
   - [ ] User A clicks a row → workspace selected, checkmark updates
