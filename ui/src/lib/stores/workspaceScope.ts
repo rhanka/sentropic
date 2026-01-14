@@ -98,12 +98,18 @@ export async function loadUserWorkspaces(): Promise<void> {
 
     workspaceScope.update((st) => {
       const selectedIdRaw = st.selectedId || '';
-      const selectedOk =
-        !!selectedIdRaw && items.some((w) => w.id === selectedIdRaw && !w.hiddenAt);
+      const selectedItem = selectedIdRaw ? items.find((w) => w.id === selectedIdRaw) ?? null : null;
       const nonHidden = items.filter((w) => !w.hiddenAt);
       const allHidden = items.length > 0 && nonHidden.length === 0;
-      const fallback = nonHidden[0]?.id || null;
-      const selectedId = allHidden ? null : (selectedOk ? selectedIdRaw : fallback);
+      const fallbackVisible = nonHidden[0]?.id || null;
+      const fallbackHidden = items[0]?.id || null;
+
+      // Keep selection even if the workspace is hidden (admin-only), because a hidden selected workspace
+      // must lock navigation to /parametres via `hiddenWorkspaceLock`.
+      const selectedId =
+        selectedItem && (!selectedItem.hiddenAt || selectedItem.role === 'admin')
+          ? selectedItem.id
+          : (allHidden ? fallbackHidden : fallbackVisible);
 
       if (browser) {
         if (selectedId) localStorage.setItem(STORAGE_KEY, selectedId);
