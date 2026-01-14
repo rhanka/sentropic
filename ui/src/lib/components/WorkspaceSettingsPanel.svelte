@@ -28,7 +28,7 @@
     const el = event.target as HTMLElement | null;
     if (!el) return false;
     // Ignore clicks coming from interactive elements to avoid re-select/reload blinks
-    return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"]'));
+    return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"], [data-ignore-row-click]'));
   }
 
   $: selectedWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId) ?? null;
@@ -178,26 +178,6 @@
     </div>
   {/if}
 
-  {#if selectedWorkspace && isWorkspaceAdmin}
-    <div class="rounded border border-slate-200 p-4">
-      <div class="text-sm text-slate-600 mb-1">Nom du workspace</div>
-      <div class="text-lg font-medium">
-        <EditableInput
-          label=""
-          value={editedSelectedWorkspaceName}
-          markdown={false}
-          multiline={false}
-          apiEndpoint={`/workspaces/${selectedWorkspace.id}`}
-          fullData={{ name: editedSelectedWorkspaceName }}
-          changeId={`workspace-name-${selectedWorkspace.id}`}
-          originalValue={originalSelectedWorkspaceName}
-          on:change={(e) => editedSelectedWorkspaceName = e.detail.value}
-          on:saved={handleWorkspaceNameSaved}
-        />
-      </div>
-    </div>
-  {/if}
-
   {#if allWorkspacesHidden && !$hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
@@ -251,7 +231,24 @@
             </td>
             <td class="px-3 py-2">
               <div class="flex items-center gap-2">
-                <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
+                {#if ws.id === $workspaceScope.selectedId && ws.role === 'admin'}
+                  <div class="min-w-[14rem]" data-ignore-row-click>
+                    <EditableInput
+                      label=""
+                      value={editedSelectedWorkspaceName}
+                      markdown={false}
+                      multiline={false}
+                      apiEndpoint={`/workspaces/${ws.id}`}
+                      fullData={{ name: editedSelectedWorkspaceName }}
+                      changeId={`workspace-name-${ws.id}`}
+                      originalValue={originalSelectedWorkspaceName}
+                      on:change={(e) => editedSelectedWorkspaceName = e.detail.value}
+                      on:saved={handleWorkspaceNameSaved}
+                    />
+                  </div>
+                {:else}
+                  <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
+                {/if}
                 {#if ws.hiddenAt}
                   <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">caché</span>
                 {/if}
