@@ -16,6 +16,7 @@ Collaboration features enable multi-user workspace sharing with role-based acces
 - **Hide/Unhide**: Workspaces can be hidden (soft delete) by `admin` members. Hidden workspaces remain accessible for unhide/export/final suppression.
 - **Final Suppression**: Hard delete (cascade all data) is only possible for hidden workspaces, by `admin` members.
 - **Remove `shareWithAdmin`**: The legacy `shareWithAdmin` field is removed (no longer useful with membership-based access).
+- **No workspace edge-case**: If a user is removed from all workspaces, the UI redirects to `/parametres` and shows a warning; no new workspace is auto-created on login.
 
 ### Workspace Membership Roles
 

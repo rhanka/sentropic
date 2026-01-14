@@ -372,11 +372,12 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const ownerWs = await ensureWorkspaceForUser(options.userId);
+    const ownerWs = await ensureWorkspaceForUser(options.userId, { createIfMissing: false });
     const sessionWorkspaceId =
       session && typeof (session as { workspaceId?: unknown }).workspaceId === 'string'
         ? ((session as { workspaceId: string }).workspaceId as string)
         : ownerWs.workspaceId;
+    if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
     // Read-only mode:
     // - Admin Workspace is always read-only (admin_app can target it)
     // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)

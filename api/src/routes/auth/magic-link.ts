@@ -105,7 +105,7 @@ magicLinkRouter.post('/verify', async (c) => {
       return c.json({ error: 'User not found' }, 500);
     }
 
-    await ensureWorkspaceForUser(user.id);
+    await ensureWorkspaceForUser(user.id, { createIfMissing: false });
 
     // Compute effective role (approval expired => guest read-only)
     const status = user.accountStatus ?? 'active';

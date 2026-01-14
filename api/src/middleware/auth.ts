@@ -62,7 +62,7 @@ export async function requireAuth(c: Context, next: Next) {
     const allowHiddenWorkspace = isWorkspaceBootstrapPath || path.includes('/health');
 
     // Attach user info to context (workspace is selected from query param if provided)
-    let { workspaceId } = await ensureWorkspaceForUser(session.userId);
+    let { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
 
     const requested = (c.req.query('workspace_id') || '').trim();
     if (requested) {
@@ -77,7 +77,11 @@ export async function requireAuth(c: Context, next: Next) {
       if (role) workspaceId = requested;
     }
 
-    if (!allowHiddenWorkspace) {
+    if (!workspaceId && !isWorkspaceBootstrapPath) {
+      return c.json({ message: 'No workspace available', code: 'WORKSPACE_REQUIRED' }, 409);
+    }
+
+    if (workspaceId && !allowHiddenWorkspace) {
       const hidden = await isWorkspaceDeleted(workspaceId);
       if (hidden) {
         return c.json({ message: 'Workspace is hidden', code: 'WORKSPACE_HIDDEN' }, 409);
@@ -88,7 +92,7 @@ export async function requireAuth(c: Context, next: Next) {
       userId: session.userId,
       sessionId: session.sessionId,
       role: session.role,
-      workspaceId,
+      workspaceId: workspaceId ?? '',
     });
     
     await next();
@@ -115,13 +119,15 @@ export async function optionalAuth(c: Context, next: Next) {
       
       if (session) {
         // Attach user info to context
-        const { workspaceId } = await ensureWorkspaceForUser(session.userId);
-        c.set('user', {
-          userId: session.userId,
-          sessionId: session.sessionId,
-          role: session.role,
-          workspaceId,
-        });
+        const { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
+        if (workspaceId) {
+          c.set('user', {
+            userId: session.userId,
+            sessionId: session.sessionId,
+            role: session.role,
+            workspaceId,
+          });
+        }
       }
     }
     

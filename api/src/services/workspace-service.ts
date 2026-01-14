@@ -52,7 +52,11 @@ export async function claimAdminWorkspaceOwner(): Promise<void> {
   }
 }
 
-export async function ensureWorkspaceForUser(userId: string): Promise<{ workspaceId: string }> {
+export async function ensureWorkspaceForUser(
+  userId: string,
+  options?: { createIfMissing?: boolean }
+): Promise<{ workspaceId: string | null }> {
+  const createIfMissing = options?.createIfMissing !== false;
   await ensureAdminWorkspaceExists();
 
   const [user] = await db
@@ -87,6 +91,8 @@ export async function ensureWorkspaceForUser(userId: string): Promise<{ workspac
     .limit(1);
 
   if (anyWs) return { workspaceId: anyWs.id };
+
+  if (!createIfMissing) return { workspaceId: null };
 
   const id = crypto.randomUUID();
   await db.transaction(async (tx) => {

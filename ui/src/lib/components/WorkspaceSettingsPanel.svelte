@@ -13,6 +13,7 @@
   let selectedWorkspace: UserWorkspace | null = null;
   let isWorkspaceAdmin = false;
   let allWorkspacesHidden = false;
+  let noWorkspaces = false;
   let editedSelectedWorkspaceName = '';
   let originalSelectedWorkspaceName = '';
   let lastWorkspaceIdForName: string | null = null;
@@ -34,6 +35,7 @@
   $: selectedWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId) ?? null;
   $: isWorkspaceAdmin = selectedWorkspace?.role === 'admin';
   $: allWorkspacesHidden = ($workspaceScope.items || []).length > 0 && ($workspaceScope.items || []).every((w) => !!w.hiddenAt);
+  $: noWorkspaces = ($workspaceScope.items || []).length === 0;
   $: if (selectedWorkspace?.id !== lastWorkspaceIdForName) {
     lastWorkspaceIdForName = selectedWorkspace?.id ?? null;
     editedSelectedWorkspaceName = selectedWorkspace?.name ?? '';
@@ -170,6 +172,12 @@
 {#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
+    </div>
+  {/if}
+
+  {#if noWorkspaces}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      Vous n’êtes membre d’aucun workspace. Demander une invitation ou créer un nouveau workspace.
     </div>
   {/if}
 

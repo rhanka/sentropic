@@ -18,7 +18,7 @@
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
   import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
-  import { hiddenWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces } from '$lib/stores/workspaceScope';
+  import { hiddenWorkspaceLock, noWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces } from '$lib/stores/workspaceScope';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
 
@@ -214,6 +214,10 @@
     }
   }
 
+  // No-workspace lock: if user has zero workspaces, restrict navigation to /parametres.
+  let lastNoWorkspaceRedirectPath: string | null = null;
+  let noWorkspaceNavCancelInProgress = false;
+
   // Hidden workspace navigation lock (Option A):
   // - If a hidden workspace is selected (admin role), restrict navigation to /parametres (+ public/auth routes).
   // - Redirect must be immediate (wins over autosave), but autosave can run best-effort in background.
@@ -224,12 +228,30 @@
     // Cancel client-side navigations early to prevent fetching forbidden views before redirect.
     beforeNavigate((nav) => {
       if (hiddenNavCancelInProgress) return;
+      if (noWorkspaceNavCancelInProgress) return;
       if (!$session.user || $session.loading) return;
       if (!$workspaceScopeHydrated) return;
-      if (!$hiddenWorkspaceLock) return;
-
       const toPath = nav.to?.url?.pathname;
       if (!toPath) return;
+
+      if ($noWorkspaceLock) {
+        const isAllowed =
+          toPath === '/parametres' ||
+          toPath.startsWith('/parametres/') ||
+          toPath.startsWith('/auth/') ||
+          isPublicRoute(toPath);
+
+        if (!isAllowed) {
+          nav.cancel();
+          noWorkspaceNavCancelInProgress = true;
+          void goto('/parametres').finally(() => {
+            noWorkspaceNavCancelInProgress = false;
+          });
+        }
+        return;
+      }
+
+      if (!$hiddenWorkspaceLock) return;
 
       const isAllowed =
         toPath === '/parametres' ||
@@ -258,6 +280,22 @@
       }
     });
   });
+  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $noWorkspaceLock) {
+    const path = $page.url.pathname;
+    const isAllowed =
+      path === '/parametres' ||
+      path.startsWith('/parametres/') ||
+      path.startsWith('/auth/') ||
+      isPublicRoute(path);
+
+    if (!isAllowed && path !== lastNoWorkspaceRedirectPath) {
+      lastNoWorkspaceRedirectPath = path;
+      goto('/parametres');
+    }
+  } else {
+    lastNoWorkspaceRedirectPath = null;
+  }
+
   $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
     const path = $page.url.pathname;
     const isAllowed =
