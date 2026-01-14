@@ -157,6 +157,7 @@ Out of scope:
   - [x] User A creates a new workspace "Workspace Alpha"
   - [x] Verify User A is automatically admin of "Workspace Alpha"
   - [x] Verify "Workspace Alpha" appears in User A's workspace list
+  - [!] When all workspace of User A are hidden, a message is display, and he can't access to other views (org folder /, usecase ...) than parameters
 - [x] **User A adds User B with viewer role:**
   - [x] User A adds User B (by email) to "Workspace Alpha" with role `viewer`
   - [x] User B logs in and switches to "Workspace Alpha"
@@ -174,6 +175,7 @@ Out of scope:
   - [x] User B tries to delete a folder → succeeds (200)
   - [x] User B tries to manage workspace members → blocked (no access to user list in UI; API 403 covered by api/security tests)
   - [x] User B tries to delete/archive workspace → blocked (no access to delete/archive functions in UI; API 403 covered by api/security tests)
+  - [x] User B can update an object (e.g. organization) through chat
 - [ ] **User A promotes User B to admin:**
   - [ ] User A updates User B membership to role `admin`
   - [ ] User B refreshes and can now manage members (add/remove/change roles)
@@ -202,6 +204,26 @@ Out of scope:
   - [ ] Verify hidden workspaces are not visible to viewer/editor members (only admins see them in the table)
   - [ ] Verify: if an admin selects a hidden workspace, all navigation (except /parametres) redirects to /parametres
   - [ ] Verify: a persistent banner explains that the workspace must be made visible to access other views
+  - **Design note (guard articulation): hidden-workspace redirect vs unsaved-changes**
+    - Goal: if `hiddenWorkspaceLock === true`, restrict app navigation to `/parametres` (plus auth routes), and grey-out the other menus.
+    - Source of truth: `hiddenWorkspaceLock` derived store (workspace selected + role admin + hiddenAt).
+    - Guards involved:
+      - `NavigationGuard` (unsaved changes): intercepts clicks / beforeunload to autosave or confirm.
+      - `HiddenWorkspaceGuard` (to add in `+layout.svelte`): enforces redirect when hidden workspace is selected.
+    - Precedence / behavior:
+      - Redirect should win even on direct URL / refresh: when on a forbidden route and `hiddenWorkspaceLock` becomes true, immediately `goto('/parametres')`.
+      - Unsaved changes should NOT block the redirect (to avoid being stuck outside `/parametres`):
+        - If there are unsaved changes, show a toast/banner: "workspace caché → accès restreint, modifications non sauvegardées ignorées" (best-effort).
+        - Optional: call `unsavedChangesStore.reset()` on forced redirect (trade-off: loses drafts; but hidden workspace is already an exceptional state).
+      - If user clicks a disabled menu item, prevent navigation (header already greys out; must also handle burger menu).
+    - Allowed routes while locked:
+      - `/parametres` (and subroutes), `/auth/*`, and public routes (e.g. `/`).
+      - Everything else → redirect.
+    - Timing:
+      - Gate on `workspaceScopeHydrated === true` to avoid redirect flashes before roles/hiddenAt are loaded.
+    - Options:
+      - Option 1 (recommended): hard redirect in `+layout.svelte` + ignore/reset unsaved changes (simple, robust).
+      - Option 2: integrate with `NavigationGuard` to attempt autosave before redirect (risk: deadlocks if save calls are blocked / slow).
 - [ ] **Workspace isolation:**
   - [ ] User A creates "Workspace Beta" (separate from "Workspace Alpha")
   - [ ] User A creates an organization in "Workspace Beta"
