@@ -3,7 +3,7 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
-  import { loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
+  import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
 
   let creatingWorkspace = false;
@@ -144,7 +144,7 @@
     La gestion des workspaces (collaboration) n’est pas disponible pour <code>admin_app</code>.
   </div>
 {:else}
-  {#if allWorkspacesHidden}
+  {#if allWorkspacesHidden && !$hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
     </div>

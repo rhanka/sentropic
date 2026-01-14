@@ -66,13 +66,13 @@
   });
 
   // Logique pour déterminer si les menus doivent être grisés (réactif)
-  const computeIsMenuDisabled = (href: string, authed: boolean, folderId: string | null) => {
+  const computeIsMenuDisabled = (href: string, authed: boolean, folderId: string | null, hiddenLock: boolean) => {
     // Si l'utilisateur n'est pas authentifié, griser tous les menus sauf l'accueil (/)
     if (!authed) return href !== '/';
 
     // Si un workspace caché est sélectionné, restreindre la navigation (Paramètres uniquement).
     // Le redirect est géré globalement dans +layout, mais on grise aussi la navigation pour le feedback UX.
-    if ($hiddenWorkspaceLock) return true;
+    if (hiddenLock) return true;
 
     // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
     if (!folderId) return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';
@@ -83,7 +83,7 @@
 
   let navDisabledByHref: Record<string, boolean> = {};
   $: navDisabledByHref = Object.fromEntries(
-    navItems.map((item) => [item.href, computeIsMenuDisabled(item.href, $isAuthenticated, $currentFolderId)])
+    navItems.map((item) => [item.href, computeIsMenuDisabled(item.href, $isAuthenticated, $currentFolderId, $hiddenWorkspaceLock)])
   );
 
   const onClickNavItem = (e: MouseEvent, href: string) => {

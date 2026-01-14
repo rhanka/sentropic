@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import '../app.css';
   import '../app.print.css';
   import Header from '$lib/components/Header.svelte';
@@ -218,6 +218,46 @@
   // - If a hidden workspace is selected (admin role), restrict navigation to /parametres (+ public/auth routes).
   // - Redirect must be immediate (wins over autosave), but autosave can run best-effort in background.
   let lastHiddenLockRedirectPath: string | null = null;
+  let hiddenNavCancelInProgress = false;
+
+  onMount(() => {
+    // Cancel client-side navigations early to prevent fetching forbidden views before redirect.
+    beforeNavigate((nav) => {
+      if (hiddenNavCancelInProgress) return;
+      if (!$session.user || $session.loading) return;
+      if (!$workspaceScopeHydrated) return;
+      if (!$hiddenWorkspaceLock) return;
+
+      const toPath = nav.to?.url?.pathname;
+      if (!toPath) return;
+
+      const isAllowed =
+        toPath === '/parametres' ||
+        toPath.startsWith('/parametres/') ||
+        toPath.startsWith('/auth/') ||
+        isPublicRoute(toPath);
+
+      if (!isAllowed) {
+        nav.cancel();
+        hiddenNavCancelInProgress = true;
+        // Best-effort autosave (non-blocking)
+        if (unsavedChangesStore.hasUnsavedChanges()) {
+          void unsavedChangesStore.saveAll().then((ok) => {
+            if (!ok) {
+              addToast({
+                type: 'warning',
+                message:
+                  "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
+              });
+            }
+          });
+        }
+        void goto('/parametres').finally(() => {
+          hiddenNavCancelInProgress = false;
+        });
+      }
+    });
+  });
   $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
     const path = $page.url.pathname;
     const isAllowed =
@@ -228,19 +268,6 @@
 
     if (!isAllowed && path !== lastHiddenLockRedirectPath) {
       lastHiddenLockRedirectPath = path;
-
-      // Best-effort autosave (non-blocking)
-      if (unsavedChangesStore.hasUnsavedChanges()) {
-        void unsavedChangesStore.saveAll().then((ok) => {
-          if (!ok) {
-            addToast({
-              type: 'warning',
-              message:
-                "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
-            });
-          }
-        });
-      }
 
       goto('/parametres');
     }
