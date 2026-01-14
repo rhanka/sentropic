@@ -22,6 +22,14 @@
   let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'editor' | 'admin' }> = [];
   let addMemberEmail = '';
   let addMemberRole: 'viewer' | 'editor' | 'admin' = 'viewer';
+  let lastMembersWorkspaceId: string | null = null;
+
+  function shouldIgnoreRowClick(event: MouseEvent): boolean {
+    const el = event.target as HTMLElement | null;
+    if (!el) return false;
+    // Ignore clicks coming from interactive elements to avoid re-select/reload blinks
+    return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"]'));
+  }
 
   $: selectedWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId) ?? null;
   $: isWorkspaceAdmin = selectedWorkspace?.role === 'admin';
@@ -103,7 +111,12 @@
   }
 
   $: if (selectedWorkspace?.id && isWorkspaceAdmin) {
-    void loadMembers();
+    if (selectedWorkspace.id !== lastMembersWorkspaceId) {
+      lastMembersWorkspaceId = selectedWorkspace.id;
+      void loadMembers();
+    }
+  } else {
+    lastMembersWorkspaceId = null;
   }
 
   async function addMember() {
@@ -225,7 +238,11 @@
           <tr
             class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === $workspaceScope.selectedId ? 'bg-blue-50' : ''}"
             title="Cliquer pour sélectionner ce workspace"
-            on:click={() => setWorkspaceScope(ws.id)}
+            on:click={(e) => {
+              if (shouldIgnoreRowClick(e)) return;
+              if (ws.id === $workspaceScope.selectedId) return;
+              setWorkspaceScope(ws.id);
+            }}
           >
             <td class="px-3 py-2">
               {#if ws.id === $workspaceScope.selectedId}

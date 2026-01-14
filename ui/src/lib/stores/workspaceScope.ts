@@ -36,7 +36,10 @@ export const workspaceScopeHydrated = writable(false);
 
 export function setWorkspaceScope(id: string | null) {
   const next = (id || '').trim();
-  workspaceScope.update((s) => ({ ...s, selectedId: next || null }));
+  const current = get(workspaceScope).selectedId ?? null;
+  const nextId = next || null;
+  if (current === nextId) return;
+  workspaceScope.update((s) => ({ ...s, selectedId: nextId }));
   if (!browser) return;
   if (next) localStorage.setItem(STORAGE_KEY, next);
   else localStorage.removeItem(STORAGE_KEY);
