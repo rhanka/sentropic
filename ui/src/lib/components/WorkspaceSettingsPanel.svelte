@@ -41,7 +41,7 @@
   }
 
   onMount(async () => {
-    if ($session.user?.role === 'admin_app' || !$session.user) return;
+    if (!$session.user) return;
     await loadUserWorkspaces();
   });
 
@@ -167,12 +167,7 @@
   }
 </script>
 
-{#if $session.user?.role === 'admin_app'}
-  <div class="text-sm text-slate-600">
-    La gestion des workspaces (collaboration) n’est pas disponible pour <code>admin_app</code>.
-  </div>
-{:else}
-  {#if $hiddenWorkspaceLock}
+{#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
     </div>
@@ -313,7 +308,7 @@
     </table>
   </div>
 
-  {#if selectedWorkspace && isWorkspaceAdmin}
+{#if selectedWorkspace && isWorkspaceAdmin}
     <div class="rounded border border-slate-200 p-4">
       <h4 class="font-medium">Membres</h4>
       <div class="mt-3 space-y-3">
@@ -387,6 +382,5 @@
       </div>
     </div>
   {/if}
-{/if}
 
 

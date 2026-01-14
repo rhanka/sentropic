@@ -86,10 +86,6 @@ export async function loadUserWorkspaces(): Promise<void> {
     workspaceScopeHydrated.set(false);
     return;
   }
-  if (s.user.role === 'admin_app') {
-    workspaceScopeHydrated.set(false);
-    return;
-  }
 
   workspaceScopeHydrated.set(false);
   workspaceScope.update((st) => ({ ...st, loading: true, error: null }));
