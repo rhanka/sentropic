@@ -18,7 +18,9 @@
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
   import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
-  import { loadUserWorkspaces } from '$lib/stores/workspaceScope';
+  import { hiddenWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces } from '$lib/stores/workspaceScope';
+  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
+  import { addToast } from '$lib/stores/toast';
 
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
@@ -211,6 +213,40 @@
       goto(`/auth/login?returnUrl=${encodeURIComponent(path)}`);
     }
   }
+
+  // Hidden workspace navigation lock (Option A):
+  // - If a hidden workspace is selected (admin role), restrict navigation to /parametres (+ public/auth routes).
+  // - Redirect must be immediate (wins over autosave), but autosave can run best-effort in background.
+  let lastHiddenLockRedirectPath: string | null = null;
+  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
+    const path = $page.url.pathname;
+    const isAllowed =
+      path === '/parametres' ||
+      path.startsWith('/parametres/') ||
+      path.startsWith('/auth/') ||
+      isPublicRoute(path);
+
+    if (!isAllowed && path !== lastHiddenLockRedirectPath) {
+      lastHiddenLockRedirectPath = path;
+
+      // Best-effort autosave (non-blocking)
+      if (unsavedChangesStore.hasUnsavedChanges()) {
+        void unsavedChangesStore.saveAll().then((ok) => {
+          if (!ok) {
+            addToast({
+              type: 'warning',
+              message:
+                "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
+            });
+          }
+        });
+      }
+
+      goto('/parametres');
+    }
+  } else {
+    lastHiddenLockRedirectPath = null;
+  }
 </script>
 
 <svelte:head>
@@ -229,6 +265,11 @@
       <Header />
     {/if}
     <main class="mx-auto max-w-7xl px-4 py-8">
+      {#if canShowContent && !$session.loading && $hiddenWorkspaceLock}
+        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Espace de travail caché sélectionné : accès restreint aux <strong>Paramètres</strong>. Rendre l’espace visible pour accéder aux autres vues.
+        </div>
+      {/if}
       {#if showSpinner}
         <!-- Afficher un loader pendant la vérification de session -->
         <div class="flex items-center justify-center min-h-[60vh]">
