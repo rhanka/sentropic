@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { db } from '../../db/client';
+import { db, pool } from '../../db/client';
 import {
   chatGenerationTraces,
   chatSessions,
@@ -22,6 +22,38 @@ import { getUserWorkspaces, requireWorkspaceAdmin } from '../../services/workspa
 export const workspacesRouter = new Hono();
 
 const roleSchema = z.enum(['viewer', 'editor', 'admin']);
+
+function escapeNotifyPayload(payload: Record<string, unknown>): string {
+  return JSON.stringify(payload).replace(/'/g, "''");
+}
+
+async function notifyWorkspaceEvent(workspaceId: string, data: Record<string, unknown> = {}, userIds?: string[]) {
+  const client = await pool.connect();
+  try {
+    const payload = {
+      workspace_id: workspaceId,
+      data,
+      ...(userIds && userIds.length > 0 ? { user_ids: userIds } : {}),
+    };
+    await client.query(`NOTIFY workspace_events, '${escapeNotifyPayload(payload)}'`);
+  } finally {
+    client.release();
+  }
+}
+
+async function notifyWorkspaceMembershipEvent(
+  workspaceId: string,
+  userId: string,
+  data: Record<string, unknown> = {}
+) {
+  const client = await pool.connect();
+  try {
+    const payload = { workspace_id: workspaceId, user_id: userId, data };
+    await client.query(`NOTIFY workspace_membership_events, '${escapeNotifyPayload(payload)}'`);
+  } finally {
+    client.release();
+  }
+}
 
 workspacesRouter.get('/', async (c) => {
   const user = c.get('user') as { userId: string };
@@ -59,6 +91,9 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     });
   });
 
+  await notifyWorkspaceEvent(id, { action: 'created' });
+  await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
+
   return c.json({ id }, 201);
 });
 
@@ -83,6 +118,7 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
   const [ws] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   if (!ws) return c.json({ message: 'Not found' }, 404);
   await db.update(workspaces).set({ name, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  await notifyWorkspaceEvent(workspaceId, { action: 'renamed' });
   return c.json({ success: true });
 });
 
@@ -101,6 +137,7 @@ workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
 
   const now = new Date();
   await db.update(workspaces).set({ hiddenAt: now, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  await notifyWorkspaceEvent(workspaceId, { action: 'hidden' });
   return c.json({ success: true });
 });
 
@@ -117,6 +154,7 @@ workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
 
   const now = new Date();
   await db.update(workspaces).set({ hiddenAt: null, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  await notifyWorkspaceEvent(workspaceId, { action: 'unhidden' });
   return c.json({ success: true });
 });
 
@@ -140,6 +178,12 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
 
   if (!ws) return c.json({ message: 'Not found' }, 404);
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
+
+  const members = await db
+    .select({ userId: workspaceMemberships.userId })
+    .from(workspaceMemberships)
+    .where(eq(workspaceMemberships.workspaceId, workspaceId));
+  const memberUserIds = members.map((m) => m.userId);
 
   await db.transaction(async (tx) => {
     // Detach traces that use workspace FK (optional; keep history)
@@ -165,6 +209,8 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     // Finally delete workspace
     await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
   });
+
+  await notifyWorkspaceEvent(workspaceId, { action: 'deleted' }, memberUserIds);
 
   return c.body(null, 204);
 });
@@ -233,6 +279,7 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
       set: { role: body.role },
     });
 
+  await notifyWorkspaceMembershipEvent(workspaceId, target.id, { action: 'added', role: body.role });
   return c.json({ success: true });
 });
 
@@ -265,6 +312,7 @@ async function updateMemberRoleHandler(c: Context) {
     .set({ role })
     .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
 
+  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'role_updated', role });
   return c.json({ success: true });
 }
 
@@ -290,6 +338,7 @@ workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
     .delete(workspaceMemberships)
     .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
 
+  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'removed' });
   return c.body(null, 204);
 });
 

@@ -181,24 +181,23 @@ Out of scope:
   - [x] User B can update an object (e.g. organization) through chat
 - [ ] **User A promotes User B to admin:**
   - [x] User A updates User B membership to role `admin`
-  - [ ] User B refreshes and can now manage members (add/remove/change roles)
-  - [ ] User B can hide/unhide the workspace (action buttons visible in workspace table)
-  - [ ] User B can perform final suppression/export of the workspace (only if hidden, delete button visible)
+  - [x] User B refreshes and can now manage members (add/remove/change roles)
+  - [x] User B can hide/unhide the workspace (action buttons visible in workspace table)
+  - [x] User B can perform final suppression of the workspace (only if hidden, delete button visible)
 - [x] **Workspace hide/unhide:**
   - [x] User A (admin) hides "Workspace Alpha"
   - [x] Verify workspace appears as hidden in workspace table
   - [x] Verify unhide button is visible for User A
   - [x] User A unhides "Workspace Alpha"
   - [x] Verify workspace appears as active again
-- [ ] **Workspace final suppression:**
+- [x] **Workspace final suppression:**
   - [x] User A hides "Workspace Alpha"
   - [x] User A clicks delete button (only visible when hidden)
   - [x] Verify confirmation dialog appears
   - [x] User A confirms → workspace and all data cascade-deleted
 - [ ] Limit case
-  - [ ] When user is removed from its last workspace, user is redirected to parameters view and a warning appear in the workspace card in parameters.
-  - [ ] Verify no new workspace is auto-created at login in this state.
-
+  - [x] When user is removed from its last workspace, user is redirected to parameters view and a warning appear in the workspace card in parameters.
+  - [x] Verify no new workspace is auto-created at login in this state.
 - [ ] **Workspace selector table:**
   - [ ] User A opens Settings and sees workspace table
   - [ ] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
@@ -207,6 +206,8 @@ Out of scope:
   - [ ] Verify hover on action buttons does NOT show row message
   - [ ] User A clicks a row → workspace selected, checkmark updates
   - [ ] User A (admin) renames the selected workspace via `EditableInput` → name updates in table (and persists after refresh)
+  - [ ] Verify workspace list updates live when another admin renames/hides/unhides a workspace
+  - [ ] Verify members list updates live when roles are changed or a member is removed
   - [ ] Verify action buttons are icons only (no text/border)
   - [ ] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
   - [ ] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)

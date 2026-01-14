@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
+  import { streamHub } from '$lib/stores/streamHub';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
 
@@ -25,6 +26,26 @@
   let addMemberRole: 'viewer' | 'editor' | 'admin' = 'viewer';
   let lastMembersWorkspaceId: string | null = null;
 
+  const HUB_KEY = 'workspace-settings-sse';
+  let workspaceReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let membersReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleWorkspaceReload() {
+    if (workspaceReloadTimer) return;
+    workspaceReloadTimer = setTimeout(async () => {
+      workspaceReloadTimer = null;
+      await loadUserWorkspaces();
+    }, 150);
+  }
+
+  function scheduleMembersReload() {
+    if (membersReloadTimer) return;
+    membersReloadTimer = setTimeout(async () => {
+      membersReloadTimer = null;
+      await loadMembers();
+    }, 150);
+  }
+
   function shouldIgnoreRowClick(event: MouseEvent): boolean {
     const el = event.target as HTMLElement | null;
     if (!el) return false;
@@ -42,9 +63,29 @@
     originalSelectedWorkspaceName = selectedWorkspace?.name ?? '';
   }
 
-  onMount(async () => {
-    if (!$session.user) return;
-    await loadUserWorkspaces();
+  onMount(() => {
+    if ($session.user) {
+      void loadUserWorkspaces();
+    }
+
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type === 'workspace_update') {
+        scheduleWorkspaceReload();
+        return;
+      }
+      if (evt?.type === 'workspace_membership_update') {
+        scheduleWorkspaceReload();
+        if (evt.workspaceId && selectedWorkspace?.id === evt.workspaceId) {
+          scheduleMembersReload();
+        }
+      }
+    });
+
+    return () => {
+      streamHub.delete(HUB_KEY);
+      if (workspaceReloadTimer) clearTimeout(workspaceReloadTimer);
+      if (membersReloadTimer) clearTimeout(membersReloadTimer);
+    };
   });
 
   async function createWorkspace() {

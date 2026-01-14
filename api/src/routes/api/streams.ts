@@ -5,7 +5,18 @@ import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, objectLocks, organizations, useCases, users } from '../../db/schema';
+import {
+  ADMIN_WORKSPACE_ID,
+  chatMessages,
+  chatSessions,
+  folders,
+  jobQueue,
+  objectLocks,
+  organizations,
+  useCases,
+  users,
+  workspaceMemberships
+} from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
@@ -92,6 +103,16 @@ function sseFolderEvent(folderId: string, data: unknown): string {
 function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   const payload = JSON.stringify({ useCaseId, data });
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseWorkspaceEvent(workspaceId: string, data: unknown): string {
+  const payload = JSON.stringify({ workspaceId, data });
+  return `event: workspace_update\nid: workspace:${workspaceId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseWorkspaceMembershipEvent(workspaceId: string, userId: string | null, data: unknown): string {
+  const payload = JSON.stringify({ workspaceId, userId, data });
+  return `event: workspace_membership_update\nid: workspace_member:${workspaceId}:${userId ?? 'unknown'}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
 function sseLockEvent(objectType: string, objectId: string, data: unknown): string {
@@ -494,6 +515,32 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
+      const isWorkspaceMember = async (workspaceId: string): Promise<boolean> => {
+        try {
+          const row = await db.get(sql`
+            SELECT 1
+            FROM workspace_memberships
+            WHERE workspace_id = ${workspaceId} AND user_id = ${user.userId}
+            LIMIT 1
+          `);
+          return !!row;
+        } catch {
+          return false;
+        }
+      };
+
+      const shouldEmitWorkspaceEvent = async (payload: Record<string, unknown>): Promise<boolean> => {
+        const workspaceId = typeof payload.workspace_id === 'string' ? payload.workspace_id : null;
+        if (!workspaceId) return false;
+        const userId = typeof payload.user_id === 'string' ? payload.user_id : null;
+        if (userId && userId === user.userId) return true;
+        const userIds = Array.isArray(payload.user_ids)
+          ? payload.user_ids.filter((id) => typeof id === 'string')
+          : [];
+        if (userIds.includes(user.userId)) return true;
+        return await isWorkspaceMember(workspaceId);
+      };
+
       // headers de "connexion"
       push(`: connected\n\n`);
 
@@ -555,6 +602,8 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN folder_events');
           await client.query('UNLISTEN usecase_events');
           await client.query('UNLISTEN lock_events');
+          await client.query('UNLISTEN workspace_events');
+          await client.query('UNLISTEN workspace_membership_events');
         } catch {
           // ignore
         } finally {
@@ -624,6 +673,25 @@ streamsRouter.get('/sse', async (c) => {
             if (!objectType || typeof objectType !== 'string') return;
             if (!objectId || typeof objectId !== 'string') return;
             void emitLockSnapshot(objectType, objectId);
+          } else if (msg.channel === 'workspace_events') {
+            const workspaceId = payload.workspace_id;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            void (async () => {
+              const allowed = await shouldEmitWorkspaceEvent(payload);
+              if (!allowed) return;
+              const data = (payload.data ?? {}) as Record<string, unknown>;
+              push(sseWorkspaceEvent(workspaceId, data));
+            })().catch(() => {});
+          } else if (msg.channel === 'workspace_membership_events') {
+            const workspaceId = payload.workspace_id;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            const targetUserId = typeof payload.user_id === 'string' ? payload.user_id : null;
+            void (async () => {
+              const allowed = await shouldEmitWorkspaceEvent(payload);
+              if (!allowed) return;
+              const data = (payload.data ?? {}) as Record<string, unknown>;
+              push(sseWorkspaceMembershipEvent(workspaceId, targetUserId, data));
+            })().catch(() => {});
           }
         } catch {
           // ignore
@@ -637,6 +705,8 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN usecase_events');
       await client.query('LISTEN stream_events');
       await client.query('LISTEN lock_events');
+      await client.query('LISTEN workspace_events');
+      await client.query('LISTEN workspace_membership_events');
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {

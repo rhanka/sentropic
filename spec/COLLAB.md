@@ -45,6 +45,7 @@ Replace dropdown selector with a table showing (column order):
 
 - Member role changes are done via select dropdown (admin-only).
 - Removing a member uses a trash icon (not a close/cross), to match destructive action semantics.
+- **Live updates**: workspace admin view listens to SSE events (`workspace_update`, `workspace_membership_update`) to refresh workspace list and members in real time.
 
 ### Hidden Workspace Visibility
 

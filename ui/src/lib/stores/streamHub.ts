@@ -17,6 +17,8 @@ export type StreamHubEvent =
   | { type: 'organization_update'; organizationId: string; data: any }
   | { type: 'folder_update'; folderId: string; data: any }
   | { type: 'usecase_update'; useCaseId: string; data: any }
+  | { type: 'workspace_update'; workspaceId: string; data: any }
+  | { type: 'workspace_membership_update'; workspaceId: string; userId?: string; data: any }
   | { type: string; streamId: string; sequence: number; data: any };
 
 type Subscription = {
@@ -31,6 +33,8 @@ const EVENT_TYPES = [
   'organization_update',
   'folder_update',
   'usecase_update',
+  'workspace_update',
+  'workspace_membership_update',
   // stream events (normalized)
   'status',
   'reasoning_delta',
@@ -283,6 +287,14 @@ class StreamHub {
         }
         if (type === 'usecase_update') {
           this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
+          return;
+        }
+        if (type === 'workspace_update') {
+          this.dispatch({ type, workspaceId: parsed.workspaceId, data: parsed.data });
+          return;
+        }
+        if (type === 'workspace_membership_update') {
+          this.dispatch({ type, workspaceId: parsed.workspaceId, userId: parsed.userId, data: parsed.data });
           return;
         }
 
