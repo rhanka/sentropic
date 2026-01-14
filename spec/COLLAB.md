@@ -37,6 +37,12 @@ Replace dropdown selector with a table showing (column order):
 - Row is clickable to select workspace.
 - Hover message on row: "Click to select workspace" (hover disabled on action buttons).
 - Icons: icons only, no text/border (same style as existing icons).
+- Workspace admins can rename the **selected** workspace in `/parametres` using an inline `EditableInput` (writes to `PUT /workspaces/:id`).
+
+### Workspace Members UI
+
+- Member role changes are done via select dropdown (admin-only).
+- Removing a member uses a trash icon (not a close/cross), to match destructive action semantics.
 
 ### Hidden Workspace Visibility
 

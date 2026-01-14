@@ -157,7 +157,10 @@ Out of scope:
   - [x] User A creates a new workspace "Workspace Alpha"
   - [x] Verify User A is automatically admin of "Workspace Alpha"
   - [x] Verify "Workspace Alpha" appears in User A's workspace list
-  - [!] When all workspace of User A are hidden, a message is display, and he can't access to other views (org folder /, usecase ...) than parameters
+  - [x] When all workspace of User A are hidden:
+    - [x] a message is displayed in workspace to warn the user
+    - [x] menus (exec id/param) are grayed, and user can't access to other views (org folder /, usecase ...) than parameters
+    - [x] when going to a url, accueil, dossiers, dossiers/[id], org, org/[id], cas-usage/[id] are redirected to parametrs
 - [x] **User A adds User B with viewer role:**
   - [x] User A adds User B (by email) to "Workspace Alpha" with role `viewer`
   - [x] User B logs in and switches to "Workspace Alpha"
@@ -198,6 +201,7 @@ Out of scope:
   - [ ] Verify hover on row shows "Click to select workspace"
   - [ ] Verify hover on action buttons does NOT show row message
   - [ ] User A clicks a row → workspace selected, checkmark updates
+  - [ ] User A (admin) renames the selected workspace via `EditableInput` → name updates in table (and persists after refresh)
   - [ ] Verify action buttons are icons only (no text/border)
   - [ ] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
   - [ ] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)
