@@ -292,11 +292,6 @@
       <Header />
     {/if}
     <main class="mx-auto max-w-7xl px-4 py-8">
-      {#if canShowContent && !$session.loading && $hiddenWorkspaceLock}
-        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Espace de travail caché sélectionné : accès restreint aux <strong>Paramètres</strong>. Rendre l’espace visible pour accéder aux autres vues.
-        </div>
-      {/if}
       {#if showSpinner}
         <!-- Afficher un loader pendant la vérification de session -->
         <div class="flex items-center justify-center min-h-[60vh]">

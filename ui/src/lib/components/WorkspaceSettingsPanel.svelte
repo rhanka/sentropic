@@ -144,6 +144,12 @@
     La gestion des workspaces (collaboration) n’est pas disponible pour <code>admin_app</code>.
   </div>
 {:else}
+  {#if $hiddenWorkspaceLock}
+    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
+    </div>
+  {/if}
+
   {#if allWorkspacesHidden && !$hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
