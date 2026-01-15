@@ -14,8 +14,7 @@ import {
   objectLocks,
   organizations,
   useCases,
-  users,
-  workspaceMemberships
+  users
 } from '../../db/schema';
 
 export const streamsRouter = new Hono();

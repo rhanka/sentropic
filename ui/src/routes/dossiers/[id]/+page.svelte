@@ -13,13 +13,16 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, type LockSnapshot } from '$lib/utils/object-lock';
 
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { Trash2, Star, X, Minus, Loader2, Lock } from '@lucide/svelte';
 
   let isLoading = false;
@@ -28,10 +31,22 @@
   let editedFolderName = '';
   let editedContext = '';
   let lastFolderId: string | null = null;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  const LOCK_REFRESH_MS = 10 * 60 * 1000;
 
   $: folderId = $page.params.id;
 
@@ -141,14 +156,109 @@
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    void releaseCurrentLock();
   });
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:folder:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type !== 'lock_update') return;
+      if (evt.objectType !== 'folder') return;
+      if (evt.objectId !== targetId) return;
+      lock = evt?.data?.lock ?? null;
+      if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        void syncLock();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+        lock = await fetchLock('folder', lockTargetId);
+      } else {
+        const res = await acquireLock('folder', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('folder', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('folder', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('folder', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('folder', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  $: if (folderId && folderId !== lockTargetId) {
+    if (lockTargetId) {
+      void releaseCurrentLock();
+    }
+    lock = null;
+    lockTargetId = folderId;
+    subscribeLock(folderId);
+    void syncLock();
+  }
 </script>
 
 <section class="space-y-6">
   {#if currentFolder}
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
-        {#if isReadOnly}
+        {#if isReadOnly || isLockedByOther}
           <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || 'Dossier'}</h1>
         {:else}
           <h1 class="text-3xl font-semibold mb-0 break-words">
@@ -184,6 +294,18 @@
             {currentFolder.model}
           </span>
         {/if}
+        <LockPresenceBadge
+          {lock}
+          {lockLoading}
+          {lockError}
+          {lockOwnerLabel}
+          {lockRequestedByMe}
+          isAdmin={isWorkspaceAdmin}
+          {isLockedByMe}
+          {isLockedByOther}
+          on:requestUnlock={handleRequestUnlock}
+          on:forceUnlock={handleForceUnlock}
+        />
         {#if showReadOnlyLock}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed"
@@ -211,7 +333,7 @@
         originalValue={currentFolder.description || ''}
         changeId={`folder-context-${currentFolder.id}`}
         on:change={(e) => (editedContext = e.detail.value)}
-        locked={isReadOnly}
+        locked={isReadOnly || isLockedByOther}
       />
     </div>
 

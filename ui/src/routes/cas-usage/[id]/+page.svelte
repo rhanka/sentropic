@@ -11,8 +11,11 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, type LockSnapshot } from '$lib/utils/object-lock';
   import { Printer, Trash2, Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
@@ -23,7 +26,21 @@
   let organizationId: string | null = null;
   let organizationName: string | null = null;
   let hubKey: string | null = null;
+  let isReadOnly = false;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope || isLockedByOther;
+  const LOCK_REFRESH_MS = 10 * 60 * 1000;
 
   $: useCaseId = $page.params.id;
 
@@ -106,7 +123,102 @@
 
   onDestroy(() => {
     if (hubKey) streamHub.delete(hubKey);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    void releaseCurrentLock();
   });
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:usecase:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type !== 'lock_update') return;
+      if (evt.objectType !== 'usecase') return;
+      if (evt.objectId !== targetId) return;
+      lock = evt?.data?.lock ?? null;
+      if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        void syncLock();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+        lock = await fetchLock('usecase', lockTargetId);
+      } else {
+        const res = await acquireLock('usecase', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('usecase', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('usecase', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('usecase', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('usecase', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  $: if (useCaseId && useCaseId !== lockTargetId) {
+    if (lockTargetId) {
+      void releaseCurrentLock();
+    }
+    lock = null;
+    lockTargetId = useCaseId;
+    subscribeLock(useCaseId);
+    void syncLock();
+  }
 
   const loadUseCase = async () => {
     try {
@@ -143,7 +255,7 @@
 
   const handleDelete = async () => {
     if (!useCase) return;
-    if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+    if (isReadOnly) {
       addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
       return;
     }
@@ -226,8 +338,21 @@
       {organizationId}
       {organizationName}
       isEditing={false}
+      locked={isLockedByOther}
     >
       <svelte:fragment slot="actions-view">
+            <LockPresenceBadge
+              {lock}
+              {lockLoading}
+              {lockError}
+              {lockOwnerLabel}
+              {lockRequestedByMe}
+              isAdmin={isWorkspaceAdmin}
+              {isLockedByMe}
+              {isLockedByOther}
+              on:requestUnlock={handleRequestUnlock}
+              on:forceUnlock={handleForceUnlock}
+            />
             <button
               on:click={() => window.print()}
               class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
@@ -235,7 +360,7 @@
             >
               <Printer class="w-5 h-5" />
             </button>
-            {#if !($adminReadOnlyScope || $workspaceReadOnlyScope)}
+            {#if !isReadOnly}
               <button 
                 on:click={handleDelete}
                 class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"

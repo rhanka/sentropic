@@ -81,6 +81,15 @@ When an `admin` selects a **hidden** workspace:
 
 - Unlock requests are stored directly on the lock row:
   - `unlock_requested_at`, `unlock_requested_by_user_id`, `unlock_request_message`
+
+### Lock UI (editor/admin)
+
+- When an object is locked by another user, show a **compact lock badge** near the header actions:
+  - A **lock icon** plus **avatar(s)** (rounded overlap). The top avatar is the lock owner.
+  - Hover tooltip: “`n utilisateurs connectés, {Nom} verrouille le document, cliquer pour demander le déverrouillage`”.
+  - Click on the badge triggers **request unlock** (no message prompt).
+  - Admin-only **Force unlock** is available as a **secondary action inside the tooltip** (no visible button).
+- When the current user owns the lock, show “**Vous éditez**” in the same compact badge.
 - No auto-transfer/timeout/accept/refuse workflow yet (planned in next phase of Lot 2).
 
 ### SSE Events (implemented - phase 1)

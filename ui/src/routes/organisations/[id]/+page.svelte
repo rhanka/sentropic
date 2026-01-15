@@ -6,19 +6,35 @@
   import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
+  import { addToast } from '$lib/stores/toast';
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, type LockSnapshot } from '$lib/utils/object-lock';
   import { Trash2, Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
   let lastLoadedId: string | null = null;
   let hubKey: string | null = null;
-  $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  const LOCK_REFRESH_MS = 10 * 60 * 1000;
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -55,12 +71,29 @@
     });
   };
 
+  const subscribeLock = (organizationId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:organization:${organizationId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type !== 'lock_update') return;
+      if (evt.objectType !== 'organization') return;
+      if (evt.objectId !== organizationId) return;
+      lock = evt?.data?.lock ?? null;
+      if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        void syncLock();
+      }
+    });
+  };
+
   onMount(async () => {
     await loadOrganization();
   });
 
   onDestroy(() => {
     if (hubKey) streamHub.delete(hubKey);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    void releaseCurrentLock();
   });
 
   $: if ($page.params.id && $page.params.id !== lastLoadedId) {
@@ -73,9 +106,17 @@
     if (lastLoadedId === organizationId) return;
 
     try {
+      if (lockTargetId && lockTargetId !== organizationId) {
+        void releaseCurrentLock();
+        lock = null;
+        lockTargetId = null;
+      }
       lastLoadedId = organizationId;
       organization = await fetchOrganizationById(organizationId);
       subscribeOrganization(organizationId);
+      subscribeLock(organizationId);
+      lockTargetId = organizationId;
+      void syncLock();
       error = '';
       unsavedChangesStore.reset();
       return;
@@ -84,6 +125,9 @@
       try {
         organization = await fetchOrganizationById(organizationId);
         subscribeOrganization(organizationId);
+        subscribeLock(organizationId);
+        lockTargetId = organizationId;
+        void syncLock();
         error = '';
         return;
       } catch {
@@ -96,6 +140,74 @@
           error = "Erreur lors du chargement de l'organisation";
         }
       }
+    }
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+        lock = await fetchLock('organization', lockTargetId);
+      } else {
+        const res = await acquireLock('organization', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('organization', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('organization', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('organization', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('organization', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
     }
   };
 
@@ -132,11 +244,24 @@
     organization={organization as any}
     {organizationData}
     apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
+    locked={isLockedByOther}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
     nameLabel=""
   >
     <div slot="actions" class="flex items-center gap-2">
+      <LockPresenceBadge
+        {lock}
+        {lockLoading}
+        {lockError}
+        {lockOwnerLabel}
+        {lockRequestedByMe}
+        isAdmin={isWorkspaceAdmin}
+        {isLockedByMe}
+        {isLockedByOther}
+        on:requestUnlock={handleRequestUnlock}
+        on:forceUnlock={handleForceUnlock}
+      />
       {#if canDelete}
         <button
           class="rounded p-2 transition text-warning hover:bg-slate-100"

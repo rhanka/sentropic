@@ -195,10 +195,10 @@ Out of scope:
   - [x] User A clicks delete button (only visible when hidden)
   - [x] Verify confirmation dialog appears
   - [x] User A confirms → workspace and all data cascade-deleted
-- [ ] Limit case
+- [x] Limit case
   - [x] When user is removed from its last workspace, user is redirected to parameters view and a warning appear in the workspace card in parameters.
   - [x] Verify no new workspace is auto-created at login in this state.
-- [ ] **Workspace selector table:**
+- [x] **Workspace selector table:**
   - [x] User A opens Settings and sees workspace table
   - [x] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
   - [x] Verify admin has the same table layout as viewer/editor (same columns, same row behavior); admin-only actions are disabled for non-admins
@@ -234,11 +234,11 @@ Out of scope:
     - Options:
       - Option A (recommended): **redirect immédiat** en `+layout.svelte` + **autosave best-effort non bloquant** (fire-and-forget) si `unsavedChangesStore` contient des changements.
       - Option B: redirect immédiat + **abandon explicite** des changements (`unsavedChangesStore.reset()`) + toast d’explication (plus simple, mais perte de drafts).
-- [ ] **Workspace isolation:**
-  - [ ] User A creates "Workspace Beta" (separate from "Workspace Alpha")
-  - [ ] User A creates an organization in "Workspace Beta"
-  - [ ] User B (only member of "Workspace Alpha") cannot see "Workspace Beta" organizations
-  - [ ] User B tries to select "Workspace Beta" in table → access denied (not a member)
+- [x] **Workspace isolation:**
+  - [x] User A creates "Workspace Beta" (separate from "Workspace Alpha")
+  - [x] User A creates an organization in "Workspace Beta"
+  - [x] User B (only member of "Workspace Alpha") cannot see "Workspace Beta" organizations
+  - [x] User B tries to select "Workspace Beta" in table → access denied (not a member)
 
 ### Lot 2 — Object edition locks + unlock workflow (API + SSE + UI)
 - [x] Define lock keys (workspaceId + objectType + objectId)
@@ -246,9 +246,10 @@ Out of scope:
 - [x] API: lock endpoints (`/api/v1/locks`) + TTL refresh / conflict (409)
 - [x] API: enforce locks on mutations (org/folder/usecase) → `409 OBJECT_LOCKED` with lock payload
 - [x] SSE: publish lock snapshots via `/streams/sse` event `lock_update`
-- [ ] UI: lock indicator + disable editing when locked by another user
-- [ ] UI: acquire/release lock lifecycle on page entry/exit
-- [ ] UI: "Request unlock" + "Force unlock" (admin) actions
+- [x] UI: lock indicator + disable editing when locked by another user
+- [x] UI: acquire/release lock lifecycle on page entry/exit
+- [x] UI: "Request unlock" + "Force unlock" (admin) actions
+  - Design note: UI uses a compact lock badge (avatar(s) + lock) with hover tooltip; admin force unlock is a secondary action inside tooltip (no visible button). Request unlock has no message prompt.
 - [ ] API/UI: richer unlock workflow (accept/refuse/timeout + presence) (phase 2)
 
 **Partial UAT (after Lot 2):**

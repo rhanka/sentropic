@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
@@ -304,16 +304,16 @@
               <td class="px-3 py-2">
                 {#if ws.role === 'admin'}
                   {#if ws.hiddenAt}
-                    <button
-                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                  <button
+                    class="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
                       title="Rendre visible (unhide)"
                       on:click|stopPropagation={() => unhideWorkspace(ws.id)}
                     >
                       <EyeOff class="h-4 w-4" />
                     </button>
                   {:else}
-                    <button
-                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                  <button
+                    class="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
                       title="Rendre invisible (hide)"
                       on:click|stopPropagation={() => hideWorkspace(ws.id)}
                     >
@@ -321,8 +321,8 @@
                     </button>
                   {/if}
                 {:else}
-                  <button
-                    class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                <button
+                  class="rounded p-1 text-slate-300 cursor-not-allowed"
                     title="Réservé aux admins"
                     disabled
                     data-ignore-row-click
@@ -333,8 +333,8 @@
               </td>
               <td class="px-3 py-2">
                 {#if ws.role === 'admin'}
-                  <button
-                    class="rounded-full p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
+                <button
+                  class="rounded p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
                     title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
                     disabled={!ws.hiddenAt}
                     on:click|stopPropagation={() => deleteWorkspace(ws.id)}
@@ -342,8 +342,8 @@
                     <Trash2 class="h-4 w-4" />
                   </button>
                 {:else}
-                  <button
-                    class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                <button
+                  class="rounded p-1 text-slate-300 cursor-not-allowed"
                     title="Réservé aux admins"
                     disabled
                     data-ignore-row-click
@@ -416,7 +416,7 @@
                     <td class="py-2 pr-3 text-right">
                       {#if m.userId !== $session.user?.id}
                         <button
-                          class="rounded-full p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
+                          class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
                           title="Retirer ce membre"
                           on:click={() => removeMember(m.userId)}
                         >
