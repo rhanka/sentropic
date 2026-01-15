@@ -246,116 +246,118 @@
     </button>
   </div>
 
-  <div class="overflow-x-auto rounded border border-slate-200">
-    <table class="min-w-full text-sm">
-      <thead class="border-b border-slate-200 text-left text-slate-600">
-        <tr>
-          <th class="w-10 px-3 py-2"></th>
-          <th class="px-3 py-2">Nom</th>
-          <th class="px-3 py-2">Rôle</th>
-          <th class="px-3 py-2">Visibilité</th>
-          <th class="w-10 px-3 py-2"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each $workspaceScope.items as ws (ws.id)}
-          <tr
-            class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === $workspaceScope.selectedId ? 'bg-blue-50' : ''}"
-            title="Cliquer pour sélectionner ce workspace"
-            on:click={(e) => {
-              if (shouldIgnoreRowClick(e)) return;
-              if (ws.id === $workspaceScope.selectedId) return;
-              setWorkspaceScope(ws.id);
-            }}
-          >
-            <td class="px-3 py-2">
-              {#if ws.id === $workspaceScope.selectedId}
-                <Check class="h-4 w-4 text-slate-900" />
-              {/if}
-            </td>
-            <td class="px-3 py-2">
-              <div class="flex items-center gap-2">
-                {#if ws.id === $workspaceScope.selectedId && ws.role === 'admin'}
-                  <div class="flex-1 min-w-0 w-full" data-ignore-row-click>
-                    <EditableInput
-                      label=""
-                      value={editedSelectedWorkspaceName}
-                      markdown={false}
-                      multiline={false}
-                      fullWidth={true}
-                      apiEndpoint={`/workspaces/${ws.id}`}
-                      fullData={{ name: editedSelectedWorkspaceName }}
-                      changeId={`workspace-name-${ws.id}`}
-                      originalValue={originalSelectedWorkspaceName}
-                      on:change={(e) => editedSelectedWorkspaceName = e.detail.value}
-                      on:saved={handleWorkspaceNameSaved}
-                    />
-                  </div>
-                {:else}
-                  <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
+  {#if !noWorkspaces}
+    <div class="overflow-x-auto rounded border border-slate-200">
+      <table class="min-w-full text-sm">
+        <thead class="border-b border-slate-200 text-left text-slate-600">
+          <tr>
+            <th class="w-10 px-3 py-2"></th>
+            <th class="px-3 py-2">Nom</th>
+            <th class="px-3 py-2">Rôle</th>
+            <th class="px-3 py-2">Visibilité</th>
+            <th class="w-10 px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $workspaceScope.items as ws (ws.id)}
+            <tr
+              class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === $workspaceScope.selectedId ? 'bg-blue-50' : ''}"
+              title="Cliquer pour sélectionner ce workspace"
+              on:click={(e) => {
+                if (shouldIgnoreRowClick(e)) return;
+                if (ws.id === $workspaceScope.selectedId) return;
+                setWorkspaceScope(ws.id);
+              }}
+            >
+              <td class="px-3 py-2">
+                {#if ws.id === $workspaceScope.selectedId}
+                  <Check class="h-4 w-4 text-slate-900" />
                 {/if}
-                {#if ws.hiddenAt}
-                  <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">caché</span>
-                {/if}
-              </div>
-            </td>
-            <td class="px-3 py-2">{ws.role}</td>
-            <td class="px-3 py-2">
-              {#if ws.role === 'admin'}
-                {#if ws.hiddenAt}
-                  <button
-                    class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                    title="Rendre visible (unhide)"
-                    on:click|stopPropagation={() => unhideWorkspace(ws.id)}
-                  >
-                    <EyeOff class="h-4 w-4" />
-                  </button>
+              </td>
+              <td class="px-3 py-2">
+                <div class="flex items-center gap-2">
+                  {#if ws.id === $workspaceScope.selectedId && ws.role === 'admin'}
+                    <div class="flex-1 min-w-0 w-full" data-ignore-row-click>
+                      <EditableInput
+                        label=""
+                        value={editedSelectedWorkspaceName}
+                        markdown={false}
+                        multiline={false}
+                        fullWidth={true}
+                        apiEndpoint={`/workspaces/${ws.id}`}
+                        fullData={{ name: editedSelectedWorkspaceName }}
+                        changeId={`workspace-name-${ws.id}`}
+                        originalValue={originalSelectedWorkspaceName}
+                        on:change={(e) => editedSelectedWorkspaceName = e.detail.value}
+                        on:saved={handleWorkspaceNameSaved}
+                      />
+                    </div>
+                  {:else}
+                    <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
+                  {/if}
+                  {#if ws.hiddenAt}
+                    <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">caché</span>
+                  {/if}
+                </div>
+              </td>
+              <td class="px-3 py-2">{ws.role}</td>
+              <td class="px-3 py-2">
+                {#if ws.role === 'admin'}
+                  {#if ws.hiddenAt}
+                    <button
+                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                      title="Rendre visible (unhide)"
+                      on:click|stopPropagation={() => unhideWorkspace(ws.id)}
+                    >
+                      <EyeOff class="h-4 w-4" />
+                    </button>
+                  {:else}
+                    <button
+                      class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                      title="Rendre invisible (hide)"
+                      on:click|stopPropagation={() => hideWorkspace(ws.id)}
+                    >
+                      <Eye class="h-4 w-4" />
+                    </button>
+                  {/if}
                 {:else}
                   <button
-                    class="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                    title="Rendre invisible (hide)"
-                    on:click|stopPropagation={() => hideWorkspace(ws.id)}
+                    class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                    title="Réservé aux admins"
+                    disabled
+                    data-ignore-row-click
                   >
                     <Eye class="h-4 w-4" />
                   </button>
                 {/if}
-              {:else}
-                <button
-                  class="rounded-full p-1 text-slate-300 cursor-not-allowed"
-                  title="Réservé aux admins"
-                  disabled
-                  data-ignore-row-click
-                >
-                  <Eye class="h-4 w-4" />
-                </button>
-              {/if}
-            </td>
-            <td class="px-3 py-2">
-              {#if ws.role === 'admin'}
-                <button
-                  class="rounded-full p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
-                  title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
-                  disabled={!ws.hiddenAt}
-                  on:click|stopPropagation={() => deleteWorkspace(ws.id)}
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              {:else}
-                <button
-                  class="rounded-full p-1 text-slate-300 cursor-not-allowed"
-                  title="Réservé aux admins"
-                  disabled
-                  data-ignore-row-click
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              {/if}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+              </td>
+              <td class="px-3 py-2">
+                {#if ws.role === 'admin'}
+                  <button
+                    class="rounded-full p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
+                    title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
+                    disabled={!ws.hiddenAt}
+                    on:click|stopPropagation={() => deleteWorkspace(ws.id)}
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                {:else}
+                  <button
+                    class="rounded-full p-1 text-slate-300 cursor-not-allowed"
+                    title="Réservé aux admins"
+                    disabled
+                    data-ignore-row-click
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 
 {#if selectedWorkspace && isWorkspaceAdmin}
     <div class="rounded border border-slate-200 p-4">
