@@ -141,7 +141,7 @@ Out of scope:
 - [x] API: `ensureWorkspaceForUser()` now resolves the default workspace from memberships (newest non-hidden), creates workspace + admin membership if none exist
 - [x] API: manage workspace members with roles (`viewer`/`editor`/`admin`)
 - [x] API: list user's workspaces with membership roles
-- [ ] UI (Settings/Paramètres): replace workspace selector with table showing (column order):
+- [x] UI (Settings/Paramètres): replace workspace selector with table showing (column order):
   - Selected state (checkmark if selected, empty otherwise)
   - Workspace name
   - Role (viewer/editor/admin)
@@ -179,7 +179,7 @@ Out of scope:
   - [x] User B tries to manage workspace members → blocked (no access to user list in UI; API 403 covered by api/security tests)
   - [x] User B tries to delete/archive workspace → blocked (no access to delete/archive functions in UI; API 403 covered by api/security tests)
   - [x] User B can update an object (e.g. organization) through chat
-- [ ] **User A promotes User B to admin:**
+- [x] **User A promotes User B to admin:**
   - [x] User A updates User B membership to role `admin`
   - [x] User B refreshes and can now manage members (add/remove/change roles)
   - [x] User B can hide/unhide the workspace (action buttons visible in workspace table)
@@ -199,21 +199,21 @@ Out of scope:
   - [x] When user is removed from its last workspace, user is redirected to parameters view and a warning appear in the workspace card in parameters.
   - [x] Verify no new workspace is auto-created at login in this state.
 - [ ] **Workspace selector table:**
-  - [ ] User A opens Settings and sees workspace table
-  - [ ] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
-  - [ ] Verify admin has the same table layout as viewer/editor (same columns, same row behavior); admin-only actions are disabled for non-admins
-  - [ ] Verify hover on row shows "Click to select workspace"
-  - [ ] Verify hover on action buttons does NOT show row message
-  - [ ] User A clicks a row → workspace selected, checkmark updates
-  - [ ] User A (admin) renames the selected workspace via `EditableInput` → name updates in table (and persists after refresh)
-  - [ ] Verify workspace list updates live when another admin renames/hides/unhides a workspace
-  - [ ] Verify members list updates live when roles are changed or a member is removed
-  - [ ] Verify action buttons are icons only (no text/border)
-  - [ ] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
-  - [ ] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)
-  - [ ] Verify hidden workspaces are not visible to viewer/editor members (only admins see them in the table)
-  - [ ] Verify: if an admin selects a hidden workspace, all navigation (except /parametres) redirects to /parametres
-  - [ ] Verify: a persistent banner explains that the workspace must be made visible to access other views
+  - [x] User A opens Settings and sees workspace table
+  - [x] Verify table columns order: selected state (checkmark or empty), workspace name, role (viewer/editor/admin), visibility, (trash column without title)
+  - [x] Verify admin has the same table layout as viewer/editor (same columns, same row behavior); admin-only actions are disabled for non-admins
+  - [x] Verify hover on row shows "Click to select workspace"
+  - [x] Verify hover on action buttons does NOT show row message
+  - [x] User A clicks a row → workspace selected, checkmark updates
+  - [x] User A (admin) renames the selected workspace via `EditableInput` → name updates in table (and persists after refresh)
+  - [x] Verify workspace list updates live when another admin renames/hides/unhides a workspace
+  - [x] Verify members list updates live when roles are changed or a member is removed
+  - [x] Verify action buttons are icons only (no text/border)
+  - [x] Verify visibility column shows `eye` when visible and `eye-off` when hidden; hover indicates the action (hide/unhide)
+  - [x] Verify trash icon is visible for admins even when workspace is not hidden (disabled + tooltip says hide first)
+  - [x] Verify hidden workspaces are not visible to viewer/editor members (only admins see them in the table)
+  - [x] Verify: if an admin selects a hidden workspace, all navigation (except /parametres) redirects to /parametres
+  - [x] Verify: a persistent banner explains that the workspace must be made visible to access other views
   - **Design note (guard articulation): hidden-workspace redirect vs unsaved-changes**
     - Goal: if `hiddenWorkspaceLock === true`, restrict app navigation to `/parametres` (plus auth routes), and grey-out the other menus.
     - Source of truth: `hiddenWorkspaceLock` derived store (workspace selected + role admin + hiddenAt).
