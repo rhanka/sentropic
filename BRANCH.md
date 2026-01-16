@@ -251,7 +251,11 @@ Out of scope:
 - [x] UI: "Request unlock" + "Force unlock" (admin) actions
   - Design note: UI uses a compact lock badge (avatar(s) + lock) with hover tooltip; admin force unlock is a secondary action inside tooltip (no visible button). Request unlock has no message prompt.
   - Design note: presence avatars are backed by `/locks/presence` + SSE `presence_update`; current user is excluded from avatar list but included in the connected count (leave via `/locks/presence/leave`).
-- [ ] API/UI: richer unlock workflow (accept/refuse/timeout + presence) (phase 2)
+- [x] API/UI: finaliser le workflow d’unlock (phase 2)
+  - [x] Pas de timeout
+  - [x] Pas de refus explicite
+  - [x] La demande tombe si le locker quitte la page
+  - [x] Accept = transfert atomique du lock au demandeur (signalé via lock_update)
 
 **Partial UAT (after Lot 2):**
 - [x] **Presence (SSE):**
@@ -263,19 +267,19 @@ Out of scope:
   - [x] User B requests unlock → User A sees a small key on User B avatar
   - [x] User A sees "déverrouiller pour User B" in the hover menu
   - [x] User A releases → lock transfers to User B (User A does not immediately re-lock)
-- [ ] **User A locks an object:**
-  - [ ] User A opens a use case detail page (editor/admin role)
-  - [ ] Verify User A acquires lock automatically
-  - [ ] Verify UI shows "You are editing" indicator
-- [ ] **User B sees locked view:**
-  - [ ] User B (editor/admin) opens the same use case detail page
-  - [ ] Verify User B sees "Locked by User A" indicator
-  - [ ] Verify User B's edit controls are disabled
-  - [ ] Verify User B can still view the object (read-only)
-- [ ] **User A edits while User B watches:**
-  - [ ] User A makes an edit (e.g., updates use case name)
-  - [ ] Verify User B receives SSE update and sees the change in real-time
-  - [ ] Verify User B's view refreshes automatically
+- [x] **User A locks an object:**
+  - [x] User A opens a use case detail page (editor/admin role)
+  - [x] Verify User A acquires lock automatically
+  - [x] Verify UI shows "You are editing" indicator
+- [x] **User B sees locked view:**
+  - [x] User B (editor/admin) opens the same use case detail page
+  - [x] Verify User B sees "Locked by User A" indicator
+  - [x] Verify User B's edit controls are disabled
+  - [x] Verify User B can still view the object (read-only)
+- [x] **User A edits while User B watches:**
+  - [x] User A makes an edit (e.g., updates use case name)
+  - [x] Verify User B receives SSE update and sees the change in real-time
+  - [x] Verify User B's view refreshes automatically
 - [ ] **User B requests unlock (User A active):**
   - [ ] User B clicks "Request unlock" button
   - [ ] Verify API refuses if another unlock request is already processing

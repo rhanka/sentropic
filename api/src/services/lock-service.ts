@@ -275,6 +275,40 @@ export async function requestUnlock(options: {
   return { requested: true, lock: await getActiveLock(options.workspaceId, options.objectType, options.objectId) };
 }
 
+export async function acceptUnlock(options: {
+  userId: string;
+  workspaceId: string;
+  objectType: LockObjectType;
+  objectId: string;
+}): Promise<{ accepted: boolean; lock: LockSnapshot | null }> {
+  const now = new Date();
+  const lock = await getActiveLock(options.workspaceId, options.objectType, options.objectId);
+  if (!lock) return { accepted: false, lock: null };
+  if (!lock.unlockRequestedByUserId) return { accepted: false, lock };
+
+  const isAdmin = await hasWorkspaceRole(options.userId, options.workspaceId, 'admin');
+  if (lock.lockedBy.userId !== options.userId && !isAdmin) {
+    throw httpError(403, 'Insufficient permissions');
+  }
+
+  const expiresAt = new Date(Date.now() + DEFAULT_TTL_MS);
+  await db
+    .update(objectLocks)
+    .set({
+      lockedByUserId: lock.unlockRequestedByUserId,
+      lockedAt: now,
+      expiresAt,
+      unlockRequestedAt: null,
+      unlockRequestedByUserId: null,
+      unlockRequestMessage: null,
+      updatedAt: now,
+    })
+    .where(eq(objectLocks.id, lock.id));
+
+  await notifyLockEvent(options.workspaceId, options.objectType, options.objectId);
+  return { accepted: true, lock: await getActiveLock(options.workspaceId, options.objectType, options.objectId) };
+}
+
 export async function forceUnlock(options: {
   userId: string;
   workspaceId: string;

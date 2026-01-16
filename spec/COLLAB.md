@@ -75,6 +75,7 @@ When an `admin` selects a **hidden** workspace:
   - `409` `{ acquired: false, lock }` (locked by another user)
 - `DELETE /api/v1/locks?objectType=...&objectId=...` → release (owner or workspace admin)
 - `POST /api/v1/locks/request-unlock` → marks an unlock request on the lock (best-effort UX signal)
+- `POST /api/v1/locks/accept-unlock` → transfer lock to requester (owner/admin)
 - `POST /api/v1/locks/force-unlock` → admin-only force release
 - `POST /api/v1/locks/presence` → record presence on an object (viewer/editor/admin)
 - `GET /api/v1/locks/presence?objectType=...&objectId=...` → list presence snapshot
@@ -84,6 +85,8 @@ When an `admin` selects a **hidden** workspace:
 
 - Unlock requests are stored directly on the lock row:
   - `unlock_requested_at`, `unlock_requested_by_user_id`, `unlock_request_message`
+- The lock owner can **accept** by transferring the lock to the requester (no explicit "refuse").
+- The request is cleared when the lock owner leaves the page (no timeout).
 
 ### Lock UI (editor/admin)
 

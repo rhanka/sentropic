@@ -73,6 +73,17 @@ export async function requestUnlock(
   return { requested: Boolean(res?.requested), lock: res?.lock ?? null };
 }
 
+export async function acceptUnlock(
+  objectType: LockObjectType,
+  objectId: string
+): Promise<{ accepted: boolean; lock: LockSnapshot | null }> {
+  const res = await apiPost<{ accepted: boolean; lock: LockSnapshot | null }>('/locks/accept-unlock', {
+    objectType,
+    objectId
+  });
+  return { accepted: Boolean(res?.accepted), lock: res?.lock ?? null };
+}
+
 export async function forceUnlock(objectType: LockObjectType, objectId: string): Promise<{ forced: boolean }> {
   const res = await apiPost<{ forced: boolean }>('/locks/force-unlock', { objectType, objectId });
   return { forced: Boolean(res?.forced) };
