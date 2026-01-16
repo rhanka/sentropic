@@ -33,6 +33,7 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
@@ -148,6 +149,10 @@
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
         if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
           void syncLock();
         }
         return;
@@ -233,6 +238,11 @@
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
     }
+  };
+
+  const handleReleaseLock = async () => {
+    suppressAutoLock = true;
+    await releaseCurrentLock();
   };
 
   const hydratePresence = async () => {
@@ -353,7 +363,7 @@
       if (anyErr?.status === 403) {
         addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
       } else {
-        addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
       }
     }
   };
@@ -430,8 +440,10 @@
               avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
               connectedCount={presenceTotal}
               canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+              showHeaderLock={!isLockedByMe}
               on:requestUnlock={handleRequestUnlock}
               on:forceUnlock={handleForceUnlock}
+              on:releaseLock={handleReleaseLock}
             />
             <button
               on:click={() => window.print()}
@@ -441,13 +453,13 @@
               <Printer class="w-5 h-5" />
             </button>
             {#if !isReadOnly}
-              <button 
-                on:click={handleDelete}
-                class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
-                title="Supprimer le cas d'usage"
-              >
-                <Trash2 class="w-5 h-5" />
-              </button>
+            <button 
+              on:click={handleDelete}
+              class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+              title="Supprimer le cas d'usage"
+            >
+              <Trash2 class="w-5 h-5" />
+            </button>
             {:else if showReadOnlyLock && !showPresenceBadge}
               <button
                 class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"

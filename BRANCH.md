@@ -259,6 +259,10 @@ Out of scope:
   - [x] User B opens the same object view → both users see each other (avatars + count)
   - [x] User A leaves the tab or navigates away → User B sees the avatar disappear
   - [x] Admin (viewer on shared workspace) sees presence and is visible to others
+- [x] **Unlock request UX (badge):**
+  - [x] User B requests unlock → User A sees a small key on User B avatar
+  - [x] User A sees "déverrouiller pour User B" in the hover menu
+  - [x] User A releases → lock transfers to User B (User A does not immediately re-lock)
 - [ ] **User A locks an object:**
   - [ ] User A opens a use case detail page (editor/admin role)
   - [ ] Verify User A acquires lock automatically

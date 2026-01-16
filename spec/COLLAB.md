@@ -101,6 +101,8 @@ When an `admin` selects a **hidden** workspace:
 - The compact badge is shown for **viewer/editor/admin** to display presence even in read-only mode.
 - In read-only mode, **request unlock is disabled** and the tooltip omits the “cliquer pour demander le déverrouillage” wording.
 - The read-only lock icon is hidden when the presence badge is visible (avoid duplicate indicators).
+- When a user requests unlock, their avatar shows a **small key overlay** in the badge.
+- The lock owner sees **"Déverrouiller pour {user}"** in the tooltip menu, and the unlock action is shown **only when a request exists**.
 
 ### SSE Events (implemented - phase 1)
 

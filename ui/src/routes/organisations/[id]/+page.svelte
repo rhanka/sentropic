@@ -27,6 +27,7 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
@@ -85,6 +86,10 @@
         if (evt.objectId !== organizationId) return;
         lock = evt?.data?.lock ?? null;
         if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
           void syncLock();
         }
         return;
@@ -244,6 +249,11 @@
     }
   };
 
+  const handleReleaseLock = async () => {
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
   const hydratePresence = async () => {
     if (!lockTargetId) return;
     try {
@@ -342,8 +352,10 @@
         avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
         connectedCount={presenceTotal}
         canRequestUnlock={!isReadOnlyRole}
+        showHeaderLock={!isLockedByMe}
         on:requestUnlock={handleRequestUnlock}
         on:forceUnlock={handleForceUnlock}
+        on:releaseLock={handleReleaseLock}
       />
       {#if canDelete}
         <button

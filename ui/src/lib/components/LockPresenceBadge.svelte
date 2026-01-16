@@ -112,11 +112,16 @@
           <div class="flex items-center">
             {#each orderedAvatars as avatar, index}
               <div
-                class="h-7 w-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold border border-white"
+                class="relative h-7 w-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold border border-white"
                 style={`margin-left: ${index === 0 ? 0 : -6}px; z-index: ${index + 1};`}
                 title={avatar.label}
               >
                 {getInitials(avatar.label)}
+                {#if lock?.unlockRequestedByUserId && avatar.userId === lock.unlockRequestedByUserId}
+                  <span class="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-100 text-amber-700 border border-white">
+                    <Key class="h-2.5 w-2.5" />
+                  </span>
+                {/if}
               </div>
             {/each}
           </div>

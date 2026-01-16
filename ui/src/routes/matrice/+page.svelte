@@ -39,6 +39,7 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   
@@ -87,6 +88,10 @@
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
         if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
           void syncLock();
         }
         return;
@@ -172,6 +177,11 @@
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
     }
+  };
+
+  const handleReleaseLock = async () => {
+    suppressAutoLock = true;
+    await releaseCurrentLock();
   };
 
   const hydratePresence = async () => {
@@ -824,8 +834,10 @@
       avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
       connectedCount={presenceTotal}
       canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+      showHeaderLock={!isLockedByMe}
       on:requestUnlock={handleRequestUnlock}
       on:forceUnlock={handleForceUnlock}
+      on:releaseLock={handleReleaseLock}
     />
     {#if showReadOnlyLock && !showPresenceBadge}
       <button

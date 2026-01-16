@@ -179,17 +179,24 @@ export async function acquireLock(options: {
     }
 
     const id = createId();
-    await tx.insert(objectLocks).values({
-      id,
-      workspaceId: options.workspaceId,
-      objectType: options.objectType,
-      objectId: options.objectId,
-      lockedByUserId: options.userId,
-      lockedAt: now,
-      expiresAt,
-      updatedAt: now,
-    });
-    return { type: 'acquired' as const };
+    try {
+      await tx.insert(objectLocks).values({
+        id,
+        workspaceId: options.workspaceId,
+        objectType: options.objectType,
+        objectId: options.objectId,
+        lockedByUserId: options.userId,
+        lockedAt: now,
+        expiresAt,
+        updatedAt: now,
+      });
+      return { type: 'acquired' as const };
+    } catch (err: unknown) {
+      if (typeof err === 'object' && err && 'code' in err && (err as { code?: string }).code === '23505') {
+        return { type: 'conflict' as const };
+      }
+      throw err;
+    }
   });
 
   const lock = await getActiveLock(options.workspaceId, options.objectType, options.objectId);

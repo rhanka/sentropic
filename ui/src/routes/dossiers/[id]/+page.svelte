@@ -37,6 +37,7 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   const HUB_KEY = 'folderDetailUseCases';
@@ -114,7 +115,7 @@
       if (anyErr?.status === 403) {
         addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
       } else {
-        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
       }
     }
   };
@@ -181,6 +182,10 @@
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
         if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
           void syncLock();
         }
         return;
@@ -266,6 +271,11 @@
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
     }
+  };
+
+  const handleReleaseLock = async () => {
+    suppressAutoLock = true;
+    await releaseCurrentLock();
   };
 
   const hydratePresence = async () => {
@@ -383,8 +393,10 @@
           avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
           connectedCount={presenceTotal}
           canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+          showHeaderLock={!isLockedByMe}
           on:requestUnlock={handleRequestUnlock}
           on:forceUnlock={handleForceUnlock}
+          on:releaseLock={handleReleaseLock}
         />
         {#if showReadOnlyLock && !showPresenceBadge}
           <button
