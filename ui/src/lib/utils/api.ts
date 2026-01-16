@@ -6,7 +6,6 @@
 
 import { browser } from '$app/environment';
 import { API_BASE_URL } from '$lib/config';
-import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 /**
@@ -36,7 +35,7 @@ export async function apiRequest<T = any>(
   // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
   // - admin_app uses admin scope store
   // - regular users use workspace scope store
-  const scoped = getScopedWorkspaceIdForAdmin() ?? getScopedWorkspaceIdForUser();
+  const scoped = getScopedWorkspaceIdForUser();
   const url = (() => {
     if (!scoped) return rawUrl;
     // Never scope auth endpoints

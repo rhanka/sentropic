@@ -5,7 +5,6 @@
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
   import { apiPut } from "$lib/utils/api";
-  import { adminReadOnlyScope } from "$lib/stores/adminWorkspaceScope";
   import { workspaceReadOnlyScope } from "$lib/stores/workspaceScope";
   
   export let label = ""; // Le label affiché au-dessus
@@ -30,7 +29,7 @@
   export let multiline = false; // Si true, utilise un textarea au lieu d'un input (pour permettre les retours à la ligne)
   
   let tiptapContainer;
-  $: isLocked = Boolean(locked || disabled || $adminReadOnlyScope || $workspaceReadOnlyScope);
+  $: isLocked = Boolean(locked || disabled || $workspaceReadOnlyScope);
   
   const dispatch = createEventDispatcher();
   

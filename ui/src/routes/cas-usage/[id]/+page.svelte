@@ -12,7 +12,6 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
-  import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
@@ -36,14 +35,14 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
-  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope || isLockedByOther;
+  $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
   let lastReadOnlyRole = isReadOnly;
   const LOCK_REFRESH_MS = 30 * 1000;
 
@@ -148,7 +147,7 @@
         if (evt.objectType !== 'usecase') return;
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
-        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
             return;
@@ -177,7 +176,7 @@
     lockLoading = true;
     lockError = null;
     try {
-      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+      if ($workspaceReadOnlyScope) {
         lock = await fetchLock('usecase', lockTargetId);
       } else {
         const res = await acquireLock('usecase', lockTargetId);
@@ -303,8 +302,8 @@
     void updatePresence();
   }
 
-  $: if (($adminReadOnlyScope || $workspaceReadOnlyScope) !== lastReadOnlyRole) {
-    lastReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: if ($workspaceReadOnlyScope !== lastReadOnlyRole) {
+    lastReadOnlyRole = $workspaceReadOnlyScope;
     if (lastReadOnlyRole) {
       void releaseCurrentLock();
       void syncLock();
@@ -316,9 +315,7 @@
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      useCase = await apiGet(`/use-cases/${useCaseId}${qs}`);
+      useCase = await apiGet(`/use-cases/${useCaseId}`);
       
       // Mettre à jour le store avec les données fraîches
       useCasesStore.update(items => 
@@ -379,9 +376,7 @@
     
     try {
       // Charger la matrice depuis le dossier
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folderResp: any = await apiGet(`/folders/${useCase.folderId}${qs}`);
+      const folderResp: any = await apiGet(`/folders/${useCase.folderId}`);
       matrix = folderResp?.matrixConfig ?? null;
       organizationId = folderResp?.organizationId ?? null;
       organizationName = folderResp?.organizationName ?? null;
@@ -445,7 +440,7 @@
               {isLockedByOther}
               avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
               connectedCount={presenceTotal}
-              canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+              canRequestUnlock={!$workspaceReadOnlyScope}
               showHeaderLock={!isLockedByMe}
               on:requestUnlock={handleRequestUnlock}
               on:forceUnlock={handleForceUnlock}

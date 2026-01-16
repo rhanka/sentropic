@@ -7,16 +7,14 @@
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
-  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
   import { FileText, Trash2, CirclePlus, Lock } from '@lucide/svelte';
 
   let isLoading = false;
   const HUB_KEY = 'foldersPage';
   let isReadOnly = false;
-  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: isReadOnly = $workspaceReadOnlyScope;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
 
   onMount(() => {
     void (async () => {
@@ -65,9 +63,9 @@
       }
     });
 
-    // Reload on admin workspace scope change
-    let lastScope = $adminWorkspaceScope.selectedId;
-    const unsub = adminWorkspaceScope.subscribe((s) => {
+    // Reload on workspace selection change
+    let lastScope = $workspaceScope.selectedId;
+    const unsub = workspaceScope.subscribe((s) => {
       if (s.selectedId !== lastScope) {
         lastScope = s.selectedId;
         currentFolderId.set(null);

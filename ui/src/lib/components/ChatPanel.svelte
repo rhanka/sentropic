@@ -3,7 +3,6 @@
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { currentFolderId } from '$lib/stores/folders';
   import { Send } from '@lucide/svelte';
 
@@ -340,8 +339,6 @@
         payload.primaryContextType = context.primaryContextType;
         if (context.primaryContextId) payload.primaryContextId = context.primaryContextId;
       }
-      const scoped = getScopedWorkspaceIdForAdmin();
-      if (scoped) payload.workspace_id = scoped;
 
       const res = await apiPost<{
         sessionId: string;

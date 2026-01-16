@@ -3,7 +3,6 @@
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
   import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '$lib/utils/documents';
@@ -64,8 +63,7 @@
     if (!silent) loading = true;
     error = null;
     try {
-      const scopedWs = getScopedWorkspaceIdForAdmin();
-      const res = await listDocuments({ contextType, contextId, workspaceId: scopedWs });
+      const res = await listDocuments({ contextType, contextId });
       items = res.items || [];
       dispatch('state', { items, uploading });
       return;
@@ -141,8 +139,7 @@
     uploading = true;
     dispatch('state', { items, uploading });
     try {
-      const scopedWs = getScopedWorkspaceIdForAdmin();
-      await uploadDocument({ contextType, contextId, file, workspaceId: scopedWs });
+      await uploadDocument({ contextType, contextId, file });
       addToast({ type: 'success', message: $_('documents.upload.success') });
       await load({ silent: true });
     } catch (err) {
@@ -159,16 +156,14 @@
   };
 
   const download = (docId: string) => {
-    const scopedWs = getScopedWorkspaceIdForAdmin();
-    const url = getDownloadUrl({ documentId: docId, workspaceId: scopedWs });
+    const url = getDownloadUrl({ documentId: docId });
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const remove = async (doc: ContextDocumentItem) => {
     if (!confirm($_('documents.delete.confirm'))) return;
     try {
-      const scopedWs = getScopedWorkspaceIdForAdmin();
-      await deleteDocument({ documentId: doc.id, workspaceId: scopedWs });
+      await deleteDocument({ documentId: doc.id });
       addToast({ type: 'success', message: $_('documents.delete.success') });
       await load({ silent: true });
     } catch (e) {

@@ -50,7 +50,7 @@ class MockEventSource {
 // Mock global EventSource
 global.EventSource = MockEventSource as any;
 
-// Mock session stores (used indirectly by adminWorkspaceScope)
+// Mock session stores (used indirectly by workspace scope logic)
 vi.mock('../../src/lib/stores/session', () => ({
   session: {
     subscribe: vi.fn((fn: (value: any) => void) => {

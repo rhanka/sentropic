@@ -8,7 +8,7 @@ test.describe('Dossiers — reload & brouillons', () => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule" possible).
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }

@@ -16,8 +16,7 @@
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { getScopedWorkspaceIdForAdmin, adminReadOnlyScope, adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
   import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
 
   let isLoading = false;
@@ -29,7 +28,7 @@
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
   const HUB_KEY = 'dashboardPage';
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
   // Variables locales pour l'édition markdown (non persistantes)
   let editedIntroduction = '';
@@ -152,9 +151,9 @@
       }
     });
 
-    // Reload on admin workspace scope change
-    let lastScope = $adminWorkspaceScope.selectedId;
-    const unsub = adminWorkspaceScope.subscribe((s) => {
+    // Reload on workspace selection change
+    let lastScope = $workspaceScope.selectedId;
+    const unsub = workspaceScope.subscribe((s) => {
       if (s.selectedId !== lastScope) {
         lastScope = s.selectedId;
         selectedFolderId = null;
@@ -201,9 +200,7 @@
 
   const loadMatrix = async (folderId: string) => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       matrix = folder.matrixConfig;
       executiveSummary = folder.executiveSummary || null;
@@ -224,7 +221,7 @@
 
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
-    if ($adminReadOnlyScope) {
+    if ($workspaceReadOnlyScope) {
       addToast({ type: 'warning', message: 'Mode lecture seule : génération désactivée.' });
       return;
     }
@@ -552,7 +549,7 @@
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0 flex-1">
         {#if selectedFolderId}
-          {#if $adminReadOnlyScope}
+          {#if $workspaceReadOnlyScope}
             <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
           {:else}
             <h1 class="text-3xl font-semibold mb-0">

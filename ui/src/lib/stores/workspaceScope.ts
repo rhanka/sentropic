@@ -60,7 +60,6 @@ export const selectedWorkspaceHidden = derived(selectedWorkspace, ($w) => {
 // When the user is no longer a member of any workspace, redirect to /parametres.
 export const noWorkspaceLock = derived([session, workspaceScope], ([$session, $scope]) => {
   if (!$session.user) return false;
-  if ($session.user.role === 'admin_app') return false;
   if ($scope.loading) return false;
   return ($scope.items || []).length === 0;
 });
@@ -68,7 +67,6 @@ export const noWorkspaceLock = derived([session, workspaceScope], ([$session, $s
 // When a hidden workspace is selected, only /parametres should be accessible until the workspace is made visible again.
 export const hiddenWorkspaceLock = derived([session, selectedWorkspace], ([$session, ws]) => {
   if (!$session.user) return false;
-  if ($session.user.role === 'admin_app') return false;
   if (!ws) return false;
   return ws.role === 'admin' && Boolean(ws.hiddenAt);
 });
@@ -76,14 +74,12 @@ export const hiddenWorkspaceLock = derived([session, selectedWorkspace], ([$sess
 // Read-only scope for regular users: viewer role (or no resolved role) => disable UI mutations.
 export const workspaceReadOnlyScope = derived([session, selectedWorkspaceRole], ([$session, role]) => {
   if (!$session.user) return true;
-  if ($session.user.role === 'admin_app') return false;
   return role !== 'editor' && role !== 'admin';
 });
 
 export function getScopedWorkspaceIdForUser(): string | null {
   const s = get(session);
   if (!s.user) return null;
-  if (s.user.role === 'admin_app') return null;
   const id = get(workspaceScope).selectedId;
   return id && id.trim() ? id : null;
 }

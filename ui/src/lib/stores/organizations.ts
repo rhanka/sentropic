@@ -1,7 +1,6 @@
 import { writable } from 'svelte/store';
 import { ApiError } from '$lib/utils/api';
 import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
-import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 
 export type Organization = {
   id: string;
@@ -33,16 +32,12 @@ export const organizationsStore = writable<Organization[]>([]);
 export const currentOrganizationId = writable<string | null>(null);
 
 export const fetchOrganizations = async (): Promise<Organization[]> => {
-  const scoped = getScopedWorkspaceIdForAdmin();
-  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-  const data = await apiGet<{ items: Organization[] }>(`/organizations${qs}`);
+  const data = await apiGet<{ items: Organization[] }>(`/organizations`);
   return data.items;
 };
 
 export const fetchOrganizationById = async (id: string): Promise<Organization> => {
-  const scoped = getScopedWorkspaceIdForAdmin();
-  const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-  return await apiGet<Organization>(`/organizations/${id}${qs}`);
+  return await apiGet<Organization>(`/organizations/${id}`);
 };
 
 export const createOrganization = async (organization: Omit<Organization, 'id'>): Promise<Organization> => {

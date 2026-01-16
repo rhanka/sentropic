@@ -11,7 +11,7 @@ test.describe.serial('Workflow métier complet', () => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule")
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }

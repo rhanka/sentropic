@@ -11,7 +11,6 @@
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
-  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
@@ -30,14 +29,14 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
-  $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: canDelete = $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
-  $: isReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: isReadOnlyRole = $workspaceReadOnlyScope;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   let lastReadOnlyRole = isReadOnlyRole;
   const LOCK_REFRESH_MS = 30 * 1000;
@@ -85,7 +84,7 @@
         if (evt.objectType !== 'organization') return;
         if (evt.objectId !== organizationId) return;
         lock = evt?.data?.lock ?? null;
-        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
             return;

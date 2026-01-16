@@ -92,11 +92,11 @@ Out of scope:
 - DB already has a `workspaces` table and most business tables are `workspace_id` scoped.
 - Current model is effectively **1:1 user ↔ owned workspace** because `workspaces.owner_user_id` is **UNIQUE**.
 - Non-admin users always operate on their owned workspace (`ensureWorkspaceForUser()`).
-- `admin_app` can read other workspaces only when `workspaces.share_with_admin=true` (query param `workspace_id`) — **this will be removed**.
+- `admin_app` access is based on workspace memberships (same as any user). No `share_with_admin` bypass.
 - UI currently exposes:
   - Workspace name + `shareWithAdmin` toggle (owner-only, via `/me` PATCH) — **this will be removed**.
-  - Admin scope selector for `admin_app` (stored in `localStorage` and sent as `workspace_id`) — **will be replaced by workspace table selector**.
-- SSE (`/streams/sse`) already supports `workspace_id` for `admin_app` scoped reads.
+  - Workspace selector stored as `workspaceScopeId` in `localStorage` for all roles (single scope).
+- SSE (`/streams/sse`) uses the same workspace scope for all users (no admin-specific scoping).
 
 **Discovery findings (Lot 0):**
 - **Schema gaps (to add in single migration):**
@@ -401,7 +401,7 @@ Out of scope:
 - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
 - [ ] Create automated tests (only now):
   - [ ] **Regression test (circular imports / Ctrl+R crash):** ensure importing core UI modules in different orders does not throw `Cannot access 'session' before initialization`
-    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/adminWorkspaceScope.ts`, `ui/src/lib/stores/workspaceScope.ts`
+    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/workspaceScope.ts`
     - Expected: no top-level import triggers store reads that require `session` initialization (Option B: scope passed explicitly to `apiRequest`)
   - `make test-api` coverage for roles/locks/comments/import-export
   - `make test-ui` coverage for core UI flows

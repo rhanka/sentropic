@@ -1,7 +1,6 @@
 import { ApiError, apiDelete, apiGet, apiPost } from '$lib/utils/api';
 import { API_BASE_URL } from '$lib/config';
 import { browser } from '$app/environment';
-import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 export type LockObjectType = 'organization' | 'folder' | 'usecase';
@@ -108,7 +107,7 @@ export async function fetchPresence(
 
 export async function leavePresence(objectType: LockObjectType, objectId: string): Promise<void> {
   const payload = JSON.stringify({ objectType, objectId });
-  const scoped = getScopedWorkspaceIdForAdmin() ?? getScopedWorkspaceIdForUser();
+  const scoped = getScopedWorkspaceIdForUser();
   const url = (() => {
     if (!scoped || !browser) return `${API_BASE_URL}/locks/presence/leave`;
     const u = new URL(`${API_BASE_URL}/locks/presence/leave`, window.location.origin);

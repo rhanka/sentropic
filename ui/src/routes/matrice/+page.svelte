@@ -11,8 +11,6 @@
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
@@ -46,15 +44,15 @@
   // Variables pour l'auto-save de la matrice (seuils, poids, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let isSavingMatrix = false;
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
-  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope || isLockedByOther;
-  let lastReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
+  let lastReadOnlyRole = $workspaceReadOnlyScope;
   const LOCK_REFRESH_MS = 30 * 1000;
 
   onMount(async () => {
@@ -87,7 +85,7 @@
         if (evt.objectType !== 'folder') return;
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
-        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
             return;
@@ -116,7 +114,7 @@
     lockLoading = true;
     lockError = null;
     try {
-      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+      if ($workspaceReadOnlyScope) {
         lock = await fetchLock('folder', lockTargetId);
       } else {
         const res = await acquireLock('folder', lockTargetId);
@@ -242,8 +240,8 @@
     void updatePresence();
   }
 
-  $: if (($adminReadOnlyScope || $workspaceReadOnlyScope) !== lastReadOnlyRole) {
-    lastReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: if ($workspaceReadOnlyScope !== lastReadOnlyRole) {
+    lastReadOnlyRole = $workspaceReadOnlyScope;
     if (lastReadOnlyRole) {
       void releaseCurrentLock();
       void syncLock();
@@ -263,9 +261,7 @@
 
     isLoading = true;
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
+      const folder = await apiGet(`/folders/${$currentFolderId}`);
       
       if (folder.matrixConfig) {
         const matrix = typeof folder.matrixConfig === 'string' 
@@ -426,7 +422,7 @@
     // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
   };
-
+  
   const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
     const pointsNumber = typeof points === 'string' ? Number(points) : points;
     if (isValue && editedConfig.valueThresholds) {
@@ -752,9 +748,7 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const data = await apiGet<{ items: Folder[] }>(`/folders/list/with-matrices${qs}`);
+      const data = await apiGet<{ items: Folder[] }>(`/folders/list/with-matrices`);
       availableFolders = data.items.filter((folder) => folder.hasMatrix && folder.id !== $currentFolderId);
     } catch (error) {
       console.error('Failed to load folders:', error);
@@ -782,9 +776,7 @@
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
-        const scoped = getScopedWorkspaceIdForAdmin();
-        const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix${qs}`);
+        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix`);
       } else if (createMatrixType === 'blank') {
         // Évaluation vierge
         matrixToUse = {
@@ -839,7 +831,7 @@
       {isLockedByOther}
       avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
       connectedCount={presenceTotal}
-      canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+      canRequestUnlock={!$workspaceReadOnlyScope}
       showHeaderLock={!isLockedByMe}
       on:requestUnlock={handleRequestUnlock}
       on:forceUnlock={handleForceUnlock}

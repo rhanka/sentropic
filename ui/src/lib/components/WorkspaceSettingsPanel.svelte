@@ -3,7 +3,6 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
-  import { ADMIN_WORKSPACE_ID, adminWorkspaceScope, loadAdminWorkspaces, setAdminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -35,11 +34,7 @@
     if (workspaceReloadTimer) return;
     workspaceReloadTimer = setTimeout(async () => {
       workspaceReloadTimer = null;
-      if (isAdminApp) {
-        await loadAdminWorkspaces();
-      } else {
-        await loadUserWorkspaces();
-      }
+      await loadUserWorkspaces();
     }, 150);
   }
 
@@ -58,17 +53,8 @@
     return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"], [data-ignore-row-click]'));
   }
 
-  $: isAdminApp = $session.user?.role === 'admin_app';
-  $: workspaceItems = isAdminApp
-    ? ($adminWorkspaceScope.items || []).map((w) => ({
-        id: w.id,
-        name: w.name || w.id,
-        role: (w.role as any) || (w.id === ADMIN_WORKSPACE_ID ? ('admin' as const) : ('viewer' as const)),
-        hiddenAt: null,
-        createdAt: ''
-      }))
-    : ($workspaceScope.items || []);
-  $: workspaceSelectedId = isAdminApp ? $adminWorkspaceScope.selectedId : $workspaceScope.selectedId;
+  $: workspaceItems = $workspaceScope.items || [];
+  $: workspaceSelectedId = $workspaceScope.selectedId;
   $: selectedWorkspace = (workspaceItems || []).find((w) => w.id === workspaceSelectedId) ?? null;
   $: isWorkspaceAdmin = selectedWorkspace?.role === 'admin';
   $: allWorkspacesHidden = (workspaceItems || []).length > 0 && (workspaceItems || []).every((w) => !!w.hiddenAt);
@@ -81,11 +67,7 @@
 
   onMount(() => {
     if ($session.user) {
-      if (isAdminApp) {
-        void loadAdminWorkspaces();
-      } else {
-        void loadUserWorkspaces();
-      }
+      void loadUserWorkspaces();
     }
 
     streamHub.set(HUB_KEY, (evt: any) => {
@@ -286,11 +268,7 @@
               on:click={(e) => {
                 if (shouldIgnoreRowClick(e)) return;
               if (ws.id === workspaceSelectedId) return;
-              if (isAdminApp) {
-                setAdminWorkspaceScope(ws.id);
-              } else {
-                setWorkspaceScope(ws.id);
-              }
+              setWorkspaceScope(ws.id);
               }}
             >
               <td class="px-3 py-2">

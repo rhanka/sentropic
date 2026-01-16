@@ -17,8 +17,7 @@
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
-  import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
-  import { hiddenWorkspaceLock, noWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces } from '$lib/stores/workspaceScope';
+  import { hiddenWorkspaceLock, noWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces, workspaceScope } from '$lib/stores/workspaceScope';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
 
@@ -159,10 +158,7 @@
   let lastAdminScope: string | null = null;
   $: {
     const currentUserId = $session.user?.id ?? null;
-    const currentScope =
-      $session.user?.role === 'admin_app'
-        ? ($adminWorkspaceScope.selectedId ?? ADMIN_WORKSPACE_ID)
-        : null;
+    const currentScope = $workspaceScope.selectedId ?? null;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
       // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
@@ -183,7 +179,7 @@
       lastAdminScope = currentScope;
 
       // Hydrate workspace roles early (prevents read-only banner flash on first navigation).
-      if (currentUserId && $session.user?.role !== 'admin_app') {
+      if (currentUserId) {
         void loadUserWorkspaces();
       }
     }

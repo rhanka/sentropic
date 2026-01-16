@@ -7,7 +7,7 @@ test.describe('Gestion des erreurs', () => {
     // Stabiliser: éviter que des specs précédents laissent l'admin en scope "lecture seule"
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }

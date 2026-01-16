@@ -12,7 +12,6 @@
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
@@ -48,9 +47,9 @@
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
-  $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: isReadOnly = $workspaceReadOnlyScope;
   let lastReadOnlyRole = isReadOnly;
-  $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   const LOCK_REFRESH_MS = 30 * 1000;
 
   $: folderId = $page.params.id;
@@ -63,9 +62,7 @@
       const useCases = await fetchUseCases(folderId);
       useCasesStore.set(useCases);
 
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder: Folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder: Folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       matrix = folder.matrixConfig;
 
@@ -87,9 +84,7 @@
 
   const handleFolderNameSaved = async () => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder: Folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder: Folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       editedFolderName = folder.name || '';
       foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
@@ -181,7 +176,7 @@
         if (evt.objectType !== 'folder') return;
         if (evt.objectId !== targetId) return;
         lock = evt?.data?.lock ?? null;
-        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+        if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
             return;
@@ -372,7 +367,7 @@
       </div>
       <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
         {#if currentFolder.organizationId}
-          {@const orgId = currentFolder.organizationId as string}
+          {@const orgId = currentFolder.organizationId}
           <button
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
@@ -398,7 +393,7 @@
           {isLockedByOther}
           avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
           connectedCount={presenceTotal}
-          canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
+          canRequestUnlock={!$workspaceReadOnlyScope}
           showHeaderLock={!isLockedByMe}
           on:requestUnlock={handleRequestUnlock}
           on:forceUnlock={handleForceUnlock}

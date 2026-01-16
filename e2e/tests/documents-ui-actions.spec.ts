@@ -18,7 +18,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     // Assurer un scope admin "normal" (pas read-only) et éviter les confirm() natifs (flaky).
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }

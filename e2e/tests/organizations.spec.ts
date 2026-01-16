@@ -11,7 +11,7 @@ test.describe('Gestion des organisations', () => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon le mode "lecture seule" cache le bouton +).
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }
