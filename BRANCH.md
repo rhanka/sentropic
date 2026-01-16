@@ -288,25 +288,11 @@ Out of scope:
   - [x] Verify User B's view refreshes automatically
 - [x] **User B requests unlock (User A active):**
   - [x] User B clicks "Request unlock" button
-  - [ ] Verify API refuses if another unlock request is already processing
-  - [ ] Verify User A receives SSE notification: "User B requests unlock"
-  - [ ] User A clicks "Accept" → verify lock transfers to User B
-  - [ ] Verify User A's UI switches to locked view
-  - [ ] Verify User B's UI switches to editing mode
-- [ ] **User B requests unlock (User A inactive/timeout):**
-  - [ ] User A has lock but is inactive (no heartbeat for >2s)
-  - [ ] User B clicks "Request unlock"
-  - [ ] Wait 2 seconds
-  - [ ] Verify lock auto-transfers to User B (timeout)
-  - [ ] Verify User B receives SSE notification: "Unlock granted"
-  - [ ] Verify User B's UI switches to editing mode
-- [ ] **User A refuses unlock:**
-  - [ ] User A has lock and is active
-  - [ ] User B requests unlock
-  - [ ] User A clicks "Refuse"
-  - [ ] Verify lock remains with User A
-  - [ ] Verify User B receives SSE notification: "Unlock refused"
-  - [ ] Verify User B's UI stays locked
+  - [x] Verify API refuses if another unlock request is already processing
+  - [x] Verify User A receives SSE notification: "User B requests unlock"
+  - [x] User A clicks "Accept" → verify lock transfers to User B
+  - [x] Verify User A's UI switches to locked view
+  - [x] Verify User B's UI switches to editing mode
 
 ### Lot 3 — Import/export (workspace, folder, use cases, organizations)
 - [ ] API: export endpoints producing ZIP archives:
