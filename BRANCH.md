@@ -304,17 +304,17 @@ Out of scope:
   - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
 - **API tests (existing categories) — exhaustive list**
   - [ ] `api/tests/api` (routes/integration):
-    - [ ] Role enforcement for orgs/folders/usecases/documents/locks (viewer/editor/admin)
-    - [ ] Workspace scoping (non-member 404 for all read endpoints)
-    - [ ] Workspace lifecycle (hide/unhide/delete) admin-only
-    - [ ] Members CRUD (add/update/remove) admin-only
-    - [ ] `workspace_id` ignored for bootstrap routes (`/workspaces`, `/me`)
-    - [ ] Hidden workspace access returns 409 (non-settings routes)
-    - [ ] SSE events workspace-scoped
-    - [ ] Documents list/upload/download/delete scoped to workspace_id
-    - [ ] Locks endpoints return 409 when locked by another user
-    - [ ] Unlock accept transfers lock (atomic)
-    - [ ] Presence list respects workspace scope
+    - [x] Role enforcement for orgs/folders/usecases/documents/locks (viewer/editor/admin)
+    - [x] Workspace scoping (non-member 404 for all read endpoints)
+    - [x] Workspace lifecycle (hide/unhide/delete) admin-only
+    - [x] Members CRUD (add/update/remove) admin-only
+    - [x] `workspace_id` ignored for bootstrap routes (`/workspaces`, `/me`)
+    - [x] Hidden workspace access returns 409 (non-settings routes)
+    - [x] SSE events workspace-scoped
+    - [x] Documents list/upload/download/delete scoped to workspace_id
+    - [x] Locks endpoints return 409 when locked by another user
+    - [x] Unlock accept transfers lock (atomic)
+    - [x] Presence list respects workspace scope
   - [ ] `api/tests/security`:
     - [ ] 403 for viewer mutations
     - [ ] 403 for editor member management + workspace lifecycle
