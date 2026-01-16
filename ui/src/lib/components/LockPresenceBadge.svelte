@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Lock } from '@lucide/svelte';
+  import { Key, Lock } from '@lucide/svelte';
   import type { LockSnapshot } from '$lib/utils/object-lock';
 
   export let lock: LockSnapshot | null = null;
@@ -14,10 +14,12 @@
   export let avatars: Array<{ userId: string; label: string }> = [];
   export let connectedCount: number = 0;
   export let canRequestUnlock: boolean = true;
+  export let showHeaderLock: boolean = true;
 
   const dispatch = createEventDispatcher<{
     requestUnlock: void;
     forceUnlock: void;
+    releaseLock: void;
   }>();
 
   let tooltipOpen = false;
@@ -73,6 +75,20 @@
   const handleForce = () => {
     dispatch('forceUnlock');
   };
+
+  const handleRelease = () => {
+    if (!isLockedByMe) return;
+    dispatch('releaseLock');
+  };
+
+  $: shouldShowHeaderLock = showHeaderLock && !isLockedByMe;
+  $: unlockRequesterLabel = (() => {
+    const requesterId = lock?.unlockRequestedByUserId;
+    if (!requesterId) return null;
+    const match = avatars.find((u) => u.userId === requesterId);
+    return match?.label || 'cet utilisateur';
+  })();
+  $: showReleaseAction = isLockedByMe && Boolean(lock?.unlockRequestedByUserId);
 </script>
 
 {#if lockLoading || lockError || lock || orderedAvatars.length > 0 || safeCount > 0}
@@ -105,16 +121,18 @@
             {/each}
           </div>
         {/if}
-        <button
-          class="ml-2 inline-flex items-center justify-center rounded p-2 text-slate-400 hover:bg-slate-100"
-          on:click|stopPropagation={handleRequest}
-          type="button"
-          aria-label="Verrou du document"
-          title={tooltipText}
-          aria-disabled={!canRequestUnlock}
-        >
-          <Lock class="h-5 w-5" />
-        </button>
+        {#if shouldShowHeaderLock}
+          <button
+            class="ml-2 inline-flex items-center justify-center rounded p-2 text-slate-400 hover:bg-slate-100"
+            on:click|stopPropagation={handleRequest}
+            type="button"
+            aria-label="Verrou du document"
+            title={tooltipText}
+            aria-disabled={!canRequestUnlock}
+          >
+            <Lock class="h-5 w-5" />
+          </button>
+        {/if}
       </div>
 
       <div
@@ -129,27 +147,42 @@
         on:mouseleave={closeTooltip}
       >
         <div class="mb-2">{tooltipText}</div>
-        {#if isLockedByOther && canRequestUnlock}
-          <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 justify-end">
+          {#if showReleaseAction}
             <button
-              class="rounded border border-amber-200 px-2 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+              class="inline-flex items-center justify-center text-slate-600 hover:text-slate-800"
+              on:click|stopPropagation={handleRelease}
+              type="button"
+              aria-label={`Déverrouiller pour ${unlockRequesterLabel ?? ''}`.trim()}
+              title={`Déverrouiller pour ${unlockRequesterLabel ?? ''}`.trim()}
+            >
+              <Lock class="h-4 w-4" />
+            </button>
+          {/if}
+          {#if isLockedByOther && canRequestUnlock}
+            <button
+              class="inline-flex items-center justify-center text-amber-600 hover:text-amber-700 disabled:opacity-60"
               on:click|stopPropagation={handleRequest}
               disabled={lockRequestedByMe}
               type="button"
+              aria-label="Demander le déverrouillage"
+              title={lockRequestedByMe ? 'Demande envoyée' : 'Demander le déverrouillage'}
             >
-              {lockRequestedByMe ? 'Demande envoyée' : 'Demander le déverrouillage'}
+              <Key class="h-4 w-4" />
             </button>
-            {#if isAdmin}
-              <button
-                class="rounded border border-rose-200 px-2 py-1 text-rose-700 hover:bg-rose-50"
-                on:click|stopPropagation={handleForce}
-                type="button"
-              >
-                Forcer
-              </button>
-            {/if}
-          </div>
-        {/if}
+          {/if}
+          {#if isLockedByOther && isAdmin}
+            <button
+              class="inline-flex items-center justify-center text-rose-600 hover:text-rose-700"
+              on:click|stopPropagation={handleForce}
+              type="button"
+              aria-label="Forcer le déverrouillage"
+              title="Forcer le déverrouillage"
+            >
+              <Lock class="h-4 w-4" />
+            </button>
+          {/if}
+        </div>
       </div>
   </div>
 {/if}
