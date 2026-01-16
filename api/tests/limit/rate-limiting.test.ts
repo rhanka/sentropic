@@ -3,6 +3,24 @@ import { httpRequest } from '../utils/test-helpers';
 import { generateTestVerificationToken } from '../utils/auth-helper';
 
 describe('Rate Limiting Tests', () => {
+  it('does not rate limit auth endpoints when disabled (dev)', async () => {
+    if (!process.env.DISABLE_RATE_LIMIT || process.env.DISABLE_RATE_LIMIT === 'false' || process.env.DISABLE_RATE_LIMIT === '0') {
+      return;
+    }
+    const responses = [];
+    for (let i = 0; i < 15; i++) {
+      const response = await httpRequest('/api/v1/auth/login/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: `test${i}@example.com` }),
+      });
+      responses.push(response);
+    }
+
+    const rateLimited = responses.filter(res => res.status === 429);
+    expect(rateLimited.length).toBe(0);
+  });
+
   it('should enforce rate limiting on auth login options', async () => {
     // Rate limiting is disabled by default in test env (see env.ts: NODE_ENV=test => DISABLE_RATE_LIMIT=true)
     // so this test is only meaningful when explicitly enabled.

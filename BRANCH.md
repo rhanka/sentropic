@@ -333,11 +333,11 @@ Out of scope:
     - [x] documents tool enabled only for authorized context
     - [x] documents tool rejects mismatched context
   - [ ] `api/tests/queue`:
-    - [ ] document summary job updates status correctly (success/failure)
+    - [x] document summary job updates status correctly (success/failure)
   - [ ] `api/tests/smoke`:
-    - [ ] DB + API health
+    - [x] DB + API health
   - [ ] `api/tests/limit`:
-    - [ ] rate limiting does not affect auth when disabled (dev)
+    - [x] rate limiting does not affect auth when disabled (dev)
 - **UI tests (existing categories) — feasible scope**
   - [x] `ui/tests/stores`:
     - [x] workspace scope selection + hydration
