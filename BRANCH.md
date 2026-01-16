@@ -303,7 +303,7 @@ Out of scope:
   - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
   - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
 - **API tests (existing categories) — exhaustive list**
-  - [ ] `api/tests/api` (routes/integration):
+  - [x] `api/tests/api` (routes/integration):
     - [x] Role enforcement for orgs/folders/usecases/documents/locks (viewer/editor/admin)
     - [x] Workspace scoping (non-member 404 for all read endpoints)
     - [x] Workspace lifecycle (hide/unhide/delete) admin-only
@@ -316,12 +316,12 @@ Out of scope:
     - [x] Unlock accept transfers lock (atomic)
     - [x] Presence list respects workspace scope
   - [ ] `api/tests/security`:
-    - [ ] 403 for viewer mutations
-    - [ ] 403 for editor member management + workspace lifecycle
-    - [ ] 404 for non-member workspace access
-    - [ ] Reject cross-workspace document access by id
-    - [ ] Concurrent edit lock enforcement (second editor gets 409)
-    - [ ] Concurrent edit lock enforcement per object type (organization/folder/usecase/matrix)
+    - [x] 403 for viewer mutations
+    - [x] 403 for editor member management + workspace lifecycle
+    - [x] 404 for non-member workspace access
+    - [x] Reject cross-workspace document access by id
+    - [x] Concurrent edit lock enforcement (second editor gets 409)
+    - [x] Concurrent edit lock enforcement per object type (organization/folder/usecase/matrix)
     - [ ] Lock breaks when locker leaves (no active SSE → lock cleared)
     - [ ] SSE disconnect does not leak locks (cleanup on zero SSE)
   - [ ] `api/tests/unit`:
