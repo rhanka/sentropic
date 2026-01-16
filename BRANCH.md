@@ -325,9 +325,9 @@ Out of scope:
     - [ ] Lock breaks when locker leaves (no active SSE → lock cleared)
     - [ ] SSE disconnect does not leak locks (cleanup on zero SSE)
   - [ ] `api/tests/unit`:
-    - [ ] Locks service (acquire/release/request/accept/force, TTL)
-    - [ ] Presence service (record/leave/list)
-    - [ ] Workspace scope resolution
+    - [x] Locks service (acquire/release/request/accept/force, TTL)
+    - [x] Presence service (record/leave/list)
+    - [x] Workspace scope resolution
     - [ ] Lock cleanup on zero SSE connections
   - [ ] `api/tests/ai`:
     - [ ] documents tool enabled only for authorized context
