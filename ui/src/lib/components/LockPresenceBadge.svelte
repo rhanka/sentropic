@@ -11,6 +11,9 @@
   export let isAdmin: boolean = false;
   export let isLockedByMe: boolean = false;
   export let isLockedByOther: boolean = false;
+  export let avatars: Array<{ userId: string; label: string }> = [];
+  export let connectedCount: number = 0;
+  export let canRequestUnlock: boolean = true;
 
   const dispatch = createEventDispatcher<{
     requestUnlock: void;
@@ -29,11 +32,23 @@
     return initials || '?';
   };
 
-  $: connectedCount = lock ? 1 : 0;
-  $: connectedLabel = connectedCount === 1 ? '1 utilisateur connecté' : `${connectedCount} utilisateurs connectés`;
+  $: orderedAvatars = (() => {
+    const list = [...avatars];
+    const ownerId = lock?.lockedBy?.userId;
+    if (!ownerId) return list;
+    const idx = list.findIndex((u) => u.userId === ownerId);
+    if (idx === -1) return list;
+    const [owner] = list.splice(idx, 1);
+    list.push(owner);
+    return list;
+  })();
+
+  $: safeCount = connectedCount || orderedAvatars.length || (lock ? 1 : 0);
+  $: connectedLabel = safeCount === 1 ? '1 utilisateur connecté' : `${safeCount} utilisateurs connectés`;
   $: tooltipText = (() => {
-    if (!lock) return '';
+    if (!lock) return `${connectedLabel}.`;
     if (isLockedByMe) return `${connectedLabel}, vous verrouillez le document.`;
+    if (!canRequestUnlock) return `${connectedLabel}, ${lockOwnerLabel} verrouille le document.`;
     return `${connectedLabel}, ${lockOwnerLabel} verrouille le document. Cliquer pour demander le déverrouillage.`;
   })();
 
@@ -50,6 +65,7 @@
   };
 
   const handleRequest = () => {
+    if (!canRequestUnlock) return;
     if (!isLockedByOther || lockRequestedByMe) return;
     dispatch('requestUnlock');
   };
@@ -59,7 +75,7 @@
   };
 </script>
 
-{#if lockLoading || lockError || lock}
+{#if lockLoading || lockError || lock || orderedAvatars.length > 0 || safeCount > 0}
   <div
     class="relative flex items-center gap-2"
     role="group"
@@ -75,22 +91,27 @@
     {#if lockError}
       <span class="text-xs text-rose-600">{lockError}</span>
     {/if}
-    {#if lock}
-      <div class="flex items-center">
-        <div class="flex items-center">
-          <div
-            class="h-7 w-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold border border-white"
-            style="margin-left: 0"
-          >
-            {getInitials(lock.lockedBy?.displayName || lock.lockedBy?.email)}
+    <div class="flex items-center">
+        {#if orderedAvatars.length}
+          <div class="flex items-center">
+            {#each orderedAvatars as avatar, index}
+              <div
+                class="h-7 w-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold border border-white"
+                style={`margin-left: ${index === 0 ? 0 : -6}px; z-index: ${index + 1};`}
+                title={avatar.label}
+              >
+                {getInitials(avatar.label)}
+              </div>
+            {/each}
           </div>
-        </div>
+        {/if}
         <button
           class="ml-2 inline-flex items-center justify-center rounded p-2 text-slate-400 hover:bg-slate-100"
           on:click|stopPropagation={handleRequest}
           type="button"
           aria-label="Verrou du document"
           title={tooltipText}
+          aria-disabled={!canRequestUnlock}
         >
           <Lock class="h-5 w-5" />
         </button>
@@ -108,7 +129,7 @@
         on:mouseleave={closeTooltip}
       >
         <div class="mb-2">{tooltipText}</div>
-        {#if isLockedByOther}
+        {#if isLockedByOther && canRequestUnlock}
           <div class="flex items-center gap-2">
             <button
               class="rounded border border-amber-200 px-2 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
@@ -130,6 +151,5 @@
           </div>
         {/if}
       </div>
-    {/if}
   </div>
 {/if}

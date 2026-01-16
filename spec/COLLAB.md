@@ -76,6 +76,9 @@ When an `admin` selects a **hidden** workspace:
 - `DELETE /api/v1/locks?objectType=...&objectId=...` → release (owner or workspace admin)
 - `POST /api/v1/locks/request-unlock` → marks an unlock request on the lock (best-effort UX signal)
 - `POST /api/v1/locks/force-unlock` → admin-only force release
+- `POST /api/v1/locks/presence` → record presence on an object (viewer/editor/admin)
+- `GET /api/v1/locks/presence?objectType=...&objectId=...` → list presence snapshot
+- `POST /api/v1/locks/presence/leave` → remove presence on page leave
 
 ### Unlock Request Flow (current behavior)
 
@@ -90,12 +93,20 @@ When an `admin` selects a **hidden** workspace:
   - Click on the badge triggers **request unlock** (no message prompt).
   - Admin-only **Force unlock** is available as a **secondary action inside the tooltip** (no visible button).
 - When the current user owns the lock, show “**Vous éditez**” in the same compact badge.
+- The avatar list **excludes the current user** but still counts them in `n utilisateurs connectés`.
 - No auto-transfer/timeout/accept/refuse workflow yet (planned in next phase of Lot 2).
+
+### Presence Badge (all roles)
+
+- The compact badge is shown for **viewer/editor/admin** to display presence even in read-only mode.
+- In read-only mode, **request unlock is disabled** and the tooltip omits the “cliquer pour demander le déverrouillage” wording.
+- The read-only lock icon is hidden when the presence badge is visible (avoid duplicate indicators).
 
 ### SSE Events (implemented - phase 1)
 
 Reuse existing `/streams/sse` channel:
 - `lock_update` → `{ objectType, objectId, data: { lock } }`
+- `presence_update` → `{ objectType, objectId, data: { users, total } }`
 
 ## Comments
 

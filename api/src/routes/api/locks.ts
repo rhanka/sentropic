@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { requireWorkspaceAdminRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole, requireWorkspaceAdminRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { acquireLock, forceUnlock, getActiveLock, requestUnlock, releaseLock, type LockObjectType } from '../../services/lock-service';
+import { listPresence, recordPresence, removePresence } from '../../services/lock-presence';
 
 export const locksRouter = new Hono();
 
@@ -105,5 +106,61 @@ locksRouter.post('/force-unlock', requireWorkspaceAdminRole(), zValidator('json'
     if (isHttpError(e) && e.status === 403) return c.json({ error: 'Insufficient permissions' }, 403);
     throw e;
   }
+});
+
+const presenceSchema = z.object({
+  objectType: objectTypeSchema,
+  objectId: z.string().min(1),
+});
+
+locksRouter.get('/presence', requireWorkspaceAccessRole(), zValidator('query', presenceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; workspaceId: string; email?: string | null; displayName?: string | null };
+  const q = c.req.valid('query');
+  const snapshot = listPresence({
+    workspaceId: user.workspaceId,
+    objectType: q.objectType as LockObjectType,
+    objectId: q.objectId,
+  });
+  return c.json(snapshot);
+});
+
+locksRouter.post('/presence', requireWorkspaceAccessRole(), zValidator('json', presenceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; workspaceId: string; email?: string | null; displayName?: string | null };
+  const body = c.req.valid('json');
+  const snapshot = await recordPresence({
+    workspaceId: user.workspaceId,
+    objectType: body.objectType as LockObjectType,
+    objectId: body.objectId,
+    user: {
+      userId: user.userId,
+      email: user.email ?? null,
+      displayName: user.displayName ?? null,
+    },
+  });
+  return c.json(snapshot);
+});
+
+locksRouter.post('/presence/leave', requireWorkspaceAccessRole(), zValidator('json', presenceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; workspaceId: string };
+  const body = c.req.valid('json');
+  const snapshot = await removePresence({
+    workspaceId: user.workspaceId,
+    objectType: body.objectType as LockObjectType,
+    objectId: body.objectId,
+    userId: user.userId,
+  });
+  return c.json(snapshot);
+});
+
+locksRouter.delete('/presence', requireWorkspaceAccessRole(), zValidator('query', presenceSchema), async (c) => {
+  const user = c.get('user') as { userId: string; workspaceId: string };
+  const q = c.req.valid('query');
+  const snapshot = await removePresence({
+    workspaceId: user.workspaceId,
+    objectType: q.objectType as LockObjectType,
+    objectId: q.objectId,
+    userId: user.userId,
+  });
+  return c.json(snapshot);
 });
 

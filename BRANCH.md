@@ -250,9 +250,15 @@ Out of scope:
 - [x] UI: acquire/release lock lifecycle on page entry/exit
 - [x] UI: "Request unlock" + "Force unlock" (admin) actions
   - Design note: UI uses a compact lock badge (avatar(s) + lock) with hover tooltip; admin force unlock is a secondary action inside tooltip (no visible button). Request unlock has no message prompt.
+  - Design note: presence avatars are backed by `/locks/presence` + SSE `presence_update`; current user is excluded from avatar list but included in the connected count (leave via `/locks/presence/leave`).
 - [ ] API/UI: richer unlock workflow (accept/refuse/timeout + presence) (phase 2)
 
 **Partial UAT (after Lot 2):**
+- [x] **Presence (SSE):**
+  - [x] User A opens an object view → presence badge shows "1 utilisateur connecté"
+  - [x] User B opens the same object view → both users see each other (avatars + count)
+  - [x] User A leaves the tab or navigates away → User B sees the avatar disappear
+  - [x] Admin (viewer on shared workspace) sees presence and is visible to others
 - [ ] **User A locks an object:**
   - [ ] User A opens a use case detail page (editor/admin role)
   - [ ] Verify User A acquires lock automatically

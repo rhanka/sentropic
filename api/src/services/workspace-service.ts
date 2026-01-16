@@ -67,6 +67,19 @@ export async function ensureWorkspaceForUser(
 
   if (user?.role === 'admin_app') {
     await claimAdminWorkspaceOwner();
+    const now = new Date();
+    await db
+      .insert(workspaceMemberships)
+      .values({
+        workspaceId: ADMIN_WORKSPACE_ID,
+        userId,
+        role: 'admin',
+        createdAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
+        set: { role: 'admin' },
+      });
     return { workspaceId: ADMIN_WORKSPACE_ID };
   }
 

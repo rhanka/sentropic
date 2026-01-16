@@ -14,7 +14,7 @@
   import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
-  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, type LockSnapshot } from '$lib/utils/object-lock';
+  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { Trash2, Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
@@ -27,6 +27,8 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
   $: canDelete = !$adminReadOnlyScope && $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
@@ -34,6 +36,9 @@
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: isReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  let lastReadOnlyRole = isReadOnlyRole;
   const LOCK_REFRESH_MS = 10 * 60 * 1000;
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
@@ -75,25 +80,46 @@
     if (lockHubKey) streamHub.delete(lockHubKey);
     lockHubKey = `lock:organization:${organizationId}`;
     streamHub.set(lockHubKey, (evt: any) => {
-      if (evt?.type !== 'lock_update') return;
-      if (evt.objectType !== 'organization') return;
-      if (evt.objectId !== organizationId) return;
-      lock = evt?.data?.lock ?? null;
-      if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
-        void syncLock();
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'organization') return;
+        if (evt.objectId !== organizationId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'organization') return;
+        if (evt.objectId !== organizationId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
       }
     });
   };
 
   onMount(async () => {
     await loadOrganization();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
   });
 
   onDestroy(() => {
     if (hubKey) streamHub.delete(hubKey);
     if (lockHubKey) streamHub.delete(lockHubKey);
     if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('organization', lockTargetId);
     void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
 
   $: if ($page.params.id && $page.params.id !== lastLoadedId) {
@@ -107,8 +133,11 @@
 
     try {
       if (lockTargetId && lockTargetId !== organizationId) {
+        void leavePresence('organization', lockTargetId);
         void releaseCurrentLock();
         lock = null;
+        presenceUsers = [];
+        presenceTotal = 0;
         lockTargetId = null;
       }
       lastLoadedId = organizationId;
@@ -117,6 +146,8 @@
       subscribeLock(organizationId);
       lockTargetId = organizationId;
       void syncLock();
+      void hydratePresence();
+      void updatePresence();
       error = '';
       unsavedChangesStore.reset();
       return;
@@ -128,6 +159,8 @@
         subscribeLock(organizationId);
         lockTargetId = organizationId;
         void syncLock();
+        void hydratePresence();
+        void updatePresence();
         error = '';
         return;
       } catch {
@@ -148,7 +181,7 @@
     lockLoading = true;
     lockError = null;
     try {
-      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+      if (isReadOnlyRole) {
         lock = await fetchLock('organization', lockTargetId);
       } else {
         const res = await acquireLock('organization', lockTargetId);
@@ -211,6 +244,53 @@
     }
   };
 
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('organization', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('organization', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('organization', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('organization', lockTargetId);
+  };
+
+
+  $: if (isReadOnlyRole !== lastReadOnlyRole) {
+    lastReadOnlyRole = isReadOnlyRole;
+    if (isReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
+
   const handleFieldUpdate = (field: string, value: string) => {
     if (!organization) return;
     organization = { ...organization, [field]: value };
@@ -259,6 +339,9 @@
         isAdmin={isWorkspaceAdmin}
         {isLockedByMe}
         {isLockedByOther}
+        avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+        connectedCount={presenceTotal}
+        canRequestUnlock={!isReadOnlyRole}
         on:requestUnlock={handleRequestUnlock}
         on:forceUnlock={handleForceUnlock}
       />
@@ -271,7 +354,7 @@
         >
           <Trash2 class="w-5 h-5" />
         </button>
-      {:else if showReadOnlyLock}
+      {:else if showReadOnlyLock && !showPresenceBadge}
         <button
           class="rounded p-2 transition text-slate-400 cursor-not-allowed"
           title="Mode lecture seule : création / suppression désactivées."

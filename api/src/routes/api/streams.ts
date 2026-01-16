@@ -5,6 +5,9 @@ import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
+import { listPresence } from '../../services/lock-presence';
+import type { LockObjectType } from '../../services/lock-service';
+import { getWorkspaceRole } from '../../services/workspace-access';
 import {
   ADMIN_WORKSPACE_ID,
   chatMessages,
@@ -30,6 +33,12 @@ type JobSnapshotRow = {
   completedAt: unknown;
   error: unknown;
 };
+
+const PRESENCE_OBJECT_TYPES: LockObjectType[] = ['organization', 'folder', 'usecase'];
+
+function coercePresenceObjectType(value: string): LockObjectType | null {
+  return PRESENCE_OBJECT_TYPES.includes(value as LockObjectType) ? (value as LockObjectType) : null;
+}
 
 function parseStreamIds(url: URL): string[] {
   // support: ?streamIds=a&streamIds=b  (preferred)
@@ -119,6 +128,11 @@ function sseLockEvent(objectType: string, objectId: string, data: unknown): stri
   return `event: lock_update\nid: lock:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function ssePresenceEvent(objectType: string, objectId: string, data: unknown): string {
+  const payload = JSON.stringify({ objectType, objectId, data });
+  return `event: presence_update\nid: presence:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === 'object') return value as Record<string, unknown>;
@@ -187,15 +201,16 @@ function hydrateOrganizationForSse(row: Record<string, unknown>): Record<string,
 }
 
 async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+  const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
   const requested = url.searchParams.get('workspace_id');
 
   if (!requested) return user.workspaceId;
   if (user?.role !== 'admin_app') return user.workspaceId;
   if (requested === ADMIN_WORKSPACE_ID) return requested;
 
-  // `shareWithAdmin` is removed in Collaboration. For now, admin_app can only scope to ADMIN_WORKSPACE_ID.
-  throw new Error('Workspace not accessible');
+  const role = await getWorkspaceRole(user.userId, requested);
+  if (!role) throw new Error('Workspace not accessible');
+  return requested;
 }
 
 // GET /streams/events/:streamId?limit=2000&sinceSequence=123
@@ -514,6 +529,18 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
+      const emitPresenceSnapshot = async (objectType: string, objectId: string, workspaceId: string) => {
+        try {
+          if (workspaceId !== targetWorkspaceId) return;
+          const coercedType = coercePresenceObjectType(objectType);
+          if (!coercedType) return;
+          const snapshot = listPresence({ workspaceId, objectType: coercedType, objectId });
+          push(ssePresenceEvent(objectType, objectId, snapshot));
+        } catch {
+          // ignore
+        }
+      };
+
       const isWorkspaceMember = async (workspaceId: string): Promise<boolean> => {
         try {
           const row = await db.get(sql`
@@ -601,6 +628,7 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN folder_events');
           await client.query('UNLISTEN usecase_events');
           await client.query('UNLISTEN lock_events');
+          await client.query('UNLISTEN presence_events');
           await client.query('UNLISTEN workspace_events');
           await client.query('UNLISTEN workspace_membership_events');
         } catch {
@@ -672,6 +700,14 @@ streamsRouter.get('/sse', async (c) => {
             if (!objectType || typeof objectType !== 'string') return;
             if (!objectId || typeof objectId !== 'string') return;
             void emitLockSnapshot(objectType, objectId);
+          } else if (msg.channel === 'presence_events') {
+            const objectType = payload.object_type;
+            const objectId = payload.object_id;
+            const workspaceId = payload.workspace_id;
+            if (!objectType || typeof objectType !== 'string') return;
+            if (!objectId || typeof objectId !== 'string') return;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            void emitPresenceSnapshot(objectType, objectId, workspaceId);
           } else if (msg.channel === 'workspace_events') {
             const workspaceId = payload.workspace_id;
             if (!workspaceId || typeof workspaceId !== 'string') return;
@@ -704,6 +740,7 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN usecase_events');
       await client.query('LISTEN stream_events');
       await client.query('LISTEN lock_events');
+      await client.query('LISTEN presence_events');
       await client.query('LISTEN workspace_events');
       await client.query('LISTEN workspace_membership_events');
 

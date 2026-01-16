@@ -17,6 +17,8 @@ export interface AuthUser {
   sessionId: string;
   role: string;
   workspaceId: string;
+  email?: string | null;
+  displayName?: string | null;
 }
 
 // Extend Hono context with user info
@@ -121,12 +123,14 @@ export async function optionalAuth(c: Context, next: Next) {
         // Attach user info to context
         const { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
         if (workspaceId) {
-          c.set('user', {
-            userId: session.userId,
-            sessionId: session.sessionId,
-            role: session.role,
-            workspaceId,
-          });
+    c.set('user', {
+      userId: session.userId,
+      sessionId: session.sessionId,
+      role: session.role,
+      workspaceId,
+      email: session.email ?? null,
+      displayName: session.displayName ?? null,
+    });
         }
       }
     }

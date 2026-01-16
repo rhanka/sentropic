@@ -6,13 +6,6 @@
   import { get } from 'svelte/store';
   import { session } from '$lib/stores/session';
   import { deactivateAccount, deleteAccount, loadMe, me } from '$lib/stores/me';
-  import {
-    adminWorkspaceScope,
-    loadAdminWorkspaces,
-    setAdminWorkspaceScope,
-    ADMIN_WORKSPACE_ID,
-    adminReadOnlyScope
-  } from '$lib/stores/adminWorkspaceScope';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import { Edit, X } from '@lucide/svelte';
@@ -55,9 +48,6 @@
 
   onMount(async () => {
     await loadMe();
-    if (isAdminApp()) {
-      void loadAdminWorkspaces();
-    }
     if (isAdmin()) {
     await loadPrompts();
     await loadAISettings();
@@ -75,10 +65,6 @@
     return s.user?.role === 'admin_app';
   };
 
-  const onAdminScopeChange = (e: Event) => {
-    const v = (e.currentTarget as HTMLSelectElement | null)?.value;
-    if (v) setAdminWorkspaceScope(v);
-  };
 
   let deleting = false;
   let deactivating = false;
@@ -343,29 +329,6 @@
         <div class="rounded border border-slate-200 p-4">
           <h3 class="font-medium">Workspace</h3>
           <div class="mt-3 space-y-3">
-            {#if $session.user?.role === 'admin_app'}
-              <label class="block text-sm">
-                <div class="text-slate-600">Contexte admin (lecture)</div>
-                <select
-                  class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
-                  bind:value={$adminWorkspaceScope.selectedId}
-                  on:change={onAdminScopeChange}
-                >
-                  <option value={ADMIN_WORKSPACE_ID}>Admin Workspace</option>
-                  {#each $adminWorkspaceScope.items.filter((w) => w.id !== ADMIN_WORKSPACE_ID) as ws (ws.id)}
-                    <option value={ws.id}>
-                      {(ws.ownerEmail || ws.ownerUserId || '—') + ' — ' + (ws.name || ws.id)}
-                    </option>
-                  {/each}
-                </select>
-                {#if $adminReadOnlyScope}
-                  <p class="mt-2 text-xs text-amber-700">
-                    Workspace partagé : <b>lecture seule</b> (actions destructives désactivées).
-                  </p>
-                {/if}
-              </label>
-              <div class="border-t border-slate-100 pt-3"></div>
-            {/if}
             <WorkspaceSettingsPanel />
           </div>
         </div>

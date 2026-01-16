@@ -3,6 +3,7 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
+  import { ADMIN_WORKSPACE_ID, adminWorkspaceScope, loadAdminWorkspaces, setAdminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -34,7 +35,11 @@
     if (workspaceReloadTimer) return;
     workspaceReloadTimer = setTimeout(async () => {
       workspaceReloadTimer = null;
-      await loadUserWorkspaces();
+      if (isAdminApp) {
+        await loadAdminWorkspaces();
+      } else {
+        await loadUserWorkspaces();
+      }
     }, 150);
   }
 
@@ -53,10 +58,21 @@
     return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"], [data-ignore-row-click]'));
   }
 
-  $: selectedWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId) ?? null;
+  $: isAdminApp = $session.user?.role === 'admin_app';
+  $: workspaceItems = isAdminApp
+    ? ($adminWorkspaceScope.items || []).map((w) => ({
+        id: w.id,
+        name: w.name || w.id,
+        role: w.id === ADMIN_WORKSPACE_ID ? ('admin' as const) : ('viewer' as const),
+        hiddenAt: null,
+        createdAt: ''
+      }))
+    : ($workspaceScope.items || []);
+  $: workspaceSelectedId = isAdminApp ? $adminWorkspaceScope.selectedId : $workspaceScope.selectedId;
+  $: selectedWorkspace = (workspaceItems || []).find((w) => w.id === workspaceSelectedId) ?? null;
   $: isWorkspaceAdmin = selectedWorkspace?.role === 'admin';
-  $: allWorkspacesHidden = ($workspaceScope.items || []).length > 0 && ($workspaceScope.items || []).every((w) => !!w.hiddenAt);
-  $: noWorkspaces = ($workspaceScope.items || []).length === 0;
+  $: allWorkspacesHidden = (workspaceItems || []).length > 0 && (workspaceItems || []).every((w) => !!w.hiddenAt);
+  $: noWorkspaces = (workspaceItems || []).length === 0;
   $: if (selectedWorkspace?.id !== lastWorkspaceIdForName) {
     lastWorkspaceIdForName = selectedWorkspace?.id ?? null;
     editedSelectedWorkspaceName = selectedWorkspace?.name ?? '';
@@ -65,7 +81,11 @@
 
   onMount(() => {
     if ($session.user) {
-      void loadUserWorkspaces();
+      if (isAdminApp) {
+        void loadAdminWorkspaces();
+      } else {
+        void loadUserWorkspaces();
+      }
     }
 
     streamHub.set(HUB_KEY, (evt: any) => {
@@ -259,24 +279,28 @@
           </tr>
         </thead>
         <tbody>
-          {#each $workspaceScope.items as ws (ws.id)}
+        {#each workspaceItems as ws (ws.id)}
             <tr
-              class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === $workspaceScope.selectedId ? 'bg-blue-50' : ''}"
+            class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === workspaceSelectedId ? 'bg-blue-50' : ''}"
               title="Cliquer pour sélectionner ce workspace"
               on:click={(e) => {
                 if (shouldIgnoreRowClick(e)) return;
-                if (ws.id === $workspaceScope.selectedId) return;
+              if (ws.id === workspaceSelectedId) return;
+              if (isAdminApp) {
+                setAdminWorkspaceScope(ws.id);
+              } else {
                 setWorkspaceScope(ws.id);
+              }
               }}
             >
               <td class="px-3 py-2">
-                {#if ws.id === $workspaceScope.selectedId}
+              {#if ws.id === workspaceSelectedId}
                   <Check class="h-4 w-4 text-slate-900" />
                 {/if}
               </td>
               <td class="px-3 py-2">
                 <div class="flex items-center gap-2">
-                  {#if ws.id === $workspaceScope.selectedId && ws.role === 'admin'}
+                {#if ws.id === workspaceSelectedId && ws.role === 'admin'}
                     <div class="flex-1 min-w-0 w-full" data-ignore-row-click>
                       <EditableInput
                         label=""

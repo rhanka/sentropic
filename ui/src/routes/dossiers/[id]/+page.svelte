@@ -15,7 +15,7 @@
   import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
-  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, type LockSnapshot } from '$lib/utils/object-lock';
+  import { acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
 
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -37,6 +37,8 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
@@ -44,7 +46,9 @@
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
+  let lastReadOnlyRole = isReadOnly;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
   const LOCK_REFRESH_MS = 10 * 60 * 1000;
 
@@ -118,6 +122,9 @@
   onMount(() => {
     currentFolderId.set(folderId);
     void loadUseCases();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
 
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type === 'usecase_update') {
@@ -158,19 +165,37 @@
     streamHub.delete(HUB_KEY);
     if (lockHubKey) streamHub.delete(lockHubKey);
     if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('folder', lockTargetId);
     void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
 
   const subscribeLock = (targetId: string) => {
     if (lockHubKey) streamHub.delete(lockHubKey);
     lockHubKey = `lock:folder:${targetId}`;
     streamHub.set(lockHubKey, (evt: any) => {
-      if (evt?.type !== 'lock_update') return;
-      if (evt.objectType !== 'folder') return;
-      if (evt.objectId !== targetId) return;
-      lock = evt?.data?.lock ?? null;
-      if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
-        void syncLock();
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$adminReadOnlyScope && !$workspaceReadOnlyScope) {
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
       }
     });
   };
@@ -180,7 +205,7 @@
     lockLoading = true;
     lockError = null;
     try {
-      if ($adminReadOnlyScope || $workspaceReadOnlyScope) {
+      if (isReadOnly) {
         lock = await fetchLock('folder', lockTargetId);
       } else {
         const res = await acquireLock('folder', lockTargetId);
@@ -243,14 +268,66 @@
     }
   };
 
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('folder', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('folder', lockTargetId);
+  };
+
+
   $: if (folderId && folderId !== lockTargetId) {
     if (lockTargetId) {
+      void leavePresence('folder', lockTargetId);
       void releaseCurrentLock();
     }
     lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
     lockTargetId = folderId;
     subscribeLock(folderId);
     void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if (isReadOnly !== lastReadOnlyRole) {
+    lastReadOnlyRole = isReadOnly;
+    if (isReadOnly) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
   }
 </script>
 
@@ -303,10 +380,13 @@
           isAdmin={isWorkspaceAdmin}
           {isLockedByMe}
           {isLockedByOther}
+          avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+          connectedCount={presenceTotal}
+          canRequestUnlock={!($adminReadOnlyScope || $workspaceReadOnlyScope)}
           on:requestUnlock={handleRequestUnlock}
           on:forceUnlock={handleForceUnlock}
         />
-        {#if showReadOnlyLock}
+        {#if showReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed"
             title="Mode lecture seule : création / suppression désactivées."

@@ -18,8 +18,10 @@ export type StreamHubEvent =
   | { type: 'folder_update'; folderId: string; data: any }
   | { type: 'usecase_update'; useCaseId: string; data: any }
   | { type: 'lock_update'; objectType: string; objectId: string; data: any }
+  | { type: 'presence_update'; objectType: string; objectId: string; data: any }
   | { type: 'workspace_update'; workspaceId: string; data: any }
   | { type: 'workspace_membership_update'; workspaceId: string; userId?: string; data: any }
+  | { type: 'ping'; data: any }
   | { type: string; streamId: string; sequence: number; data: any };
 
 type Subscription = {
@@ -35,6 +37,7 @@ const EVENT_TYPES = [
   'folder_update',
   'usecase_update',
   'lock_update',
+  'presence_update',
   'workspace_update',
   'workspace_membership_update',
   // stream events (normalized)
@@ -302,12 +305,20 @@ class StreamHub {
           this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
           return;
         }
+        if (type === 'presence_update') {
+          this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
+          return;
+        }
         if (type === 'workspace_update') {
           this.dispatch({ type, workspaceId: parsed.workspaceId, data: parsed.data });
           return;
         }
         if (type === 'workspace_membership_update') {
           this.dispatch({ type, workspaceId: parsed.workspaceId, userId: parsed.userId, data: parsed.data });
+          return;
+        }
+        if (type === 'ping') {
+          this.dispatch({ type, data: parsed });
           return;
         }
 
