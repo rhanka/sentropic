@@ -330,8 +330,8 @@ Out of scope:
     - [x] Workspace scope resolution
     - [ ] Lock cleanup on zero SSE connections
   - [ ] `api/tests/ai`:
-    - [ ] documents tool enabled only for authorized context
-    - [ ] documents tool rejects mismatched context
+    - [x] documents tool enabled only for authorized context
+    - [x] documents tool rejects mismatched context
   - [ ] `api/tests/queue`:
     - [ ] document summary job updates status correctly (success/failure)
   - [ ] `api/tests/smoke`:
