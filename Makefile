@@ -506,25 +506,25 @@ sh-ui:
 sh-api:
 	$(COMPOSE_RUN_API) sh
 
-.PHONY: exec-api
-exec-api: ## Exec a command in the running api container: make exec-api CMD="node -v"
+.PHONY: exec-%
+exec-%: ## Exec a command in the running api or ui container: make exec-api CMD="node -v"
 	@if [ -z "$$CMD" ]; then \
-		echo "Usage: make exec-api CMD=\"<command>\""; \
+		echo "Usage: make exec-<ui/api> CMD=\"<command>\""; \
 		exit 2; \
 	fi
-	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
-		echo "api container is not running. Start it first (e.g. make up / make dev / make up-api-test)."; \
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q $* 2>/dev/null | wc -l)" -eq 0 ]; then \
+		echo "$* container is not running. Start it first (e.g. make up / make dev / make up-api-test)."; \
 		exit 1; \
 	fi
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "$$CMD"
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh -lc "$$CMD"
 
-.PHONY: exec-api-sh
-exec-api-sh: ## Open a shell in the running api container
-	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
-		echo "api container is not running. Start it first (e.g. make up / make dev / make up-api-test)."; \
+.PHONY: exec-%-sh
+exec-%-sh: ## Open a shell in the running api container
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q $* 2>/dev/null | wc -l)" -eq 0 ]; then \
+		echo "$* container is not running. Start it first (e.g. make up / make dev ...)."; \
 		exit 1; \
 	fi
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh
 
 # -----------------------------------------------------------------------------
 # Database helpers
