@@ -42,6 +42,7 @@ Out of scope:
 - **Unlock request timeout**: 2 seconds (fixed, but centralize as variable or env param).
 
 ### Implementation Notes
+- **Documents scoping**: document list/upload/download/delete must include `workspace_id` from the selected scope to avoid cross-workspace misses.
 - **User invitations for non-existing users**: Deferred beyond Lot 1 (not urgent).
 - **Workspace lifecycle**: replace "soft delete / restore" with "hide / unhide" semantics.
   - Hidden workspaces are accessible from parameters for unhide/final suppression/export.
@@ -285,8 +286,8 @@ Out of scope:
   - [x] User A makes an edit (e.g., updates use case name)
   - [x] Verify User B receives SSE update and sees the change in real-time
   - [x] Verify User B's view refreshes automatically
-- [ ] **User B requests unlock (User A active):**
-  - [ ] User B clicks "Request unlock" button
+- [x] **User B requests unlock (User A active):**
+  - [x] User B clicks "Request unlock" button
   - [ ] Verify API refuses if another unlock request is already processing
   - [ ] Verify User A receives SSE notification: "User B requests unlock"
   - [ ] User A clicks "Accept" → verify lock transfers to User B
