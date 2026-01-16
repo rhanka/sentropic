@@ -31,7 +31,7 @@ locksRouter.get('/', zValidator('query', lockQuerySchema), async (c) => {
 const acquireSchema = z.object({
   objectType: objectTypeSchema,
   objectId: z.string().min(1),
-  ttlMs: z.number().int().min(5_000).max(6 * 60 * 60 * 1000).optional(),
+  ttlMs: z.number().int().min(5_000).max(60_000).optional(),
 });
 
 locksRouter.post('/', requireWorkspaceEditorRole(), zValidator('json', acquireSchema), async (c) => {

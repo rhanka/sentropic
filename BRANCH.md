@@ -256,6 +256,11 @@ Out of scope:
   - [x] Pas de refus explicite
   - [x] La demande tombe si le locker quitte la page
   - [x] Accept = transfert atomique du lock au demandeur (signalé via lock_update)
+- [x] **Lock lifecycle hardening:**
+  - [x] TTL max = 1 minute + refresh UI toutes les 30s
+  - [x] Purge des locks au démarrage de l’API
+  - [x] Purge des locks si l’utilisateur n’a plus aucun SSE actif
+  - [x] Sweep périodique des locks expirés + `lock_update` pour relancer la prise de lock
 
 **Partial UAT (after Lot 2):**
 - [x] **Presence (SSE):**

@@ -51,7 +51,7 @@
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope;
   let lastReadOnlyRole = isReadOnly;
   $: showReadOnlyLock = $adminReadOnlyScope || ($workspaceScopeHydrated && $workspaceReadOnlyScope);
-  const LOCK_REFRESH_MS = 10 * 60 * 1000;
+  const LOCK_REFRESH_MS = 30 * 1000;
 
   $: folderId = $page.params.id;
 

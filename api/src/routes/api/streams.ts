@@ -6,7 +6,6 @@ import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
 import { listPresence } from '../../services/lock-presence';
-import type { LockObjectType } from '../../services/lock-service';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
   ADMIN_WORKSPACE_ID,
@@ -21,6 +20,59 @@ import {
 } from '../../db/schema';
 
 export const streamsRouter = new Hono();
+
+type LockObjectType = 'organization' | 'folder' | 'usecase';
+
+const sseConnectionsByUser = new Map<string, number>();
+
+async function notifyLockEvent(workspaceId: string, objectType: LockObjectType, objectId: string): Promise<void> {
+  const payload = JSON.stringify({
+    workspace_id: workspaceId,
+    object_type: objectType,
+    object_id: objectId,
+  }).replace(/'/g, "''");
+
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY lock_events, '${payload}'`);
+  } finally {
+    client.release();
+  }
+}
+
+async function clearLocksForUser(userId: string): Promise<void> {
+  const rows = await db
+    .select({
+      workspaceId: objectLocks.workspaceId,
+      objectType: objectLocks.objectType,
+      objectId: objectLocks.objectId,
+    })
+    .from(objectLocks)
+    .where(eq(objectLocks.lockedByUserId, userId));
+
+  if (!rows.length) return;
+  await db.delete(objectLocks).where(eq(objectLocks.lockedByUserId, userId));
+  await Promise.all(
+    rows.map((row) => notifyLockEvent(row.workspaceId, row.objectType as LockObjectType, row.objectId))
+  );
+}
+
+function registerSseConnection(userId: string): () => Promise<void> {
+  const current = sseConnectionsByUser.get(userId) ?? 0;
+  sseConnectionsByUser.set(userId, current + 1);
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    const next = (sseConnectionsByUser.get(userId) ?? 1) - 1;
+    if (next <= 0) {
+      sseConnectionsByUser.delete(userId);
+      await clearLocksForUser(userId);
+      return;
+    }
+    sseConnectionsByUser.set(userId, next);
+  };
+}
 
 type StreamEventRow = { streamId: string; eventType: string; data: unknown; sequence: number };
 type JobSnapshotRow = {
@@ -248,6 +300,7 @@ streamsRouter.get('/sse', async (c) => {
   const url = new URL(c.req.url);
   const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
   const targetWorkspaceId = await resolveTargetWorkspaceId(c, url);
+  const releaseSseConnection = registerSseConnection(user.userId);
 
   const streamIds = parseStreamIds(url);
   const jobIds = parseJobIds(url);
@@ -635,6 +688,11 @@ streamsRouter.get('/sse', async (c) => {
           // ignore
         } finally {
           client.release();
+        }
+        try {
+          await releaseSseConnection();
+        } catch {
+          // ignore
         }
         try {
           controller.close();

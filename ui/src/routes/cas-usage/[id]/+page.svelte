@@ -45,7 +45,7 @@
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope || isLockedByOther;
   let lastReadOnlyRole = isReadOnly;
-  const LOCK_REFRESH_MS = 10 * 60 * 1000;
+  const LOCK_REFRESH_MS = 30 * 1000;
 
   $: useCaseId = $page.params.id;
 

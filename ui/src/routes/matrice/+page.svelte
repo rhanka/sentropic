@@ -55,7 +55,7 @@
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $adminReadOnlyScope || $workspaceReadOnlyScope || isLockedByOther;
   let lastReadOnlyRole = $adminReadOnlyScope || $workspaceReadOnlyScope;
-  const LOCK_REFRESH_MS = 10 * 60 * 1000;
+  const LOCK_REFRESH_MS = 30 * 1000;
 
   onMount(async () => {
     await loadMatrix();
@@ -855,7 +855,7 @@
       >
         <Lock class="w-5 h-5" />
       </button>
-    {/if}
+  {/if}
   </div>
 </div>
   
@@ -965,14 +965,14 @@
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
-                      <button
-                        class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
-                        on:click={() => openAxisDescriptions(axis, true)}
-                        title="Voir les niveaux"
-                        aria-label="Voir les niveaux de {axis.name}"
-                      >
-                        <Eye class="w-4 h-4" />
-                      </button>
+                    <button 
+                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                      on:click={() => openAxisDescriptions(axis, true)}
+                      title="Voir les niveaux"
+                      aria-label="Voir les niveaux de {axis.name}"
+                    >
+                      <Eye class="w-4 h-4" />
+        </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
                         on:click={() => removeAxis(true, index)}
@@ -995,14 +995,14 @@
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">Axes de Complexité</span>
-              <div class="flex items-center gap-1 ml-1">
-                {#each range(3) as i (i)}
-                  <X class="w-5 h-5 text-white" />
-                {/each}
-                {#each range(2) as i (i)}
-                  <X class="w-5 h-5 text-gray-400" />
-                {/each}
-              </div>
+            <div class="flex items-center gap-1 ml-1">
+            {#each range(3) as i (i)}
+                <X class="w-5 h-5 text-white" />
+            {/each}
+            {#each range(2) as i (i)}
+                <X class="w-5 h-5 text-gray-400" />
+        {/each}
+            </div>
           </h2>
           <button
             on:click={() => addAxis(false)}

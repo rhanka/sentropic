@@ -65,6 +65,7 @@ When an `admin` selects a **hidden** workspace:
 
 - **Scope**: object-level \(workspaceId + objectType + objectId\)
 - **Storage**: single table `object_locks` with TTL (`expires_at`)
+- **TTL**: 1 minute max, UI refresh every 30s
 - **Write enforcement**: mutations (PUT/DELETE) are blocked if a lock exists and is held by another user → `409` with `{ code: 'OBJECT_LOCKED', lock }`
 
 ### Lock API (implemented - phase 1)
@@ -87,6 +88,12 @@ When an `admin` selects a **hidden** workspace:
   - `unlock_requested_at`, `unlock_requested_by_user_id`, `unlock_request_message`
 - The lock owner can **accept** by transferring the lock to the requester (no explicit "refuse").
 - The request is cleared when the lock owner leaves the page (no timeout).
+
+### Lock Lifecycle (SSE + cleanup)
+
+- All locks are purged at API startup (no persistence across restarts).
+- Locks are purged if a user has **no active SSE connections**.
+- A periodic sweep removes expired locks and emits `lock_update` so clients can re-acquire.
 
 ### Lock UI (editor/admin)
 
