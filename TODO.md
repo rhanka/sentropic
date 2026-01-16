@@ -94,18 +94,18 @@
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
 - Collaboration
-  - [ ] Share workspace
-    - [ ] User can create additionnal workspaces (in param) and is granted admin of it
-    - [ ] User can delete any of the workspace which he admins
-    - [ ] User can provide access to any other user to any of the workspace with admin rights : he provides readonly or editor or admin access
+  - [x] Share workspace
+    - [x] User can create additionnal workspaces (in param) and is granted admin of it
+    - [x] User can delete any of the workspace which he admins
+    - [x] User can provide access to any other user to any of the workspace with admin rights : he provides readonly or editor or admin access
     - [ ] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension topw)
-  - [ ] Object editions
-    - [ ] When an editor (or admin) is first on a view/object, he puts a locker on dit and can only edit
-    - [ ] When an other editor is on it, the view is locker
-    - [ ] Other viewer or locked editor is on the view, he recieves updates through sse
-    - [ ] When a view is locked to an edit user, the UI ask to unlock It async. He recieves the answer through sse.
-    - [ ] When the API recieves an unlock demand, it refuses directly if another demand is already processing. Else it sends through sse to the current editor with the locker a demand. If no answer in 2 seconds, it transfers the locker to the asker and sends him through sse the unlock
-    - [ ] When an editor recieves through sso the demand, it refuses if still on the view, or accepts else.
+  - [x] Object editions
+    - [x] When an editor (or admin) is first on a view/object, he puts a locker on dit and can only edit
+    - [x] When an other editor is on it, the view is locker
+    - [x] Other viewer or locked editor is on the view, he recieves updates through sse
+    - [x] When a view is locked to an edit user, the UI ask to unlock It async. He recieves the answer through sse.
+    - [x] When the API recieves an unlock demand, it refuses directly if another demand is already processing. Else it sends through sse to the current editor with the locker a demand.
+    - [x] No timeout, no explicit refuse; request cleared when locker leaves; accept transfers lock to the requester.
     - [ ] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension topf)
     - [ ] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extensions topu et topo)
   - [ ] Comments

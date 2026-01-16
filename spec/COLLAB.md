@@ -157,6 +157,93 @@ Reuse existing `/streams/sse` channel:
 
 - Include/exclude comments (checkbox).
 
+## Lot 4 — Comments (table + UI + @mentions + close)
+
+- DB: comments table + relations (object + section)
+- API: CRUD comments + one-level replies
+- API: @mention assignment with autocomplete (workspace users)
+- API: close comment (only last assigned user; rule to confirm)
+- UI: show comment indicator on header of the relevant "data part" cards
+
+### Partial UAT (Lot 4) — to automate in E2E
+
+- **User A creates comment:**
+  - User A opens a use case detail page
+  - User A creates a comment on a data section (e.g., "description" field)
+  - Verify comment appears in the section header indicator
+  - Verify comment creator is User A (default assignee if no @mention)
+- **User B replies (one-level):**
+  - User B opens the same use case
+  - User B replies to User A's comment
+  - Verify reply appears nested under User A's comment
+  - Verify User B cannot reply to the reply (one-level only enforced)
+- **User A assigns via @mention:**
+  - User A edits the comment and types "@User B"
+  - Verify autocomplete shows only workspace members (User A, User B)
+  - Verify autocomplete does NOT show users from other workspaces
+  - User A selects User B from autocomplete
+  - Verify comment assignment updates to User B
+  - Verify User B receives notification (if implemented)
+- **User B closes comment:**
+  - User B (last assigned user) closes the comment
+  - Verify comment status changes to "closed"
+  - Verify User A cannot close the comment (not the last assigned)
+  - Verify only User B can reopen/close the comment
+- **Comment indicators:**
+  - User A creates multiple comments on different sections
+  - Verify each section header shows comment count badge
+  - Clicking badge opens comment panel with relevant comments
+- **Export with/without comments:**
+  - User A exports use case with "Include comments" → verify comments in ZIP
+  - User A exports use case with "Exclude comments" → verify comments NOT in ZIP
+  - User B imports both versions and verifies comment presence/absence
+
+## Lot 5 — Finalization: schema/migration, docs, automated tests (run at end)
+
+- Apply the **single planned schema evolution** (one migration file for entire branch - see Migration Strategy).
+- Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`.
+- Generate/update OpenAPI artifacts if needed (`make openapi-*`).
+- Create automated tests (only now):
+  - **Regression test (circular imports / Ctrl+R crash):** ensure importing core UI modules in different orders does not throw `Cannot access 'session' before initialization`
+    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/workspaceScope.ts`
+    - Expected: no top-level import triggers store reads that require `session` initialization (Option B: scope passed explicitly to `apiRequest`)
+  - `make test-api` coverage for roles/locks/comments/import-export
+  - `make test-ui` coverage for core UI flows
+  - `make test-e2e` for critical collaboration journeys
+- **UAT automation**: all UAT scenarios below must be implemented in Playwright E2E.
+- **API security tests**: cover role enforcement, workspace scoping, locks, documents, chat tools.
+- Run full gates: `make typecheck lint test-api test-ui test-e2e`.
+
+### Full UAT (final) — to automate in E2E
+
+- **Complete workspace collaboration flow:**
+  - User A creates "Workspace Delta" and adds User B as `editor`
+  - User A creates an organization and folder in "Workspace Delta"
+  - User B switches to "Workspace Delta" and creates a use case
+  - User A and User B both view the use case simultaneously
+  - User A acquires edit lock; User B sees locked view
+  - User A edits use case; User B receives SSE updates
+  - User B requests unlock; User A accepts; lock transfers to User B
+  - User B creates a comment with @mention to User A
+  - User A replies to comment; User B closes it
+  - User A exports workspace with comments as `.topw`
+  - User A hides "Workspace Delta"
+  - User B tries to access → sees archived workspace
+  - User A unhides "Workspace Delta"; User B can access again
+  - User A performs final suppression; all data cascade-deleted
+  - User B cannot access "Workspace Delta" anymore
+- **Cross-workspace isolation:**
+  - User A has "Workspace Epsilon" (private, no members)
+  - User B has "Workspace Zeta" (private, no members)
+  - Verify User A cannot see User B's data
+  - Verify User B cannot see User A's data
+  - Verify SSE updates are workspace-scoped (no cross-workspace leaks)
+- **Role enforcement across all endpoints:**
+  - User B (viewer) attempts all mutation endpoints → all blocked
+  - User B (editor) attempts mutations → all succeed
+  - User B (editor) attempts member management → blocked
+  - User B (admin) attempts all operations → all succeed
+
 ## Permission Enforcement
 
 ### Mutation Endpoints

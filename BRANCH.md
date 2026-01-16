@@ -293,170 +293,176 @@ Out of scope:
   - [x] User A clicks "Accept" → verify lock transfers to User B
   - [x] Verify User A's UI switches to locked view
   - [x] Verify User B's UI switches to editing mode
+### Lot 3 — Import/export (workspace, folder, use cases, organizations) — parked (future branch)
 
-### Lot 3 — Import/export (workspace, folder, use cases, organizations)
-- [ ] API: export endpoints producing ZIP archives:
-  - Workspace export (`.topw`)
-  - Folder export (`.topf`)
-  - Use case export (`.topu`)
-  - Organization export (`.topo`)
-- [ ] API: import endpoints consuming those archives (admin/editor constraints)
-- [ ] Include optional documents when applicable (using existing storage abstraction)
-- [ ] UI: add import/export actions in the relevant screens
-- [ ] Export option: with/without comments
+### Lot 4 — Comments (table + UI + @mentions + close) — parked (future branch)
 
-**Partial UAT (after Lot 3):**
-- [ ] **Export workspace (with comments):**
-  - [ ] User A creates a workspace with organizations, folders, use cases, and comments
-  - [ ] User A exports workspace as `.topw` file with "Include comments" checked
-  - [ ] Verify ZIP contains: workspace JSON, organizations JSON, folders JSON, use cases JSON, comments JSON, documents (if any)
-  - [ ] Verify ZIP metadata includes DB migration version
-- [ ] **Import workspace:**
-  - [ ] User B creates a new workspace "Workspace Gamma"
-  - [ ] User B imports the `.topw` file exported by User A
-  - [ ] Verify all organizations are recreated in "Workspace Gamma"
-  - [ ] Verify all folders are recreated with correct organization relations
-  - [ ] Verify all use cases are recreated with correct folder relations
-  - [ ] Verify comments are recreated with correct assignments
-  - [ ] Verify documents are restored and linked correctly
-- [ ] **Export workspace (without comments):**
-  - [ ] User A exports workspace again with "Exclude comments" checked
-  - [ ] Verify ZIP does NOT contain comments JSON
-  - [ ] Verify organizations/folders/use cases are still present
-- [ ] **Export folder:**
-  - [ ] User A exports a folder as `.topf` file
-  - [ ] Verify ZIP contains: folder JSON, use cases JSON, documents (if any)
-  - [ ] User B imports `.topf` into a different workspace
-  - [ ] Verify folder and use cases are recreated with proper relations
-- [ ] **Export use case(s):**
-  - [ ] User A selects multiple use cases and exports as `.topu` file
-  - [ ] Verify ZIP contains: use cases JSON array, documents (if any)
-  - [ ] User B imports `.topu` into a folder
-  - [ ] Verify use cases are recreated and linked to target folder
-- [ ] **Export organization(s):**
-  - [ ] User A selects an organization and exports as `.topo` file
-  - [ ] Verify ZIP contains: organization JSON, documents (if any)
-  - [ ] User B imports `.topo` into a workspace
-  - [ ] Verify organization is recreated
-- [ ] **Import permission checks:**
-  - [ ] User B (viewer role) tries to import a workspace → blocked (403)
-  - [ ] User B (editor role) can import → succeeds (200)
-  - [ ] User B (admin role) can import → succeeds (200)
-
-### Lot 4 — Comments (table + UI + @mentions + close)
-- [ ] DB: comments table + relations (object + section)
-- [ ] API: CRUD comments + one-level replies
-- [ ] API: @mention assignment with autocomplete (workspace users)
-- [ ] API: close comment (only last assigned user; rule to confirm)
-- [ ] UI: show comment indicator on header of the relevant "data part" cards
-
-**Partial UAT (after Lot 4):**
-- [ ] **User A creates comment:**
-  - [ ] User A opens a use case detail page
-  - [ ] User A creates a comment on a data section (e.g., "description" field)
-  - [ ] Verify comment appears in the section header indicator
-  - [ ] Verify comment creator is User A (default assignee if no @mention)
-- [ ] **User B replies (one-level):**
-  - [ ] User B opens the same use case
-  - [ ] User B replies to User A's comment
-  - [ ] Verify reply appears nested under User A's comment
-  - [ ] Verify User B cannot reply to the reply (one-level only enforced)
-- [ ] **User A assigns via @mention:**
-  - [ ] User A edits the comment and types "@User B"
-  - [ ] Verify autocomplete shows only workspace members (User A, User B)
-  - [ ] Verify autocomplete does NOT show users from other workspaces
-  - [ ] User A selects User B from autocomplete
-  - [ ] Verify comment assignment updates to User B
-  - [ ] Verify User B receives notification (if implemented)
-- [ ] **User B closes comment:**
-  - [ ] User B (last assigned user) closes the comment
-  - [ ] Verify comment status changes to "closed"
-  - [ ] Verify User A cannot close the comment (not the last assigned)
-  - [ ] Verify only User B can reopen/close the comment
-- [ ] **Comment indicators:**
-  - [ ] User A creates multiple comments on different sections
-  - [ ] Verify each section header shows comment count badge
-  - [ ] Clicking badge opens comment panel with relevant comments
-- [ ] **Export with/without comments:**
-  - [ ] User A exports use case with "Include comments" → verify comments in ZIP
-  - [ ] User A exports use case with "Exclude comments" → verify comments NOT in ZIP
-  - [ ] User B imports both versions and verifies comment presence/absence
-
-### Lot 5 — Finalization: schema/migration, docs, automated tests (run at end)
-- [ ] Apply the **single planned schema evolution** (one migration file for entire branch - see Migration Strategy in Design Decisions)
-- [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
-- [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
-- [ ] Create automated tests (only now):
-  - [ ] **Regression test (circular imports / Ctrl+R crash):** ensure importing core UI modules in different orders does not throw `Cannot access 'session' before initialization`
-    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/workspaceScope.ts`
-    - Expected: no top-level import triggers store reads that require `session` initialization (Option B: scope passed explicitly to `apiRequest`)
-  - `make test-api` coverage for roles/locks/comments/import-export
-  - `make test-ui` coverage for core UI flows
-  - `make test-e2e` for critical collaboration journeys
-- [ ] Run full gates (after UAT is completed): `make typecheck lint test-api test-ui test-e2e` (exact sequence to confirm)
-
-**Full UAT (final):**
-- [ ] **Complete workspace collaboration flow:**
-  - [ ] User A creates "Workspace Delta" and adds User B as `editor`
-  - [ ] User A creates an organization and folder in "Workspace Delta"
-  - [ ] User B switches to "Workspace Delta" and creates a use case
-  - [ ] User A and User B both view the use case simultaneously
-  - [ ] User A acquires edit lock; User B sees locked view
-  - [ ] User A edits use case; User B receives SSE updates
-  - [ ] User B requests unlock; User A accepts; lock transfers to User B
-  - [ ] User B creates a comment with @mention to User A
-  - [ ] User A replies to comment; User B closes it
-  - [ ] User A exports workspace with comments as `.topw`
-  - [ ] User A soft-deletes "Workspace Delta"
-  - [ ] User B tries to access → sees archived workspace
-  - [ ] User A undeletes "Workspace Delta"; User B can access again
-  - [ ] User A performs final suppression; all data cascade-deleted
-  - [ ] User B cannot access "Workspace Delta" anymore
-- [ ] **Cross-workspace isolation:**
-  - [ ] User A has "Workspace Epsilon" (private, no members)
-  - [ ] User B has "Workspace Zeta" (private, no members)
-  - [ ] Verify User A cannot see User B's data
-  - [ ] Verify User B cannot see User A's data
-  - [ ] Verify SSE updates are workspace-scoped (no cross-workspace leaks)
-- [ ] **Role enforcement across all endpoints:**
-  - [ ] User B (viewer) attempts all mutation endpoints → all blocked
-  - [ ] User B (editor) attempts mutations → all succeed
-  - [ ] User B (editor) attempts member management → blocked
-  - [ ] User B (admin) attempts all operations → all succeed
-
-## Data Model Strategy (single evolution)
-Design goal: add only what is required for collaboration, keep compatibility, avoid broad refactors.
-
-Planned entities (to validate against current schema to avoid duplicates):
-- Workspaces (if not already present): metadata + ownership/admin constraints
-- Workspace memberships: `userId`, `workspaceId`, `role`, timestamps
-- Object locks: `workspaceId`, `objectType`, `objectId`, `lockedByUserId`, `lockedAt`, `heartbeat/ttl`
-- Unlock requests: state machine + timeouts, tied to object lock
-- Comments: `workspaceId`, target object reference, optional `sectionKey`, `createdBy`, `assignedTo?`, `status`, `parentCommentId?` (one-level enforced)
-
-## Commits & Progress
-- [x] **docs:** add collaboration BRANCH.md plan with detailed UAT scenarios (commit 409808f)
-- [x] **docs:** complete Lot 0 discovery findings in BRANCH.md (commit 06fd208)
-- [x] **fix(collab):** unblock `/workspaces` bootstrap when localStorage scope is stale (commit fd4aa24)
-- [x] **fix(admin):** avoid duplicate users in `/admin/users` (commit df4ce2f)
-- [x] **feat(collab):** lock `EditableInput` in read-only workspace scope (commit 57392a1)
-- [x] **fix(collab):** enforce viewer read-only in UI (hide create/delete, block drafts) (commit 2323947)
-
-## Related Documentation
-
-- **Specification**: See `spec/COLLAB.md` for detailed feature specification (will be completed during UAT phases).
-
-## Status
-- **Progress**: 1/6 lots completed (Lot 0 done)
-- **Current**: Lot 1 — workspace sharing fundamentals (create/hide/delete, memberships, roles)
-- **Next**: implement workspace CRUD + membership management + role enforcement + workspace selector table UI
-
-### Lot 1 progress notes
-- Migration `api/drizzle/0018_workspace_collaboration.sql` is now present and registered in `api/drizzle/meta/_journal.json`.
-- Work-in-progress code is kept compilable; no `shareWithAdmin` references remain in API/DB schema.
-- UI groundwork: added `workspaceScope` (localStorage) and append `workspace_id` to API requests + SSE for non-admin users.
-- Fix: avoid a bootstrap deadlock where a stale localStorage `workspace_id` prevents `/workspaces` from loading:
-  - API auth: ignore invalid `workspace_id` for `/workspaces` and `/me` instead of returning opaque 404
-  - UI API util: never attach `workspace_id` to `/workspaces` endpoints
-
-
+### Lot 5 — Tests & Finalization (current branch)
+- **Scope**: Lot 3/4 parked; focus on tests + doc finalization for what is already implemented.
+- **Docs**:
+  - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
+  - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
+- **API tests (existing categories) — exhaustive list**
+  - [ ] `api/tests/api` (routes/integration):
+    - [ ] Role enforcement for orgs/folders/usecases/documents/locks (viewer/editor/admin)
+    - [ ] Workspace scoping (non-member 404 for all read endpoints)
+    - [ ] Workspace lifecycle (hide/unhide/delete) admin-only
+    - [ ] Members CRUD (add/update/remove) admin-only
+    - [ ] `workspace_id` ignored for bootstrap routes (`/workspaces`, `/me`)
+    - [ ] Hidden workspace access returns 409 (non-settings routes)
+    - [ ] SSE events workspace-scoped
+    - [ ] Documents list/upload/download/delete scoped to workspace_id
+    - [ ] Locks endpoints return 409 when locked by another user
+    - [ ] Unlock accept transfers lock (atomic)
+    - [ ] Presence list respects workspace scope
+  - [ ] `api/tests/security`:
+    - [ ] 403 for viewer mutations
+    - [ ] 403 for editor member management + workspace lifecycle
+    - [ ] 404 for non-member workspace access
+    - [ ] Reject cross-workspace document access by id
+    - [ ] Concurrent edit lock enforcement (second editor gets 409)
+    - [ ] Concurrent edit lock enforcement per object type (organization/folder/usecase/matrix)
+    - [ ] Lock breaks when locker leaves (no active SSE → lock cleared)
+    - [ ] SSE disconnect does not leak locks (cleanup on zero SSE)
+  - [ ] `api/tests/unit`:
+    - [ ] Locks service (acquire/release/request/accept/force, TTL)
+    - [ ] Presence service (record/leave/list)
+    - [ ] Workspace scope resolution
+    - [ ] Lock cleanup on zero SSE connections
+  - [ ] `api/tests/ai`:
+    - [ ] documents tool enabled only for authorized context
+    - [ ] documents tool rejects mismatched context
+  - [ ] `api/tests/queue`:
+    - [ ] document summary job updates status correctly (success/failure)
+  - [ ] `api/tests/smoke`:
+    - [ ] DB + API health
+  - [ ] `api/tests/limit`:
+    - [ ] rate limiting does not affect auth when disabled (dev)
+- **UI tests (existing categories) — feasible scope**
+  - [ ] `ui/tests/stores`:
+    - [ ] workspace scope selection + hydration
+    - [ ] read-only role derivation
+    - [ ] streamHub workspace scoping
+    - [ ] hidden workspace lock activation
+    - [ ] no-workspace lock activation
+  - [ ] `ui/tests/utils`:
+    - [ ] api utils do not import stores (Ctrl+R regression)
+    - [ ] documents utils use workspace_id for list/download
+  - [ ] `ui/tests` (components/integration):
+    - [ ] workspace selector table behavior (row select, actions disabled)
+    - [ ] read-only UI guards (locks, buttons) — if feasible with DOM tests
+    - [ ] lock badge + presence rendering — if feasible with DOM tests
+- **E2E (Playwright) — existing categories + UAT mapping**
+  - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:
+    - [ ] **User A creates workspace + assigns roles**
+      - [ ] User A creates "Workspace Alpha"
+      - [ ] User A adds User B as `viewer`
+      - [ ] User B switches to "Workspace Alpha"
+      - [ ] User A changes User B to `editor`
+      - [ ] User A promotes User B to `admin`
+    - [ ] **Hidden workspace lock**
+      - [ ] User A hides "Workspace Alpha"
+      - [ ] User A selects hidden workspace → redirect to /parametres
+      - [ ] User B cannot access hidden workspace (not visible)
+    - [ ] **No-workspace edge**
+      - [ ] User A removes User B from last workspace
+      - [ ] User B redirected to /parametres + warning
+    - [ ] **User B admin**
+      - [ ] User A promotes User B to admin
+      - [ ] User B can manage members
+      - [ ] User B can hide/unhide workspace
+      - [ ] User B can perform final suppression (hidden only)
+  - [ ] `e2e/tests/settings.spec.ts`:
+    - [ ] **Workspace table UX**
+      - [ ] Icons only, hover message on row
+      - [ ] Action buttons do not trigger row hover
+    - [ ] **User A renames workspace**
+      - [ ] Rename via EditableInput → persisted
+    - [ ] **Live updates**
+      - [ ] User A updates member role → User B sees update
+      - [ ] User A hides/unhides workspace → table updates for both
+  - [ ] `e2e/tests/access-control.spec.ts`:
+    - [ ] **User B viewer**
+      - [ ] No create/delete buttons
+      - [ ] Cannot access create routes (redirect)
+      - [ ] Inline editors locked
+    - [ ] **User B editor**
+      - [ ] Can edit objects
+      - [ ] Cannot manage members
+    - [ ] **User B admin**
+      - [ ] Can manage members
+      - [ ] Can hide/unhide workspace
+      - [ ] Can delete hidden workspace
+  - [ ] `e2e/tests/organizations-detail.spec.ts` / `usecase-detail.spec.ts`:
+    - [ ] **User A locks / User B sees locked view**
+      - [ ] User A opens object → acquires lock
+      - [ ] User B opens same object → locked view
+    - [ ] **Unlock request flow**
+      - [ ] User B requests unlock
+      - [ ] User A accepts → lock transfers to User B
+    - [ ] **Presence**
+      - [ ] User A/B avatars appear
+      - [ ] Avatar disappears on leave
+    - [ ] **Lock breaks on leave**
+      - [ ] User A leaves view → lock released
+      - [ ] User B can acquire lock
+    - [ ] **3 users contention**
+      - [ ] User A locks object
+      - [ ] User B requests unlock
+      - [ ] User C opens same object → sees presence + locked view
+      - [ ] Second unlock request rejected (B/C)
+      - [ ] User A accepts → lock transfers to requester, others stay locked
+  - [ ] `e2e/tests/dossiers-reload-draft.spec.ts`:
+    - [ ] **Folder lock/presence**
+      - [ ] User A locks folder
+      - [ ] User B sees locked view + presence
+      - [ ] Unlock request + accept on folder
+      - [ ] User A leaves → lock released → User B can lock
+  - [ ] `e2e/tests/organizations-detail.spec.ts`:
+    - [ ] **Organization lock/presence**
+      - [ ] User A locks organization
+      - [ ] User B sees locked view
+      - [ ] Unlock request + accept on organization
+  - [ ] `e2e/tests/usecase-detail.spec.ts`:
+    - [ ] **Use case lock/presence**
+      - [ ] User A locks use case
+      - [ ] User B sees locked view
+      - [ ] Unlock request + accept on use case
+  - [ ] `e2e/tests/matrix.spec.ts`:
+    - [ ] **Matrix lock/presence**
+      - [ ] User A locks matrix
+      - [ ] User B sees locked view
+      - [ ] Unlock request + accept on matrix
+      - [ ] User A leaves → lock released → User B can lock
+  - [ ] `e2e/tests/dashboard.spec.ts`:
+    - [ ] **Dashboard read-only**
+      - [ ] Viewer sees lock icon
+      - [ ] Print mode hides lock icon
+  - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
+    - [ ] **Read-only UI across views (viewer)**
+      - [ ] Organizations list/detail: no create/delete/edit
+      - [ ] Folders list/detail: no create/delete/edit
+      - [ ] Use cases list/detail: no create/delete/edit
+  - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
+    - [ ] **Documents scoping**
+      - [ ] User A uploads document to org
+      - [ ] User B in same workspace sees document
+      - [ ] User B in other workspace does not see document
+  - [ ] `e2e/tests/workflow.spec.ts`:
+    - [ ] Final UAT flow (from `spec/COLLAB.md`)
+  - [ ] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
+    - [ ] **Cross-workspace isolation (A/B)**
+      - [ ] User A data not visible to User B
+      - [ ] User B data not visible to User A
+  - [ ] `e2e/tests/usecase.spec.ts`:
+    - [ ] **Role change reactivity**
+      - [ ] User A changes User B role
+      - [ ] User B view updates without reload
+  - [ ] `e2e/tests/streams` (to add if missing):
+    - [ ] SSE workspace scoping (no cross-workspace leakage)
+- **Gates**:
+  - [ ] `make typecheck`
+  - [ ] `make lint`
+  - [ ] `make test-api`
+  - [ ] `make test-ui`
+  - [ ] `make test-e2e`
