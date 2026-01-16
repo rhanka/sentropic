@@ -339,19 +339,14 @@ Out of scope:
   - [ ] `api/tests/limit`:
     - [ ] rate limiting does not affect auth when disabled (dev)
 - **UI tests (existing categories) — feasible scope**
-  - [ ] `ui/tests/stores`:
-    - [ ] workspace scope selection + hydration
-    - [ ] read-only role derivation
-    - [ ] streamHub workspace scoping
-    - [ ] hidden workspace lock activation
-    - [ ] no-workspace lock activation
+  - [x] `ui/tests/stores`:
+    - [x] workspace scope selection + hydration
+    - [x] read-only role derivation
+    - [x] streamHub workspace scoping
+    - [x] hidden workspace lock activation
+    - [x] no-workspace lock activation
   - [ ] `ui/tests/utils`:
-    - [ ] api utils do not import stores (Ctrl+R regression)
-    - [ ] documents utils use workspace_id for list/download
-  - [ ] `ui/tests` (components/integration):
-    - [ ] workspace selector table behavior (row select, actions disabled)
-    - [ ] read-only UI guards (locks, buttons) — if feasible with DOM tests
-    - [ ] lock badge + presence rendering — if feasible with DOM tests
+    - [x] documents utils use workspace_id for list/download
 - **E2E (Playwright) — existing categories + UAT mapping**
   - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:
     - [ ] **User A creates workspace + assigns roles**
