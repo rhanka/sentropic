@@ -12,6 +12,7 @@ export type AdminWorkspace = {
   shareWithAdmin: boolean;
   ownerUserId: string | null;
   ownerEmail?: string | null;
+  role?: 'viewer' | 'editor' | 'admin' | null;
 };
 
 type State = {
@@ -45,7 +46,11 @@ export function getScopedWorkspaceIdForAdmin(): string | null {
 }
 
 export const adminReadOnlyScope = derived([session, adminWorkspaceScope], ([$session, $scope]) => {
-  return $session.user?.role === 'admin_app' && ($scope.selectedId ?? ADMIN_WORKSPACE_ID) !== ADMIN_WORKSPACE_ID;
+  if ($session.user?.role !== 'admin_app') return false;
+  const selectedId = $scope.selectedId ?? ADMIN_WORKSPACE_ID;
+  if (selectedId === ADMIN_WORKSPACE_ID) return false;
+  const role = ($scope.items || []).find((w) => w.id === selectedId)?.role ?? null;
+  return role !== 'admin' && role !== 'editor';
 });
 
 export async function loadAdminWorkspaces(): Promise<void> {

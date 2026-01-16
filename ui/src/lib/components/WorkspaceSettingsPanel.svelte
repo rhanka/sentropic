@@ -63,7 +63,7 @@
     ? ($adminWorkspaceScope.items || []).map((w) => ({
         id: w.id,
         name: w.name || w.id,
-        role: w.id === ADMIN_WORKSPACE_ID ? ('admin' as const) : ('viewer' as const),
+        role: (w.role as any) || (w.id === ADMIN_WORKSPACE_ID ? ('admin' as const) : ('viewer' as const)),
         hiddenAt: null,
         createdAt: ''
       }))
