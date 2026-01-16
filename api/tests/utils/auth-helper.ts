@@ -1,5 +1,5 @@
 import { db } from '../../src/db/client';
-import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes } from '../../src/db/schema';
+import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes, workspaces, workspaceMemberships, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { createSession } from '../../src/services/session-manager';
 import type { UserRole } from '../../src/db/schema';
@@ -15,7 +15,9 @@ export interface TestUser {
   displayName: string;
   role: UserRole;
   sessionToken?: string;
+  workspaceId?: string | null;
 }
+
 
 /**
  * Clean up all auth-related data after tests
@@ -39,6 +41,7 @@ export async function createTestUser(options: {
   withSession?: boolean;
   deviceName?: string;
   emailVerified?: boolean;
+  withWorkspace?: boolean;
 }): Promise<TestUser> {
   const {
     email = 'test@example.com',
@@ -47,6 +50,7 @@ export async function createTestUser(options: {
     withSession = false,
     deviceName = 'Test Device',
     emailVerified = true, // Default to verified for tests
+    withWorkspace = true,
   } = options;
 
   const userId = crypto.randomUUID();
@@ -63,6 +67,26 @@ export async function createTestUser(options: {
   });
 
   let sessionToken: string | undefined;
+  let workspaceId: string | null = null;
+
+  if (withWorkspace && role !== 'admin_app') {
+    workspaceId = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      ownerUserId: userId,
+      name: `Test Workspace ${workspaceId.slice(0, 6)}`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId,
+      userId,
+      role: role === 'guest' ? 'viewer' : role === 'editor' ? 'editor' : 'admin',
+      createdAt: new Date(),
+    });
+  } else if (role === 'admin_app') {
+    workspaceId = ADMIN_WORKSPACE_ID;
+  }
 
   // Create session if requested
   if (withSession) {
@@ -76,6 +100,7 @@ export async function createTestUser(options: {
     displayName,
     role,
     sessionToken,
+    workspaceId,
   };
 }
 

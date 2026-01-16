@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, jobQueue, workspaces } from '../../src/db/schema';
+import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 const mockPutObject = vi.fn();
@@ -205,7 +205,7 @@ describe('Documents API', () => {
     createdDocId = null;
   });
 
-  it('admin_app can read documents from a shared workspace via workspace_id query param', async () => {
+  it('admin_app can read documents from a workspace where they are a member (workspace_id query)', async () => {
     // Upload as editor in their own workspace
     const form = new FormData();
     form.set('context_type', 'folder');
@@ -216,7 +216,7 @@ describe('Documents API', () => {
     const created = await up.json();
     createdDocId = created.id;
 
-    // Find editor workspace and mark it shareWithAdmin=true
+    // Find editor workspace and grant admin_app membership
     const [ws] = await db
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -225,9 +225,14 @@ describe('Documents API', () => {
     expect(ws?.id).toBeTruthy();
     const editorWorkspaceId = ws!.id;
     await db
-      .update(workspaces)
-      .set({ shareWithAdmin: true })
-      .where(eq(workspaces.id, editorWorkspaceId));
+      .insert(workspaceMemberships)
+      .values({
+        workspaceId: editorWorkspaceId,
+        userId: admin.id,
+        role: 'viewer',
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
 
     // Admin lists docs in that workspace
     const list = await app.request(`/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`, {
@@ -246,7 +251,7 @@ describe('Documents API', () => {
     expect(meta.status).toBe(200);
   });
 
-  it('admin_app cannot read documents from a non-shared workspace via workspace_id (opaque 404)', async () => {
+  it('admin_app cannot read documents from a workspace where they are not a member (opaque 404)', async () => {
     // Upload as editor in their own workspace
     const form = new FormData();
     form.set('context_type', 'folder');
@@ -257,15 +262,14 @@ describe('Documents API', () => {
     const created = await up.json();
     createdDocId = created.id;
 
-    // Find editor workspace and ensure shareWithAdmin=false
+    // Find editor workspace (do not grant admin_app membership)
     const [ws] = await db
-      .select({ id: workspaces.id, shareWithAdmin: workspaces.shareWithAdmin })
+      .select({ id: workspaces.id })
       .from(workspaces)
       .where(eq(workspaces.ownerUserId, user.id))
       .limit(1);
     expect(ws?.id).toBeTruthy();
     const editorWorkspaceId = ws!.id;
-    await db.update(workspaces).set({ shareWithAdmin: false }).where(eq(workspaces.id, editorWorkspaceId));
 
     const list = await app.request(
       `/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`,
