@@ -482,8 +482,8 @@ Out of scope:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
   - [ ] `e2e/tests/chat.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Envoi chat bloqué quand scope workspace non résolu (bouton désactivé / POST jamais émis)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Envoi chat bloqué quand scope workspace non résolu (bouton désactivé / POST jamais émis)
 - **Gates**:
   - [ ] `make typecheck`
   - [ ] `make lint`
