@@ -441,8 +441,8 @@ Out of scope:
       - [ ] User A leaves → lock released → User B can lock
   - [ ] `e2e/tests/dashboard.spec.ts`:
     - [ ] **Dashboard read-only**
-      - [ ] Viewer sees lock icon
-      - [ ] Print mode hides lock icon
+      - [x] Viewer sees lock icon
+      - [x] Print mode hides lock icon
   - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
