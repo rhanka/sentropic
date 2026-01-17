@@ -348,6 +348,8 @@ Out of scope:
     - [x] documents utils use workspace_id for list/download
 - **E2E (Playwright) — existing categories + UAT mapping**
   - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Seed E2E sans `workspace_memberships` → User A/B sans workspace (page bloquée)
     - [ ] **User A creates workspace + assigns roles**
       - [ ] User A creates "Workspace Alpha"
       - [ ] User A adds User B as `viewer`
@@ -367,6 +369,8 @@ Out of scope:
       - [ ] User B can hide/unhide workspace
       - [ ] User B can perform final suppression (hidden only)
   - [ ] `e2e/tests/settings.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Session bloquée sur “Vérification de la session…” (cache localStorage / scope non hydraté)
     - [ ] **Workspace table UX**
       - [ ] Icons only, hover message on row
       - [ ] Action buttons do not trigger row hover
@@ -376,6 +380,8 @@ Out of scope:
       - [ ] User A updates member role → User B sees update
       - [ ] User A hides/unhides workspace → table updates for both
   - [ ] `e2e/tests/access-control.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Test obsolète (toggle “Partager mon workspace…” supprimé avec `workspace_memberships`)
     - [ ] **User B viewer**
       - [ ] No create/delete buttons
       - [ ] Cannot access create routes (redirect)
@@ -407,6 +413,9 @@ Out of scope:
       - [ ] Second unlock request rejected (B/C)
       - [ ] User A accepts → lock transfers to requester, others stay locked
   - [ ] `e2e/tests/dossiers-reload-draft.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
+      - [ ] Draft créé hors scope → H1 vide sur `/dossier/new?draft=...`
     - [ ] **Folder lock/presence**
       - [ ] User A locks folder
       - [ ] User B sees locked view + presence
@@ -423,6 +432,8 @@ Out of scope:
       - [ ] User B sees locked view
       - [ ] Unlock request + accept on use case
   - [ ] `e2e/tests/matrix.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Page bloquée “Vérification de la session…” (session/scope non hydraté)
     - [ ] **Matrix lock/presence**
       - [ ] User A locks matrix
       - [ ] User B sees locked view
@@ -433,16 +444,19 @@ Out of scope:
       - [ ] Viewer sees lock icon
       - [ ] Print mode hides lock icon
   - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
+      - [ ] Redirection “read-only” sur `/organisations/new` empêche IA / création
+      - [ ] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
+      - [ ] Création folder/use-case via API échoue si scope workspace non aligné
+      - [ ] Pages list bloquées “Vérification de la session…” (session/scope non hydraté)
     - [ ] **Read-only UI across views (viewer)**
       - [ ] Organizations list/detail: no create/delete/edit
       - [ ] Folders list/detail: no create/delete/edit
       - [ ] Use cases list/detail: no create/delete/edit
-  - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
-    - [ ] **Documents scoping**
-      - [ ] User A uploads document to org
-      - [ ] User B in same workspace sees document
-      - [ ] User B in other workspace does not see document
   - [ ] `e2e/tests/workflow.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Bouton “Créer une organisation” absent (read-only au chargement)
     - [ ] Final UAT flow (from `spec/COLLAB.md`)
   - [ ] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
     - [ ] **Cross-workspace isolation (A/B)**
@@ -454,6 +468,22 @@ Out of scope:
       - [ ] User B view updates without reload
   - [ ] `e2e/tests/streams` (to add if missing):
     - [ ] SSE workspace scoping (no cross-workspace leakage)
+  - [ ] `e2e/tests/documents-summary.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
+  - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
+    - [ ] **Documents scoping**
+      - [ ] User A uploads document to org
+      - [ ] User B in same workspace sees document
+      - [ ] User B in other workspace does not see document
+  - [ ] `e2e/tests/ai-generation.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
+  - [ ] `e2e/tests/chat.spec.ts`:
+    - [ ] **Régression à corriger (branch vs main)**
+      - [ ] Envoi chat bloqué quand scope workspace non résolu (bouton désactivé / POST jamais émis)
 - **Gates**:
   - [ ] `make typecheck`
   - [ ] `make lint`
