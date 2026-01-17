@@ -455,8 +455,8 @@ Out of scope:
       - [ ] Folders list/detail: no create/delete/edit
       - [ ] Use cases list/detail: no create/delete/edit
   - [ ] `e2e/tests/workflow.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Bouton “Créer une organisation” absent (read-only au chargement)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Bouton “Créer une organisation” absent (read-only au chargement)
     - [ ] Final UAT flow (from `spec/COLLAB.md`)
   - [ ] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
     - [ ] **Cross-workspace isolation (A/B)**
