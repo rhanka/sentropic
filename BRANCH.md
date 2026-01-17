@@ -460,8 +460,8 @@ Out of scope:
     - [ ] Final UAT flow (from `spec/COLLAB.md`)
   - [ ] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
     - [ ] **Cross-workspace isolation (A/B)**
-      - [ ] User A data not visible to User B
-      - [ ] User B data not visible to User A
+      - [x] User A data not visible to User B (couvert par `tenancy-workspaces.spec.ts`)
+      - [x] User B data not visible to User A (couvert par `tenancy-workspaces.spec.ts`)
   - [ ] `e2e/tests/usecase.spec.ts`:
     - [ ] **Role change reactivity**
       - [ ] User A changes User B role
