@@ -300,8 +300,7 @@ Out of scope:
 ### Lot 5 — Tests & Finalization (current branch)
 - **Scope**: Lot 3/4 parked; focus on tests + doc finalization for what is already implemented.
 - **Docs**:
-  - [ ] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
-  - [ ] Generate/update OpenAPI artifacts if needed (`make openapi-*`)
+  - [x] Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`
 - **API tests (existing categories) — exhaustive list**
   - [x] `api/tests/api` (routes/integration):
     - [x] Role enforcement for orgs/folders/usecases/documents/locks (viewer/editor/admin)
@@ -345,7 +344,7 @@ Out of scope:
     - [x] streamHub workspace scoping
     - [x] hidden workspace lock activation
     - [x] no-workspace lock activation
-  - [ ] `ui/tests/utils`:
+  - [x] `ui/tests/utils`:
     - [x] documents utils use workspace_id for list/download
 - **E2E (Playwright) — existing categories + UAT mapping**
   - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:

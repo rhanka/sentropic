@@ -1,13 +1,15 @@
 # Modèle de données (PostgreSQL 16 / Drizzle)
 
 Source de vérité : `api/src/db/schema.ts` (Drizzle).  
-Conventions : tables en `snake_case`, clés primaires `text` (UUID string), multi-tenant via `workspace_id` (private-by-default).
+Conventions : tables en `snake_case`, clés primaires `text` (UUID string), multi-tenant via `workspace_id` + `workspace_memberships` (private-by-default).
 
 ## Vue d’ensemble (tenancy + objets métier)
 
 ```mermaid
 erDiagram
-    users ||--o| workspaces : "owner_user_id (unique, nullable)"
+    users ||--o{ workspaces : "owner_user_id (nullable)"
+    users ||--o{ workspace_memberships : "user_id"
+    workspaces ||--o{ workspace_memberships : "workspace_id"
 
     workspaces ||--o{ organizations : "workspace_id"
     workspaces ||--o{ folders : "workspace_id"
@@ -20,11 +22,18 @@ erDiagram
 
     workspaces {
         text id PK
-        text owner_user_id "FK users.id (unique, nullable)"
+        text owner_user_id "FK users.id (nullable)"
         text name
-        boolean share_with_admin
+        timestamp hidden_at
         timestamp created_at
         timestamp updated_at
+    }
+
+    workspace_memberships {
+        text workspace_id FK
+        text user_id FK
+        text role
+        timestamp created_at
     }
 
     users {
@@ -88,12 +97,28 @@ erDiagram
         text started_at
         text completed_at
     }
+
+    object_locks {
+        text id PK
+        text workspace_id FK
+        text object_type
+        text object_id
+        text locked_by_user_id FK
+        timestamp locked_at
+        timestamp expires_at
+        timestamp unlock_requested_at
+        text unlock_requested_by_user_id "FK users.id (nullable)"
+        text unlock_request_message
+        timestamp updated_at
+    }
 ```
 
 Notes :
 - `organizations.data` est **JSONB** (profil organisation : `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.).
 - `use_cases.data` est **JSONB** (contient `name`, `description`, scores, etc. – migration 0008).
-- `workspaces.owner_user_id` est **unique mais nullable** (Postgres autorise plusieurs `NULL`).
+- `workspaces.owner_user_id` est **nullable** (plus de contrainte unique).
+- `workspaces.hidden_at` indique la visibilité (workspaces cachés).
+- `workspace_memberships` est la source de vérité des rôles (`viewer` | `editor` | `admin`).
 
 ## Prompts (état actuel vs cible)
 
