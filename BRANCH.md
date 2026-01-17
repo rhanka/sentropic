@@ -348,8 +348,8 @@ Out of scope:
     - [x] documents utils use workspace_id for list/download
 - **E2E (Playwright) — existing categories + UAT mapping**
   - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Seed E2E sans `workspace_memberships` → User A/B sans workspace (page bloquée)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Seed E2E sans `workspace_memberships` → User A/B sans workspace (page bloquée)
     - [ ] **User A creates workspace + assigns roles**
       - [ ] User A creates "Workspace Alpha"
       - [ ] User A adds User B as `viewer`
