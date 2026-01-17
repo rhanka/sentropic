@@ -322,21 +322,21 @@ Out of scope:
     - [x] Reject cross-workspace document access by id
     - [x] Concurrent edit lock enforcement (second editor gets 409)
     - [x] Concurrent edit lock enforcement per object type (organization/folder/usecase/matrix)
-    - [ ] Lock breaks when locker leaves (no active SSE → lock cleared)
-    - [ ] SSE disconnect does not leak locks (cleanup on zero SSE)
+    - [x] Lock breaks when locker leaves (no active SSE → lock cleared)
+    - [x] SSE disconnect does not leak locks (cleanup on zero SSE)
   - [ ] `api/tests/unit`:
     - [x] Locks service (acquire/release/request/accept/force, TTL)
     - [x] Presence service (record/leave/list)
     - [x] Workspace scope resolution
-    - [ ] Lock cleanup on zero SSE connections
-  - [ ] `api/tests/ai`:
+    - [x] Lock cleanup on zero SSE connections
+  - [x] `api/tests/ai`:
     - [x] documents tool enabled only for authorized context
     - [x] documents tool rejects mismatched context
-  - [ ] `api/tests/queue`:
+  - [x] `api/tests/queue`:
     - [x] document summary job updates status correctly (success/failure)
-  - [ ] `api/tests/smoke`:
+  - [x] `api/tests/smoke`:
     - [x] DB + API health
-  - [ ] `api/tests/limit`:
+  - [x] `api/tests/limit`:
     - [x] rate limiting does not affect auth when disabled (dev)
 - **UI tests (existing categories) — feasible scope**
   - [x] `ui/tests/stores`:

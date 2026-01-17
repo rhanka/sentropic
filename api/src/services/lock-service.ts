@@ -328,6 +328,30 @@ export async function forceUnlock(options: {
   return { forced: true };
 }
 
+export async function clearLocksForUser(userId: string): Promise<void> {
+  const rows = await db
+    .select({
+      workspaceId: objectLocks.workspaceId,
+      objectType: objectLocks.objectType,
+      objectId: objectLocks.objectId,
+    })
+    .from(objectLocks)
+    .where(eq(objectLocks.lockedByUserId, userId));
+
+  if (!rows.length) return;
+  await db.delete(objectLocks).where(eq(objectLocks.lockedByUserId, userId));
+  await Promise.all(
+    rows.map((row) => notifyLockEvent(row.workspaceId, row.objectType as LockObjectType, row.objectId))
+  );
+}
+
+export async function __test_clearLocksForUser(userId: string): Promise<void> {
+  if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+    throw new Error('Test-only helper');
+  }
+  await clearLocksForUser(userId);
+}
+
 export async function notifyLockEvent(workspaceId: string, objectType: LockObjectType, objectId: string): Promise<void> {
   const payload = JSON.stringify({
     workspace_id: workspaceId,

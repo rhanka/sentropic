@@ -3,7 +3,7 @@ import { db } from '../../src/db/client';
 import { objectLocks, workspaceMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createTestUser, cleanupAuthData } from '../utils/auth-helper';
-import { acquireLock, releaseLock, requestUnlock, acceptUnlock, forceUnlock, getActiveLock } from '../../src/services/lock-service';
+import { acquireLock, releaseLock, requestUnlock, acceptUnlock, forceUnlock, getActiveLock, __test_clearLocksForUser } from '../../src/services/lock-service';
 
 describe('lock-service', () => {
   let editor: any;
@@ -86,6 +86,17 @@ describe('lock-service', () => {
       expiresAt: new Date(Date.now() - 60_000),
       updatedAt: new Date(Date.now() - 60_000),
     });
+
+    const lock = await getActiveLock(workspaceId, objectType, objectId);
+    expect(lock).toBeNull();
+  });
+
+  it('clears locks for a user (zero SSE connections)', async () => {
+    const objectType = 'organization';
+    const objectId = `org_clear_${Date.now()}`;
+    await acquireLock({ userId: editor.id, workspaceId, objectType, objectId });
+
+    await __test_clearLocksForUser(editor.id);
 
     const lock = await getActiveLock(workspaceId, objectType, objectId);
     expect(lock).toBeNull();

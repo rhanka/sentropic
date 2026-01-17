@@ -5,6 +5,7 @@ import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '
 import { db } from '../../src/db/client';
 import { contextDocuments, workspaceMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { __test_clearLocksForUser } from '../../src/services/lock-service';
 
 const mockPutObject = vi.fn();
 const mockDeleteObject = vi.fn();
@@ -188,6 +189,64 @@ describe('Collaboration security', () => {
         { objectType, objectId }
       );
       expect(lockB.status).toBe(409);
+    }
+  });
+
+  it('clears locks when locker leaves (test hook)', async () => {
+    const objectType = 'organization';
+    const objectId = `org_${createTestId()}`;
+
+    const lockA = await authenticatedRequest(
+      app,
+      'POST',
+      `/api/v1/locks?workspace_id=${encodeURIComponent(workspaceId)}`,
+      editor.sessionToken!,
+      { objectType, objectId }
+    );
+    expect(lockA.status).toBe(201);
+
+    await __test_clearLocksForUser(editor.id);
+
+    const check = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/locks?workspace_id=${encodeURIComponent(workspaceId)}&objectType=${objectType}&objectId=${objectId}`,
+      otherEditor.sessionToken!
+    );
+    expect(check.status).toBe(200);
+    const payload = await check.json();
+    expect(payload.lock).toBeNull();
+  });
+
+  it('clears all locks when SSE connections drop to zero', async () => {
+    const locks = [
+      { objectType: 'organization', objectId: `org_${createTestId()}` },
+      { objectType: 'folder', objectId: `folder_${createTestId()}` },
+    ];
+
+    for (const { objectType, objectId } of locks) {
+      const res = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/locks?workspace_id=${encodeURIComponent(workspaceId)}`,
+        editor.sessionToken!,
+        { objectType, objectId }
+      );
+      expect(res.status).toBe(201);
+    }
+
+    await __test_clearLocksForUser(editor.id);
+
+    for (const { objectType, objectId } of locks) {
+      const check = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/locks?workspace_id=${encodeURIComponent(workspaceId)}&objectType=${objectType}&objectId=${objectId}`,
+        otherEditor.sessionToken!
+      );
+      expect(check.status).toBe(200);
+      const payload = await check.json();
+      expect(payload.lock).toBeNull();
     }
   });
 
