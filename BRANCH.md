@@ -445,8 +445,8 @@ Out of scope:
       - [ ] Print mode hides lock icon
   - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
     - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
-      - [ ] Redirection “read-only” sur `/organisations/new` empêche IA / création
+      - [x] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
+      - [x] Redirection “read-only” sur `/organisations/new` empêche IA / création
       - [ ] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
       - [ ] Création folder/use-case via API échoue si scope workspace non aligné
       - [ ] Pages list bloquées “Vérification de la session…” (session/scope non hydraté)

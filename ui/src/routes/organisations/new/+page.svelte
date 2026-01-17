@@ -18,7 +18,7 @@
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/config';
   import References from '$lib/components/References.svelte';
-  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
 
   let organization: Partial<Organization> = {
     name: '',
@@ -62,12 +62,15 @@
 
   onMount(() => {
     void loadDraftIfAny();
+  });
+  let readOnlyChecked = false;
+  $: if ($workspaceScopeHydrated && !readOnlyChecked) {
+    readOnlyChecked = true;
     if ($workspaceReadOnlyScope) {
       addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
       goto('/organisations');
-      return;
     }
-  });
+  }
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -107,7 +110,7 @@
   // Create draft lazily once user typed a name (debounced), so documents can be attached before creating/enriching.
   $: {
     const name = (organization.name || '').trim();
-    if (name && !organization.id && !draftCreating && !$workspaceReadOnlyScope) {
+    if (name && !organization.id && !draftCreating && $workspaceScopeHydrated && !$workspaceReadOnlyScope) {
       if (draftTimer) clearTimeout(draftTimer);
       draftTimer = setTimeout(() => {
         void ensureDraftOrganization();
@@ -116,7 +119,7 @@
   }
 
   const handleEnrichOrganization = async () => {
-    if ($workspaceReadOnlyScope) {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
       addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
       return;
     }
@@ -153,7 +156,7 @@
   };
 
   const handleCreateOrganization = async () => {
-    if ($workspaceReadOnlyScope) {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
       addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
       return;
     }
