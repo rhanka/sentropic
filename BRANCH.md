@@ -451,9 +451,9 @@ Out of scope:
       - [x] Création folder/use-case via API échoue si scope workspace non aligné
       - [x] Pages list bloquées “Vérification de la session…” (session/scope non hydraté)
     - [ ] **Read-only UI across views (viewer)**
-      - [ ] Organizations list/detail: no create/delete/edit
-      - [ ] Folders list/detail: no create/delete/edit
-      - [ ] Use cases list/detail: no create/delete/edit
+      - [x] Organizations list/detail: no create/delete/edit
+      - [x] Folders list/detail: no create/delete/edit
+      - [x] Use cases list/detail: no create/delete/edit
   - [ ] `e2e/tests/workflow.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Bouton “Créer une organisation” absent (read-only au chargement)
