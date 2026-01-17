@@ -380,8 +380,8 @@ Out of scope:
       - [ ] User A updates member role → User B sees update
       - [ ] User A hides/unhides workspace → table updates for both
   - [ ] `e2e/tests/access-control.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Test obsolète (toggle “Partager mon workspace…” supprimé avec `workspace_memberships`)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Test obsolète (toggle “Partager mon workspace…” supprimé avec `workspace_memberships`)
     - [ ] **User B viewer**
       - [ ] No create/delete buttons
       - [ ] Cannot access create routes (redirect)
