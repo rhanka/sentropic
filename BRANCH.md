@@ -447,8 +447,8 @@ Out of scope:
     - [ ] **Régression à corriger (branch vs main)**
       - [x] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
       - [x] Redirection “read-only” sur `/organisations/new` empêche IA / création
-      - [ ] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
-      - [ ] Création folder/use-case via API échoue si scope workspace non aligné
+      - [x] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
+      - [x] Création folder/use-case via API échoue si scope workspace non aligné
       - [x] Pages list bloquées “Vérification de la session…” (session/scope non hydraté)
     - [ ] **Read-only UI across views (viewer)**
       - [ ] Organizations list/detail: no create/delete/edit
