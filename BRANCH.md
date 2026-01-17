@@ -444,7 +444,7 @@ Out of scope:
       - [ ] Viewer sees lock icon
       - [ ] Print mode hides lock icon
   - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
+    - [x] **Régression à corriger (branch vs main)**
       - [x] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
       - [x] Redirection “read-only” sur `/organisations/new` empêche IA / création
       - [x] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
