@@ -101,7 +101,7 @@ test.describe.serial('Génération IA', () => {
 
     const enrichResPromise = page.waitForResponse((res) => {
       const req = res.request();
-      return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich$/.test(res.url());
+      return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich/.test(res.url());
     }, { timeout: 30_000 });
 
     await aiButton.click();

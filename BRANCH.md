@@ -479,8 +479,8 @@ Out of scope:
       - [ ] User B in same workspace sees document
       - [ ] User B in other workspace does not see document
   - [ ] `e2e/tests/ai-generation.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
   - [ ] `e2e/tests/chat.spec.ts`:
     - [ ] **Régression à corriger (branch vs main)**
       - [ ] Envoi chat bloqué quand scope workspace non résolu (bouton désactivé / POST jamais émis)
