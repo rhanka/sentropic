@@ -413,9 +413,9 @@ Out of scope:
       - [ ] Second unlock request rejected (B/C)
       - [ ] User A accepts → lock transfers to requester, others stay locked
   - [ ] `e2e/tests/dossiers-reload-draft.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
-      - [ ] Draft créé hors scope → H1 vide sur `/dossier/new?draft=...`
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
+      - [x] Draft créé hors scope → H1 vide sur `/dossier/new?draft=...`
     - [ ] **Folder lock/presence**
       - [ ] User A locks folder
       - [ ] User B sees locked view + presence
