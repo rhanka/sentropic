@@ -469,8 +469,8 @@ Out of scope:
   - [ ] `e2e/tests/streams` (to add if missing):
     - [ ] SSE workspace scoping (no cross-workspace leakage)
   - [ ] `e2e/tests/documents-summary.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
   - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
