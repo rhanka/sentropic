@@ -432,8 +432,8 @@ Out of scope:
       - [ ] User B sees locked view
       - [ ] Unlock request + accept on use case
   - [ ] `e2e/tests/matrix.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Page bloquée “Vérification de la session…” (session/scope non hydraté)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Page bloquée “Vérification de la session…” (session/scope non hydraté)
     - [ ] **Matrix lock/presence**
       - [ ] User A locks matrix
       - [ ] User B sees locked view
