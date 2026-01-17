@@ -369,8 +369,8 @@ Out of scope:
       - [ ] User B can hide/unhide workspace
       - [ ] User B can perform final suppression (hidden only)
   - [ ] `e2e/tests/settings.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Session bloquée sur “Vérification de la session…” (cache localStorage / scope non hydraté)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Session bloquée sur “Vérification de la session…” (cache localStorage / scope non hydraté)
     - [ ] **Workspace table UX**
       - [ ] Icons only, hover message on row
       - [ ] Action buttons do not trigger row hover
