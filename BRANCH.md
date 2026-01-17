@@ -472,8 +472,8 @@ Out of scope:
     - [ ] **Régression à corriger (branch vs main)**
       - [ ] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
   - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
-    - [ ] **Régression à corriger (branch vs main)**
-      - [ ] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
+    - [x] **Régression à corriger (branch vs main)**
+      - [x] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
     - [ ] **Documents scoping**
       - [ ] User A uploads document to org
       - [ ] User B in same workspace sees document
