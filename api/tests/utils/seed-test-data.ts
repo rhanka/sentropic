@@ -167,7 +167,7 @@ export async function seedTestData() {
       },
     ]);
 
-    console.log('✅ Workspaces + users seeded (admin + userA + userB + pending)');
+    console.log('✅ Workspaces + users seeded (admin + userA + userB + userVictim + pending)');
 
     await db.insert(workspaceMemberships).values([
       { workspaceId: E2E_WS_ADMIN, userId: E2E_ADMIN_ID, role: 'admin', createdAt: now },
