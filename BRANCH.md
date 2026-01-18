@@ -376,9 +376,9 @@ Out of scope:
       - [x] Action buttons do not trigger row hover
     - [x] **User A renames workspace**
       - [x] Rename via EditableInput → persisted
-    - [ ] **Live updates**
+    - [x] **Live updates**
       - [x] User A updates member role → User B sees update
-      - [ ] User A hides/unhides workspace → table updates for both
+      - [x] User A hides/unhides workspace → table updates for both
   - [x] `e2e/tests/access-control.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Test obsolète (toggle “Partager mon workspace…” supprimé avec `workspace_memberships`)

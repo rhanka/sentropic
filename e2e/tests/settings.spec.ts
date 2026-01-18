@@ -250,5 +250,75 @@ test.describe('Page Paramètres', () => {
       await userAApi.dispose();
       await userBApi.dispose();
     });
+
+    test('live update: hide/unhide visible côté User B', async ({ browser }) => {
+      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+      const workspaceLiveName = `Workspace Hide ${Date.now()}`;
+      const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceLiveName } });
+      if (!createRes.ok()) throw new Error(`Impossible de créer Workspace Hide (status ${createRes.status()})`);
+      const created = await createRes.json().catch(() => null);
+      const workspaceLiveId = String(created?.id || '');
+      if (!workspaceLiveId) throw new Error('workspaceLiveId introuvable');
+      const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceLiveId}/members`, {
+        data: { email: 'e2e-user-b@example.com', role: 'admin' },
+      });
+      if (!addRes.ok() && addRes.status() !== 409) {
+        throw new Error(`Impossible d'ajouter user-b admin (status ${addRes.status()})`);
+      }
+
+      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const pageA = await userAContext.newPage();
+      const pageB = await userBContext.newPage();
+
+      const setScope = (id: string) => {
+        return (value: string) => {
+          try {
+            localStorage.setItem(id, value);
+          } catch {
+            // ignore
+          }
+        };
+      };
+
+      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
+      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
+      await pageA.goto('/parametres');
+      await pageB.goto('/parametres');
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageB.waitForLoadState('domcontentloaded');
+      await pageB.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
+      await pageB.reload({ waitUntil: 'domcontentloaded' });
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      await expect
+        .poll(async () => {
+          const res = await userBApi.get('/api/v1/workspaces');
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const items: Array<{ id: string }> = data?.items ?? [];
+          return items.some((ws) => ws.id === workspaceLiveId);
+        }, { timeout: 10_000 })
+        .toBe(true);
+
+      const rowA = pageA.locator('tbody tr').filter({ has: pageA.locator('.editable-input') }).first();
+      await expect(rowA.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
+      const hideButton = rowA.locator('button[title="Rendre invisible (hide)"]');
+      await hideButton.click();
+
+      const rowB = pageB.locator('tbody tr').filter({ has: pageB.locator('.editable-input') }).first();
+      await expect(rowB.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
+      await expect(rowB.locator('span', { hasText: 'caché' })).toBeVisible({ timeout: 10_000 });
+
+      const unhideButton = rowA.locator('button[title="Rendre visible (unhide)"]');
+      await unhideButton.click();
+      await expect(rowB.locator('span', { hasText: 'caché' })).toHaveCount(0, { timeout: 10_000 });
+
+      await userAContext.close();
+      await userBContext.close();
+      await userAApi.dispose();
+      await userBApi.dispose();
+    });
   });
 });
