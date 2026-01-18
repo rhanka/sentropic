@@ -260,6 +260,9 @@ export async function requestUnlock(options: {
   if (lock.lockedBy.userId === options.userId) {
     return { requested: false, lock };
   }
+  if (lock.unlockRequestedByUserId && lock.unlockRequestedByUserId !== options.userId) {
+    throw httpError(409, 'Unlock already requested');
+  }
 
   await db
     .update(objectLocks)

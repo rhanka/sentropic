@@ -76,14 +76,19 @@ const requestUnlockSchema = z.object({
 locksRouter.post('/request-unlock', requireWorkspaceEditorRole(), zValidator('json', requestUnlockSchema), async (c) => {
   const user = c.get('user') as { userId: string; workspaceId: string };
   const body = c.req.valid('json');
-  const res = await requestUnlock({
-    userId: user.userId,
-    workspaceId: user.workspaceId,
-    objectType: body.objectType as LockObjectType,
-    objectId: body.objectId,
-    message: body.message,
-  });
-  return c.json(res);
+  try {
+    const res = await requestUnlock({
+      userId: user.userId,
+      workspaceId: user.workspaceId,
+      objectType: body.objectType as LockObjectType,
+      objectId: body.objectId,
+      message: body.message,
+    });
+    return c.json(res);
+  } catch (e: unknown) {
+    if (isHttpError(e) && e.status === 409) return c.json({ error: 'Unlock already requested' }, 409);
+    throw e;
+  }
 });
 
 const acceptUnlockSchema = z.object({
