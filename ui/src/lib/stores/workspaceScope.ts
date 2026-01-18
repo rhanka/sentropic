@@ -1,6 +1,6 @@
 import { writable, get, derived } from 'svelte/store';
 import { browser } from '$app/environment';
-import { apiGet } from '$lib/utils/api';
+import { ApiError, apiGet } from '$lib/utils/api';
 import { session } from '$lib/stores/session';
 
 const STORAGE_KEY = 'workspaceScopeId';
@@ -122,7 +122,14 @@ export async function loadUserWorkspaces(): Promise<void> {
       return { ...st, loading: false, items, selectedId, error: null };
     });
   } catch (e: any) {
-    workspaceScope.update((st) => ({ ...st, loading: false, error: e?.message ?? 'Erreur chargement workspaces' }));
+    if (e instanceof ApiError && e.status === 409) {
+      workspaceScope.update((st) => {
+        if (browser) localStorage.removeItem(STORAGE_KEY);
+        return { ...st, loading: false, items: [], selectedId: null, error: null };
+      });
+    } else {
+      workspaceScope.update((st) => ({ ...st, loading: false, error: e?.message ?? 'Erreur chargement workspaces' }));
+    }
   } finally {
     workspaceScopeHydrated.set(true);
   }
