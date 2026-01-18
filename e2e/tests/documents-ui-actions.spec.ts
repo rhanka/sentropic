@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 test.describe('Documents — UI actions (icônes + suppression)', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+  const USER_A_STATE = './.auth/user-a.json';
+  const USER_B_STATE = './.auth/user-b.json';
+  let workspaceAId = '';
+  let workspaceBId = '';
+  let organizationAId = '';
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -13,6 +18,44 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
   function readFixture(name: string): Buffer {
     return fs.readFileSync(path.join(__dirname, 'fixtures', name));
   }
+
+  test.beforeAll(async () => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+
+    const workspacesARes = await userAApi.get('/api/v1/workspaces');
+    expect(workspacesARes.ok()).toBeTruthy();
+    const workspacesAJson = await workspacesARes.json().catch(() => null);
+    const workspacesA: Array<{ id: string; name: string }> = workspacesAJson?.items ?? [];
+    const workspaceA = workspacesA.find((ws) => ws.name.includes('Workspace A (E2E)'));
+    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
+    workspaceAId = workspaceA.id;
+
+    const workspacesBRes = await userBApi.get('/api/v1/workspaces');
+    expect(workspacesBRes.ok()).toBeTruthy();
+    const workspacesBJson = await workspacesBRes.json().catch(() => null);
+    const workspacesB: Array<{ id: string; name: string }> = workspacesBJson?.items ?? [];
+    const workspaceB = workspacesB.find((ws) => ws.name.includes('Workspace B (E2E)'));
+    if (!workspaceB) throw new Error('Workspace B (E2E) introuvable');
+    workspaceBId = workspaceB.id;
+
+    const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+      data: { email: 'e2e-user-b@example.com', role: 'editor' },
+    });
+    if (!addRes.ok() && addRes.status() !== 409) {
+      throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
+    }
+
+    const orgsRes = await userAApi.get('/api/v1/organizations');
+    if (!orgsRes.ok()) throw new Error(`Impossible de charger les organisations (status ${orgsRes.status()})`);
+    const orgsJson = await orgsRes.json().catch(() => null);
+    const orgItems: Array<{ id: string }> = orgsJson?.items ?? [];
+    if (!orgItems.length) throw new Error('Aucune organisation Workspace A');
+    organizationAId = orgItems[0].id;
+
+    await userAApi.dispose();
+    await userBApi.dispose();
+  });
 
   test.beforeEach(async ({ page }) => {
     // Assurer un scope admin "normal" (pas read-only) et éviter les confirm() natifs (flaky).
@@ -157,6 +200,76 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
     await expect(docRow).toHaveCount(0, { timeout: 20_000 });
+  });
+
+  test('documents scoping: User B voit le doc en workspace A, pas en workspace B', async ({ browser }) => {
+    test.setTimeout(180_000);
+
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+    const workspaceQueryA = `?workspace_id=${workspaceAId}`;
+    const workspaceQueryB = `?workspace_id=${workspaceBId}`;
+
+    const filename = `README-org-${Date.now()}.md`;
+    const uploadRes = await userAApi.post(`/api/v1/documents${workspaceQueryA}`, {
+      multipart: {
+        context_type: 'organization',
+        context_id: organizationAId,
+        file: { name: filename, mimeType: 'text/markdown', buffer: readFixture('README.md') },
+      },
+    });
+    expect(uploadRes.ok()).toBeTruthy();
+
+    const listUrlA = `${API_BASE_URL}/api/v1/documents${workspaceQueryA}&context_type=organization&context_id=${encodeURIComponent(organizationAId)}`;
+    const start = Date.now();
+    let docId = '';
+    while (Date.now() - start < 60_000) {
+      const res = await userBApi.get(listUrlA);
+      if (res.ok()) {
+        const json = await res.json().catch(() => null);
+        const items: any[] = (json as any)?.items ?? [];
+        const doc = items.find((d) => d.filename === filename);
+        if (doc) {
+          docId = String(doc.id || '');
+          break;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    expect(docId).toBeTruthy();
+
+    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const pageB = await userBContext.newPage();
+    await pageB.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('workspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, workspaceAId);
+    await pageB.goto(`/organisations/${encodeURIComponent(organizationAId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    await expect(pageB.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
+    const docRow = pageB.locator('tbody tr').filter({
+      has: pageB.locator('div.font-medium', { hasText: filename }),
+    });
+    await expect(docRow).toBeVisible({ timeout: 20_000 });
+
+    const listUrlB = `${API_BASE_URL}/api/v1/documents${workspaceQueryB}&context_type=organization&context_id=${encodeURIComponent(organizationAId)}`;
+    const otherRes = await userBApi.get(listUrlB);
+    if (otherRes.ok()) {
+      const otherJson = await otherRes.json().catch(() => null);
+      const otherItems: any[] = (otherJson as any)?.items ?? [];
+      if (otherItems.find((d) => d.id === docId)) {
+        throw new Error('Document visible en workspace B alors qu’il ne devrait pas');
+      }
+    } else {
+      expect([403, 404]).toContain(otherRes.status());
+    }
+
+    await userBContext.close();
+    await userAApi.dispose();
+    await userBApi.dispose();
   });
 });
 

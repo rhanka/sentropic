@@ -475,9 +475,9 @@ Out of scope:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
     - [ ] **Documents scoping**
-      - [ ] User A uploads document to org
-      - [ ] User B in same workspace sees document
-      - [ ] User B in other workspace does not see document
+      - [x] User A uploads document to org
+      - [x] User B in same workspace sees document
+      - [x] User B in other workspace does not see document
   - [ ] `e2e/tests/ai-generation.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
