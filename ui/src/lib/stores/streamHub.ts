@@ -238,6 +238,15 @@ class StreamHub {
       }
     }
 
+    if (typeof window !== 'undefined') {
+      const type = (event as any)?.type;
+      if (type === 'workspace_membership_update') {
+        window.dispatchEvent(new CustomEvent('streamhub:workspace_membership_update', { detail: event }));
+      } else if (type === 'workspace_update') {
+        window.dispatchEvent(new CustomEvent('streamhub:workspace_update', { detail: event }));
+      }
+    }
+
     for (const sub of this.subs.values()) {
       try {
         if (sub.onlyType && (event as any)?.type !== sub.onlyType) continue;

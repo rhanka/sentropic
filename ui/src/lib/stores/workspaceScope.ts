@@ -128,4 +128,19 @@ export async function loadUserWorkspaces(): Promise<void> {
   }
 }
 
+if (browser) {
+  const handleMembershipUpdate = (evt: Event) => {
+    const detail = (evt as CustomEvent<any>).detail as {
+      userId?: string;
+    } | null;
+    const currentUserId = get(session)?.user?.id;
+    if (!currentUserId) return;
+    if (detail?.userId && detail.userId !== currentUserId) return;
+    void loadUserWorkspaces();
+  };
+
+  window.addEventListener('streamhub:workspace_membership_update', handleMembershipUpdate);
+  window.addEventListener('streamhub:workspace_update', handleMembershipUpdate);
+}
+
 
