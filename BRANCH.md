@@ -428,10 +428,9 @@ Out of scope:
       - [x] Unlock request + accept on organization
   - [ ] `e2e/tests/usecase-detail.spec.ts`:
     - [ ] **Use case lock/presence**
-      - [ ] User A locks use case
-      - [ ] User B sees locked view
-      - [ ] Unlock request + accept on use case
-      - [ ] Bloqué: User B n'atteint pas la vue détail en E2E (test skip temporaire)
+      - [x] User A locks use case
+      - [x] User B sees locked view
+      - [x] Unlock request + accept on use case
   - [ ] `e2e/tests/matrix.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Page bloquée “Vérification de la session…” (session/scope non hydraté)

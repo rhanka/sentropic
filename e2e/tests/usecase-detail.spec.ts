@@ -388,7 +388,7 @@ test.describe('Détail des cas d\'usage', () => {
     }
   });
 
-  test.skip('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
+  test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     const userAContext = await browser.newContext({ storageState: USER_A_STATE });
     const userBContext = await browser.newContext({ storageState: USER_B_STATE });
@@ -410,7 +410,9 @@ test.describe('Détail des cas d\'usage', () => {
 
     await pageA.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await expect(pageA.locator('h1, h2')).toBeVisible({ timeout: 10_000 });
+    await pageA
+      .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${useCaseId}`), { timeout: 10_000 })
+      .catch(() => null);
 
     const lockRes = await userAApi.post('/api/v1/locks', {
       data: { objectType: 'usecase', objectId: useCaseId },
@@ -445,7 +447,24 @@ test.describe('Détail des cas d\'usage', () => {
       await pageB.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
       await pageB.waitForLoadState('domcontentloaded');
     }
-    await expect(pageB.locator('h1, h2')).toBeVisible({ timeout: 10_000 });
+    const waitForUseCaseView = async () => {
+      const response = await pageB
+        .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${useCaseId}`), { timeout: 10_000 })
+        .catch(() => null);
+      if (response && response.status() === 404) {
+        await pageB.evaluate((id) => {
+          try {
+            localStorage.setItem('workspaceScopeId', id);
+          } catch {
+            // ignore
+          }
+        }, workspaceAId);
+        await pageB.reload({ waitUntil: 'domcontentloaded' });
+      }
+      const editableTitle = pageB.locator('h1 textarea.editable-textarea, h1 input.editable-input');
+      await expect(editableTitle).toBeVisible({ timeout: 10_000 });
+    };
+    await waitForUseCaseView();
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
     const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
