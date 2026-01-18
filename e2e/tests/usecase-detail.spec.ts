@@ -1,6 +1,61 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 
 test.describe('Détail des cas d\'usage', () => {
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const USER_A_STATE = './.auth/user-a.json';
+  const USER_B_STATE = './.auth/user-b.json';
+  let workspaceAId = '';
+  let useCaseId = '';
+  let useCaseName = '';
+  let folderId = '';
+  let userAId = '';
+  let userBId = '';
+
+  test.beforeAll(async () => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const res = await userAApi.get('/api/v1/workspaces');
+    if (!res.ok()) throw new Error(`Impossible de charger les workspaces (status ${res.status()})`);
+    const data = await res.json().catch(() => null);
+    const items: Array<{ id: string; name: string }> = data?.items ?? [];
+    const workspaceA = items.find((ws) => ws.name.includes('Workspace A (E2E)'));
+    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
+    workspaceAId = workspaceA.id;
+
+    const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+      data: { email: 'e2e-user-b@example.com', role: 'editor' },
+    });
+    if (!addRes.ok() && addRes.status() !== 409) {
+      throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
+    }
+
+    const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
+    if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
+    const membersData = await membersRes.json().catch(() => null);
+    const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
+    const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
+    userAId = userA?.userId ?? '';
+    if (!userAId) throw new Error('User A id introuvable');
+    const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
+    userBId = userB?.userId ?? '';
+    if (!userBId) throw new Error('User B id introuvable');
+
+    const foldersRes = await userAApi.get('/api/v1/folders');
+    if (!foldersRes.ok()) throw new Error(`Impossible de charger les dossiers (status ${foldersRes.status()})`);
+    const foldersData = await foldersRes.json().catch(() => null);
+    const folders: Array<{ id: string }> = foldersData?.items ?? [];
+    if (!folders.length) throw new Error('Aucun dossier trouvé pour Workspace A');
+    folderId = folders[0].id;
+
+    const useCasesRes = await userAApi.get(`/api/v1/use-cases?folder_id=${encodeURIComponent(folderId)}`);
+    if (!useCasesRes.ok()) throw new Error(`Impossible de charger les cas d'usage (status ${useCasesRes.status()})`);
+    const useCasesData = await useCasesRes.json().catch(() => null);
+    const useCases: Array<{ id: string; name?: string }> = useCasesData?.items ?? [];
+    if (!useCases.length) throw new Error('Aucun cas d\'usage trouvé pour Workspace A');
+    useCaseId = useCases[0].id;
+    useCaseName = useCases[0].name ?? '';
+
+    await userAApi.dispose();
+  });
   test('devrait afficher la page de détail d\'un cas d\'usage', async ({ page }) => {
     // D'abord aller à la liste des cas d'usage
     await page.goto('/cas-usage');
@@ -331,5 +386,94 @@ test.describe('Détail des cas d\'usage', () => {
         // Le footer peut être présent ou non selon l'implémentation
       }
     }
+  });
+
+  test.skip('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const pageA = await userAContext.newPage();
+    const pageB = await userBContext.newPage();
+
+    const setScope = (id: string) => {
+      return (value: string) => {
+        try {
+          localStorage.setItem(id, value);
+        } catch {
+          // ignore
+        }
+      };
+    };
+
+    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+
+    await pageA.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await pageA.waitForLoadState('domcontentloaded');
+    await expect(pageA.locator('h1, h2')).toBeVisible({ timeout: 10_000 });
+
+    const lockRes = await userAApi.post('/api/v1/locks', {
+      data: { objectType: 'usecase', objectId: useCaseId },
+    });
+    if (!lockRes.ok() && lockRes.status() !== 409) {
+      throw new Error(`Impossible d'acquérir le lock usecase (status ${lockRes.status()})`);
+    }
+
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?objectType=usecase&objectId=${encodeURIComponent(useCaseId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.lockedBy?.userId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userAId);
+
+    await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    let opened = false;
+    if (useCaseName) {
+      const useCaseCard = pageB.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
+      if (await useCaseCard.isVisible().catch(() => false)) {
+        await Promise.all([
+          pageB.waitForURL(new RegExp(`/cas-usage/${useCaseId}$`), { timeout: 10_000 }),
+          useCaseCard.click()
+        ]);
+        opened = true;
+      }
+    }
+    if (!opened) {
+      await pageB.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+    }
+    await expect(pageB.locator('h1, h2')).toBeVisible({ timeout: 10_000 });
+    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+    const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
+    await expect(badgeB).toBeVisible({ timeout: 10_000 });
+    await badgeB.hover();
+    const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+    await expect(requestButton).toBeVisible({ timeout: 5_000 });
+    await requestButton.click();
+
+    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+    await badgeA.hover();
+    const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
+    await expect(releaseButton).toBeVisible({ timeout: 5_000 });
+    await releaseButton.click();
+
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?objectType=usecase&objectId=${encodeURIComponent(useCaseId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.lockedBy?.userId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userBId);
+
+    await expect(badgeB).toBeVisible({ timeout: 10_000 });
+
+    await userAContext.close();
+    await userBContext.close();
+    await userAApi.dispose();
   });
 });

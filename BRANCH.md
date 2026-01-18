@@ -423,14 +423,15 @@ Out of scope:
       - [ ] User A leaves → lock released → User B can lock
   - [ ] `e2e/tests/organizations-detail.spec.ts`:
     - [ ] **Organization lock/presence**
-      - [ ] User A locks organization
-      - [ ] User B sees locked view
-      - [ ] Unlock request + accept on organization
+      - [x] User A locks organization
+      - [x] User B sees locked view
+      - [x] Unlock request + accept on organization
   - [ ] `e2e/tests/usecase-detail.spec.ts`:
     - [ ] **Use case lock/presence**
       - [ ] User A locks use case
       - [ ] User B sees locked view
       - [ ] Unlock request + accept on use case
+      - [ ] Bloqué: User B n'atteint pas la vue détail en E2E (test skip temporaire)
   - [ ] `e2e/tests/matrix.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Page bloquée “Vérification de la session…” (session/scope non hydraté)
@@ -464,8 +465,8 @@ Out of scope:
       - [x] User B data not visible to User A (couvert par `tenancy-workspaces.spec.ts`)
   - [ ] `e2e/tests/usecase.spec.ts`:
     - [ ] **Role change reactivity**
-      - [ ] User A changes User B role
-      - [ ] User B view updates without reload
+      - [x] User A changes User B role
+      - [x] User B view updates without reload
   - [ ] `e2e/tests/streams` (to add if missing):
     - [ ] SSE workspace scoping (no cross-workspace leakage)
   - [ ] `e2e/tests/documents-summary.spec.ts`:

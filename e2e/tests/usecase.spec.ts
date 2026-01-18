@@ -8,6 +8,7 @@ test.describe('Gestion des cas d\'usage', () => {
   let folderId = '';
   let useCaseId = '';
   let useCaseName = '';
+  let userBId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -24,6 +25,14 @@ test.describe('Gestion des cas d\'usage', () => {
     if (!addRes.ok() && addRes.status() !== 409) {
       throw new Error(`Impossible d'ajouter user-b en viewer (status ${addRes.status()})`);
     }
+
+    const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
+    if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
+    const membersData = await membersRes.json().catch(() => null);
+    const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
+    const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
+    if (!userB) throw new Error('User B introuvable dans les membres du workspace A');
+    userBId = userB.userId;
 
     const foldersRes = await userAApi.get('/api/v1/folders');
     if (!foldersRes.ok()) throw new Error(`Impossible de charger les dossiers (status ${foldersRes.status()})`);
@@ -138,5 +147,39 @@ test.describe('Gestion des cas d\'usage', () => {
       const deleteButton = page.locator('button[title="Supprimer le cas d\'usage"]');
       await expect(deleteButton).toHaveCount(0);
     });
+  });
+
+  test('User A change le rôle de User B → User B se met à jour sans reload', async ({ browser }) => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const setViewer = await userAApi.patch(`/api/v1/workspaces/${workspaceAId}/members/${userBId}`, {
+      data: { role: 'viewer' },
+    });
+    if (!setViewer.ok()) throw new Error(`Impossible de repasser User B en viewer (status ${setViewer.status()})`);
+
+    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const pageB = await userBContext.newPage();
+    await pageB.addInitScript((id: string) => {
+      try {
+        localStorage.setItem('workspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, workspaceAId);
+    await pageB.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+    const editableField = pageB.locator('.editable-input, .editable-textarea').first();
+    await expect(editableField).toBeDisabled({ timeout: 10_000 });
+
+    const setEditor = await userAApi.patch(`/api/v1/workspaces/${workspaceAId}/members/${userBId}`, {
+      data: { role: 'editor' },
+    });
+    if (!setEditor.ok()) throw new Error(`Impossible de passer User B en editor (status ${setEditor.status()})`);
+
+    await expect(editableField).toBeEnabled({ timeout: 10_000 });
+
+    await userBContext.close();
+    await userAApi.dispose();
   });
 });
