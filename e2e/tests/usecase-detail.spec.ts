@@ -17,14 +17,16 @@ test.describe('Détail des cas d\'usage', () => {
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const res = await userAApi.get('/api/v1/workspaces');
-    if (!res.ok()) throw new Error(`Impossible de charger les workspaces (status ${res.status()})`);
-    const data = await res.json().catch(() => null);
-    const items: Array<{ id: string; name: string }> = data?.items ?? [];
-    const workspaceA = items.find((ws) => ws.name.includes('Workspace A (E2E)'));
-    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
-    workspaceAId = workspaceA.id;
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `UseCase Detail E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
 
+    // Ajouter les membres nécessaires
     const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
       data: { email: 'e2e-user-b@example.com', role: 'editor' },
     });
@@ -35,9 +37,10 @@ test.describe('Détail des cas d\'usage', () => {
       data: { email: 'e2e-user-victim@example.com', role: 'editor' },
     });
     if (!addResC.ok() && addResC.status() !== 409) {
-      throw new Error(`Impossible d'ajouter user-c en editor (status ${addResC.status()})`);
+      throw new Error(`Impossible d'ajouter user-victim en editor (status ${addResC.status()})`);
     }
 
+    // Récupérer les IDs des utilisateurs
     const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
     if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
     const membersData = await membersRes.json().catch(() => null);
@@ -52,19 +55,30 @@ test.describe('Détail des cas d\'usage', () => {
     userCId = userC?.userId ?? '';
     if (!userCId) throw new Error('User C id introuvable');
 
-    const foldersRes = await userAApi.get('/api/v1/folders');
-    if (!foldersRes.ok()) throw new Error(`Impossible de charger les dossiers (status ${foldersRes.status()})`);
-    const foldersData = await foldersRes.json().catch(() => null);
-    const folders: Array<{ id: string }> = foldersData?.items ?? [];
-    if (!folders.length) throw new Error('Aucun dossier trouvé pour Workspace A');
-    folderId = folders[0].id;
+    // Créer une organisation et un dossier dans ce workspace
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
+    const orgJson = await orgRes.json().catch(() => null);
+    const organizationId = String(orgJson?.id || '');
 
-    const useCasesRes = await userAApi.get(`/api/v1/use-cases?folder_id=${encodeURIComponent(folderId)}`);
-    if (!useCasesRes.ok()) throw new Error(`Impossible de charger les cas d'usage (status ${useCasesRes.status()})`);
-    const useCasesData = await useCasesRes.json().catch(() => null);
-    const useCases: Array<{ id: string; name?: string }> = useCasesData?.items ?? [];
-    if (!useCases.length) throw new Error('Aucun cas d\'usage trouvé pour Workspace A');
-    useCaseId = useCases[0].id;
+    const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
+      data: { name: 'Dossier Test', description: 'Dossier pour tests usecase-detail', organizationId },
+    });
+    if (!folderRes.ok()) throw new Error(`Impossible de créer dossier (status ${folderRes.status()})`);
+    const folderJson = await folderRes.json().catch(() => null);
+    folderId = String(folderJson?.id || '');
+    if (!folderId) throw new Error('folderId introuvable');
+
+    // Créer un cas d'usage dans ce dossier
+    const useCaseRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+      data: { folderId, name: 'Cas d\'usage Test', problem: 'Problème test', solution: 'Solution test' },
+    });
+    if (!useCaseRes.ok()) throw new Error(`Impossible de créer cas d'usage (status ${useCaseRes.status()})`);
+    const useCaseJson = await useCaseRes.json().catch(() => null);
+    useCaseId = String(useCaseJson?.id || '');
+    if (!useCaseId) throw new Error('useCaseId introuvable');
     useCaseName = useCases[0].name ?? '';
 
     const lockName = `UC Lock ${Date.now()}`;

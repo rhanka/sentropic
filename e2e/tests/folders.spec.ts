@@ -8,13 +8,16 @@ test.describe('Gestion des dossiers', () => {
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const res = await userAApi.get('/api/v1/workspaces');
-    if (!res.ok()) throw new Error(`Impossible de charger les workspaces (status ${res.status()})`);
-    const data = await res.json().catch(() => null);
-    const items: Array<{ id: string; name: string }> = data?.items ?? [];
-    const workspaceA = items.find((ws) => ws.name.includes('Workspace A (E2E)'));
-    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
-    workspaceAId = workspaceA.id;
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `Folders E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
+
+    // Ajouter user-b en viewer pour les tests read-only
     const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
       data: { email: 'e2e-user-b@example.com', role: 'viewer' },
     });

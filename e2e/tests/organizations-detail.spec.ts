@@ -13,14 +13,16 @@ test.describe('Détail des organisations', () => {
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const res = await userAApi.get('/api/v1/workspaces');
-    if (!res.ok()) throw new Error(`Impossible de charger les workspaces (status ${res.status()})`);
-    const data = await res.json().catch(() => null);
-    const items: Array<{ id: string; name: string }> = data?.items ?? [];
-    const workspaceA = items.find((ws) => ws.name.includes('Workspace A (E2E)'));
-    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
-    workspaceAId = workspaceA.id;
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `Organizations Detail E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
 
+    // Ajouter les membres nécessaires
     const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
       data: { email: 'e2e-user-b@example.com', role: 'editor' },
     });
@@ -31,9 +33,10 @@ test.describe('Détail des organisations', () => {
       data: { email: 'e2e-user-victim@example.com', role: 'editor' },
     });
     if (!addResC.ok() && addResC.status() !== 409) {
-      throw new Error(`Impossible d'ajouter user-c en editor (status ${addResC.status()})`);
+      throw new Error(`Impossible d'ajouter user-victim en editor (status ${addResC.status()})`);
     }
 
+    // Récupérer les IDs des utilisateurs
     const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
     if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
     const membersData = await membersRes.json().catch(() => null);
@@ -48,12 +51,14 @@ test.describe('Détail des organisations', () => {
     if (!userBId) throw new Error('User B id introuvable');
     if (!userCId) throw new Error('User C id introuvable');
 
-    const orgRes = await userAApi.get('/api/v1/organizations');
-    if (!orgRes.ok()) throw new Error(`Impossible de charger les organisations (status ${orgRes.status()})`);
-    const orgData = await orgRes.json().catch(() => null);
-    const orgs: Array<{ id: string }> = orgData?.items ?? [];
-    if (!orgs.length) throw new Error('Aucune organisation trouvée pour Workspace A');
-    organizationId = orgs[0].id;
+    // Créer une organisation dans ce workspace
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
+    const orgJson = await orgRes.json().catch(() => null);
+    organizationId = String(orgJson?.id || '');
+    if (!organizationId) throw new Error('organizationId introuvable');
 
     await userAApi.dispose();
   });

@@ -23,22 +23,24 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
 
-    const workspacesARes = await userAApi.get('/api/v1/workspaces');
-    expect(workspacesARes.ok()).toBeTruthy();
-    const workspacesAJson = await workspacesARes.json().catch(() => null);
-    const workspacesA: Array<{ id: string; name: string }> = workspacesAJson?.items ?? [];
-    const workspaceA = workspacesA.find((ws) => ws.name.includes('Workspace A (E2E)'));
-    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
-    workspaceAId = workspaceA.id;
+    // Créer deux workspaces uniques pour ce fichier de test (isolation des ressources)
+    // Workspace A pour User A
+    const workspaceAName = `Documents Workspace A E2E ${Date.now()}`;
+    const createARes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceAName } });
+    if (!createARes.ok()) throw new Error(`Impossible de créer workspace A (status ${createARes.status()})`);
+    const createdA = await createARes.json().catch(() => null);
+    workspaceAId = String(createdA?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
 
-    const workspacesBRes = await userBApi.get('/api/v1/workspaces');
-    expect(workspacesBRes.ok()).toBeTruthy();
-    const workspacesBJson = await workspacesBRes.json().catch(() => null);
-    const workspacesB: Array<{ id: string; name: string }> = workspacesBJson?.items ?? [];
-    const workspaceB = workspacesB.find((ws) => ws.name.includes('Workspace B (E2E)'));
-    if (!workspaceB) throw new Error('Workspace B (E2E) introuvable');
-    workspaceBId = workspaceB.id;
+    // Workspace B pour User B
+    const workspaceBName = `Documents Workspace B E2E ${Date.now()}`;
+    const createBRes = await userBApi.post('/api/v1/workspaces', { data: { name: workspaceBName } });
+    if (!createBRes.ok()) throw new Error(`Impossible de créer workspace B (status ${createBRes.status()})`);
+    const createdB = await createBRes.json().catch(() => null);
+    workspaceBId = String(createdB?.id || '');
+    if (!workspaceBId) throw new Error('workspaceBId introuvable');
 
+    // Ajouter user-b en editor dans Workspace A pour les tests
     const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
       data: { email: 'e2e-user-b@example.com', role: 'editor' },
     });
@@ -46,10 +48,13 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
       throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
     }
 
-    const orgsRes = await userAApi.get('/api/v1/organizations');
-    if (!orgsRes.ok()) throw new Error(`Impossible de charger les organisations (status ${orgsRes.status()})`);
-    const orgsJson = await orgsRes.json().catch(() => null);
-    const orgItems: Array<{ id: string }> = orgsJson?.items ?? [];
+    // Créer une organisation dans Workspace A pour les tests
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
+    const orgJson = await orgRes.json().catch(() => null);
+    const orgItems: Array<{ id: string }> = orgJson ? [{ id: String(orgJson.id || '') }] : [];
     if (!orgItems.length) throw new Error('Aucune organisation Workspace A');
     organizationAId = orgItems[0].id;
 

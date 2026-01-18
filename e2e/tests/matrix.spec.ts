@@ -11,14 +11,16 @@ test.describe('Configuration de la matrice', () => {
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const workspacesRes = await userAApi.get('/api/v1/workspaces');
-    expect(workspacesRes.ok()).toBeTruthy();
-    const workspacesJson = await workspacesRes.json().catch(() => null);
-    const workspaces: Array<{ id: string; name: string }> = workspacesJson?.items ?? [];
-    const workspaceA = workspaces.find((ws) => ws.name.includes('Workspace A (E2E)'));
-    if (!workspaceA) throw new Error('Workspace A (E2E) introuvable');
-    workspaceAId = workspaceA.id;
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `Matrix E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
 
+    // Ajouter user-b en editor
     const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
       data: { email: 'e2e-user-b@example.com', role: 'editor' },
     });
@@ -26,6 +28,7 @@ test.describe('Configuration de la matrice', () => {
       throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
     }
 
+    // Récupérer les IDs des utilisateurs
     const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
     if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
     const membersData = await membersRes.json().catch(() => null);
@@ -36,12 +39,21 @@ test.describe('Configuration de la matrice', () => {
     userBId = userB?.userId ?? '';
     if (!userAId || !userBId) throw new Error('User A/B id introuvable');
 
-    const foldersRes = await userAApi.get('/api/v1/folders');
-    expect(foldersRes.ok()).toBeTruthy();
-    const foldersJson = await foldersRes.json().catch(() => null);
-    const items: Array<{ id: string }> = foldersJson?.items ?? [];
-    if (!items.length) throw new Error('Aucun dossier trouvé pour Workspace A');
-    folderId = items[0].id;
+    // Créer une organisation et un dossier dans ce workspace
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
+    const orgJson = await orgRes.json().catch(() => null);
+    const organizationId = String(orgJson?.id || '');
+
+    const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
+      data: { name: 'Dossier Test', description: 'Dossier pour tests matrix', organizationId },
+    });
+    if (!folderRes.ok()) throw new Error(`Impossible de créer dossier (status ${folderRes.status()})`);
+    const folderJson = await folderRes.json().catch(() => null);
+    folderId = String(folderJson?.id || '');
+    if (!folderId) throw new Error('folderId introuvable');
 
     await userAApi.dispose();
   });
