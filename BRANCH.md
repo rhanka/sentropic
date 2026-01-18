@@ -314,7 +314,7 @@ Out of scope:
     - [x] Locks endpoints return 409 when locked by another user
     - [x] Unlock accept transfers lock (atomic)
     - [x] Presence list respects workspace scope
-  - [ ] `api/tests/security`:
+  - [x] `api/tests/security`:
     - [x] 403 for viewer mutations
     - [x] 403 for editor member management + workspace lifecycle
     - [x] 404 for non-member workspace access
@@ -323,7 +323,7 @@ Out of scope:
     - [x] Concurrent edit lock enforcement per object type (organization/folder/usecase/matrix)
     - [x] Lock breaks when locker leaves (no active SSE → lock cleared)
     - [x] SSE disconnect does not leak locks (cleanup on zero SSE)
-  - [ ] `api/tests/unit`:
+  - [x] `api/tests/unit`:
     - [x] Locks service (acquire/release/request/accept/force, TTL)
     - [x] Presence service (record/leave/list)
     - [x] Workspace scope resolution
@@ -412,45 +412,45 @@ Out of scope:
       - [ ] User C opens same object → sees presence + locked view
       - [ ] Second unlock request rejected (B/C)
       - [ ] User A accepts → lock transfers to requester, others stay locked
-  - [ ] `e2e/tests/dossiers-reload-draft.spec.ts`:
+  - [x] `e2e/tests/dossiers-reload-draft.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
       - [x] Draft créé hors scope → H1 vide sur `/dossier/new?draft=...`
-    - [ ] **Folder lock/presence**
+    - [x] **Folder lock/presence**
       - [x] User A locks folder
       - [x] User B sees locked view + presence
       - [x] Unlock request + accept on folder
       - [x] User A leaves → lock released → User B can lock
-  - [ ] `e2e/tests/organizations-detail.spec.ts`:
-    - [ ] **Organization lock/presence**
+  - [x] `e2e/tests/organizations-detail.spec.ts`:
+    - [x] **Organization lock/presence**
       - [x] User A locks organization
       - [x] User B sees locked view
       - [x] Unlock request + accept on organization
-  - [ ] `e2e/tests/usecase-detail.spec.ts`:
-    - [ ] **Use case lock/presence**
+  - [x] `e2e/tests/usecase-detail.spec.ts`:
+    - [x] **Use case lock/presence**
       - [x] User A locks use case
       - [x] User B sees locked view
       - [x] Unlock request + accept on use case
-  - [ ] `e2e/tests/matrix.spec.ts`:
+  - [x] `e2e/tests/matrix.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Page bloquée “Vérification de la session…” (session/scope non hydraté)
-    - [ ] **Matrix lock/presence**
-      - [ ] User A locks matrix
-      - [ ] User B sees locked view
-      - [ ] Unlock request + accept on matrix
-      - [ ] User A leaves → lock released → User B can lock
-  - [ ] `e2e/tests/dashboard.spec.ts`:
-    - [ ] **Dashboard read-only**
+    - [x] **Matrix lock/presence**
+      - [x] User A locks matrix
+      - [x] User B sees locked view
+      - [x] Unlock request + accept on matrix
+      - [x] User A leaves → lock released → User B can lock
+  - [x] `e2e/tests/dashboard.spec.ts`:
+    - [x] **Dashboard read-only**
       - [x] Viewer sees lock icon
       - [x] Print mode hides lock icon
-  - [ ] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
+  - [x] `e2e/tests/organizations.spec.ts` / `e2e/tests/folders.spec.ts` / `e2e/tests/usecase.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Boutons création masqués si scope admin ≠ workspace admin (read-only par défaut)
       - [x] Redirection “read-only” sur `/organisations/new` empêche IA / création
       - [x] `/cas-usage` ne redirige pas vers `/dossiers` (guard/session non prête)
       - [x] Création folder/use-case via API échoue si scope workspace non aligné
       - [x] Pages list bloquées “Vérification de la session…” (session/scope non hydraté)
-    - [ ] **Read-only UI across views (viewer)**
+    - [x] **Read-only UI across views (viewer)**
       - [x] Organizations list/detail: no create/delete/edit
       - [x] Folders list/detail: no create/delete/edit
       - [x] Use cases list/detail: no create/delete/edit
@@ -458,17 +458,17 @@ Out of scope:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Bouton “Créer une organisation” absent (read-only au chargement)
     - [ ] Final UAT flow (from `spec/COLLAB.md`)
-  - [ ] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
-    - [ ] **Cross-workspace isolation (A/B)**
+  - [x] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
+    - [x] **Cross-workspace isolation (A/B)**
       - [x] User A data not visible to User B (couvert par `tenancy-workspaces.spec.ts`)
       - [x] User B data not visible to User A (couvert par `tenancy-workspaces.spec.ts`)
-  - [ ] `e2e/tests/usecase.spec.ts`:
-    - [ ] **Role change reactivity**
+  - [x] `e2e/tests/usecase.spec.ts`:
+    - [x] **Role change reactivity**
       - [x] User A changes User B role
       - [x] User B view updates without reload
   - [ ] `e2e/tests/streams` (to add if missing):
     - [ ] SSE workspace scoping (no cross-workspace leakage)
-  - [ ] `e2e/tests/documents-summary.spec.ts`:
+  - [x] `e2e/tests/documents-summary.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
   - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
@@ -481,7 +481,7 @@ Out of scope:
   - [ ] `e2e/tests/ai-generation.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
-  - [ ] `e2e/tests/chat.spec.ts`:
+  - [x] `e2e/tests/chat.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Envoi chat bloqué quand scope workspace non résolu (bouton désactivé / POST jamais émis)
 - **Gates**:
