@@ -417,10 +417,10 @@ Out of scope:
       - [x] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
       - [x] Draft créé hors scope → H1 vide sur `/dossier/new?draft=...`
     - [ ] **Folder lock/presence**
-      - [ ] User A locks folder
-      - [ ] User B sees locked view + presence
-      - [ ] Unlock request + accept on folder
-      - [ ] User A leaves → lock released → User B can lock
+      - [x] User A locks folder
+      - [x] User B sees locked view + presence
+      - [x] Unlock request + accept on folder
+      - [x] User A leaves → lock released → User B can lock
   - [ ] `e2e/tests/organizations-detail.spec.ts`:
     - [ ] **Organization lock/presence**
       - [x] User A locks organization
