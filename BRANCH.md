@@ -467,7 +467,7 @@ Out of scope:
       - [x] User A changes User B role
       - [x] User B view updates without reload
   - [ ] `e2e/tests/streams` (to add if missing):
-    - [ ] SSE workspace scoping (no cross-workspace leakage)
+    - [x] SSE workspace scoping (no cross-workspace leakage)
   - [x] `e2e/tests/documents-summary.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
