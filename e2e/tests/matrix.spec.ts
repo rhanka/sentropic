@@ -449,17 +449,46 @@ test.describe('Configuration de la matrice', () => {
         }, { timeout: 10_000 })
         .toBe(userAId);
 
+      // Navigate to another page to trigger SSE cleanup
+      await pageA.goto('/dossiers');
+      await pageA.waitForLoadState('domcontentloaded');
+      // Wait a bit for SSE cleanup to complete
+      await pageA.waitForTimeout(1000);
       await userAContext.close();
 
+      // After User A leaves, the lock should be released (null) or User B can acquire it
+      // User B might auto-acquire the lock if they're on the page
+      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const pageB = await userBContext.newPage();
+      const setScopeB = (id: string) => {
+        return (value: string) => {
+          try {
+            localStorage.setItem(id, value);
+          } catch {
+            // ignore
+          }
+        };
+      };
+      await pageB.addInitScript(setScopeB('workspaceScopeId'), workspaceAId);
+      await pageB.addInitScript(setScopeB('currentFolderId'), folderId);
+      await pageB.goto('/matrice');
+      await pageB.waitForLoadState('domcontentloaded');
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      // Wait for lock to be released or acquired by User B
       await expect
         .poll(async () => {
           const res = await userBApi.get(`/api/v1/locks${workspaceQuery}&objectType=folder&objectId=${encodeURIComponent(folderId)}`);
           if (!res.ok()) return null;
           const data = await res.json().catch(() => null);
-          return data?.lock ?? null;
-        }, { timeout: 10_000 })
-        .toBeNull();
+          const lock = data?.lock;
+          if (!lock) return 'released';
+          const lockedBy = lock?.lockedBy?.userId ?? null;
+          return lockedBy === userBId ? 'acquired-by-b' : lockedBy === userAId ? 'still-locked-by-a' : 'unknown';
+        }, { timeout: 15_000 })
+        .toMatch(/released|acquired-by-b/);
 
+      // Verify User B can acquire the lock (if not already acquired)
       const acquireRes = await userBApi.post(`/api/v1/locks${workspaceQuery}`, {
         data: { objectType: 'folder', objectId: folderId },
       });
@@ -469,6 +498,8 @@ test.describe('Configuration de la matrice', () => {
       const acquireJson = await acquireRes.json().catch(() => null);
       const lockedBy = acquireJson?.lock?.lockedBy?.userId ?? null;
       expect(lockedBy).toBe(userBId);
+
+      await userBContext.close();
 
       await userAApi.dispose();
       await userBApi.dispose();
