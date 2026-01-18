@@ -4,9 +4,12 @@ test.describe('Détail des organisations', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
+  const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
   let organizationId = '';
   let userAId = '';
+  let userBId = '';
+  let userCId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -24,14 +27,26 @@ test.describe('Détail des organisations', () => {
     if (!addRes.ok() && addRes.status() !== 409) {
       throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
     }
+    const addResC = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+      data: { email: 'e2e-user-victim@example.com', role: 'editor' },
+    });
+    if (!addResC.ok() && addResC.status() !== 409) {
+      throw new Error(`Impossible d'ajouter user-c en editor (status ${addResC.status()})`);
+    }
 
     const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
     if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
     const membersData = await membersRes.json().catch(() => null);
     const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
     const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
+    const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
+    const userC = members.find((member) => member.email === 'e2e-user-victim@example.com');
     userAId = userA?.userId ?? '';
+    userBId = userB?.userId ?? '';
+    userCId = userC?.userId ?? '';
     if (!userAId) throw new Error('User A id introuvable');
+    if (!userBId) throw new Error('User B id introuvable');
+    if (!userCId) throw new Error('User C id introuvable');
 
     const orgRes = await userAApi.get('/api/v1/organizations');
     if (!orgRes.ok()) throw new Error(`Impossible de charger les organisations (status ${orgRes.status()})`);
@@ -197,5 +212,160 @@ test.describe('Détail des organisations', () => {
     await userAContext.close();
     await userBContext.close();
     await userAApi.dispose();
+  });
+
+  test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
+    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const pageA = await userAContext.newPage();
+    const pageB = await userBContext.newPage();
+
+    const setScope = (id: string) => {
+      return (value: string) => {
+        try {
+          localStorage.setItem(id, value);
+        } catch {
+          // ignore
+        }
+      };
+    };
+
+    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+
+    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await pageA.waitForLoadState('domcontentloaded');
+    await pageB.waitForLoadState('domcontentloaded');
+
+    const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
+    const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
+    await expect(avatarAInB).toBeVisible({ timeout: 10_000 });
+    await expect(avatarBInA).toBeVisible({ timeout: 10_000 });
+
+    await pageB.close();
+    await expect(avatarBInA).toHaveCount(0, { timeout: 10_000 });
+
+    await userAContext.close();
+    await userBContext.close();
+  });
+
+  test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+    const pageA = await userAContext.newPage();
+
+    const setScope = (id: string) => {
+      return (value: string) => {
+        try {
+          localStorage.setItem(id, value);
+        } catch {
+          // ignore
+        }
+      };
+    };
+
+    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await pageA.waitForLoadState('domcontentloaded');
+    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    if (!lockRes.ok() && lockRes.status() !== 409) {
+      throw new Error(`Impossible d'acquérir le lock (status ${lockRes.status()})`);
+    }
+
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.lockedBy?.userId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userAId);
+
+    await userAContext.close();
+
+    await expect
+      .poll(async () => {
+        const res = await userBApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock ?? null;
+      }, { timeout: 10_000 })
+      .toBeNull();
+
+    const acquireRes = await userBApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    if (!acquireRes.ok() && acquireRes.status() !== 409) {
+      throw new Error(`Impossible d'acquérir le lock B (status ${acquireRes.status()})`);
+    }
+    const acquireJson = await acquireRes.json().catch(() => null);
+    const lockedBy = acquireJson?.lock?.lockedBy?.userId ?? null;
+    expect(lockedBy).toBe(userBId);
+
+    await userAApi.dispose();
+    await userBApi.dispose();
+  });
+
+  test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async () => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+    const userCApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_C_STATE });
+
+    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    if (!lockRes.ok() && lockRes.status() !== 409) {
+      throw new Error(`Impossible d'acquérir le lock A (status ${lockRes.status()})`);
+    }
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.lockedBy?.userId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userAId);
+
+    const requestB = await userBApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    expect(requestB.ok()).toBeTruthy();
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.unlockRequestedByUserId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userBId);
+
+    const requestC = await userCApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    expect([409, 403]).toContain(requestC.status());
+
+    const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock?workspace_id=${workspaceAId}`, {
+      data: { objectType: 'organization', objectId: organizationId },
+    });
+    expect(acceptRes.ok()).toBeTruthy();
+
+    await expect
+      .poll(async () => {
+        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+        if (!res.ok()) return null;
+        const data = await res.json().catch(() => null);
+        return data?.lock?.lockedBy?.userId ?? null;
+      }, { timeout: 10_000 })
+      .toBe(userBId);
+
+    await userAApi.dispose();
+    await userBApi.dispose();
+    await userCApi.dispose();
   });
 });

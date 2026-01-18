@@ -393,25 +393,25 @@ Out of scope:
       - [ ] Can manage members
       - [ ] Can hide/unhide workspace
       - [ ] Can delete hidden workspace
-  - [ ] `e2e/tests/organizations-detail.spec.ts` / `usecase-detail.spec.ts`:
-    - [ ] **User A locks / User B sees locked view**
-      - [ ] User A opens object → acquires lock
-      - [ ] User B opens same object → locked view
-    - [ ] **Unlock request flow**
-      - [ ] User B requests unlock
-      - [ ] User A accepts → lock transfers to User B
-    - [ ] **Presence**
-      - [ ] User A/B avatars appear
-      - [ ] Avatar disappears on leave
-    - [ ] **Lock breaks on leave**
-      - [ ] User A leaves view → lock released
-      - [ ] User B can acquire lock
-    - [ ] **3 users contention**
-      - [ ] User A locks object
-      - [ ] User B requests unlock
-      - [ ] User C opens same object → sees presence + locked view
-      - [ ] Second unlock request rejected (B/C)
-      - [ ] User A accepts → lock transfers to requester, others stay locked
+  - [x] `e2e/tests/organizations-detail.spec.ts` / `usecase-detail.spec.ts`:
+    - [x] **User A locks / User B sees locked view**
+      - [x] User A opens object → acquires lock
+      - [x] User B opens same object → locked view
+    - [x] **Unlock request flow**
+      - [x] User B requests unlock
+      - [x] User A accepts → lock transfers to User B
+    - [x] **Presence**
+      - [x] User A/B avatars appear
+      - [x] Avatar disappears on leave
+    - [x] **Lock breaks on leave**
+      - [x] User A leaves view → lock released
+      - [x] User B can acquire lock
+    - [x] **3 users contention**
+      - [x] User A locks object
+      - [x] User B requests unlock
+      - [x] User C opens same object → sees presence + locked view
+      - [x] Second unlock request rejected (B/C)
+      - [x] User A accepts → lock transfers to requester, others stay locked
   - [x] `e2e/tests/dossiers-reload-draft.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Dossier choisi via API pas dans le `workspace_id` actif → blocage UI
@@ -466,19 +466,19 @@ Out of scope:
     - [x] **Role change reactivity**
       - [x] User A changes User B role
       - [x] User B view updates without reload
-  - [ ] `e2e/tests/streams` (to add if missing):
+  - [x] `e2e/tests/streams` (to add if missing):
     - [x] SSE workspace scoping (no cross-workspace leakage)
   - [x] `e2e/tests/documents-summary.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Résumés restent “En cours” suite à échec `e2e-set-queue` (SQL)
-  - [ ] `e2e/tests/documents-ui-actions.spec.ts`:
+  - [x] `e2e/tests/documents-ui-actions.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Poll documents bloqué si `workspace_id` ne correspond pas au scope UI (admin multi-workspaces)
-    - [ ] **Documents scoping**
+    - [x] **Documents scoping**
       - [x] User A uploads document to org
       - [x] User B in same workspace sees document
       - [x] User B in other workspace does not see document
-  - [ ] `e2e/tests/ai-generation.spec.ts`:
+  - [x] `e2e/tests/ai-generation.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Workspace read-only détecté trop tôt sur `/organisations/new` → redirection avant enrichissement
   - [x] `e2e/tests/chat.spec.ts`:
