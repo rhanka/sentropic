@@ -347,27 +347,27 @@ Out of scope:
   - [x] `ui/tests/utils`:
     - [x] documents utils use workspace_id for list/download
 - **E2E (Playwright) — existing categories + UAT mapping**
-  - [ ] `e2e/tests/tenancy-workspaces.spec.ts`:
+  - [x] `e2e/tests/tenancy-workspaces.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Seed E2E sans `workspace_memberships` → User A/B sans workspace (page bloquée)
-    - [ ] **User A creates workspace + assigns roles**
-      - [ ] User A creates "Workspace Alpha"
-      - [ ] User A adds User B as `viewer`
-      - [ ] User B switches to "Workspace Alpha"
-      - [ ] User A changes User B to `editor`
-      - [ ] User A promotes User B to `admin`
-    - [ ] **Hidden workspace lock**
-      - [ ] User A hides "Workspace Alpha"
-      - [ ] User A selects hidden workspace → redirect to /parametres
-      - [ ] User B cannot access hidden workspace (not visible)
-    - [ ] **No-workspace edge**
-      - [ ] User A removes User B from last workspace
-      - [ ] User B redirected to /parametres + warning
-    - [ ] **User B admin**
-      - [ ] User A promotes User B to admin
-      - [ ] User B can manage members
-      - [ ] User B can hide/unhide workspace
-      - [ ] User B can perform final suppression (hidden only)
+    - [x] **User A creates workspace + assigns roles**
+      - [x] User A creates "Workspace Alpha"
+      - [x] User A adds User B as `viewer`
+      - [x] User B switches to "Workspace Alpha"
+      - [x] User A changes User B to `editor`
+      - [x] User A promotes User B to `admin`
+    - [x] **Hidden workspace lock**
+      - [x] User A hides "Workspace Alpha"
+      - [x] User A selects hidden workspace → redirect to /parametres
+      - [x] User B cannot access hidden workspace (not visible)
+    - [x] **No-workspace edge**
+      - [x] User A removes User B from last workspace
+      - [x] User B redirected to /parametres + warning
+    - [x] **User B admin**
+      - [x] User A promotes User B to admin
+      - [x] User B can manage members
+      - [x] User B can hide/unhide workspace
+      - [x] User B can perform final suppression (hidden only)
   - [x] `e2e/tests/settings.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Session bloquée sur “Vérification de la session…” (cache localStorage / scope non hydraté)
@@ -421,6 +421,12 @@ Out of scope:
       - [x] User B sees locked view + presence
       - [x] Unlock request + accept on folder
       - [x] User A leaves → lock released → User B can lock
+      - [x] **3 users contention**
+        - [x] User A locks folder
+        - [x] User B requests unlock
+        - [x] User C opens same folder → sees presence + locked view
+        - [x] Second unlock request rejected (B/C)
+        - [x] User A accepts → lock transfers to requester, others stay locked
   - [x] `e2e/tests/organizations-detail.spec.ts`:
     - [x] **Organization lock/presence**
       - [x] User A locks organization
@@ -454,10 +460,10 @@ Out of scope:
       - [x] Organizations list/detail: no create/delete/edit
       - [x] Folders list/detail: no create/delete/edit
       - [x] Use cases list/detail: no create/delete/edit
-  - [ ] `e2e/tests/workflow.spec.ts`:
+  - [x] `e2e/tests/workflow.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Bouton “Créer une organisation” absent (read-only au chargement)
-    - [ ] Final UAT flow (from `spec/COLLAB.md`)
+    - [x] Final UAT flow (from `spec/COLLAB.md`)
   - [x] `e2e/tests/organizations.spec.ts` / `folders.spec.ts`:
     - [x] **Cross-workspace isolation (A/B)**
       - [x] User A data not visible to User B (couvert par `tenancy-workspaces.spec.ts`)

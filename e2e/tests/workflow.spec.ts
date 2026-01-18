@@ -191,8 +191,4 @@ test.describe.serial('Workflow métier complet', () => {
     }
   });
 
-  test.skip('devrait permettre de changer de dossier dans le dashboard', async ({ page }) => {
-    // Test skip: Le sélecteur de dossier n'existe plus dans la nouvelle structure du dashboard
-    // Le changement de dossier se fait maintenant via la navigation vers /dossiers
-  });
 });
