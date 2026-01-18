@@ -1,6 +1,7 @@
 services:
   api:
     environment:
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       - ADMIN_EMAIL=e2e-admin@example.com
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:5173
