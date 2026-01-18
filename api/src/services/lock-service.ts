@@ -23,7 +23,9 @@ export type LockSnapshot = {
   unlockRequestMessage: string | null;
 };
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
+// TTL configurable via LOCK_TTL_MS env var (default: 60s, as per COLLAB.md "1 minute max")
+// For E2E tests, use LOCK_TTL_MS=15000 (15s) in docker-compose.test.yml
+const DEFAULT_TTL_MS = process.env.LOCK_TTL_MS ? parseInt(process.env.LOCK_TTL_MS, 10) : 60 * 1000;
 
 type HttpError = Error & { status: number };
 function httpError(status: number, message: string): HttpError {
