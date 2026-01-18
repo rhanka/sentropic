@@ -368,16 +368,16 @@ Out of scope:
       - [ ] User B can manage members
       - [ ] User B can hide/unhide workspace
       - [ ] User B can perform final suppression (hidden only)
-  - [ ] `e2e/tests/settings.spec.ts`:
+  - [x] `e2e/tests/settings.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Session bloquée sur “Vérification de la session…” (cache localStorage / scope non hydraté)
-    - [ ] **Workspace table UX**
-      - [ ] Icons only, hover message on row
-      - [ ] Action buttons do not trigger row hover
-    - [ ] **User A renames workspace**
-      - [ ] Rename via EditableInput → persisted
+    - [x] **Workspace table UX**
+      - [x] Icons only, hover message on row
+      - [x] Action buttons do not trigger row hover
+    - [x] **User A renames workspace**
+      - [x] Rename via EditableInput → persisted
     - [ ] **Live updates**
-      - [ ] User A updates member role → User B sees update
+      - [x] User A updates member role → User B sees update
       - [ ] User A hides/unhides workspace → table updates for both
   - [ ] `e2e/tests/access-control.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
