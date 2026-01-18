@@ -379,20 +379,20 @@ Out of scope:
     - [ ] **Live updates**
       - [x] User A updates member role → User B sees update
       - [ ] User A hides/unhides workspace → table updates for both
-  - [ ] `e2e/tests/access-control.spec.ts`:
+  - [x] `e2e/tests/access-control.spec.ts`:
     - [x] **Régression à corriger (branch vs main)**
       - [x] Test obsolète (toggle “Partager mon workspace…” supprimé avec `workspace_memberships`)
-    - [ ] **User B viewer**
-      - [ ] No create/delete buttons
-      - [ ] Cannot access create routes (redirect)
-      - [ ] Inline editors locked
-    - [ ] **User B editor**
-      - [ ] Can edit objects
-      - [ ] Cannot manage members
-    - [ ] **User B admin**
-      - [ ] Can manage members
-      - [ ] Can hide/unhide workspace
-      - [ ] Can delete hidden workspace
+    - [x] **User B viewer**
+      - [x] No create/delete buttons
+      - [x] Cannot access create routes (redirect)
+      - [x] Inline editors locked
+    - [x] **User B editor**
+      - [x] Can edit objects
+      - [x] Cannot manage members
+    - [x] **User B admin**
+      - [x] Can manage members
+      - [x] Can hide/unhide workspace
+      - [x] Can delete hidden workspace
   - [x] `e2e/tests/organizations-detail.spec.ts` / `usecase-detail.spec.ts`:
     - [x] **User A locks / User B sees locked view**
       - [x] User A opens object → acquires lock
