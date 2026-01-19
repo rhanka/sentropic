@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { contextDocuments, contextModificationHistory, jobQueue } from '../../db/schema';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
@@ -38,12 +37,7 @@ documentsRouter.get('/', async (c) => {
   });
   if (!parsed.success) return c.json({ message: 'Invalid query' }, 400);
 
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({ user, requested: parsed.data.workspace_id });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
 
   const rows = await db
     .select()
@@ -116,12 +110,7 @@ documentsRouter.get('/', async (c) => {
 
 documentsRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({ user, requested: c.req.query('workspace_id') });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
 
   const id = c.req.param('id');
   const [doc] = await db
@@ -151,12 +140,7 @@ documentsRouter.get('/:id', async (c) => {
 
 documentsRouter.get('/:id/content', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({ user, requested: c.req.query('workspace_id') });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
 
   const id = c.req.param('id');
   const [doc] = await db

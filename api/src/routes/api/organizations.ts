@@ -10,7 +10,6 @@ import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { requireEditor } from '../../middleware/rbac';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 type OrganizationData = {
@@ -143,15 +142,7 @@ async function notifyOrganizationEvent(organizationId: string): Promise<void> {
 
 organizationsRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id'),
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const rows = await db
     .select()
     .from(organizations)
@@ -265,15 +256,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
 
 organizationsRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id'),
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id');
   const [org] = await db
     .select()

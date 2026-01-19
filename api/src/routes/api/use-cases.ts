@@ -14,7 +14,6 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 
@@ -336,15 +335,7 @@ export const useCasesRouter = new Hono();
 
 useCasesRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const folderId = c.req.query('folder_id');
   const rows = folderId
     ? await db.select().from(useCases).where(and(eq(useCases.workspaceId, targetWorkspaceId), eq(useCases.folderId, folderId)))
@@ -399,15 +390,7 @@ useCasesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator
 
 useCasesRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id');
   const [record] = await db
     .select()

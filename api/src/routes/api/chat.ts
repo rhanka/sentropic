@@ -4,7 +4,6 @@ import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 export const chatRouter = new Hono();
@@ -97,19 +96,8 @@ chatRouter.post('/messages', requireWorkspaceEditorRole(), zValidator('json', cr
   const user = c.get('user');
   const body = c.req.valid('json');
 
-  // Workspace scope for chat: admin_app can target a shared workspace (read-only), otherwise own workspace.
-  let targetWorkspaceId = user.workspaceId as string;
-  try {
-    const requestedRaw = (body as Record<string, unknown>)['workspace_id'];
-    const requestedWorkspaceId = typeof requestedRaw === 'string' ? requestedRaw : undefined;
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user: { role: user.role, workspaceId: user.workspaceId },
-      requested: requestedWorkspaceId
-    });
-  } catch {
-    // opaque
-    return c.json({ message: 'Not found' }, 404);
-  }
+  // Workspace scope for chat: user.workspaceId is already resolved by requireAuth middleware
+  const targetWorkspaceId = user.workspaceId as string;
 
   const created = await chatService.createUserMessageWithAssistantPlaceholder({
     userId: user.userId,

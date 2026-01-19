@@ -7,7 +7,6 @@ import { createId } from '../../utils/id';
 import { and, desc, eq } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { requireEditor } from '../../middleware/rbac';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 
@@ -114,15 +113,7 @@ const parseMatrix = (value: string | null) => {
 
 foldersRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const organizationId = c.req.query('organization_id');
   
   // LEFT JOIN with organizations to retrieve organization name
@@ -260,15 +251,7 @@ foldersRouter.post(
 
 foldersRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id');
   const [folder] = await db.select({
     id: folders.id,
@@ -395,15 +378,7 @@ foldersRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async 
 
 foldersRouter.get('/:id/matrix', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id');
   const [folder] = await db
     .select()
@@ -425,15 +400,7 @@ foldersRouter.get('/matrix/default', async (c) => {
 // Endpoint pour lister les dossiers avec leurs matrices (pour copier)
 foldersRouter.get('/list/with-matrices', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id')
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const rows = await db.select().from(folders).where(eq(folders.workspaceId, targetWorkspaceId));
   const items = rows.map((folder) => ({
     id: folder.id,
