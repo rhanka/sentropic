@@ -53,7 +53,7 @@
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
   let lastReadOnlyRole = $workspaceReadOnlyScope;
-  const LOCK_REFRESH_MS = 30 * 1000;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   onMount(async () => {
     await loadMatrix();

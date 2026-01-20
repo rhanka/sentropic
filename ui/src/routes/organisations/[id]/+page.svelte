@@ -39,7 +39,7 @@
   $: isReadOnlyRole = $workspaceReadOnlyScope;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   let lastReadOnlyRole = isReadOnlyRole;
-  const LOCK_REFRESH_MS = 30 * 1000;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
