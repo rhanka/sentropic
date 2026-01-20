@@ -1,4 +1,6 @@
 import { test, expect, request } from '@playwright/test';
+import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -11,9 +13,6 @@ test.describe('Détail des cas d\'usage', () => {
   let lockUseCaseId = '';
   let lockUseCaseName = '';
   let folderId = '';
-  let userAId = '';
-  let userBId = '';
-  let userCId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -46,14 +45,11 @@ test.describe('Détail des cas d\'usage', () => {
     const membersData = await membersRes.json().catch(() => null);
     const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
     const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
-    userAId = userA?.userId ?? '';
-    if (!userAId) throw new Error('User A id introuvable');
     const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
-    userBId = userB?.userId ?? '';
-    if (!userBId) throw new Error('User B id introuvable');
     const userC = members.find((member) => member.email === 'e2e-user-victim@example.com');
-    userCId = userC?.userId ?? '';
-    if (!userCId) throw new Error('User C id introuvable');
+    if (!userA?.userId || !userB?.userId || !userC?.userId) {
+      throw new Error('User A/B/C id introuvable');
+    }
 
     // Créer une organisation et un dossier dans ce workspace
     const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
@@ -79,10 +75,10 @@ test.describe('Détail des cas d\'usage', () => {
     const useCaseJson = await useCaseRes.json().catch(() => null);
     useCaseId = String(useCaseJson?.id || '');
     if (!useCaseId) throw new Error('useCaseId introuvable');
-    useCaseName = useCases[0].name ?? '';
+    useCaseName = String(useCaseJson?.name || '');
 
     const lockName = `UC Lock ${Date.now()}`;
-    const createLockRes = await userAApi.post('/api/v1/use-cases', {
+    const createLockRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
       data: { name: lockName, description: 'Use case lock test', folderId },
     });
     if (!createLockRes.ok()) throw new Error(`Impossible de créer un cas d'usage lock (status ${createLockRes.status()})`);
@@ -426,8 +422,6 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
     const userAContext = await browser.newContext({ storageState: USER_A_STATE });
     const userBContext = await browser.newContext({ storageState: USER_B_STATE });
     const pageA = await userAContext.newPage();
@@ -451,22 +445,8 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA
       .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
       .catch(() => null);
-
-    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    if (!lockRes.ok() && lockRes.status() !== 409) {
-      throw new Error(`Impossible d'acquérir le lock usecase (status ${lockRes.status()})`);
-    }
-
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userAId);
+    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockOwnedByMe(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
@@ -490,34 +470,27 @@ test.describe('Détail des cas d\'usage', () => {
     await waitForUseCaseView();
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-    const requestRes = await userBApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    if (!requestRes.ok()) throw new Error(`Demande déverrouillage refusée (status ${requestRes.status()})`);
+    await waitForLockedByOther(pageB);
+    const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+    await requestButton.click();
 
-    const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    if (!acceptRes.ok()) throw new Error(`Accept unlock refusé (status ${acceptRes.status()})`);
-
+    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+    const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
     await expect
       .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
+        await badgeA.hover({ force: true });
+        return releaseButton.count();
+      }, { timeout: 15_000 })
+      .toBe(1);
+    await releaseButton.click();
+
+    await waitForLockOwnedByMe(pageB);
 
     await userAContext.close();
     await userBContext.close();
-    await userAApi.dispose();
-    await userBApi.dispose();
   });
 
   test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
     const userAContext = await browser.newContext({ storageState: USER_A_STATE });
     const userBContext = await browser.newContext({ storageState: USER_B_STATE });
     const pageA = await userAContext.newPage();
@@ -542,56 +515,28 @@ test.describe('Détail des cas d\'usage', () => {
     await pageB.waitForLoadState('domcontentloaded');
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-    await pageA
-      .waitForResponse((res) => res.url().includes('/api/v1/locks/presence') && res.request().method() === 'POST', { timeout: 10_000 })
-      .catch(() => {});
-    await pageB
-      .waitForResponse((res) => res.url().includes('/api/v1/locks/presence') && res.request().method() === 'POST', { timeout: 10_000 })
-      .catch(() => {});
 
-    await userAApi.post(`/api/v1/locks/presence?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    await userBApi.post(`/api/v1/locks/presence?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-
-    await pageA.reload({ waitUntil: 'domcontentloaded' });
-    await pageB.reload({ waitUntil: 'domcontentloaded' });
-
+    const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
+    const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
     await expect
       .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks/presence?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.total ?? null;
-      }, { timeout: 10_000 })
-      .toBeGreaterThanOrEqual(2);
+        const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);
+        return aInB > 0 && bInA > 0;
+      }, { timeout: 15_000 })
+      .toBe(true);
 
     await pageB.close();
-    await userBApi.post(`/api/v1/locks/presence/leave?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks/presence?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.total ?? null;
-      }, { timeout: 10_000 })
-      .toBe(1);
+    await expect(avatarBInA).toHaveCount(0, { timeout: 10_000 });
 
     await userAContext.close();
     await userBContext.close();
-    await userAApi.dispose();
-    await userBApi.dispose();
   });
 
   test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
     const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
     const pageA = await userAContext.newPage();
+    const pageB = await userBContext.newPage();
 
     const setScope = (id: string) => {
       return (value: string) => {
@@ -608,101 +553,91 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    if (!lockRes.ok() && lockRes.status() !== 409) {
-      throw new Error(`Impossible d'acquérir le lock (status ${lockRes.status()})`);
-    }
-
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userAId);
+    await waitForLockOwnedByMe(pageA);
 
     await userAContext.close();
 
-    await expect
-      .poll(async () => {
-        const res = await userBApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock ?? null;
-      }, { timeout: 10_000 })
-      .toBeNull();
+    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+    await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockOwnedByMe(pageB);
 
-    const acquireRes = await userBApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    if (!acquireRes.ok() && acquireRes.status() !== 409) {
-      throw new Error(`Impossible d'acquérir le lock B (status ${acquireRes.status()})`);
-    }
-    const acquireJson = await acquireRes.json().catch(() => null);
-    const lockedBy = acquireJson?.lock?.lockedBy?.userId ?? null;
-    expect(lockedBy).toBe(userBId);
-
-    await userAApi.dispose();
-    await userBApi.dispose();
+    await userBContext.close();
   });
 
-  test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async () => {
+  test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-    const userCApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_C_STATE });
-
-    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
-    if (!lockRes.ok() && lockRes.status() !== 409) {
-      throw new Error(`Impossible d'acquérir le lock A (status ${lockRes.status()})`);
-    }
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+    });
+    const userCContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_C_STATE, workspaceAId),
+    });
+    const pageA = await userAContext.newPage();
+    const pageB = await userBContext.newPage();
+    const pageC = await userCContext.newPage();
+
+    // workspaceScopeId hydrated via storageState
+
+    const testName = `UC Lock 3 users ${Date.now()}`;
+    const createRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+      data: { name: testName, description: 'Use case lock 3 users', folderId },
+    });
+    if (!createRes.ok()) throw new Error(`Impossible de créer le cas d'usage (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    const testUseCaseId = String((created as any)?.id ?? '');
+    if (!testUseCaseId) throw new Error('testUseCaseId introuvable');
+
+    await pageA.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
+    await pageA.waitForLoadState('domcontentloaded');
+    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockOwnedByMe(pageA);
+
+    await pageB.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockedByOther(pageB);
+    const requestButtonB = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+    await requestButtonB.click();
+
+    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+    const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
     await expect
       .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
+        await badgeA.evaluate((el) => {
+          el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        });
+        return releaseButton.count();
       }, { timeout: 10_000 })
-      .toBe(userAId);
+      .toBe(1);
+    const releaseLabelBefore = (await releaseButton.getAttribute('aria-label')) || '';
 
-    const requestB = await userBApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    expect(requestB.ok()).toBeTruthy();
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.unlockRequestedByUserId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
-
-    const requestC = await userCApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    expect([409, 403]).toContain(requestC.status());
-
-    const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'usecase', objectId: lockUseCaseId },
-    });
-    expect(acceptRes.ok()).toBeTruthy();
+    await pageC.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
+    await pageC.waitForLoadState('domcontentloaded');
+    await pageC.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockedByOther(pageC);
+    const requestButtonC = pageC.locator('button[aria-label="Demander le déverrouillage"]');
+    await requestButtonC.click();
 
     await expect
       .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=usecase&objectId=${encodeURIComponent(lockUseCaseId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
+        await badgeA.evaluate((el) => {
+          el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        });
+        return (await releaseButton.getAttribute('aria-label')) || '';
+      }, { timeout: 5_000 })
+      .toBe(releaseLabelBefore);
 
+    await releaseButton.click();
+    await waitForLockOwnedByMe(pageB);
+
+    await userAContext.close();
+    await userBContext.close();
+    await userCContext.close();
     await userAApi.dispose();
-    await userBApi.dispose();
-    await userCApi.dispose();
   });
 });

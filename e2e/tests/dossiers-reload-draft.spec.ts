@@ -1,4 +1,6 @@
 import { test, expect, request } from '@playwright/test';
+import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Dossiers — reload & brouillons', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -7,10 +9,8 @@ test.describe('Dossiers — reload & brouillons', () => {
   const USER_B_STATE = './.auth/user-b.json';
   const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
+  let organizationId = '';
   let folderId = '';
-  let userAId = '';
-  let userBId = '';
-  let userCId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -46,10 +46,9 @@ test.describe('Dossiers — reload & brouillons', () => {
     const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
     const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
     const userC = members.find((member) => member.email === 'e2e-user-victim@example.com');
-    userAId = userA?.userId ?? '';
-    userBId = userB?.userId ?? '';
-    userCId = userC?.userId ?? '';
-    if (!userAId || !userBId || !userCId) throw new Error('User A/B/C id introuvable');
+    if (!userA?.userId || !userB?.userId || !userC?.userId) {
+      throw new Error('User A/B/C id introuvable');
+    }
 
     // Créer une organisation et un dossier dans ce workspace
     const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
@@ -57,7 +56,8 @@ test.describe('Dossiers — reload & brouillons', () => {
     });
     if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
     const orgJson = await orgRes.json().catch(() => null);
-    const organizationId = String(orgJson?.id || '');
+    organizationId = String(orgJson?.id || '');
+    if (!organizationId) throw new Error('organizationId introuvable');
 
     const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
       data: { name: 'Dossier Test', description: 'Dossier pour tests dossiers-reload-draft', organizationId },
@@ -134,9 +134,12 @@ test.describe('Dossiers — reload & brouillons', () => {
 
   test.describe.serial('Folder lock/presence', () => {
     test('User A locks → User B sees → unlock accept', async ({ browser }) => {
-      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
@@ -150,59 +153,49 @@ test.describe('Dossiers — reload & brouillons', () => {
         };
       };
 
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+      // workspaceScopeId hydrated via storageState
 
       await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
 
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await waitForLockOwnedByMe(pageA);
 
       await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
-      await expect(badgeB).toBeVisible({ timeout: 10_000 });
-      await badgeB.hover();
+      await waitForLockedByOther(pageB);
       const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
-      await expect(requestButton).toBeVisible({ timeout: 5_000 });
       await requestButton.click();
 
       const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
-      await badgeA.hover();
       const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
-      await expect(releaseButton).toBeVisible({ timeout: 5_000 });
-      await releaseButton.click();
-
       await expect
         .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
+          await badgeA.hover({ force: true });
+          return releaseButton.count();
         }, { timeout: 10_000 })
-        .toBe(userBId);
+        .toBe(1);
+      await releaseButton.click();
+
+      await waitForLockOwnedByMe(pageB);
 
       await userAContext.close();
       await userBContext.close();
-      await userAApi.dispose();
     });
 
     test('User A leaves → lock released → User B can lock', async ({ browser }) => {
-      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
       const pageA = await userAContext.newPage();
+      const pageB = await userBContext.newPage();
 
       const setScope = (id: string) => {
         return (value: string) => {
@@ -214,55 +207,47 @@ test.describe('Dossiers — reload & brouillons', () => {
         };
       };
 
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+      // workspaceScopeId hydrated via storageState
       await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
 
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await waitForLockOwnedByMe(pageA);
 
       await userAContext.close();
 
-      await expect
-        .poll(async () => {
-          const res = await userBApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock ?? null;
-        }, { timeout: 10_000 })
-        .toBeNull();
-
-      const acquireRes = await userBApi.post('/api/v1/locks', {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!acquireRes.ok() && acquireRes.status() !== 409) {
-        throw new Error(`Impossible d'acquérir le lock folder (status ${acquireRes.status()})`);
-      }
-      const acquireJson = await acquireRes.json().catch(() => null);
-      const lockedBy = acquireJson?.lock?.lockedBy?.userId ?? null;
-      expect(lockedBy).toBe(userBId);
-
-      await userAApi.dispose();
-      await userBApi.dispose();
+      // workspaceScopeId hydrated via storageState
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await waitForLockOwnedByMe(pageB);
     });
 
     test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
       const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-      const userCApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_C_STATE });
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
-      const userCContext = await browser.newContext({ storageState: USER_C_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const userCContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_C_STATE, workspaceAId),
+      });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
       const pageC = await userCContext.newPage();
+
+      const folderName = `Dossier Lock 3 users ${Date.now()}`;
+      const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
+        data: { name: folderName, description: 'Dossier lock 3 users', organizationId },
+      });
+      if (!folderRes.ok()) throw new Error(`Impossible de créer le dossier (status ${folderRes.status()})`);
+      const folderJson = await folderRes.json().catch(() => null);
+      const testFolderId = String(folderJson?.id || '');
+      if (!testFolderId) throw new Error('testFolderId introuvable');
 
       const setScope = (id: string) => {
         return (value: string) => {
@@ -274,77 +259,56 @@ test.describe('Dossiers — reload & brouillons', () => {
         };
       };
 
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageC.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+      // workspaceScopeId hydrated via storageState
 
-      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.goto(`/dossiers/${encodeURIComponent(testFolderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
 
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await waitForLockOwnedByMe(pageA);
 
-      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.goto(`/dossiers/${encodeURIComponent(testFolderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
-      await expect(badgeB).toBeVisible({ timeout: 10_000 });
-      await badgeB.hover();
+      await waitForLockedByOther(pageB);
       const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
-      await expect(requestButton).toBeVisible({ timeout: 5_000 });
       await requestButton.click();
 
+      const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+      const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
       await expect
         .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.unlockRequestedByUserId ?? null;
+          await badgeA.hover({ force: true });
+          return releaseButton.count();
         }, { timeout: 10_000 })
-        .toBe(userBId);
+        .toBe(1);
+      const releaseLabelBefore = (await releaseButton.getAttribute('aria-label')) || '';
 
-      await pageC.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageC.goto(`/dossiers/${encodeURIComponent(testFolderId)}`);
       await pageC.waitForLoadState('domcontentloaded');
       await expect(pageC.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
-      const badgeC = pageC.locator('div[role="group"][aria-label="Verrou du document"]');
-      await expect(badgeC).toBeVisible({ timeout: 10_000 });
-
-      const secondReq = await userCApi.post(
-        `/api/v1/locks/request-unlock?workspace_id=${encodeURIComponent(workspaceAId)}`,
-        { data: { objectType: 'folder', objectId: folderId } }
-      );
-      expect(secondReq.status()).toBe(409);
-
-      const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
-      await badgeA.hover();
-      const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
-      await expect(releaseButton).toBeVisible({ timeout: 5_000 });
-      await releaseButton.click();
+      await waitForLockedByOther(pageC);
+      const requestButtonC = pageC.locator('button[aria-label="Demander le déverrouillage"]');
+      await requestButtonC.click();
 
       await expect
         .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userBId);
+          await badgeA.hover({ force: true });
+          return (await releaseButton.getAttribute('aria-label')) || '';
+        }, { timeout: 5_000 })
+        .toBe(releaseLabelBefore);
+
+      await releaseButton.click();
+
+      await waitForLockOwnedByMe(pageB);
 
       await userAContext.close();
       await userBContext.close();
       await userCContext.close();
       await userAApi.dispose();
-      await userBApi.dispose();
-      await userCApi.dispose();
     });
   });
 });

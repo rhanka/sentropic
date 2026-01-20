@@ -1,4 +1,6 @@
 import { test, expect, request } from '@playwright/test';
+import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des organisations', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -6,6 +8,7 @@ test.describe('Détail des organisations', () => {
   const USER_B_STATE = './.auth/user-b.json';
   const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
+  let workspaceName = '';
   let organizationId = '';
   let userAId = '';
   let userBId = '';
@@ -15,7 +18,7 @@ test.describe('Détail des organisations', () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
-    const workspaceName = `Organizations Detail E2E ${Date.now()}`;
+    workspaceName = `Organizations Detail E2E ${Date.now()}`;
     const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
     if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
     const created = await createRes.json().catch(() => null);
@@ -162,271 +165,251 @@ test.describe('Détail des organisations', () => {
     }
   });
 
-  test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+  test.describe.serial('Lock/presence', () => {
+    test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+    });
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+    });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
-
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
 
     // User A arrives first and acquires the lock
     await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    
+    // Vérifier que workspaceScopeId est bien défini
+    const scopeIdA = await pageA.evaluate(() => localStorage.getItem('workspaceScopeId'));
+    expect(scopeIdA).toBe(workspaceAId);
 
-    // Wait for User A to acquire the lock
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userAId);
+    // Wait for page to be fully loaded (h1 with organization name should be visible)
+    await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
+
+    // Wait for User A to acquire the lock (verify via UI: editable fields should be enabled)
+    const editableFieldA = pageA.locator('input, textarea').first();
+    await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
+    await expect(editableFieldA).toBeEnabled({ timeout: 10_000 });
+
+    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await waitForLockOwnedByMe(pageA);
 
     // Now User B arrives (should see locked view)
     await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
     await pageB.waitForLoadState('domcontentloaded');
+    
+    // Vérifier que workspaceScopeId est bien défini
+    const scopeIdB = await pageB.evaluate(() => localStorage.getItem('workspaceScopeId'));
+    expect(scopeIdB).toBe(workspaceAId);
+
+    // Wait for page to be fully loaded (h1 with organization name should be visible)
+    await expect(pageB.locator('h1')).toBeVisible({ timeout: 10_000 });
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
 
-    // Wait for page B to receive the lock update via SSE (badge should be visible)
-    const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
-    await expect(badgeB).toBeVisible({ timeout: 10_000 });
-    // Wait a bit more for Svelte reactivity to update isLockedByOther
-    await pageB.waitForTimeout(500);
-
-    const editableFieldB = pageB.locator('.editable-input, .editable-textarea').first();
-    await expect(editableFieldB).toBeDisabled({ timeout: 10_000 });
-
-    await badgeB.hover();
+    await waitForLockedByOther(pageB);
     const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
-    await expect(requestButton).toBeVisible({ timeout: 5_000 });
     await requestButton.click();
 
-    // Wait for the unlock request to be processed and propagated via SSE
+    // Wait for the unlock request to be processed and propagated via SSE (verify via UI: button should appear)
+    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+    const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
     await expect
       .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.unlockRequestedByUserId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
-
-    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
-    await badgeA.hover();
-    const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
-    await expect(releaseButton).toBeVisible({ timeout: 5_000 });
+        await badgeA.hover({ force: true });
+        return releaseButton.count();
+      }, { timeout: 15_000 })
+      .toBe(1);
     await releaseButton.click();
 
+    const editableFieldB = pageB.locator('input, textarea').first();
     await expect(editableFieldB).toBeEnabled({ timeout: 10_000 });
 
-    await userAContext.close();
-    await userBContext.close();
-    await userAApi.dispose();
-  });
-
-  test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
-    const pageA = await userAContext.newPage();
-    const pageB = await userBContext.newPage();
-
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-
-    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-    await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-    await pageA.waitForLoadState('domcontentloaded');
-    await pageB.waitForLoadState('domcontentloaded');
-
-    const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
-    const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
-    await expect(avatarAInB).toBeVisible({ timeout: 10_000 });
-    await expect(avatarBInA).toBeVisible({ timeout: 10_000 });
-
-    await pageB.close();
-    await expect(avatarBInA).toHaveCount(0, { timeout: 10_000 });
-
-    await userAContext.close();
-    await userBContext.close();
-  });
-
-  test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const pageA = await userAContext.newPage();
-
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-    await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-
-    const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'organization', objectId: organizationId },
+      await userAContext.close();
+      await userBContext.close();
     });
-    if (!lockRes.ok() && lockRes.status() !== 409) {
-      throw new Error(`Impossible d'acquérir le lock (status ${lockRes.status()})`);
-    }
 
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userAId);
+    test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
+      test.setTimeout(60_000);
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const pageA = await userAContext.newPage();
+      const pageB = await userBContext.newPage();
 
-    // Navigate to another page to trigger SSE cleanup
-    await pageA.goto('/organisations');
-    await pageA.waitForLoadState('domcontentloaded');
-    // Wait a bit for SSE cleanup to complete
-    await pageA.waitForTimeout(1000);
-    await userAContext.close();
+      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageB.waitForLoadState('domcontentloaded');
 
-    // After User A leaves, the lock should be released (null) or User B can acquire it
-    // User B might auto-acquire the lock if they're on the page
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
-    const pageB = await userBContext.newPage();
-    const setScopeB = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-    await pageB.addInitScript(setScopeB('workspaceScopeId'), workspaceAId);
-    await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-    await pageB.waitForLoadState('domcontentloaded');
-    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      // Wait for SSE connections to be established (needed for presence sync)
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      // Wait for organization API responses
+      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
+      await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
 
-    // Wait for lock to be released or acquired by User B
-    await expect
-      .poll(async () => {
-        const res = await userBApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        const lock = data?.lock;
-        if (!lock) return 'released';
-        const lockedBy = lock?.lockedBy?.userId ?? null;
-        return lockedBy === userBId ? 'acquired-by-b' : lockedBy === userAId ? 'still-locked-by-a' : 'unknown';
-      }, { timeout: 15_000 })
-      .toMatch(/released|acquired-by-b/);
+      // Wait for pages to be fully loaded
+      await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 10_000 });
 
-    // Verify User B can edit (lock is released or acquired by B)
-    const editableFieldB = pageB.locator('.editable-input, .editable-textarea').first();
-    await expect(editableFieldB).toBeEnabled({ timeout: 10_000 });
+      const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
+      const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
+      await expect
+        .poll(async () => {
+          const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);
+          return aInB > 0 && bInA > 0;
+        }, { timeout: 15_000 })
+        .toBe(true);
 
-    await userBContext.close();
+      await pageB.close();
+      await expect(avatarBInA).toHaveCount(0, { timeout: 10_000 });
 
-    await userAApi.dispose();
-    await userBApi.dispose();
-  });
-
-  test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-    const userCApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_C_STATE });
-
-    // User A opens the page to maintain SSE connection
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const pageA = await userAContext.newPage();
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-    await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-
-    // Wait for User A to acquire the lock automatically
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userAId);
-
-    const requestB = await userBApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'organization', objectId: organizationId },
+      await userAContext.close();
+      await userBContext.close();
     });
-    expect(requestB.ok()).toBeTruthy();
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.unlockRequestedByUserId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
 
-    const requestC = await userCApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'organization', objectId: organizationId },
+    test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
+      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const pageA = await userAContext.newPage();
+
+      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 1000 }).catch(() => {});
+
+      const lockRes = await userAApi.post(`/api/v1/locks?workspace_id=${workspaceAId}`, {
+        data: { objectType: 'organization', objectId: organizationId },
+      });
+      if (!lockRes.ok() && lockRes.status() !== 409) {
+        throw new Error(`Impossible d'acquérir le lock (status ${lockRes.status()})`);
+      }
+
+      await expect
+        .poll(async () => {
+          const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          return data?.lock?.lockedBy?.userId ?? null;
+        }, { timeout: 10_000 })
+        .toBe(userAId);
+
+      // Navigate to another page to trigger SSE cleanup
+      await pageA.goto('/organisations');
+      await pageA.waitForLoadState('domcontentloaded');
+      // Wait a bit for SSE cleanup to complete
+      await pageA.waitForTimeout(500);
+      await userAContext.close();
+
+      // After User A leaves, the lock should be released (null) or User B can acquire it
+      // User B might auto-acquire the lock if they're on the page
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const pageB = await userBContext.newPage();
+      await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      
+      // Wait for page to be fully loaded (h1 with organization name should be visible)
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 5_000 });
+      await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 5_000 }).catch(() => {});
+
+      // Wait for lock to be released or acquired by User B
+      await expect
+        .poll(async () => {
+          const res = await userBApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const lock = data?.lock;
+          if (!lock) return 'released';
+          const lockedBy = lock?.lockedBy?.userId ?? null;
+          return lockedBy === userBId ? 'acquired-by-b' : lockedBy === userAId ? 'still-locked-by-a' : 'unknown';
+        }, { timeout: 10_000 })
+        .toMatch(/released|acquired-by-b/);
+
+      // Wait a bit for Svelte reactivity to update isLockedByOther
+      await pageB.waitForTimeout(500);
+
+      // Wait for page to be fully rendered (check for editable fields to exist)
+      const editableFieldB = pageB.locator('input, textarea').first();
+      await expect(editableFieldB).toBeVisible({ timeout: 10_000 });
+
+      // Verify User B can edit (lock is released or acquired by B)
+      await expect(editableFieldB).toBeEnabled({ timeout: 10_000 });
+
+      await userBContext.close();
+
+      await userAApi.dispose();
+      await userBApi.dispose();
     });
-    expect([409, 403]).toContain(requestC.status());
 
-    const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock?workspace_id=${workspaceAId}`, {
-      data: { objectType: 'organization', objectId: organizationId },
+    test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
+      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+      const userCApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_C_STATE });
+
+      // User A opens the page to maintain SSE connection
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+      });
+      const pageA = await userAContext.newPage();
+      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      // Wait for organization API response
+      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
+
+      // Wait for page to be fully loaded (h1 with organization name should be visible)
+      await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
+
+      // Wait for User A to acquire the lock automatically (verify via UI: editable fields should be enabled)
+      const editableFieldA = pageA.locator('input, textarea').first();
+      await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
+      await expect(editableFieldA).toBeEnabled({ timeout: 10_000 });
+
+      const requestB = await userBApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
+        data: { objectType: 'organization', objectId: organizationId },
+      });
+      expect(requestB.ok()).toBeTruthy();
+      await expect
+        .poll(async () => {
+          const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          return data?.lock?.unlockRequestedByUserId ?? null;
+        }, { timeout: 10_000 })
+        .toBe(userBId);
+
+      const requestC = await userCApi.post(`/api/v1/locks/request-unlock?workspace_id=${workspaceAId}`, {
+        data: { objectType: 'organization', objectId: organizationId },
+      });
+      expect([409, 403]).toContain(requestC.status());
+
+      const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock?workspace_id=${workspaceAId}`, {
+        data: { objectType: 'organization', objectId: organizationId },
+      });
+      expect(acceptRes.ok()).toBeTruthy();
+
+      await expect
+        .poll(async () => {
+          const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          return data?.lock?.lockedBy?.userId ?? null;
+        }, { timeout: 10_000 })
+        .toBe(userBId);
+
+      await userAContext.close();
+      await userAApi.dispose();
+      await userBApi.dispose();
+      await userCApi.dispose();
     });
-    expect(acceptRes.ok()).toBeTruthy();
-
-    await expect
-      .poll(async () => {
-        const res = await userAApi.get(`/api/v1/locks?workspace_id=${workspaceAId}&objectType=organization&objectId=${encodeURIComponent(organizationId)}`);
-        if (!res.ok()) return null;
-        const data = await res.json().catch(() => null);
-        return data?.lock?.lockedBy?.userId ?? null;
-      }, { timeout: 10_000 })
-      .toBe(userBId);
-
-    await userAContext.close();
-    await userAApi.dispose();
-    await userBApi.dispose();
-    await userCApi.dispose();
   });
 });

@@ -1,4 +1,6 @@
 import { test, expect, request } from '@playwright/test';
+import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -6,8 +8,6 @@ test.describe('Configuration de la matrice', () => {
   const USER_B_STATE = './.auth/user-b.json';
   let workspaceAId = '';
   let folderId = '';
-  let userAId = '';
-  let userBId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -35,9 +35,7 @@ test.describe('Configuration de la matrice', () => {
     const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
     const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
     const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
-    userAId = userA?.userId ?? '';
-    userBId = userB?.userId ?? '';
-    if (!userAId || !userBId) throw new Error('User A/B id introuvable');
+    if (!userA?.userId || !userB?.userId) throw new Error('User A/B id introuvable');
 
     // Créer une organisation et un dossier dans ce workspace
     const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
@@ -57,6 +55,23 @@ test.describe('Configuration de la matrice', () => {
 
     await userAApi.dispose();
   });
+
+  const ensureCurrentFolderId = async (page: import('@playwright/test').Page) => {
+    const current = await page.evaluate(() => localStorage.getItem('currentFolderId'));
+    if (current !== folderId) {
+      await page.evaluate((id) => {
+        try {
+          localStorage.setItem('currentFolderId', id);
+        } catch {
+          // ignore
+        }
+      }, folderId);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+    await expect
+      .poll(async () => page.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+      .toBe(folderId);
+  };
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/matrice');
@@ -327,52 +342,60 @@ test.describe('Configuration de la matrice', () => {
 
   test.describe('Matrix lock/presence', () => {
     test('User A locks → User B sees → unlock accept', async ({ browser }) => {
-      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-      const workspaceQuery = `?workspace_id=${workspaceAId}`;
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
+      });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      const setScope = (id: string) => {
-        return (value: string) => {
+      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageA);
+
+      await pageA.click('a[href="/matrice"]');
+      await expect(pageA).toHaveURL(/\/matrice/);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageA);
+      const noFolderMessageA = pageA.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
+      if (await noFolderMessageA.isVisible().catch(() => false)) {
+        await pageA.evaluate((id) => {
           try {
-            localStorage.setItem(id, value);
+            localStorage.setItem('currentFolderId', id);
           } catch {
             // ignore
           }
-        };
-      };
-
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageA.addInitScript(setScope('currentFolderId'), folderId);
-      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageB.addInitScript(setScope('currentFolderId'), folderId);
-
-      await pageA.goto('/matrice');
-      await pageA.waitForLoadState('domcontentloaded');
-      await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
-
-      const lockRes = await userAApi.post(`/api/v1/locks${workspaceQuery}`, {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!lockRes.ok() && lockRes.status() !== 409) {
-        throw new Error(`Impossible d'acquérir le lock folder (status ${lockRes.status()})`);
+        }, folderId);
+        await pageA.reload({ waitUntil: 'domcontentloaded' });
+        await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       }
 
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      await pageB.goto('/matrice');
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .toBe(folderId);
+      await expect
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .toBe(folderId);
+
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageB);
+
+      await pageB.click('a[href="/matrice"]');
+      await expect(pageB).toHaveURL(/\/matrice/);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageB);
       const noFolderMessage = pageB.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
       if (await noFolderMessage.isVisible().catch(() => false)) {
         await pageB.evaluate((id) => {
@@ -387,79 +410,47 @@ test.describe('Configuration de la matrice', () => {
       }
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
+      await waitForLockedByOther(pageB);
+      const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+      await requestButton.click();
+
+      const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+      const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
       await expect
         .poll(async () => {
-          const res = await userBApi.get(`/api/v1/locks${workspaceQuery}&objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+          await pageA.evaluate(() => window.scrollTo(0, 0));
+          await badgeA.evaluate((el) => {
+            el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          });
+          return releaseButton.count();
+        }, { timeout: 15_000 })
+        .toBe(1);
+      await releaseButton.click();
 
-      const requestRes = await userBApi.post(`/api/v1/locks/request-unlock${workspaceQuery}`, {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!requestRes.ok()) throw new Error(`Demande déverrouillage refusée (status ${requestRes.status()})`);
-
-      const acceptRes = await userAApi.post(`/api/v1/locks/accept-unlock${workspaceQuery}`, {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!acceptRes.ok()) throw new Error(`Accept unlock refusé (status ${acceptRes.status()})`);
-
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks${workspaceQuery}&objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userBId);
+      await waitForLockOwnedByMe(pageB);
 
       await userAContext.close();
       await userBContext.close();
-      await userAApi.dispose();
-      await userBApi.dispose();
     });
 
     test('User A leaves → lock released → User B can lock', async ({ browser }) => {
-      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
-      const workspaceQuery = `?workspace_id=${workspaceAId}`;
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
+      });
       const pageA = await userAContext.newPage();
 
-      const setScope = (id: string) => {
-        return (value: string) => {
-          try {
-            localStorage.setItem(id, value);
-          } catch {
-            // ignore
-          }
-        };
-      };
+      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageA);
 
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-      await pageA.addInitScript(setScope('currentFolderId'), folderId);
-
-      await pageA.goto('/matrice');
+      await pageA.click('a[href="/matrice"]');
+      await expect(pageA).toHaveURL(/\/matrice/);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageA);
 
-      const lockRes = await userAApi.post(`/api/v1/locks${workspaceQuery}`, {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!lockRes.ok() && lockRes.status() !== 409) {
-        throw new Error(`Impossible d'acquérir le lock folder (status ${lockRes.status()})`);
-      }
-
-      await expect
-        .poll(async () => {
-          const res = await userAApi.get(`/api/v1/locks${workspaceQuery}&objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          return data?.lock?.lockedBy?.userId ?? null;
-        }, { timeout: 10_000 })
-        .toBe(userAId);
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       // Navigate to another page to trigger SSE cleanup
       await pageA.goto('/dossiers');
@@ -470,51 +461,26 @@ test.describe('Configuration de la matrice', () => {
 
       // After User A leaves, the lock should be released (null) or User B can acquire it
       // User B might auto-acquire the lock if they're on the page
-      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
+      });
       const pageB = await userBContext.newPage();
-      const setScopeB = (id: string) => {
-        return (value: string) => {
-          try {
-            localStorage.setItem(id, value);
-          } catch {
-            // ignore
-          }
-        };
-      };
-      await pageB.addInitScript(setScopeB('workspaceScopeId'), workspaceAId);
-      await pageB.addInitScript(setScopeB('currentFolderId'), folderId);
-      await pageB.goto('/matrice');
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageB);
+
+      await pageB.click('a[href="/matrice"]');
+      await expect(pageB).toHaveURL(/\/matrice/);
+      await pageB.waitForLoadState('domcontentloaded');
+      await ensureCurrentFolderId(pageB);
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       // Wait for lock to be released or acquired by User B
-      await expect
-        .poll(async () => {
-          const res = await userBApi.get(`/api/v1/locks${workspaceQuery}&objectType=folder&objectId=${encodeURIComponent(folderId)}`);
-          if (!res.ok()) return null;
-          const data = await res.json().catch(() => null);
-          const lock = data?.lock;
-          if (!lock) return 'released';
-          const lockedBy = lock?.lockedBy?.userId ?? null;
-          return lockedBy === userBId ? 'acquired-by-b' : lockedBy === userAId ? 'still-locked-by-a' : 'unknown';
-        }, { timeout: 15_000 })
-        .toMatch(/released|acquired-by-b/);
-
-      // Verify User B can acquire the lock (if not already acquired)
-      const acquireRes = await userBApi.post(`/api/v1/locks${workspaceQuery}`, {
-        data: { objectType: 'folder', objectId: folderId },
-      });
-      if (!acquireRes.ok() && acquireRes.status() !== 409) {
-        throw new Error(`Impossible d'acquérir le lock folder (status ${acquireRes.status()})`);
-      }
-      const acquireJson = await acquireRes.json().catch(() => null);
-      const lockedBy = acquireJson?.lock?.lockedBy?.userId ?? null;
-      expect(lockedBy).toBe(userBId);
+      await waitForLockOwnedByMe(pageB);
 
       await userBContext.close();
 
-      await userAApi.dispose();
-      await userBApi.dispose();
     });
   });
 });
