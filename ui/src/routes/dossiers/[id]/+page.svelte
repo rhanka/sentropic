@@ -227,6 +227,10 @@
     }, LOCK_REFRESH_MS);
   };
 
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
   const refreshLock = async () => {
     if (!lockTargetId || !$session.user) return;
     if (!isLockedByMe) return;
