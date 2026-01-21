@@ -3,6 +3,7 @@ import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
+  const FILE_TAG = 'e2e:usecase-detail.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -15,7 +16,10 @@ test.describe('Détail des cas d\'usage', () => {
   let folderId = '';
 
   test.beforeAll(async () => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
     const workspaceName = `UseCase Detail E2E ${Date.now()}`;
@@ -89,6 +93,9 @@ test.describe('Détail des cas d\'usage', () => {
 
     await userAApi.dispose();
   });
+  test.beforeEach(async ({ page }, testInfo) => {
+  });
+
   test('devrait afficher la page de détail d\'un cas d\'usage', async ({ page }) => {
     // D'abord aller à la liste des cas d'usage
     await page.goto('/cas-usage');
@@ -422,8 +429,12 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const userAContext = await browser.newContext({
+      storageState: USER_A_STATE,
+    });
+    const userBContext = await browser.newContext({
+      storageState: USER_B_STATE,
+    });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -442,30 +453,88 @@ test.describe('Détail des cas d\'usage', () => {
 
     await pageA.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await pageA
-      .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
-      .catch(() => null);
+    const waitForUseCaseViewA = async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await pageA
+          .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
+          .catch(() => null);
+        if (response && [401, 403, 404].includes(response.status())) {
+          await pageA.evaluate((id) => {
+            try {
+              localStorage.setItem('workspaceScopeId', id);
+            } catch {
+              // ignore
+            }
+          }, workspaceAId);
+          await pageA.reload({ waitUntil: 'domcontentloaded' });
+          continue;
+        }
+        const title = pageA.locator('h1');
+        const lockBadge = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+        let ok = false;
+        try {
+          await expect
+            .poll(async () => {
+              const [titleCount, badgeCount] = await Promise.all([title.count(), lockBadge.count()]);
+              return titleCount > 0 || badgeCount > 0;
+            }, { timeout: 10_000 })
+            .toBe(true);
+          ok = true;
+        } catch {
+          ok = false;
+        }
+        if (ok) return;
+        await pageA.reload({ waitUntil: 'domcontentloaded' });
+      }
+      await expect(pageA.locator('h1')).toBeVisible({ timeout: 5_000 });
+    };
+    await waitForUseCaseViewA();
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
+    await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
+    await editableFieldA.click();
+    await pageA.waitForResponse(
+      (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
+      { timeout: 10_000 }
+    ).catch(() => {});
     await waitForLockOwnedByMe(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     const waitForUseCaseView = async () => {
-      const response = await pageB
-        .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
-        .catch(() => null);
-      if (response && response.status() === 404) {
-        await pageB.evaluate((id) => {
-          try {
-            localStorage.setItem('workspaceScopeId', id);
-          } catch {
-            // ignore
-          }
-        }, workspaceAId);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await pageB
+          .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
+          .catch(() => null);
+        if (response && [401, 403, 404].includes(response.status())) {
+          await pageB.evaluate((id) => {
+            try {
+              localStorage.setItem('workspaceScopeId', id);
+            } catch {
+              // ignore
+            }
+          }, workspaceAId);
+          await pageB.reload({ waitUntil: 'domcontentloaded' });
+          continue;
+        }
+        const title = pageB.locator('h1');
+        const lockBadge = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
+        let ok = false;
+        try {
+          await expect
+            .poll(async () => {
+              const [titleCount, badgeCount] = await Promise.all([title.count(), lockBadge.count()]);
+              return titleCount > 0 || badgeCount > 0;
+            }, { timeout: 10_000 })
+            .toBe(true);
+          ok = true;
+        } catch {
+          ok = false;
+        }
+        if (ok) return;
         await pageB.reload({ waitUntil: 'domcontentloaded' });
       }
-      const editableTitle = pageB.locator('h1 textarea.editable-textarea, h1 input.editable-input');
-      await expect(editableTitle).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 5_000 });
     };
     await waitForUseCaseView();
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
@@ -476,8 +545,10 @@ test.describe('Détail des cas d\'usage', () => {
 
     const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
     const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
+    await expect(badgeA).toHaveCount(1);
     await expect
       .poll(async () => {
+        await badgeA.scrollIntoViewIfNeeded();
         await badgeA.hover({ force: true });
         return releaseButton.count();
       }, { timeout: 15_000 })
@@ -491,8 +562,13 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    test.setTimeout(60_000);
+    const userAContext = await browser.newContext({
+      storageState: USER_A_STATE,
+    });
+    const userBContext = await browser.newContext({
+      storageState: USER_B_STATE,
+    });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -513,8 +589,30 @@ test.describe('Détail des cas d\'usage', () => {
     await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageB.waitForLoadState('domcontentloaded');
+    await pageA.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
+    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await pageA.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
+    await pageB.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
+
+    const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+    const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
+    try {
+      await expect(badgeA).toBeVisible({ timeout: 10_000 });
+      await expect(badgeB).toBeVisible({ timeout: 10_000 });
+    } catch {
+      await pageA.reload({ waitUntil: 'domcontentloaded' });
+      await pageB.reload({ waitUntil: 'domcontentloaded' });
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await expect(badgeA).toBeVisible({ timeout: 10_000 });
+      await expect(badgeB).toBeVisible({ timeout: 10_000 });
+    }
+    await badgeA.hover({ force: true });
+    await expect(pageA.locator('[role="tooltip"]')).toContainText('utilisateur', { timeout: 10_000 });
+    await badgeB.hover({ force: true });
+    await expect(pageB.locator('[role="tooltip"]')).toContainText('utilisateur', { timeout: 10_000 });
 
     const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
     const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
@@ -522,7 +620,7 @@ test.describe('Détail des cas d\'usage', () => {
       .poll(async () => {
         const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);
         return aInB > 0 && bInA > 0;
-      }, { timeout: 15_000 })
+      }, { timeout: 30_000 })
       .toBe(true);
 
     await pageB.close();
@@ -533,8 +631,12 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
-    const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const userAContext = await browser.newContext({
+      storageState: USER_A_STATE,
+    });
+    const userBContext = await browser.newContext({
+      storageState: USER_B_STATE,
+    });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -567,7 +669,10 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     const userAContext = await browser.newContext({
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });

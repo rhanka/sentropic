@@ -3,6 +3,7 @@ import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
 import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
+  const FILE_TAG = 'e2e:matrix.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -10,7 +11,10 @@ test.describe('Configuration de la matrice', () => {
   let folderId = '';
 
   test.beforeAll(async () => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
     const workspaceName = `Matrix E2E ${Date.now()}`;
@@ -73,7 +77,7 @@ test.describe('Configuration de la matrice', () => {
       .toBe(folderId);
   };
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await page.goto('/matrice');
     await page.waitForLoadState('domcontentloaded');
   });

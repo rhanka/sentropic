@@ -3,6 +3,7 @@ import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Dossiers — reload & brouillons', () => {
+  const FILE_TAG = 'e2e:dossiers-reload-draft.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
   const USER_A_STATE = './.auth/user-a.json';
@@ -13,7 +14,10 @@ test.describe('Dossiers — reload & brouillons', () => {
   let folderId = '';
 
   test.beforeAll(async () => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
     const workspaceName = `Dossiers Reload E2E ${Date.now()}`;
@@ -71,7 +75,7 @@ test.describe('Dossiers — reload & brouillons', () => {
     await userAApi.dispose();
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule" possible).
     await page.addInitScript((id: string) => {
       try {
@@ -160,6 +164,14 @@ test.describe('Dossiers — reload & brouillons', () => {
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
 
       await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
+      if ((await editableFieldA.count()) > 0) {
+        await editableFieldA.click();
+        await pageA.waitForResponse(
+          (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
+          { timeout: 10_000 }
+        ).catch(() => {});
+      }
       await waitForLockOwnedByMe(pageA);
 
       await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
@@ -222,11 +234,22 @@ test.describe('Dossiers — reload & brouillons', () => {
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      const editableFieldB = pageB.locator('input:not([type="file"]):not(.hidden), textarea').first();
+      if ((await editableFieldB.count()) > 0) {
+        await editableFieldB.click();
+        await pageB.waitForResponse(
+          (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
+          { timeout: 10_000 }
+        ).catch(() => {});
+      }
       await waitForLockOwnedByMe(pageB);
     });
 
     test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
-      const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+      const userAApi = await request.newContext({
+        baseURL: API_BASE_URL,
+        storageState: USER_A_STATE,
+      });
       const userAContext = await browser.newContext({
         storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
       });

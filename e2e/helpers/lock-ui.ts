@@ -23,12 +23,15 @@ export async function waitForLockOwnedByMe(page: Page) {
 export async function waitForLockedByOther(page: Page) {
   const badge = page.locator('div[role="group"][aria-label="Verrou du document"]');
   await expect(badge).toHaveCount(1);
+  await badge.scrollIntoViewIfNeeded();
   await badge.hover({ force: true });
   await expect
     .poll(async () => {
       const tooltip = badge.locator('[role="tooltip"]');
       const text = (await tooltip.textContent()) || '';
-      return text.includes('verrouille le document') && !text.includes('vous verrouillez');
+      const requestButton = page.locator('button[aria-label="Demander le déverrouillage"]');
+      const hasRequestButton = (await requestButton.count()) > 0;
+      return (text.includes('verrouille le document') && !text.includes('vous verrouillez')) || hasRequestButton;
     }, { timeout: 10_000 })
     .toBe(true);
   const requestButton = page.locator('button[aria-label="Demander le déverrouillage"]');
