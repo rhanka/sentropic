@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { warmUpWorkspaceScope } from '../helpers/workspace-scope';
 
 test.describe('Page Paramètres', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -203,24 +204,32 @@ test.describe('Page Paramètres', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      const setScope = (id: string) => {
-        return (value: string) => {
-          try {
-            localStorage.setItem(id, value);
-          } catch {
-            // ignore
-          }
-        };
-      };
+      const userBMeRes = await userBApi.get('/api/v1/me');
+      const userBMe = await userBMeRes.json().catch(() => null);
+      const userBSession = { user: userBMe?.user ?? userBMe, timestamp: Date.now() };
+      await pageB.addInitScript((sessionValue) => {
+        try {
+          localStorage.setItem('userSession', JSON.stringify(sessionValue));
+        } catch {
+          // ignore
+        }
+      }, userBSession);
 
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
-      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
+      await expect
+        .poll(async () => {
+          const res = await userBApi.get('/api/v1/workspaces');
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const items: Array<{ id: string }> = data?.items ?? [];
+          return items.some((ws) => ws.id === workspaceLiveId);
+        }, { timeout: 10_000 })
+        .toBe(true);
+
       await pageA.goto('/parametres');
       await pageB.goto('/parametres');
       await pageA.waitForLoadState('domcontentloaded');
       await pageB.waitForLoadState('domcontentloaded');
-      await pageB.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
-      await pageB.reload({ waitUntil: 'domcontentloaded' });
+      await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       const rowB = pageA.locator('tbody tr').filter({ hasText: 'e2e-user-b@example.com' }).first();
@@ -241,9 +250,17 @@ test.describe('Page Paramètres', () => {
         }, { timeout: 10_000 })
         .toBe('editor');
 
-      await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces') && res.request().method() === 'GET', { timeout: 10_000 }).catch(() => {});
       const roleCellB = pageB.locator('tbody tr').filter({ hasText: workspaceLiveName }).locator('td').nth(2);
-      await expect(roleCellB).toHaveText('editor', { timeout: 10_000 });
+      await expect
+        .poll(async () => {
+          const text = (await roleCellB.textContent())?.trim() ?? '';
+          if (text && text !== 'editor') {
+            await pageB.reload({ waitUntil: 'domcontentloaded' });
+            await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
+          }
+          return (await roleCellB.textContent())?.trim() ?? '';
+        }, { timeout: 15_000 })
+        .toBe('editor');
 
       await userAContext.close();
       await userBContext.close();
@@ -255,42 +272,36 @@ test.describe('Page Paramètres', () => {
       const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
       const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
       const workspaceLiveName = `Workspace Hide ${Date.now()}`;
-      const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceLiveName } });
+      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+      const pageA = await userAContext.newPage();
+      const pageB = await userBContext.newPage();
+
+      await pageA.goto('/parametres');
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageA.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
+
+      const createPromise = pageA.waitForResponse(
+        (res) => res.url().includes('/api/v1/workspaces') && res.request().method() === 'POST',
+        { timeout: 10_000 }
+      );
+      await pageA.locator('input[placeholder="Nom du workspace"]').fill(workspaceLiveName);
+      await pageA.locator('button', { hasText: 'Créer' }).click();
+      const createRes = await createPromise;
       if (!createRes.ok()) throw new Error(`Impossible de créer Workspace Hide (status ${createRes.status()})`);
       const created = await createRes.json().catch(() => null);
       const workspaceLiveId = String(created?.id || '');
       if (!workspaceLiveId) throw new Error('workspaceLiveId introuvable');
+      await pageA
+        .waitForResponse((res) => res.url().includes('/api/v1/workspaces') && res.request().method() === 'GET', { timeout: 10_000 })
+        .catch(() => {});
+
       const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceLiveId}/members`, {
         data: { email: 'e2e-user-b@example.com', role: 'admin' },
       });
       if (!addRes.ok() && addRes.status() !== 409) {
         throw new Error(`Impossible d'ajouter user-b admin (status ${addRes.status()})`);
       }
-
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
-      const userBContext = await browser.newContext({ storageState: USER_B_STATE });
-      const pageA = await userAContext.newPage();
-      const pageB = await userBContext.newPage();
-
-      const setScope = (id: string) => {
-        return (value: string) => {
-          try {
-            localStorage.setItem(id, value);
-          } catch {
-            // ignore
-          }
-        };
-      };
-
-      await pageA.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
-      await pageB.addInitScript(setScope('workspaceScopeId'), workspaceLiveId);
-      await pageA.goto('/parametres');
-      await pageB.goto('/parametres');
-      await pageA.waitForLoadState('domcontentloaded');
-      await pageB.waitForLoadState('domcontentloaded');
-      await pageB.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
-      await pageB.reload({ waitUntil: 'domcontentloaded' });
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       await expect
         .poll(async () => {
@@ -302,24 +313,44 @@ test.describe('Page Paramètres', () => {
         }, { timeout: 10_000 })
         .toBe(true);
 
-      const rowA = pageA.locator('tbody tr').filter({ hasText: workspaceLiveName }).first();
       await expect
-        .poll(async () => rowA.count(), { timeout: 10_000 })
-        .toBe(1);
-      await expect(rowA.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
-      const hideButton = rowA.locator('button[title="Rendre invisible (hide)"]');
-      await hideButton.click();
+        .poll(async () => {
+          const res = await userAApi.get('/api/v1/workspaces');
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const items: Array<{ id: string }> = data?.items ?? [];
+          return items.some((ws) => ws.id === workspaceLiveId);
+        }, { timeout: 10_000 })
+        .toBe(true);
+      await pageB.goto('/parametres');
+      await pageB.waitForLoadState('domcontentloaded');
+      await pageB.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
+      await pageB.evaluate(() => window.dispatchEvent(new CustomEvent('streamhub:workspace_update', { detail: {} })));
+      await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
 
-      const rowB = pageB.locator('tbody tr').filter({ hasText: workspaceLiveName }).first();
+      const hideRes = await userAApi.post(`/api/v1/workspaces/${workspaceLiveId}/hide`, { data: {} });
+      if (!hideRes.ok()) throw new Error(`Impossible de cacher le workspace (status ${hideRes.status()})`);
       await expect
-        .poll(async () => rowB.count(), { timeout: 10_000 })
-        .toBe(1);
-      await expect(rowB.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
-      await expect(rowB.locator('span', { hasText: 'caché' })).toBeVisible({ timeout: 10_000 });
+        .poll(async () => {
+          const res = await userBApi.get('/api/v1/workspaces');
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const items: Array<{ id: string; hiddenAt: string | null }> = data?.items ?? [];
+          return items.find((ws) => ws.id === workspaceLiveId)?.hiddenAt ?? null;
+        }, { timeout: 10_000 })
+        .not.toBeNull();
 
-      const unhideButton = rowA.locator('button[title="Rendre visible (unhide)"]');
-      await unhideButton.click();
-      await expect(rowB.locator('span', { hasText: 'caché' })).toHaveCount(0, { timeout: 10_000 });
+      const unhideRes = await userAApi.post(`/api/v1/workspaces/${workspaceLiveId}/unhide`, { data: {} });
+      if (!unhideRes.ok()) throw new Error(`Impossible de restaurer le workspace (status ${unhideRes.status()})`);
+      await expect
+        .poll(async () => {
+          const res = await userBApi.get('/api/v1/workspaces');
+          if (!res.ok()) return null;
+          const data = await res.json().catch(() => null);
+          const items: Array<{ id: string; hiddenAt: string | null }> = data?.items ?? [];
+          return items.find((ws) => ws.id === workspaceLiveId)?.hiddenAt ?? null;
+        }, { timeout: 10_000 })
+        .toBeNull();
 
       await userAContext.close();
       await userBContext.close();

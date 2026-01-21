@@ -499,6 +499,6 @@ Out of scope:
     - [x] fix parallelism logic (separate db seeds)
     - [x] rely on UI rather than API call to make tests more realistic
     - [x] 1) flake `organizations-detail` lock/presence (3 users transfer) — lock A non acquis
-    - [ ] 2) flake `settings` hide/unhide live update — workspace row manquante/instable
+    - [x] 2) flake `settings` hide/unhide live update — workspace row manquante/instable
     - [ ] 3) flake `usecase-detail` presence avatars — badge/presence non visible
     - [ ] rerun make test-e2e
