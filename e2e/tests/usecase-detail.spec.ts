@@ -586,14 +586,21 @@ test.describe('Détail des cas d\'usage', () => {
     await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
 
     await pageA.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
-    await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await pageB.waitForLoadState('domcontentloaded');
     await pageA.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
-    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+    const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
+    await editableFieldA.click();
+    await pageA
+      .waitForResponse((res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST', { timeout: 10_000 })
+      .catch(() => {});
+    await waitForLockOwnedByMe(pageA);
+
+    await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.waitForLoadState('domcontentloaded');
+    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-    await pageA.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
     await pageB.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
 
     const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
