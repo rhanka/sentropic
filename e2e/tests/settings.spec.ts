@@ -302,12 +302,18 @@ test.describe('Page Paramètres', () => {
         }, { timeout: 10_000 })
         .toBe(true);
 
-      const rowA = pageA.locator('tbody tr').filter({ has: pageA.locator('.editable-input') }).first();
+      const rowA = pageA.locator('tbody tr').filter({ hasText: workspaceLiveName }).first();
+      await expect
+        .poll(async () => rowA.count(), { timeout: 10_000 })
+        .toBe(1);
       await expect(rowA.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
       const hideButton = rowA.locator('button[title="Rendre invisible (hide)"]');
       await hideButton.click();
 
-      const rowB = pageB.locator('tbody tr').filter({ has: pageB.locator('.editable-input') }).first();
+      const rowB = pageB.locator('tbody tr').filter({ hasText: workspaceLiveName }).first();
+      await expect
+        .poll(async () => rowB.count(), { timeout: 10_000 })
+        .toBe(1);
       await expect(rowB.locator('.editable-input').first()).toHaveValue(workspaceLiveName, { timeout: 10_000 });
       await expect(rowB.locator('span', { hasText: 'caché' })).toBeVisible({ timeout: 10_000 });
 
