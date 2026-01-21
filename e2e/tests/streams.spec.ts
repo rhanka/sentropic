@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 
 test.describe('Streams — SSE scoping', () => {
+  const FILE_TAG = 'e2e:streams.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -9,8 +10,14 @@ test.describe('Streams — SSE scoping', () => {
   let organizationAId = '';
 
   test.beforeAll(async () => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+    const userBApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_B_STATE,
+    });
 
     // Créer deux workspaces uniques pour ce fichier de test (isolation des ressources)
     // Workspace A pour User A
@@ -42,8 +49,11 @@ test.describe('Streams — SSE scoping', () => {
     await userBApi.dispose();
   });
 
-  test('SSE: aucun leak cross-workspace', async ({ browser }) => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+  test('SSE: aucun leak cross-workspace', async ({ browser }, testInfo) => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     const pageA = await (await browser.newContext({ storageState: USER_A_STATE })).newPage();
     const pageB = await (await browser.newContext({ storageState: USER_B_STATE })).newPage();
 
@@ -59,12 +69,17 @@ test.describe('Streams — SSE scoping', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.evaluate((id) => {
         (window as any).__events = [];
+        (window as any).__sseReady = false;
         const es = new EventSource(`/api/v1/streams/sse?workspace_id=${id}`);
+        es.addEventListener('open', () => {
+          (window as any).__sseReady = true;
+        });
         es.addEventListener('organization_update', (evt) => {
           (window as any).__events.push({ type: 'organization_update', data: (evt as MessageEvent).data });
         });
         (window as any).__eventSource = es;
       }, workspaceId);
+      await page.waitForFunction(() => (window as any).__sseReady === true, { timeout: 10_000 });
     };
 
     await initSse(pageA, workspaceAId);
