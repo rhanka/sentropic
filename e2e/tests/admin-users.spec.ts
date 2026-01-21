@@ -1,6 +1,35 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
+import { waitForMagicLinkToken } from '../helpers/maildev';
 
-const VICTIM_EMAIL = 'e2e-user-victim@example.com';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+const UI_BASE_URL = process.env.UI_BASE_URL || 'http://localhost:5173';
+
+async function createDisposableUser(email: string) {
+  const api = await request.newContext({ baseURL: API_BASE_URL });
+  try {
+    const requestRes = await api.post('/api/v1/auth/magic-link/request', { data: { email } });
+    if (!requestRes.ok()) {
+      throw new Error(`Magic link request failed: ${requestRes.status()} ${requestRes.statusText()}`);
+    }
+  } finally {
+    await api.dispose();
+  }
+
+  const token = await waitForMagicLinkToken(email, 60_000);
+  const verifyApi = await request.newContext({ baseURL: API_BASE_URL });
+  try {
+    const verifyRes = await verifyApi.post('/api/v1/auth/magic-link/verify', {
+      data: { token },
+      headers: { origin: UI_BASE_URL },
+    });
+    if (!verifyRes.ok()) {
+      const body = await verifyRes.text().catch(() => '');
+      throw new Error(`Magic link verify failed: ${verifyRes.status()} ${verifyRes.statusText()} ${body.slice(0, 200)}`);
+    }
+  } finally {
+    await verifyApi.dispose();
+  }
+}
 
 // Admin-only: uses default storageState (admin) from global.setup.ts
 test.describe('Admin · Utilisateurs (Paramètres)', () => {
@@ -31,6 +60,9 @@ test.describe('Admin · Utilisateurs (Paramètres)', () => {
   });
 
   test('l’admin peut disable/reactivate/delete un utilisateur non-admin (flux UI)', async ({ page }) => {
+    const tempEmail = `e2e-admin-users-${Date.now()}@example.com`;
+    await createDisposableUser(tempEmail);
+
     await page.goto('/parametres');
     await page.waitForLoadState('domcontentloaded');
 
@@ -49,8 +81,8 @@ test.describe('Admin · Utilisateurs (Paramètres)', () => {
       await expect(adminRow.locator('button', { hasText: 'Delete' })).toHaveCount(0);
     }
 
-    // Trouver la ligne de la "victim" (créée dans globalSetup)
-    const victimRow = () => page.locator('tr').filter({ hasText: VICTIM_EMAIL }).first();
+    // Trouver la ligne du user temporaire
+    const victimRow = () => page.locator('tr').filter({ hasText: tempEmail }).first();
     await expect(victimRow()).toBeVisible({ timeout: 15_000 });
 
     // Disable
@@ -67,7 +99,7 @@ test.describe('Admin · Utilisateurs (Paramètres)', () => {
     await expect(victimRow()).toContainText('disabled_by_admin', { timeout: 15_000 });
 
     await victimRow().locator('button', { hasText: 'Delete' }).click();
-    await expect(page.locator('tr').filter({ hasText: VICTIM_EMAIL })).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.locator('tr').filter({ hasText: tempEmail })).toHaveCount(0, { timeout: 15_000 });
   });
 });
 
