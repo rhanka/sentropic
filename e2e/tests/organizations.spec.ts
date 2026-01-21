@@ -5,6 +5,7 @@ import { debug, setupDebugBuffer } from '../helpers/debug';
 setupDebugBuffer();
 
 test.describe('Gestion des organisations', () => {
+  const FILE_TAG = 'e2e:organizations.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -12,7 +13,10 @@ test.describe('Gestion des organisations', () => {
   let workspaceAId = '';
 
   test.beforeAll(async () => {
-    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
     const workspaceName = `Organizations E2E ${Date.now()}`;
@@ -29,10 +33,18 @@ test.describe('Gestion des organisations', () => {
     if (!addRes.ok() && addRes.status() !== 409) {
       throw new Error(`Impossible d'ajouter user-b en viewer (status ${addRes.status()})`);
     }
+
+    // Seed: au moins une organisation dans ce workspace pour les tests read-only
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Org Readonly E2E', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) {
+      throw new Error(`Impossible de créer organisation read-only (status ${orgRes.status()})`);
+    }
     await userAApi.dispose();
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon le mode "lecture seule" cache le bouton +).
     await page.addInitScript((id: string) => {
       try {
