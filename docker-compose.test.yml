@@ -21,6 +21,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./e2e/tests:/app/tests
+      - ./e2e/helpers:/app/helpers
       - ./e2e/.auth:/app/.auth
       - ./e2e/test-results:/app/test-results
     depends_on:
