@@ -42,17 +42,17 @@ export async function warmUpWorkspaceScope(page: Page, workspaceName: string, wo
   await page.goto('/parametres');
   await page.waitForLoadState('domcontentloaded');
   const rows = page.locator('tbody tr');
-  await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+  await expect(rows.first()).toBeVisible({ timeout: 2_000 });
 
   const selectedInput = page.locator(`input[value="${workspaceName}"]`).first();
   if (await selectedInput.count()) {
-    await expect(selectedInput).toBeVisible({ timeout: 10_000 });
+    await expect(selectedInput).toBeVisible({ timeout: 2_000 });
   } else {
     const row = rows.filter({ hasText: workspaceName }).first();
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toBeVisible({ timeout: 2_000 });
     await row.click();
   }
   await expect
-    .poll(async () => page.evaluate(() => localStorage.getItem('workspaceScopeId')), { timeout: 10_000 })
+    .poll(async () => page.evaluate(() => localStorage.getItem('workspaceScopeId')), { timeout: 2_000 })
     .toBe(workspaceId);
 }

@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
-import { withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
+import { warmUpWorkspaceScope, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des organisations', () => {
   const FILE_TAG = 'e2e:organizations-detail.spec.ts';
@@ -320,53 +321,29 @@ test.describe('Détail des organisations', () => {
 
     test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
       const userAContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+        storageState: USER_A_STATE,
+      });
+      const userBContext = await browser.newContext({
+        storageState: USER_B_STATE,
       });
       const pageA = await userAContext.newPage();
-
-      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-      await pageA.waitForLoadState('domcontentloaded');
-      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 1000 }).catch(() => {});
-      const editableFieldA = pageA.locator('input, textarea').first();
-      await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
-      await expect(editableFieldA).toBeEnabled({ timeout: 10_000 });
-      await editableFieldA.click();
-      await pageA.waitForResponse(
-        (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
-        { timeout: 10_000 }
-      ).catch(() => {});
-      await waitForLockOwnedByMe(pageA);
-
-      // Navigate to another page to trigger SSE cleanup
-      await pageA.goto('/organisations');
-      await pageA.waitForLoadState('domcontentloaded');
-      // Wait a bit for SSE cleanup to complete
-      await pageA.waitForTimeout(500);
-      await userAContext.close();
-
-      // After User A leaves, the lock should be released (null) or User B can acquire it
-      // User B might auto-acquire the lock if they're on the page
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-      });
       const pageB = await userBContext.newPage();
-      await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-      await pageB.waitForLoadState('domcontentloaded');
-      
-      // Wait for page to be fully loaded (h1 with organization name should be visible)
-      await expect(pageB.locator('h1')).toBeVisible({ timeout: 5_000 });
-      await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 5_000 }).catch(() => {});
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      const getOrgNameField = (page: typeof pageA) =>
+        page.getByPlaceholder("Saisir le nom de l'organisation");
 
-      // Wait for lock to be released and acquired by User B
-      await waitForLockOwnedByMe(pageB);
-
-      // Wait for page to be fully rendered (check for editable fields to exist)
-      const editableFieldB = pageB.locator('input, textarea').first();
-      await expect(editableFieldB).toBeVisible({ timeout: 10_000 });
-
-      // Verify User B can edit (lock is released or acquired by B)
-      await expect(editableFieldB).toBeEnabled({ timeout: 10_000 });
+      await warmUpWorkspaceScope(pageA, workspaceName, workspaceAId);
+      await warmUpWorkspaceScope(pageB, workspaceName, workspaceAId);
+      await runLockBreaksOnLeaveScenario({
+        pageA,
+        pageB,
+        url: `/organisations/${encodeURIComponent(organizationId)}`,
+        getEditableField: getOrgNameField,
+        expectBadgeOnArrival: true,
+        expectBadgeGoneAfterLeave: true,
+        waitForReady: async (page) => {
+          await expect(page.locator('h1')).toBeVisible({ timeout: 2_000 });
+        },
+      });
 
       await userBContext.close();
     });
