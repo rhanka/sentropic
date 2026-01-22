@@ -41,17 +41,42 @@ export async function withWorkspaceAndFolderStorageState(
 export async function warmUpWorkspaceScope(page: Page, workspaceName: string, workspaceId: string) {
   await page.goto('/parametres');
   await page.waitForLoadState('domcontentloaded');
-  const rows = page.locator('tbody tr');
-  await expect(rows.first()).toBeVisible({ timeout: 2_000 });
 
-  const selectedInput = page.locator(`input[value="${workspaceName}"]`).first();
-  if (await selectedInput.count()) {
-    await expect(selectedInput).toBeVisible({ timeout: 2_000 });
-  } else {
-    const row = rows.filter({ hasText: workspaceName }).first();
-    await expect(row).toBeVisible({ timeout: 2_000 });
-    await row.click();
+  let selected = false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const rows = page.locator('tbody tr');
+    try {
+      await expect(rows.first()).toBeVisible({ timeout: 2_000 });
+    } catch {
+      if (attempt < 2) {
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        continue;
+      }
+    }
+
+    const selectedInput = page.locator(`input[value="${workspaceName}"]`).first();
+    if (await selectedInput.count()) {
+      await expect(selectedInput).toBeVisible({ timeout: 2_000 });
+      selected = true;
+    } else {
+      const row = rows.filter({ hasText: workspaceName }).first();
+      if (await row.count()) {
+        await expect(row).toBeVisible({ timeout: 2_000 });
+        await row.click();
+        selected = true;
+      }
+    }
+
+    if (selected) break;
+    if (attempt < 2) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
   }
+
+  if (!selected) {
+    throw new Error(`Workspace introuvable dans /parametres: ${workspaceName}`);
+  }
+
   await expect
     .poll(async () => page.evaluate(() => localStorage.getItem('workspaceScopeId')), { timeout: 2_000 })
     .toBe(workspaceId);

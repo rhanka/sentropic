@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
-import { withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
+import { warmUpWorkspaceScope, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
   const FILE_TAG = 'e2e:usecase-detail.spec.ts';
@@ -9,6 +10,7 @@ test.describe('Détail des cas d\'usage', () => {
   const USER_B_STATE = './.auth/user-b.json';
   const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
+  let workspaceName = '';
   let useCaseId = '';
   let useCaseName = '';
   let lockUseCaseId = '';
@@ -22,7 +24,7 @@ test.describe('Détail des cas d\'usage', () => {
     });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
-    const workspaceName = `UseCase Detail E2E ${Date.now()}`;
+    workspaceName = `UseCase Detail E2E ${Date.now()}`;
     const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
     if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
     const created = await createRes.json().catch(() => null);
@@ -571,26 +573,18 @@ test.describe('Détail des cas d\'usage', () => {
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
+    const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
 
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
+    await warmUpWorkspaceScope(pageA, workspaceName, workspaceAId);
+    await warmUpWorkspaceScope(pageB, workspaceName, workspaceAId);
 
     await pageA.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-    const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
+    const editableFieldA = getUseCaseNameField(pageA);
+    await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
     await editableFieldA.click();
     await pageA
       .waitForResponse((res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST', { timeout: 10_000 })
@@ -646,31 +640,21 @@ test.describe('Détail des cas d\'usage', () => {
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
+    const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
 
-    const setScope = (id: string) => {
-      return (value: string) => {
-        try {
-          localStorage.setItem(id, value);
-        } catch {
-          // ignore
-        }
-      };
-    };
-
-    await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageA.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
-    await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-
-    await waitForLockOwnedByMe(pageA);
-
-    await userAContext.close();
-
-    await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
-    await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
-    await pageB.waitForLoadState('domcontentloaded');
-    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-    await waitForLockOwnedByMe(pageB);
+    await warmUpWorkspaceScope(pageA, workspaceName, workspaceAId);
+    await warmUpWorkspaceScope(pageB, workspaceName, workspaceAId);
+    await runLockBreaksOnLeaveScenario({
+      pageA,
+      pageB,
+      url: `/cas-usage/${encodeURIComponent(lockUseCaseId)}`,
+      getEditableField: getUseCaseNameField,
+      expectBadgeOnArrival: true,
+      expectBadgeGoneAfterLeave: true,
+      waitForReady: async (page) => {
+        await expect(page.locator('h1')).toBeVisible({ timeout: 2_000 });
+      },
+    });
 
     await userBContext.close();
   });
@@ -707,6 +691,9 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    const editableFieldA = pageA.locator('h1 textarea, h1 input').first();
+    await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
+    await editableFieldA.click();
     await waitForLockOwnedByMe(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
