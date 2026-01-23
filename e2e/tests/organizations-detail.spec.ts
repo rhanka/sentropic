@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { warmUpWorkspaceScope, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
@@ -200,12 +200,12 @@ test.describe('Détail des organisations', () => {
     expect(scopeIdA).toBe(workspaceAId);
 
     // Wait for page to be fully loaded (h1 with organization name should be visible)
-    await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.locator('h1')).toBeVisible({ timeout: 2_000 });
 
     // Wait for User A to acquire the lock (verify via UI: editable fields should be enabled)
     const editableFieldA = pageA.locator('input, textarea').first();
-    await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
-    await expect(editableFieldA).toBeEnabled({ timeout: 10_000 });
+    await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
+    await expect(editableFieldA).toBeEnabled({ timeout: 2_000 });
     await editableFieldA.click();
     const lockRes = await lockAcquired;
     expect(lockRes).not.toBeNull();
@@ -218,11 +218,11 @@ test.describe('Détail des organisations', () => {
     }
     await pageA.waitForResponse(
       (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
-      { timeout: 10_000 }
+      { timeout: 2_000 }
     ).catch(() => {});
 
-    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-    await waitForLockOwnedByMe(pageA);
+    await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
+    await waitForNoLocker(pageA);
 
     // Now User B arrives (should see locked view)
     await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
@@ -234,7 +234,7 @@ test.describe('Détail des organisations', () => {
 
     const waitForOrgView = async () => {
       const response = await pageB
-        .waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 })
+        .waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 })
         .catch(() => null);
       if (response && response.status() === 404) {
         await pageB.evaluate((id) => {
@@ -246,11 +246,11 @@ test.describe('Détail des organisations', () => {
         }, workspaceAId);
         await pageB.reload({ waitUntil: 'domcontentloaded' });
       }
-      await expect(pageB.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 2_000 });
     };
     // Wait for page to be fully loaded (h1 with organization name should be visible)
     await waitForOrgView();
-    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+    await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
 
     await waitForLockedByOther(pageB);
     const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
@@ -270,7 +270,7 @@ test.describe('Détail des organisations', () => {
     await releaseButton.click();
 
     const editableFieldB = pageB.locator('input, textarea').first();
-    await expect(editableFieldB).toBeEnabled({ timeout: 10_000 });
+    await expect(editableFieldB).toBeEnabled({ timeout: 2_000 });
 
       await userAContext.close();
       await userBContext.close();
@@ -293,15 +293,15 @@ test.describe('Détail des organisations', () => {
       await pageB.waitForLoadState('domcontentloaded');
 
       // Wait for SSE connections to be established (needed for presence sync)
-      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
       // Wait for organization API responses
-      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
-      await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
+      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 }).catch(() => {});
+      await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 }).catch(() => {});
 
       // Wait for pages to be fully loaded
-      await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
-      await expect(pageB.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await expect(pageA.locator('h1')).toBeVisible({ timeout: 2_000 });
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 2_000 });
 
       const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
       const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
@@ -313,7 +313,7 @@ test.describe('Détail des organisations', () => {
         .toBe(true);
 
       await pageB.close();
-      await expect(avatarBInA).toHaveCount(0, { timeout: 10_000 });
+      await expect(avatarBInA).toHaveCount(0, { timeout: 2_000 });
 
       await userAContext.close();
       await userBContext.close();
@@ -356,15 +356,15 @@ test.describe('Détail des organisations', () => {
       const pageA = await userAContext.newPage();
       await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
       await pageA.waitForLoadState('domcontentloaded');
-      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
       // Wait for organization API response
-      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
+      await pageA.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 }).catch(() => {});
 
       // Wait for page to be fully loaded (h1 with organization name should be visible)
-      await expect(pageA.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await expect(pageA.locator('h1')).toBeVisible({ timeout: 2_000 });
 
       // Wait for User A to acquire the lock (UI-driven)
-      await waitForLockOwnedByMe(pageA);
+      await waitForNoLocker(pageA);
 
       const userBContext = await browser.newContext({
         storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
@@ -372,9 +372,9 @@ test.describe('Détail des organisations', () => {
       const pageB = await userBContext.newPage();
       await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
       await pageB.waitForLoadState('domcontentloaded');
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-      await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 10_000 }).catch(() => {});
-      await expect(pageB.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
+      await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 }).catch(() => {});
+      await expect(pageB.locator('h1')).toBeVisible({ timeout: 2_000 });
       await waitForLockedByOther(pageB);
       const requestButtonB = pageB.locator('button[aria-label="Demander le déverrouillage"]');
       await requestButtonB.click();
@@ -395,7 +395,7 @@ test.describe('Détail des organisations', () => {
       const pageC = await userCContext.newPage();
       await pageC.goto(`/organisations/${encodeURIComponent(organizationId)}`);
       await pageC.waitForLoadState('domcontentloaded');
-      await expect(pageC.locator('h1')).toBeVisible({ timeout: 10_000 });
+      await expect(pageC.locator('h1')).toBeVisible({ timeout: 2_000 });
       await releaseReady;
       await waitForLockedByOther(pageC);
       const requestButtonC = pageC.locator('button[aria-label="Demander le déverrouillage"]');
@@ -405,17 +405,17 @@ test.describe('Détail des organisations', () => {
           const errCount = await pageC.locator('text=Unlock already requested').count();
           const genericCount = await pageC.locator('text=Erreur demande de déverrouillage').count();
           return errCount + genericCount;
-        }, { timeout: 10_000 })
+        }, { timeout: 2_000 })
         .toBeGreaterThan(0);
 
       await releaseButton.click();
-      await waitForLockOwnedByMe(pageB);
+      await waitForNoLocker(pageB);
 
       await expect
         .poll(async () => {
           const badgeB = pageB.locator('div[role="group"][aria-label="Verrou du document"]');
           return badgeB.count();
-        }, { timeout: 10_000 })
+        }, { timeout: 2_000 })
         .toBe(1);
 
       await userAContext.close();

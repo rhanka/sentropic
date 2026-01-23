@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { warmUpWorkspaceScope, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
@@ -499,7 +499,7 @@ test.describe('Détail des cas d\'usage', () => {
       (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
       { timeout: 10_000 }
     ).catch(() => {});
-    await waitForLockOwnedByMe(pageA);
+    await waitForNoLocker(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
@@ -557,7 +557,7 @@ test.describe('Détail des cas d\'usage', () => {
       .toBe(1);
     await releaseButton.click();
 
-    await waitForLockOwnedByMe(pageB);
+    await waitForNoLocker(pageB);
 
     await userAContext.close();
     await userBContext.close();
@@ -589,7 +589,7 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA
       .waitForResponse((res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST', { timeout: 10_000 })
       .catch(() => {});
-    await waitForLockOwnedByMe(pageA);
+    await waitForNoLocker(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
@@ -694,7 +694,7 @@ test.describe('Détail des cas d\'usage', () => {
     const editableFieldA = pageA.locator('h1 textarea, h1 input').first();
     await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
     await editableFieldA.click();
-    await waitForLockOwnedByMe(pageA);
+    await waitForNoLocker(pageA);
 
     await pageB.goto(`/cas-usage/${encodeURIComponent(testUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
@@ -732,7 +732,7 @@ test.describe('Détail des cas d\'usage', () => {
       .toBe(releaseLabelBefore);
 
     await releaseButton.click();
-    await waitForLockOwnedByMe(pageB);
+    await waitForNoLocker(pageB);
 
     await userAContext.close();
     await userBContext.close();

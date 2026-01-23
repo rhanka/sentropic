@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { waitForLockOwnedByMe, waitForLockedByOther } from '../helpers/lock-ui';
+import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
@@ -431,7 +431,7 @@ test.describe('Configuration de la matrice', () => {
         .toBe(1);
       await releaseButton.click();
 
-      await waitForLockOwnedByMe(pageB);
+      await waitForNoLocker(pageB);
 
       await userAContext.close();
       await userBContext.close();
@@ -481,7 +481,7 @@ test.describe('Configuration de la matrice', () => {
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       // Wait for lock to be released or acquired by User B
-      await waitForLockOwnedByMe(pageB);
+      await waitForNoLocker(pageB);
 
       await userBContext.close();
 
