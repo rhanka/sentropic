@@ -45,7 +45,7 @@ try {
 }
 
 // Pool configuration: DB_POOL_MAX (default: 30) for all environments including SCW
-const poolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 30;
+const poolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 50;
 const pool = new Pool({ connectionString, ssl, ...(pgOptions ? { options: pgOptions } : {}), max: poolMax, idleTimeoutMillis: 10_000 });
 
 const pgDb = drizzle(pool);
