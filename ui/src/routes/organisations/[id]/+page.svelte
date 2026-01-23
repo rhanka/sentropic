@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchOrganizations, fetchOrganizationById, deleteOrganization, type Organization } from '$lib/stores/organizations';
+  import { organizationsStore, fetchOrganizationById, deleteOrganization, type Organization } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
   import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -18,7 +18,7 @@
 
   let organization: Organization | null = null;
   let error = '';
-  let lastLoadedId: string | null = null;
+  let organizationId: string | null = null;
   let hubKey: string | null = null;
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -60,21 +60,7 @@
       }
     : {};
 
-  const subscribeOrganization = (organizationId: string) => {
-    if (hubKey) streamHub.delete(hubKey);
-    hubKey = `organizationDetail:${organizationId}`;
-    streamHub.set(hubKey, (evt: any) => {
-      if (evt?.type !== 'organization_update') return;
-      const id: string = evt.organizationId;
-      const data: any = evt.data ?? {};
-      if (!id || id !== organizationId) return;
-      if (data?.deleted) return;
-      if (data?.organization) {
-        const updated = data.organization;
-        organization = { ...(organization || ({} as any)), ...updated };
-      }
-    });
-  };
+  $: organizationId = $page.params.id;
 
   const subscribeLock = (organizationId: string) => {
     if (lockHubKey) streamHub.delete(lockHubKey);
@@ -108,11 +94,27 @@
     });
   };
 
-  onMount(async () => {
-    await loadOrganization();
+  onMount(() => {
+    void loadOrganization();
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handleLeave);
     window.addEventListener('beforeunload', handleLeave);
+
+    if (hubKey) streamHub.delete(hubKey);
+    if (organizationId) {
+      hubKey = `organizationDetail:${organizationId}`;
+      streamHub.set(hubKey, (evt: any) => {
+        if (evt?.type !== 'organization_update') return;
+        const id: string = evt.organizationId;
+        const data: any = evt.data ?? {};
+        if (!id || id !== organizationId) return;
+        if (data?.deleted) return;
+        if (data?.organization) {
+          const updated = data.organization;
+          organization = { ...(organization || ({} as any)), ...updated };
+        }
+      });
+    }
   });
 
   onDestroy(() => {
@@ -126,57 +128,38 @@
     window.removeEventListener('beforeunload', handleLeave);
   });
 
-  $: if ($page.params.id && $page.params.id !== lastLoadedId) {
-    loadOrganization();
+  $: if (organizationId && organizationId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('organization', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = organizationId;
+    subscribeLock(lockTargetId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
   }
 
   const loadOrganization = async () => {
-    const organizationId = $page.params.id;
     if (!organizationId) return;
-    if (lastLoadedId === organizationId) return;
 
     try {
-      if (lockTargetId && lockTargetId !== organizationId) {
-        void leavePresence('organization', lockTargetId);
-        void releaseCurrentLock();
-        lock = null;
-        presenceUsers = [];
-        presenceTotal = 0;
-        lockTargetId = null;
-      }
-      lastLoadedId = organizationId;
       organization = await fetchOrganizationById(organizationId);
-      subscribeOrganization(organizationId);
-      subscribeLock(organizationId);
-      lockTargetId = organizationId;
-      void syncLock();
-      void hydratePresence();
-      void updatePresence();
       error = '';
       unsavedChangesStore.reset();
       return;
     } catch {
-      await new Promise((r) => setTimeout(r, 300));
-      try {
-        organization = await fetchOrganizationById(organizationId);
-        subscribeOrganization(organizationId);
-        subscribeLock(organizationId);
-        lockTargetId = organizationId;
-        void syncLock();
-        void hydratePresence();
-        void updatePresence();
-        error = '';
+      const organizations = $organizationsStore;
+      organization = organizations.find((o) => o.id === organizationId) || null;
+      if (!organization) {
+        error = "Erreur lors du chargement de l'organisation";
         return;
-      } catch {
-        try {
-          const organizations = await fetchOrganizations();
-          organization = organizations.find((o) => o.id === organizationId) || null;
-          error = organization ? '' : 'Organisation non trouvée';
-          unsavedChangesStore.reset();
-        } catch {
-          error = "Erreur lors du chargement de l'organisation";
-        }
       }
+      error = '';
+      unsavedChangesStore.reset();
     }
   };
 
