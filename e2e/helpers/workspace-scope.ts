@@ -43,12 +43,14 @@ export async function warmUpWorkspaceScope(page: Page, workspaceName: string, wo
   await page.waitForLoadState('domcontentloaded');
 
   let selected = false;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const rows = page.locator('tbody tr');
     try {
-      await expect(rows.first()).toBeVisible({ timeout: 2_000 });
+      await expect
+        .poll(async () => (await rows.count()) > 0, { timeout: 2_000 })
+        .toBe(true);
     } catch {
-      if (attempt < 2) {
+      if (attempt < 1) {
         await page.reload({ waitUntil: 'domcontentloaded' });
         continue;
       }
@@ -68,7 +70,7 @@ export async function warmUpWorkspaceScope(page: Page, workspaceName: string, wo
     }
 
     if (selected) break;
-    if (attempt < 2) {
+    if (attempt < 1) {
       await page.reload({ waitUntil: 'domcontentloaded' });
     }
   }
