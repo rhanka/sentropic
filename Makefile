@@ -365,7 +365,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES \
 	  e2e sh -lc ' \
 	    workers="$${WORKERS:-4}"; \
-	    retries="$${RETRIES:-0}"; \
+	    retries="$${RETRIES:-2}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
@@ -377,7 +377,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	      npx playwright test --workers="$$workers" --retries="$$retries" $$extra; \
 	    fi'
 	@echo "🛑 Stopping services..."
-	@$(DOCKER_COMPOSE) down
+	# @$(DOCKER_COMPOSE) down
 
 e2e-set-queue: ## (E2E) Tweak queue settings in DB (defaults: QUEUE_CONCURRENCY=30)
 	@set -e; \

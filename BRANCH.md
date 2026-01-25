@@ -501,4 +501,5 @@ Out of scope:
     - [x] 1) flake `organizations-detail` lock/presence (3 users transfer) — lock A non acquis
     - [x] 2) flake `settings` hide/unhide live update — workspace row manquante/instable
     - [x] 3) flake `usecase-detail` presence avatars — badge/presence non visible
-    - [ ] rerun make test-e2e
+    - [x] rerun make test-e2e
+    - [x] final user smoke test
