@@ -6,6 +6,8 @@ import {
   settings, 
   users, 
   workspaces,
+  workspaceMemberships,
+  objectLocks,
   contextDocuments,
   webauthnCredentials, 
   sessions,
@@ -37,6 +39,7 @@ export async function seedTestData() {
     await db.delete(chatMessages);
     await db.delete(chatSessions);
     await db.delete(contextModificationHistory);
+    await db.delete(objectLocks);
 
     await db.delete(useCases); // Depends on folders and organizations
     await db.delete(folders); // Depends on organizations
@@ -55,6 +58,7 @@ export async function seedTestData() {
     await db.delete(jobQueue); // Clean job queue to avoid interference
     await db.delete(settings); // Clean settings to ensure clean state
     await db.delete(contextDocuments); // FK -> workspaces (documents are workspace-scoped)
+    await db.delete(workspaceMemberships); // FK -> workspaces/users
     await db.delete(workspaces); // After all workspace-scoped tables are deleted
     
     // Note: businessConfig is kept as it contains business configuration
@@ -83,7 +87,6 @@ export async function seedTestData() {
         id: E2E_WS_ADMIN,
         ownerUserId: E2E_ADMIN_ID, // will be claimed by actual admin_app at boot; OK for E2E fixtures
         name: 'Admin Workspace',
-        shareWithAdmin: false,
         createdAt: now,
         updatedAt: now,
       },
@@ -91,7 +94,6 @@ export async function seedTestData() {
         id: E2E_WS_A,
         ownerUserId: E2E_USER_A_ID,
         name: 'Workspace A (E2E)',
-        shareWithAdmin: true,
         createdAt: now,
         updatedAt: now,
       },
@@ -99,7 +101,6 @@ export async function seedTestData() {
         id: E2E_WS_B,
         ownerUserId: E2E_USER_B_ID,
         name: 'Workspace B (E2E)',
-        shareWithAdmin: false,
         createdAt: now,
         updatedAt: now,
       },
@@ -107,7 +108,6 @@ export async function seedTestData() {
         id: E2E_WS_VICTIM,
         ownerUserId: E2E_USER_VICTIM_ID,
         name: 'Workspace Victim (E2E)',
-        shareWithAdmin: false,
         createdAt: now,
         updatedAt: now,
       },
@@ -167,7 +167,14 @@ export async function seedTestData() {
       },
     ]);
 
-    console.log('✅ Workspaces + users seeded (admin + userA + userB + pending)');
+    console.log('✅ Workspaces + users seeded (admin + userA + userB + userVictim + pending)');
+
+    await db.insert(workspaceMemberships).values([
+      { workspaceId: E2E_WS_ADMIN, userId: E2E_ADMIN_ID, role: 'admin', createdAt: now },
+      { workspaceId: E2E_WS_A, userId: E2E_USER_A_ID, role: 'admin', createdAt: now },
+      { workspaceId: E2E_WS_B, userId: E2E_USER_B_ID, role: 'admin', createdAt: now },
+      { workspaceId: E2E_WS_VICTIM, userId: E2E_USER_VICTIM_ID, role: 'admin', createdAt: now },
+    ]);
 
     // 1. Organisations de test (profil dans organizations.data JSONB)
     const testOrganizationsData = [

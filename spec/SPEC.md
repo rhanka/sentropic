@@ -229,11 +229,11 @@ Variables sous-jacentes clés côté backend/API:
 Base: **PostgreSQL 16** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
 
 Principe: **tenancy par workspace** (private-by-default) :
-- Table `workspaces` (avec `share_with_admin`)
+- Table `workspaces`
 - Tous les objets métier sont scoppés par `workspace_id` (`organizations`, `folders`, `use_cases`, `job_queue`, etc.)
 
 Tables principales (simplifié) :
-- `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, `share_with_admin`, timestamps
+- `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, timestamps
 - `users`: `id`, `email`, `display_name`, `role`, `account_status`, `approval_due_at`, `email_verified`, timestamps
 - `organizations`: `id`, `workspace_id`, `name`, `status` (`draft|enriching|completed`), `data` (**JSONB**: contient `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.)
 - `folders`: `id`, `workspace_id`, `name`, `organization_id?`, `matrix_config` (texte JSON), `status` (`generating|completed`), `executive_summary` (texte JSON)
@@ -248,7 +248,7 @@ Auth & sessions :
 - `email_verification_codes`: codes email (hash + verificationToken)
 
 Streaming/chat :
-- `chat_sessions` (inclut `workspace_id` pour scope admin read-only)
+- `chat_sessions` (inclut `workspace_id` pour le scoping standard)
 - `chat_messages`
 - `chat_stream_events`
 - `chat_generation_traces` (debug)

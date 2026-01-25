@@ -20,13 +20,13 @@ describe('Me API', () => {
     expect(data.workspace.id).toBeDefined();
   });
 
-  it('should allow toggling shareWithAdmin', async () => {
+  it('should allow renaming workspace', async () => {
     const user = await createAuthenticatedUser('editor');
-    const res = await authenticatedRequest(app, 'PATCH', '/api/v1/me', user.sessionToken!, { shareWithAdmin: true });
+    const res = await authenticatedRequest(app, 'PATCH', '/api/v1/me', user.sessionToken!, { workspaceName: 'Workspace Renamed' });
     expect(res.status).toBe(200);
 
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.ownerUserId, user.id)).limit(1);
-    expect(ws.shareWithAdmin).toBe(true);
+    expect(ws.name).toBe('Workspace Renamed');
   });
 
   it('should delete user workspace data on DELETE /me', async () => {

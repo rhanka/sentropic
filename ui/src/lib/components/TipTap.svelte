@@ -15,6 +15,7 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
     export let value;
     export let forceList = false;
     export let placeholder = '';
+    export let disabled = false;
     let editor, element;
     let lastValue;
     const dispatch = createEventDispatcher();
@@ -72,6 +73,7 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
     const initialContent = ensureListMarkdown(value);
     editor = new Editor({
       element,
+      editable: !disabled,
       extensions: [
         // StarterKit avec certaines extensions désactivées pour utiliser nos versions avec classes Tailwind
         StarterKit.configure({
@@ -172,6 +174,10 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
       element?.removeEventListener('keydown', handleKeyDown, true);
     });
   });
+
+  $: if (editor) {
+    editor.setEditable(!disabled);
+  }
 
   onDestroy(() => editor?.destroy());
 </script>

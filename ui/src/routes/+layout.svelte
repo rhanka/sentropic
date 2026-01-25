@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import '../app.css';
   import '../app.print.css';
   import Header from '$lib/components/Header.svelte';
@@ -17,7 +17,9 @@
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
-  import { adminWorkspaceScope, ADMIN_WORKSPACE_ID } from '$lib/stores/adminWorkspaceScope';
+  import { hiddenWorkspaceLock, noWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces, workspaceScope } from '$lib/stores/workspaceScope';
+  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
+  import { addToast } from '$lib/stores/toast';
 
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
@@ -156,10 +158,7 @@
   let lastAdminScope: string | null = null;
   $: {
     const currentUserId = $session.user?.id ?? null;
-    const currentScope =
-      $session.user?.role === 'admin_app'
-        ? ($adminWorkspaceScope.selectedId ?? ADMIN_WORKSPACE_ID)
-        : null;
+    const currentScope = $workspaceScope.selectedId ?? null;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
       // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
@@ -178,6 +177,11 @@
       }
       lastUserId = currentUserId;
       lastAdminScope = currentScope;
+
+      // Hydrate workspace roles early (prevents read-only banner flash on first navigation).
+      if (currentUserId) {
+        void loadUserWorkspaces();
+      }
     }
   }
 
@@ -204,6 +208,105 @@
     if (protectedRoute && !publicRoute && !$session.user) {
       goto(`/auth/login?returnUrl=${encodeURIComponent(path)}`);
     }
+  }
+
+  // No-workspace lock: if user has zero workspaces, restrict navigation to /parametres.
+  let lastNoWorkspaceRedirectPath: string | null = null;
+  let noWorkspaceNavCancelInProgress = false;
+
+  // Hidden workspace navigation lock (Option A):
+  // - If a hidden workspace is selected (admin role), restrict navigation to /parametres (+ public/auth routes).
+  // - Redirect must be immediate (wins over autosave), but autosave can run best-effort in background.
+  let lastHiddenLockRedirectPath: string | null = null;
+  let hiddenNavCancelInProgress = false;
+
+  onMount(() => {
+    // Cancel client-side navigations early to prevent fetching forbidden views before redirect.
+    beforeNavigate((nav) => {
+      if (hiddenNavCancelInProgress) return;
+      if (noWorkspaceNavCancelInProgress) return;
+      if (!$session.user || $session.loading) return;
+      if (!$workspaceScopeHydrated) return;
+      const toPath = nav.to?.url?.pathname;
+      if (!toPath) return;
+
+      if ($noWorkspaceLock) {
+        const isAllowed =
+          toPath === '/parametres' ||
+          toPath.startsWith('/parametres/') ||
+          toPath.startsWith('/auth/') ||
+          isPublicRoute(toPath);
+
+        if (!isAllowed) {
+          nav.cancel();
+          noWorkspaceNavCancelInProgress = true;
+          void goto('/parametres').finally(() => {
+            noWorkspaceNavCancelInProgress = false;
+          });
+        }
+        return;
+      }
+
+      if (!$hiddenWorkspaceLock) return;
+
+      const isAllowed =
+        toPath === '/parametres' ||
+        toPath.startsWith('/parametres/') ||
+        toPath.startsWith('/auth/') ||
+        isPublicRoute(toPath);
+
+      if (!isAllowed) {
+        nav.cancel();
+        hiddenNavCancelInProgress = true;
+        // Best-effort autosave (non-blocking)
+        if (unsavedChangesStore.hasUnsavedChanges()) {
+          void unsavedChangesStore.saveAll().then((ok) => {
+            if (!ok) {
+              addToast({
+                type: 'warning',
+                message:
+                  "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
+              });
+            }
+          });
+        }
+        void goto('/parametres').finally(() => {
+          hiddenNavCancelInProgress = false;
+        });
+      }
+    });
+  });
+  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $noWorkspaceLock) {
+    const path = $page.url.pathname;
+    const isAllowed =
+      path === '/parametres' ||
+      path.startsWith('/parametres/') ||
+      path.startsWith('/auth/') ||
+      isPublicRoute(path);
+
+    if (!isAllowed && path !== lastNoWorkspaceRedirectPath) {
+      lastNoWorkspaceRedirectPath = path;
+      goto('/parametres');
+    }
+  } else {
+    lastNoWorkspaceRedirectPath = null;
+  }
+
+  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
+    const path = $page.url.pathname;
+    const isAllowed =
+      path === '/parametres' ||
+      path.startsWith('/parametres/') ||
+      path.startsWith('/auth/') ||
+      isPublicRoute(path);
+
+    if (!isAllowed && path !== lastHiddenLockRedirectPath) {
+      lastHiddenLockRedirectPath = path;
+
+      goto('/parametres');
+    }
+  } else {
+    lastHiddenLockRedirectPath = null;
   }
 </script>
 

@@ -6,12 +6,15 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { streamHub } from '$lib/stores/streamHub';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { adminReadOnlyScope } from '$lib/stores/adminWorkspaceScope';
-  import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X } from '@lucide/svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
+  import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X, Lock } from '@lucide/svelte';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -27,14 +30,37 @@
   let createMatrixType = 'default'; // 'default', 'copy', 'blank'
   let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
+  let isReadOnly = false;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
   
   // Variables pour l'auto-save de la matrice (seuils, poids, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let isSavingMatrix = false;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
+  let lastReadOnlyRole = $workspaceReadOnlyScope;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   onMount(async () => {
     await loadMatrix();
     await updateCaseCounts();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
   });
 
   onDestroy(() => {
@@ -42,7 +68,191 @@
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:matrix:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if ($workspaceReadOnlyScope) {
+        lock = await fetchLock('folder', lockTargetId);
+      } else {
+        const res = await acquireLock('folder', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('folder', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('folder', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('folder', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('folder', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('folder', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('folder', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('folder', lockTargetId);
+  };
+
+
+  $: if ($currentFolderId && $currentFolderId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('folder', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = $currentFolderId;
+    subscribeLock($currentFolderId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if ($workspaceReadOnlyScope !== lastReadOnlyRole) {
+    lastReadOnlyRole = $workspaceReadOnlyScope;
+    if (lastReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
 
   const loadMatrix = async () => {
     if (!$currentFolderId) {
@@ -55,9 +265,7 @@
 
     isLoading = true;
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder = await apiGet(`/folders/${$currentFolderId}${qs}`);
+      const folder = await apiGet(`/folders/${$currentFolderId}`);
       
       if (folder.matrixConfig) {
         const matrix = typeof folder.matrixConfig === 'string' 
@@ -218,7 +426,7 @@
     // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
   };
-
+  
   const handlePointsChange = (isValue: boolean, level: number, points: string | number) => {
     const pointsNumber = typeof points === 'string' ? Number(points) : points;
     if (isValue && editedConfig.valueThresholds) {
@@ -291,7 +499,7 @@
    * - Par NavigationGuard lors de la navigation (via unsavedChangesStore.saveAll)
    */
   const saveMatrix = async () => {
-    if ($adminReadOnlyScope) return;
+    if (isReadOnly) return;
     if (!$currentFolderId || isSavingMatrix) return;
     
     isSavingMatrix = true;
@@ -327,7 +535,7 @@
   };
 
   const saveChanges = async () => {
-    if ($adminReadOnlyScope) {
+    if (isReadOnly) {
       addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
       return;
     }
@@ -466,7 +674,7 @@
   };
 
   const handleCloseWarningSave = async () => {
-    if ($adminReadOnlyScope) {
+    if (isReadOnly) {
       addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
       showCloseWarning = false;
       showDescriptionsDialog = false;
@@ -544,9 +752,7 @@
 
   const loadAvailableFolders = async () => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const data = await apiGet<{ items: Folder[] }>(`/folders/list/with-matrices${qs}`);
+      const data = await apiGet<{ items: Folder[] }>(`/folders/list/with-matrices`);
       availableFolders = data.items.filter((folder) => folder.hasMatrix && folder.id !== $currentFolderId);
     } catch (error) {
       console.error('Failed to load folders:', error);
@@ -554,7 +760,7 @@
   };
 
   const createNewMatrix = async () => {
-    if ($adminReadOnlyScope) {
+    if (isReadOnly) {
       addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
       return;
     }
@@ -574,9 +780,7 @@
         console.log('Default matrix fetched:', matrixToUse);
       } else if (createMatrixType === 'copy' && selectedFolderToCopy) {
         // Copier une matrice existante
-        const scoped = getScopedWorkspaceIdForAdmin();
-        const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix${qs}`);
+        matrixToUse = await apiGet(`/folders/${selectedFolderToCopy}/matrix`);
       } else if (createMatrixType === 'blank') {
         // Évaluation vierge
         matrixToUse = {
@@ -617,13 +821,39 @@
 </script>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-6 text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
-
-  {#if $adminReadOnlyScope}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
-      Mode admin — workspace partagé : <b>lecture seule</b> (édition désactivée).
-    </div>
+<div class="mb-6 flex items-start justify-between gap-4">
+  <h1 class="text-3xl font-bold text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
+  <div class="flex items-center gap-2 flex-wrap justify-end">
+    <LockPresenceBadge
+      {lock}
+      {lockLoading}
+      {lockError}
+      {lockOwnerLabel}
+      {lockRequestedByMe}
+      isAdmin={isWorkspaceAdmin}
+      {isLockedByMe}
+      {isLockedByOther}
+      avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+      connectedCount={presenceTotal}
+      canRequestUnlock={!$workspaceReadOnlyScope}
+      showHeaderLock={!isLockedByMe}
+      on:requestUnlock={handleRequestUnlock}
+      on:forceUnlock={handleForceUnlock}
+      on:releaseLock={handleReleaseLock}
+    />
+    {#if showReadOnlyLock && !showPresenceBadge}
+      <button
+        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+        title="Mode lecture seule : modification désactivée."
+        aria-label="Mode lecture seule : modification désactivée."
+        type="button"
+        disabled
+      >
+        <Lock class="w-5 h-5" />
+      </button>
   {/if}
+  </div>
+</div>
   
   {#if $currentFolderId}
     <p class="text-gray-600 -mt-4 mb-6">
@@ -700,6 +930,7 @@
                   <td class="px-4 py-3">
                     <div class="text-sm w-full">
                       <EditableInput
+                        locked={isReadOnly}
                         value={axis.name}
                         originalValue={originalConfig.valueAxes[index]?.name || ""}
                         changeId={`value-axis-${index}-name`}
@@ -793,6 +1024,7 @@
                   <td class="px-4 py-3">
                     <div class="text-sm w-full">
                       <EditableInput
+                        locked={isReadOnly}
                         value={axis.name}
                         originalValue={originalConfig.complexityAxes[index]?.name || ""}
                         changeId={`complexity-axis-${index}-name`}
@@ -1021,6 +1253,7 @@
                 </td>
                 <td class="py-3">
                   <EditableInput
+                    locked={isReadOnly}
                     value={getLevelDescription(selectedAxis, levelNum)}
                     originalValue={getLevelDescription(selectedAxis, levelNum)}
                     changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis ? selectedAxis.name : 'unknown'}-level-${levelNum}`}

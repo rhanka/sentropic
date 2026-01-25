@@ -5,6 +5,7 @@
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
   import { apiPut } from "$lib/utils/api";
+  import { workspaceReadOnlyScope } from "$lib/stores/workspaceScope";
   
   export let label = ""; // Le label affiché au-dessus
   export let value = ""; // La valeur de l'input
@@ -13,6 +14,8 @@
   export let saveDelay = 5000; // Délai en ms avant sauvegarde (défaut: 5s)
   export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
+  export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)
+  export let fullWidth = false; // If true, input/textarea takes 100% width of its container (disables auto-size)
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
@@ -26,6 +29,7 @@
   export let multiline = false; // Si true, utilise un textarea au lieu d'un input (pour permettre les retours à la ligne)
   
   let tiptapContainer;
+  $: isLocked = Boolean(locked || disabled || $workspaceReadOnlyScope);
   
   const dispatch = createEventDispatcher();
   
@@ -41,12 +45,25 @@
   
   // Basculer entre le mode édition et le mode affichage
   const toggleEditing = () => {
-    if (disabled) return;
+    if (isLocked) return;
     isEditing = !isEditing;
   };
   
   // Fonction pour ajuster la largeur de l'input
   const adjustWidth = () => {
+    if (fullWidth) {
+      if (!markdown && !multiline && input) {
+        input.style.width = '100%';
+        input.style.maxWidth = '100%';
+      } else if (!markdown && multiline && textarea) {
+        textarea.style.width = '100%';
+        textarea.style.maxWidth = '100%';
+        // Ajuster aussi la hauteur automatiquement
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+      }
+      return;
+    }
     if (!markdown && !multiline && span && input) {
       span.textContent = value || " "; // Mise à jour du contenu du span
       const measuredWidth = span.offsetWidth + 4;
@@ -64,6 +81,7 @@
   
   // Fonction de sauvegarde avec buffer
   const saveWithBuffer = async () => {
+    if (isLocked) return;
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
     
     // Annuler le timeout précédent s'il existe
@@ -79,6 +97,7 @@
   
   // Effectuer la sauvegarde réelle
   const performSave = async () => {
+    if (isLocked) return;
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
     
     isSaving = true;
@@ -112,6 +131,7 @@
   
   // Gérer les changements de valeur (pour les inputs HTML)
   const handleInput = (event) => {
+    if (isLocked) return;
     const newValue = event.target.value;
     value = newValue;
     
@@ -144,6 +164,7 @@
 
   // Gérer les changements de valeur (pour TipTap)
   const handleTipTapChange = (event) => {
+    if (isLocked) return;
     const newValue = event.detail.value;
     value = newValue;
     
@@ -172,6 +193,7 @@
   
   // Sauvegarder immédiatement si nécessaire (avant navigation)
   const saveImmediately = async () => {
+    if (isLocked) return;
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
@@ -533,21 +555,22 @@
   export { saveImmediately, hasUnsavedChanges };
 </script>
 
-<div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={multiline && !markdown}>
+<div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={(fullWidth || multiline) && !markdown}>
   {#if label}
     <label for={inputId}>{label}</label>
   {/if}
   {#if !markdown}
-    <div class="input-wrapper" class:full-width={multiline}>
+    <div class="input-wrapper" class:full-width={multiline || fullWidth}>
       {#if multiline}
         <textarea
           id={inputId}
           bind:value
           bind:this={textarea}
           class="editable-textarea"
+          class:full-width={fullWidth}
           class:has-unsaved-changes={hasUnsavedChanges}
           class:is-saving={isSaving}
-          disabled={disabled}
+          disabled={isLocked}
           rows="1"
           aria-label={label || undefined}
           placeholder={placeholder || undefined}
@@ -564,9 +587,10 @@
               bind:value
               bind:this={input}
               class="editable-input"
+              class:full-width={fullWidth}
               class:has-unsaved-changes={hasUnsavedChanges}
               class:is-saving={isSaving}
-              disabled={disabled}
+              disabled={isLocked}
               aria-label={label || undefined}
               placeholder={placeholder || undefined}
               on:input={handleInput}
@@ -580,9 +604,10 @@
             bind:value
             bind:this={input}
             class="editable-input"
+            class:full-width={fullWidth}
             class:has-unsaved-changes={hasUnsavedChanges}
             class:is-saving={isSaving}
-            disabled={disabled}
+            disabled={isLocked}
             aria-label={label || undefined}
             placeholder={placeholder || undefined}
             on:input={handleInput}
@@ -601,7 +626,7 @@
     <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges} role="textbox" aria-label={label || undefined}>
       <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder}/>
+          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder} disabled={isLocked}/>
         </div>
       </div>
       {#if isSaving}

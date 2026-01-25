@@ -19,7 +19,7 @@ test.describe.serial('Génération IA', () => {
     // Stabiliser: éviter que d'autres specs laissent l'admin en scope "lecture seule"
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }
@@ -101,7 +101,7 @@ test.describe.serial('Génération IA', () => {
 
     const enrichResPromise = page.waitForResponse((res) => {
       const req = res.request();
-      return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich$/.test(res.url());
+      return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich/.test(res.url());
     }, { timeout: 30_000 });
 
     await aiButton.click();

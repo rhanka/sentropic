@@ -44,8 +44,9 @@ try {
   // Si l'URL n'est pas parseable, rester en config minimale
 }
 
-// Minimal pool; serverless-friendly
-const pool = new Pool({ connectionString, ssl, ...(pgOptions ? { options: pgOptions } : {}), max: 10, idleTimeoutMillis: 10_000 });
+// Pool configuration: DB_POOL_MAX (default: 30) for all environments including SCW
+const poolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 50;
+const pool = new Pool({ connectionString, ssl, ...(pgOptions ? { options: pgOptions } : {}), max: poolMax, idleTimeoutMillis: 10_000 });
 
 const pgDb = drizzle(pool);
 

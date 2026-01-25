@@ -16,8 +16,8 @@
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { getScopedWorkspaceIdForAdmin, adminReadOnlyScope, adminWorkspaceScope } from '$lib/stores/adminWorkspaceScope';
-  import { Printer, RotateCcw, FileText, TrendingUp, Settings, X } from '@lucide/svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -28,6 +28,7 @@
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
   const HUB_KEY = 'dashboardPage';
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
   // Variables locales pour l'édition markdown (non persistantes)
   let editedIntroduction = '';
@@ -150,9 +151,9 @@
       }
     });
 
-    // Reload on admin workspace scope change
-    let lastScope = $adminWorkspaceScope.selectedId;
-    const unsub = adminWorkspaceScope.subscribe((s) => {
+    // Reload on workspace selection change
+    let lastScope = $workspaceScope.selectedId;
+    const unsub = workspaceScope.subscribe((s) => {
       if (s.selectedId !== lastScope) {
         lastScope = s.selectedId;
         selectedFolderId = null;
@@ -199,9 +200,7 @@
 
   const loadMatrix = async (folderId: string) => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       matrix = folder.matrixConfig;
       executiveSummary = folder.executiveSummary || null;
@@ -222,7 +221,7 @@
 
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
-    if ($adminReadOnlyScope) {
+    if ($workspaceReadOnlyScope) {
       addToast({ type: 'warning', message: 'Mode lecture seule : génération désactivée.' });
       return;
     }
@@ -546,34 +545,44 @@
 {/if}
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
-  {#if $adminReadOnlyScope}
-    <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 print-hidden">
-      Mode admin — workspace partagé : <b>lecture seule</b> (édition / génération désactivées).
-    </div>
-  {/if}
   <div class="w-full print-hidden">
-    {#if selectedFolderId}
-      {#if $adminReadOnlyScope}
-        <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
-      {:else}
-        <h1 class="text-3xl font-semibold mb-0">
-          <EditableInput
-            label=""
-            value={editedFolderName}
-            markdown={false}
-            multiline={true}
-            apiEndpoint={`/folders/${selectedFolderId}`}
-            fullData={{ name: editedFolderName }}
-            changeId={`folder-name-${selectedFolderId}`}
-            originalValue={selectedFolderName || ''}
-            on:change={(e) => editedFolderName = e.detail.value}
-            on:saved={handleFolderNameSaved}
-          />
-        </h1>
+    <div class="flex items-start justify-between gap-4">
+      <div class="min-w-0 flex-1">
+        {#if selectedFolderId}
+          {#if $workspaceReadOnlyScope}
+            <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
+          {:else}
+            <h1 class="text-3xl font-semibold mb-0">
+              <EditableInput
+                label=""
+                value={editedFolderName}
+                markdown={false}
+                multiline={true}
+                apiEndpoint={`/folders/${selectedFolderId}`}
+                fullData={{ name: editedFolderName }}
+                changeId={`folder-name-${selectedFolderId}`}
+                originalValue={selectedFolderName || ''}
+                on:change={(e) => editedFolderName = e.detail.value}
+                on:saved={handleFolderNameSaved}
+              />
+            </h1>
+          {/if}
+        {:else}
+          <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
+        {/if}
+      </div>
+      {#if showReadOnlyLock}
+        <button
+          class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
+          title="Mode lecture seule : édition / génération désactivées."
+          aria-label="Mode lecture seule : édition / génération désactivées."
+          type="button"
+          disabled
+        >
+          <Lock class="w-5 h-5" />
+        </button>
       {/if}
-    {:else}
-      <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
-    {/if}
+    </div>
   </div>
 
   <!-- Synthèse exécutive (FIRST) - Masquée en impression (déjà sur la page de garde) -->

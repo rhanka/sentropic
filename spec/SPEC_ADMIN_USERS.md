@@ -230,25 +230,24 @@ Split global admin settings from user settings:
   - delete account (danger zone)
 - **My workspace / namespace**
   - rename workspace
-  - privacy: toggle "Share my workspace with admin"
+  - privacy: workspace visibility (hide/unhide)
   - (optional) export data
 
-- **Admin workspace scope (admin_app only)**
-  - location: **Settings > Workspace** (not in the global header)
-  - selector label: show **owner email** + workspace name (avoid ambiguous "My Workspace")
-  - selecting a user workspace switches the admin scope for:
+- **Workspace selection (all roles)**
+  - location: **Settings > Workspace** (table selector)
+  - selection applies to:
     - dashboard, organizations, folders, use cases, matrix pages
-  - access mode: **read-only** when scoped to a user workspace (A1/A2)
+  - access mode is derived from **workspace membership role** (`viewer`/`editor`/`admin`)
 
 ### Admin panel
 Add a dedicated admin view (visible only for `admin_app`) to:
 - list pending approvals, approve/disable/reactivate users
-- view whether user has enabled "share with admin"
+- view approval status and membership changes
 
 ## Security considerations
 - Enforce workspace scoping on all business object queries to prevent IDOR.
 - Do not rely on UI-only checks; API must filter by workspace.
-- Admin endpoints must not allow bypass unless sharing is enabled.
+- Admin endpoints must not bypass membership checks.
 - Log admin actions (approve/disable/reactivate) in an audit table (recommended):
   - `admin_audit_log` with actor, target, action, timestamp, metadata.
 
@@ -272,32 +271,28 @@ Recommended approach:
   - New user enrolls -> can create objects immediately
   - After simulated deadline expiry (time travel in tests) -> access invalid
   - Admin approves -> user regains access
-  - User toggles shareWithAdmin -> admin can/cannot access read-only endpoint
+  - Admin access is allowed only when explicitly added as a workspace member
   - User delete -> data gone immediately
 
 ## Open questions (need confirmation)
 1. (Resolved) "Unlimited usage" has no quotas for now; full access is role `editor` within user's own workspace.
 2. (Resolved) Approval expiry -> **read-only** (`guest`) until admin approval. Email not verified -> full block.
 3. (Resolved) User self-reactivation is allowed.
-4. (Resolved) Share-with-admin is **workspace-wide** (Option A). Per-object is future work.
+4. (Resolved) Workspace access is **membership-based** (no share-with-admin).
 5. (Resolved direction) Existing global data should be locked down; user data must be private-by-default (via workspace scoping and a system/legacy workspace).
 
 ## Chat / AI / Streaming (additional spec section)
 
-### Admin chat when scoped to a shared workspace (Chat-1 + read-only)
+### Chat when operating on a shared workspace
 
 Decision:
-- Admin keeps ownership of their chat sessions (no access to user's chat history).
-- When the admin scopes to a shared user workspace, the assistant:
-  - acts **on that workspace** for reads (e.g. read_usecase / read references),
-  - is **read-only** for writes (e.g. `update_usecase_field` must be disabled).
+- Users keep ownership of their chat sessions (no cross-user access).
+- The assistant acts on the **selected workspace** for reads/writes according to membership role.
 
 Implementation notes:
 - Store `chat_sessions.workspace_id`.
-- Server must compute `readOnly` based on:
-  - current user role
-  - selected workspace scope
-  - `shareWithAdmin` flag for the target workspace
+- Server computes `readOnly` based on:
+  - current user role in the selected workspace
 
 ### Streaming & SSE tenancy
 

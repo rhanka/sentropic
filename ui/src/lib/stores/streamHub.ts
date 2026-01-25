@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '$lib/config';
 import { isAuthenticated } from '$lib/stores/session';
-import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => void }): T {
   let value!: T;
@@ -16,6 +16,11 @@ export type StreamHubEvent =
   | { type: 'organization_update'; organizationId: string; data: any }
   | { type: 'folder_update'; folderId: string; data: any }
   | { type: 'usecase_update'; useCaseId: string; data: any }
+  | { type: 'lock_update'; objectType: string; objectId: string; data: any }
+  | { type: 'presence_update'; objectType: string; objectId: string; data: any }
+  | { type: 'workspace_update'; workspaceId: string; data: any }
+  | { type: 'workspace_membership_update'; workspaceId: string; userId?: string; data: any }
+  | { type: 'ping'; data: any }
   | { type: string; streamId: string; sequence: number; data: any };
 
 type Subscription = {
@@ -30,6 +35,10 @@ const EVENT_TYPES = [
   'organization_update',
   'folder_update',
   'usecase_update',
+  'lock_update',
+  'presence_update',
+  'workspace_update',
+  'workspace_membership_update',
   // stream events (normalized)
   'status',
   'reasoning_delta',
@@ -53,6 +62,7 @@ class StreamHub {
   private lastOrganizationEventById = new Map<string, StreamHubEvent>();
   private lastFolderEventById = new Map<string, StreamHubEvent>();
   private lastUseCaseEventById = new Map<string, StreamHubEvent>();
+  private lastLockEventByKey = new Map<string, StreamHubEvent>();
   // Historique compact par stream_id (on garde surtout les tool calls + un état courant reasoning/content)
   private streamHistoryById = new Map<string, StreamHubEvent[]>();
   private maxStreamIds = 50;
@@ -67,6 +77,7 @@ class StreamHub {
     this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
+    this.lastLockEventByKey.clear();
     this.streamHistoryById.clear();
     this.close();
     this.scheduleReconnect();
@@ -81,6 +92,7 @@ class StreamHub {
     this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
+    this.lastLockEventByKey.clear();
     this.streamHistoryById.clear();
   }
 
@@ -92,6 +104,7 @@ class StreamHub {
       for (const ev of this.lastOrganizationEventById.values()) onEvent(ev);
       for (const ev of this.lastFolderEventById.values()) onEvent(ev);
       for (const ev of this.lastUseCaseEventById.values()) onEvent(ev);
+      for (const ev of this.lastLockEventByKey.values()) onEvent(ev);
       for (const events of this.streamHistoryById.values()) {
         for (const ev of events) onEvent(ev);
       }
@@ -165,6 +178,9 @@ class StreamHub {
     } else if ((event as any).type === 'usecase_update') {
       const e = event as any;
       if (e.useCaseId) this.lastUseCaseEventById.set(e.useCaseId, event);
+    } else if ((event as any).type === 'lock_update') {
+      const e = event as any;
+      if (e.objectType && e.objectId) this.lastLockEventByKey.set(`${e.objectType}:${e.objectId}`, event);
     } else {
       const e = event as any;
       if (e.streamId) {
@@ -222,6 +238,15 @@ class StreamHub {
       }
     }
 
+    if (typeof window !== 'undefined') {
+      const type = (event as any)?.type;
+      if (type === 'workspace_membership_update') {
+        window.dispatchEvent(new CustomEvent('streamhub:workspace_membership_update', { detail: event }));
+      } else if (type === 'workspace_update') {
+        window.dispatchEvent(new CustomEvent('streamhub:workspace_update', { detail: event }));
+      }
+    }
+
     for (const sub of this.subs.values()) {
       try {
         if (sub.onlyType && (event as any)?.type !== sub.onlyType) continue;
@@ -255,7 +280,7 @@ class StreamHub {
     // and proxies `/api/v1/*` to the API). `new URL('/api/v1/...')` throws in browsers unless a base is provided.
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
     const urlObj = new URL(`${API_BASE_URL}/streams/sse`, window.location.origin);
-    const scoped = getScopedWorkspaceIdForAdmin();
+    const scoped = getScopedWorkspaceIdForUser();
     if (scoped) urlObj.searchParams.set('workspace_id', scoped);
     const url = urlObj.toString();
     if (this.es && this.currentUrl === url) return;
@@ -282,6 +307,26 @@ class StreamHub {
         }
         if (type === 'usecase_update') {
           this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
+          return;
+        }
+        if (type === 'lock_update') {
+          this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
+          return;
+        }
+        if (type === 'presence_update') {
+          this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
+          return;
+        }
+        if (type === 'workspace_update') {
+          this.dispatch({ type, workspaceId: parsed.workspaceId, data: parsed.data });
+          return;
+        }
+        if (type === 'workspace_membership_update') {
+          this.dispatch({ type, workspaceId: parsed.workspaceId, userId: parsed.userId, data: parsed.data });
+          return;
+        }
+        if (type === 'ping') {
+          this.dispatch({ type, data: parsed });
           return;
         }
 

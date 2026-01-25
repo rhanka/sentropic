@@ -49,7 +49,6 @@ meRouter.get('/', async (c) => {
     .select({
       id: workspaces.id,
       name: workspaces.name,
-      shareWithAdmin: workspaces.shareWithAdmin,
       ownerUserId: workspaces.ownerUserId,
       createdAt: workspaces.createdAt,
       updatedAt: workspaces.updatedAt,
@@ -67,13 +66,12 @@ meRouter.get('/', async (c) => {
 });
 
 const patchMeSchema = z.object({
-  shareWithAdmin: z.boolean().optional(),
   workspaceName: z.string().min(1).max(128).optional(),
 });
 
 meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
   const { userId, workspaceId } = c.get('user');
-  const { shareWithAdmin, workspaceName } = c.req.valid('json');
+  const { workspaceName } = c.req.valid('json');
 
   // Only allow updates for the caller's own workspace
   const [ws] = await db
@@ -87,7 +85,6 @@ meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
   await db
     .update(workspaces)
     .set({
-      ...(shareWithAdmin === undefined ? {} : { shareWithAdmin }),
       ...(workspaceName === undefined ? {} : { name: workspaceName }),
       updatedAt: new Date(),
     })

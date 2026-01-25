@@ -7,12 +7,22 @@ import {
   authenticatedRequest, 
   cleanupAuthData 
 } from '../utils/auth-helper';
+import { db } from '../../src/db/client';
+import { workspaceMemberships } from '../../src/db/schema';
 
 describe('Use Cases API', () => {
   let user: any;
+  let viewer: any;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+    viewer = await createAuthenticatedUser('guest');
+    if (user.workspaceId) {
+      await db
+        .insert(workspaceMemberships)
+        .values({ workspaceId: user.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
+        .onConflictDoNothing();
+    }
   });
 
   afterEach(async () => {
@@ -141,6 +151,39 @@ describe('Use Cases API', () => {
       const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, invalidUseCaseData);
 
       expect(response.status).toBe(400);
+    });
+
+    it('should forbid viewers from creating use cases', async () => {
+      const folderId = await createTestFolder();
+      const useCaseData = {
+        name: `Test Use Case ${createTestId()}`,
+        description: 'Test use case description',
+        folderId
+      };
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/use-cases?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        viewer.sessionToken!,
+        useCaseData
+      );
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('DELETE /use-cases/:id', () => {
+    it('should forbid viewers from deleting use cases', async () => {
+      const folderId = await createTestFolder();
+      const useCase = await createTestUseCase(folderId);
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/use-cases/${useCase.id}?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        viewer.sessionToken!
+      );
+      expect(response.status).toBe(403);
     });
   });
 

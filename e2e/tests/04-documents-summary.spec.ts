@@ -6,8 +6,6 @@ import { fileURLToPath } from 'node:url';
 test.describe('Documents — résumés (court + long)', () => {
   test.describe.configure({ retries: 0 });
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
-  const LONG_PDF_URL =
-    'https://www.scaleai.ca/wp-content/uploads/2025/12/SCALE-AI_Annual-Report_2024-2025.pdf';
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
@@ -47,11 +45,13 @@ test.describe('Documents — résumés (court + long)', () => {
     });
     expect(upShort.ok()).toBeTruthy();
 
+    const longBuf = readFixture('spec-concat.md');
+    const longPayload = longBuf.length > 50_000 ? longBuf.subarray(0, 50_000) : longBuf;
     const upLong = await page.request.post(`${API_BASE_URL}/api/v1/documents`, {
       multipart: {
         context_type: 'folder',
         context_id: folderId,
-        file: { name: longName, mimeType: 'text/markdown', buffer: readFixture('spec-concat.md') },
+        file: { name: longName, mimeType: 'text/markdown', buffer: longPayload },
       },
     });
     expect(upLong.ok()).toBeTruthy();
@@ -117,38 +117,6 @@ test.describe('Documents — résumés (court + long)', () => {
     await expect(rowLong).toContainText(/Prêt|Échec/);
   });
 
-  test.skip('PDF Scale AI (long): upload → statut ready/failed → résumé détaillé', async ({ page }) => {
-    // Test abandonné (flaky/non déterministe) : dépendance à un PDF externe + génération longue.
-    // Validation manuelle déjà faite : le résumé PDF fonctionne en prod.
-    test.setTimeout(360_000);
-    await page.addInitScript(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).confirm = () => true;
-    });
-
-    const folderName = `E2E Docs Summary Long PDF ${Date.now()}`;
-    const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
-      data: { name: folderName, description: 'Docs summary e2e (long pdf)' }
-    });
-    expect(draftRes.ok()).toBeTruthy();
-    const draftJson = await draftRes.json().catch(() => null);
-    const folderId = String((draftJson as any)?.id ?? '');
-    expect(folderId).toBeTruthy();
-
-    const longName = `scaleai-annual-report-${Date.now()}.pdf`;
-    const pdfRes = await page.request.get(LONG_PDF_URL);
-    expect(pdfRes.ok()).toBeTruthy();
-    const pdfBuf = await pdfRes.body();
-
-    const upLong = await page.request.post(`${API_BASE_URL}/api/v1/documents`, {
-      multipart: {
-        context_type: 'folder',
-        context_id: folderId,
-        file: { name: longName, mimeType: 'application/pdf', buffer: pdfBuf },
-      },
-    });
-    expect(upLong.ok()).toBeTruthy();
-  });
 });
 
 

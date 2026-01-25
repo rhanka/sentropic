@@ -14,8 +14,10 @@ import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
+import { workspacesRouter } from './workspaces';
+import { locksRouter } from './locks';
 import { requireAuth } from '../../middleware/auth';
-import { requireRole, requireAdmin, requireEditor } from '../../middleware/rbac';
+import { requireRole, requireAdmin } from '../../middleware/rbac';
 
 export const apiRouter = new Hono();
 
@@ -39,16 +41,24 @@ apiRouter.route('/analytics', analyticsRouter);
 apiRouter.use('/me/*', requireAuth);
 apiRouter.route('/me', meRouter);
 
-// Streaming routes (require editor role or higher)
-apiRouter.use('/streams/*', requireAuth, requireEditor);
+// Workspace routes (authenticated; role checks are enforced per endpoint)
+apiRouter.use('/workspaces/*', requireAuth);
+apiRouter.route('/workspaces', workspacesRouter);
+
+// Locks (authenticated; read is allowed, mutations require workspace editor/admin)
+apiRouter.use('/locks/*', requireAuth);
+apiRouter.route('/locks', locksRouter);
+
+// Streaming routes: read-only for users; allow any authenticated user.
+apiRouter.use('/streams/*', requireAuth);
 apiRouter.route('/streams', streamsRouter);
 
-// Chat routes (require editor role or higher)
-apiRouter.use('/chat/*', requireAuth, requireEditor);
+// Chat routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
+apiRouter.use('/chat/*', requireAuth);
 apiRouter.route('/chat', chatRouter);
 
-// Documents routes (require editor role or higher)
-apiRouter.use('/documents/*', requireAuth, requireEditor);
+// Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
+apiRouter.use('/documents/*', requireAuth);
 apiRouter.route('/documents', documentsRouter);
 
 // Admin routes (require admin_org or admin_app)

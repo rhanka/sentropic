@@ -2,12 +2,47 @@ import { Hono, type Context } from 'hono';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, folders, jobQueue, organizations, useCases, workspaces } from '../../db/schema';
+import { listPresence } from '../../services/lock-presence';
+import { clearLocksForUser } from '../../services/lock-service';
+import { getWorkspaceRole } from '../../services/workspace-access';
+import {
+  ADMIN_WORKSPACE_ID,
+  chatMessages,
+  chatSessions,
+  folders,
+  jobQueue,
+  objectLocks,
+  organizations,
+  useCases,
+  users
+} from '../../db/schema';
 
 export const streamsRouter = new Hono();
+
+type LockObjectType = 'organization' | 'folder' | 'usecase';
+
+const sseConnectionsByUser = new Map<string, number>();
+
+
+function registerSseConnection(userId: string): () => Promise<void> {
+  const current = sseConnectionsByUser.get(userId) ?? 0;
+  sseConnectionsByUser.set(userId, current + 1);
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    const next = (sseConnectionsByUser.get(userId) ?? 1) - 1;
+    if (next <= 0) {
+      sseConnectionsByUser.delete(userId);
+      await clearLocksForUser(userId);
+      return;
+    }
+    sseConnectionsByUser.set(userId, next);
+  };
+}
 
 type StreamEventRow = { streamId: string; eventType: string; data: unknown; sequence: number };
 type JobSnapshotRow = {
@@ -20,6 +55,12 @@ type JobSnapshotRow = {
   completedAt: unknown;
   error: unknown;
 };
+
+const PRESENCE_OBJECT_TYPES: LockObjectType[] = ['organization', 'folder', 'usecase'];
+
+function coercePresenceObjectType(value: string): LockObjectType | null {
+  return PRESENCE_OBJECT_TYPES.includes(value as LockObjectType) ? (value as LockObjectType) : null;
+}
 
 function parseStreamIds(url: URL): string[] {
   // support: ?streamIds=a&streamIds=b  (preferred)
@@ -94,6 +135,26 @@ function sseUseCaseEvent(useCaseId: string, data: unknown): string {
   return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function sseWorkspaceEvent(workspaceId: string, data: unknown): string {
+  const payload = JSON.stringify({ workspaceId, data });
+  return `event: workspace_update\nid: workspace:${workspaceId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseWorkspaceMembershipEvent(workspaceId: string, userId: string | null, data: unknown): string {
+  const payload = JSON.stringify({ workspaceId, userId, data });
+  return `event: workspace_membership_update\nid: workspace_member:${workspaceId}:${userId ?? 'unknown'}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function sseLockEvent(objectType: string, objectId: string, data: unknown): string {
+  const payload = JSON.stringify({ objectType, objectId, data });
+  return `event: lock_update\nid: lock:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
+function ssePresenceEvent(objectType: string, objectId: string, data: unknown): string {
+  const payload = JSON.stringify({ objectType, objectId, data });
+  return `event: presence_update\nid: presence:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === 'object') return value as Record<string, unknown>;
@@ -162,20 +223,15 @@ function hydrateOrganizationForSse(row: Record<string, unknown>): Record<string,
 }
 
 async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+  const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
   const requested = url.searchParams.get('workspace_id');
 
   if (!requested) return user.workspaceId;
   if (user?.role !== 'admin_app') return user.workspaceId;
   if (requested === ADMIN_WORKSPACE_ID) return requested;
 
-  const [ws] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(and(eq(workspaces.id, requested), eq(workspaces.shareWithAdmin, true)))
-    .limit(1);
-
-  if (!ws) throw new Error('Workspace not accessible');
+  const role = await getWorkspaceRole(user.userId, requested);
+  if (!role) throw new Error('Workspace not accessible');
   return requested;
 }
 
@@ -214,6 +270,7 @@ streamsRouter.get('/sse', async (c) => {
   const url = new URL(c.req.url);
   const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
   const targetWorkspaceId = await resolveTargetWorkspaceId(c, url);
+  const releaseSseConnection = registerSseConnection(user.userId);
 
   const streamIds = parseStreamIds(url);
   const jobIds = parseJobIds(url);
@@ -440,6 +497,99 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
+      const emitLockSnapshot = async (objectType: string, objectId: string) => {
+        try {
+          const now = new Date();
+          const [row] = await db
+            .select({
+              id: objectLocks.id,
+              workspaceId: objectLocks.workspaceId,
+              objectType: objectLocks.objectType,
+              objectId: objectLocks.objectId,
+              lockedAt: objectLocks.lockedAt,
+              expiresAt: objectLocks.expiresAt,
+              lockedByUserId: objectLocks.lockedByUserId,
+              lockedByEmail: users.email,
+              lockedByDisplayName: users.displayName,
+              unlockRequestedAt: objectLocks.unlockRequestedAt,
+              unlockRequestedByUserId: objectLocks.unlockRequestedByUserId,
+              unlockRequestMessage: objectLocks.unlockRequestMessage,
+            })
+            .from(objectLocks)
+            .innerJoin(users, eq(objectLocks.lockedByUserId, users.id))
+            .where(
+              and(
+                eq(objectLocks.workspaceId, targetWorkspaceId),
+                eq(objectLocks.objectType, objectType),
+                eq(objectLocks.objectId, objectId),
+                gt(objectLocks.expiresAt, now)
+              )
+            )
+            .limit(1);
+
+          const lock = row?.id
+            ? {
+                id: row.id,
+                workspaceId: row.workspaceId,
+                objectType: row.objectType,
+                objectId: row.objectId,
+                lockedAt: row.lockedAt,
+                expiresAt: row.expiresAt,
+                lockedBy: {
+                  userId: row.lockedByUserId,
+                  email: row.lockedByEmail ?? null,
+                  displayName: row.lockedByDisplayName ?? null,
+                },
+                unlockRequestedAt: row.unlockRequestedAt ?? null,
+                unlockRequestedByUserId: row.unlockRequestedByUserId ?? null,
+                unlockRequestMessage: row.unlockRequestMessage ?? null,
+              }
+            : null;
+
+          push(sseLockEvent(objectType, objectId, { lock }));
+        } catch {
+          // ignore
+        }
+      };
+
+      const emitPresenceSnapshot = async (objectType: string, objectId: string, workspaceId: string) => {
+        try {
+          if (workspaceId !== targetWorkspaceId) return;
+          const coercedType = coercePresenceObjectType(objectType);
+          if (!coercedType) return;
+          const snapshot = listPresence({ workspaceId, objectType: coercedType, objectId });
+          push(ssePresenceEvent(objectType, objectId, snapshot));
+        } catch {
+          // ignore
+        }
+      };
+
+      const isWorkspaceMember = async (workspaceId: string): Promise<boolean> => {
+        try {
+          const row = await db.get(sql`
+            SELECT 1
+            FROM workspace_memberships
+            WHERE workspace_id = ${workspaceId} AND user_id = ${user.userId}
+            LIMIT 1
+          `);
+          return !!row;
+        } catch {
+          return false;
+        }
+      };
+
+      const shouldEmitWorkspaceEvent = async (payload: Record<string, unknown>): Promise<boolean> => {
+        const workspaceId = typeof payload.workspace_id === 'string' ? payload.workspace_id : null;
+        if (!workspaceId) return false;
+        const userId = typeof payload.user_id === 'string' ? payload.user_id : null;
+        if (userId && userId === user.userId) return true;
+        const userIds = Array.isArray(payload.user_ids)
+          ? payload.user_ids.filter((id) => typeof id === 'string')
+          : [];
+        if (userIds.includes(user.userId)) return true;
+        return await isWorkspaceMember(workspaceId);
+      };
+
       // headers de "connexion"
       push(`: connected\n\n`);
 
@@ -500,10 +650,19 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN organization_events');
           await client.query('UNLISTEN folder_events');
           await client.query('UNLISTEN usecase_events');
+          await client.query('UNLISTEN lock_events');
+          await client.query('UNLISTEN presence_events');
+          await client.query('UNLISTEN workspace_events');
+          await client.query('UNLISTEN workspace_membership_events');
         } catch {
           // ignore
         } finally {
           client.release();
+        }
+        try {
+          await releaseSseConnection();
+        } catch {
+          // ignore
         }
         try {
           controller.close();
@@ -563,6 +722,39 @@ streamsRouter.get('/sse', async (c) => {
             const useCaseId = payload.use_case_id;
             if (!useCaseId || typeof useCaseId !== 'string') return;
             void emitUseCaseSnapshot(useCaseId);
+          } else if (msg.channel === 'lock_events') {
+            const objectType = payload.object_type;
+            const objectId = payload.object_id;
+            if (!objectType || typeof objectType !== 'string') return;
+            if (!objectId || typeof objectId !== 'string') return;
+            void emitLockSnapshot(objectType, objectId);
+          } else if (msg.channel === 'presence_events') {
+            const objectType = payload.object_type;
+            const objectId = payload.object_id;
+            const workspaceId = payload.workspace_id;
+            if (!objectType || typeof objectType !== 'string') return;
+            if (!objectId || typeof objectId !== 'string') return;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            void emitPresenceSnapshot(objectType, objectId, workspaceId);
+          } else if (msg.channel === 'workspace_events') {
+            const workspaceId = payload.workspace_id;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            void (async () => {
+              const allowed = await shouldEmitWorkspaceEvent(payload);
+              if (!allowed) return;
+              const data = (payload.data ?? {}) as Record<string, unknown>;
+              push(sseWorkspaceEvent(workspaceId, data));
+            })().catch(() => {});
+          } else if (msg.channel === 'workspace_membership_events') {
+            const workspaceId = payload.workspace_id;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            const targetUserId = typeof payload.user_id === 'string' ? payload.user_id : null;
+            void (async () => {
+              const allowed = await shouldEmitWorkspaceEvent(payload);
+              if (!allowed) return;
+              const data = (payload.data ?? {}) as Record<string, unknown>;
+              push(sseWorkspaceMembershipEvent(workspaceId, targetUserId, data));
+            })().catch(() => {});
           }
         } catch {
           // ignore
@@ -575,6 +767,10 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN folder_events');
       await client.query('LISTEN usecase_events');
       await client.query('LISTEN stream_events');
+      await client.query('LISTEN lock_events');
+      await client.query('LISTEN presence_events');
+      await client.query('LISTEN workspace_events');
+      await client.query('LISTEN workspace_membership_events');
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {

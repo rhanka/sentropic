@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, jobQueue, workspaces } from '../../src/db/schema';
+import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 const mockPutObject = vi.fn();
@@ -35,6 +35,7 @@ async function authenticatedMultipartRequest(app: any, path: string, sessionToke
 describe('Documents API', () => {
   let user: any;
   let admin: any;
+  let viewer: any;
   let app: any;
   let createdDocId: string | null = null;
   let createdJobId: string | null = null;
@@ -44,11 +45,24 @@ describe('Documents API', () => {
     app = await importApp();
     user = await createAuthenticatedUser('editor');
     admin = await createAuthenticatedUser('admin_app');
+    viewer = await createAuthenticatedUser('guest');
     mockPutObject.mockReset();
     mockDeleteObject.mockReset();
     mockGetObjectBodyStream.mockReset();
     createdJobId = null;
     createdDocId = null;
+
+    if (user.workspaceId) {
+      await db
+        .insert(workspaceMemberships)
+        .values({
+          workspaceId: user.workspaceId,
+          userId: viewer.id,
+          role: 'viewer',
+          createdAt: new Date(),
+        })
+        .onConflictDoNothing();
+    }
 
     // Spy queueManager.addJob so we can:
     // - create a real row in job_queue (FK on context_documents.job_id)
@@ -105,6 +119,16 @@ describe('Documents API', () => {
     expect(jobType).toBe('document_summary');
     expect(jobData.documentId).toBe(createdDocId);
     expect(jobOpts.workspaceId).toBeTruthy();
+  });
+
+  it('forbids viewers from uploading documents', async () => {
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc viewer.pdf', { type: 'application/pdf' }));
+
+    const res = await authenticatedMultipartRequest(app, '/api/v1/documents', viewer.sessionToken!, form);
+    expect(res.status).toBe(403);
   });
 
   it('GET /documents lists documents for a context', async () => {
@@ -205,7 +229,27 @@ describe('Documents API', () => {
     createdDocId = null;
   });
 
-  it('admin_app can read documents from a shared workspace via workspace_id query param', async () => {
+  it('forbids viewers from deleting documents in a workspace where they are viewer', async () => {
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc viewer delete.pdf', { type: 'application/pdf' }));
+    const up = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(up.status).toBe(201);
+    const created = await up.json();
+    createdDocId = created.id;
+
+    const del = await app.request(
+      `/api/v1/documents/${createdDocId}?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+      {
+        method: 'DELETE',
+        headers: { Cookie: `session=${viewer.sessionToken}` },
+      }
+    );
+    expect(del.status).toBe(403);
+  });
+
+  it('admin_app can read documents from a workspace where they are a member (workspace_id query)', async () => {
     // Upload as editor in their own workspace
     const form = new FormData();
     form.set('context_type', 'folder');
@@ -216,7 +260,7 @@ describe('Documents API', () => {
     const created = await up.json();
     createdDocId = created.id;
 
-    // Find editor workspace and mark it shareWithAdmin=true
+    // Find editor workspace and grant admin_app membership
     const [ws] = await db
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -225,9 +269,14 @@ describe('Documents API', () => {
     expect(ws?.id).toBeTruthy();
     const editorWorkspaceId = ws!.id;
     await db
-      .update(workspaces)
-      .set({ shareWithAdmin: true })
-      .where(eq(workspaces.id, editorWorkspaceId));
+      .insert(workspaceMemberships)
+      .values({
+        workspaceId: editorWorkspaceId,
+        userId: admin.id,
+        role: 'viewer',
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
 
     // Admin lists docs in that workspace
     const list = await app.request(`/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`, {
@@ -244,9 +293,25 @@ describe('Documents API', () => {
       headers: { Cookie: `session=${admin.sessionToken}` },
     });
     expect(meta.status).toBe(200);
+
+    // Admin can download content with workspace_id
+    mockGetObjectBodyStream.mockResolvedValueOnce(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([7, 7, 7]));
+        controller.close();
+      },
+    }));
+    const content = await app.request(
+      `/api/v1/documents/${createdDocId}/content?workspace_id=${encodeURIComponent(editorWorkspaceId)}`,
+      {
+        method: 'GET',
+        headers: { Cookie: `session=${admin.sessionToken}` },
+      }
+    );
+    expect(content.status).toBe(200);
   });
 
-  it('admin_app cannot read documents from a non-shared workspace via workspace_id (opaque 404)', async () => {
+  it('admin_app cannot read documents from a workspace where they are not a member (opaque 404)', async () => {
     // Upload as editor in their own workspace
     const form = new FormData();
     form.set('context_type', 'folder');
@@ -257,15 +322,14 @@ describe('Documents API', () => {
     const created = await up.json();
     createdDocId = created.id;
 
-    // Find editor workspace and ensure shareWithAdmin=false
+    // Find editor workspace (do not grant admin_app membership)
     const [ws] = await db
-      .select({ id: workspaces.id, shareWithAdmin: workspaces.shareWithAdmin })
+      .select({ id: workspaces.id })
       .from(workspaces)
       .where(eq(workspaces.ownerUserId, user.id))
       .limit(1);
     expect(ws?.id).toBeTruthy();
     const editorWorkspaceId = ws!.id;
-    await db.update(workspaces).set({ shareWithAdmin: false }).where(eq(workspaces.id, editorWorkspaceId));
 
     const list = await app.request(
       `/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`,

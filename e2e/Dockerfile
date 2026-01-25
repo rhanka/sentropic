@@ -6,14 +6,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY playwright.config.ts ./
 COPY global.setup.ts ./
-COPY helpers/ ./helpers/
 
 # Installer les dépendances
 RUN npm install --legacy-peer-deps && \
     npx playwright install --with-deps chromium
 
 # Copier les fichiers de test
-COPY tests/ ./tests/
+# COPY helpers/ ./helpers/
+# COPY tests/ ./tests/
 
 # Commande par défaut
 CMD ["npm", "run", "test"]

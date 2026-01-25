@@ -18,6 +18,7 @@
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/config';
   import References from '$lib/components/References.svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
 
   let organization: Partial<Organization> = {
     name: '',
@@ -62,6 +63,14 @@
   onMount(() => {
     void loadDraftIfAny();
   });
+  let readOnlyChecked = false;
+  $: if ($workspaceScopeHydrated && !readOnlyChecked) {
+    readOnlyChecked = true;
+    if ($workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
+      goto('/organisations');
+    }
+  }
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -101,7 +110,7 @@
   // Create draft lazily once user typed a name (debounced), so documents can be attached before creating/enriching.
   $: {
     const name = (organization.name || '').trim();
-    if (name && !organization.id && !draftCreating) {
+    if (name && !organization.id && !draftCreating && $workspaceScopeHydrated && !$workspaceReadOnlyScope) {
       if (draftTimer) clearTimeout(draftTimer);
       draftTimer = setTimeout(() => {
         void ensureDraftOrganization();
@@ -110,6 +119,10 @@
   }
 
   const handleEnrichOrganization = async () => {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      return;
+    }
     if (!organization.name?.trim()) return;
     if (docsUploading) return;
 
@@ -143,6 +156,10 @@
   };
 
   const handleCreateOrganization = async () => {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      return;
+    }
     if (!organization.name?.trim()) return;
 
     isCreating = true;
@@ -198,7 +215,7 @@
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
           data-testid="enrich-organization"
           on:click={handleEnrichOrganization}
-        disabled={isEnriching || !organization.name?.trim() || docsUploading}
+        disabled={$workspaceReadOnlyScope || isEnriching || !organization.name?.trim() || docsUploading}
         title="IA"
         aria-label="IA"
         >
@@ -213,7 +230,7 @@
           title="Créer"
         aria-label="Créer"
           on:click={handleCreateOrganization}
-          disabled={!organization.name?.trim() || isCreating}
+          disabled={$workspaceReadOnlyScope || !organization.name?.trim() || isCreating}
         >
         {#if isCreating}
           <Loader2 class="w-5 h-5 animate-spin" />

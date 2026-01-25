@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { streamHub } from '../../src/lib/stores/streamHub';
 import { isAuthenticated } from '../../src/lib/stores/session';
+import { setWorkspaceScope } from '../../src/lib/stores/workspaceScope';
 import { get } from 'svelte/store';
 
 // Mock EventSource
@@ -50,7 +51,7 @@ class MockEventSource {
 // Mock global EventSource
 global.EventSource = MockEventSource as any;
 
-// Mock session stores (used indirectly by adminWorkspaceScope)
+// Mock session stores (used indirectly by workspace scope logic)
 vi.mock('../../src/lib/stores/session', () => ({
   session: {
     subscribe: vi.fn((fn: (value: any) => void) => {
@@ -102,6 +103,18 @@ describe('streamHub', () => {
     
     expect(global.EventSource).toHaveBeenCalled();
     expect(mockEventSource).not.toBeNull();
+  });
+
+  it('should include workspace_id in SSE URL when scope is selected', async () => {
+    setWorkspaceScope('ws-123');
+    const callback = vi.fn();
+    streamHub.set('test-key-2', callback);
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(global.EventSource).toHaveBeenCalled();
+    const [url] = (global.EventSource as any).mock.calls[0];
+    expect(String(url)).toContain('workspace_id=ws-123');
   });
 
   it('should replay cached events to new subscribers', async () => {

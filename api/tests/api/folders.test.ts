@@ -7,12 +7,22 @@ import {
   authenticatedRequest, 
   cleanupAuthData 
 } from '../utils/auth-helper';
+import { db } from '../../src/db/client';
+import { workspaceMemberships } from '../../src/db/schema';
 
 describe('Folders API', () => {
   let user: any;
+  let viewer: any;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+    viewer = await createAuthenticatedUser('guest');
+    if (user.workspaceId) {
+      await db
+        .insert(workspaceMemberships)
+        .values({ workspaceId: user.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
+        .onConflictDoNothing();
+    }
   });
 
   afterEach(async () => {
@@ -135,6 +145,36 @@ describe('Folders API', () => {
       const response = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, invalidFolderData);
 
       expect(response.status).toBe(400);
+    });
+
+    it('should forbid viewers from creating folders', async () => {
+      const folderData = {
+        name: `Test Folder ${createTestId()}`,
+        description: 'Test folder description'
+      };
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/folders?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        viewer.sessionToken!,
+        folderData
+      );
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('DELETE /folders/:id', () => {
+    it('should forbid viewers from deleting folders', async () => {
+      const folder = await createTestFolder();
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/folders/${folder.id}?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        viewer.sessionToken!
+      );
+      expect(response.status).toBe(403);
     });
   });
 

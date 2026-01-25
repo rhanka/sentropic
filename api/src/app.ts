@@ -5,8 +5,10 @@ import { apiRouter } from './routes/api';
 import { authRouter } from './routes/auth';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
+import { logger } from './logger';
 
 export const app = new Hono();
+const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
 
 // Parse allowed origins from environment variable
 const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
@@ -41,6 +43,26 @@ app.use('*', async (c, next) => {
     xXssProtection: '1; mode=block',
     referrerPolicy: 'strict-origin-when-cross-origin',
   })(c, next);
+});
+
+// Global HTTP logging (opt-in)
+app.use('*', async (c, next) => {
+  if (!httpLogEnabled) return next();
+  const startedAt = Date.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  const workspaceId = c.req.query('workspace_id') || null;
+  try {
+    await next();
+  } finally {
+    if (method !== 'OPTIONS') {
+      const status = c.res?.status ?? 0;
+      logger.info(
+        { method, path, status, workspaceId, ms: Date.now() - startedAt },
+        'http'
+      );
+    }
+  }
 });
 
 // Custom CORS middleware (strict mode with credentials)

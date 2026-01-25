@@ -36,6 +36,7 @@
   export let isEditing: boolean = false;
   export let organizationId: string | null = null;
   export let organizationName: string | null = null;
+  export let locked: boolean = false;
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -489,6 +490,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         {:else}
           <h1 class="text-3xl font-semibold break-words mb-0">
             <EditableInput
+              locked={locked}
               label=""
               value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
               markdown={false}
@@ -610,6 +612,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         {:else}
           <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
             <EditableInput
+              locked={locked}
               label=""
               value={textBuffers.deadline || ''}
               markdown={true}
@@ -646,6 +649,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
+                  locked={locked}
                   label=""
                   value={textBuffers.description || ''}
                   markdown={true}
@@ -681,6 +685,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                 <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                   <EditableInput
+                    locked={locked}
                     label=""
                     value={textBuffers.problem || ''}
                     markdown={true}
@@ -714,6 +719,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                 <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                   <EditableInput
+                    locked={locked}
                     label=""
                     value={textBuffers.solution || ''}
                     markdown={true}
@@ -755,6 +761,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             {:else}
               <div class="text-sm text-slate-600">
                 <EditableInput
+                  locked={locked}
                   label=""
                   value={listMarkdowns.benefits || ''}
                   markdown={true}
@@ -794,6 +801,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {:else}
                 <div class="text-sm text-slate-600">
                   <EditableInput
+                    locked={locked}
                     label=""
                     value={listMarkdowns.risks || ''}
                     markdown={true}
@@ -831,6 +839,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {:else}
                 <div class="text-sm text-slate-600">
                   <EditableInput
+                    locked={locked}
                     label=""
                     value={listMarkdowns.metrics || ''}
                     markdown={true}
@@ -871,6 +880,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             {:else}
               <span class="flex-1 text-slate-600 text-sm">
                 <EditableInput
+                  locked={locked}
                   label=""
                   value={textBuffers.contact || ''}
                   markdown={true}
@@ -914,6 +924,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {:else}
             <div class="text-sm text-slate-600">
               <EditableInput
+                locked={locked}
                 label=""
                 value={listMarkdowns.technologies || ''}
                 markdown={true}
@@ -958,6 +969,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         {:else}
           <div class="text-sm text-slate-600">
             <EditableInput
+              locked={locked}
               label=""
               value={listMarkdowns.dataSources || ''}
               markdown={true}
@@ -1001,6 +1013,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         {:else}
           <div class="text-sm text-slate-600">
             <EditableInput
+              locked={locked}
               label=""
               value={listMarkdowns.dataObjects || ''}
               markdown={true}
@@ -1042,6 +1055,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       {:else}
         <div class="text-sm text-slate-600">
           <EditableInput
+            locked={locked}
             label=""
             value={listMarkdowns.nextSteps || ''}
             markdown={true}
@@ -1106,6 +1120,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 {:else}
                   <div class="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none">
                     <EditableInput
+                      locked={locked}
                       label=""
                       value={bufferValue}
                       markdown={true}
@@ -1164,6 +1179,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 {:else}
                   <div class="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none">
                     <EditableInput
+                      locked={locked}
                       label=""
                       value={bufferValue}
                       markdown={true}

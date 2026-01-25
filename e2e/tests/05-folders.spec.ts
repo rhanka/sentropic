@@ -1,6 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 
 test.describe('Gestion des dossiers', () => {
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const USER_A_STATE = './.auth/user-a.json';
+  const USER_B_STATE = './.auth/user-b.json';
+  let workspaceAId = '';
+
+  test.beforeAll(async () => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `Folders E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
+
+    // Ajouter user-b en viewer pour les tests read-only
+    const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+      data: { email: 'e2e-user-b@example.com', role: 'viewer' },
+    });
+    if (!addRes.ok() && addRes.status() !== 409) {
+      throw new Error(`Impossible d'ajouter user-b en viewer (status ${addRes.status()})`);
+    }
+    await userAApi.dispose();
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto('/dossiers');
   });
@@ -83,6 +109,44 @@ test.describe('Gestion des dossiers', () => {
       await deleteButtons.first().click();
       await page.waitForLoadState('domcontentloaded');
     }
+  });
+
+  test.describe('Read-only (viewer)', () => {
+    test.use({ storageState: USER_B_STATE });
+
+    test.beforeEach(async ({ page }) => {
+      await page.addInitScript((id: string) => {
+        try {
+          localStorage.setItem('workspaceScopeId', id);
+        } catch {
+          // ignore
+        }
+      }, workspaceAId);
+    });
+
+    test('liste: pas de création ni suppression + lock visible', async ({ page }) => {
+      await page.goto('/dossiers');
+      await page.waitForLoadState('domcontentloaded');
+
+      await expect(page.locator('button:has-text("Nouveau dossier")')).toHaveCount(0);
+      await expect(page.locator('button:has-text("Supprimer"), button[title="Supprimer"]')).toHaveCount(0);
+
+      const lockIcon = page.locator('button[aria-label="Mode lecture seule : création / suppression désactivées."]');
+      await expect(lockIcon).toBeVisible({ timeout: 10_000 });
+    });
+
+    test('détail: champs non éditables', async ({ page }) => {
+      await page.goto('/dossiers');
+      await page.waitForLoadState('domcontentloaded');
+
+      const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
+      if (await folderItems.count() === 0) return;
+      await folderItems.first().click();
+      await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
+
+      const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
+      await expect(disabledField).toBeVisible({ timeout: 10_000 });
+    });
   });
 });
 

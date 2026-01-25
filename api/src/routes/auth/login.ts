@@ -156,8 +156,8 @@ loginRouter.post('/verify', async (c) => {
       }, 403);
     }
 
-    // Ensure workspace exists for this user (idempotent)
-    await ensureWorkspaceForUser(user.id);
+    // Ne pas auto-créer de workspace à la connexion (cas limite: utilisateur retiré de son dernier workspace).
+    await ensureWorkspaceForUser(user.id, { createIfMissing: false });
 
     // Compute effective role (approval expired => guest read-only)
     const status = user.accountStatus ?? 'active';

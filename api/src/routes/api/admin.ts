@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { ADMIN_WORKSPACE_ID, folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
+import { folders, organizations, useCases, userSessions, users, workspaces, workspaceMemberships } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -79,7 +79,7 @@ adminRouter.get('/users', async (c) => {
   const parsedStatus = status ? userStatusSchema.safeParse(status) : { success: true as const, data: undefined };
   if (!parsedStatus.success) return c.json({ error: 'Invalid status' }, 400);
 
-  const rows = await db
+  const usersRows = await db
     .select({
       id: users.id,
       email: users.email,
@@ -94,33 +94,65 @@ adminRouter.get('/users', async (c) => {
       emailVerified: users.emailVerified,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
-      workspaceId: workspaces.id,
-      workspaceName: workspaces.name,
-      shareWithAdmin: workspaces.shareWithAdmin,
     })
     .from(users)
-    .leftJoin(workspaces, eq(workspaces.ownerUserId, users.id))
     .where(parsedStatus.data ? eq(users.accountStatus, parsedStatus.data) : undefined)
     .orderBy(desc(users.createdAt));
 
-  return c.json({ items: rows });
+  // Since workspaces are no longer 1:1 with owner_user_id, a join would duplicate users.
+  // For admin UI display, attach the most recently created owned workspace (if any) without duplicating user rows.
+  const ownerIds = usersRows.map((u) => u.id);
+  const wsRows =
+    ownerIds.length === 0
+      ? []
+      : await db
+          .select({
+            ownerUserId: workspaces.ownerUserId,
+            id: workspaces.id,
+            name: workspaces.name,
+            createdAt: workspaces.createdAt,
+          })
+          .from(workspaces)
+          .where(inArray(workspaces.ownerUserId, ownerIds))
+          .orderBy(desc(workspaces.createdAt));
+
+  const latestWsByOwner = new Map<string, { id: string; name: string | null }>();
+  for (const row of wsRows) {
+    const ownerId = row.ownerUserId;
+    if (!ownerId) continue;
+    if (!latestWsByOwner.has(ownerId)) {
+      latestWsByOwner.set(ownerId, { id: row.id, name: row.name });
+    }
+  }
+
+  const items = usersRows.map((u) => {
+    const ws = latestWsByOwner.get(u.id);
+    return {
+      ...u,
+      workspaceId: ws?.id ?? null,
+      workspaceName: ws?.name ?? null,
+    };
+  });
+
+  return c.json({ items });
 });
 
 adminRouter.get('/workspaces', async (c) => {
-  // Admin workspace + all workspaces that are explicitly shared with admin
+  const admin = c.get('user');
+  // List all workspaces (admin_app can see all), attach membership role if any.
   const rows = await db
     .select({
       id: workspaces.id,
       name: workspaces.name,
-      shareWithAdmin: workspaces.shareWithAdmin,
       ownerUserId: workspaces.ownerUserId,
       ownerEmail: users.email,
+      role: workspaceMemberships.role,
     })
     .from(workspaces)
     .leftJoin(users, eq(workspaces.ownerUserId, users.id))
-    .where(
-      // keep it simple: either admin workspace or shareWithAdmin=true
-      sql`${workspaces.id} = ${ADMIN_WORKSPACE_ID} OR ${workspaces.shareWithAdmin} = true`
+    .leftJoin(
+      workspaceMemberships,
+      and(eq(workspaceMemberships.workspaceId, workspaces.id), eq(workspaceMemberships.userId, admin.userId))
     )
     .orderBy(desc(workspaces.createdAt));
 

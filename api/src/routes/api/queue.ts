@@ -3,13 +3,13 @@ import { queueManager } from '../../services/queue-manager';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { requireRole } from '../../middleware/rbac';
-import { ADMIN_WORKSPACE_ID, workspaces } from '../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { getWorkspaceRole } from '../../services/workspace-access';
+import { ADMIN_WORKSPACE_ID } from '../../db/schema';
 
 const queueRouter = new Hono();
 
 async function resolveTargetWorkspaceId(c: Context): Promise<string> {
-  const { role, workspaceId } = c.get('user') as { role: string; workspaceId: string };
+  const { role, workspaceId, userId } = c.get('user') as { role: string; workspaceId: string; userId: string };
   const requested = c.req.query('workspace_id');
 
   // Default: always own workspace
@@ -21,18 +21,10 @@ async function resolveTargetWorkspaceId(c: Context): Promise<string> {
   // Admin workspace always allowed
   if (requested === ADMIN_WORKSPACE_ID) return requested;
 
-  // Only allowed if the target workspace is explicitly shared with admin
-  const [ws] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(and(eq(workspaces.id, requested), eq(workspaces.shareWithAdmin, true)))
-    .limit(1);
-
-  if (!ws) {
-    // keep it opaque
+  const accessRole = await getWorkspaceRole(userId, requested);
+  if (!accessRole) {
     throw new Error('Workspace not accessible');
   }
-
   return requested;
 }
 

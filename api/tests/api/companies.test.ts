@@ -9,6 +9,8 @@ import {
   unauthenticatedRequest,
   cleanupAuthData 
 } from '../utils/auth-helper';
+import { db } from '../../src/db/client';
+import { workspaceMemberships } from '../../src/db/schema';
 
 describe('Organizations API', () => {
   afterEach(async () => {
@@ -58,6 +60,17 @@ describe('Organizations API', () => {
     expect(res.status).toBe(201);
   });
 
+  it('should forbid viewers from creating organizations', async () => {
+    const viewer = await createAuthenticatedUser('guest');
+    const companyData = {
+      name: `Test Company ${createTestId()}`,
+      industry: testOrganizations.valid.industry,
+    };
+
+    const res = await authenticatedRequest(app, 'POST', '/api/v1/organizations', viewer.sessionToken!, companyData);
+    expect(res.status).toBe(403);
+  });
+
   it('should allow guests to read organizations (200)', async () => {
     const user = await createAuthenticatedUser('guest');
     
@@ -103,6 +116,45 @@ describe('Organizations API', () => {
     const data = await res.json();
     expect(data.name).toBe(companyData.name);
     expect(data.industry).toBe(companyData.industry);
+  });
+
+  it('should forbid viewers from updating and deleting organizations', async () => {
+    const editor = await createAuthenticatedUser('editor');
+    const viewer = await createAuthenticatedUser('guest');
+
+    await db
+      .insert(workspaceMemberships)
+      .values({
+        workspaceId: editor.workspaceId,
+        userId: viewer.id,
+        role: 'viewer',
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+
+    const createRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', editor.sessionToken!, {
+      name: `Test Company ${createTestId()}`,
+      industry: testOrganizations.valid.industry,
+    });
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+
+    const updateRes = await authenticatedRequest(
+      app,
+      'PUT',
+      `/api/v1/organizations/${created.id}?workspace_id=${encodeURIComponent(editor.workspaceId)}`,
+      viewer.sessionToken!,
+      { name: 'Updated Company' }
+    );
+    expect(updateRes.status).toBe(403);
+
+    const deleteRes = await authenticatedRequest(
+      app,
+      'DELETE',
+      `/api/v1/organizations/${created.id}?workspace_id=${encodeURIComponent(editor.workspaceId)}`,
+      viewer.sessionToken!
+    );
+    expect(deleteRes.status).toBe(403);
   });
 
   it('should get all organizations with authentication', async () => {

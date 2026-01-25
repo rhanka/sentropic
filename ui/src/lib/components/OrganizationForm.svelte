@@ -9,6 +9,7 @@
   export let showKpis: boolean = false;
   // UX: sur `organisations/new`, afficher un label explicite. Sur `[id]`, pas de label (titre seul).
   export let nameLabel: string = '';
+  export let locked: boolean = false;
 </script>
 
 {#if organization}
@@ -25,6 +26,7 @@
             fullData={organizationData}
             markdown={false}
             multiline={true}
+            locked={locked}
             placeholder="Saisir le nom de l'organisation"
             on:change={(e) => onFieldUpdate?.('name', e.detail.value)}
             on:saved={() => {}}
@@ -39,6 +41,7 @@
             changeId={apiEndpoint ? 'organization-industry' : 'new-organization-industry'}
             apiEndpoint={apiEndpoint}
             fullData={organizationData}
+            locked={locked}
             placeholder="Non renseigné"
             on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
             on:saved={() => {}}
@@ -64,6 +67,7 @@
             apiEndpoint={apiEndpoint}
             fullData={organizationData}
             markdown={true}
+            locked={locked}
             placeholder="Non renseigné"
             on:change={(e) => onFieldUpdate?.('size', e.detail.value)}
             on:saved={() => {}}
@@ -81,6 +85,7 @@
             apiEndpoint={apiEndpoint}
             fullData={organizationData}
             markdown={true}
+            locked={locked}
             placeholder="Non renseigné"
             on:change={(e) => onFieldUpdate?.('technologies', e.detail.value)}
             on:saved={() => {}}
@@ -99,6 +104,7 @@
           apiEndpoint={apiEndpoint}
           fullData={organizationData}
           markdown={true}
+          locked={locked}
           placeholder="Non renseigné"
           on:change={(e) => onFieldUpdate?.('products', e.detail.value)}
           on:saved={() => {}}
@@ -116,6 +122,7 @@
           apiEndpoint={apiEndpoint}
           fullData={organizationData}
           markdown={true}
+          locked={locked}
           placeholder="Non renseigné"
           on:change={(e) => onFieldUpdate?.('processes', e.detail.value)}
           on:saved={() => {}}
@@ -137,6 +144,7 @@
             fullData={organizationData}
             markdown={true}
             multiline={true}
+            locked={locked}
             placeholder="Non renseigné"
             on:change={(e) => onFieldUpdate?.('kpis', e.detail.value)}
             on:saved={() => {}}
@@ -155,6 +163,7 @@
           apiEndpoint={apiEndpoint}
           fullData={organizationData}
           markdown={true}
+          locked={locked}
           placeholder="Non renseigné"
           on:change={(e) => onFieldUpdate?.('challenges', e.detail.value)}
           on:saved={() => {}}
@@ -172,6 +181,7 @@
           apiEndpoint={apiEndpoint}
           fullData={organizationData}
           markdown={true}
+          locked={locked}
           placeholder="Non renseigné"
           on:change={(e) => onFieldUpdate?.('objectives', e.detail.value)}
           on:saved={() => {}}

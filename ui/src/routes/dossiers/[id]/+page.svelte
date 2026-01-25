@@ -12,14 +12,17 @@
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { adminReadOnlyScope, getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
 
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
-  import { Trash2, Star, X, Minus, Loader2 } from '@lucide/svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import { Trash2, Star, X, Minus, Loader2, Lock } from '@lucide/svelte';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -27,7 +30,27 @@
   let editedFolderName = '';
   let editedContext = '';
   let lastFolderId: string | null = null;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
   const HUB_KEY = 'folderDetailUseCases';
+  let isReadOnly = false;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  $: isReadOnly = $workspaceReadOnlyScope;
+  let lastReadOnlyRole = isReadOnly;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   $: folderId = $page.params.id;
 
@@ -39,9 +62,7 @@
       const useCases = await fetchUseCases(folderId);
       useCasesStore.set(useCases);
 
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder: Folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder: Folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       matrix = folder.matrixConfig;
 
@@ -63,9 +84,7 @@
 
   const handleFolderNameSaved = async () => {
     try {
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folder: Folder = await apiGet(`/folders/${folderId}${qs}`);
+      const folder: Folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
       editedFolderName = folder.name || '';
       foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
@@ -87,13 +106,21 @@
       addToast({ type: 'success', message: "Cas d'usage supprimé avec succès !" });
     } catch (error) {
       console.error('Failed to delete use case:', error);
+      const anyErr = error as any;
+      if (anyErr?.status === 403) {
+        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      } else {
       addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      }
     }
   };
 
   onMount(() => {
     currentFolderId.set(folderId);
     void loadUseCases();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
 
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type === 'usecase_update') {
@@ -132,14 +159,198 @@
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:folder:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if (isReadOnly) {
+        lock = await fetchLock('folder', lockTargetId);
+      } else {
+        const res = await acquireLock('folder', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('folder', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('folder', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('folder', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('folder', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('folder', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('folder', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('folder', lockTargetId);
+  };
+
+
+  $: if (folderId && folderId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('folder', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = folderId;
+    subscribeLock(folderId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if (isReadOnly !== lastReadOnlyRole) {
+    lastReadOnlyRole = isReadOnly;
+    if (isReadOnly) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
 </script>
 
 <section class="space-y-6">
   {#if currentFolder}
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
-        {#if $adminReadOnlyScope}
+        {#if isReadOnly || isLockedByOther}
           <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || 'Dossier'}</h1>
         {:else}
           <h1 class="text-3xl font-semibold mb-0 break-words">
@@ -160,7 +371,7 @@
       </div>
       <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
         {#if currentFolder.organizationId}
-          {@const orgId = currentFolder.organizationId as string}
+          {@const orgId = currentFolder.organizationId}
           <button
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
@@ -174,6 +385,34 @@
           <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
             {currentFolder.model}
           </span>
+        {/if}
+        <LockPresenceBadge
+          {lock}
+          {lockLoading}
+          {lockError}
+          {lockOwnerLabel}
+          {lockRequestedByMe}
+          isAdmin={isWorkspaceAdmin}
+          {isLockedByMe}
+          {isLockedByOther}
+          avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+          connectedCount={presenceTotal}
+          canRequestUnlock={!$workspaceReadOnlyScope}
+          showHeaderLock={!isLockedByMe}
+          on:requestUnlock={handleRequestUnlock}
+          on:forceUnlock={handleForceUnlock}
+          on:releaseLock={handleReleaseLock}
+        />
+        {#if showReadOnlyLock && !showPresenceBadge}
+          <button
+            class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+            title="Mode lecture seule : création / suppression désactivées."
+            aria-label="Mode lecture seule : création / suppression désactivées."
+            type="button"
+            disabled
+          >
+            <Lock class="w-5 h-5" />
+          </button>
         {/if}
       </div>
     </div>
@@ -191,6 +430,7 @@
         originalValue={currentFolder.description || ''}
         changeId={`folder-context-${currentFolder.id}`}
         on:change={(e) => (editedContext = e.detail.value)}
+        locked={isReadOnly || isLockedByOther}
       />
     </div>
 
@@ -231,7 +471,7 @@
               {useCase?.data?.name || useCase?.name || "Cas d'usage sans nom"}
             </h2>
           </div>
-          {#if !$adminReadOnlyScope}
+          {#if !isReadOnly}
             <button
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}

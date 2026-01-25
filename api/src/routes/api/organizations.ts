@@ -8,8 +8,9 @@ import { createId } from '../../utils/id';
 import { enrichOrganization } from '../../services/context-organization';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { requireEditor } from '../../middleware/rbac';
-import { resolveReadableWorkspaceId } from '../../utils/workspace-scope';
+import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 type OrganizationData = {
   industry?: string;
@@ -141,15 +142,7 @@ async function notifyOrganizationEvent(organizationId: string): Promise<void> {
 
 organizationsRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id'),
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const rows = await db
     .select()
     .from(organizations)
@@ -157,7 +150,7 @@ organizationsRouter.get('/', async (c) => {
   return c.json({ items: rows.map(hydrateOrganization) });
 });
 
-organizationsRouter.post('/', requireEditor, zValidator('json', organizationInput), async (c) => {
+organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const id = createId();
@@ -263,15 +256,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
 
 organizationsRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
-  let targetWorkspaceId = user.workspaceId;
-  try {
-    targetWorkspaceId = await resolveReadableWorkspaceId({
-      user,
-      requested: c.req.query('workspace_id'),
-    });
-  } catch {
-    return c.json({ message: 'Not found' }, 404);
-  }
+  const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id');
   const [org] = await db
     .select()
@@ -281,8 +266,8 @@ organizationsRouter.get('/:id', async (c) => {
   return c.json(hydrateOrganization(org));
 });
 
-organizationsRouter.put('/:id', requireEditor, zValidator('json', organizationInput.partial()), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+organizationsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput.partial()), async (c) => {
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const payload = c.req.valid('json');
 
@@ -291,6 +276,18 @@ organizationsRouter.put('/:id', requireEditor, zValidator('json', organizationIn
     .from(organizations)
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   if (!existing) return c.json({ message: 'Not found' }, 404);
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'organization',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
 
   const currentData = parseOrganizationData(existing.data);
   const nextData: OrganizationData = {
@@ -326,7 +323,7 @@ const aiEnrichInput = z.object({
   model: z.string().optional(),
 });
 
-organizationsRouter.post('/ai-enrich', requireEditor, zValidator('json', aiEnrichInput), async (c) => {
+organizationsRouter.post('/ai-enrich', requireEditor, requireWorkspaceEditorRole(), zValidator('json', aiEnrichInput), async (c) => {
   const { name, model } = c.req.valid('json');
   const selectedModel = model || 'gpt-4.1-nano';
   const enrichedData = await enrichOrganization(name, selectedModel, undefined, undefined, {
@@ -338,8 +335,8 @@ organizationsRouter.post('/ai-enrich', requireEditor, zValidator('json', aiEnric
   return c.json(enrichedData);
 });
 
-organizationsRouter.delete('/:id', requireEditor, async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
 
   const [org] = await db
@@ -347,6 +344,18 @@ organizationsRouter.delete('/:id', requireEditor, async (c) => {
     .from(organizations)
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   if (!org) return c.json({ message: 'Not found' }, 404);
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'organization',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
 
   // Check dependencies
   const relatedFolders = await db

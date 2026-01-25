@@ -33,6 +33,8 @@ interface SessionPayload {
   userId: string;
   sessionId: string;
   role: string;
+  email?: string | null;
+  displayName?: string | null;
 }
 
 // JWT secret key (from environment or generate random for dev)
@@ -177,6 +179,8 @@ export async function validateSession(
         role: users.role,
         accountStatus: users.accountStatus,
         approvalDueAt: users.approvalDueAt,
+        email: users.email,
+        displayName: users.displayName,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -210,7 +214,13 @@ export async function validateSession(
       .set({ lastActivityAt: new Date() })
       .where(eq(userSessions.id, sessionId));
     
-    return { userId, sessionId, role: effectiveRole };
+    return {
+      userId,
+      sessionId,
+      role: effectiveRole,
+      email: userAuth.email ?? null,
+      displayName: userAuth.displayName ?? null,
+    };
   } catch (error) {
     logger.debug({ err: error }, 'Invalid session token');
     return null;

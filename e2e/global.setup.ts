@@ -37,6 +37,32 @@ const USER_VICTIM: TestUser = {
   displayName: 'E2E Victim',
 };
 
+async function assertSeededUsersExist(storageStatePath: string, usersToCheck: TestUser[]) {
+  const api = await request.newContext({ baseURL: API_BASE_URL, storageState: storageStatePath });
+  try {
+    const res = await api.get('/api/v1/admin/users');
+    if (!res.ok()) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /api/v1/admin/users failed: ${res.status()} ${res.statusText()} ${body.slice(0, 200)}`);
+    }
+    const data = await res.json().catch(() => null);
+    const items: Array<{ email?: string; emailVerified?: boolean }> = data?.items ?? [];
+    const byEmail = new Map(items.map((u) => [String(u.email || ''), u]));
+    const missing = usersToCheck.filter((u) => !byEmail.has(u.email)).map((u) => u.email);
+    if (missing.length > 0) {
+      throw new Error(`Seed utilisateurs manquant(s): ${missing.join(', ')}`);
+    }
+    const notVerified = usersToCheck
+      .filter((u) => byEmail.has(u.email) && !byEmail.get(u.email)?.emailVerified)
+      .map((u) => u.email);
+    if (notVerified.length > 0) {
+      throw new Error(`Seed utilisateurs non vérifiés (emailVerified=false): ${notVerified.join(', ')}`);
+    }
+  } finally {
+    await api.dispose();
+  }
+}
+
 async function setupWebAuthn(page: Page) {
   const client = await page.context().newCDPSession(page);
   await client.send('WebAuthn.enable');
@@ -459,6 +485,9 @@ export default async function globalSetup() {
     await magicLinkLoginAndSave(browser, USER_A, STORAGE_STATE_USER_A);
     await magicLinkLoginAndSave(browser, USER_B, STORAGE_STATE_USER_B);
     await magicLinkLoginAndSave(browser, USER_VICTIM, STORAGE_STATE_VICTIM);
+
+    // Fail-fast: verify that all required seed users exist and are verified.
+    await assertSeededUsersExist(STORAGE_STATE_PATH, [ADMIN_USER, USER_A, USER_B, USER_VICTIM]);
     
     // Si on arrive ici, c'est un succès - on peut nettoyer le buffer
     clearDebugBuffer();

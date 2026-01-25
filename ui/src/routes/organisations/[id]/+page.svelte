@@ -1,20 +1,45 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchOrganizations, fetchOrganizationById, deleteOrganization, type Organization } from '$lib/stores/organizations';
+  import { organizationsStore, fetchOrganizationById, deleteOrganization, type Organization } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
   import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
+  import { addToast } from '$lib/stores/toast';
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
-  import { Trash2 } from '@lucide/svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
+  import { Trash2, Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
-  let lastLoadedId: string | null = null;
+  let organizationId: string | null = null;
   let hubKey: string | null = null;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
+  $: canDelete = $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: isReadOnlyRole = $workspaceReadOnlyScope;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  let lastReadOnlyRole = isReadOnlyRole;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
@@ -35,65 +60,238 @@
       }
     : {};
 
-  const subscribeOrganization = (organizationId: string) => {
-    if (hubKey) streamHub.delete(hubKey);
-    hubKey = `organizationDetail:${organizationId}`;
-    streamHub.set(hubKey, (evt: any) => {
-      if (evt?.type !== 'organization_update') return;
-      const id: string = evt.organizationId;
-      const data: any = evt.data ?? {};
-      if (!id || id !== organizationId) return;
-      if (data?.deleted) return;
-      if (data?.organization) {
-        const updated = data.organization;
-        organization = { ...(organization || ({} as any)), ...updated };
+  $: organizationId = $page.params.id;
+
+  const subscribeLock = (organizationId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:organization:${organizationId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'organization') return;
+        if (evt.objectId !== organizationId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'organization') return;
+        if (evt.objectId !== organizationId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
       }
     });
   };
 
-  onMount(async () => {
-    await loadOrganization();
+  onMount(() => {
+    void loadOrganization();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
+
+    if (hubKey) streamHub.delete(hubKey);
+    if (organizationId) {
+      hubKey = `organizationDetail:${organizationId}`;
+      streamHub.set(hubKey, (evt: any) => {
+        if (evt?.type !== 'organization_update') return;
+        const id: string = evt.organizationId;
+        const data: any = evt.data ?? {};
+        if (!id || id !== organizationId) return;
+        if (data?.deleted) return;
+        if (data?.organization) {
+          const updated = data.organization;
+          organization = { ...(organization || ({} as any)), ...updated };
+        }
+      });
+    }
   });
 
   onDestroy(() => {
     if (hubKey) streamHub.delete(hubKey);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('organization', lockTargetId);
+    void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
 
-  $: if ($page.params.id && $page.params.id !== lastLoadedId) {
-    loadOrganization();
+  $: if (organizationId && organizationId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('organization', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = organizationId;
+    subscribeLock(lockTargetId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
   }
 
   const loadOrganization = async () => {
-    const organizationId = $page.params.id;
     if (!organizationId) return;
-    if (lastLoadedId === organizationId) return;
 
     try {
-      lastLoadedId = organizationId;
       organization = await fetchOrganizationById(organizationId);
-      subscribeOrganization(organizationId);
       error = '';
       unsavedChangesStore.reset();
       return;
     } catch {
-      await new Promise((r) => setTimeout(r, 300));
-      try {
-        organization = await fetchOrganizationById(organizationId);
-        subscribeOrganization(organizationId);
-        error = '';
+      const organizations = $organizationsStore;
+      organization = organizations.find((o) => o.id === organizationId) || null;
+      if (!organization) {
+        error = "Erreur lors du chargement de l'organisation";
         return;
-      } catch {
-        try {
-          const organizations = await fetchOrganizations();
-          organization = organizations.find((o) => o.id === organizationId) || null;
-          error = organization ? '' : 'Organisation non trouvée';
-          unsavedChangesStore.reset();
-        } catch {
-          error = "Erreur lors du chargement de l'organisation";
-        }
       }
+      error = '';
+      unsavedChangesStore.reset();
     }
   };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if (isReadOnlyRole) {
+        lock = await fetchLock('organization', lockTargetId);
+      } else {
+        const res = await acquireLock('organization', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('organization', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('organization', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('organization', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('organization', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('organization', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('organization', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('organization', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('organization', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('organization', lockTargetId);
+  };
+
+
+  $: if (isReadOnlyRole !== lastReadOnlyRole) {
+    lastReadOnlyRole = isReadOnlyRole;
+    if (isReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
 
   const handleFieldUpdate = (field: string, value: string) => {
     if (!organization) return;
@@ -103,6 +301,7 @@
 
   const handleDelete = async () => {
     if (!organization) return;
+    if (!canDelete) return;
 
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
 
@@ -127,19 +326,49 @@
     organization={organization as any}
     {organizationData}
     apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
+    locked={isLockedByOther}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
     nameLabel=""
   >
     <div slot="actions" class="flex items-center gap-2">
-      <button
-        class="rounded p-2 transition text-warning hover:bg-slate-100"
-        title="Supprimer"
-        aria-label="Supprimer"
-        on:click={handleDelete}
-      >
-        <Trash2 class="w-5 h-5" />
-      </button>
+      <LockPresenceBadge
+        {lock}
+        {lockLoading}
+        {lockError}
+        {lockOwnerLabel}
+        {lockRequestedByMe}
+        isAdmin={isWorkspaceAdmin}
+        {isLockedByMe}
+        {isLockedByOther}
+        avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+        connectedCount={presenceTotal}
+        canRequestUnlock={!isReadOnlyRole}
+        showHeaderLock={!isLockedByMe}
+        on:requestUnlock={handleRequestUnlock}
+        on:forceUnlock={handleForceUnlock}
+        on:releaseLock={handleReleaseLock}
+      />
+      {#if canDelete}
+        <button
+          class="rounded p-2 transition text-warning hover:bg-slate-100"
+          title="Supprimer"
+          aria-label="Supprimer"
+          on:click={handleDelete}
+        >
+          <Trash2 class="w-5 h-5" />
+        </button>
+      {:else if showReadOnlyLock && !showPresenceBadge}
+        <button
+          class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+          title="Mode lecture seule : création / suppression désactivées."
+          aria-label="Mode lecture seule : création / suppression désactivées."
+          type="button"
+          disabled
+        >
+          <Lock class="w-5 h-5" />
+        </button>
+      {/if}
     </div>
 
     <div slot="underHeader">

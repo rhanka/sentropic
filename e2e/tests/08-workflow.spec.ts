@@ -11,7 +11,7 @@ test.describe.serial('Workflow métier complet', () => {
     // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule")
     await page.addInitScript((id: string) => {
       try {
-        localStorage.setItem('adminWorkspaceScopeId', id);
+        localStorage.setItem('workspaceScopeId', id);
       } catch {
         // ignore
       }
@@ -191,8 +191,4 @@ test.describe.serial('Workflow métier complet', () => {
     }
   });
 
-  test.skip('devrait permettre de changer de dossier dans le dashboard', async ({ page }) => {
-    // Test skip: Le sélecteur de dossier n'existe plus dans la nouvelle structure du dashboard
-    // Le changement de dossier se fait maintenant via la navigation vers /dossiers
-  });
 });

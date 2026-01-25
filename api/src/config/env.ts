@@ -47,6 +47,7 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration
   DISABLE_RATE_LIMIT: z.string().optional(),
+  HTTP_LOG: z.string().default('true'),
 
   // Chat tracing (debug / audit)
   // Store OpenAI payloads + tool calls for troubleshooting loops.

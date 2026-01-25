@@ -156,6 +156,62 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     estimateSpy.mockRestore();
     chunkSpy.mockRestore();
   });
+
+  it('documents.get_content rejects mismatched context', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'ctx.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/ctx.pdf',
+      status: 'ready',
+      data: { summary: 'Résumé court', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await expect(
+      toolService.getDocumentContent({
+        workspaceId,
+        contextType,
+        contextId: 'wrong_context',
+        documentId: docId,
+      })
+    ).rejects.toThrow('Security: document does not match context');
+  });
+
+  it('documents.get_content rejects non-member workspace access', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'ws.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/ws.pdf',
+      status: 'ready',
+      data: { summary: 'Résumé court', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await expect(
+      toolService.getDocumentContent({
+        workspaceId: 'workspace_other',
+        contextType,
+        contextId,
+        documentId: docId,
+      })
+    ).rejects.toThrow('Document not found');
+  });
 });
 
 

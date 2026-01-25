@@ -1,7 +1,9 @@
 services:
   api:
     environment:
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       - ADMIN_EMAIL=e2e-admin@example.com
+      - LOCK_TTL_MS=15000  # 15s for E2E tests (default: 60s)
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:5173
       # Document storage (CI/E2E): MinIO
@@ -19,6 +21,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./e2e/tests:/app/tests
+      - ./e2e/helpers:/app/helpers
       - ./e2e/.auth:/app/.auth
       - ./e2e/test-results:/app/test-results
     depends_on:

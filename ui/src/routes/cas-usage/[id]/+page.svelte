@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { useCasesStore } from '$lib/stores/useCases';
+  import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
   import { goto } from '$app/navigation';
@@ -10,8 +11,11 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { getScopedWorkspaceIdForAdmin } from '$lib/stores/adminWorkspaceScope';
-  import { Printer, Trash2 } from '@lucide/svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
+  import { Printer, Trash2, Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let useCase: any = undefined;
@@ -21,11 +25,34 @@
   let organizationId: string | null = null;
   let organizationName: string | null = null;
   let hubKey: string | null = null;
+  let isReadOnly = false;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
+  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
+  let lastReadOnlyRole = isReadOnly;
+  const LOCK_REFRESH_MS = 10 * 1000;
 
   $: useCaseId = $page.params.id;
 
   onMount(() => {
     loadUseCase();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
     // SSE: usecase_update (+ folder_update pour la matrice)
     if (hubKey) streamHub.delete(hubKey);
     hubKey = `useCaseDetail:${useCaseId}`;
@@ -103,14 +130,196 @@
 
   onDestroy(() => {
     if (hubKey) streamHub.delete(hubKey);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('usecase', lockTargetId);
+    void releaseCurrentLock();
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pagehide', handleLeave);
+    window.removeEventListener('beforeunload', handleLeave);
   });
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:usecase:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'usecase') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'usecase') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if ($workspaceReadOnlyScope) {
+        lock = await fetchLock('usecase', lockTargetId);
+      } else {
+        const res = await acquireLock('usecase', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? 'Erreur de verrouillage';
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('usecase', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('usecase', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('usecase', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('usecase', lockTargetId);
+      addToast({ type: 'success', message: 'Verrou forcé' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('usecase', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('usecase', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('usecase', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('usecase', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('usecase', lockTargetId);
+  };
+
+
+  $: if (useCaseId && useCaseId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('usecase', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = useCaseId;
+    subscribeLock(useCaseId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if ($workspaceReadOnlyScope !== lastReadOnlyRole) {
+    lastReadOnlyRole = $workspaceReadOnlyScope;
+    if (lastReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
 
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      useCase = await apiGet(`/use-cases/${useCaseId}${qs}`);
+      useCase = await apiGet(`/use-cases/${useCaseId}`);
       
       // Mettre à jour le store avec les données fraîches
       useCasesStore.update(items => 
@@ -139,9 +348,15 @@
   // Polling désactivé: mise à jour via SSE (usecase_update)
 
   const handleDelete = async () => {
-    if (!useCase || !confirm('Êtes-vous sûr de vouloir supprimer ce cas d\'usage ?')) return;
+    if (!useCase) return;
+    if (isReadOnly) {
+      addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      return;
+    }
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
 
     try {
+      await deleteUseCase(useCase.id);
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
       if (useCase.folderId) {
@@ -151,7 +366,12 @@
       }
     } catch (err) {
       console.error('Failed to delete use case:', err);
+      const anyErr = err as any;
+      if (anyErr?.status === 403) {
+        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      } else {
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      }
     }
   };
 
@@ -160,9 +380,7 @@
     
     try {
       // Charger la matrice depuis le dossier
-      const scoped = getScopedWorkspaceIdForAdmin();
-      const qs = scoped ? `?workspace_id=${encodeURIComponent(scoped)}` : '';
-      const folderResp: any = await apiGet(`/folders/${useCase.folderId}${qs}`);
+      const folderResp: any = await apiGet(`/folders/${useCase.folderId}`);
       matrix = folderResp?.matrixConfig ?? null;
       organizationId = folderResp?.organizationId ?? null;
       organizationName = folderResp?.organizationName ?? null;
@@ -212,8 +430,26 @@
       {organizationId}
       {organizationName}
       isEditing={false}
+      locked={isLockedByOther}
     >
       <svelte:fragment slot="actions-view">
+            <LockPresenceBadge
+              {lock}
+              {lockLoading}
+              {lockError}
+              {lockOwnerLabel}
+              {lockRequestedByMe}
+              isAdmin={isWorkspaceAdmin}
+              {isLockedByMe}
+              {isLockedByOther}
+              avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+              connectedCount={presenceTotal}
+              canRequestUnlock={!$workspaceReadOnlyScope}
+              showHeaderLock={!isLockedByMe}
+              on:requestUnlock={handleRequestUnlock}
+              on:forceUnlock={handleForceUnlock}
+              on:releaseLock={handleReleaseLock}
+            />
             <button
               on:click={() => window.print()}
               class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
@@ -221,6 +457,7 @@
             >
               <Printer class="w-5 h-5" />
             </button>
+            {#if !isReadOnly}
             <button 
               on:click={handleDelete}
               class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
@@ -228,6 +465,17 @@
             >
               <Trash2 class="w-5 h-5" />
             </button>
+            {:else if showReadOnlyLock && !showPresenceBadge}
+              <button
+                class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
+                title="Mode lecture seule : création / suppression désactivées."
+                aria-label="Mode lecture seule : création / suppression désactivées."
+                type="button"
+                disabled
+              >
+                <Lock class="w-5 h-5" />
+              </button>
+            {/if}
       </svelte:fragment>
     </UseCaseDetail>
 

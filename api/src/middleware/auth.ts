@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono';
 import { validateSession } from '../services/session-manager';
 import { logger } from '../logger';
 import { ensureWorkspaceForUser } from '../services/workspace-service';
+import { getWorkspaceRole, isWorkspaceDeleted } from '../services/workspace-access';
 
 /**
  * Authentication Middleware
@@ -16,6 +17,8 @@ export interface AuthUser {
   sessionId: string;
   role: string;
   workspaceId: string;
+  email?: string | null;
+  displayName?: string | null;
 }
 
 // Extend Hono context with user info
@@ -56,13 +59,42 @@ export async function requireAuth(c: Context, next: Next) {
       return c.json({ error: 'Invalid or expired session' }, 401);
     }
     
-    // Attach user info to context
-    const { workspaceId } = await ensureWorkspaceForUser(session.userId);
+    const path = c.req.path || '';
+    const isWorkspaceBootstrapPath = path.includes('/workspaces') || path.includes('/me');
+    const allowHiddenWorkspace = isWorkspaceBootstrapPath || path.includes('/health');
+
+    // Attach user info to context (workspace is selected from query param if provided)
+    let { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
+
+    const requested = (c.req.query('workspace_id') || '').trim();
+    if (requested) {
+      const role = await getWorkspaceRole(session.userId, requested);
+      if (!role) {
+        // If the client has a stale localStorage workspace_id, allow bootstrap endpoints to recover.
+        if (!isWorkspaceBootstrapPath) {
+          // opaque
+          return c.json({ message: 'Not found' }, 404);
+        }
+      }
+      if (role) workspaceId = requested;
+    }
+
+    if (!workspaceId && !isWorkspaceBootstrapPath) {
+      return c.json({ message: 'No workspace available', code: 'WORKSPACE_REQUIRED' }, 409);
+    }
+
+    if (workspaceId && !allowHiddenWorkspace) {
+      const hidden = await isWorkspaceDeleted(workspaceId);
+      if (hidden) {
+        return c.json({ message: 'Workspace is hidden', code: 'WORKSPACE_HIDDEN' }, 409);
+      }
+    }
+
     c.set('user', {
       userId: session.userId,
       sessionId: session.sessionId,
       role: session.role,
-      workspaceId,
+      workspaceId: workspaceId ?? '',
     });
     
     await next();
@@ -89,13 +121,17 @@ export async function optionalAuth(c: Context, next: Next) {
       
       if (session) {
         // Attach user info to context
-        const { workspaceId } = await ensureWorkspaceForUser(session.userId);
-        c.set('user', {
-          userId: session.userId,
-          sessionId: session.sessionId,
-          role: session.role,
-          workspaceId,
-        });
+        const { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
+        if (workspaceId) {
+    c.set('user', {
+      userId: session.userId,
+      sessionId: session.sessionId,
+      role: session.role,
+      workspaceId,
+      email: session.email ?? null,
+      displayName: session.displayName ?? null,
+    });
+        }
       }
     }
     

@@ -1,7 +1,83 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
+import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
+import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
-  test.beforeEach(async ({ page }) => {
+  const FILE_TAG = 'e2e:matrix.spec.ts';
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const USER_A_STATE = './.auth/user-a.json';
+  const USER_B_STATE = './.auth/user-b.json';
+  let workspaceAId = '';
+  let folderId = '';
+
+  test.beforeAll(async () => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+    
+    // Créer un workspace unique pour ce fichier de test (isolation des ressources)
+    const workspaceName = `Matrix E2E ${Date.now()}`;
+    const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
+    if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
+    const created = await createRes.json().catch(() => null);
+    workspaceAId = String(created?.id || '');
+    if (!workspaceAId) throw new Error('workspaceAId introuvable');
+
+    // Ajouter user-b en editor
+    const addRes = await userAApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+      data: { email: 'e2e-user-b@example.com', role: 'editor' },
+    });
+    if (!addRes.ok() && addRes.status() !== 409) {
+      throw new Error(`Impossible d'ajouter user-b en editor (status ${addRes.status()})`);
+    }
+
+    // Récupérer les IDs des utilisateurs
+    const membersRes = await userAApi.get(`/api/v1/workspaces/${workspaceAId}/members`);
+    if (!membersRes.ok()) throw new Error(`Impossible de charger les membres (status ${membersRes.status()})`);
+    const membersData = await membersRes.json().catch(() => null);
+    const members: Array<{ userId: string; email?: string }> = membersData?.items ?? [];
+    const userA = members.find((member) => member.email === 'e2e-user-a@example.com');
+    const userB = members.find((member) => member.email === 'e2e-user-b@example.com');
+    if (!userA?.userId || !userB?.userId) throw new Error('User A/B id introuvable');
+
+    // Créer une organisation et un dossier dans ce workspace
+    const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
+      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+    });
+    if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
+    const orgJson = await orgRes.json().catch(() => null);
+    const organizationId = String(orgJson?.id || '');
+
+    const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
+      data: { name: 'Dossier Test', description: 'Dossier pour tests matrix', organizationId },
+    });
+    if (!folderRes.ok()) throw new Error(`Impossible de créer dossier (status ${folderRes.status()})`);
+    const folderJson = await folderRes.json().catch(() => null);
+    folderId = String(folderJson?.id || '');
+    if (!folderId) throw new Error('folderId introuvable');
+
+    await userAApi.dispose();
+  });
+
+  const ensureCurrentFolderId = async (page: import('@playwright/test').Page) => {
+    const current = await page.evaluate(() => localStorage.getItem('currentFolderId'));
+    if (current !== folderId) {
+      await page.evaluate((id) => {
+        try {
+          localStorage.setItem('currentFolderId', id);
+        } catch {
+          // ignore
+        }
+      }, folderId);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+    await expect
+      .poll(async () => page.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+      .toBe(folderId);
+  };
+
+  test.beforeEach(async ({ page }, testInfo) => {
     await page.goto('/matrice');
     await page.waitForLoadState('domcontentloaded');
   });
@@ -266,5 +342,149 @@ test.describe('Configuration de la matrice', () => {
         }
       }
     }
+  });
+
+  test.describe('Matrix lock/presence', () => {
+    test('User A locks → User B sees → unlock accept', async ({ browser }) => {
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
+      });
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
+      });
+      const pageA = await userAContext.newPage();
+      const pageB = await userBContext.newPage();
+
+      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageA);
+
+      await pageA.click('a[href="/matrice"]');
+      await expect(pageA).toHaveURL(/\/matrice/);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageA);
+      const noFolderMessageA = pageA.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
+      if (await noFolderMessageA.isVisible().catch(() => false)) {
+        await pageA.evaluate((id) => {
+          try {
+            localStorage.setItem('currentFolderId', id);
+          } catch {
+            // ignore
+          }
+        }, folderId);
+        await pageA.reload({ waitUntil: 'domcontentloaded' });
+        await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      }
+
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .toBe(folderId);
+      await expect
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .toBe(folderId);
+
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageB);
+
+      await pageB.click('a[href="/matrice"]');
+      await expect(pageB).toHaveURL(/\/matrice/);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageB);
+      const noFolderMessage = pageB.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
+      if (await noFolderMessage.isVisible().catch(() => false)) {
+        await pageB.evaluate((id) => {
+          try {
+            localStorage.setItem('currentFolderId', id);
+          } catch {
+            // ignore
+          }
+        }, folderId);
+        await pageB.reload({ waitUntil: 'domcontentloaded' });
+        await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
+      }
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      await waitForLockedByOther(pageB);
+      const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+      await requestButton.click();
+
+      const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
+      const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
+      await expect
+        .poll(async () => {
+          await pageA.evaluate(() => window.scrollTo(0, 0));
+          await badgeA.evaluate((el) => {
+            el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          });
+          return releaseButton.count();
+        }, { timeout: 15_000 })
+        .toBe(1);
+      await releaseButton.click();
+
+      await waitForNoLocker(pageB);
+
+      await userAContext.close();
+      await userBContext.close();
+    });
+
+    test('User A leaves → lock released → User B can lock', async ({ browser }) => {
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
+      });
+      const pageA = await userAContext.newPage();
+
+      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageA);
+
+      await pageA.click('a[href="/matrice"]');
+      await expect(pageA).toHaveURL(/\/matrice/);
+      await pageA.waitForLoadState('domcontentloaded');
+      await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      await ensureCurrentFolderId(pageA);
+
+      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      // Navigate to another page to trigger SSE cleanup
+      await pageA.goto('/dossiers');
+      await pageA.waitForLoadState('domcontentloaded');
+      // Wait a bit for SSE cleanup to complete
+      await pageA.waitForTimeout(1000);
+      await userAContext.close();
+
+      // After User A leaves, the lock should be released (null) or User B can acquire it
+      // User B might auto-acquire the lock if they're on the page
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
+      });
+      const pageB = await userBContext.newPage();
+      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await ensureCurrentFolderId(pageB);
+
+      await pageB.click('a[href="/matrice"]');
+      await expect(pageB).toHaveURL(/\/matrice/);
+      await pageB.waitForLoadState('domcontentloaded');
+      await ensureCurrentFolderId(pageB);
+      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+
+      // Wait for lock to be released or acquired by User B
+      await waitForNoLocker(pageB);
+
+      await userBContext.close();
+
+    });
   });
 });

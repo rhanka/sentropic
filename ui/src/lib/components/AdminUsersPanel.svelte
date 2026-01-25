@@ -30,7 +30,6 @@
     updatedAt: string | null;
     workspaceId: string | null;
     workspaceName: string | null;
-    shareWithAdmin: boolean | null;
   };
 
   let loading = false;
@@ -49,7 +48,13 @@
     try {
       const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
       const data = await apiGet<{ items: AdminUserRow[] }>(`/admin/users${qs}`);
-      items = data.items;
+      // Defensive: avoid keyed each crash if server returns duplicates (e.g. multiple owned workspaces).
+      const uniq = new Map<string, AdminUserRow>();
+      for (const u of data.items ?? []) {
+        if (!u?.id) continue;
+        if (!uniq.has(u.id)) uniq.set(u.id, u);
+      }
+      items = Array.from(uniq.values());
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur de chargement admin' });
     } finally {
@@ -161,7 +166,6 @@
                 <th class="py-2 pr-3">Status</th>
                 <th class="py-2 pr-3">Email OK</th>
                 <th class="py-2 pr-3">Workspace</th>
-                <th class="py-2 pr-3">Share</th>
                 <th class="py-2 pr-3"></th>
               </tr>
             </thead>
@@ -174,7 +178,6 @@
                   <td class="py-2 pr-3">{u.accountStatus}</td>
                   <td class="py-2 pr-3">{u.emailVerified ? 'oui' : 'non'}</td>
                   <td class="py-2 pr-3">{u.workspaceName ?? u.workspaceId ?? '—'}</td>
-                  <td class="py-2 pr-3">{u.shareWithAdmin ? 'oui' : 'non'}</td>
                   <td class="py-2 pr-3">
                     <div class="flex flex-wrap gap-2">
                       {#if u.accountStatus === 'pending_admin_approval' || u.accountStatus === 'approval_expired_readonly'}
