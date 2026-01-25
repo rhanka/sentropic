@@ -33,8 +33,6 @@ export async function apiRequest<T = any>(
   const rawUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
 
   // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
-  // - admin_app uses admin scope store
-  // - regular users use workspace scope store
   const scoped = getScopedWorkspaceIdForUser();
   const url = (() => {
     if (!scoped) return rawUrl;
