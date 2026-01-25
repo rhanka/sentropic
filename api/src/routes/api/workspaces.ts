@@ -68,7 +68,6 @@ const createWorkspaceSchema = z.object({
 // Create workspace: creator becomes admin member
 workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
-  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const { name } = c.req.valid('json');
   const id = createId();
@@ -104,7 +103,6 @@ const updateWorkspaceSchema = z.object({
 
 workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
-  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   try {
@@ -126,7 +124,6 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
 
 workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
-  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   try {
@@ -143,7 +140,6 @@ workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
 
 workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
-  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   try {
@@ -161,7 +157,6 @@ workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
 // Hard delete (only if hidden)
 workspacesRouter.delete('/:id', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
-  if (user.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   try {
@@ -250,7 +245,6 @@ const addMemberSchema = z.object({
 
 workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMemberSchema), async (c) => {
   const actor = c.get('user') as { userId: string; role: string };
-  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   try {
@@ -289,7 +283,6 @@ const updateMemberSchema = z.object({
 
 async function updateMemberRoleHandler(c: Context) {
   const actor = c.get('user') as { userId: string; role: string };
-  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   const targetUserId = c.req.param('userId');
@@ -322,7 +315,6 @@ workspacesRouter.put('/:id/members/:userId', requireEditor, zValidator('json', u
 
 workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
   const actor = c.get('user') as { userId: string; role: string };
-  if (actor.role === 'admin_app') return c.json({ error: 'Insufficient permissions' }, 403);
 
   const workspaceId = c.req.param('id');
   const targetUserId = c.req.param('userId');
