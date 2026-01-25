@@ -1,6 +1,5 @@
 <script lang="ts">
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
-  import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete } from '$lib/utils/api';
   import { onMount, onDestroy } from 'svelte';
@@ -43,23 +42,7 @@
         return;
       }
       if (evt?.type === 'usecase_update') {
-        const useCaseId: string = evt.useCaseId;
-        const data: any = evt.data ?? {};
-        if (!useCaseId) return;
-        if (data?.deleted) {
-          useCasesStore.update((items) => items.filter(uc => uc.id !== useCaseId));
-          return;
-        }
-        if (data?.useCase) {
-          const updated = data.useCase;
-          useCasesStore.update((items) => {
-            const idx = items.findIndex(uc => uc.id === updated.id);
-            if (idx === -1) return [updated, ...items];
-            const next = [...items];
-            next[idx] = { ...next[idx], ...updated };
-            return next;
-          });
-        }
+        void refreshFolderCounts();
       }
     });
 
@@ -82,12 +65,8 @@
   const loadFolders = async () => {
     isLoading = true;
     try {
-      const folders = await fetchFolders();
+      const folders = await fetchFolders({ includeUseCaseCounts: true });
       foldersStore.set(folders);
-      
-      // Charger les cas d'usage pour chaque dossier pour compter
-      const useCases = await fetchUseCases();
-      useCasesStore.set(useCases);
       
       // Valider que le dossier sélectionné existe toujours
       if ($currentFolderId) {
@@ -117,6 +96,15 @@
     }
   };
 
+  const refreshFolderCounts = async () => {
+    try {
+      const folders = await fetchFolders({ includeUseCaseCounts: true });
+      foldersStore.set(folders);
+    } catch (error) {
+      console.error('Failed to refresh folder counts:', error);
+    }
+  };
+
   // Polling désactivé: dossiers/cas d'usage se mettent à jour via SSE (folder_update/usecase_update)
 
   const handleFolderClick = (folderId: string, folderStatus: string) => {
@@ -129,10 +117,9 @@
 
     // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
     if (folderStatus === 'generating') {
-      const folderUseCases = $useCasesStore.filter(uc => uc.folderId === folderId);
-      if (folderUseCases.length === 0) {
-        return;
-      }
+      const folder = $foldersStore.find(f => f.id === folderId);
+      const count = folder?.useCaseCount ?? 0;
+      if (count === 0) return;
     }
     
     // Naviguer vers la vue dossier (qui contient la liste des cas d'usage)
@@ -141,7 +128,7 @@
   };
 
   const getUseCaseCount = (folderId: string) => {
-    return $useCasesStore.filter(uc => uc.folderId === folderId).length;
+    return $foldersStore.find(f => f.id === folderId)?.useCaseCount ?? 0;
   };
 
   const handleDeleteFolder = async (id: string) => {
