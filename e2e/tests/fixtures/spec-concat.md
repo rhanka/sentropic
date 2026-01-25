@@ -1178,7 +1178,6 @@ This must be immediate and irreversible (no recycle bin).
 - `GET /api/v1/admin/users/:userId/objects/*` (only if workspace is shared; read-only)
 
 Workspace switcher support:
-- `GET /api/v1/admin/workspaces`
   - list workspaces that are either:
     - admin workspace, or
     - shared by their owner (`shareWithAdmin=true`)
