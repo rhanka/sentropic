@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { folders, organizations } from '../../db/schema';
+import { folders, organizations, useCases } from '../../db/schema';
 import { createId } from '../../utils/id';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -115,7 +115,70 @@ foldersRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
   const organizationId = c.req.query('organization_id');
+  const includeUseCaseCounts = c.req.query('include_usecase_counts') === 'true';
   
+  if (includeUseCaseCounts) {
+    const rows = organizationId
+      ? await db.select({
+          id: folders.id,
+          name: folders.name,
+          description: folders.description,
+          organizationId: folders.organizationId,
+          organizationName: organizations.name,
+          matrixConfig: folders.matrixConfig,
+          status: folders.status,
+          createdAt: folders.createdAt,
+          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+        })
+        .from(folders)
+        .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
+        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .where(and(eq(folders.workspaceId, targetWorkspaceId), eq(folders.organizationId, organizationId)))
+        .groupBy(
+          folders.id,
+          folders.name,
+          folders.description,
+          folders.organizationId,
+          organizations.name,
+          folders.matrixConfig,
+          folders.status,
+          folders.createdAt
+        )
+        .orderBy(desc(folders.createdAt))
+      : await db.select({
+          id: folders.id,
+          name: folders.name,
+          description: folders.description,
+          organizationId: folders.organizationId,
+          organizationName: organizations.name,
+          matrixConfig: folders.matrixConfig,
+          status: folders.status,
+          createdAt: folders.createdAt,
+          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+        })
+        .from(folders)
+        .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
+        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .where(eq(folders.workspaceId, targetWorkspaceId))
+        .groupBy(
+          folders.id,
+          folders.name,
+          folders.description,
+          folders.organizationId,
+          organizations.name,
+          folders.matrixConfig,
+          folders.status,
+          folders.createdAt
+        )
+        .orderBy(desc(folders.createdAt));
+
+    const items = rows.map((folder) => ({
+      ...folder,
+      matrixConfig: parseMatrix(folder.matrixConfig ?? null)
+    }));
+    return c.json({ items });
+  }
+
   // LEFT JOIN with organizations to retrieve organization name
   const rows = organizationId
     ? await db.select({

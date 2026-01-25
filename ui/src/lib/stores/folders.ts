@@ -10,6 +10,7 @@ export type Folder = {
   organizationName?: string | null;
   matrixConfig?: any;
   hasMatrix?: boolean; // Indicates if folder has a matrix configuration
+  useCaseCount?: number;
   executiveSummary?: {
     introduction?: string;
     analyse?: string;
@@ -67,8 +68,20 @@ export const currentFolderId = createPersistentFolderIdStore();
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 
 // Fonctions API
-export const fetchFolders = async (): Promise<Folder[]> => {
-  const data = await apiGet<{ items: Folder[] }>(`/folders`);
+export const fetchFolders = async (options?: {
+  organizationId?: string;
+  includeUseCaseCounts?: boolean;
+}): Promise<Folder[]> => {
+  const params = new URLSearchParams();
+  if (options?.organizationId) {
+    params.set('organization_id', options.organizationId);
+  }
+  if (options?.includeUseCaseCounts) {
+    params.set('include_usecase_counts', 'true');
+  }
+  const qs = params.toString();
+  const url = qs ? `/folders?${qs}` : '/folders';
+  const data = await apiGet<{ items: Folder[] }>(url);
   return data.items;
 };
 
