@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, organizations, useCases, userSessions, users, workspaces, workspaceMemberships } from '../../db/schema';
+import { folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -135,28 +135,6 @@ adminRouter.get('/users', async (c) => {
   });
 
   return c.json({ items });
-});
-
-adminRouter.get('/workspaces', async (c) => {
-  const admin = c.get('user');
-  // List all workspaces (admin_app can see all), attach membership role if any.
-  const rows = await db
-    .select({
-      id: workspaces.id,
-      name: workspaces.name,
-      ownerUserId: workspaces.ownerUserId,
-      ownerEmail: users.email,
-      role: workspaceMemberships.role,
-    })
-    .from(workspaces)
-    .leftJoin(users, eq(workspaces.ownerUserId, users.id))
-    .leftJoin(
-      workspaceMemberships,
-      and(eq(workspaceMemberships.workspaceId, workspaces.id), eq(workspaceMemberships.userId, admin.userId))
-    )
-    .orderBy(desc(workspaces.createdAt));
-
-  return c.json({ items: rows });
 });
 
 const approveSchema = z.object({
