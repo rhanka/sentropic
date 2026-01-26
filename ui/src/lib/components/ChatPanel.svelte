@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
-  import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
+  import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { currentFolderId } from '$lib/stores/folders';
-  import { Send, ThumbsUp, ThumbsDown } from '@lucide/svelte';
+  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw } from '@lucide/svelte';
 
   type ChatSession = {
     id: string;
@@ -48,6 +48,8 @@
   let scrollScheduled = false;
   let scrollForcePending = false;
   const BOTTOM_THRESHOLD_PX = 96;
+  let editingMessageId: string | null = null;
+  let editingContent = '';
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -134,6 +136,61 @@
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
+    }
+  };
+
+  const startEditMessage = (m: ChatMessage) => {
+    if (!m.id || m.role !== 'user') return;
+    editingMessageId = m.id;
+    editingContent = m.content ?? '';
+  };
+
+  const cancelEditMessage = () => {
+    editingMessageId = null;
+    editingContent = '';
+  };
+
+  const saveEditMessage = async (messageId: string) => {
+    const next = editingContent.trim();
+    if (!next) return;
+    errorMsg = null;
+    try {
+      await apiPatch(`/chat/messages/${encodeURIComponent(messageId)}`, { content: next });
+      messages = messages.map((m) => (m.id === messageId ? { ...m, content: next } : m));
+      cancelEditMessage();
+    } catch (e) {
+      errorMsg = formatApiError(e, 'Erreur lors de la modification du message');
+    }
+  };
+
+  const retryMessage = async (messageId: string) => {
+    if (!sessionId) return;
+    errorMsg = null;
+    try {
+      await apiPost(`/chat/messages/${encodeURIComponent(messageId)}/retry`);
+      await loadMessages(sessionId, { scrollToBottom: true });
+    } catch (e) {
+      errorMsg = formatApiError(e, 'Erreur lors du retry');
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    if (!text) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    } catch {
+      errorMsg = 'Impossible de copier le message';
     }
   };
 
@@ -426,9 +483,64 @@
     {:else}
       {#each messages as m (m.id)}
         {#if m.role === 'user'}
-          <div class="flex justify-end">
-            <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 whitespace-pre-wrap break-words">
-              {m.content}
+          <div class="flex flex-col items-end group">
+            <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 whitespace-pre-wrap break-words w-full">
+              {#if editingMessageId === m.id}
+                <div class="space-y-2">
+                  <textarea
+                    class="w-full rounded border border-slate-700 bg-slate-950 text-white text-xs px-2 py-1 resize-none"
+                    rows="2"
+                    bind:value={editingContent}
+                  ></textarea>
+                  <div class="flex items-center justify-end gap-2 text-[11px]">
+                    <button
+                      class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                      type="button"
+                      on:click={cancelEditMessage}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                      type="button"
+                      on:click={() => void saveEditMessage(m.id)}
+                    >
+                      Enregistrer
+                    </button>
+                  </div>
+                </div>
+              {:else}
+                {m.content}
+              {/if}
+            </div>
+            <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+              on:click={() => startEditMessage(m)}
+              type="button"
+              aria-label="Modifier"
+              title="Modifier"
+            >
+              <Pencil class="w-3.5 h-3.5" />
+            </button>
+            <button
+              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+              on:click={() => void retryMessage(m.id)}
+              type="button"
+              aria-label="Retry"
+              title="Retry"
+            >
+              <RotateCcw class="w-3.5 h-3.5" />
+            </button>
+            <button
+              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+              on:click={() => void copyToClipboard(m.content ?? '')}
+              type="button"
+              aria-label="Copier"
+              title="Copier"
+            >
+              <Copy class="w-3.5 h-3.5" />
+            </button>
             </div>
           </div>
         {:else if m.role === 'assistant'}
@@ -438,7 +550,7 @@
           {@const isUp = m.feedbackVote === 1}
           {@const isDown = m.feedbackVote === -1}
           {@const isTerminal = (m._localStatus ?? (m.content ? 'completed' : 'processing')) === 'completed'}
-          <div class="flex justify-start">
+          <div class="flex justify-start group">
             <div class="max-w-[85%] w-full">
               <StreamMessage
                 variant="chat"
@@ -452,7 +564,18 @@
                 onTerminal={(t) => void handleAssistantTerminal(sid, t)}
               />
               {#if isTerminal}
-                <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-500">
+                <div class="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      on:click={() => void copyToClipboard(m.content ?? '')}
+                      type="button"
+                      aria-label="Copier"
+                      title="Copier"
+                    >
+                      <Copy class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <button
                     class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                     class:text-slate-900={isUp}

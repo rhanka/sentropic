@@ -37,8 +37,8 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [ ] **Lot 2 Message actions**:
     - [x] Add API endpoint(s) for edit/retry on user messages with history safety.
     - [x] Ensure retry removes subsequent assistant/user messages and re-queues.
-    - [ ] UI: add hover action icons under user messages (edit/retry/copy).
-    - [ ] UI: add hover action icon under assistant messages (copy).
+    - [x] UI: add hover action icons under user messages (edit/retry/copy).
+    - [x] UI: add hover action icon under assistant messages (copy).
     - [ ] UAT lot 2
         - [ ] Test: hover sur message utilisateur → icônes visibles.
         - [ ] Test: modifier un message utilisateur (édition) → message mis à jour.
@@ -82,12 +82,12 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [x] **Commit 1** (f470d54): Single migration + data model spec
 - [x] **Commit 2** (c02a3b2): Feedback API endpoints
 - [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
-- [ ] **Commit 4**: Message actions API (edit/retry)
+- [x] **Commit 4** (6a28f92): Message actions API (edit/retry)
 - [ ] **Commit 5**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
 - [ ] **Commit 6**: Composer improvements (UAT-3)
 - [ ] **Commit 7**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Lot 1 complete (UAT done); Lot 2 API in progress
-- **Current**: Implementing message actions API (edit/retry)
-- **Next**: Implement UI actions for Lot 2
+- **Progress**: Lot 1 complete (UAT done); Lot 2 UI in progress
+- **Current**: Implementing message actions UI
+- **Next**: Run UAT lot 2 after commit
