@@ -3,8 +3,11 @@
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import { Streamdown } from 'svelte-streamdown';
+  import EditableInput from '$lib/components/EditableInput.svelte';
   import { currentFolderId } from '$lib/stores/folders';
   import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Plus } from '@lucide/svelte';
+  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   type ChatSession = {
     id: string;
@@ -43,7 +46,7 @@
   let errorMsg: string | null = null;
   let input = '';
   let listEl: HTMLDivElement | null = null;
-  let composerEl: HTMLTextAreaElement | null = null;
+  let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
@@ -54,6 +57,7 @@
   const copiedMessageIds = new Set<string>();
   const COMPOSER_BASE_HEIGHT = 40;
   let composerIsMultiline = false;
+  let composerMaxHeight = COMPOSER_BASE_HEIGHT;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -143,15 +147,19 @@
     }
   };
 
+  const handleComposerChange = async () => {
+    await tick();
+    updateComposerHeight();
+  };
+
   const updateComposerHeight = () => {
     if (!composerEl) return;
-    composerEl.style.height = 'auto';
     const containerHeight = panelEl?.clientHeight ?? 0;
     const maxHeight = Math.max(COMPOSER_BASE_HEIGHT, Math.floor(containerHeight * 0.3));
-    const nextHeight = Math.min(composerEl.scrollHeight, maxHeight || composerEl.scrollHeight);
-    composerEl.style.height = `${nextHeight}px`;
+    composerMaxHeight = maxHeight;
+    const contentHeight = composerEl.scrollHeight || COMPOSER_BASE_HEIGHT;
     const wasMultiline = composerIsMultiline;
-    composerIsMultiline = nextHeight > COMPOSER_BASE_HEIGHT + 2;
+    composerIsMultiline = contentHeight > COMPOSER_BASE_HEIGHT + 2;
     if (composerIsMultiline !== wasMultiline) {
       requestAnimationFrame(updateComposerHeight);
     }
@@ -210,9 +218,17 @@
 
   const isCopied = (messageId: string) => copiedMessageIds.has(messageId);
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, html?: string) => {
     if (!text) return;
     try {
+      if (navigator?.clipboard?.write && html && typeof ClipboardItem !== 'undefined') {
+        const item = new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' })
+        });
+        await navigator.clipboard.write([item]);
+        return true;
+      }
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
         return true;
@@ -234,7 +250,8 @@
 
   export const focusComposer = async () => {
     await tick();
-    composerEl?.focus();
+    const target = composerEl?.querySelector('.ProseMirror') as HTMLElement | null;
+    target?.focus();
   };
 
   const scrollChatToBottomStable = async () => {
@@ -446,7 +463,7 @@
 
       input = '';
       composerIsMultiline = false;
-      if (composerEl) composerEl.style.height = `${COMPOSER_BASE_HEIGHT}px`;
+      updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
         sessionId = res.sessionId;
         void loadSessions();
@@ -525,14 +542,14 @@
       {#each messages as m (m.id)}
         {#if m.role === 'user'}
           <div class="flex flex-col items-end group">
-            <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 whitespace-pre-wrap break-words w-full">
+            <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown">
               {#if editingMessageId === m.id}
                 <div class="space-y-2">
-                  <textarea
-                    class="w-full border-0 bg-transparent text-white text-xs p-0 resize-none focus:ring-0 focus:outline-none"
-                    rows="2"
+                  <EditableInput
+                    markdown={true}
                     bind:value={editingContent}
-                  ></textarea>
+                    placeholder="Modifier le message…"
+                  />
                   <div class="flex items-center justify-end gap-2 text-[11px]">
                     <button
                       class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
@@ -551,14 +568,15 @@
                   </div>
                 </div>
               {:else}
-                {m.content}
+                <Streamdown content={m.content ?? ''} />
               {/if}
             </div>
             <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
               on:click={async () => {
-                const ok = await copyToClipboard(m.content ?? '');
+                const text = m.content ?? '';
+                const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
                 if (ok) markCopied(m.id);
               }}
               type="button"
@@ -607,7 +625,8 @@
                   <button
                     class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                     on:click={async () => {
-                      const ok = await copyToClipboard(m.content ?? '');
+                      const text = m.content ?? '';
+                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
                       if (ok) markCopied(m.id);
                     }}
                     type="button"
@@ -670,16 +689,23 @@
       >
         <Plus class="w-4 h-4" />
       </button>
-      <textarea
-        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none overflow-y-auto overflow-x-hidden slim-scroll"
-        class:leading-5={!composerIsMultiline}
-        rows="1"
-        bind:value={input}
+      <div
+        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
+        class:composer-single-line={!composerIsMultiline}
+        style={`max-height: ${composerMaxHeight}px; min-height: ${COMPOSER_BASE_HEIGHT}px;`}
         bind:this={composerEl}
-        placeholder="Écrire un message…"
+        role="textbox"
+        aria-label="Composer"
+        tabindex="0"
         on:keydown={handleKeyDown}
-        on:input={updateComposerHeight}
-      ></textarea>
+      >
+        <EditableInput
+          markdown={true}
+          bind:value={input}
+          placeholder="Écrire un message…"
+          on:change={handleComposerChange}
+        />
+      </div>
       <button
         class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
         on:click={() => void sendMessage()}
@@ -692,3 +718,36 @@
     </div>
   </div>
 </div>
+
+<style>
+  .composer-rich :global(.markdown-input-wrapper),
+  .userMarkdown :global(.markdown-input-wrapper) {
+    padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
+  }
+
+  .composer-rich :global(.markdown-input-wrapper:hover),
+  .userMarkdown :global(.markdown-input-wrapper:hover) {
+    border-left-color: transparent;
+    background-color: transparent;
+  }
+
+  .composer-rich :global(.markdown-wrapper) {
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .composer-rich :global(.ProseMirror) {
+    outline: none;
+  }
+
+  .composer-single-line :global(.ProseMirror) {
+    line-height: 1.25rem;
+  }
+
+  .userMarkdown :global(.markdown-wrapper .text-slate-700),
+  .userMarkdown :global(.markdown-wrapper .text-slate-700 *) {
+    color: #fff;
+  }
+</style>

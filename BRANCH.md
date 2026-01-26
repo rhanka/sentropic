@@ -58,11 +58,11 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: bouton + visible (menu placeholder).
         - [x] Test: multi‑ligne auto‑resize ≤ 30% hauteur box.
 - [ ] **Lot 4A Rich text input + copy/paste**:
-    - [ ] Switch composer to `EditableInput` (rich text paste support).
-    - [ ] Use `EditableInput` for user message edit (Lot 2) to support rich text.
-    - [ ] Ensure copy action preserves rich text when possible (fallback to plain text).
-    - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 4B
+    - [x] Switch composer to `EditableInput` (rich text paste support).
+    - [x] Use `EditableInput` for user message edit (Lot 2) to support rich text.
+    - [x] Ensure copy action preserves rich text when possible (fallback to plain text).
+    - [x] `make typecheck` + `make lint`
+    - [ ] UAT lot 4A
         - [ ] Test: collage rich text dans le composer (styles conservés).
         - [ ] Test: édition d’un message utilisateur en rich text.
         - [ ] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
@@ -71,7 +71,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [ ] Add multi-context mode: context additions when switching views (last added has priority).
     - [ ] Allow toggling tools/contexts from the menu.
     - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 4A
+    - [ ] UAT lot 4B
         - [ ] Test: menu “+” affiche tools + contextes.
         - [ ] Test: toggle tool/context ON/OFF persiste pour la session.
         - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
