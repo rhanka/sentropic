@@ -215,11 +215,13 @@ erDiagram
     chat_sessions ||--o{ chat_messages : "session_id"
     chat_sessions ||--o{ chat_contexts : "session_id"
     chat_messages ||--o{ chat_stream_events : "message_id (nullable)"
+    chat_messages ||--o{ chat_message_feedback : "message_id"
 
     chat_sessions ||--o{ chat_generation_traces : "session_id"
     chat_messages ||--o{ chat_generation_traces : "assistant_message_id"
     users ||--o{ chat_generation_traces : "user_id"
     workspaces ||--o{ chat_generation_traces : "workspace_id (nullable)"
+    users ||--o{ chat_message_feedback : "user_id"
 
     chat_sessions ||--o{ context_modification_history : "session_id (nullable)"
     chat_messages ||--o{ context_modification_history : "message_id (nullable)"
@@ -250,6 +252,15 @@ erDiagram
         text model
         int sequence
         timestamp created_at
+    }
+
+    chat_message_feedback {
+        text id PK
+        text message_id FK
+        text user_id FK
+        int vote "1=up, -1=down"
+        timestamp created_at
+        timestamp updated_at
     }
 
     chat_stream_events {
@@ -340,5 +351,6 @@ Notes :
 - `context_modification_history.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases` (et `folders` pour `executive_summary`).
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
+- `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
 
 

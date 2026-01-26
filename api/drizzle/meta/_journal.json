@@ -134,6 +134,13 @@
       "when": 1768183589637,
       "tag": "0018_workspace_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1768183600000,
+      "tag": "0019_chat_message_feedback",
+      "breakpoints": true
     }
   ]
 }

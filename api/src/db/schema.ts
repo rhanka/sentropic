@@ -287,6 +287,23 @@ export const chatStreamEvents = pgTable('chat_stream_events', {
   streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
 }));
 
+export const chatMessageFeedback = pgTable('chat_message_feedback', {
+  id: text('id').primaryKey(),
+  messageId: text('message_id')
+    .notNull()
+    .references(() => chatMessages.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  vote: integer('vote').notNull(), // 1 = up, -1 = down
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  messageIdIdx: index('chat_message_feedback_message_id_idx').on(table.messageId),
+  userIdIdx: index('chat_message_feedback_user_id_idx').on(table.userId),
+  messageUserUnique: uniqueIndex('chat_message_feedback_message_user_unique').on(table.messageId, table.userId),
+}));
+
 // Chat tracing (debug/audit): store the exact OpenAI payloads + tool calls per iteration.
 // Retention is enforced via periodic purge (7 days by default).
 export const chatGenerationTraces = pgTable('chat_generation_traces', {

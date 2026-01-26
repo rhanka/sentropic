@@ -20,11 +20,11 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 
 ## Plan / Todo (linear, test-driven)
 - [ ] **Data model (single change)**:
-    - [ ] Decide storage: new table vs columns in `chat_messages`.
-    - [ ] Update `api/src/db/schema.ts` + generate one migration in `api/drizzle/`.
-    - [ ] Update `spec/DATA_MODEL.md` immediately after migration.
+    - [x] Decide storage: new table vs columns in `chat_messages`.
+    - [x] Update `api/src/db/schema.ts` + add one migration in `api/drizzle/`.
+    - [x] Update `spec/DATA_MODEL.md` immediately after migration.
     - [ ] Validate DB reset strategy ready (only if extra patch required).
-- [ ] **Lot UAT-1 (Feedback)**:
+- [ ] **Lot 1 Feedback**:
     - [ ] Add API endpoint to set feedback on assistant message (👍/👎, toggle).
     - [ ] Ensure feedback is returned by `/chat/sessions/:id/messages`.
     - [ ] UI: add feedback buttons under assistant message (hover or always visible).
@@ -34,7 +34,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Test: soumettre 👍 puis recharger — état persiste.
         - [ ] Test: soumettre 👎 puis recharger — état persiste.
         - [ ] Test: changer 👍→👎 — état mis à jour.
-- [ ] **Lot UAT-2 (Message actions)**:
+- [ ] **Lot 2 Message actions**:
     - [ ] Add API endpoint(s) for edit/retry on user messages with history safety.
     - [ ] Ensure retry removes subsequent assistant/user messages and re-queues.
     - [ ] UI: add hover action icons under user messages (edit/retry/copy).
@@ -45,7 +45,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Test: retry d’un message utilisateur → suite supprimée et nouveau stream.
         - [ ] Test: copie d’un message utilisateur → clipboard OK.
         - [ ] Test: copie d’une réponse assistant → clipboard OK.
-- [ ] **Lot UAT-3 (Composer)**:
+- [ ] **Lot 3 Composer**:
     - [ ] Implement single-line mode UI (centered text vertically).
     - [ ] Add left “+” menu placeholder (no actions wired yet).
     - [ ] Implement autosize for multi-line (cap at 30% of chat box height).
@@ -72,15 +72,21 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
 - [ ] Run required Make tests per lot (typecheck/lint) and final test suite.
+    - [ ] UAT-1: `make typecheck` + `make lint`
+    - [ ] UAT-2: `make typecheck` + `make lint`
+    - [ ] UAT-3: `make typecheck` + `make lint`
+    - [ ] Final: `make test-api` + `make test-ui` + `make clean test-e2e`
 - [ ] Verify GitHub Actions CI for the branch.
 
 ## Commits & Progress
-- [ ] **Commit 1**: Single migration + API endpoints for feedback/actions (UAT-1)
-- [ ] **Commit 2**: UI actions (edit/retry/copy) + assistant copy + feedback UI polish (UAT-2)
-- [ ] **Commit 3**: Composer improvements + tests (UAT-3)
-- [ ] **Commit 4**: Test additions + doc updates (specs)
+- [x] **Commit 1**: Single migration + data model spec
+- [ ] **Commit 2**: Feedback API endpoints
+- [ ] **Commit 3**: Feedback UI (UAT-1)
+- [ ] **Commit 4**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
+- [ ] **Commit 5**: Composer improvements (UAT-3)
+- [ ] **Commit 6**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: 0/12 tasks completed
-- **Current**: Planning and scope alignment
-- **Next**: Decide the single data model change (table vs columns) before coding
+- **Progress**: Data model implemented; feedback flow not yet applied
+- **Current**: Preparing feedback API and UI work
+- **Next**: Implement feedback API
