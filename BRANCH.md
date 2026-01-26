@@ -27,8 +27,8 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [ ] **Lot 1 Feedback**:
     - [x] Add API endpoint to set feedback on assistant message (👍/👎, toggle).
     - [x] Ensure feedback is returned by `/chat/sessions/:id/messages`.
-    - [ ] UI: add feedback buttons under assistant message (hover or always visible).
-    - [ ] UI: persist feedback state on reload (from API).
+    - [x] UI: add feedback buttons under assistant message (hover or always visible).
+    - [x] UI: persist feedback state on reload (from API).
     - [ ] UAT lot 1
         - [ ] Test: afficher les boutons 👍/👎 sur réponses assistant.
         - [ ] Test: soumettre 👍 puis recharger — état persiste.
@@ -80,13 +80,13 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 
 ## Commits & Progress
 - [x] **Commit 1** (f470d54): Single migration + data model spec
-- [ ] **Commit 2**: Feedback API endpoints
+- [x] **Commit 2** (c02a3b2): Feedback API endpoints
 - [ ] **Commit 3**: Feedback UI (UAT-1)
 - [ ] **Commit 4**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
 - [ ] **Commit 5**: Composer improvements (UAT-3)
 - [ ] **Commit 6**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Data model implemented; feedback flow not yet applied
-- **Current**: Preparing feedback API and UI work
-- **Next**: Implement feedback API
+- **Progress**: Feedback API + UI implemented; UAT pending
+- **Current**: Awaiting UAT lot 1
+- **Next**: Record UAT lot 1 in BRANCH.md (separate commit)

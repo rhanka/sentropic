@@ -4,7 +4,7 @@
   import { apiGet, apiPost, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { currentFolderId } from '$lib/stores/folders';
-  import { Send } from '@lucide/svelte';
+  import { Send, ThumbsUp, ThumbsDown } from '@lucide/svelte';
 
   type ChatSession = {
     id: string;
@@ -23,6 +23,7 @@
     reasoning?: string | null;
     sequence?: number;
     createdAt?: string;
+    feedbackVote?: number | null;
   };
 
   type LocalMessage = ChatMessage & {
@@ -386,6 +387,17 @@
     }
   };
 
+  const setFeedback = async (messageId: string, next: 'up' | 'down' | 'clear') => {
+    errorMsg = null;
+    try {
+      await apiPost(`/chat/messages/${encodeURIComponent(messageId)}/feedback`, { vote: next });
+      const voteValue = next === 'clear' ? null : (next === 'up' ? 1 : -1);
+      messages = messages.map((m) => (m.id === messageId ? { ...m, feedbackVote: voteValue } : m));
+    } catch (e) {
+      errorMsg = formatApiError(e, 'Erreur lors de la mise à jour du feedback');
+    }
+  };
+
   onMount(async () => {
     await loadSessions();
     if (sessionId && messages.length === 0) {
@@ -423,6 +435,9 @@
           {@const sid = m._streamId ?? m.id}
           {@const initEvents = initialEventsByMessageId.get(sid)}
           {@const showDetailWaiter = !!m.content && streamDetailsLoading && initEvents === undefined}
+          {@const isUp = m.feedbackVote === 1}
+          {@const isDown = m.feedbackVote === -1}
+          {@const isTerminal = (m._localStatus ?? (m.content ? 'completed' : 'processing')) === 'completed'}
           <div class="flex justify-start">
             <div class="max-w-[85%] w-full">
               <StreamMessage
@@ -436,6 +451,32 @@
                 onStreamEvent={() => scheduleScrollToBottom()}
                 onTerminal={(t) => void handleAssistantTerminal(sid, t)}
               />
+              {#if isTerminal}
+                <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-500">
+                  <button
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    class:text-slate-900={isUp}
+                    class:bg-slate-100={isUp}
+                    on:click={() => void setFeedback(m.id, isUp ? 'clear' : 'up')}
+                    type="button"
+                    aria-label="Utile"
+                    title="Utile"
+                  >
+                    <ThumbsUp class="w-3.5 h-3.5" fill={isUp ? 'currentColor' : 'none'} />
+                  </button>
+                  <button
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    class:text-slate-900={isDown}
+                    class:bg-slate-100={isDown}
+                    on:click={() => void setFeedback(m.id, isDown ? 'clear' : 'down')}
+                    type="button"
+                    aria-label="Pas utile"
+                    title="Pas utile"
+                  >
+                    <ThumbsDown class="w-3.5 h-3.5" fill={isDown ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
+              {/if}
             </div>
           </div>
         {/if}
