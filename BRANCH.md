@@ -48,10 +48,10 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: copie d’un message utilisateur → clipboard OK.
         - [x] Test: copie d’une réponse assistant → clipboard OK.
 - [ ] **Lot 3 Composer**:
-    - [ ] Implement single-line mode UI (centered text vertically).
-    - [ ] Add left “+” menu placeholder (no actions wired yet).
-    - [ ] Implement autosize for multi-line (cap at 30% of chat box height).
-    - [ ] `make typecheck` + `make lint`
+    - [x] Implement single-line mode UI (centered text vertically).
+    - [x] Add left “+” menu placeholder (no actions wired yet).
+    - [x] Implement autosize for multi-line (cap at 30% of chat box height).
+    - [x] `make typecheck` + `make lint`
     - [ ] UAT lot 3
         - [ ] Test: mode monoligne (entrée centrée verticalement).
         - [ ] Test: bouton + visible (menu placeholder).
@@ -84,10 +84,10 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
 - [x] **Commit 4** (6a28f92): Message actions API (edit/retry)
 - [x] **Commit 5** (023875c): UI actions (edit/retry/copy) + assistant copy (UAT-2)
-- [ ] **Commit 6**: Composer improvements (UAT-3)
+- [x] **Commit 6** (32d9ee4): Composer improvements (UAT-3)
 - [ ] **Commit 7**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Lot 1 and Lot 2 complete (UAT done)
-- **Current**: Ready to start Lot 3 (composer)
-- **Next**: Implement composer improvements (single-line, + menu, autosize)
+- **Progress**: Lot 3 implementation done (UAT pending)
+- **Current**: UAT lot 3 ready for user testing
+- **Next**: User UAT lot 3, then update specs/tests plan

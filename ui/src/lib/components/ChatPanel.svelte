@@ -4,7 +4,7 @@
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { currentFolderId } from '$lib/stores/folders';
-  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check } from '@lucide/svelte';
+  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Plus } from '@lucide/svelte';
 
   type ChatSession = {
     id: string;
@@ -44,6 +44,7 @@
   let input = '';
   let listEl: HTMLDivElement | null = null;
   let composerEl: HTMLTextAreaElement | null = null;
+  let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
   let scrollForcePending = false;
@@ -51,6 +52,8 @@
   let editingMessageId: string | null = null;
   let editingContent = '';
   const copiedMessageIds = new Set<string>();
+  const COMPOSER_BASE_HEIGHT = 40;
+  let composerIsMultiline = false;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -138,6 +141,16 @@
       e.preventDefault();
       void sendMessage();
     }
+  };
+
+  const updateComposerHeight = () => {
+    if (!composerEl) return;
+    composerEl.style.height = 'auto';
+    const containerHeight = panelEl?.clientHeight ?? 0;
+    const maxHeight = Math.max(COMPOSER_BASE_HEIGHT, Math.floor(containerHeight * 0.3));
+    const nextHeight = Math.min(composerEl.scrollHeight, maxHeight || composerEl.scrollHeight);
+    composerEl.style.height = `${nextHeight}px`;
+    composerIsMultiline = nextHeight > COMPOSER_BASE_HEIGHT + 2;
   };
 
   const startEditMessage = (m: ChatMessage) => {
@@ -428,6 +441,8 @@
       }>('/chat/messages', payload);
 
       input = '';
+      composerIsMultiline = false;
+      if (composerEl) composerEl.style.height = `${COMPOSER_BASE_HEIGHT}px`;
       if (res.sessionId && res.sessionId !== sessionId) {
         sessionId = res.sessionId;
         void loadSessions();
@@ -481,10 +496,11 @@
     if (sessionId && messages.length === 0) {
       await loadMessages(sessionId, { scrollToBottom: true });
     }
+    updateComposerHeight();
   });
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex flex-col h-full" bind:this={panelEl}>
 
   <div
     class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 slim-scroll"
@@ -642,13 +658,23 @@
 
   <div class="p-3 border-t border-slate-200">
     <div class="flex items-center gap-2">
+      <button
+        class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
+        type="button"
+        aria-label="Plus"
+        title="Plus"
+      >
+        <Plus class="w-4 h-4" />
+      </button>
       <textarea
-        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none h-10"
+        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none"
+        class:leading-5={!composerIsMultiline}
         rows="1"
         bind:value={input}
         bind:this={composerEl}
         placeholder="Écrire un message…"
         on:keydown={handleKeyDown}
+        on:input={updateComposerHeight}
       ></textarea>
       <button
         class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
