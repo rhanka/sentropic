@@ -57,16 +57,25 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: mode monoligne (entrée centrée verticalement).
         - [x] Test: bouton + visible (menu placeholder).
         - [x] Test: multi‑ligne auto‑resize ≤ 30% hauteur box.
-- [ ] **Lot 4A Rich text input + copy/paste**:
+- [x] **Lot 4A Rich text input + copy/paste**:
     - [x] Switch composer to `EditableInput` (rich text paste support).
     - [x] Use `EditableInput` for user message edit (Lot 2) to support rich text.
     - [x] Ensure copy action preserves rich text when possible (fallback to plain text).
     - [x] `make typecheck` + `make lint`
-    - [ ] UAT lot 4A
-        - [ ] Test: collage rich text dans le composer (styles conservés).
-        - [ ] Test: édition d’un message utilisateur en rich text.
-        - [ ] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
-- [ ] **Lot 4B Composer menu content (tools/context)**:
+    - [x] UAT lot 4A
+        - [x] Test: collage rich text dans le composer (styles conservés).
+        - [x] Test: édition d’un message utilisateur en rich text.
+        - [x] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
+- [ ] **Lot 4B Chat session documents (upload + résumé + doc tool)**:
+    - [ ] Add document upload to chat session (paperclip in the "+" menu).
+    - [ ] Generate automatic summary (short/long) for attached docs.
+    - [ ] Ensure doc tool can access session-attached docs.
+    - [ ] `make typecheck` + `make lint`
+    - [ ] UAT lot 4C
+        - [ ] Test: upload document via trombone dans le chat.
+        - [ ] Test: résumé auto créé (court/long selon taille).
+        - [ ] Test: doc tool utilise les docs attachés à la session.
+- [ ] **Lot 4C Composer menu content (tools/context)**:
     - [ ] List tools and contexts in the “+” menu (checkable).
     - [ ] Add multi-context mode: context additions when switching views (last added has priority).
     - [ ] Allow toggling tools/contexts from the menu.
@@ -86,16 +95,19 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Add new tests: `api/tests/chat/feedback.test.ts` (feedback create/update/toggle).
         - [ ] Add new tests: `api/tests/chat/message-actions.test.ts` (edit/retry flows, read-only guard).
         - [ ] Update existing: `api/tests/chat/chat-routes.test.ts` (messages include feedback state).
+        - [ ] Add new tests: `api/tests/chat/session-docs.test.ts` (upload + summary + doc tool access).
     - [ ] **UI tests**:
         - [ ] Add/extend: `ui/tests/chat-panel.spec.ts` (hover icons, copy, edit UI state).
         - [ ] Add/extend: `ui/tests/stream-message.spec.ts` (assistant copy action).
         - [ ] Add/extend: `ui/tests/chat-composer.spec.ts` (single-line + autosize behavior).
         - [ ] Add/extend: `ui/tests/chat-composer-menu.spec.ts` (menu content, toggles, multi-context).
         - [ ] Add/extend: `ui/tests/chat-richtext.spec.ts` (EditableInput, paste, edit flow).
+        - [ ] Add/extend: `ui/tests/chat-docs.spec.ts` (upload, summary badge, menu list).
     - [ ] **E2E tests**:
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, rich text copy/paste).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (document upload + summary + doc tool usage).
 - [ ] Run final test suite.
     - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
 - [ ] Verify GitHub Actions CI for the branch.
