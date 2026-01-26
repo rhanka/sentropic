@@ -22,6 +22,10 @@ const feedbackInput = z.object({
   vote: z.enum(['up', 'down', 'clear'])
 });
 
+const editMessageInput = z.object({
+  content: z.string().min(1)
+});
+
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
   const sessions = await chatService.listSessions(user.userId);
@@ -109,6 +113,64 @@ chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidat
     return c.json({ messageId, vote: result.vote });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unable to set feedback';
+    const status = msg === 'Message not found' ? 404 : 400;
+    return c.json({ error: msg }, status);
+  }
+});
+
+/**
+ * PATCH /api/v1/chat/messages/:id
+ * Edit a user message content.
+ */
+chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json', editMessageInput), async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+  const body = c.req.valid('json');
+
+  try {
+    const result = await chatService.updateUserMessageContent({
+      messageId,
+      userId: user.userId,
+      content: body.content
+    });
+    return c.json({ messageId: result.messageId });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unable to edit message';
+    const status = msg === 'Message not found' ? 404 : 400;
+    return c.json({ error: msg }, status);
+  }
+});
+
+/**
+ * POST /api/v1/chat/messages/:id/retry
+ * Retry a user message (deletes subsequent messages and re-queues assistant).
+ */
+chatRouter.post('/messages/:id/retry', requireWorkspaceEditorRole(), async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  try {
+    const created = await chatService.retryUserMessage({ messageId, userId: user.userId });
+    const jobId = await queueManager.addJob(
+      'chat_message',
+      {
+        userId: user.userId,
+        sessionId: created.sessionId,
+        assistantMessageId: created.assistantMessageId,
+        model: created.model
+      },
+      { workspaceId: user.workspaceId }
+    );
+
+    return c.json({
+      sessionId: created.sessionId,
+      userMessageId: created.userMessageId,
+      assistantMessageId: created.assistantMessageId,
+      streamId: created.streamId,
+      jobId
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unable to retry message';
     const status = msg === 'Message not found' ? 404 : 400;
     return c.json({ error: msg }, status);
   }

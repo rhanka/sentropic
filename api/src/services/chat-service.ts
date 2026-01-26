@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, sql, inArray, isNotNull, gt } from 'drizzle-orm';
 import { db } from '../db/client';
 import { ADMIN_WORKSPACE_ID, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
@@ -98,7 +98,8 @@ export class ChatService {
       .select({
         id: chatMessages.id,
         sessionId: chatMessages.sessionId,
-        role: chatMessages.role
+        role: chatMessages.role,
+        sequence: chatMessages.sequence
       })
       .from(chatMessages)
       .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
@@ -202,6 +203,74 @@ export class ChatService {
       });
 
     return { vote: voteValue };
+  }
+
+  async updateUserMessageContent(options: { messageId: string; userId: string; content: string }) {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be edited');
+
+    await db
+      .update(chatMessages)
+      .set({ content: options.content })
+      .where(eq(chatMessages.id, options.messageId));
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+
+    return { messageId: options.messageId };
+  }
+
+  async retryUserMessage(options: { messageId: string; userId: string }): Promise<{
+    sessionId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+    streamId: string;
+    model: string;
+  }> {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be retried');
+
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = aiSettings.defaultModel;
+
+    await db
+      .delete(chatMessages)
+      .where(and(eq(chatMessages.sessionId, msg.sessionId), gt(chatMessages.sequence, msg.sequence)));
+
+    const assistantMessageId = createId();
+    const assistantSeq = msg.sequence + 1;
+
+    await db.insert(chatMessages).values({
+      id: assistantMessageId,
+      sessionId: msg.sessionId,
+      role: 'assistant',
+      content: null,
+      toolCalls: null,
+      toolCallId: null,
+      reasoning: null,
+      model: selectedModel,
+      promptId: null,
+      promptVersionId: null,
+      sequence: assistantSeq,
+      createdAt: new Date()
+    });
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+
+    return {
+      sessionId: msg.sessionId,
+      userMessageId: options.messageId,
+      assistantMessageId,
+      streamId: assistantMessageId,
+      model: selectedModel
+    };
   }
 
   async listStreamEventsForSession(options: {

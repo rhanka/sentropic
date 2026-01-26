@@ -82,11 +82,12 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66â€“88): user feedback (ðŸ
 - [x] **Commit 1** (f470d54): Single migration + data model spec
 - [x] **Commit 2** (c02a3b2): Feedback API endpoints
 - [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
-- [ ] **Commit 4**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
-- [ ] **Commit 5**: Composer improvements (UAT-3)
-- [ ] **Commit 6**: Test additions + doc updates (specs)
+- [ ] **Commit 4**: Message actions API (edit/retry)
+- [ ] **Commit 5**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
+- [ ] **Commit 6**: Composer improvements (UAT-3)
+- [ ] **Commit 7**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Lot 1 complete (UAT done)
-- **Current**: Ready to start Lot 2 (message actions)
-- **Next**: Implement message actions (edit/retry/copy)
+- **Progress**: Lot 1 complete (UAT done); Lot 2 API in progress
+- **Current**: Implementing message actions API (edit/retry)
+- **Next**: Implement UI actions for Lot 2
