@@ -19,36 +19,39 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - Final tests (after user UAT): `make test-api`, `make test-ui`, `make clean test-e2e`.
 
 ## Plan / Todo (linear, test-driven)
-- [ ] **Data model (single change)**:
+- [x] **Data model (single change)**:
     - [x] Decide storage: new table vs columns in `chat_messages`.
     - [x] Update `api/src/db/schema.ts` + add one migration in `api/drizzle/`.
     - [x] Update `spec/DATA_MODEL.md` immediately after migration.
     - [ ] Validate DB reset strategy ready (only if extra patch required).
-- [ ] **Lot 1 Feedback**:
+- [x] **Lot 1 Feedback**:
     - [x] Add API endpoint to set feedback on assistant message (👍/👎, toggle).
     - [x] Ensure feedback is returned by `/chat/sessions/:id/messages`.
     - [x] UI: add feedback buttons under assistant message (hover or always visible).
     - [x] UI: persist feedback state on reload (from API).
+    - [x] `make typecheck` + `make lint`
     - [x] UAT lot 1
         - [x] Test: afficher les boutons 👍/👎 sur réponses assistant.
         - [x] Test: soumettre 👍 puis recharger — état persiste.
         - [x] Test: soumettre 👎 puis recharger — état persiste.
         - [x] Test: changer 👍→👎 — état mis à jour.
-- [ ] **Lot 2 Message actions**:
+- [x] **Lot 2 Message actions**:
     - [x] Add API endpoint(s) for edit/retry on user messages with history safety.
     - [x] Ensure retry removes subsequent assistant/user messages and re-queues.
     - [x] UI: add hover action icons under user messages (edit/retry/copy).
     - [x] UI: add hover action icon under assistant messages (copy).
-    - [ ] UAT lot 2
-        - [ ] Test: hover sur message utilisateur → icônes visibles.
-        - [ ] Test: modifier un message utilisateur (édition) → message mis à jour.
-        - [ ] Test: retry d’un message utilisateur → suite supprimée et nouveau stream.
-        - [ ] Test: copie d’un message utilisateur → clipboard OK.
-        - [ ] Test: copie d’une réponse assistant → clipboard OK.
+    - [x] `make typecheck` + `make lint`
+    - [x] UAT lot 2
+        - [x] Test: hover sur message utilisateur → icônes visibles.
+        - [x] Test: modifier un message utilisateur (édition) → message mis à jour.
+        - [x] Test: retry d’un message utilisateur → suite supprimée et nouveau stream.
+        - [x] Test: copie d’un message utilisateur → clipboard OK.
+        - [x] Test: copie d’une réponse assistant → clipboard OK.
 - [ ] **Lot 3 Composer**:
     - [ ] Implement single-line mode UI (centered text vertically).
     - [ ] Add left “+” menu placeholder (no actions wired yet).
     - [ ] Implement autosize for multi-line (cap at 30% of chat box height).
+    - [ ] `make typecheck` + `make lint`
     - [ ] UAT lot 3
         - [ ] Test: mode monoligne (entrée centrée verticalement).
         - [ ] Test: bouton + visible (menu placeholder).
@@ -71,11 +74,8 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [ ] **E2E tests**:
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
-- [ ] Run required Make tests per lot (typecheck/lint) and final test suite.
-    - [x] UAT-1: `make typecheck` + `make lint`
-    - [ ] UAT-2: `make typecheck` + `make lint`
-    - [ ] UAT-3: `make typecheck` + `make lint`
-    - [ ] Final: `make test-api` + `make test-ui` + `make clean test-e2e`
+- [ ] Run final test suite.
+    - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
 - [ ] Verify GitHub Actions CI for the branch.
 
 ## Commits & Progress
@@ -83,11 +83,11 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [x] **Commit 2** (c02a3b2): Feedback API endpoints
 - [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
 - [x] **Commit 4** (6a28f92): Message actions API (edit/retry)
-- [ ] **Commit 5**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
+- [x] **Commit 5** (023875c): UI actions (edit/retry/copy) + assistant copy (UAT-2)
 - [ ] **Commit 6**: Composer improvements (UAT-3)
 - [ ] **Commit 7**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Lot 1 complete (UAT done); Lot 2 UI in progress
-- **Current**: Implementing message actions UI
-- **Next**: Run UAT lot 2 after commit
+- **Progress**: Lot 1 and Lot 2 complete (UAT done)
+- **Current**: Ready to start Lot 3 (composer)
+- **Next**: Implement composer improvements (single-line, + menu, autosize)

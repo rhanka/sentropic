@@ -4,7 +4,7 @@
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { currentFolderId } from '$lib/stores/folders';
-  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw } from '@lucide/svelte';
+  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check } from '@lucide/svelte';
 
   type ChatSession = {
     id: string;
@@ -50,6 +50,7 @@
   const BOTTOM_THRESHOLD_PX = 96;
   let editingMessageId: string | null = null;
   let editingContent = '';
+  const copiedMessageIds = new Set<string>();
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -158,6 +159,7 @@
       await apiPatch(`/chat/messages/${encodeURIComponent(messageId)}`, { content: next });
       messages = messages.map((m) => (m.id === messageId ? { ...m, content: next } : m));
       cancelEditMessage();
+      await retryMessage(messageId);
     } catch (e) {
       errorMsg = formatApiError(e, 'Erreur lors de la modification du message');
     }
@@ -174,12 +176,29 @@
     }
   };
 
+  const retryFromAssistant = async (assistantMessageId: string) => {
+    const idx = messages.findIndex((m) => m.id === assistantMessageId);
+    if (idx <= 0) return;
+    const previousUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+    if (!previousUser) return;
+    await retryMessage(previousUser.id);
+  };
+
+  const markCopied = (messageId: string) => {
+    copiedMessageIds.add(messageId);
+    setTimeout(() => {
+      copiedMessageIds.delete(messageId);
+    }, 2000);
+  };
+
+  const isCopied = (messageId: string) => copiedMessageIds.has(messageId);
+
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
-        return;
+        return true;
       }
       const el = document.createElement('textarea');
       el.value = text;
@@ -189,9 +208,11 @@
       el.select();
       document.execCommand('copy');
       document.body.removeChild(el);
+      return true;
     } catch {
       errorMsg = 'Impossible de copier le message';
     }
+    return false;
   };
 
   export const focusComposer = async () => {
@@ -488,7 +509,7 @@
               {#if editingMessageId === m.id}
                 <div class="space-y-2">
                   <textarea
-                    class="w-full rounded border border-slate-700 bg-slate-950 text-white text-xs px-2 py-1 resize-none"
+                    class="w-full border-0 bg-transparent text-white text-xs p-0 resize-none focus:ring-0 focus:outline-none"
                     rows="2"
                     bind:value={editingContent}
                   ></textarea>
@@ -505,7 +526,7 @@
                       type="button"
                       on:click={() => void saveEditMessage(m.id)}
                     >
-                      Enregistrer
+                      Envoyer
                     </button>
                   </div>
                 </div>
@@ -513,7 +534,23 @@
                 {m.content}
               {/if}
             </div>
-            <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+              on:click={async () => {
+                const ok = await copyToClipboard(m.content ?? '');
+                if (ok) markCopied(m.id);
+              }}
+              type="button"
+              aria-label="Copier"
+              title="Copier"
+            >
+              {#if isCopied(m.id)}
+                <Check class="w-3.5 h-3.5 text-slate-900" />
+              {:else}
+                <Copy class="w-3.5 h-3.5" />
+              {/if}
+            </button>
             <button
               class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
               on:click={() => startEditMessage(m)}
@@ -522,24 +559,6 @@
               title="Modifier"
             >
               <Pencil class="w-3.5 h-3.5" />
-            </button>
-            <button
-              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-              on:click={() => void retryMessage(m.id)}
-              type="button"
-              aria-label="Retry"
-              title="Retry"
-            >
-              <RotateCcw class="w-3.5 h-3.5" />
-            </button>
-            <button
-              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-              on:click={() => void copyToClipboard(m.content ?? '')}
-              type="button"
-              aria-label="Copier"
-              title="Copier"
-            >
-              <Copy class="w-3.5 h-3.5" />
             </button>
             </div>
           </div>
@@ -564,18 +583,32 @@
                 onTerminal={(t) => void handleAssistantTerminal(sid, t)}
               />
               {#if isTerminal}
-                <div class="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                  <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                      on:click={() => void copyToClipboard(m.content ?? '')}
-                      type="button"
-                      aria-label="Copier"
-                      title="Copier"
-                    >
+                <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                  <button
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    on:click={async () => {
+                      const ok = await copyToClipboard(m.content ?? '');
+                      if (ok) markCopied(m.id);
+                    }}
+                    type="button"
+                    aria-label="Copier"
+                    title="Copier"
+                  >
+                    {#if isCopied(m.id)}
+                      <Check class="w-3.5 h-3.5 text-slate-900" />
+                    {:else}
                       <Copy class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                    {/if}
+                  </button>
+                  <button
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    on:click={() => void retryFromAssistant(m.id)}
+                    type="button"
+                    aria-label="Réessayer"
+                    title="Réessayer"
+                  >
+                    <RotateCcw class="w-3.5 h-3.5" />
+                  </button>
                   <button
                     class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                     class:text-slate-900={isUp}
