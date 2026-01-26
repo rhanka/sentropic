@@ -29,14 +29,14 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] Ensure feedback is returned by `/chat/sessions/:id/messages`.
     - [x] UI: add feedback buttons under assistant message (hover or always visible).
     - [x] UI: persist feedback state on reload (from API).
-    - [ ] UAT lot 1
-        - [ ] Test: afficher les boutons 👍/👎 sur réponses assistant.
-        - [ ] Test: soumettre 👍 puis recharger — état persiste.
-        - [ ] Test: soumettre 👎 puis recharger — état persiste.
-        - [ ] Test: changer 👍→👎 — état mis à jour.
+    - [x] UAT lot 1
+        - [x] Test: afficher les boutons 👍/👎 sur réponses assistant.
+        - [x] Test: soumettre 👍 puis recharger — état persiste.
+        - [x] Test: soumettre 👎 puis recharger — état persiste.
+        - [x] Test: changer 👍→👎 — état mis à jour.
 - [ ] **Lot 2 Message actions**:
-    - [ ] Add API endpoint(s) for edit/retry on user messages with history safety.
-    - [ ] Ensure retry removes subsequent assistant/user messages and re-queues.
+    - [x] Add API endpoint(s) for edit/retry on user messages with history safety.
+    - [x] Ensure retry removes subsequent assistant/user messages and re-queues.
     - [ ] UI: add hover action icons under user messages (edit/retry/copy).
     - [ ] UI: add hover action icon under assistant messages (copy).
     - [ ] UAT lot 2
@@ -72,7 +72,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
 - [ ] Run required Make tests per lot (typecheck/lint) and final test suite.
-    - [ ] UAT-1: `make typecheck` + `make lint`
+    - [x] UAT-1: `make typecheck` + `make lint`
     - [ ] UAT-2: `make typecheck` + `make lint`
     - [ ] UAT-3: `make typecheck` + `make lint`
     - [ ] Final: `make test-api` + `make test-ui` + `make clean test-e2e`
@@ -81,12 +81,12 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 ## Commits & Progress
 - [x] **Commit 1** (f470d54): Single migration + data model spec
 - [x] **Commit 2** (c02a3b2): Feedback API endpoints
-- [ ] **Commit 3**: Feedback UI (UAT-1)
+- [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
 - [ ] **Commit 4**: UI actions (edit/retry/copy) + assistant copy (UAT-2)
 - [ ] **Commit 5**: Composer improvements (UAT-3)
 - [ ] **Commit 6**: Test additions + doc updates (specs)
 
 ## Status
-- **Progress**: Feedback API + UI implemented; UAT pending
-- **Current**: Awaiting UAT lot 1
-- **Next**: Record UAT lot 1 in BRANCH.md (separate commit)
+- **Progress**: Lot 1 complete (UAT done)
+- **Current**: Ready to start Lot 2 (message actions)
+- **Next**: Implement message actions (edit/retry/copy)
