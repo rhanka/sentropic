@@ -67,20 +67,23 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: édition d’un message utilisateur en rich text.
         - [x] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
 - [ ] **Lot 4B Chat session documents (upload + résumé + doc tool)**:
-    - [ ] Add document upload to chat session (paperclip in the "+" menu).
-    - [ ] Generate automatic summary (short/long) for attached docs.
-    - [ ] Ensure doc tool can access session-attached docs.
+    - [ ] Decide API strategy: reuse `/documents` with `context_type=chat_session` or add `/chat/sessions/:id/documents`.
+    - [ ] Enforce session access checks on upload/list/delete (user owns session or workspace access).
+    - [ ] Add document upload to chat session (paperclip in the “+” menu).
+    - [ ] Generate automatic summary (short/long) for attached docs (reuse `document_summary` job).
+    - [ ] Expose session docs to the `documents` tool (allowed contexts include session).
     - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 4C
+    - [ ] UAT lot 4B
         - [ ] Test: upload document via trombone dans le chat.
         - [ ] Test: résumé auto créé (court/long selon taille).
         - [ ] Test: doc tool utilise les docs attachés à la session.
+        - [ ] Test: accès interdit si session hors workspace.
 - [ ] **Lot 4C Composer menu content (tools/context)**:
     - [ ] List tools and contexts in the “+” menu (checkable).
     - [ ] Add multi-context mode: context additions when switching views (last added has priority).
     - [ ] Allow toggling tools/contexts from the menu.
     - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 4B
+    - [ ] UAT lot 4C
         - [ ] Test: menu “+” affiche tools + contextes.
         - [ ] Test: toggle tool/context ON/OFF persiste pour la session.
         - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
