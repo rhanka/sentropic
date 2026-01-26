@@ -25,8 +25,8 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] Update `spec/DATA_MODEL.md` immediately after migration.
     - [ ] Validate DB reset strategy ready (only if extra patch required).
 - [ ] **Lot 1 Feedback**:
-    - [ ] Add API endpoint to set feedback on assistant message (👍/👎, toggle).
-    - [ ] Ensure feedback is returned by `/chat/sessions/:id/messages`.
+    - [x] Add API endpoint to set feedback on assistant message (👍/👎, toggle).
+    - [x] Ensure feedback is returned by `/chat/sessions/:id/messages`.
     - [ ] UI: add feedback buttons under assistant message (hover or always visible).
     - [ ] UI: persist feedback state on reload (from API).
     - [ ] UAT lot 1
@@ -79,7 +79,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 - [ ] Verify GitHub Actions CI for the branch.
 
 ## Commits & Progress
-- [x] **Commit 1**: Single migration + data model spec
+- [x] **Commit 1** (f470d54): Single migration + data model spec
 - [ ] **Commit 2**: Feedback API endpoints
 - [ ] **Commit 3**: Feedback UI (UAT-1)
 - [ ] **Commit 4**: UI actions (edit/retry/copy) + assistant copy (UAT-2)

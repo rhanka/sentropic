@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
+import { ADMIN_WORKSPACE_ID, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -148,10 +148,60 @@ export class ChatService {
     if (!session) throw new Error('Session not found');
 
     return await db
-      .select()
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        toolCalls: chatMessages.toolCalls,
+        toolCallId: chatMessages.toolCallId,
+        reasoning: chatMessages.reasoning,
+        model: chatMessages.model,
+        promptId: chatMessages.promptId,
+        promptVersionId: chatMessages.promptVersionId,
+        sequence: chatMessages.sequence,
+        createdAt: chatMessages.createdAt,
+        feedbackVote: chatMessageFeedback.vote
+      })
       .from(chatMessages)
+      .leftJoin(
+        chatMessageFeedback,
+        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
+      )
       .where(eq(chatMessages.sessionId, sessionId))
       .orderBy(asc(chatMessages.sequence));
+  }
+
+  async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
+
+    if (options.vote === 'clear') {
+      await db
+        .delete(chatMessageFeedback)
+        .where(and(eq(chatMessageFeedback.messageId, options.messageId), eq(chatMessageFeedback.userId, options.userId)));
+      return { vote: null };
+    }
+
+    const voteValue = options.vote === 'up' ? 1 : -1;
+    const now = new Date();
+    await db
+      .insert(chatMessageFeedback)
+      .values({
+        id: createId(),
+        messageId: options.messageId,
+        userId: options.userId,
+        vote: voteValue,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: [chatMessageFeedback.messageId, chatMessageFeedback.userId],
+        set: { vote: voteValue, updatedAt: now }
+      });
+
+    return { vote: voteValue };
   }
 
   async listStreamEventsForSession(options: {

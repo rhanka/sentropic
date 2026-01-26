@@ -4,7 +4,7 @@ import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
-import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 export const chatRouter = new Hono();
 
@@ -16,6 +16,10 @@ const createMessageInput = z.object({
   primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
+});
+
+const feedbackInput = z.object({
+  vote: z.enum(['up', 'down', 'clear'])
 });
 
 chatRouter.get('/sessions', async (c) => {
@@ -85,6 +89,29 @@ chatRouter.get('/messages/:id/stream-events', async (c) => {
 
   const events = await readStreamEvents(messageId, Number.isFinite(sinceSequence as number) ? sinceSequence : undefined, Number.isFinite(limit) ? limit : 2000);
   return c.json({ messageId, streamId: messageId, events });
+});
+
+/**
+ * POST /api/v1/chat/messages/:id/feedback
+ * Set user feedback (👍/👎) on an assistant message.
+ */
+chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidator('json', feedbackInput), async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+  const body = c.req.valid('json');
+
+  try {
+    const result = await chatService.setMessageFeedback({
+      messageId,
+      userId: user.userId,
+      vote: body.vote
+    });
+    return c.json({ messageId, vote: result.vote });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unable to set feedback';
+    const status = msg === 'Message not found' ? 404 : 400;
+    return c.json({ error: msg }, status);
+  }
 });
 
 /**
