@@ -47,20 +47,39 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: retry d’un message utilisateur → suite supprimée et nouveau stream.
         - [x] Test: copie d’un message utilisateur → clipboard OK.
         - [x] Test: copie d’une réponse assistant → clipboard OK.
-- [ ] **Lot 3 Composer**:
+- [x] **Lot 3 Composer**:
     - [x] Implement single-line mode UI (centered text vertically).
     - [x] Add left “+” menu placeholder (no actions wired yet).
     - [x] Implement autosize for multi-line (cap at 30% of chat box height).
+    - [x] Fix autosize + scrollbar behavior (UAT feedback).
     - [x] `make typecheck` + `make lint`
-    - [ ] UAT lot 3
-        - [ ] Test: mode monoligne (entrée centrée verticalement).
-        - [ ] Test: bouton + visible (menu placeholder).
-        - [ ] Test: multi‑ligne auto‑resize ≤ 30% hauteur box.
+    - [x] UAT lot 3
+        - [x] Test: mode monoligne (entrée centrée verticalement).
+        - [x] Test: bouton + visible (menu placeholder).
+        - [x] Test: multi‑ligne auto‑resize ≤ 30% hauteur box.
+- [ ] **Lot 4A Rich text input + copy/paste**:
+    - [ ] Switch composer to `EditableInput` (rich text paste support).
+    - [ ] Use `EditableInput` for user message edit (Lot 2) to support rich text.
+    - [ ] Ensure copy action preserves rich text when possible (fallback to plain text).
+    - [ ] `make typecheck` + `make lint`
+    - [ ] UAT lot 4B
+        - [ ] Test: collage rich text dans le composer (styles conservés).
+        - [ ] Test: édition d’un message utilisateur en rich text.
+        - [ ] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
+- [ ] **Lot 4B Composer menu content (tools/context)**:
+    - [ ] List tools and contexts in the “+” menu (checkable).
+    - [ ] Add multi-context mode: context additions when switching views (last added has priority).
+    - [ ] Allow toggling tools/contexts from the menu.
+    - [ ] `make typecheck` + `make lint`
+    - [ ] UAT lot 4A
+        - [ ] Test: menu “+” affiche tools + contextes.
+        - [ ] Test: toggle tool/context ON/OFF persiste pour la session.
+        - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
 - [ ] **Docs (spec updates)**:
     - [ ] Update `spec/DATA_MODEL.md` right after migration.
     - [ ] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).
     - [ ] Update `spec/JSON_STREAMING.md` only if streaming payload/UI changed.
-    - [ ] Update `spec/SPEC.md` after Lot 3 if user-visible behavior changed.
+    - [ ] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.
 - [ ] Add i18n strings and UX copy where needed (FR/EN).
 - [ ] Tests to update/add (by type + file):
     - [ ] **API tests**:
@@ -71,8 +90,11 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Add/extend: `ui/tests/chat-panel.spec.ts` (hover icons, copy, edit UI state).
         - [ ] Add/extend: `ui/tests/stream-message.spec.ts` (assistant copy action).
         - [ ] Add/extend: `ui/tests/chat-composer.spec.ts` (single-line + autosize behavior).
+        - [ ] Add/extend: `ui/tests/chat-composer-menu.spec.ts` (menu content, toggles, multi-context).
+        - [ ] Add/extend: `ui/tests/chat-richtext.spec.ts` (EditableInput, paste, edit flow).
     - [ ] **E2E tests**:
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, rich text copy/paste).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
 - [ ] Run final test suite.
     - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
@@ -90,4 +112,4 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
 ## Status
 - **Progress**: Lot 3 implementation done (UAT pending)
 - **Current**: UAT lot 3 ready for user testing
-- **Next**: User UAT lot 3, then update specs/tests plan
+- **Next**: Lot 4A/4B planning + implementation, then specs/tests updates

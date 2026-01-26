@@ -150,7 +150,11 @@
     const maxHeight = Math.max(COMPOSER_BASE_HEIGHT, Math.floor(containerHeight * 0.3));
     const nextHeight = Math.min(composerEl.scrollHeight, maxHeight || composerEl.scrollHeight);
     composerEl.style.height = `${nextHeight}px`;
+    const wasMultiline = composerIsMultiline;
     composerIsMultiline = nextHeight > COMPOSER_BASE_HEIGHT + 2;
+    if (composerIsMultiline !== wasMultiline) {
+      requestAnimationFrame(updateComposerHeight);
+    }
   };
 
   const startEditMessage = (m: ChatMessage) => {
@@ -667,7 +671,7 @@
         <Plus class="w-4 h-4" />
       </button>
       <textarea
-        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none"
+        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs resize-none overflow-y-auto overflow-x-hidden slim-scroll"
         class:leading-5={!composerIsMultiline}
         rows="1"
         bind:value={input}
