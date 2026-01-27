@@ -67,12 +67,13 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: édition d’un message utilisateur en rich text.
         - [x] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
 - [ ] **Lot 4B Chat session documents (upload + résumé + doc tool)**:
-    - [ ] Decide API strategy: reuse `/documents` with `context_type=chat_session` or add `/chat/sessions/:id/documents`.
-    - [ ] Enforce session access checks on upload/list/delete (user owns session or workspace access).
-    - [ ] Add document upload to chat session (paperclip in the “+” menu).
-    - [ ] Generate automatic summary (short/long) for attached docs (reuse `document_summary` job).
-    - [ ] Expose session docs to the `documents` tool (allowed contexts include session).
-    - [ ] `make typecheck` + `make lint`
+    - [x] Decide API strategy: reuse `/documents` with `context_type=chat_session` or add `/chat/sessions/:id/documents`.
+    - [x] Enforce session access checks on upload/list/delete (user owns session or workspace access).
+    - [x] Add document upload to chat session (paperclip in the “+” menu).
+    - [x] Generate automatic summary (short/long) for attached docs (reuse `document_summary` job).
+    - [x] Expose session docs to the `documents` tool (allowed contexts include session).
+    - [x] Evolution: allow `documents.get_content` for short docs even if summary not ready; keep `get_summary` blocked; keep both blocked for long docs (threshold unchanged).
+    - [x] `make typecheck` + `make lint`
     - [ ] UAT lot 4B
         - [ ] Test: upload document via trombone dans le chat.
         - [ ] Test: résumé auto créé (court/long selon taille).
@@ -99,6 +100,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [ ] Add new tests: `api/tests/chat/message-actions.test.ts` (edit/retry flows, read-only guard).
         - [ ] Update existing: `api/tests/chat/chat-routes.test.ts` (messages include feedback state).
         - [ ] Add new tests: `api/tests/chat/session-docs.test.ts` (upload + summary + doc tool access).
+        - [ ] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
     - [ ] **UI tests**:
         - [ ] Add/extend: `ui/tests/chat-panel.spec.ts` (hover icons, copy, edit UI state).
         - [ ] Add/extend: `ui/tests/stream-message.spec.ts` (assistant copy action).
