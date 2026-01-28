@@ -66,6 +66,7 @@
   let sessionDocsError: string | null = null;
   let sessionDocsKey = '';
   let sessionDocsSseKey = '';
+  let sessionTitlesSseKey = '';
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Historique batch (Option C): messageId -> events
@@ -613,6 +614,17 @@
         void loadSessionDocs();
       }, 150);
     });
+    sessionTitlesSseKey = `chat-sessions:${Math.random().toString(36).slice(2)}`;
+    streamHub.set(sessionTitlesSseKey, (ev: StreamHubEvent) => {
+      if (ev.type !== 'workspace_update') return;
+      const action = (ev as any)?.data?.action;
+      if (action !== 'chat_session_title_updated') return;
+      const sessionIdUpdated = String((ev as any)?.data?.sessionId ?? '').trim();
+      const title = String((ev as any)?.data?.title ?? '').trim();
+      if (!sessionIdUpdated || !title) return;
+      if (!sessions?.length) return;
+      sessions = sessions.map((s) => (s.id === sessionIdUpdated ? { ...s, title } : s));
+    });
   });
 
   onDestroy(() => {
@@ -620,6 +632,8 @@
     sessionDocsReloadTimer = null;
     if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
     sessionDocsSseKey = '';
+    if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
+    sessionTitlesSseKey = '';
   });
 </script>
 
