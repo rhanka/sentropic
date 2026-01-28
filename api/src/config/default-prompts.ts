@@ -28,6 +28,46 @@ none|low|medium|high|xhigh`,
     variables: ['last_user_message', 'context_excerpt']
   },
   {
+    id: 'chat_system_base',
+    name: 'Chat — System prompt (base)',
+    description: 'Base prompt for the chat assistant with injected context/documents blocks',
+    content: `Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.
+
+{{CONTEXT_BLOCK}}
+
+{{DOCUMENTS_BLOCK}}
+
+{{AUTOMATION_BLOCK}}`,
+    variables: ['CONTEXT_BLOCK', 'DOCUMENTS_BLOCK', 'AUTOMATION_BLOCK']
+  },
+  {
+    id: 'chat_conversation_auto',
+    name: 'Chat — Automatisation conversation',
+    description: 'Mini-règles pour guider l’automatisation de la conversation',
+    content: `Mini-règles d’automatisation :
+- Si l’utilisateur donne un objectif clair, propose une action directe et exécute-la.
+- Si des infos manquent, pose une seule question ciblée avant d’agir.
+- Évite les réponses vagues, privilégie des étapes concrètes.`,
+    variables: []
+  },
+  {
+    id: 'chat_session_title',
+    name: 'Chat — Titre de session',
+    description: 'Générer un titre court pour une session de chat',
+    content: `Génère un titre court (3 à 6 mots) pour cette conversation.
+Contexte: {{primary_context_label}}
+Message utilisateur: {{last_user_message}}
+
+Contraintes:
+- Sans guillemets, sans markdown
+- Pas de ponctuation finale
+- Pas d’identifiants (UUID, ids)
+- Si le message est vide, retourne "Conversation"
+
+Réponds uniquement avec le titre.`,
+    variables: ['primary_context_label', 'last_user_message']
+  },
+  {
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',

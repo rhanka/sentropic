@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, sql, inArray, isNotNull, gt } from 'drizzle-orm';
-import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
+import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm';
+import { db, pool } from '../db/client';
+import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAIResponseStream, type StreamEventType } from './openai';
+import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
@@ -91,6 +91,61 @@ export class ChatService {
       if (parts.join('\n\n').length > maxTotal) break;
     }
     return this.safeTruncate(parts.join('\n\n'), maxTotal);
+  }
+
+  private getPromptTemplate(id: string): string {
+    return defaultPrompts.find((p) => p.id === id)?.content || '';
+  }
+
+  private renderTemplate(template: string, vars: Record<string, string>): string {
+    return Object.entries(vars).reduce((acc, [key, value]) => {
+      const token = `{{${key}}}`;
+      return acc.split(token).join(value ?? '');
+    }, template);
+  }
+
+  private formatContextLabel(type: ChatContextType | null | undefined, id: string | null | undefined): string {
+    const t = (type ?? '').trim();
+    const v = (id ?? '').trim();
+    if (!t || !v) return 'Aucun contexte';
+    return `${t}:${v}`;
+  }
+
+  private async generateSessionTitle(opts: {
+    primaryContextType?: ChatContextType | null;
+    primaryContextId?: string | null;
+    lastUserMessage: string;
+  }): Promise<string | null> {
+    const template = this.getPromptTemplate('chat_session_title');
+    if (!template) return null;
+    const prompt = this.renderTemplate(template, {
+      primary_context_label: this.formatContextLabel(opts.primaryContextType, opts.primaryContextId),
+      last_user_message: (opts.lastUserMessage || '').trim()
+    });
+    try {
+      const res = await callOpenAI({
+        model: 'gpt-4.1-nano',
+        messages: [{ role: 'system', content: prompt }],
+        maxOutputTokens: 32
+      });
+      const content = res.choices?.[0]?.message?.content ?? '';
+      const cleaned = String(content).trim().replace(/^["'`]+|["'`]+$/g, '');
+      if (!cleaned) return null;
+      return cleaned.slice(0, 80);
+    } catch {
+      return null;
+    }
+  }
+
+  private async notifyWorkspaceEvent(workspaceId: string, data: Record<string, unknown> = {}): Promise<void> {
+    const escape = (payload: Record<string, unknown>) => JSON.stringify(payload).replace(/'/g, "''");
+    const client = await pool.connect();
+    try {
+      const payload = { workspace_id: workspaceId, data };
+      await client.query(`NOTIFY workspace_events, '${escape(payload)}'`);
+    } finally {
+      client.release();
+    }
   }
 
   async getMessageForUser(messageId: string, userId: string) {
@@ -366,6 +421,23 @@ export class ChatService {
             primaryContextId: input.primaryContextId ?? null,
             title: input.sessionTitle ?? null
           })).sessionId;
+    const nextContextType = isChatContextType(input.primaryContextType) ? input.primaryContextType : null;
+    const nextContextId = typeof input.primaryContextId === 'string' ? input.primaryContextId.trim() : '';
+
+    if (nextContextType && nextContextId) {
+      const shouldUpdateContext =
+        !existing || existing.primaryContextType !== nextContextType || existing.primaryContextId !== nextContextId;
+      if (shouldUpdateContext) {
+        await db
+          .update(chatSessions)
+          .set({
+            primaryContextType: nextContextType,
+            primaryContextId: nextContextId,
+            updatedAt: new Date()
+          })
+          .where(eq(chatSessions.id, sessionId));
+      }
+    }
 
     // Modèle (default settings si non fourni)
     const aiSettings = await settingsService.getAISettings();
@@ -502,15 +574,11 @@ export class ChatService {
         : ownerWs.workspaceId;
     if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
     // Read-only mode:
-    // - Admin Workspace is always read-only (admin_app can target it)
     // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)
     // - Otherwise: writable if the user is editor/admin member of the session workspace
-    const hidden = sessionWorkspaceId !== ADMIN_WORKSPACE_ID ? await isWorkspaceDeleted(sessionWorkspaceId) : false;
-    const canWrite =
-      !hidden && sessionWorkspaceId !== ADMIN_WORKSPACE_ID
-        ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor')
-        : false;
-    const readOnly = sessionWorkspaceId === ADMIN_WORKSPACE_ID || hidden || !canWrite;
+    const hidden = await isWorkspaceDeleted(sessionWorkspaceId);
+    const canWrite = !hidden ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor') : false;
+    const readOnly = hidden || !canWrite;
 
     // Charger messages (sans inclure le placeholder assistant)
     const messages = await db
@@ -529,6 +597,32 @@ export class ChatService {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? ''
       }));
+
+    if (!session.title) {
+      const lastUserMessage =
+        [...messages]
+          .filter((m) => m.sequence < assistantRow.sequence && m.role === 'user')
+          .pop()?.content ?? '';
+      if (lastUserMessage.trim()) {
+        const safeContextType = isChatContextType(session.primaryContextType) ? session.primaryContextType : null;
+        const title = await this.generateSessionTitle({
+          primaryContextType: safeContextType,
+          primaryContextId: session.primaryContextId ?? null,
+          lastUserMessage
+        });
+        if (title) {
+          await db
+            .update(chatSessions)
+            .set({ title, updatedAt: new Date() })
+            .where(eq(chatSessions.id, session.id));
+          await this.notifyWorkspaceEvent(sessionWorkspaceId, {
+            action: 'chat_session_title_updated',
+            sessionId: session.id,
+            title
+          });
+        }
+      }
+    }
 
     // Récupérer le contexte depuis la session
     const primaryContextType = isChatContextType(session.primaryContextType) ? session.primaryContextType : null;
@@ -621,10 +715,54 @@ export class ChatService {
       tools = undefined;
     }
 
+    const contextLabel = (type: string, id: string) => {
+      if (type === 'chat_session') return `Session de chat (${id})`;
+      return `${type}:${id}`;
+    };
+
+    const documentsBlock = await (async () => {
+      const contexts = allowedDocContexts;
+      if (contexts.length === 0) {
+        return 'DOCUMENTS DISPONIBLES :\n- Aucun document disponible pour les contextes autorisés.';
+      }
+      const conditions = contexts.map((c) =>
+        and(eq(contextDocuments.contextType, c.contextType), eq(contextDocuments.contextId, c.contextId))
+      );
+      const rows = await db
+        .select({
+          contextType: contextDocuments.contextType,
+          contextId: contextDocuments.contextId,
+          id: contextDocuments.id
+        })
+        .from(contextDocuments)
+        .where(and(eq(contextDocuments.workspaceId, sessionWorkspaceId), or(...conditions)));
+      const counts = new Map<string, number>();
+      for (const r of rows) {
+        const key = `${r.contextType}:${r.contextId}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const lines = contexts.map((c) => {
+        const key = `${c.contextType}:${c.contextId}`;
+        const count = counts.get(key) ?? 0;
+        const status = count > 0 ? `${count} document(s)` : 'Aucun document';
+        return `- ${contextLabel(c.contextType, c.contextId)} : ${status}`;
+      });
+      return [
+        'DOCUMENTS DISPONIBLES :',
+        ...lines,
+        '',
+        'Règles :',
+        '- Toujours inclure les documents de session si présents.',
+        '- Prioriser le contexte focus pour le listing.',
+        '- Commencer par documents.list (le listing indique context_type/context_id).',
+        '- Si un document est en cours de traitement, utiliser documents.analyze plutôt que get_summary.'
+      ].join('\n');
+    })();
+
     // Enrichir le system prompt avec le contexte si disponible
-    let systemPrompt = "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.";
+    let contextBlock = '';
     if (primaryContextType === 'usecase' && primaryContextId) {
-      systemPrompt += ` 
+      contextBlock = ` 
 
 Tu travailles sur le use case ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
@@ -660,7 +798,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       const orgLine = primaryContextId
         ? `Tu travailles sur l'organisation ${primaryContextId}.`
         : `Tu es sur la liste des organisations (pas d'organisation sélectionnée).`;
-      systemPrompt += ` 
+      contextBlock = ` 
 
 ${orgLine}
 
@@ -679,7 +817,7 @@ Règles :
       const folderLine = primaryContextId
         ? `Tu travailles sur le dossier ${primaryContextId}.`
         : `Tu es sur la liste des dossiers (pas de dossier sélectionné). Tu peux lire les dossiers via \`folders_list\`, puis lire les cas d'usage d'un dossier via \`usecases_list\` en passant son folderId.`;
-      systemPrompt += ` 
+      contextBlock = ` 
 
 ${folderLine}
 
@@ -700,7 +838,7 @@ Règles :
 - Pour toute modification, lis d'abord puis mets à jour via les tools.
 - Si un folderId de contexte est présent, ne lis/modifie que ce dossier. Sinon (vue liste), tu peux lire plusieurs dossiers en fournissant explicitement leur folderId.`;
     } else if (primaryContextType === 'executive_summary' && primaryContextId) {
-      systemPrompt += ` 
+      contextBlock = ` 
 
 Tu travailles sur la synthèse exécutive du dossier ${primaryContextId}.
 
@@ -718,6 +856,15 @@ Tools disponibles :
 Règles :
 - Ne tente pas d'accéder à un autre dossier que celui du contexte.`;
     }
+
+    const basePrompt = this.getPromptTemplate('chat_system_base')
+      || "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
+    const automationBlock = this.getPromptTemplate('chat_conversation_auto');
+    const systemPrompt = this.renderTemplate(basePrompt, {
+      CONTEXT_BLOCK: contextBlock,
+      DOCUMENTS_BLOCK: documentsBlock,
+      AUTOMATION_BLOCK: automationBlock
+    }).trim();
 
     let streamSeq = await getNextSequence(options.assistantMessageId);
     const contentParts: string[] = [];
