@@ -97,6 +97,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] List tools and contexts in the “+” menu (checkable) (in addition of the trombone for doc upload)
     - [x] Add multi-context mode: context additions when switching views (last added has priority).
     - [x] Allow toggling tools/contexts from the menu.
+    - [x] Backend: outils autorisés via tous les contextes actifs.
     - [x] `make typecheck` + `make lint`
     - [x] UAT lot 4C
         - [x] Test: menu “+” affiche tools + contextes.

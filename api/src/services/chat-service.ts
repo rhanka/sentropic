@@ -657,6 +657,36 @@ export class ChatService {
     const primaryContextId =
       focusContext?.contextId ?? (typeof session.primaryContextId === 'string' ? session.primaryContextId : null);
 
+    const allowedContexts =
+      contextsOverride.length > 0 && contextsOverride.every((c) => c.contextId)
+        ? contextsOverride
+        : primaryContextType && primaryContextId
+          ? [{ contextType: primaryContextType, contextId: primaryContextId }]
+          : [];
+    const allowedByType = {
+      organization: new Set<string>(),
+      folder: new Set<string>(),
+      usecase: new Set<string>(),
+      executive_summary: new Set<string>()
+    };
+    for (const c of allowedContexts) {
+      if (c.contextType === 'organization') allowedByType.organization.add(c.contextId);
+      if (c.contextType === 'folder') allowedByType.folder.add(c.contextId);
+      if (c.contextType === 'usecase') allowedByType.usecase.add(c.contextId);
+      if (c.contextType === 'executive_summary') allowedByType.executive_summary.add(c.contextId);
+    }
+    const allowedFolderIds = new Set<string>([
+      ...allowedByType.folder,
+      ...allowedByType.executive_summary
+    ]);
+    const hasContextType = (type: ChatContextType) => {
+      if (type === 'organization') return allowedByType.organization.size > 0;
+      if (type === 'folder') return allowedFolderIds.size > 0;
+      if (type === 'usecase') return allowedByType.usecase.size > 0;
+      if (type === 'executive_summary') return allowedByType.executive_summary.size > 0;
+      return false;
+    };
+
     // Documents tool is only exposed if there are documents attached to the current context.
     const allowedDocContexts = await this.getAllowedDocumentsContexts({
       primaryContextType,
@@ -1172,6 +1202,32 @@ Règles :
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
       const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
+      const orgByFolderId = new Map<string, string | null>();
+      const getOrganizationIdForFolder = async (folderId: string): Promise<string | null> => {
+        if (orgByFolderId.has(folderId)) return orgByFolderId.get(folderId) ?? null;
+        try {
+          const folder = await toolService.getFolder(folderId, {
+            workspaceId: sessionWorkspaceId,
+            select: ['organizationId']
+          });
+          const orgId = typeof (folder.data as Record<string, unknown>)?.organizationId === 'string'
+            ? ((folder.data as Record<string, unknown>).organizationId as string)
+            : null;
+          orgByFolderId.set(folderId, orgId);
+          return orgId;
+        } catch {
+          orgByFolderId.set(folderId, null);
+          return null;
+        }
+      };
+      const isAllowedOrganizationId = async (orgId: string): Promise<boolean> => {
+        if (allowedByType.organization.has(orgId)) return true;
+        for (const folderId of allowedFolderIds) {
+          const folderOrgId = await getOrganizationIdForFolder(folderId);
+          if (folderOrgId && folderOrgId === orgId) return true;
+        }
+        return false;
+      };
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
@@ -1181,9 +1237,8 @@ Règles :
           let result: unknown;
 
           if (toolCall.name === 'read_usecase' || toolCall.name === 'usecase_get') {
-            // Vérifier la sécurité : useCaseId doit correspondre au contexte
-            if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
-              throw new Error('Security: useCaseId does not match session context');
+            if (!allowedByType.usecase.has(args.useCaseId)) {
+              throw new Error('Security: useCaseId does not match allowed contexts');
             }
             const readResult = await toolService.readUseCase(args.useCaseId, {
               workspaceId: sessionWorkspaceId,
@@ -1203,9 +1258,8 @@ Règles :
             if (readOnly) {
               throw new Error('Read-only workspace: use case update is disabled');
             }
-            // Vérifier la sécurité : useCaseId doit correspondre au contexte
-            if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
-              throw new Error('Security: useCaseId does not match session context');
+            if (!allowedByType.usecase.has(args.useCaseId)) {
+              throw new Error('Security: useCaseId does not match allowed contexts');
             }
             const updateResult = await toolService.updateUseCaseFields({
               useCaseId: args.useCaseId,
@@ -1226,7 +1280,7 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'organizations_list') {
-            if (primaryContextType !== 'organization') {
+            if (!hasContextType('organization')) {
               throw new Error('Security: organizations_list is only available in organization context');
             }
             const listResult = await toolService.listOrganizations({
@@ -1244,27 +1298,12 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'organization_get') {
-            // organization context: must match context id
-            if (primaryContextType === 'organization') {
-              if (!primaryContextId || args.organizationId !== primaryContextId) {
-                throw new Error('Security: organizationId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' || primaryContextType === 'executive_summary') {
-              // folder/executive_summary context: only allow reading the organization linked to the current folder
-              if (!primaryContextId) throw new Error('Security: organization_get requires a folder context id');
-              const folder = await toolService.getFolder(primaryContextId, {
-                workspaceId: sessionWorkspaceId,
-                select: ['organizationId']
-              });
-              const folderOrganizationId = typeof (folder.data as Record<string, unknown>)?.organizationId === 'string'
-                ? ((folder.data as Record<string, unknown>).organizationId as string)
-                : null;
-              if (!folderOrganizationId) throw new Error('Folder has no organizationId');
-              if (args.organizationId !== folderOrganizationId) {
-                throw new Error('Security: organizationId is not linked to current folder');
-              }
-            } else {
-              throw new Error('Security: organization_get is not available in this context');
+            if (!args.organizationId || typeof args.organizationId !== 'string') {
+              throw new Error('Security: organizationId is required');
+            }
+            const allowed = await isAllowedOrganizationId(args.organizationId);
+            if (!allowed) {
+              throw new Error('Security: organizationId does not match allowed contexts');
             }
 
             const getResult = await toolService.getOrganization(args.organizationId, {
@@ -1282,8 +1321,12 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'organization_update') {
             if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-            if (primaryContextType !== 'organization' || !primaryContextId || args.organizationId !== primaryContextId) {
-              throw new Error('Security: organizationId does not match session context');
+            if (!args.organizationId || typeof args.organizationId !== 'string') {
+              throw new Error('Security: organizationId is required');
+            }
+            const allowed = await isAllowedOrganizationId(args.organizationId);
+            if (!allowed) {
+              throw new Error('Security: organizationId does not match allowed contexts');
             }
             const updateResult = await toolService.updateOrganizationFields({
               organizationId: args.organizationId,
@@ -1303,13 +1346,12 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'folders_list') {
-            if (primaryContextType !== 'organization' && primaryContextType !== 'folder') {
+            if (!hasContextType('organization') && !hasContextType('folder')) {
               throw new Error('Security: folders_list is only available in organization/folder context');
             }
-            const organizationId =
-              primaryContextType === 'organization' && primaryContextId
-                ? primaryContextId
-                : (typeof args.organizationId === 'string' ? args.organizationId : null);
+            const organizationId = typeof args.organizationId === 'string'
+              ? args.organizationId
+              : (allowedByType.organization.values().next().value ?? null);
             const listResult = await toolService.listFolders({
               workspaceId: sessionWorkspaceId,
               organizationId,
@@ -1326,18 +1368,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'folder_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: folder_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getFolder(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1354,8 +1389,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'folder_update') {
             if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateFolderFields({
               folderId: args.folderId,
@@ -1375,18 +1413,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'usecases_list') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow listing any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: usecases_list is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const listResult = await toolService.listUseCasesForFolder(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1403,18 +1434,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'executive_summary_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: executive_summary_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getExecutiveSummary(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1431,8 +1455,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'executive_summary_update') {
             if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-            if ((primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateExecutiveSummaryFields({
               folderId: args.folderId,
@@ -1452,18 +1479,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'matrix_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: matrix_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
             result = getResult;
@@ -1477,8 +1497,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'matrix_update') {
             if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateMatrix({
               folderId: args.folderId,
