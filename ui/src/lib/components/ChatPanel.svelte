@@ -9,7 +9,7 @@
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Paperclip, X } from '@lucide/svelte';
+  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Paperclip, X, Plus } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   type ChatSession = {
@@ -38,6 +38,22 @@
   };
 
   type StreamEvent = { eventType: string; data: any; sequence: number; createdAt?: string };
+  // eslint-disable-next-line no-unused-vars
+  type DocumentClickHandler = (...args: unknown[]) => void;
+  type ChatContextEntry = {
+    contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    contextId?: string;
+    label: string;
+    active: boolean;
+    lastUsedAt: number;
+  };
+
+  type ToolToggle = {
+    id: string;
+    label: string;
+    description?: string;
+    toolIds: string[];
+  };
 
   export let sessions: ChatSession[] = [];
   export let sessionId: string | null = null;
@@ -68,6 +84,14 @@
   let sessionDocsSseKey = '';
   let sessionTitlesSseKey = '';
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let showComposerMenu = false;
+  let composerMenuRef: HTMLDivElement | null = null;
+  let composerMenuButtonRef: HTMLButtonElement | null = null;
+  let handleDocumentClick: DocumentClickHandler | null = null;
+  let multiContextEnabled = true;
+  let contextEntries: ChatContextEntry[] = [];
+  let toolEnabledById: Record<string, boolean> = {};
+  let prefsKey = '';
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -125,6 +149,191 @@
 
     // Pas de contexte détecté
     return null;
+  };
+
+  const TOOL_TOGGLES: ToolToggle[] = [
+    {
+      id: 'documents',
+      label: 'Documents',
+      description: 'Lister / analyser les documents',
+      toolIds: ['documents']
+    },
+    {
+      id: 'web_search',
+      label: 'Web search',
+      description: 'Rechercher des infos sur le web',
+      toolIds: ['web_search']
+    },
+    {
+      id: 'web_extract',
+      label: 'Web extract',
+      description: 'Extraire le contenu des URLs',
+      toolIds: ['web_extract']
+    },
+    {
+      id: 'organization_read',
+      label: 'Organisation (lecture)',
+      toolIds: ['organizations_list', 'organization_get']
+    },
+    {
+      id: 'organization_update',
+      label: 'Organisation (édition)',
+      toolIds: ['organization_update']
+    },
+    {
+      id: 'folder_read',
+      label: 'Dossier (lecture)',
+      toolIds: ['folders_list', 'folder_get']
+    },
+    {
+      id: 'folder_update',
+      label: 'Dossier (édition)',
+      toolIds: ['folder_update']
+    },
+    {
+      id: 'usecase_read',
+      label: "Cas d'usage (lecture)",
+      toolIds: ['usecases_list', 'usecase_get', 'read_usecase']
+    },
+    {
+      id: 'usecase_update',
+      label: "Cas d'usage (édition)",
+      toolIds: ['usecase_update', 'update_usecase_field']
+    },
+    {
+      id: 'matrix',
+      label: 'Matrice (lecture/édition)',
+      toolIds: ['matrix_get', 'matrix_update']
+    },
+    {
+      id: 'executive_summary',
+      label: 'Synthèse exécutive',
+      toolIds: ['executive_summary_get', 'executive_summary_update']
+    }
+  ];
+
+  const getPrefsKey = (id: string | null) => `chat_session_prefs:${id || 'new'}`;
+
+  const loadPrefs = (id: string | null) => {
+    if (typeof localStorage === 'undefined') return;
+    const key = getPrefsKey(id);
+    prefsKey = key;
+    try {
+      if (id && !localStorage.getItem(key)) {
+        const draft = localStorage.getItem(getPrefsKey(null));
+        if (draft) {
+          localStorage.setItem(key, draft);
+        }
+      }
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        multiContextEnabled?: boolean;
+        contexts?: ChatContextEntry[];
+        toolEnabledById?: Record<string, boolean>;
+      };
+      if (typeof parsed.multiContextEnabled === 'boolean') {
+        multiContextEnabled = parsed.multiContextEnabled;
+      }
+      if (Array.isArray(parsed.contexts)) {
+        contextEntries = parsed.contexts.filter((c) => !!c.contextType);
+      }
+      if (parsed.toolEnabledById && typeof parsed.toolEnabledById === 'object') {
+        toolEnabledById = parsed.toolEnabledById;
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const savePrefs = () => {
+    if (!prefsKey || typeof localStorage === 'undefined') return;
+    const payload = {
+      multiContextEnabled,
+      contexts: contextEntries,
+      toolEnabledById
+    };
+    try {
+      localStorage.setItem(prefsKey, JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  };
+
+  const ensureDefaultToolToggles = () => {
+    if (Object.keys(toolEnabledById).length > 0) return;
+    const defaults: Record<string, boolean> = {};
+    for (const t of TOOL_TOGGLES) defaults[t.id] = true;
+    toolEnabledById = defaults;
+  };
+
+  const updateContextFromRoute = () => {
+    const context = detectContextFromRoute();
+    if (!context?.primaryContextType) return;
+    const contextId = context.primaryContextId || '';
+    const contextType = context.primaryContextType as ChatContextEntry['contextType'];
+    if (!contextId) return;
+    const label = `${contextType}:${contextId}`;
+    const now = Date.now();
+    if (!multiContextEnabled) {
+      contextEntries = [
+        {
+          contextType,
+          contextId,
+          label,
+          active: true,
+          lastUsedAt: now
+        }
+      ];
+      savePrefs();
+      return;
+    }
+    const idx = contextEntries.findIndex((c) => c.contextType === contextType && c.contextId === contextId);
+    if (idx === -1) {
+      contextEntries = [
+        { contextType, contextId, label, active: true, lastUsedAt: now },
+        ...contextEntries
+      ];
+    } else {
+      const next = [...contextEntries];
+      const current = next[idx];
+      next[idx] = current.active ? { ...current, lastUsedAt: now } : current;
+      contextEntries = next;
+    }
+    savePrefs();
+  };
+
+  const getSortedContexts = () =>
+    [...contextEntries].sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+
+  const getActiveContexts = () =>
+    contextEntries
+      .filter((c) => c.active)
+      .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+
+  const getEnabledToolIds = () => {
+    const enabled = new Set<string>();
+    for (const t of TOOL_TOGGLES) {
+      if (toolEnabledById[t.id]) {
+        t.toolIds.forEach((id) => enabled.add(id));
+      }
+    }
+    return Array.from(enabled);
+  };
+
+  const toggleContextActive = (entry: ChatContextEntry) => {
+    const now = Date.now();
+    contextEntries = contextEntries.map((c) =>
+      c.contextType === entry.contextType && c.contextId === entry.contextId
+        ? { ...c, active: !c.active, lastUsedAt: !c.active ? now : c.lastUsedAt }
+        : c
+    );
+    savePrefs();
+  };
+
+  const toggleTool = (id: string) => {
+    toolEnabledById = { ...toolEnabledById, [id]: !toolEnabledById[id] };
+    savePrefs();
   };
 
   const isNearBottom = (): boolean => {
@@ -503,7 +712,9 @@
     errorMsg = null;
     try {
       // Détecter le contexte depuis la route
-      const context = detectContextFromRoute();
+      updateContextFromRoute();
+      const activeContexts = getActiveContexts();
+      const focusContext = activeContexts[0];
 
       // Construire le payload avec le contexte si disponible
       const payload: {
@@ -511,6 +722,8 @@
         content: string;
         primaryContextType?: string;
         primaryContextId?: string;
+        contexts?: Array<{ contextType: string; contextId: string }>;
+        tools?: string[];
         workspace_id?: string;
       } = {
         content: text
@@ -520,10 +733,19 @@
         payload.sessionId = sessionId;
       }
 
-      if (context) {
-        payload.primaryContextType = context.primaryContextType;
-        if (context.primaryContextId) payload.primaryContextId = context.primaryContextId;
+      if (focusContext?.contextType && focusContext.contextId) {
+        payload.primaryContextType = focusContext.contextType;
+        payload.primaryContextId = focusContext.contextId;
       }
+
+      if (activeContexts.length > 0) {
+        payload.contexts = activeContexts
+          .filter((c) => c.contextType && c.contextId)
+          .map((c) => ({ contextType: c.contextType, contextId: c.contextId ?? '' }));
+      }
+
+      const enabledTools = getEnabledToolIds();
+      if (enabledTools.length > 0) payload.tools = enabledTools;
 
       const res = await apiPost<{
         sessionId: string;
@@ -603,6 +825,18 @@
       await loadMessages(sessionId, { scrollToBottom: true });
     }
     updateComposerHeight();
+    ensureDefaultToolToggles();
+    loadPrefs(sessionId);
+    updateContextFromRoute();
+    handleDocumentClick = (event: MouseEvent) => {
+      if (!showComposerMenu) return;
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (composerMenuRef?.contains(target)) return;
+      if (composerMenuButtonRef?.contains(target)) return;
+      showComposerMenu = false;
+    };
+    document.addEventListener('click', handleDocumentClick);
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
       if (ev.type !== 'job_update' || !('jobId' in ev)) return;
@@ -627,6 +861,22 @@
     });
   });
 
+  $: if (sessionId && prefsKey !== getPrefsKey(sessionId)) {
+    loadPrefs(sessionId);
+    ensureDefaultToolToggles();
+  }
+
+  $: if (!sessionId && prefsKey !== getPrefsKey(null)) {
+    loadPrefs(null);
+    ensureDefaultToolToggles();
+  }
+
+  let lastPath = '';
+  $: if ($page?.url?.pathname && $page.url.pathname !== lastPath) {
+    lastPath = $page.url.pathname;
+    updateContextFromRoute();
+  }
+
   onDestroy(() => {
     if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
     sessionDocsReloadTimer = null;
@@ -634,6 +884,7 @@
     sessionDocsSseKey = '';
     if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
     sessionTitlesSseKey = '';
+    if (handleDocumentClick) document.removeEventListener('click', handleDocumentClick);
   });
 </script>
 
@@ -797,6 +1048,73 @@
 
   <div class="p-3 border-t border-slate-200">
     <div class="relative flex items-center gap-2">
+      <button
+        class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
+        aria-label="Ouvrir le menu"
+        title="Ouvrir le menu"
+        type="button"
+        bind:this={composerMenuButtonRef}
+        on:click={() => (showComposerMenu = !showComposerMenu)}
+      >
+        <Plus class="w-4 h-4" />
+      </button>
+      {#if showComposerMenu}
+        <div
+          class="absolute bottom-12 left-0 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3"
+          bind:this={composerMenuRef}
+        >
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-slate-600">Contexte</div>
+            <label class="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                class="accent-slate-700"
+                checked={multiContextEnabled}
+                on:change={() => {
+                  multiContextEnabled = !multiContextEnabled;
+                  updateContextFromRoute();
+                  savePrefs();
+                }}
+              />
+              Multi‑contexte
+            </label>
+          </div>
+          {#if contextEntries.length === 0}
+            <div class="text-[11px] text-slate-500">Aucun contexte actif.</div>
+          {:else}
+            <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
+              {#each getSortedContexts() as c (c.contextType + ':' + c.contextId)}
+                <label class="flex items-center gap-2 text-[11px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    class="accent-slate-700"
+                    checked={c.active}
+                    on:change={() => toggleContextActive(c)}
+                  />
+                  <span class="truncate">{c.label}</span>
+                </label>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="border-t border-slate-100 pt-2">
+            <div class="text-xs font-semibold text-slate-600 mb-1">Outils</div>
+            <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
+              {#each TOOL_TOGGLES as t (t.id)}
+                <label class="flex items-center gap-2 text-[11px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    class="accent-slate-700"
+                    checked={toolEnabledById[t.id] !== false}
+                    on:change={() => toggleTool(t.id)}
+                  />
+                  <span class="truncate">{t.label}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
       <label
         class={"rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50 " +
           (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
