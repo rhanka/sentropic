@@ -109,31 +109,26 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
 - [ ] **Docs (spec updates)**:
     - [x] Update `spec/DATA_MODEL.md` right after migration.
-    - [ ] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).
-    - [ ] Update `spec/JSON_STREAMING.md` only if streaming payload/UI changed.
-    - [ ] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.
-    - [ ] Merge `spec/SPEC_CHATBOT_TOOLS_EVOL.md` into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
-    - [ ] Add composer menu behavior (tools/context + upload) to `spec/SPEC_CHATBOT.md`.
-- [ ] Add i18n strings and UX copy where needed (FR/EN).
+    - [x] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).
+    - [x] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.
+    - [x] Merge `spec/SPEC_CHATBOT_TOOLS_EVOL.md` into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
+    - [x] Add composer menu behavior (tools/context + upload) to `spec/SPEC_CHATBOT.md`.
 - [ ] Tests to update/add (by type + file):
-    - [ ] **API tests**:
+    - [ ] **API tests** (for each, test, validate using make test api-endpoints)
         - [ ] Add new tests: `api/tests/chat/feedback.test.ts` (feedback create/update/toggle).
         - [ ] Add new tests: `api/tests/chat/message-actions.test.ts` (edit/retry flows, read-only guard).
-        - [ ] Update existing: `api/tests/chat/chat-routes.test.ts` (messages include feedback state).
+        - [ ] Update existing: `api/tests/chat/chat-routes.test.ts` (messages include feedback + contexts).
         - [ ] Add new tests: `api/tests/chat/session-docs.test.ts` (upload + summary + doc tool access + delete as viewer).
         - [ ] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
-    - [ ] **UI tests**:
-        - [ ] Add/extend: `ui/tests/chat-panel.spec.ts` (hover icons, copy, edit UI state).
-        - [ ] Add/extend: `ui/tests/stream-message.spec.ts` (assistant copy action).
-        - [ ] Add/extend: `ui/tests/chat-composer.spec.ts` (single-line + autosize behavior).
-        - [ ] Add/extend: `ui/tests/chat-composer-menu.spec.ts` (menu content, toggles, multi-context).
-        - [ ] Add/extend: `ui/tests/chat-richtext.spec.ts` (EditableInput, paste, edit flow).
-        - [ ] Add/extend: `ui/tests/chat-docs.spec.ts` (upload, summary badge, menu list).
+    - [ ] **UI tests (TS-only, pas de composants Svelte)**:
+        - [ ] Add/extend: `ui/tests/stream-hub.spec.ts` (SSE events, de-dupe, status transitions).
+        - [ ] Add/extend: `ui/tests/chat-contexts.spec.ts` (merge/normalize contexts, toggles persistence logic).
     - [ ] **E2E tests**:
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
-        - [ ] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, rich text copy/paste).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, provisional context behavior).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
-        - [ ] Update: `e2e/tests/03-chat.spec.ts` (document upload + summary + doc tool usage).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (document upload + summary + doc tool usage + delete as viewer).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (session title update via SSE).
 - [ ] Run final test suite.
     - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
 - [ ] Verify GitHub Actions CI for the branch.

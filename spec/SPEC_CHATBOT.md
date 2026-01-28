@@ -63,6 +63,9 @@
           - [ ] Fonctionnalité de comparaison entre deux versions d'un objet (diff visuel)
 - [ ] **CU-012 : Multi-contexte dans une session**
           - [x] Un seul contexte principal par session (`primaryContextType`, `primaryContextId`)
+          - [x] Contexte actif(s) transmis par message (array `contexts`)
+          - [x] Outils autorisés sur l’union des contextes actifs
+          - [x] Contexte provisoire en UI (visible avant envoi, persistant seulement si utilisé)
           - [ ] Une session peut modifier plusieurs objets différents
           - [ ] L'IA peut comprendre les relations hiérarchiques entre objets
 - [ ] **CU-013 : Suggestions et recommandations**
@@ -78,6 +81,7 @@
 - [x] **CU-015 : Gestion des sessions** (partiel : création et suppression)
           - [x] Un utilisateur peut avoir plusieurs sessions actives pour le même objet
           - [x] Suppression de sessions (`DELETE /api/v1/chat/sessions/:id`)
+          - [x] Titre de session auto-généré (IA, SSE)
           - [ ] Reprise d'une session interrompue (après déconnexion)
           - [ ] Renommage de sessions pour organisation
 - [x] **CU-016 : Affichage dans les vues existantes** (partiel : streaming visible dans QueueMonitor)
@@ -105,6 +109,7 @@
 - [x] **CU-020 : Notifications et feedback** (partiel : notifications SSE)
           - [x] Notifications en temps réel via SSE (events `usecase_update`, etc.)
           - [x] Refresh automatique de l'UI après modification
+          - [x] Notification de titre de session (`chat_session_title_updated`)
           - [ ] Toast/badge pour notifications visuelles
           - [ ] Feedback utilisateur sur la qualité des suggestions de l'IA (👍/👎)
 - [x] **CU-021 : Gestion des erreurs** (partiel : erreurs affichées)
@@ -289,6 +294,7 @@ Messages de la conversation (utilisateur et assistant).
 - `session_id` (FK → chat_sessions.id) : Session à laquelle appartient le message
 - `role` : Rôle du message ('user' | 'assistant' | 'system' | 'tool')
 - `content` : Contenu textuel du message (peut être null pour tool calls)
+- `contexts` (JSONB) : Contextes associés au message (array `{ contextType, contextId }`)
 - `tool_calls` (JSONB) : Appels d'outils effectués (array de tool calls OpenAI)
 - `tool_call_id` : ID du tool call si ce message est un résultat d'outil
 - `reasoning` : Tokens de reasoning (pour modèles avec reasoning comme o1)
@@ -593,6 +599,9 @@ const replay = await replayChatSession('session-789');
 **Valeur** : Attacher des documents aux objets (organization/folder/usecase), lancer automatiquement un résumé (0,1k token/page, langue configurable, défaut FR), consulter le résumé et le statut.
 
 **Couverture CU** : CU-022
+
+**Implémenté (partiel)** :
+- [x] Documents de session chat (upload/list/delete, résumé auto, tool `documents`).
 
 **À implémenter** :
 - [ ] API : POST `/api/documents` (upload + context_type/id) ; GET `/api/documents?context_type=&context_id=` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
