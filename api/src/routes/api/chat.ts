@@ -26,10 +26,29 @@ const editMessageInput = z.object({
   content: z.string().min(1)
 });
 
+const createSessionInput = z.object({
+  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextId: z.string().optional(),
+  sessionTitle: z.string().optional()
+});
+
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
   const sessions = await chatService.listSessions(user.userId);
   return c.json({ sessions });
+});
+
+chatRouter.post('/sessions', requireWorkspaceEditorRole(), zValidator('json', createSessionInput), async (c) => {
+  const user = c.get('user');
+  const body = c.req.valid('json');
+  const res = await chatService.createSession({
+    userId: user.userId,
+    workspaceId: user.workspaceId,
+    primaryContextType: body.primaryContextType ?? null,
+    primaryContextId: body.primaryContextId ?? null,
+    title: body.sessionTitle ?? null
+  });
+  return c.json({ sessionId: res.sessionId });
 });
 
 chatRouter.get('/sessions/:id/messages', async (c) => {

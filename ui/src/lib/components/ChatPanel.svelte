@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { currentFolderId } from '$lib/stores/folders';
-  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Plus } from '@lucide/svelte';
+  import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
+  import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
+  import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
+  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Paperclip, X } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   type ChatSession = {
@@ -58,6 +61,12 @@
   const COMPOSER_BASE_HEIGHT = 40;
   let composerIsMultiline = false;
   let composerMaxHeight = COMPOSER_BASE_HEIGHT;
+  let sessionDocs: ContextDocumentItem[] = [];
+  let sessionDocsUploading = false;
+  let sessionDocsError: string | null = null;
+  let sessionDocsKey = '';
+  let sessionDocsSseKey = '';
+  let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -162,6 +171,68 @@
     composerIsMultiline = contentHeight > COMPOSER_BASE_HEIGHT + 2;
     if (composerIsMultiline !== wasMultiline) {
       requestAnimationFrame(updateComposerHeight);
+    }
+  };
+
+  const sessionDocStatusLabel = (s: string) => {
+    if (s === 'uploaded') return 'En attente';
+    if (s === 'processing') return 'Résumé en cours';
+    if (s === 'ready') return 'Résumé prêt';
+    if (s === 'failed') return 'Échec';
+    return 'Inconnu';
+  };
+
+  const loadSessionDocs = async () => {
+    if (!sessionId) return;
+    sessionDocsError = null;
+    try {
+      const scopedWs = getScopedWorkspaceIdForUser();
+      const res = await listDocuments({ contextType: 'chat_session', contextId: sessionId, workspaceId: scopedWs });
+      sessionDocs = res.items ?? [];
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      sessionDocsError = msg;
+    }
+  };
+
+  const onPickSessionDoc = async (e: Event) => {
+    const inputEl = e.target as HTMLInputElement;
+    const file = inputEl.files?.[0];
+    inputEl.value = '';
+    if (!file) return;
+
+    sessionDocsUploading = true;
+    sessionDocsError = null;
+    try {
+      if (!sessionId) {
+        const context = detectContextFromRoute();
+        const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
+          primaryContextType: context?.primaryContextType,
+          primaryContextId: context?.primaryContextId
+        });
+        sessionId = res.sessionId;
+        await loadSessions();
+        await loadMessages(res.sessionId, { scrollToBottom: true });
+      }
+      const scopedWs = getScopedWorkspaceIdForUser();
+      await uploadDocument({ contextType: 'chat_session', contextId: sessionId!, file, workspaceId: scopedWs });
+      await loadSessionDocs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sessionDocsError = msg;
+    } finally {
+      sessionDocsUploading = false;
+    }
+  };
+
+  const removeSessionDoc = async (doc: ContextDocumentItem) => {
+    try {
+      const scopedWs = getScopedWorkspaceIdForUser();
+      await deleteDocument({ documentId: doc.id, workspaceId: scopedWs });
+      sessionDocs = sessionDocs.filter((d) => d.id !== doc.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sessionDocsError = msg;
     }
   };
 
@@ -512,12 +583,43 @@
     }
   };
 
+  $: {
+    const key = sessionId ? `chat_session:${sessionId}` : '';
+    if (key && key !== sessionDocsKey) {
+      sessionDocsKey = key;
+      sessionDocs = [];
+      void loadSessionDocs();
+    }
+    if (!key && sessionDocsKey) {
+      sessionDocsKey = '';
+      sessionDocs = [];
+    }
+  }
+
   onMount(async () => {
     await loadSessions();
     if (sessionId && messages.length === 0) {
       await loadMessages(sessionId, { scrollToBottom: true });
     }
     updateComposerHeight();
+    sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
+    streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
+      if (ev.type !== 'job_update' || !('jobId' in ev)) return;
+      const jobIds = new Set(sessionDocs.map((d) => d.job_id).filter(Boolean) as string[]);
+      if (jobIds.size === 0) return;
+      if (!jobIds.has(ev.jobId)) return;
+      if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
+      sessionDocsReloadTimer = setTimeout(() => {
+        void loadSessionDocs();
+      }, 150);
+    });
+  });
+
+  onDestroy(() => {
+    if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
+    sessionDocsReloadTimer = null;
+    if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
+    sessionDocsSseKey = '';
   });
 </script>
 
@@ -680,15 +782,22 @@
   </div>
 
   <div class="p-3 border-t border-slate-200">
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
-        type="button"
-        aria-label="Plus"
-        title="Plus"
+    <div class="relative flex items-center gap-2">
+      <label
+        class={"rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50 " +
+          (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
+        aria-label="Joindre un document"
+        title="Joindre un document"
       >
-        <Plus class="w-4 h-4" />
-      </button>
+        <input
+          class="hidden"
+          type="file"
+          on:change={onPickSessionDoc}
+          disabled={sessionDocsUploading}
+          accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
+        />
+        <Paperclip class="w-4 h-4" />
+      </label>
       <div
         class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
         class:composer-single-line={!composerIsMultiline}
@@ -699,6 +808,30 @@
         tabindex="0"
         on:keydown={handleKeyDown}
       >
+        {#if sessionDocsError}
+          <div class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700">
+            {sessionDocsError}
+          </div>
+        {/if}
+        {#if sessionDocs.length > 0}
+          <div class="mb-2 flex flex-wrap gap-2">
+            {#each sessionDocs as doc (doc.id)}
+              <div class="flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
+                <div class="max-w-[220px] truncate">{doc.filename}</div>
+                <span class="text-slate-400">· {sessionDocStatusLabel(doc.status)}</span>
+                <button
+                  class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
+                  type="button"
+                  aria-label="Supprimer le document"
+                  title="Supprimer"
+                  on:click={() => void removeSessionDoc(doc)}
+                >
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
         <EditableInput
           markdown={true}
           bind:value={input}

@@ -427,8 +427,12 @@ export class ChatService {
     primaryContextType: ChatContextType | null | undefined;
     primaryContextId: string | null | undefined;
     workspaceId: string;
-  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>> {
-    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
+    sessionId: string;
+  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }>> {
+    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }> = [];
+    if (opts.sessionId) {
+      out.push({ contextType: 'chat_session', contextId: opts.sessionId });
+    }
     const type = opts.primaryContextType ?? null;
     const id = (opts.primaryContextId ?? '').trim();
     if (!type || !id) return out;
@@ -534,7 +538,8 @@ export class ChatService {
     const allowedDocContexts = await this.getAllowedDocumentsContexts({
       primaryContextType,
       primaryContextId,
-      workspaceId: sessionWorkspaceId
+      workspaceId: sessionWorkspaceId,
+      sessionId: session.id
     });
 
     const hasDocuments = await (async () => {
@@ -610,6 +615,8 @@ export class ChatService {
         webSearchTool,
         webExtractTool
       ];
+    } else if (hasDocuments) {
+      tools = [documentsTool];
     } else {
       tools = undefined;
     }
@@ -1333,16 +1340,6 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'documents') {
             // Security: documents tool must match the effective session context exactly.
-            if (
-              primaryContextType !== 'organization' &&
-              primaryContextType !== 'folder' &&
-              primaryContextType !== 'usecase' &&
-              primaryContextType !== 'executive_summary'
-            ) {
-              throw new Error('Security: documents tool is only available in organization/folder/usecase/executive_summary context');
-            }
-            if (!primaryContextId) throw new Error('Security: documents tool requires a selected context id');
-
             const allowed = allowedDocContexts;
             const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
             if (!isAllowed) {

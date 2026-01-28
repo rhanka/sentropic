@@ -459,7 +459,7 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: 'documents',
     description: `
-      Accède aux documents attachés à un contexte (organization/folder/usecase).
+      Accède aux documents attachés à un contexte (organization/folder/usecase/chat_session).
       
       Les documents sont fournis par l'utilisateurs et supposés être une source importante d'information.
 
@@ -479,7 +479,7 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         },
         contextType: {
           type: 'string',
-          enum: ['organization', 'folder', 'usecase'],
+          enum: ['organization', 'folder', 'usecase', 'chat_session'],
           description: 'Type du contexte.'
         },
         contextId: { type: 'string', description: 'ID du contexte.' },
@@ -646,7 +646,7 @@ export interface ExecuteWithToolsStreamOptions {
   useDocuments?: boolean;
   documentsContext?: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
   };
   /**
@@ -655,7 +655,7 @@ export interface ExecuteWithToolsStreamOptions {
    */
   documentsContexts?: Array<{
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
   }>;
   responseFormat?: 'json_object';
