@@ -38,7 +38,7 @@ chatRouter.get('/sessions', async (c) => {
   return c.json({ sessions });
 });
 
-chatRouter.post('/sessions', requireWorkspaceEditorRole(), zValidator('json', createSessionInput), async (c) => {
+chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', createSessionInput), async (c) => {
   const user = c.get('user');
   const body = c.req.valid('json');
   const res = await chatService.createSession({
@@ -164,7 +164,7 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
  * POST /api/v1/chat/messages/:id/retry
  * Retry a user message (deletes subsequent messages and re-queues assistant).
  */
-chatRouter.post('/messages/:id/retry', requireWorkspaceEditorRole(), async (c) => {
+chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
   const messageId = c.req.param('id');
 
@@ -200,7 +200,7 @@ chatRouter.post('/messages/:id/retry', requireWorkspaceEditorRole(), async (c) =
  * Crée un message user + un placeholder assistant, puis enfile un job `chat_message`.
  * Le SSE chat est sur streamId == assistantMessageId.
  */
-chatRouter.post('/messages', requireWorkspaceEditorRole(), zValidator('json', createMessageInput), async (c) => {
+chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', createMessageInput), async (c) => {
   const user = c.get('user');
   const body = c.req.valid('json');
 
