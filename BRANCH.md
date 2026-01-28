@@ -94,10 +94,10 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: update tools is blocked (with viewer role)
         - [x] Test: doc tool utilise les docs attachés à la session. 
 - [ ] **Lot 4C Composer menu content (tools/context)**:
-    - [ ] List tools and contexts in the “+” menu (checkable) (in addition of the trombone for doc upload)
+    - [x] List tools and contexts in the “+” menu (checkable) (in addition of the trombone for doc upload)
     - [x] Add multi-context mode: context additions when switching views (last added has priority).
-    - [ ] Allow toggling tools/contexts from the menu.
-    - [ ] `make typecheck` + `make lint`
+    - [x] Allow toggling tools/contexts from the menu.
+    - [x] `make typecheck` + `make lint`
     - [ ] UAT lot 4C
         - [ ] Test: menu “+” affiche tools + contextes.
         - [ ] Test: toggle tool/context ON/OFF persiste pour la session.
