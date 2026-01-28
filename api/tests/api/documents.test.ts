@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
+import { createAuthenticatedUser, cleanupAuthData, authenticatedRequest } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -121,7 +121,7 @@ describe('Documents API', () => {
     expect(jobOpts.workspaceId).toBeTruthy();
   });
 
-  it('forbids viewers from uploading documents', async () => {
+  it('forbids viewers from uploading documents for non-chat contexts', async () => {
     const form = new FormData();
     form.set('context_type', 'folder');
     form.set('context_id', 'f_1');
@@ -129,6 +129,26 @@ describe('Documents API', () => {
 
     const res = await authenticatedMultipartRequest(app, '/api/v1/documents', viewer.sessionToken!, form);
     expect(res.status).toBe(403);
+  });
+
+  it('allows viewers to upload documents for chat_session', async () => {
+    const chatRes = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', viewer.sessionToken!, {
+      content: 'Viewer chat session doc upload',
+    });
+    expect(chatRes.status).toBe(200);
+    const chatData = await chatRes.json();
+    const sessionId = chatData.sessionId as string;
+
+    const form = new FormData();
+    form.set('context_type', 'chat_session');
+    form.set('context_id', sessionId);
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc viewer chat.pdf', { type: 'application/pdf' }));
+
+    const res = await authenticatedMultipartRequest(app, '/api/v1/documents', viewer.sessionToken!, form);
+    expect(res.status).toBe(201);
+    const created = await res.json();
+    createdDocId = created.id;
+    expect(created.context_type).toBe('chat_session');
   });
 
   it('GET /documents lists documents for a context', async () => {
@@ -247,6 +267,31 @@ describe('Documents API', () => {
       }
     );
     expect(del.status).toBe(403);
+  });
+
+  it('allows viewers to delete documents in their chat_session', async () => {
+    const chatRes = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', viewer.sessionToken!, {
+      content: 'Viewer chat session delete',
+    });
+    expect(chatRes.status).toBe(200);
+    const chatData = await chatRes.json();
+    const sessionId = chatData.sessionId as string;
+
+    const form = new FormData();
+    form.set('context_type', 'chat_session');
+    form.set('context_id', sessionId);
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc viewer delete chat.pdf', { type: 'application/pdf' }));
+    const up = await authenticatedMultipartRequest(app, '/api/v1/documents', viewer.sessionToken!, form);
+    expect(up.status).toBe(201);
+    const created = await up.json();
+    createdDocId = created.id;
+
+    const del = await app.request(`/api/v1/documents/${createdDocId}`, {
+      method: 'DELETE',
+      headers: { Cookie: `session=${viewer.sessionToken}` },
+    });
+    expect(del.status).toBe(204);
+    createdDocId = null;
   });
 
   it('admin_app can read documents from a workspace where they are a member (workspace_id query)', async () => {

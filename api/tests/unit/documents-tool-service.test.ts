@@ -211,6 +211,73 @@ describe('ToolService (documents) - unit', () => {
     expect(mockExtract).toHaveBeenCalledTimes(1);
   });
 
+  it('getDocumentSummary: throws when document is not ready', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'pending.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/pending.pdf',
+      status: 'processing',
+      data: { summary: 'Résumé court', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await expect(
+      toolService.getDocumentSummary({
+        workspaceId,
+        contextType,
+        contextId,
+        documentId: docId,
+      })
+    ).rejects.toThrow('documents.get_summary: document not ready');
+  });
+
+  it('getDocumentContent: allows short docs even if not ready', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'short.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      storageKey: 'documents/test/short.pdf',
+      status: 'uploaded',
+      data: { summary: 'Résumé court', summaryLang: 'fr' } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    mockExtract.mockResolvedValueOnce({
+      text: 'texte '.repeat(500).trim(),
+      metadata: { pages: 1, title: 'Short' },
+      headingsH1: [],
+    });
+
+    const res = await toolService.getDocumentContent({
+      workspaceId,
+      contextType,
+      contextId,
+      documentId: docId,
+      maxChars: 2000,
+    });
+
+    expect(res.documentStatus).toBe('uploaded');
+    expect(res.contentMode).toBe('full_text');
+    expect(res.content).toContain('texte');
+    expect(res.words).toBeGreaterThan(0);
+    expect(mockCallOpenAI).not.toHaveBeenCalled();
+  });
+
   it('listContextDocuments: summaryAvailable reflects presence of data.summary', async () => {
     docId = createId();
     await db.insert(contextDocuments).values({

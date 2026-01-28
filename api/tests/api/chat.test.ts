@@ -141,6 +141,31 @@ describe('Chat API Endpoints', () => {
       expect(sessions[0].primaryContextId).toBe(useCaseId);
     });
 
+    it('should store message contexts and return them in session messages', async () => {
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: 'Message with contexts',
+        contexts: [
+          { contextType: 'organization', contextId: 'org_1' },
+          { contextType: 'folder', contextId: 'folder_1' },
+        ],
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      const sessionId = data.sessionId as string;
+      const userMessageId = data.userMessageId as string;
+
+      const list = await authenticatedRequest(app, 'GET', `/api/v1/chat/sessions/${sessionId}/messages`, user.sessionToken!);
+      expect(list.status).toBe(200);
+      const payload = await list.json();
+      const userMsg = (payload.messages || []).find((m: any) => m.id === userMessageId);
+      expect(userMsg).toBeTruthy();
+      expect(userMsg.contexts).toEqual([
+        { contextType: 'organization', contextId: 'org_1' },
+        { contextType: 'folder', contextId: 'folder_1' },
+      ]);
+    });
+
     it('should return 401 without authentication', async () => {
       const response = await app.request('/api/v1/chat/messages', {
         method: 'POST',

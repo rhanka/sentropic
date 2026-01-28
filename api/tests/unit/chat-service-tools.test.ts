@@ -67,7 +67,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
-    await db.delete(folders).where(eq(folders.id, folderId));
+    await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
   });
@@ -238,7 +238,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     const result2 = events2.find((e) => e.eventType === 'tool_call_result' && (e.data as any)?.tool_call_id === 'call_mx_2');
     expect(result2).toBeDefined();
     expect((result2 as any).data?.result?.status).toBe('error');
-    expect(String((result2 as any).data?.result?.error ?? '')).toContain('Security: folderId does not match session context');
+    expect(String((result2 as any).data?.result?.error ?? '')).toContain('Security: folderId does not match allowed contexts');
 
     // Cleanup extra folder (avoid leaking across tests)
     await db.delete(folders).where(and(eq(folders.id, otherFolderId), eq(folders.workspaceId, workspaceId)));

@@ -114,12 +114,12 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66â€“88): user feedback (ðŸ
     - [x] Merge `spec/SPEC_CHATBOT_TOOLS_EVOL.md` into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
     - [x] Add composer menu behavior (tools/context + upload) to `spec/SPEC_CHATBOT.md`.
 - [ ] Tests to update/add (by type + file):
-    - [ ] **API tests** (for each, test, validate using make test api-endpoints)
-        - [ ] Add new tests: `api/tests/chat/feedback.test.ts` (feedback create/update/toggle).
-        - [ ] Add new tests: `api/tests/chat/message-actions.test.ts` (edit/retry flows, read-only guard).
-        - [ ] Update existing: `api/tests/chat/chat-routes.test.ts` (messages include feedback + contexts).
-        - [ ] Add new tests: `api/tests/chat/session-docs.test.ts` (upload + summary + doc tool access + delete as viewer).
-        - [ ] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
+    - [x] **API tests** (for each, test, validate using make test api-endpoints)
+        - [x] Add new tests: `api/tests/api/chat-feedback.test.ts` (feedback create/update/toggle).
+        - [x] Add new tests: `api/tests/api/chat-message-actions.test.ts` (edit/retry flows, read-only guard).
+        - [x] Update existing: `api/tests/api/chat.test.ts` (messages include feedback + contexts).
+        - [x] Add/extend: `api/tests/api/documents.test.ts` (session docs upload + summary + doc tool access + delete as viewer).
+        - [x] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
     - [ ] **UI tests (TS-only, pas de composants Svelte)**:
         - [ ] Add/extend: `ui/tests/stream-hub.spec.ts` (SSE events, de-dupe, status transitions).
         - [ ] Add/extend: `ui/tests/chat-contexts.spec.ts` (merge/normalize contexts, toggles persistence logic).
