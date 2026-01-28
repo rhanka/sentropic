@@ -6,7 +6,8 @@ import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } 
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
-import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceEditor } from '../../services/workspace-access';
 
 export const documentsRouter = new Hono();
 
@@ -245,7 +246,7 @@ async function getNextModificationSequence(contextType: string, contextId: strin
   return maxSequence + 1;
 }
 
-documentsRouter.post('/', requireWorkspaceEditorRole(), async (c) => {
+documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
 
   const form = await c.req.raw.formData();
@@ -260,6 +261,12 @@ documentsRouter.post('/', requireWorkspaceEditorRole(), async (c) => {
   if (parsed.data.context_type === 'chat_session') {
     const ok = await ensureChatSessionAccess({ sessionId: parsed.data.context_id, userId });
     if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
   }
 
   const file = form.get('file');
