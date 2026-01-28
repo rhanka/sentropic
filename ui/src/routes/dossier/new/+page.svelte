@@ -261,6 +261,7 @@
         markdown={false}
         multiline={true}
         placeholder="Saisir le nom du dossier (optionnel)"
+        locked={$workspaceReadOnlyScope}
         apiEndpoint={folder.id ? `/folders/${folder.id}` : ''}
         fullData={{ name: isAutoName ? AUTO_DRAFT_NAME : (folder.name || '') }}
         originalValue={folder.id ? (originalName ?? (isAutoName ? '' : (folder.name || ''))) : (isAutoName ? '' : (folder.name || ''))}
@@ -343,6 +344,7 @@
         value={folder.description || ''}
         markdown={true}
         placeholder="Décrire le contexte métier et les objectifs…"
+        locked={$workspaceReadOnlyScope}
         apiEndpoint={folder.id ? `/folders/${folder.id}` : ''}
         fullData={{ description: folder.description || '' }}
         originalValue={folder.id ? (originalContext ?? (folder.description || '')) : (folder.description || '')}

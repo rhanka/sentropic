@@ -625,6 +625,7 @@
             label=""
             value={editedSyntheseExecutive}
             markdown={true}
+            locked={$workspaceReadOnlyScope}
             apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
             fullData={syntheseFullData}
             changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
@@ -833,6 +834,7 @@
                   label=""
                   value={editedIntroduction}
                   markdown={true}
+                  locked={$workspaceReadOnlyScope}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={introductionFullData}
                   changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
@@ -910,6 +912,7 @@
                   label=""
                   value={editedAnalyse}
                   markdown={true}
+                  locked={$workspaceReadOnlyScope}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={analyseFullData}
                   changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
@@ -934,6 +937,7 @@
                   label=""
                   value={editedRecommandation}
                   markdown={true}
+                  locked={$workspaceReadOnlyScope}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={recommandationFullData}
                   changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
@@ -984,6 +988,7 @@
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
+              locked={$workspaceReadOnlyScope}
             />
         </section>
         {/each}
