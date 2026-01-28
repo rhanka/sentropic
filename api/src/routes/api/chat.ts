@@ -8,6 +8,11 @@ import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../mi
 
 export const chatRouter = new Hono();
 
+const chatContextInput = z.object({
+  contextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']),
+  contextId: z.string().min(1)
+});
+
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
@@ -15,7 +20,9 @@ const createMessageInput = z.object({
   workspace_id: z.string().optional(),
   primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
-  sessionTitle: z.string().optional()
+  sessionTitle: z.string().optional(),
+  contexts: z.array(chatContextInput).optional(),
+  tools: z.array(z.string()).optional()
 });
 
 const feedbackInput = z.object({
@@ -222,7 +229,9 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     userId: user.userId,
     sessionId: created.sessionId,
     assistantMessageId: created.assistantMessageId,
-    model: created.model
+    model: created.model,
+    contexts: body.contexts ?? undefined,
+    tools: body.tools ?? undefined
   }, { workspaceId: user.workspaceId });
 
   return c.json({
