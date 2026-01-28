@@ -6,7 +6,7 @@ import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } 
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
-import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceEditor } from '../../services/workspace-access';
 
 export const documentsRouter = new Hono();
@@ -180,7 +180,7 @@ documentsRouter.get('/:id/content', async (c) => {
   return c.newResponse(stream, 200);
 });
 
-documentsRouter.delete('/:id', requireWorkspaceEditorRole(), async (c) => {
+documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   // Delete is write-scoped: only within user's own workspace for now.
   const workspaceId = user.workspaceId;
@@ -195,6 +195,12 @@ documentsRouter.delete('/:id', requireWorkspaceEditorRole(), async (c) => {
   if (doc.contextType === 'chat_session') {
     const ok = await ensureChatSessionAccess({ sessionId: doc.contextId, userId: user.userId });
     if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(user.userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
   }
 
   // Delete object (best-effort) then DB record.

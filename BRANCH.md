@@ -79,7 +79,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: résumé auto créé (court/long selon taille).
         - [x] Test: doc tool utilise les docs attachés à la session.
         - [x] Test: accès interdit si session hors workspace
-        - [ ] Test: suppression doc chat_session en viewer (actuellement 403).
+        - [x] Test: suppression doc chat_session en viewer.
 - [ ] **Lot 4Bbis Prompt + session UX cleanup**:
     - [x] Centralize chat system prompt in `default_prompts` (single base + context block injection).
     - [x] Add explicit document availability block (session + focus-derived contexts).
