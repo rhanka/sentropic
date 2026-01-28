@@ -240,6 +240,7 @@ export const chatMessages = pgTable('chat_messages', {
     .references(() => chatSessions.id, { onDelete: 'cascade' }),
   role: text('role').notNull(), // 'user' | 'assistant' | 'system' | 'tool'
   content: text('content'), // nullable for tool calls
+  contexts: jsonb('contexts'), // array of { contextType, contextId } for message traceability
   toolCalls: jsonb('tool_calls'), // array of tool calls OpenAI
   toolCallId: text('tool_call_id'), // ID du tool call si ce message est un résultat d'outil
   reasoning: text('reasoning'), // Tokens de reasoning (pour modèles avec reasoning)

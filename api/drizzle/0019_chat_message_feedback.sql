@@ -32,3 +32,7 @@ CREATE INDEX IF NOT EXISTS "chat_message_feedback_message_id_idx" ON "chat_messa
 --> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "chat_message_feedback_user_id_idx" ON "chat_message_feedback" USING btree ("user_id");
+--> statement-breakpoint
+
+ALTER TABLE "chat_messages"
+ADD COLUMN IF NOT EXISTS "contexts" jsonb;

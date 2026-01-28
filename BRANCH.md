@@ -98,6 +98,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] Add multi-context mode: context additions when switching views (last added has priority).
     - [x] Allow toggling tools/contexts from the menu.
     - [x] Backend: outils autorisés via tous les contextes actifs.
+    - [x] Persist contexts per message (`chat_messages.contexts` JSONB).
     - [x] `make typecheck` + `make lint`
     - [x] UAT lot 4C
         - [x] Test: menu “+” affiche tools + contextes.
@@ -107,7 +108,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: “Ajouter un fichier” a le même style que les items.
         - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
 - [ ] **Docs (spec updates)**:
-    - [ ] Update `spec/DATA_MODEL.md` right after migration.
+    - [x] Update `spec/DATA_MODEL.md` right after migration.
     - [ ] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).
     - [ ] Update `spec/JSON_STREAMING.md` only if streaming payload/UI changed.
     - [ ] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.

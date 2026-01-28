@@ -247,6 +247,7 @@ erDiagram
         text session_id FK
         text role
         text content
+        jsonb contexts
         jsonb tool_calls
         text tool_call_id
         text model

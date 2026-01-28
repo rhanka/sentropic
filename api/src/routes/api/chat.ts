@@ -222,6 +222,7 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     workspaceId: targetWorkspaceId,
     primaryContextType: body.primaryContextType ?? null,
     primaryContextId: body.primaryContextId ?? null,
+    contexts: body.contexts ?? undefined,
     sessionTitle: body.sessionTitle ?? null
   });
 

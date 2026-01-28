@@ -60,10 +60,32 @@ export type CreateChatMessageInput = {
   model?: string | null;
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
+  contexts?: Array<{ contextType: ChatContextType; contextId: string }>;
   sessionTitle?: string | null;
 };
 
 export class ChatService {
+  private normalizeMessageContexts(
+    input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
+  ): Array<{ contextType: ChatContextType; contextId: string }> {
+    const normalized: Array<{ contextType: ChatContextType; contextId: string }> = [];
+    const seen = new Set<string>();
+    if (Array.isArray(input.contexts)) {
+      for (const c of input.contexts) {
+        if (!c || !isChatContextType(c.contextType) || typeof c.contextId !== 'string' || !c.contextId) continue;
+        const key = `${c.contextType}:${c.contextId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push({ contextType: c.contextType, contextId: c.contextId });
+      }
+    }
+    if (normalized.length === 0 && input.primaryContextType && input.primaryContextId) {
+      if (isChatContextType(input.primaryContextType) && typeof input.primaryContextId === 'string') {
+        normalized.push({ contextType: input.primaryContextType, contextId: input.primaryContextId });
+      }
+    }
+    return normalized;
+  }
   private safeTruncate(text: string, maxLen: number): string {
     if (!text) return '';
     if (text.length <= maxLen) return text;
@@ -209,6 +231,7 @@ export class ChatService {
         sessionId: chatMessages.sessionId,
         role: chatMessages.role,
         content: chatMessages.content,
+        contexts: chatMessages.contexts,
         toolCalls: chatMessages.toolCalls,
         toolCallId: chatMessages.toolCallId,
         reasoning: chatMessages.reasoning,
@@ -449,6 +472,8 @@ export class ChatService {
     const userMessageId = createId();
     const assistantMessageId = createId();
 
+    const messageContexts = this.normalizeMessageContexts(input);
+
     await db.insert(chatMessages).values([
       {
         id: userMessageId,
@@ -461,6 +486,7 @@ export class ChatService {
         model: null,
         promptId: null,
         promptVersionId: null,
+        contexts: messageContexts.length > 0 ? messageContexts : null,
         sequence: userSeq,
         createdAt: new Date()
       },
@@ -475,6 +501,7 @@ export class ChatService {
         model: selectedModel,
         promptId: null,
         promptVersionId: null,
+        contexts: null,
         sequence: assistantSeq,
         createdAt: new Date()
       }
