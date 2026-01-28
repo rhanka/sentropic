@@ -121,11 +121,11 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66â€“88): user feedback (ðŸ
         - [x] Add/extend: `api/tests/api/documents.test.ts` (session docs upload + summary + doc tool access + delete as viewer).
         - [x] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
     - [ ] **UI tests (TS-only, pas de composants Svelte)**:
-        - [ ] Add/extend: `ui/tests/stream-hub.spec.ts` (SSE events, de-dupe, status transitions).
-        - [ ] Add/extend: `ui/tests/chat-contexts.spec.ts` (merge/normalize contexts, toggles persistence logic).
+        - [x] Add/extend: `ui/tests/stores/streamHub.test.ts` (SSE events, de-dupe, status transitions).
     - [ ] **E2E tests**:
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, provisional context behavior).
+        - [ ] Update: `e2e/tests/03-chat.spec.ts` (contexts merge/normalize + toggles persistence).
         - [ ] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (document upload + summary + doc tool usage + delete as viewer).
         - [ ] Update: `e2e/tests/03-chat.spec.ts` (session title update via SSE).

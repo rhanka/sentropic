@@ -225,6 +225,39 @@ describe('streamHub', () => {
     expect(lastAggregated.data.delta).toBe('Content Part 2');
   });
 
+  it('should aggregate tool_call_delta events by tool_call_id', async () => {
+    const callback1 = vi.fn();
+    streamHub.set('test-key-1', callback1);
+    await vi.advanceTimersByTimeAsync(200);
+    callback1.mockClear();
+
+    if (mockEventSource) {
+      mockEventSource.simulateEvent('tool_call_delta', {
+        streamId: 'stream-2',
+        sequence: 1,
+        data: { tool_call_id: 'call-1', delta: '{"a":' }
+      });
+      mockEventSource.simulateEvent('tool_call_delta', {
+        streamId: 'stream-2',
+        sequence: 2,
+        data: { tool_call_id: 'call-1', delta: '1}' }
+      });
+    }
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    const callback2 = vi.fn();
+    streamHub.setStream('test-key-2', 'stream-2', callback2);
+    await vi.advanceTimersByTimeAsync(10);
+
+    const aggregatedCalls = callback2.mock.calls.filter(call =>
+      call[0].type === 'tool_call_delta' && call[0].streamId === 'stream-2'
+    );
+    expect(aggregatedCalls.length).toBeGreaterThan(0);
+    const lastAggregated = aggregatedCalls[aggregatedCalls.length - 1][0];
+    expect(lastAggregated.data.delta).toBe('{"a":1}');
+  });
+
   it('should filter events by streamId when using setStream', async () => {
     const callback1 = vi.fn();
     streamHub.set('test-key-1', callback1);
@@ -316,6 +349,31 @@ describe('streamHub', () => {
     await vi.advanceTimersByTimeAsync(200);
     
     expect(mockEventSource?.readyState).toBe(2); // CLOSED
+  });
+
+  it('should clear cached events on reset', async () => {
+    const callback1 = vi.fn();
+    streamHub.set('test-key-1', callback1);
+    await vi.advanceTimersByTimeAsync(200);
+
+    if (mockEventSource) {
+      mockEventSource.simulateEvent('job_update', {
+        jobId: 'job-reset-1',
+        data: { status: 'running' }
+      });
+    }
+    await vi.advanceTimersByTimeAsync(10);
+
+    streamHub.reset();
+    await vi.advanceTimersByTimeAsync(200);
+
+    const callback2 = vi.fn();
+    streamHub.set('test-key-2', callback2);
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(callback2).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'job_update', jobId: 'job-reset-1' })
+    );
   });
 
   it('should handle usecase_update events', async () => {
