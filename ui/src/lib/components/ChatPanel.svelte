@@ -65,6 +65,7 @@
     contextId?: string;
     label: string;
     active: boolean;
+    used: boolean;
     lastUsedAt: number;
   };
 
@@ -184,6 +185,7 @@
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
   let prefsKey = '';
+  let lastRouteContextKey: string | null = null;
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
@@ -335,7 +337,12 @@
         toolEnabledById?: Record<string, boolean>;
       };
       if (Array.isArray(parsed.contexts)) {
-        contextEntries = parsed.contexts.filter((c) => !!c.contextType);
+        contextEntries = parsed.contexts
+          .filter((c) => !!c.contextType)
+          .map((c) => ({
+            ...c,
+            used: typeof c.used === 'boolean' ? c.used : true
+          }));
       }
       if (parsed.toolEnabledById && typeof parsed.toolEnabledById === 'object') {
         toolEnabledById = parsed.toolEnabledById;
@@ -367,10 +374,17 @@
 
   const updateContextFromRoute = () => {
     const context = detectContextFromRoute();
-    if (!context?.primaryContextType) return;
-    const contextId = context.primaryContextId || '';
-    const contextType = context.primaryContextType as ChatContextEntry['contextType'];
-    if (!contextId) return;
+    const contextId = context?.primaryContextId || '';
+    const contextType = (context?.primaryContextType || null) as ChatContextEntry['contextType'] | null;
+    const routeKey = contextType && contextId ? `${contextType}:${contextId}` : null;
+    if (lastRouteContextKey && lastRouteContextKey !== routeKey) {
+      contextEntries = contextEntries.filter(
+        (c) => !(c.contextType + ':' + c.contextId === lastRouteContextKey && !c.used)
+      );
+      savePrefs();
+    }
+    lastRouteContextKey = routeKey;
+    if (!contextType || !contextId) return;
     const label = getContextLabelFromStores(contextType, contextId)
       || contextNameByKey.get(`${contextType}:${contextId}`)
       || contextId;
@@ -378,13 +392,40 @@
     const idx = contextEntries.findIndex((c) => c.contextType === contextType && c.contextId === contextId);
     if (idx === -1) {
       contextEntries = [
-        { contextType, contextId, label, active: true, lastUsedAt: now },
+        { contextType, contextId, label, active: true, used: false, lastUsedAt: now },
         ...contextEntries
       ];
     } else {
       const next = [...contextEntries];
       const current = next[idx];
-      next[idx] = { ...current, label, active: true, lastUsedAt: now };
+      next[idx] = { ...current, label, active: true };
+      contextEntries = next;
+    }
+    if (label === contextId) {
+      void loadContextName(contextType, contextId);
+    }
+    savePrefs();
+  };
+
+  const markCurrentContextUsed = () => {
+    const context = detectContextFromRoute();
+    if (!context?.primaryContextType || !context.primaryContextId) return;
+    const contextType = context.primaryContextType as ChatContextEntry['contextType'];
+    const contextId = context.primaryContextId;
+    const label = getContextLabelFromStores(contextType, contextId)
+      || contextNameByKey.get(`${contextType}:${contextId}`)
+      || contextId;
+    const now = Date.now();
+    const idx = contextEntries.findIndex((c) => c.contextType === contextType && c.contextId === contextId);
+    if (idx === -1) {
+      contextEntries = [
+        { contextType, contextId, label, active: true, used: true, lastUsedAt: now },
+        ...contextEntries
+      ];
+    } else {
+      const next = [...contextEntries];
+      const current = next[idx];
+      next[idx] = { ...current, label, active: true, used: true, lastUsedAt: now };
       contextEntries = next;
     }
     if (label === contextId) {
@@ -397,7 +438,7 @@
 
   const getActiveContexts = () =>
     contextEntries
-      .filter((c) => c.active)
+      .filter((c) => c.active && c.used)
       .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
 
   const getEnabledToolIds = () => {
@@ -801,8 +842,9 @@
     sending = true;
     errorMsg = null;
     try {
-      // Détecter le contexte depuis la route
-      updateContextFromRoute();
+    // Détecter le contexte depuis la route
+    updateContextFromRoute();
+    markCurrentContextUsed();
       const activeContexts = getActiveContexts();
       const focusContext = activeContexts[0];
 

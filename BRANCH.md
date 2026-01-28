@@ -106,7 +106,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: toggle contexte met à jour l’UI sans fermer le menu.
         - [x] Test: libellés contextes affichent le name/title (pas l’UUID).
         - [x] Test: “Ajouter un fichier” a le même style que les items.
-        - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
+        - [x] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
 - [ ] **Docs (spec updates)**:
     - [x] Update `spec/DATA_MODEL.md` right after migration.
     - [ ] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).

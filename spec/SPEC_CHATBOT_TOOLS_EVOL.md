@@ -24,6 +24,7 @@ It is intended to be merged into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
 4. The assistant must explicitly state when it uses a non-focus context.
 5. The UI can send an explicit list of **active contexts** per message; tools and documents must be allowed across the union of these contexts.
 6. Each user message stores its contexts in `chat_messages.contexts` (JSONB array) for traceability.
+7. The UI keeps **provisional contexts**: a context appears in the menu on view entry, but only becomes “used” (and sent to the API) when the user sends a message in that view. Provisional contexts are removed when leaving the view without use.
 
 ## Documents Availability Model
 Documents available to the assistant depend on focus context, plus session documents.
