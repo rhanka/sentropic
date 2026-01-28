@@ -102,6 +102,9 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] UAT lot 4C
         - [x] Test: menu “+” affiche tools + contextes.
         - [x] Test: toggle tool/context ON/OFF persiste pour la session.
+        - [x] Test: toggle contexte met à jour l’UI sans fermer le menu.
+        - [x] Test: libellés contextes affichent le name/title (pas l’UUID).
+        - [x] Test: “Ajouter un fichier” a le même style que les items.
         - [ ] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
 - [ ] **Docs (spec updates)**:
     - [ ] Update `spec/DATA_MODEL.md` right after migration.
@@ -109,6 +112,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [ ] Update `spec/JSON_STREAMING.md` only if streaming payload/UI changed.
     - [ ] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.
     - [ ] Merge `spec/SPEC_CHATBOT_TOOLS_EVOL.md` into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
+    - [ ] Add composer menu behavior (tools/context + upload) to `spec/SPEC_CHATBOT.md`.
 - [ ] Add i18n strings and UX copy where needed (FR/EN).
 - [ ] Tests to update/add (by type + file):
     - [ ] **API tests**:

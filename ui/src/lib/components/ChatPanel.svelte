@@ -5,11 +5,32 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { currentFolderId } from '$lib/stores/folders';
+  import { currentFolderId, foldersStore } from '$lib/stores/folders';
+  import { organizationsStore } from '$lib/stores/organizations';
+  import { useCasesStore } from '$lib/stores/useCases';
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import { Send, ThumbsUp, ThumbsDown, Copy, Pencil, RotateCcw, Check, Paperclip, X, Plus } from '@lucide/svelte';
+  import {
+    Send,
+    ThumbsUp,
+    ThumbsDown,
+    Copy,
+    Pencil,
+    RotateCcw,
+    Check,
+    Paperclip,
+    X,
+    Plus,
+    FileText,
+    Globe,
+    Link2,
+    Building2,
+    Folder,
+    Lightbulb,
+    Table,
+    ScrollText
+  } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   type ChatSession = {
@@ -38,8 +59,7 @@
   };
 
   type StreamEvent = { eventType: string; data: any; sequence: number; createdAt?: string };
-  // eslint-disable-next-line no-unused-vars
-  type DocumentClickHandler = (...args: unknown[]) => void;
+  type IconComponent = typeof FileText;
   type ChatContextEntry = {
     contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary';
     contextId?: string;
@@ -53,6 +73,77 @@
     label: string;
     description?: string;
     toolIds: string[];
+    icon: IconComponent;
+  };
+
+  const getContextIcon = (type: ChatContextEntry['contextType']) => {
+    if (type === 'organization') return Building2;
+    if (type === 'folder') return Folder;
+    if (type === 'usecase') return Lightbulb;
+    if (type === 'executive_summary') return ScrollText;
+    return FileText;
+  };
+
+  const contextNameByKey = new Map<string, string>();
+  const contextNameLoading = new Set<string>();
+
+  const getContextLabelFromStores = (type: ChatContextEntry['contextType'], contextId: string) => {
+    if (!contextId) return '';
+    if (type === 'organization') {
+      const org = $organizationsStore.find((o) => o.id === contextId);
+      return org?.name || '';
+    }
+    if (type === 'folder') {
+      const folder = $foldersStore.find((f) => f.id === contextId);
+      return folder?.name || '';
+    }
+    if (type === 'usecase') {
+      const useCase = $useCasesStore.find((u) => u.id === contextId);
+      return useCase?.data?.name || useCase?.name || '';
+    }
+    if (type === 'executive_summary') {
+      const folder = $foldersStore.find((f) => f.id === contextId);
+      return folder?.name ? `Synthèse: ${folder.name}` : '';
+    }
+    return '';
+  };
+
+  const loadContextName = async (type: ChatContextEntry['contextType'], contextId: string) => {
+    const key = `${type}:${contextId}`;
+    if (!contextId || contextNameByKey.has(key) || contextNameLoading.has(key)) return;
+    contextNameLoading.add(key);
+    try {
+      if (type === 'organization') {
+        const org = await apiGet<{ name?: string }>(`/organizations/${contextId}`);
+        if (org?.name) contextNameByKey.set(key, org.name);
+      } else if (type === 'folder' || type === 'executive_summary') {
+        const folder = await apiGet<{ name?: string }>(`/folders/${contextId}`);
+        if (folder?.name) {
+          contextNameByKey.set(key, type === 'executive_summary' ? `Synthèse: ${folder.name}` : folder.name);
+        }
+      } else if (type === 'usecase') {
+        const useCase = await apiGet<{ data?: { name?: string }; name?: string }>(`/use-cases/${contextId}`);
+        const name = useCase?.data?.name || useCase?.name;
+        if (name) contextNameByKey.set(key, name);
+      }
+    } catch {
+      // ignore
+    } finally {
+      contextNameLoading.delete(key);
+    }
+  };
+
+  const refreshContextLabels = () => {
+    contextEntries = contextEntries.map((c) => {
+      const key = `${c.contextType}:${c.contextId}`;
+      const fromStore = getContextLabelFromStores(c.contextType, c.contextId || '');
+      const cached = contextNameByKey.get(key) || '';
+      const nextLabel = fromStore || cached || c.label;
+      if (!nextLabel || nextLabel === c.contextId) {
+        void loadContextName(c.contextType, c.contextId || '');
+      }
+      return { ...c, label: nextLabel };
+    });
   };
 
   export let sessions: ChatSession[] = [];
@@ -87,9 +178,10 @@
   let showComposerMenu = false;
   let composerMenuRef: HTMLDivElement | null = null;
   let composerMenuButtonRef: HTMLButtonElement | null = null;
-  let handleDocumentClick: DocumentClickHandler | null = null;
-  let multiContextEnabled = true;
+  // eslint-disable-next-line no-unused-vars
+  let handleDocumentClick: ((_: MouseEvent) => void) | null = null;
   let contextEntries: ChatContextEntry[] = [];
+  let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
   let prefsKey = '';
 
@@ -156,59 +248,70 @@
       id: 'documents',
       label: 'Documents',
       description: 'Lister / analyser les documents',
-      toolIds: ['documents']
+      toolIds: ['documents'],
+      icon: FileText
     },
     {
       id: 'web_search',
       label: 'Web search',
       description: 'Rechercher des infos sur le web',
-      toolIds: ['web_search']
+      toolIds: ['web_search'],
+      icon: Globe
     },
     {
       id: 'web_extract',
       label: 'Web extract',
       description: 'Extraire le contenu des URLs',
-      toolIds: ['web_extract']
+      toolIds: ['web_extract'],
+      icon: Link2
     },
     {
       id: 'organization_read',
       label: 'Organisation (lecture)',
-      toolIds: ['organizations_list', 'organization_get']
+      toolIds: ['organizations_list', 'organization_get'],
+      icon: Building2
     },
     {
       id: 'organization_update',
       label: 'Organisation (édition)',
-      toolIds: ['organization_update']
+      toolIds: ['organization_update'],
+      icon: Building2
     },
     {
       id: 'folder_read',
       label: 'Dossier (lecture)',
-      toolIds: ['folders_list', 'folder_get']
+      toolIds: ['folders_list', 'folder_get'],
+      icon: Folder
     },
     {
       id: 'folder_update',
       label: 'Dossier (édition)',
-      toolIds: ['folder_update']
+      toolIds: ['folder_update'],
+      icon: Folder
     },
     {
       id: 'usecase_read',
       label: "Cas d'usage (lecture)",
-      toolIds: ['usecases_list', 'usecase_get', 'read_usecase']
+      toolIds: ['usecases_list', 'usecase_get', 'read_usecase'],
+      icon: Lightbulb
     },
     {
       id: 'usecase_update',
       label: "Cas d'usage (édition)",
-      toolIds: ['usecase_update', 'update_usecase_field']
+      toolIds: ['usecase_update', 'update_usecase_field'],
+      icon: Lightbulb
     },
     {
       id: 'matrix',
       label: 'Matrice (lecture/édition)',
-      toolIds: ['matrix_get', 'matrix_update']
+      toolIds: ['matrix_get', 'matrix_update'],
+      icon: Table
     },
     {
       id: 'executive_summary',
       label: 'Synthèse exécutive',
-      toolIds: ['executive_summary_get', 'executive_summary_update']
+      toolIds: ['executive_summary_get', 'executive_summary_update'],
+      icon: ScrollText
     }
   ];
 
@@ -228,13 +331,9 @@
       const raw = localStorage.getItem(key);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
-        multiContextEnabled?: boolean;
         contexts?: ChatContextEntry[];
         toolEnabledById?: Record<string, boolean>;
       };
-      if (typeof parsed.multiContextEnabled === 'boolean') {
-        multiContextEnabled = parsed.multiContextEnabled;
-      }
       if (Array.isArray(parsed.contexts)) {
         contextEntries = parsed.contexts.filter((c) => !!c.contextType);
       }
@@ -249,7 +348,6 @@
   const savePrefs = () => {
     if (!prefsKey || typeof localStorage === 'undefined') return;
     const payload = {
-      multiContextEnabled,
       contexts: contextEntries,
       toolEnabledById
     };
@@ -273,21 +371,10 @@
     const contextId = context.primaryContextId || '';
     const contextType = context.primaryContextType as ChatContextEntry['contextType'];
     if (!contextId) return;
-    const label = `${contextType}:${contextId}`;
+    const label = getContextLabelFromStores(contextType, contextId)
+      || contextNameByKey.get(`${contextType}:${contextId}`)
+      || contextId;
     const now = Date.now();
-    if (!multiContextEnabled) {
-      contextEntries = [
-        {
-          contextType,
-          contextId,
-          label,
-          active: true,
-          lastUsedAt: now
-        }
-      ];
-      savePrefs();
-      return;
-    }
     const idx = contextEntries.findIndex((c) => c.contextType === contextType && c.contextId === contextId);
     if (idx === -1) {
       contextEntries = [
@@ -297,14 +384,16 @@
     } else {
       const next = [...contextEntries];
       const current = next[idx];
-      next[idx] = current.active ? { ...current, lastUsedAt: now } : current;
+      next[idx] = { ...current, label, active: true, lastUsedAt: now };
       contextEntries = next;
+    }
+    if (label === contextId) {
+      void loadContextName(contextType, contextId);
     }
     savePrefs();
   };
 
-  const getSortedContexts = () =>
-    [...contextEntries].sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+  $: sortedContexts = [...contextEntries];
 
   const getActiveContexts = () =>
     contextEntries
@@ -410,6 +499,7 @@
     const file = inputEl.files?.[0];
     inputEl.value = '';
     if (!file) return;
+    showComposerMenu = false;
 
     sessionDocsUploading = true;
     sessionDocsError = null;
@@ -836,7 +926,9 @@
       if (composerMenuButtonRef?.contains(target)) return;
       showComposerMenu = false;
     };
-    document.addEventListener('click', handleDocumentClick);
+    if (handleDocumentClick) {
+      document.addEventListener('click', handleDocumentClick);
+    }
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
       if (ev.type !== 'job_update' || !('jobId' in ev)) return;
@@ -864,17 +956,23 @@
   $: if (sessionId && prefsKey !== getPrefsKey(sessionId)) {
     loadPrefs(sessionId);
     ensureDefaultToolToggles();
+    refreshContextLabels();
   }
 
   $: if (!sessionId && prefsKey !== getPrefsKey(null)) {
     loadPrefs(null);
     ensureDefaultToolToggles();
+    refreshContextLabels();
   }
 
   let lastPath = '';
   $: if ($page?.url?.pathname && $page.url.pathname !== lastPath) {
     lastPath = $page.url.pathname;
     updateContextFromRoute();
+  }
+
+  $: if ($organizationsStore || $foldersStore || $useCasesStore) {
+    refreshContextLabels();
   }
 
   onDestroy(() => {
@@ -884,7 +982,9 @@
     sessionDocsSseKey = '';
     if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
     sessionTitlesSseKey = '';
-    if (handleDocumentClick) document.removeEventListener('click', handleDocumentClick);
+    if (handleDocumentClick) {
+      document.removeEventListener('click', handleDocumentClick);
+    }
   });
 </script>
 
@@ -1063,36 +1163,42 @@
           class="absolute bottom-12 left-0 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3"
           bind:this={composerMenuRef}
         >
-          <div class="flex items-center justify-between">
-            <div class="text-xs font-semibold text-slate-600">Contexte</div>
-            <label class="flex items-center gap-2 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                class="accent-slate-700"
-                checked={multiContextEnabled}
-                on:change={() => {
-                  multiContextEnabled = !multiContextEnabled;
-                  updateContextFromRoute();
-                  savePrefs();
-                }}
-              />
-              Multi‑contexte
-            </label>
-          </div>
+          <label
+            class={"flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 " +
+              (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
+            aria-label="Ajouter un fichier"
+            title="Ajouter un fichier"
+          >
+            <input
+              class="hidden"
+              type="file"
+              on:change={onPickSessionDoc}
+              disabled={sessionDocsUploading}
+              accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
+            />
+            <Paperclip class="w-4 h-4" />
+            <span>Ajouter un fichier</span>
+          </label>
+          <div class="border-t border-slate-100 pt-2"></div>
+          <div class="text-xs font-semibold text-slate-600">Contexte(s)</div>
           {#if contextEntries.length === 0}
             <div class="text-[11px] text-slate-500">Aucun contexte actif.</div>
           {:else}
             <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
-              {#each getSortedContexts() as c (c.contextType + ':' + c.contextId)}
-                <label class="flex items-center gap-2 text-[11px] text-slate-700">
-                  <input
-                    type="checkbox"
-                    class="accent-slate-700"
-                    checked={c.active}
-                    on:change={() => toggleContextActive(c)}
+              {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
+                <button
+                  class={`flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] hover:bg-slate-50 ${
+                    c.active ? 'text-slate-900' : 'text-slate-400'
+                  }`}
+                  type="button"
+                  on:click={() => toggleContextActive(c)}
+                >
+                  <svelte:component
+                    this={getContextIcon(c.contextType)}
+                    class="w-4 h-4"
                   />
-                  <span class="truncate">{c.label}</span>
-                </label>
+                  <span class="truncate max-w-[220px]">{c.label}</span>
+                </button>
               {/each}
             </div>
           {/if}
@@ -1101,35 +1207,22 @@
             <div class="text-xs font-semibold text-slate-600 mb-1">Outils</div>
             <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
               {#each TOOL_TOGGLES as t (t.id)}
-                <label class="flex items-center gap-2 text-[11px] text-slate-700">
-                  <input
-                    type="checkbox"
-                    class="accent-slate-700"
-                    checked={toolEnabledById[t.id] !== false}
-                    on:change={() => toggleTool(t.id)}
+                <button
+                  class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                  type="button"
+                  on:click={() => toggleTool(t.id)}
+                >
+                  <svelte:component
+                    this={t.icon}
+                    class={`w-4 h-4 ${toolEnabledById[t.id] !== false ? 'text-slate-900' : 'text-slate-400'}`}
                   />
                   <span class="truncate">{t.label}</span>
-                </label>
+                </button>
               {/each}
             </div>
           </div>
         </div>
       {/if}
-      <label
-        class={"rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50 " +
-          (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
-        aria-label="Joindre un document"
-        title="Joindre un document"
-      >
-        <input
-          class="hidden"
-          type="file"
-          on:change={onPickSessionDoc}
-          disabled={sessionDocsUploading}
-          accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
-        />
-        <Paperclip class="w-4 h-4" />
-      </label>
       <div
         class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
         class:composer-single-line={!composerIsMultiline}
