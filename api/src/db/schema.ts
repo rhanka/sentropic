@@ -465,3 +465,35 @@ export const objectLocks = pgTable('object_locks', {
 }));
 
 export type ObjectLockRow = typeof objectLocks.$inferSelect;
+
+// Lot 4: Comments (one-level replies, workspace-scoped)
+export const comments = pgTable('comments', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  contextType: text('context_type').notNull(), // 'organization' | 'folder' | 'usecase' | ...
+  contextId: text('context_id').notNull(),
+  sectionKey: text('section_key'), // optional sub-section key (e.g., 'description', 'matrix.cell.x.y')
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('open'), // 'open' | 'closed'
+  parentCommentId: text('parent_comment_id'),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  parentCommentFk: foreignKey({
+    columns: [table.parentCommentId],
+    foreignColumns: [table.id],
+  }).onDelete('cascade'),
+  workspaceIdIdx: index('comments_workspace_id_idx').on(table.workspaceId),
+  contextIdx: index('comments_context_idx').on(table.contextType, table.contextId),
+  parentCommentIdx: index('comments_parent_comment_id_idx').on(table.parentCommentId),
+  assignedToIdx: index('comments_assigned_to_idx').on(table.assignedTo),
+  statusIdx: index('comments_status_idx').on(table.status),
+}));
+
+export type CommentRow = typeof comments.$inferSelect;

@@ -69,12 +69,12 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
                 - [x] If `target_workspace_id` exists, merge into it; if unknown or not admin-owned, refuse.
 
 - [ ] **Lot 1 — Data model (single change)**
-    - [ ] Finalize the `comments` table fields and indexes (one-level replies, workspace scope).
-    - [ ] Update `api/src/db/schema.ts`.
-    - [ ] Add exactly one migration in `api/drizzle/`.
-    - [ ] Update `spec/DATA_MODEL.md` right after migration.
-    - [ ] Confirm no further schema changes will be needed.
-    - [ ] `make typecheck` + `make lint`
+    - [x] Finalize the `comments` table fields and indexes (one-level replies, workspace scope).
+    - [x] Update `api/src/db/schema.ts`.
+    - [x] Add exactly one migration in `api/drizzle/`.
+    - [x] Update `spec/DATA_MODEL.md` right after migration.
+    - [x] Confirm no further schema changes will be needed.
+    - [x] `make typecheck` + `make lint`
     - [ ] UAT lot 1 (user-run)
         - [ ] Verify no user-facing changes yet (schema only).
 

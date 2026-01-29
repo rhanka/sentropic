@@ -15,10 +15,14 @@ erDiagram
     workspaces ||--o{ folders : "workspace_id"
     workspaces ||--o{ use_cases : "workspace_id"
     workspaces ||--o{ job_queue : "workspace_id"
+    workspaces ||--o{ comments : "workspace_id"
 
     organizations ||--o{ folders : "organization_id (optional)"
     folders ||--o{ use_cases : "folder_id"
     organizations ||--o{ use_cases : "organization_id (optional)"
+    users ||--o{ comments : "created_by"
+    users ||--o{ comments : "assigned_to (optional)"
+    comments ||--o{ comments : "parent_comment_id (optional)"
 
     workspaces {
         text id PK
@@ -111,6 +115,21 @@ erDiagram
         text unlock_request_message
         timestamp updated_at
     }
+
+    comments {
+        text id PK
+        text workspace_id FK
+        text context_type
+        text context_id
+        text section_key
+        text created_by FK
+        text assigned_to "FK users.id (nullable)"
+        text status
+        text parent_comment_id "FK comments.id (nullable)"
+        text content
+        timestamp created_at
+        timestamp updated_at
+    }
 ```
 
 Notes :
@@ -119,6 +138,7 @@ Notes :
 - `workspaces.owner_user_id` est **nullable** (plus de contrainte unique).
 - `workspaces.hidden_at` indique la visibilité (workspaces cachés).
 - `workspace_memberships` est la source de vérité des rôles (`viewer` | `editor` | `admin`).
+- `comments` stocke les commentaires avec réponses à un seul niveau, scoppés par workspace.
 
 ## Prompts (état actuel vs cible)
 
