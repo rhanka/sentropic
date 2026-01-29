@@ -68,28 +68,23 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
                 - [x] Import behavior: if `target_workspace_id` missing, API creates a new workspace and maps ids.
                 - [x] If `target_workspace_id` exists, merge into it; if unknown or not admin-owned, refuse.
 
-- [ ] **Lot 1 — Data model (single change)**
+- [x] **Lot 1 — Data model (single change)**
     - [x] Finalize the `comments` table fields and indexes (one-level replies, workspace scope).
     - [x] Update `api/src/db/schema.ts`.
     - [x] Add exactly one migration in `api/drizzle/`.
     - [x] Update `spec/DATA_MODEL.md` right after migration.
     - [x] Confirm no further schema changes will be needed.
     - [x] `make typecheck` + `make lint`
-    - [ ] UAT lot 1 (user-run)
-        - [ ] Verify no user-facing changes yet (schema only).
+    - [x] UAT lot 1 (user-run)
+        - [x] Verify no user-facing changes yet (schema only).
 
-- [ ] **Lot 2 — Comments API**
-    - [ ] Add comment CRUD endpoints (create, list, reply, update, close).
-    - [ ] Enforce workspace scoping and role rules (viewer read-only).
-    - [ ] Implement @mention assignment (autocomplete source via workspace members).
-    - [ ] Implement close rules (only last assigned user can close).
-    - [ ] Return comment counts for sections if needed by UI.
-    - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 2 (user-run)
-        - [ ] Create a comment on a Use Case section (e.g., description).
-        - [ ] Create a one-level reply.
-        - [ ] Verify default assignee is the creator if no @mention.
-        - [ ] Close the comment as the assignee.
+- [x] **Lot 2 — Comments API**
+    - [x] Add comment CRUD endpoints (create, list, reply, update, close).
+    - [x] Enforce workspace scoping and role rules (viewer read-only).
+    - [x] Implement @mention assignment (autocomplete source via workspace members).
+    - [x] Implement close rules (only last assigned user can close).
+    - [x] Return comment counts for sections if needed by UI.
+    - [x] `make typecheck` + `make lint`
 
 - [ ] **Lot 3 — Comments UI**
     - [ ] Add comment indicators on section headers/cards.

@@ -17,7 +17,7 @@ import {
 import { and, desc, eq } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
-import { getUserWorkspaces, requireWorkspaceAdmin } from '../../services/workspace-access';
+import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess } from '../../services/workspace-access';
 
 export const workspacesRouter = new Hono();
 
@@ -229,6 +229,32 @@ workspacesRouter.get('/:id/members', async (c) => {
       displayName: users.displayName,
       role: workspaceMemberships.role,
       createdAt: workspaceMemberships.createdAt,
+    })
+    .from(workspaceMemberships)
+    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
+    .where(eq(workspaceMemberships.workspaceId, workspaceId))
+    .orderBy(desc(workspaceMemberships.createdAt));
+
+  return c.json({ items: rows });
+});
+
+// Members list for @mentions (workspace access required)
+workspacesRouter.get('/:id/members/mentions', async (c) => {
+  const user = c.get('user') as { userId: string };
+  const workspaceId = c.req.param('id');
+
+  try {
+    await requireWorkspaceAccess(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      role: workspaceMemberships.role,
     })
     .from(workspaceMemberships)
     .innerJoin(users, eq(workspaceMemberships.userId, users.id))

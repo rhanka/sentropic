@@ -16,6 +16,7 @@ import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { locksRouter } from './locks';
+import { commentsRouter } from './comments';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -60,6 +61,10 @@ apiRouter.route('/chat', chatRouter);
 // Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
 apiRouter.use('/documents/*', requireAuth);
 apiRouter.route('/documents', documentsRouter);
+
+// Comments routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
+apiRouter.use('/comments/*', requireAuth);
+apiRouter.route('/comments', commentsRouter);
 
 // Admin routes (require admin_org or admin_app)
 apiRouter.use('/settings/*', requireAuth, requireAdmin);
