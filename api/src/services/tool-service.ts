@@ -1090,7 +1090,7 @@ export class ToolService {
 
   async listContextDocuments(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
   }): Promise<{
     items: Array<{
@@ -1132,7 +1132,7 @@ export class ToolService {
 
   async getDocumentSummary(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
     documentId: string;
   }): Promise<{
@@ -1149,6 +1149,9 @@ export class ToolService {
     if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
       throw new Error('Security: document does not match context');
     }
+    if (row.status !== 'ready') {
+      throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
+    }
     return {
       documentId: row.id,
       documentStatus: row.status,
@@ -1158,7 +1161,7 @@ export class ToolService {
 
   async getDocumentContent(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
     documentId: string;
     maxChars?: number | null;
@@ -1200,28 +1203,59 @@ export class ToolService {
       return v && v.trim() ? v : null;
     })();
 
-    // If the document is not ready yet, do not attempt to download/extract or regenerate anything here.
+    // If the document is not ready yet, allow get_content only for short docs.
     // Tools must remain read-only: job `document_summary` is the single writer for summaries.
     if (row.status !== 'ready') {
-      const extracted = this.asRecord(this.asRecord(row.data).extracted);
-      const isLong = storedWords != null && storedWords > WORDS_FULL_CONTENT_LIMIT;
-          return {
-            documentId: row.id,
-            documentStatus: row.status,
-            filename: row.filename,
-            mimeType: row.mimeType,
-            pages: typeof extracted.pages === 'number' ? extracted.pages : null,
-            title: typeof extracted.title === 'string' ? extracted.title : null,
-        content:
-          `Contenu indisponible: document en cours de traitement (status="${row.status}"). ` +
-          `Réessayer une fois le statut "ready".`,
-        clipped: true,
-        contentMode: isLong ? 'detailed_summary' : 'full_text',
-        words: storedWords ?? 0,
-        contentWords: isLong ? 0 : undefined,
+      const bucket = getDocumentsBucketName();
+      const bytes = await getObjectBytes({ bucket, key: row.storageKey });
+      const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+      const full = (extracted.text || '').trim();
+      const words = this.countWords(full);
+      const isLong = words > WORDS_FULL_CONTENT_LIMIT;
+
+      if (isLong) {
+        return {
+          documentId: row.id,
+          documentStatus: row.status,
+          filename: row.filename,
+          mimeType: row.mimeType,
+          pages: typeof extracted.metadata?.pages === 'number' ? extracted.metadata.pages : null,
+          title: typeof extracted.metadata?.title === 'string' ? extracted.metadata.title : null,
+          content:
+            `Contenu indisponible: document long en cours de traitement (status="${row.status}"). ` +
+            `Réessayer une fois le statut "ready".`,
+          clipped: true,
+          contentMode: 'detailed_summary',
+          words,
+          contentWords: 0,
+          summary: this.getDataString(row.data, 'summary'),
+        };
+      }
+
+      let content = full;
+      let clipped = false;
+      const maxChars = typeof opts.maxChars === 'number' ? opts.maxChars : null;
+      if (typeof maxChars === 'number') {
+        const max = Math.max(1000, Math.min(50_000, Number.isFinite(maxChars) ? maxChars : 30_000));
+        clipped = content.length > max;
+        content = clipped ? content.slice(0, max) + '\n…(tronqué)…' : content;
+      }
+
+      return {
+        documentId: row.id,
+        documentStatus: row.status,
+        filename: row.filename,
+        mimeType: row.mimeType,
+        pages: typeof extracted.metadata?.pages === 'number' ? extracted.metadata.pages : null,
+        title: typeof extracted.metadata?.title === 'string' ? extracted.metadata.title : null,
+        content,
+        clipped,
+        contentMode: 'full_text',
+        words,
+        contentWords: this.countWords(content),
         summary: this.getDataString(row.data, 'summary'),
-          };
-        }
+      };
+    }
 
     // Fast-path: if we already have a persisted detailed summary and a word count showing it's a big doc,
     // return it without downloading/extracting the file again.
@@ -1296,7 +1330,7 @@ export class ToolService {
 
   async analyzeDocument(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase';
+    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
     contextId: string;
     documentId: string;
     prompt: string;
@@ -1330,6 +1364,9 @@ export class ToolService {
     if (!row) throw new Error('Document not found');
     if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
       throw new Error('Security: document does not match context');
+    }
+    if (row.status !== 'ready') {
+      throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
     }
 
     const bucket = getDocumentsBucketName();

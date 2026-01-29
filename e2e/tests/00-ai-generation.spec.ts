@@ -99,12 +99,24 @@ test.describe.serial('Génération IA', () => {
     const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]').first();
     await expect(aiButton).toBeEnabled({ timeout: 30_000 });
 
+    const draftResPromise = page
+      .waitForResponse((res) => {
+        const req = res.request();
+        return req.method() === 'POST' && /\/api\/v1\/organizations\/draft/.test(res.url());
+      }, { timeout: 15_000 })
+      .catch(() => null);
+
     const enrichResPromise = page.waitForResponse((res) => {
       const req = res.request();
       return req.method() === 'POST' && /\/api\/v1\/organizations\/[^/]+\/enrich/.test(res.url());
-    }, { timeout: 30_000 });
+    }, { timeout: 60_000 });
 
     await aiButton.click();
+    const draftRes = await draftResPromise;
+    if (draftRes && !draftRes.ok()) {
+      const body = await draftRes.text().catch(() => '');
+      throw new Error(`Erreur creation brouillon organisation: ${draftRes.status()} ${body.slice(0, 200)}`);
+    }
     const enrichRes = await enrichResPromise;
     const enrichJson = await enrichRes.json().catch(() => null);
     const enrichJobId = String((enrichJson as any)?.jobId ?? '').trim();
@@ -316,23 +328,27 @@ test.describe.serial('Génération IA', () => {
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     const sendChatAndWaitApi = async (message: string) => {
-      await composer.fill(message);
+      const editable = composer.locator('[contenteditable="true"]');
+      await editable.click();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type(message);
       await Promise.all([
         page.waitForResponse((res) => {
           const req = res.request();
           return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
         }, { timeout: 30_000 }),
-        composer.press('Enter')
+        page.keyboard.press('Enter')
       ]);
     };
     
     const message1 = 'Quel est le nom de ce cas d\'usage ?';
     await sendChatAndWaitApi(message1);
     
-    const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
+    const userMessage1 = page.locator('.userMarkdown').filter({ hasText: message1 }).first();
     await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // On cherche le dernier message assistant (div.flex.justify-start)
@@ -345,7 +361,7 @@ test.describe.serial('Génération IA', () => {
     const message2 = 'Ajoute "Test E2E" au début de la description';
     await sendChatAndWaitApi(message2);
     
-    const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
+    const userMessage2 = page.locator('.userMarkdown').filter({ hasText: message2 }).first();
     await expect(userMessage2).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call update_usecase_field)
@@ -363,7 +379,7 @@ test.describe.serial('Génération IA', () => {
     const message3 = 'Analyse les références en détail';
     await sendChatAndWaitApi(message3);
     
-    const userMessage3 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message3 }).first();
+    const userMessage3 = page.locator('.userMarkdown').filter({ hasText: message3 }).first();
     await expect(userMessage3).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (avec tool call web_extract)

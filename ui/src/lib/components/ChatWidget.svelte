@@ -185,8 +185,7 @@
 
   const formatSessionLabel = (s: ChatSession) => {
     if (s.title) return s.title;
-    if (s.primaryContextType && s.primaryContextId) return `${s.primaryContextType}:${s.primaryContextId}`;
-    return `Session ${s.id.slice(0, 6)}`;
+    return `Conversation ${s.id.slice(0, 6)}`;
   };
 
   $: jobsTotal = $queueStore.jobs.length;

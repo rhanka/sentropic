@@ -430,7 +430,7 @@
       {organizationId}
       {organizationName}
       isEditing={false}
-      locked={isLockedByOther}
+      locked={isLockedByOther || isReadOnly}
     >
       <svelte:fragment slot="actions-view">
             <LockPresenceBadge

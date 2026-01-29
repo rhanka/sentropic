@@ -2,15 +2,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
-import { contextDocuments, contextModificationHistory, jobQueue } from '../../db/schema';
+import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
-import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceEditor } from '../../services/workspace-access';
 
 export const documentsRouter = new Hono();
 
-const contextTypeSchema = z.enum(['organization', 'folder', 'usecase']);
+const contextTypeSchema = z.enum(['organization', 'folder', 'usecase', 'chat_session']);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -28,8 +29,17 @@ const listQuerySchema = z.object({
   workspace_id: z.string().optional(),
 });
 
+async function ensureChatSessionAccess(opts: { sessionId: string; userId: string }): Promise<boolean> {
+  const [row] = await db
+    .select({ id: chatSessions.id })
+    .from(chatSessions)
+    .where(and(eq(chatSessions.id, opts.sessionId), eq(chatSessions.userId, opts.userId)))
+    .limit(1);
+  return !!row;
+}
+
 documentsRouter.get('/', async (c) => {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   const parsed = listQuerySchema.safeParse({
     context_type: c.req.query('context_type'),
     context_id: c.req.query('context_id'),
@@ -38,6 +48,10 @@ documentsRouter.get('/', async (c) => {
   if (!parsed.success) return c.json({ message: 'Invalid query' }, 400);
 
   const targetWorkspaceId = user.workspaceId;
+  if (parsed.data.context_type === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: parsed.data.context_id, userId: user.userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  }
 
   const rows = await db
     .select()
@@ -109,7 +123,7 @@ documentsRouter.get('/', async (c) => {
 });
 
 documentsRouter.get('/:id', async (c) => {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   const targetWorkspaceId = user.workspaceId;
 
   const id = c.req.param('id');
@@ -120,6 +134,10 @@ documentsRouter.get('/:id', async (c) => {
     .limit(1);
 
   if (!doc) return c.json({ message: 'Not found' }, 404);
+  if (doc.contextType === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: doc.contextId, userId: user.userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  }
 
   return c.json({
     id: doc.id,
@@ -139,7 +157,7 @@ documentsRouter.get('/:id', async (c) => {
 });
 
 documentsRouter.get('/:id/content', async (c) => {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+  const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   const targetWorkspaceId = user.workspaceId;
 
   const id = c.req.param('id');
@@ -149,6 +167,10 @@ documentsRouter.get('/:id/content', async (c) => {
     .where(and(eq(contextDocuments.id, id), eq(contextDocuments.workspaceId, targetWorkspaceId)))
     .limit(1);
   if (!doc) return c.json({ message: 'Not found' }, 404);
+  if (doc.contextType === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: doc.contextId, userId: user.userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  }
 
   const bucket = getDocumentsBucketName();
   const stream = await getObjectBodyStream({ bucket, key: doc.storageKey });
@@ -158,8 +180,8 @@ documentsRouter.get('/:id/content', async (c) => {
   return c.newResponse(stream, 200);
 });
 
-documentsRouter.delete('/:id', requireWorkspaceEditorRole(), async (c) => {
-  const user = c.get('user') as { role?: string; workspaceId: string };
+documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   // Delete is write-scoped: only within user's own workspace for now.
   const workspaceId = user.workspaceId;
 
@@ -170,6 +192,16 @@ documentsRouter.delete('/:id', requireWorkspaceEditorRole(), async (c) => {
     .where(and(eq(contextDocuments.id, id), eq(contextDocuments.workspaceId, workspaceId)))
     .limit(1);
   if (!doc) return c.json({ message: 'Not found' }, 404);
+  if (doc.contextType === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: doc.contextId, userId: user.userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(user.userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
+  }
 
   // Delete object (best-effort) then DB record.
   try {
@@ -220,8 +252,8 @@ async function getNextModificationSequence(contextType: string, contextId: strin
   return maxSequence + 1;
 }
 
-documentsRouter.post('/', requireWorkspaceEditorRole(), async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
 
   const form = await c.req.raw.formData();
   const rawContextType = form.get('context_type');
@@ -232,6 +264,16 @@ documentsRouter.post('/', requireWorkspaceEditorRole(), async (c) => {
     context_id: typeof rawContextId === 'string' ? rawContextId : '',
   });
   if (!parsed.success) return c.json({ message: 'Invalid form fields' }, 400);
+  if (parsed.data.context_type === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: parsed.data.context_id, userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
+  }
 
   const file = form.get('file');
 

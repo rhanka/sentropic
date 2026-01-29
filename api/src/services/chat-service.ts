@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, sql, inArray, isNotNull } from 'drizzle-orm';
-import { db } from '../db/client';
-import { ADMIN_WORKSPACE_ID, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
+import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm';
+import { db, pool } from '../db/client';
+import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAIResponseStream, type StreamEventType } from './openai';
+import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
@@ -60,10 +60,32 @@ export type CreateChatMessageInput = {
   model?: string | null;
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
+  contexts?: Array<{ contextType: ChatContextType; contextId: string }>;
   sessionTitle?: string | null;
 };
 
 export class ChatService {
+  private normalizeMessageContexts(
+    input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
+  ): Array<{ contextType: ChatContextType; contextId: string }> {
+    const normalized: Array<{ contextType: ChatContextType; contextId: string }> = [];
+    const seen = new Set<string>();
+    if (Array.isArray(input.contexts)) {
+      for (const c of input.contexts) {
+        if (!c || !isChatContextType(c.contextType) || typeof c.contextId !== 'string' || !c.contextId) continue;
+        const key = `${c.contextType}:${c.contextId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push({ contextType: c.contextType, contextId: c.contextId });
+      }
+    }
+    if (normalized.length === 0 && input.primaryContextType && input.primaryContextId) {
+      if (isChatContextType(input.primaryContextType) && typeof input.primaryContextId === 'string') {
+        normalized.push({ contextType: input.primaryContextType, contextId: input.primaryContextId });
+      }
+    }
+    return normalized;
+  }
   private safeTruncate(text: string, maxLen: number): string {
     if (!text) return '';
     if (text.length <= maxLen) return text;
@@ -93,12 +115,68 @@ export class ChatService {
     return this.safeTruncate(parts.join('\n\n'), maxTotal);
   }
 
+  private getPromptTemplate(id: string): string {
+    return defaultPrompts.find((p) => p.id === id)?.content || '';
+  }
+
+  private renderTemplate(template: string, vars: Record<string, string>): string {
+    return Object.entries(vars).reduce((acc, [key, value]) => {
+      const token = `{{${key}}}`;
+      return acc.split(token).join(value ?? '');
+    }, template);
+  }
+
+  private formatContextLabel(type: ChatContextType | null | undefined, id: string | null | undefined): string {
+    const t = (type ?? '').trim();
+    const v = (id ?? '').trim();
+    if (!t || !v) return 'Aucun contexte';
+    return `${t}:${v}`;
+  }
+
+  private async generateSessionTitle(opts: {
+    primaryContextType?: ChatContextType | null;
+    primaryContextId?: string | null;
+    lastUserMessage: string;
+  }): Promise<string | null> {
+    const template = this.getPromptTemplate('chat_session_title');
+    if (!template) return null;
+    const prompt = this.renderTemplate(template, {
+      primary_context_label: this.formatContextLabel(opts.primaryContextType, opts.primaryContextId),
+      last_user_message: (opts.lastUserMessage || '').trim()
+    });
+    try {
+      const res = await callOpenAI({
+        model: 'gpt-4.1-nano',
+        messages: [{ role: 'system', content: prompt }],
+        maxOutputTokens: 32
+      });
+      const content = res.choices?.[0]?.message?.content ?? '';
+      const cleaned = String(content).trim().replace(/^["'`]+|["'`]+$/g, '');
+      if (!cleaned) return null;
+      return cleaned.slice(0, 80);
+    } catch {
+      return null;
+    }
+  }
+
+  private async notifyWorkspaceEvent(workspaceId: string, data: Record<string, unknown> = {}): Promise<void> {
+    const escape = (payload: Record<string, unknown>) => JSON.stringify(payload).replace(/'/g, "''");
+    const client = await pool.connect();
+    try {
+      const payload = { workspace_id: workspaceId, data };
+      await client.query(`NOTIFY workspace_events, '${escape(payload)}'`);
+    } finally {
+      client.release();
+    }
+  }
+
   async getMessageForUser(messageId: string, userId: string) {
     const [row] = await db
       .select({
         id: chatMessages.id,
         sessionId: chatMessages.sessionId,
-        role: chatMessages.role
+        role: chatMessages.role,
+        sequence: chatMessages.sequence
       })
       .from(chatMessages)
       .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
@@ -148,10 +226,129 @@ export class ChatService {
     if (!session) throw new Error('Session not found');
 
     return await db
-      .select()
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        contexts: chatMessages.contexts,
+        toolCalls: chatMessages.toolCalls,
+        toolCallId: chatMessages.toolCallId,
+        reasoning: chatMessages.reasoning,
+        model: chatMessages.model,
+        promptId: chatMessages.promptId,
+        promptVersionId: chatMessages.promptVersionId,
+        sequence: chatMessages.sequence,
+        createdAt: chatMessages.createdAt,
+        feedbackVote: chatMessageFeedback.vote
+      })
       .from(chatMessages)
+      .leftJoin(
+        chatMessageFeedback,
+        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
+      )
       .where(eq(chatMessages.sessionId, sessionId))
       .orderBy(asc(chatMessages.sequence));
+  }
+
+  async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
+
+    if (options.vote === 'clear') {
+      await db
+        .delete(chatMessageFeedback)
+        .where(and(eq(chatMessageFeedback.messageId, options.messageId), eq(chatMessageFeedback.userId, options.userId)));
+      return { vote: null };
+    }
+
+    const voteValue = options.vote === 'up' ? 1 : -1;
+    const now = new Date();
+    await db
+      .insert(chatMessageFeedback)
+      .values({
+        id: createId(),
+        messageId: options.messageId,
+        userId: options.userId,
+        vote: voteValue,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: [chatMessageFeedback.messageId, chatMessageFeedback.userId],
+        set: { vote: voteValue, updatedAt: now }
+      });
+
+    return { vote: voteValue };
+  }
+
+  async updateUserMessageContent(options: { messageId: string; userId: string; content: string }) {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be edited');
+
+    await db
+      .update(chatMessages)
+      .set({ content: options.content })
+      .where(eq(chatMessages.id, options.messageId));
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+
+    return { messageId: options.messageId };
+  }
+
+  async retryUserMessage(options: { messageId: string; userId: string }): Promise<{
+    sessionId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+    streamId: string;
+    model: string;
+  }> {
+    const msg = await this.getMessageForUser(options.messageId, options.userId);
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be retried');
+
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = aiSettings.defaultModel;
+
+    await db
+      .delete(chatMessages)
+      .where(and(eq(chatMessages.sessionId, msg.sessionId), gt(chatMessages.sequence, msg.sequence)));
+
+    const assistantMessageId = createId();
+    const assistantSeq = msg.sequence + 1;
+
+    await db.insert(chatMessages).values({
+      id: assistantMessageId,
+      sessionId: msg.sessionId,
+      role: 'assistant',
+      content: null,
+      toolCalls: null,
+      toolCallId: null,
+      reasoning: null,
+      model: selectedModel,
+      promptId: null,
+      promptVersionId: null,
+      sequence: assistantSeq,
+      createdAt: new Date()
+    });
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+
+    return {
+      sessionId: msg.sessionId,
+      userMessageId: options.messageId,
+      assistantMessageId,
+      streamId: assistantMessageId,
+      model: selectedModel
+    };
   }
 
   async listStreamEventsForSession(options: {
@@ -247,6 +444,23 @@ export class ChatService {
             primaryContextId: input.primaryContextId ?? null,
             title: input.sessionTitle ?? null
           })).sessionId;
+    const nextContextType = isChatContextType(input.primaryContextType) ? input.primaryContextType : null;
+    const nextContextId = typeof input.primaryContextId === 'string' ? input.primaryContextId.trim() : '';
+
+    if (nextContextType && nextContextId) {
+      const shouldUpdateContext =
+        !existing || existing.primaryContextType !== nextContextType || existing.primaryContextId !== nextContextId;
+      if (shouldUpdateContext) {
+        await db
+          .update(chatSessions)
+          .set({
+            primaryContextType: nextContextType,
+            primaryContextId: nextContextId,
+            updatedAt: new Date()
+          })
+          .where(eq(chatSessions.id, sessionId));
+      }
+    }
 
     // Modèle (default settings si non fourni)
     const aiSettings = await settingsService.getAISettings();
@@ -257,6 +471,8 @@ export class ChatService {
 
     const userMessageId = createId();
     const assistantMessageId = createId();
+
+    const messageContexts = this.normalizeMessageContexts(input);
 
     await db.insert(chatMessages).values([
       {
@@ -270,6 +486,7 @@ export class ChatService {
         model: null,
         promptId: null,
         promptVersionId: null,
+        contexts: messageContexts.length > 0 ? messageContexts : null,
         sequence: userSeq,
         createdAt: new Date()
       },
@@ -284,6 +501,7 @@ export class ChatService {
         model: selectedModel,
         promptId: null,
         promptVersionId: null,
+        contexts: null,
         sequence: assistantSeq,
         createdAt: new Date()
       }
@@ -308,50 +526,63 @@ export class ChatService {
     primaryContextType: ChatContextType | null | undefined;
     primaryContextId: string | null | undefined;
     workspaceId: string;
-  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>> {
-    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
-    const type = opts.primaryContextType ?? null;
-    const id = (opts.primaryContextId ?? '').trim();
-    if (!type || !id) return out;
-
-    if (type === 'organization' || type === 'usecase') {
-      out.push({ contextType: type, contextId: id });
-      return out;
+    sessionId: string;
+    extraContexts?: Array<{ contextType: ChatContextType; contextId: string }>;
+  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }>> {
+    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }> = [];
+    const pushUnique = (contextType: 'organization' | 'folder' | 'usecase' | 'chat_session', contextId: string) => {
+      if (!contextId) return;
+      const key = `${contextType}:${contextId}`;
+      if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) return;
+      out.push({ contextType, contextId });
+    };
+    if (opts.sessionId) {
+      pushUnique('chat_session', opts.sessionId);
     }
-
-    if (type === 'folder') {
-      // Folder view can use folder docs + organization docs (if folder is linked to an org).
-      out.push({ contextType: 'folder', contextId: id });
-      try {
-        const [row] = await db
-          .select({ organizationId: folders.organizationId })
-          .from(folders)
-          .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
-          .limit(1);
-        const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
-        if (orgId) out.push({ contextType: 'organization', contextId: orgId });
-      } catch {
-        // ignore (no org)
+    const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
+      const id = (idRaw ?? '').trim();
+      if (!type || !id) return;
+      if (type === 'organization' || type === 'usecase') {
+        pushUnique(type, id);
+        return;
       }
-      return out;
-    }
-
-    if (type === 'executive_summary') {
-      // Executive summary is a folder-scoped view.
-      out.push({ contextType: 'folder', contextId: id });
-      // Also allow organization docs (folder.organizationId) to be used from this view.
-      try {
-        const [row] = await db
-          .select({ organizationId: folders.organizationId })
-          .from(folders)
-          .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
-          .limit(1);
-        const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
-        if (orgId) out.push({ contextType: 'organization', contextId: orgId });
-      } catch {
-        // ignore (no org)
+      if (type === 'folder') {
+        // Folder view can use folder docs + organization docs (if folder is linked to an org).
+        pushUnique('folder', id);
+        try {
+          const [row] = await db
+            .select({ organizationId: folders.organizationId })
+            .from(folders)
+            .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
+            .limit(1);
+          const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
+          if (orgId) pushUnique('organization', orgId);
+        } catch {
+          // ignore (no org)
+        }
+        return;
       }
-      return out;
+      if (type === 'executive_summary') {
+        // Executive summary is a folder-scoped view.
+        pushUnique('folder', id);
+        // Also allow organization docs (folder.organizationId) to be used from this view.
+        try {
+          const [row] = await db
+            .select({ organizationId: folders.organizationId })
+            .from(folders)
+            .where(and(eq(folders.id, id), eq(folders.workspaceId, opts.workspaceId)))
+            .limit(1);
+          const orgId = typeof row?.organizationId === 'string' ? row.organizationId : null;
+          if (orgId) pushUnique('organization', orgId);
+        } catch {
+          // ignore (no org)
+        }
+      }
+    };
+
+    await appendContext(opts.primaryContextType ?? null, opts.primaryContextId);
+    for (const ctx of opts.extraContexts ?? []) {
+      await appendContext(ctx.contextType, ctx.contextId);
     }
 
     return out;
@@ -367,6 +598,8 @@ export class ChatService {
     sessionId: string;
     assistantMessageId: string;
     model?: string | null;
+    contexts?: Array<{ contextType: string; contextId: string }>;
+    tools?: string[];
     signal?: AbortSignal;
   }): Promise<void> {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
@@ -379,15 +612,26 @@ export class ChatService {
         : ownerWs.workspaceId;
     if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
     // Read-only mode:
-    // - Admin Workspace is always read-only (admin_app can target it)
     // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)
     // - Otherwise: writable if the user is editor/admin member of the session workspace
-    const hidden = sessionWorkspaceId !== ADMIN_WORKSPACE_ID ? await isWorkspaceDeleted(sessionWorkspaceId) : false;
-    const canWrite =
-      !hidden && sessionWorkspaceId !== ADMIN_WORKSPACE_ID
-        ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor')
-        : false;
-    const readOnly = sessionWorkspaceId === ADMIN_WORKSPACE_ID || hidden || !canWrite;
+    const hidden = await isWorkspaceDeleted(sessionWorkspaceId);
+    const canWrite = !hidden ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor') : false;
+    const readOnly = hidden || !canWrite;
+
+    const normalizeContexts = (items?: Array<{ contextType: string; contextId: string }>) => {
+      const out: Array<{ contextType: ChatContextType; contextId: string }> = [];
+      for (const item of items ?? []) {
+        const type = item?.contextType;
+        const id = (item?.contextId || '').trim();
+        if (!isChatContextType(type) || !id) continue;
+        const key = `${type}:${id}`;
+        if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) continue;
+        out.push({ contextType: type, contextId: id });
+      }
+      return out;
+    };
+    const contextsOverride = normalizeContexts(options.contexts);
+    const focusContext = contextsOverride[0] ?? null;
 
     // Charger messages (sans inclure le placeholder assistant)
     const messages = await db
@@ -407,15 +651,76 @@ export class ChatService {
         content: m.content ?? ''
       }));
 
+    if (!session.title) {
+      const lastUserMessage =
+        [...messages]
+          .filter((m) => m.sequence < assistantRow.sequence && m.role === 'user')
+          .pop()?.content ?? '';
+      if (lastUserMessage.trim()) {
+        const safeContextType =
+          focusContext?.contextType || (isChatContextType(session.primaryContextType) ? session.primaryContextType : null);
+        const title = await this.generateSessionTitle({
+          primaryContextType: safeContextType,
+          primaryContextId: session.primaryContextId ?? null,
+          lastUserMessage
+        });
+        if (title) {
+          await db
+            .update(chatSessions)
+            .set({ title, updatedAt: new Date() })
+            .where(eq(chatSessions.id, session.id));
+          await this.notifyWorkspaceEvent(sessionWorkspaceId, {
+            action: 'chat_session_title_updated',
+            sessionId: session.id,
+            title
+          });
+        }
+      }
+    }
+
     // Récupérer le contexte depuis la session
-    const primaryContextType = isChatContextType(session.primaryContextType) ? session.primaryContextType : null;
-    const primaryContextId = typeof session.primaryContextId === 'string' ? session.primaryContextId : null;
+    const primaryContextType = (focusContext?.contextType ??
+      (isChatContextType(session.primaryContextType) ? session.primaryContextType : null)) as ChatContextType | null;
+    const primaryContextId =
+      focusContext?.contextId ?? (typeof session.primaryContextId === 'string' ? session.primaryContextId : null);
+
+    const allowedContexts =
+      contextsOverride.length > 0 && contextsOverride.every((c) => c.contextId)
+        ? contextsOverride
+        : primaryContextType && primaryContextId
+          ? [{ contextType: primaryContextType, contextId: primaryContextId }]
+          : [];
+    const allowedByType = {
+      organization: new Set<string>(),
+      folder: new Set<string>(),
+      usecase: new Set<string>(),
+      executive_summary: new Set<string>()
+    };
+    for (const c of allowedContexts) {
+      if (c.contextType === 'organization') allowedByType.organization.add(c.contextId);
+      if (c.contextType === 'folder') allowedByType.folder.add(c.contextId);
+      if (c.contextType === 'usecase') allowedByType.usecase.add(c.contextId);
+      if (c.contextType === 'executive_summary') allowedByType.executive_summary.add(c.contextId);
+    }
+    const allowedFolderIds = new Set<string>([
+      ...allowedByType.folder,
+      ...allowedByType.executive_summary
+    ]);
+    const hasContextType = (type: ChatContextType) => {
+      if (type === 'organization') return allowedByType.organization.size > 0;
+      if (type === 'folder') return allowedFolderIds.size > 0;
+      if (type === 'usecase') return allowedByType.usecase.size > 0;
+      if (type === 'executive_summary') return allowedByType.executive_summary.size > 0;
+      return false;
+    };
 
     // Documents tool is only exposed if there are documents attached to the current context.
     const allowedDocContexts = await this.getAllowedDocumentsContexts({
       primaryContextType,
       primaryContextId,
-      workspaceId: sessionWorkspaceId
+      workspaceId: sessionWorkspaceId,
+      sessionId: session.id,
+      extraContexts: contextsOverride
     });
 
     const hasDocuments = await (async () => {
@@ -441,31 +746,44 @@ export class ChatService {
       }
     })();
 
-    // Prepare tools based on primary context type (view-scoped behavior).
+    // Prepare tools based on the active contexts (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
-    if (primaryContextType === 'usecase') {
+    const toolSet = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
+    const addTools = (items: OpenAI.Chat.Completions.ChatCompletionTool[]) => {
+      for (const t of items) {
+        if (t.type !== 'function') continue;
+        const name = t.function?.name;
+        if (!name) continue;
+        toolSet.set(name, t);
+      }
+    };
+    const contextTypes = new Set<ChatContextType>();
+    if (primaryContextType) contextTypes.add(primaryContextType);
+    contextsOverride.forEach((c) => contextTypes.add(c.contextType));
+
+    if (contextTypes.has('usecase')) {
       // Prefer Option B tool ids, but keep legacy ids for backward-compatibility.
-      tools = [
+      addTools([
         useCaseGetTool,
         readUseCaseTool,
         ...(readOnly ? [] : [useCaseUpdateTool, updateUseCaseFieldTool]),
-        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
-      ];
-    } else if (primaryContextType === 'organization') {
-      tools = [
+      ]);
+    }
+    if (contextTypes.has('organization')) {
+      addTools([
         organizationsListTool,
         organizationGetTool,
         ...(readOnly ? [] : [organizationUpdateTool]),
         foldersListTool,
-        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
-      ];
-    } else if (primaryContextType === 'folder') {
-      tools = [
+      ]);
+    }
+    if (contextTypes.has('folder')) {
+      addTools([
         foldersListTool,
         folderGetTool,
         ...(readOnly ? [] : [folderUpdateTool]),
@@ -475,30 +793,81 @@ export class ChatService {
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
         organizationGetTool,
-        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
-      ];
-    } else if (primaryContextType === 'executive_summary') {
-      tools = [
+      ]);
+    }
+    if (contextTypes.has('executive_summary')) {
+      addTools([
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
         useCasesListTool,
         folderGetTool,
         matrixGetTool,
         organizationGetTool,
-        ...(hasDocuments ? [documentsTool] : []),
         webSearchTool,
         webExtractTool
-      ];
-    } else {
-      tools = undefined;
+      ]);
+    }
+    if (hasDocuments) {
+      addTools([documentsTool]);
+    }
+    tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
+
+    if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
+      const allowed = new Set(options.tools);
+      tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
+      if (tools.length === 0) tools = undefined;
     }
 
+    const contextLabel = (type: string, id: string) => {
+      if (type === 'chat_session') return `Session de chat (${id})`;
+      return `${type}:${id}`;
+    };
+
+    const documentsBlock = await (async () => {
+      const contexts = allowedDocContexts;
+      if (contexts.length === 0) {
+        return 'DOCUMENTS DISPONIBLES :\n- Aucun document disponible pour les contextes autorisés.';
+      }
+      const conditions = contexts.map((c) =>
+        and(eq(contextDocuments.contextType, c.contextType), eq(contextDocuments.contextId, c.contextId))
+      );
+      const rows = await db
+        .select({
+          contextType: contextDocuments.contextType,
+          contextId: contextDocuments.contextId,
+          id: contextDocuments.id
+        })
+        .from(contextDocuments)
+        .where(and(eq(contextDocuments.workspaceId, sessionWorkspaceId), or(...conditions)));
+      const counts = new Map<string, number>();
+      for (const r of rows) {
+        const key = `${r.contextType}:${r.contextId}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const lines = contexts.map((c) => {
+        const key = `${c.contextType}:${c.contextId}`;
+        const count = counts.get(key) ?? 0;
+        const status = count > 0 ? `${count} document(s)` : 'Aucun document';
+        return `- ${contextLabel(c.contextType, c.contextId)} : ${status}`;
+      });
+      return [
+        'DOCUMENTS DISPONIBLES :',
+        ...lines,
+        '',
+        'Règles :',
+        '- Toujours inclure les documents de session si présents.',
+        '- Prioriser le contexte focus pour le listing.',
+        '- Commencer par documents.list (le listing indique context_type/context_id).',
+        '- Si un document est en cours de traitement, utiliser documents.analyze plutôt que get_summary.'
+      ].join('\n');
+    })();
+
     // Enrichir le system prompt avec le contexte si disponible
-    let systemPrompt = "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.";
+    let contextBlock = '';
     if (primaryContextType === 'usecase' && primaryContextId) {
-      systemPrompt += ` 
+      contextBlock = ` 
 
 Tu travailles sur le use case ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
@@ -534,7 +903,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       const orgLine = primaryContextId
         ? `Tu travailles sur l'organisation ${primaryContextId}.`
         : `Tu es sur la liste des organisations (pas d'organisation sélectionnée).`;
-      systemPrompt += ` 
+      contextBlock = ` 
 
 ${orgLine}
 
@@ -553,7 +922,7 @@ Règles :
       const folderLine = primaryContextId
         ? `Tu travailles sur le dossier ${primaryContextId}.`
         : `Tu es sur la liste des dossiers (pas de dossier sélectionné). Tu peux lire les dossiers via \`folders_list\`, puis lire les cas d'usage d'un dossier via \`usecases_list\` en passant son folderId.`;
-      systemPrompt += ` 
+      contextBlock = ` 
 
 ${folderLine}
 
@@ -574,7 +943,7 @@ Règles :
 - Pour toute modification, lis d'abord puis mets à jour via les tools.
 - Si un folderId de contexte est présent, ne lis/modifie que ce dossier. Sinon (vue liste), tu peux lire plusieurs dossiers en fournissant explicitement leur folderId.`;
     } else if (primaryContextType === 'executive_summary' && primaryContextId) {
-      systemPrompt += ` 
+      contextBlock = ` 
 
 Tu travailles sur la synthèse exécutive du dossier ${primaryContextId}.
 
@@ -592,6 +961,23 @@ Tools disponibles :
 Règles :
 - Ne tente pas d'accéder à un autre dossier que celui du contexte.`;
     }
+
+    const historyContexts = contextsOverride.filter(
+      (c) => !(c.contextType === primaryContextType && c.contextId === primaryContextId)
+    );
+    if (historyContexts.length > 0) {
+      const historyLines = historyContexts.map((c) => `- ${c.contextType}:${c.contextId}`).join('\n');
+      contextBlock += `\n\nContexte(s) historique(s) :\n${historyLines}\n\nRègle : prioriser le contexte focus, utiliser l’historique seulement si nécessaire.`;
+    }
+
+    const basePrompt = this.getPromptTemplate('chat_system_base')
+      || "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
+    const automationBlock = this.getPromptTemplate('chat_conversation_auto');
+    const systemPrompt = this.renderTemplate(basePrompt, {
+      CONTEXT_BLOCK: contextBlock,
+      DOCUMENTS_BLOCK: documentsBlock,
+      AUTOMATION_BLOCK: automationBlock
+    }).trim();
 
     let streamSeq = await getNextSequence(options.assistantMessageId);
     const contentParts: string[] = [];
@@ -843,6 +1229,32 @@ Règles :
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
       const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
+      const orgByFolderId = new Map<string, string | null>();
+      const getOrganizationIdForFolder = async (folderId: string): Promise<string | null> => {
+        if (orgByFolderId.has(folderId)) return orgByFolderId.get(folderId) ?? null;
+        try {
+          const folder = await toolService.getFolder(folderId, {
+            workspaceId: sessionWorkspaceId,
+            select: ['organizationId']
+          });
+          const orgId = typeof (folder.data as Record<string, unknown>)?.organizationId === 'string'
+            ? ((folder.data as Record<string, unknown>).organizationId as string)
+            : null;
+          orgByFolderId.set(folderId, orgId);
+          return orgId;
+        } catch {
+          orgByFolderId.set(folderId, null);
+          return null;
+        }
+      };
+      const isAllowedOrganizationId = async (orgId: string): Promise<boolean> => {
+        if (allowedByType.organization.has(orgId)) return true;
+        for (const folderId of allowedFolderIds) {
+          const folderOrgId = await getOrganizationIdForFolder(folderId);
+          if (folderOrgId && folderOrgId === orgId) return true;
+        }
+        return false;
+      };
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
@@ -852,9 +1264,8 @@ Règles :
           let result: unknown;
 
           if (toolCall.name === 'read_usecase' || toolCall.name === 'usecase_get') {
-            // Vérifier la sécurité : useCaseId doit correspondre au contexte
-            if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
-              throw new Error('Security: useCaseId does not match session context');
+            if (!allowedByType.usecase.has(args.useCaseId)) {
+              throw new Error('Security: useCaseId does not match allowed contexts');
             }
             const readResult = await toolService.readUseCase(args.useCaseId, {
               workspaceId: sessionWorkspaceId,
@@ -874,9 +1285,8 @@ Règles :
             if (readOnly) {
               throw new Error('Read-only workspace: use case update is disabled');
             }
-            // Vérifier la sécurité : useCaseId doit correspondre au contexte
-            if (primaryContextType !== 'usecase' || args.useCaseId !== primaryContextId) {
-              throw new Error('Security: useCaseId does not match session context');
+            if (!allowedByType.usecase.has(args.useCaseId)) {
+              throw new Error('Security: useCaseId does not match allowed contexts');
             }
             const updateResult = await toolService.updateUseCaseFields({
               useCaseId: args.useCaseId,
@@ -897,7 +1307,7 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'organizations_list') {
-            if (primaryContextType !== 'organization') {
+            if (!hasContextType('organization')) {
               throw new Error('Security: organizations_list is only available in organization context');
             }
             const listResult = await toolService.listOrganizations({
@@ -915,27 +1325,12 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'organization_get') {
-            // organization context: must match context id
-            if (primaryContextType === 'organization') {
-              if (!primaryContextId || args.organizationId !== primaryContextId) {
-                throw new Error('Security: organizationId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' || primaryContextType === 'executive_summary') {
-              // folder/executive_summary context: only allow reading the organization linked to the current folder
-              if (!primaryContextId) throw new Error('Security: organization_get requires a folder context id');
-              const folder = await toolService.getFolder(primaryContextId, {
-                workspaceId: sessionWorkspaceId,
-                select: ['organizationId']
-              });
-              const folderOrganizationId = typeof (folder.data as Record<string, unknown>)?.organizationId === 'string'
-                ? ((folder.data as Record<string, unknown>).organizationId as string)
-                : null;
-              if (!folderOrganizationId) throw new Error('Folder has no organizationId');
-              if (args.organizationId !== folderOrganizationId) {
-                throw new Error('Security: organizationId is not linked to current folder');
-              }
-            } else {
-              throw new Error('Security: organization_get is not available in this context');
+            if (!args.organizationId || typeof args.organizationId !== 'string') {
+              throw new Error('Security: organizationId is required');
+            }
+            const allowed = await isAllowedOrganizationId(args.organizationId);
+            if (!allowed) {
+              throw new Error('Security: organizationId does not match allowed contexts');
             }
 
             const getResult = await toolService.getOrganization(args.organizationId, {
@@ -953,8 +1348,12 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'organization_update') {
             if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-            if (primaryContextType !== 'organization' || !primaryContextId || args.organizationId !== primaryContextId) {
-              throw new Error('Security: organizationId does not match session context');
+            if (!args.organizationId || typeof args.organizationId !== 'string') {
+              throw new Error('Security: organizationId is required');
+            }
+            const allowed = await isAllowedOrganizationId(args.organizationId);
+            if (!allowed) {
+              throw new Error('Security: organizationId does not match allowed contexts');
             }
             const updateResult = await toolService.updateOrganizationFields({
               organizationId: args.organizationId,
@@ -974,13 +1373,12 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'folders_list') {
-            if (primaryContextType !== 'organization' && primaryContextType !== 'folder') {
+            if (!hasContextType('organization') && !hasContextType('folder')) {
               throw new Error('Security: folders_list is only available in organization/folder context');
             }
-            const organizationId =
-              primaryContextType === 'organization' && primaryContextId
-                ? primaryContextId
-                : (typeof args.organizationId === 'string' ? args.organizationId : null);
+            const organizationId = typeof args.organizationId === 'string'
+              ? args.organizationId
+              : (allowedByType.organization.values().next().value ?? null);
             const listResult = await toolService.listFolders({
               workspaceId: sessionWorkspaceId,
               organizationId,
@@ -997,18 +1395,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'folder_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: folder_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getFolder(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1025,8 +1416,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'folder_update') {
             if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateFolderFields({
               folderId: args.folderId,
@@ -1046,18 +1440,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'usecases_list') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow listing any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: usecases_list is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const listResult = await toolService.listUseCasesForFolder(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1074,18 +1461,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'executive_summary_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: executive_summary_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getExecutiveSummary(args.folderId, {
               workspaceId: sessionWorkspaceId,
@@ -1102,8 +1482,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'executive_summary_update') {
             if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-            if ((primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateExecutiveSummaryFields({
               folderId: args.folderId,
@@ -1123,18 +1506,11 @@ Règles :
             );
             streamSeq += 1;
           } else if (toolCall.name === 'matrix_get') {
-            // Folder detail contexts: enforce matching. Folder list context (primaryContextId null): allow reading any folderId (workspace-scoped).
-            if (primaryContextType !== 'folder' && primaryContextType !== 'executive_summary') {
-              throw new Error('Security: matrix_get is only available in folder/executive_summary context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
             }
-            if (primaryContextType === 'executive_summary') {
-              if (!primaryContextId || args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
-            } else if (primaryContextType === 'folder' && primaryContextId) {
-              if (args.folderId !== primaryContextId) {
-                throw new Error('Security: folderId does not match session context');
-              }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
             result = getResult;
@@ -1148,8 +1524,11 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'matrix_update') {
             if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-            if (primaryContextType !== 'folder' || !primaryContextId || args.folderId !== primaryContextId) {
-              throw new Error('Security: folderId does not match session context');
+            if (!args.folderId || typeof args.folderId !== 'string') {
+              throw new Error('Security: folderId is required');
+            }
+            if (!allowedFolderIds.has(args.folderId)) {
+              throw new Error('Security: folderId does not match allowed contexts');
             }
             const updateResult = await toolService.updateMatrix({
               folderId: args.folderId,
@@ -1214,16 +1593,6 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'documents') {
             // Security: documents tool must match the effective session context exactly.
-            if (
-              primaryContextType !== 'organization' &&
-              primaryContextType !== 'folder' &&
-              primaryContextType !== 'usecase' &&
-              primaryContextType !== 'executive_summary'
-            ) {
-              throw new Error('Security: documents tool is only available in organization/folder/usecase/executive_summary context');
-            }
-            if (!primaryContextId) throw new Error('Security: documents tool requires a selected context id');
-
             const allowed = allowedDocContexts;
             const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
             if (!isAllowed) {

@@ -206,6 +206,7 @@
     {organization}
     {organizationData}
     apiEndpoint={organization.id ? `${API_BASE_URL}/organizations/${organization.id}` : ''}
+    locked={$workspaceReadOnlyScope}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
     nameLabel="Nom de l'organisation"

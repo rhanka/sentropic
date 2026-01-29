@@ -41,6 +41,8 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] Workspace scope enforced via `workspaceId` in ToolService queries
 - [x] Read-only workspace disables mutation tools (update tools)
 - [x] Context-id matching for detail contexts (prevents cross-object writes)
+- [x] Active contexts union: tools allowed if the target context is in the active list sent by the UI
+- [x] Tool allowlist can be narrowed per message via `tools[]` payload
 - [x] Folder list context (`primaryContextType=folder` without id) allows read-only:
   - [x] `folder_get(folderId=...)`
   - [x] `usecases_list(folderId=...)`
@@ -58,6 +60,7 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] `/cas-usage/[id]` sends `primaryContextType=usecase` + `primaryContextId`
 - [x] `/dashboard` sends `primaryContextType=folder` + `primaryContextId=currentFolderId` (dashboard syncs `currentFolderId`)
 - [x] `/matrice` sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
+- [x] Chat composer sends `contexts[]` and `tools[]` per message (multi‑contexte + toggles)
 
 ### UI live refresh (SSE)
 - [x] Dashboard listens to `folder_update` and refreshes executive summary + matrix via `loadMatrix(folderId)`

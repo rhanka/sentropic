@@ -326,7 +326,7 @@
     organization={organization as any}
     {organizationData}
     apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
-    locked={isLockedByOther}
+    locked={isLockedByOther || isReadOnlyRole}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
     nameLabel=""
