@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
+import path from 'node:path';
 
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
@@ -6,24 +7,34 @@ test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debuggi
 // Important: ces tests manipulent le même compte + les mêmes sessions.
 // En parallèle (workers>1), ils se marchent dessus (création/suppression sessions) → flaky.
 test.describe.serial('Chat', () => {
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+  const ADMIN_STATE = './.auth/state.json';
+  const USER_A_STATE = './.auth/user-a.json';
+  const USER_A_EMAIL = 'e2e-user-a@example.com';
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
-    await composer.fill(message);
-    await composer.focus();
-    const [res] = await Promise.all([
+    const editable = composer.locator('[contenteditable="true"]');
+    await editable.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type(message);
+    const [req, res] = await Promise.all([
+      page.waitForRequest((req: any) => req.method() === 'POST' && req.url().includes('/api/v1/chat/messages'), {
+        timeout: 30_000
+      }),
       page.waitForResponse((res: any) => {
-        const req = res.request();
-        return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
+        const r = res.request();
+        return r.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
       }, { timeout: 30_000 }),
-      composer.press('Enter')
+      page.keyboard.press('Enter')
     ]);
-    const req = res.request();
     let requestBody: any = null;
     try {
-      requestBody = typeof req.postDataJSON === 'function' ? req.postDataJSON() : JSON.parse(req.postData() || 'null');
+      const raw = req.postData() || '{}';
+      requestBody = JSON.parse(raw);
     } catch {
       requestBody = null;
     }
@@ -33,7 +44,8 @@ test.describe.serial('Chat', () => {
       jobId: String((data as any)?.jobId ?? ''),
       streamId: String((data as any)?.streamId ?? ''),
       assistantMessageId: String((data as any)?.assistantMessageId ?? ''),
-      sessionId: String((data as any)?.sessionId ?? '')
+      sessionId: String((data as any)?.sessionId ?? ''),
+      userMessageId: String((data as any)?.userMessageId ?? '')
     };
   }
 
@@ -91,7 +103,7 @@ test.describe.serial('Chat', () => {
     
     // Attendre que le panneau chat soit visible (le panneau remplace la bulle)
     // Le panneau a une classe spécifique et contient le textarea (Svelte est réactif, timeout 1s)
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Envoyer un message avec une demande de réponse spécifique pour vérifier la réponse
@@ -101,7 +113,8 @@ test.describe.serial('Chat', () => {
     
     // Attendre que le message utilisateur apparaisse dans la liste (fond sombre, aligné à droite)
     // Svelte est réactif, le message apparaît immédiatement (timeout 1s)
-    const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
+    const userGroup = page.locator('div.flex.flex-col.items-end.group').last();
+    const userMessage = userGroup.locator('.userMarkdown').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 5000 });
     
     // Le placeholder assistant (StreamMessage) est ajouté immédiatement après l'envoi.
@@ -121,9 +134,9 @@ test.describe.serial('Chat', () => {
 
   test('devrait envoyer le bon contexte primaire au backend selon la route', async ({ page }) => {
     const chatButton = page.locator('button[title="Chat / Jobs IA"]');
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
 
-    // 1) /dossiers → folder (no id)
+    // 1) /dossiers → no contextId (expect no primaryContextType)
     await page.goto('/dossiers');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
@@ -131,10 +144,10 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 5000 });
     const r1 = await sendMessageAndWaitApi(page, composer, 'Test context dossiers');
-    expect(r1.requestBody?.primaryContextType).toBe('folder');
+    expect(r1.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r1.requestBody?.primaryContextId ?? null).toBeNull();
 
-    // 2) /organisations → organization (no id)
+    // 2) /organisations → no contextId (expect no primaryContextType)
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Organisations', { timeout: 5000 });
@@ -142,7 +155,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 5000 });
     const r2 = await sendMessageAndWaitApi(page, composer, 'Test context organisations');
-    expect(r2.requestBody?.primaryContextType).toBe('organization');
+    expect(r2.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r2.requestBody?.primaryContextId ?? null).toBeNull();
 
     // 2bis) /organisations/[id] → organization + id from URL
@@ -194,6 +207,71 @@ test.describe.serial('Chat', () => {
     expect(r3.requestBody?.primaryContextId).toBe(useCaseId);
   });
 
+  test('devrait gérer les contextes provisoires et persistants', async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
+
+    await page.goto('/organisations');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 5000 });
+
+    const organizationRows = page.locator('article.rounded.border.border-slate-200');
+    if ((await organizationRows.count()) === 0) return;
+    await organizationRows.first().click();
+    await page.waitForURL(/\/organisations\/[^/?#]+$/, { timeout: 10_000 });
+    await page.waitForLoadState('domcontentloaded');
+    const orgName = (await page.locator('h1').first().textContent())?.trim();
+    if (!orgName) return;
+
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    await menuButton.click();
+    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    await expect(menu.locator('button', { hasText: orgName })).toBeVisible({ timeout: 5000 });
+    const webSearchButton = menu.locator('button', { hasText: 'Web search' });
+    const webSearchIcon = webSearchButton.locator('svg');
+    const wasEnabled = await webSearchIcon.evaluate((el) => el.classList.contains('text-slate-900'));
+    await webSearchButton.click();
+    await expect(webSearchIcon).toHaveClass(wasEnabled ? /text-slate-400/ : /text-slate-900/);
+
+    // Quitter la vue sans envoyer de message: contexte provisoire supprimé.
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    await menuButton.click();
+    const menu2 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    await expect(menu2.locator('button', { hasText: orgName })).toHaveCount(0);
+    const webSearchButton2 = menu2.locator('button', { hasText: 'Web search' });
+    const webSearchIcon2 = webSearchButton2.locator('svg');
+    await expect(webSearchIcon2).toHaveClass(wasEnabled ? /text-slate-400/ : /text-slate-900/);
+
+    // Revenir sur l'organisation, envoyer un message, puis vérifier la persistance.
+    await page.goto('/organisations');
+    await page.waitForLoadState('domcontentloaded');
+    await organizationRows.first().click();
+    await page.waitForURL(/\/organisations\/[^/?#]+$/, { timeout: 10_000 });
+    await page.waitForLoadState('domcontentloaded');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    await sendMessageAndWaitApi(page, composer, 'Contexte utilisé');
+
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    await expect(composer).toBeVisible({ timeout: 5000 });
+    await menuButton.click();
+    const menu3 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 5000 });
+  });
+
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
     // Aller sur une page simple
     await page.goto('/dossiers');
@@ -206,7 +284,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     
     // Attendre que le panneau soit visible
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Basculer vers Jobs IA via le sélecteur dans le header
@@ -239,7 +317,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
@@ -247,7 +325,7 @@ test.describe.serial('Chat', () => {
     await sendMessageAndWaitApi(page, composer, message1);
     
     // Attendre que le message utilisateur apparaisse
-    const userMessage1 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message1 }).first();
+    const userMessage1 = page.locator('.userMarkdown').filter({ hasText: message1 }).first();
     await expect(userMessage1).toBeVisible({ timeout: 5000 });
     
     // Attendre qu'un message assistant apparaisse (placeholder streaming ou contenu final)
@@ -259,7 +337,7 @@ test.describe.serial('Chat', () => {
     await sendMessageAndWaitApi(page, composer, message2);
     
     // Vérifier que les deux messages utilisateur sont visibles
-    const userMessage2 = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message2 }).first();
+    const userMessage2 = page.locator('.userMarkdown').filter({ hasText: message2 }).first();
     await expect(userMessage2).toBeVisible({ timeout: 5000 });
     
     // Le point clé: le 2e message n'a pas effacé le 1er (session/conversation conservée)
@@ -267,6 +345,167 @@ test.describe.serial('Chat', () => {
 
     // Attendre qu'au moins un message assistant soit visible après le 2e envoi
     await expect.poll(async () => await assistantWrappers.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  });
+
+  test('devrait gérer les actions sur les messages (copier, éditer, retry, feedback)', async ({ page }) => {
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 5000 });
+
+    const expectedResponse = 'OK';
+    const message = `Réponds uniquement avec le mot ${expectedResponse}`;
+    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
+
+    const userGroup = page.locator('div.flex.flex-col.items-end.group').last();
+    const userMessage = userGroup.locator('.userMarkdown').filter({ hasText: message }).first();
+    await expect(userMessage).toBeVisible({ timeout: 5000 });
+
+    const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
+    try {
+      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
+
+    await userGroup.hover();
+    await userGroup.locator('button[aria-label="Copier"]').click();
+
+    await userGroup.locator('button[aria-label="Modifier"]').click({ force: true });
+    const editInput = userGroup.locator('[contenteditable="true"]').first();
+    await expect(editInput).toBeVisible({ timeout: 5000 });
+    await editInput.click();
+    await page.keyboard.press('Control+A');
+    const updatedMessage = 'Message modifié (E2E)';
+    await page.keyboard.type(updatedMessage);
+    const saveButton = userGroup.locator('button', { hasText: 'Envoyer' });
+    await expect(saveButton).toBeVisible({ timeout: 5000 });
+    await saveButton.click();
+    await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 5000 });
+
+    const assistantGroup = assistantWrapper(page).last();
+    const usefulButton = assistantGroup.locator('button[aria-label="Utile"]');
+    await usefulButton.click();
+    await expect(usefulButton).toHaveClass(/text-slate-900/);
+    await usefulButton.click();
+    await expect(usefulButton).not.toHaveClass(/text-slate-900/);
+
+    const retryButton = assistantGroup.locator('button[aria-label="Réessayer"]');
+    const [retryResponse] = await Promise.all([
+      page.waitForResponse((res) => {
+        const req = res.request();
+        return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages/') && res.url().includes('/retry');
+      }, { timeout: 30_000 }),
+      retryButton.click()
+    ]);
+    expect(retryResponse.ok()).toBeTruthy();
+    await expect(assistantBubble(page).last()).toBeVisible({ timeout: 30_000 });
+  });
+
+  test('devrait mettre à jour le titre de session via SSE', async ({ page }) => {
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 5000 });
+
+    await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
+
+    const headerSelect = page.locator('select[title="Session / Jobs"]');
+    await expect.poll(async () => {
+      const text = (await headerSelect.locator('option:checked').textContent())?.trim() ?? '';
+      return text;
+    }, { timeout: 90_000 }).not.toMatch(/^Conversation\s/);
+  });
+
+  test('devrait permettre upload + résumé + usage tool + suppression en viewer', async ({ browser }) => {
+    const adminApi = await request.newContext({ baseURL: API_BASE_URL, storageState: ADMIN_STATE });
+    const workspacesRes = await adminApi.get('/api/v1/workspaces');
+    expect(workspacesRes.ok()).toBeTruthy();
+    const workspacesData = await workspacesRes.json().catch(() => null);
+    const adminWorkspace = (workspacesData?.items ?? []).find((w: { name?: string }) => w.name === 'Admin Workspace');
+    const adminWorkspaceId = String(adminWorkspace?.id ?? '');
+    expect(adminWorkspaceId).toBeTruthy();
+
+    const addMemberRes = await adminApi.post(`/api/v1/workspaces/${adminWorkspaceId}/members`, {
+      data: { email: USER_A_EMAIL, role: 'viewer' }
+    });
+    expect(addMemberRes.ok()).toBeTruthy();
+    await adminApi.dispose();
+
+    const userContext = await browser.newContext({ storageState: USER_A_STATE });
+    const page = await userContext.newPage();
+    await page.addInitScript((id) => {
+      try {
+        localStorage.setItem('workspaceScopeId', id);
+      } catch {
+        // ignore
+      }
+    }, adminWorkspaceId);
+
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 5000 });
+
+    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
+    await menuButton.click();
+    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const fileInput = menu.locator('input[type="file"]');
+    const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/README.md');
+    await fileInput.setInputFiles(fixturePath);
+    await expect(page.locator('div.absolute').filter({ hasText: 'Contexte(s)' })).toHaveCount(0);
+
+    const docRow = page
+      .locator('div', { hasText: 'README.md' })
+      .filter({ has: page.locator('button[aria-label="Supprimer le document"]') })
+      .first();
+    await expect(docRow).toBeVisible({ timeout: 15_000 });
+    await expect(docRow).toContainText(/En attente|Analyse en cours|Résumé prêt/);
+    await expect(docRow).toContainText('Résumé prêt', { timeout: 90_000 });
+
+    const { jobId, streamId } = await sendMessageAndWaitApi(
+      page,
+      composer,
+      'Liste les documents de la session et cite leur nom.'
+    );
+    const assistantResponse = assistantBubble(page).filter({ hasText: 'README.md' }).last();
+    try {
+      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
+
+    await Promise.all([
+      page.waitForResponse((res) => {
+        const req = res.request();
+        return req.method() === 'DELETE' && res.url().includes('/api/v1/documents/');
+      }, { timeout: 30_000 }),
+      docRow.locator('button[aria-label="Supprimer le document"]').click()
+    ]);
+    await expect(docRow).toHaveCount(0);
+
+    await userContext.close();
   });
 
   test('devrait conserver la session après fermeture et réouverture du widget', async ({ page }) => {
@@ -281,7 +520,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Envoyer un message pour créer une session
@@ -289,7 +528,7 @@ test.describe.serial('Chat', () => {
     await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
-    const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
+    const userMessage = page.locator('.userMarkdown').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 1000 });
     
     // Attendre qu'une réponse de l'assistant apparaisse (peu importe le contenu, on teste la conservation de session)
@@ -326,7 +565,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Envoyer un message pour créer une session avec une réponse spécifique
@@ -336,7 +575,7 @@ test.describe.serial('Chat', () => {
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
-    const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
+    const userMessage = page.locator('.userMarkdown').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 1000 });
     
     // Attendre la réponse de l'assistant avec le texte spécifique
@@ -370,7 +609,7 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Envoyer un message pour créer une session avec une réponse spécifique
@@ -379,7 +618,7 @@ test.describe.serial('Chat', () => {
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
-    const userMessage = page.locator('div.flex.justify-end .bg-slate-900.text-white').filter({ hasText: message }).first();
+    const userMessage = page.locator('.userMarkdown').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: 1000 });
     
     // Attendre la réponse de l'assistant avec le texte spécifique

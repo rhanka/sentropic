@@ -113,4 +113,54 @@ test.describe('Streams — SSE scoping', () => {
     await pageB.context().close();
     await userAApi.dispose();
   });
+
+  test('Stream events restent accessibles après retry', async () => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+
+    const workspacesRes = await userAApi.get('/api/v1/workspaces');
+    expect(workspacesRes.ok()).toBeTruthy();
+    const workspacesData = await workspacesRes.json().catch(() => null);
+    const workspaceId = String((workspacesData?.items ?? [])[0]?.id ?? '');
+    if (!workspaceId) throw new Error('workspaceId introuvable pour user A');
+
+    const createMessageRes = await userAApi.post(`/api/v1/chat/messages?workspace_id=${workspaceId}`, {
+      data: { content: 'Test stream retry E2E' },
+    });
+    expect(createMessageRes.ok()).toBeTruthy();
+    const createPayload = await createMessageRes.json().catch(() => null);
+    const userMessageId = String(createPayload?.userMessageId ?? '');
+    const streamId = String(createPayload?.streamId ?? '');
+    if (!userMessageId || !streamId) throw new Error('Message/stream manquant');
+
+    await expect
+      .poll(async () => {
+        const eventsRes = await userAApi.get(`/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`);
+        if (!eventsRes.ok()) return 0;
+        const payload = await eventsRes.json().catch(() => null);
+        return Array.isArray(payload?.events) ? payload.events.length : 0;
+      }, { timeout: 60_000 })
+      .toBeGreaterThan(0);
+
+    const retryRes = await userAApi.post(
+      `/api/v1/chat/messages/${encodeURIComponent(userMessageId)}/retry?workspace_id=${workspaceId}`
+    );
+    expect(retryRes.ok()).toBeTruthy();
+    const retryPayload = await retryRes.json().catch(() => null);
+    const retryStreamId = String(retryPayload?.streamId ?? '');
+    if (!retryStreamId) throw new Error('streamId retry manquant');
+
+    await expect
+      .poll(async () => {
+        const eventsRes = await userAApi.get(`/api/v1/streams/events/${encodeURIComponent(retryStreamId)}?limit=50`);
+        if (!eventsRes.ok()) return 0;
+        const payload = await eventsRes.json().catch(() => null);
+        return Array.isArray(payload?.events) ? payload.events.length : 0;
+      }, { timeout: 60_000 })
+      .toBeGreaterThan(0);
+
+    await userAApi.dispose();
+  });
 });
