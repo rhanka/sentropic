@@ -19,7 +19,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 - Final tests (after user UAT): `make test-api`, `make test-ui`, `make clean test-e2e`.
 
 ## Plan / Todo (detailed, lot-based)
-- [ ] **Lot 0 — Analysis and touchpoints**
+- [x] **Lot 0 — Analysis and touchpoints**
     - [x] Review `spec/COLLAB.md` and extract comment + import/export requirements.
     - [x] Review `spec/DATA_MODEL.md` for current schema constraints and tenancy rules.
     - [x] Map API touchpoints:
@@ -36,7 +36,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] Identify existing export tooling:
         - [x] Any existing ZIP helpers or document export logic.
         - [x] Any existing metadata/versioning for migrations in archives.
-    - [ ] Output of Lot 0 (documented in BRANCH.md as notes or checklist):
+    - [x] Output of Lot 0 (documented in BRANCH.md as notes or checklist):
         - [x] List of endpoints to add/update.
         - [x] List of UI components/pages to update.
         - [x] Decision on SSE usage for comments.
