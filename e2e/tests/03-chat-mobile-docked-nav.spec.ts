@@ -16,7 +16,7 @@ test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
 
-    const composer = page.locator('textarea[placeholder="Écrire un message…"]');
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
     // Ouvrir le menu du ChatWidget (et surtout PAS le burger du header sous-jacent)

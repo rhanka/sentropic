@@ -131,6 +131,9 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66â€“88): user feedback (ðŸ
         - [x] Update: `e2e/tests/06-streams.spec.ts` (ensure stream remains stable after retry).
         - [x] Update: `e2e/tests/03-chat.spec.ts` (document upload + summary + doc tool usage + delete as viewer).
         - [x] Update: `e2e/tests/03-chat.spec.ts` (session title update via SSE).
+        - [x] Fix: `e2e/tests/00-ai-generation.spec.ts` (composer selector + typing).
+        - [x] Fix: `e2e/tests/03-chat-mobile-docked-nav.spec.ts` (composer selector).
+        - [ ] make test-e2e
 - [ ] Run final test suite.
     - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
 - [ ] Verify GitHub Actions CI for the branch.
