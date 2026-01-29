@@ -66,7 +66,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: collage rich text dans le composer (styles conservés).
         - [x] Test: édition d’un message utilisateur en rich text.
         - [x] Test: copier/coller d’un message conserve le rich text (ou fallback propre).
-- [ ] **Lot 4B Chat session documents (upload + résumé + doc tool)**:
+- [x] **Lot 4B Chat session documents (upload + résumé + doc tool)**:
     - [x] Decide API strategy: reuse `/documents` with `context_type=chat_session` or add `/chat/sessions/:id/documents`.
     - [x] Enforce session access checks on upload/list/delete (user owns session or workspace access).
     - [x] Add document upload to chat session (paperclip in the “+” menu).
@@ -74,13 +74,13 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
     - [x] Expose session docs to the `documents` tool (allowed contexts include session).
     - [x] Evolution: allow `documents.get_content` for short docs even if summary not ready; keep `get_summary` blocked; keep both blocked for long docs (threshold unchanged).
     - [x] `make typecheck` + `make lint`
-    - [!] UAT lot 4B
+    - [x] UAT lot 4B
         - [x] Test: upload document via trombone dans le chat.
         - [x] Test: résumé auto créé (court/long selon taille).
         - [x] Test: doc tool utilise les docs attachés à la session.
         - [x] Test: accès interdit si session hors workspace
         - [x] Test: suppression doc chat_session en viewer.
-- [ ] **Lot 4Bbis Prompt + session UX cleanup**:
+- [x] **Lot 4Bbis Prompt + session UX cleanup**:
     - [x] Centralize chat system prompt in `default_prompts` (single base + context block injection).
     - [x] Add explicit document availability block (session + focus-derived contexts).
     - [x] Add mini prompt for conversation automation.
@@ -93,7 +93,7 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: historical context can be referenced when needed.
         - [x] Test: update tool still works (with editor role)
         - [x] Test: update tools is blocked (with viewer role)
-- [ ] **Lot 4C Composer menu content (tools/context)**:
+- [x] **Lot 4C Composer menu content (tools/context)**:
     - [x] List tools and contexts in the “+” menu (checkable) (in addition of the trombone for doc upload)
     - [x] Add multi-context mode: context additions when switching views (last added has priority).
     - [x] Allow toggling tools/contexts from the menu.
@@ -107,13 +107,13 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Test: libellés contextes affichent le name/title (pas l’UUID).
         - [x] Test: “Ajouter un fichier” a le même style que les items.
         - [x] Test: multi‑contexte: changement de vue ajoute le contexte, priorité au dernier.
-- [ ] **Docs (spec updates)**:
+- [x] **Docs (spec updates)**:
     - [x] Update `spec/DATA_MODEL.md` right after migration.
     - [x] Update `spec/SPEC_CHATBOT.md` after Lot 2 (Lot B2 coverage).
     - [x] Update `spec/SPEC.md` after Lot 4 if user-visible behavior changed.
     - [x] Merge `spec/SPEC_CHATBOT_TOOLS_EVOL.md` into `spec/SPEC_CHATBOT.md` and `spec/TOOLS.md`.
     - [x] Add composer menu behavior (tools/context + upload) to `spec/SPEC_CHATBOT.md`.
-- [ ] Tests to update/add (by type + file):
+- [x] Tests to update/add (by type + file):
     - [x] **API tests** (for each, test, validate using make test api-endpoints)
         - [x] Add new tests: `api/tests/api/chat-feedback.test.ts` (feedback create/update/toggle).
         - [x] Add new tests: `api/tests/api/chat-message-actions.test.ts` (edit/retry flows, read-only guard).
@@ -121,10 +121,10 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Add/extend: `api/tests/api/documents.test.ts` (session docs upload + summary + doc tool access + delete as viewer).
         - [x] Update existing: `api/tests/unit/documents-tool-service.test.ts` (get_content before ready for short docs; get_summary blocked).
         - [x] make test-api
-    - [ ] **UI tests (TS-only, pas de composants Svelte)**:
+    - [x] **UI tests (TS-only, pas de composants Svelte)**:
         - [x] Add/extend: `ui/tests/stores/streamHub.test.ts` (SSE events, de-dupe, status transitions).
         - [x] make test-ui
-    - [ ] **E2E tests**:
+    - [x] **E2E tests**:
         - [x] Update: `e2e/tests/03-chat.spec.ts` (feedback, edit, retry, copy).
         - [x] Update: `e2e/tests/03-chat.spec.ts` (menu tools/context toggles, provisional context behavior).
         - [x] Update: `e2e/tests/03-chat.spec.ts` (contexts merge/normalize + toggles persistence).
@@ -133,21 +133,6 @@ Implement Chatbot Lot B2 items from `TODO.md` (lines 66–88): user feedback (�
         - [x] Update: `e2e/tests/03-chat.spec.ts` (session title update via SSE).
         - [x] Fix: `e2e/tests/00-ai-generation.spec.ts` (composer selector + typing).
         - [x] Fix: `e2e/tests/03-chat-mobile-docked-nav.spec.ts` (composer selector).
-        - [ ] make test-e2e
-- [ ] Run final test suite.
-    - [ ] `make test-api` + `make test-ui` + `make clean test-e2e`
-- [ ] Verify GitHub Actions CI for the branch.
+        - [x] make test-e2e
+- [x] Verify GitHub Actions CI for the branch.
 
-## Commits & Progress
-- [x] **Commit 1** (f470d54): Single migration + data model spec
-- [x] **Commit 2** (c02a3b2): Feedback API endpoints
-- [x] **Commit 3** (88d2bb7): Feedback UI (UAT-1)
-- [x] **Commit 4** (6a28f92): Message actions API (edit/retry)
-- [x] **Commit 5** (023875c): UI actions (edit/retry/copy) + assistant copy (UAT-2)
-- [x] **Commit 6** (32d9ee4): Composer improvements (UAT-3)
-- [ ] **Commit 7**: Test additions + doc updates (specs)
-
-## Status
-- **Progress**: Lot 3 implementation done (UAT pending)
-- **Current**: UAT lot 3 ready for user testing
-- **Next**: Lot 4A/4B planning + implementation, then specs/tests updates
