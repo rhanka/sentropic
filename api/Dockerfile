@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine AS base
+FROM node:24-alpine3.22 AS base
 # Security: Update npm to latest version to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@latest
 # Security: Force update glob in npm itself to fix CVE-2025-64756
@@ -14,6 +14,17 @@ RUN mkdir -p /tmp/glob-update && \
       mv package glob; \
     fi && \
     rm -rf /tmp/glob-update
+# Security: Force update tar in npm itself to fix CVE-2026-24842
+RUN mkdir -p /tmp/tar-update && \
+    cd /tmp/tar-update && \
+    npm pack tar@latest && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d tar ]; then \
+      rm -rf tar && \
+      tar -xzf /tmp/tar-update/tar-*.tgz && \
+      mv package tar; \
+    fi && \
+    rm -rf /tmp/tar-update
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
@@ -45,6 +56,17 @@ RUN mkdir -p /tmp/glob-update && \
       mv package glob; \
     fi && \
     rm -rf /tmp/glob-update
+# Security: Force update tar in npm itself to fix CVE-2026-24842
+RUN mkdir -p /tmp/tar-update && \
+    cd /tmp/tar-update && \
+    npm pack tar@latest && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d tar ]; then \
+      rm -rf tar && \
+      tar -xzf /tmp/tar-update/tar-*.tgz && \
+      mv package tar; \
+    fi && \
+    rm -rf /tmp/tar-update
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=base /app/package.json ./
