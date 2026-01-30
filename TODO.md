@@ -110,6 +110,32 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
+- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
+  - l'autodiscovery d'un utilisateur sur ce template (design phase)
+    - [ ] aide complete initiale : parcourir les écrans, donner des tips
+    - [ ] aide locale : en mode "discovery", l'agent intervient lorsqu'une vue n'a pas encore été activée
+    - [ ] aide étendue : l'agent supervise les actions de l'utilisateur, et détecte des amlériorations possible dans sont interaction avec l'UI et les agents
+  - l'auto documentation
+    - génération de doc from scratch
+    - génération d'incrément de doc
+    - screeshots
+    - automatisation ci
+  - l'auto test
+    - [ ] pendant la phase de dév, à partir des tests UAT proposé dans le contexte d'un branche.md, faire les screenshots et documenter
+    - [ ] être activable via une target make pour livrer constats et screenshot (pour utilisation par cursor)
+  - [ ] principes
+    - [ ] doit reposer sur des mécanismes de tag de div pour permettre une interaction entre l'agent et des actions UI de mise en exergue
+    - [ ] doit permettre d'avoir une conscience des codes sources, a minimal de l'UI, pour aider au débug ou à une compréhension avancée selon le public (dév, support, end-user)
+    - [ ] doit être concu pour une maintenance récurrence simple
+    - [ ] désactivable
+  - [ ] Livrables
+    - [ ] une spec md
+    - [ ] un modele de données
+    - [ ] un modèle d'opération (ci etc quand je livre les artefacts et les commit, ce peut être un make update-doc etc)
+    - [ ] un plan d'implémentation (potntiellement multibranche/mulit-sous-lots, chaque branche visant une mise en production)
+- [ ] Agent auto-doc: pour une version, gérer un agent favorisant permettant de créer la documentation utilisateur et les documents de support, incluant les screenshots via playwright
+  - [ ] Créer une cible / environnemnt spécifique (peut être basé sur le mode dev, mais avec playwright activé, pas en mode test e2e mais sur la même flavor)
+  - [ ] Un agent passif gère les déroulés dans l'écran
 - [ ] Renforcement de la structure agentique (phase design)
   Etudier les finalités/opportunités suivantes afin de définir le meilleur modele cible
   - [ ] Opportunité du RL / modele adaptatif
