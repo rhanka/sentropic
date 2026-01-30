@@ -110,6 +110,16 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
+- [ ] Streamline des directives mdc
+  - [ ] analyse des meilleurs pratique (conductor model, model testing Bmad)
+  - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
+  - [ ] création d'un template de branche, incluant les UAT partiels à chaque lot
+  - [ ] tout-make: clarifier les obligation d'usage de make
+  - [ ] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+- [ ] Storybook (spec)
+  - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
+  - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
+  - [ ] proposer un plan d'implémentation en une branche
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
   - l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
@@ -182,14 +192,18 @@
     - [ ] Gestion de référentiel de processus et de processus eux même (à approfondir)
     - [ ] Gestion de roadmap d'architecture d'entreprise (applications / infrastructures / plan d'évolution / scénarios / critères de priorisation / vision planifiée / gestion des risques)
     - [ ] High level design dossier (movitation for change / diagramme system as-is / composants du system as-is / évaluation SWOT de ces composants / vision business au sens archimate / architecture drivers (constraints, standard, principles) / buisness requirements / non-functional requirements / business objects / high level design scenario = descriptions & schema avec composants / scenario evaluation selon critères / vue de transition / présentation de l'initiative=scenario privilégié (description intiative, Digital scope for initiative, initial goals, prerequisites, buisness outcomes, estimation budget, initiative timelines/milestones, risks, archi dimension) )
+    - [ ] Business case management / Porfolio
+    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences 
     - [ ] Définition d'un business plan (à approfondir)
     - [ ] Evaluation d'intelligence économique (des docs seront fournis)
     - [ ] Veille stratégique (à approfondir)
     - [ ] autres idées (à approfondir)
+    Les travaux devront aussi définir les intégration potentielles (Collab Gdrive, ERP, Workday, Signature électronique ...) et les features clés (e.g révision / validation avec role d'objet = workflow de validation formel). Envisager cela à haut niveau permettra
     En sortie on attendra:
     - [ ] Une spécification détaillée du modèle coeur
     - [ ] Une spécification des composant cibles, api et ui
     - [ ] Une proposition d'évolution (drastique potentiellement) du data model
+    - [ ] Une liste d'intégration must-have et should have par business case
     - [ ] Un plan de transition pour l'application as-is avec les lots, sous-lots et étaps (soit en une branche, soit multibranche sachant qu'à chaque fin de branche il y a une mise en prod)
     - [ ] Evaluation des charges des lots
     - [ ] Evaluation d'opportunité de chaque feature vs potentiels clients du produit
