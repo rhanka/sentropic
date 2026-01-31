@@ -17,6 +17,7 @@ import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
+import { exportsRouter, importsRouter } from './import-export';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -65,6 +66,12 @@ apiRouter.route('/documents', documentsRouter);
 // Comments routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
 apiRouter.use('/comments/*', requireAuth);
 apiRouter.route('/comments', commentsRouter);
+
+// Import/Export routes: authenticated, role checks enforced per endpoint.
+apiRouter.use('/exports/*', requireAuth);
+apiRouter.route('/exports', exportsRouter);
+apiRouter.use('/imports/*', requireAuth);
+apiRouter.route('/imports', importsRouter);
 
 // Admin routes (require admin_org or admin_app)
 apiRouter.use('/settings/*', requireAuth, requireAdmin);
