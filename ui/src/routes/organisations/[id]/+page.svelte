@@ -10,16 +10,20 @@
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
+  import CommentBadge from '$lib/components/CommentBadge.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, workspaceScope } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
+  import { listComments } from '$lib/utils/comments';
   import { Trash2, Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
   let organizationId: string | null = null;
   let hubKey: string | null = null;
+  let lastOrganizationIdForCounts: string | null = null;
+  let hasMounted = false;
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
@@ -29,6 +33,14 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
+  let commentCounts: Record<string, number> = {};
+  let workspaceId: string | null = null;
+  let commentUserId: string | null = null;
+  let lastCommentCountsKey = '';
+  let commentCountsLoading = false;
+  let commentCountsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let commentCountsRetryAttempts = 0;
+  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
   $: canDelete = $workspaceScopeHydrated && !$workspaceReadOnlyScope && !isLockedByOther;
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
@@ -61,6 +73,8 @@
     : {};
 
   $: organizationId = $page.params.id;
+  $: workspaceId = $workspaceScope.selectedId ?? null;
+  $: commentUserId = $session.user?.id ?? null;
 
   const subscribeLock = (organizationId: string) => {
     if (lockHubKey) streamHub.delete(lockHubKey);
@@ -100,24 +114,39 @@
     window.addEventListener('pagehide', handleLeave);
     window.addEventListener('beforeunload', handleLeave);
 
-    if (hubKey) streamHub.delete(hubKey);
     if (organizationId) {
-      hubKey = `organizationDetail:${organizationId}`;
-      streamHub.set(hubKey, (evt: any) => {
-        if (evt?.type !== 'organization_update') return;
-        const id: string = evt.organizationId;
-        const data: any = evt.data ?? {};
-        if (!id || id !== organizationId) return;
-        if (data?.deleted) return;
-        if (data?.organization) {
-          const updated = data.organization;
-          organization = { ...(organization || ({} as any)), ...updated };
-        }
-      });
+      setupOrganizationHub(organizationId);
+      lastOrganizationIdForCounts = organizationId;
     }
+    hasMounted = true;
   });
 
+  const handleOrganizationHubEvent = (evt: any, currentId: string) => {
+    if (evt?.type === 'organization_update') {
+      const id: string = evt.organizationId;
+      const data: any = evt.data ?? {};
+      if (!id || id !== currentId) return;
+      if (data?.deleted) return;
+      if (data?.organization) {
+        const updated = data.organization;
+        organization = { ...(organization || ({} as any)), ...updated };
+      }
+      return;
+    }
+    if (evt?.type === 'comment_update') {
+      if (evt.contextType !== 'organization' || evt.contextId !== currentId) return;
+      scheduleCommentReload();
+    }
+  };
+
+  const setupOrganizationHub = (currentId: string) => {
+    if (hubKey) streamHub.delete(hubKey);
+    hubKey = `organizationDetail:${currentId}`;
+    streamHub.set(hubKey, (evt: any) => handleOrganizationHubEvent(evt, currentId));
+  };
+
   onDestroy(() => {
+    if (commentCountsRetryTimer) clearTimeout(commentCountsRetryTimer);
     if (hubKey) streamHub.delete(hubKey);
     if (lockHubKey) streamHub.delete(lockHubKey);
     if (lockRefreshTimer) clearInterval(lockRefreshTimer);
@@ -127,6 +156,12 @@
     window.removeEventListener('pagehide', handleLeave);
     window.removeEventListener('beforeunload', handleLeave);
   });
+
+  $: if (hasMounted && organizationId && organizationId !== lastOrganizationIdForCounts) {
+    lastOrganizationIdForCounts = organizationId;
+    void loadOrganization();
+    setupOrganizationHub(organizationId);
+  }
 
   $: if (organizationId && organizationId !== lockTargetId) {
     if (lockTargetId) {
@@ -150,6 +185,7 @@
       organization = await fetchOrganizationById(organizationId);
       error = '';
       unsavedChangesStore.reset();
+      await loadCommentCounts();
       return;
     } catch {
       const organizations = $organizationsStore;
@@ -160,7 +196,80 @@
       }
       error = '';
       unsavedChangesStore.reset();
+      await loadCommentCounts();
     }
+  };
+
+  const canLoadCommentCounts = () =>
+    Boolean(organizationId && workspaceId && commentUserId && !$session.loading);
+
+  const scheduleCommentCountsRetry = () => {
+    if (commentCountsRetryTimer) return;
+    commentCountsRetryTimer = setTimeout(() => {
+      commentCountsRetryTimer = null;
+      if (canLoadCommentCounts() && commentCountsRetryAttempts < 3) {
+        void loadCommentCounts();
+      }
+    }, 600);
+  };
+
+  const loadCommentCounts = async () => {
+    if (!canLoadCommentCounts()) return;
+    if (commentCountsLoading) return;
+    commentCountsLoading = true;
+    try {
+      const res = await listComments({ contextType: 'organization', contextId: organizationId });
+      const counts: Record<string, number> = {};
+      const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
+      for (const item of res.items || []) {
+        const threadId = item.thread_id;
+        if (!threadId) continue;
+        const existing = threads.get(threadId);
+        if (!existing) {
+          threads.set(threadId, {
+            status: item.status,
+            count: 1,
+            sectionKey: item.section_key || null,
+          });
+        } else {
+          threads.set(threadId, { ...existing, count: existing.count + 1 });
+        }
+      }
+      for (const thread of threads.values()) {
+        if (thread.status === 'closed') continue;
+        const key = thread.sectionKey || 'root';
+        counts[key] = (counts[key] || 0) + thread.count;
+      }
+      commentCounts = counts;
+      commentCountsRetryAttempts = 0;
+    } catch {
+      // ignore
+      commentCountsRetryAttempts += 1;
+      scheduleCommentCountsRetry();
+    } finally {
+      commentCountsLoading = false;
+    }
+  };
+
+  $: if (organizationId && workspaceId && commentUserId && !$session.loading) {
+    const key = `${organizationId}:${workspaceId}:${commentUserId}`;
+    if (key !== lastCommentCountsKey) {
+      lastCommentCountsKey = key;
+      void loadCommentCounts();
+    }
+  }
+
+  const scheduleCommentReload = () => {
+    if (commentReloadTimer) return;
+    commentReloadTimer = setTimeout(() => {
+      commentReloadTimer = null;
+      void loadCommentCounts();
+    }, 150);
+  };
+
+  const openCommentsFor = (sectionKey: string) => {
+    const detail = { contextType: 'organization', contextId: organizationId, sectionKey };
+    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
   };
 
   const syncLock = async () => {
@@ -330,6 +439,8 @@
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
     nameLabel=""
+    {commentCounts}
+    onOpenComments={openCommentsFor}
   >
     <div slot="actions" class="flex items-center gap-2">
       <LockPresenceBadge
@@ -378,15 +489,23 @@
     <div slot="bottom">
       <!-- Références (lecture seule, en fin de page) -->
       {#if organization.references && organization.references.length > 0}
-        <div class="rounded border border-slate-200 bg-white p-4">
+        <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="references">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold">Références</h3>
+            <h3 class="font-semibold flex items-center gap-2 group">
+              Références
+              <CommentBadge
+                count={commentCounts?.references ?? 0}
+                disabled={!openCommentsFor}
+                on:click={() => openCommentsFor('references')}
+              />
+            </h3>
           </div>
           <References references={organization.references} referencesScaleFactor={1} />
         </div>
       {/if}
     </div>
   </OrganizationForm>
+  <!-- Commentaires gérés par ChatWidget -->
 {:else if !error}
   <div class="text-center py-12">
     <p class="text-slate-500">Chargement...</p>

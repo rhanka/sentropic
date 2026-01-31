@@ -2,13 +2,23 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
+  import { session } from '$lib/stores/session';
+  import {
+    listComments,
+    createComment,
+    updateComment,
+    listMentionMembers,
+    type CommentItem,
+    type CommentContextType,
+    type MentionMember,
+  } from '$lib/utils/comments';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { useCasesStore } from '$lib/stores/useCases';
-  import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
+  import { getScopedWorkspaceIdForUser, workspaceCanComment } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
@@ -150,21 +160,234 @@
   export let sessions: ChatSession[] = [];
   export let sessionId: string | null = null;
   export let loadingSessions = false;
+  export let mode: 'ai' | 'comments' = 'ai';
+  export let commentContextType: CommentContextType | null = null;
+  export let commentContextId: string | null = null;
+  export let commentSectionKey: string | null = null;
+  export let commentSectionLabel: string | null = null;
+  export let commentThreadId: string | null = null;
+  export let commentThreads: Array<{
+    id: string;
+    sectionKey: string | null;
+    count: number;
+    lastAt: string;
+    preview: string;
+    authorLabel: string;
+    status: 'open' | 'closed';
+    assignedTo: string | null;
+    rootId: string;
+    createdBy: string;
+  }> = [];
+
+  const getInitials = (label: string) => {
+    const parts = label.trim().split(/\s+/);
+    const initials = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
+    return initials || '?';
+  };
+
+  const commentAuthorLabel = (comment: CommentItem) =>
+    comment.created_by_user?.displayName || comment.created_by_user?.email || comment.created_by;
+
+  const mentionLabelFor = (member: MentionMember) =>
+    member.displayName || member.email || member.userId;
+
+  const isCommentByCurrentUser = (comment: CommentItem) => {
+    const user = $session.user;
+    if (!user) return false;
+    if (comment.created_by === user.id) return true;
+    if (comment.created_by === user.email) return true;
+    if (comment.created_by_user?.id === user.id) return true;
+    if (user.email && comment.created_by_user?.email === user.email) return true;
+    return false;
+  };
+
+  const getMentionCandidate = (text: string) => {
+    if (!text) return null;
+    if (/\s$/.test(text)) return null;
+    const match = /(^|[\s([{])@([^\s@]{0,32})$/.exec(text);
+    if (!match) return null;
+    const start = (match.index ?? 0) + match[1].length;
+    return { start, end: text.length, query: match[2] ?? '' };
+  };
+
+  const getMentionMatches = (query: string) => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return mentionMembers.slice(0, 6);
+    return mentionMembers
+      .filter((m) => mentionLabelFor(m).toLowerCase().includes(needle))
+      .slice(0, 6);
+  };
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const timeFormatter = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  const formatCommentTimestamp = (value: string | null | undefined) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    if (isSameDay(date, now)) return timeFormatter.format(date);
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (isSameDay(date, yesterday)) return `Hier ${timeFormatter.format(date)}`;
+    return `${dateFormatter.format(date)} ${timeFormatter.format(date)}`;
+  };
+
+  const findAssignedUserFromText = (text: string) => {
+    if (!text || mentionMembers.length === 0) return null;
+    const haystack = text.toLowerCase();
+    let best: { member: MentionMember; index: number } | null = null;
+    for (const member of mentionMembers) {
+      const label = mentionLabelFor(member).toLowerCase();
+      const idx = haystack.lastIndexOf(`@${label}`);
+      if (idx >= 0 && (!best || idx > best.index)) {
+        best = { member, index: idx };
+      }
+    }
+    return best?.member ?? null;
+  };
+
+  const loadMentionMembers = async () => {
+    const workspaceId = getScopedWorkspaceIdForUser();
+    if (!workspaceId) return;
+    if (mentionLoading && workspaceId === mentionWorkspaceId) return;
+    mentionLoading = true;
+    mentionError = null;
+    mentionDelayElapsed = false;
+    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
+    mentionDelayTimer = setTimeout(() => {
+      mentionDelayElapsed = true;
+      mentionDelayTimer = null;
+    }, 500);
+    try {
+      const res = await listMentionMembers(workspaceId);
+      mentionMembers = res.items ?? [];
+      mentionWorkspaceId = workspaceId;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      mentionError = msg;
+    } finally {
+      mentionLoading = false;
+    }
+  };
+
+  const selectMentionMember = (member: MentionMember) => {
+    const candidate = getMentionCandidate(commentInput);
+    if (!candidate) return;
+    const label = mentionLabelFor(member);
+    const nextInput = `${commentInput.slice(0, candidate.start)}@${label} ${commentInput.slice(candidate.end)}`;
+    commentInput = nextInput;
+    assignedToUserId = member.userId;
+    assignedToLabel = label;
+    showMentionMenu = false;
+    mentionQuery = '';
+    mentionMatches = [];
+    mentionSuppressUntilChange = true;
+    mentionSuppressValue = nextInput.trimEnd();
+  };
+
+  const buildCommentThreads = (items: CommentItem[]) => {
+    const threads = new Map<string, CommentItem[]>();
+    for (const item of items) {
+      const threadId = item.thread_id;
+      if (!threadId) continue;
+      const current = threads.get(threadId) ?? [];
+      current.push(item);
+      threads.set(threadId, current);
+    }
+    for (const [threadId, threadItems] of threads.entries()) {
+      threads.set(
+        threadId,
+        threadItems.sort((a, b) => (a.created_at < b.created_at ? -1 : 1)),
+      );
+    }
+    const nextThreads = Array.from(threads.entries()).map(([threadId, threadItems]) => {
+      const last = threadItems[threadItems.length - 1];
+      const root = threadItems[0] ?? null;
+      const lastAt = last?.created_at ?? '';
+      return {
+        id: threadId,
+        sectionKey: last?.section_key || null,
+        count: threadItems.length,
+        lastAt,
+        preview: last?.content ?? '',
+        authorLabel: last ? commentAuthorLabel(last) : '',
+        status: (root?.status ?? 'open') as 'open' | 'closed',
+        assignedTo: root?.assigned_to ?? null,
+        rootId: root?.id ?? threadId,
+        createdBy: root?.created_by ?? '',
+      };
+    });
+    nextThreads.sort((a, b) => (a.lastAt < b.lastAt ? 1 : -1));
+    return { threads: nextThreads, map: threads };
+  };
 
   let messages: LocalMessage[] = [];
   let loadingMessages = false;
   let sending = false;
   let errorMsg: string | null = null;
   let input = '';
+  let commentInput = '';
+  let commentMessages: CommentItem[] = [];
+  export let commentLoading = false;
+  const hasCommentContext = () => Boolean(commentContextType && commentContextId);
+  let commentError: string | null = null;
+  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let commentHubKey = '';
+  let commentItemsByThread = new Map<string, CommentItem[]>();
+  let lastCommentKey = '';
+  let lastCommentSectionKey: string | null = null;
+  let lastCommentThreadId: string | null = null;
+  let lastCommentMessageCount = 0;
+  let lastSelectedCommentThreadId: string | null = null;
+  let mentionMembers: MentionMember[] = [];
+  let mentionLoading = false;
+  let mentionError: string | null = null;
+  let mentionQuery = '';
+  let mentionMatches: MentionMember[] = [];
+  let showMentionMenu = false;
+  let mentionDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  let mentionDelayElapsed = false;
+  let mentionWorkspaceId: string | null = null;
+  let mentionMenuRef: HTMLDivElement | null = null;
+  let assignedToUserId: string | null = null;
+  let assignedToLabel: string | null = null;
+  let mentionSuppressUntilChange = false;
+  let mentionSuppressValue = '';
+  // eslint-disable-next-line no-unused-vars
+  let handleMentionRefresh: ((_: Event) => void) | null = null;
   let listEl: HTMLDivElement | null = null;
   let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
+  let commentPlaceholder = '';
+  let commentThreadResolved = false;
+  let commentThreadResolvedAt: string | null = null;
+
+  $: commentPlaceholder = !$workspaceCanComment
+    ? 'Commentaires désactivés pour le rôle viewer.'
+    : commentThreadResolved
+      ? 'Commentaire résolu. Réouvrez pour répondre.'
+      : 'Écrire un commentaire…';
   let scrollForcePending = false;
   const BOTTOM_THRESHOLD_PX = 96;
   let editingMessageId: string | null = null;
   let editingContent = '';
+  let editingCommentId: string | null = null;
+  let editingCommentContent = '';
+  let lastEditableCommentId: string | null = null;
   const copiedMessageIds = new Set<string>();
   const COMPOSER_BASE_HEIGHT = 40;
   let composerIsMultiline = false;
@@ -492,6 +715,14 @@
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (mode === 'comments') {
+        if (showMentionMenu && mentionMatches.length > 0) {
+          selectMentionMember(mentionMatches[0]);
+          return;
+        }
+        void sendCommentMessage();
+        return;
+      }
       void sendMessage();
     }
   };
@@ -513,6 +744,303 @@
       requestAnimationFrame(updateComposerHeight);
     }
   };
+
+  const loadCommentThreads = async (opts?: { silent?: boolean }) => {
+    if (mode !== 'comments') return;
+    if (!hasCommentContext()) {
+      commentThreads = [];
+      commentMessages = [];
+      commentItemsByThread = new Map();
+      lastCommentThreadId = null;
+      lastCommentMessageCount = 0;
+      return;
+    }
+    const contextType = commentContextType;
+    const contextId = commentContextId;
+    if (!contextType || !contextId) return;
+    const shouldShowLoader = !opts?.silent;
+    if (shouldShowLoader) commentLoading = true;
+    commentError = null;
+    const activeThreadId = commentThreadId;
+    try {
+      const res = await listComments({
+        contextType,
+        contextId,
+      });
+      const items = res.items || [];
+      const { threads, map } = buildCommentThreads(items);
+      commentThreads = threads;
+      commentItemsByThread = new Map(map);
+      if (activeThreadId && commentItemsByThread.has(activeThreadId)) {
+        commentMessages = commentItemsByThread.get(activeThreadId) ?? [];
+        const nextCount = commentMessages.length;
+        const threadChanged = lastCommentThreadId !== activeThreadId;
+        if (threadChanged) {
+          lastCommentThreadId = activeThreadId;
+          lastCommentMessageCount = nextCount;
+          followBottom = true;
+          scheduleScrollToBottom({ force: true });
+        } else if (nextCount > lastCommentMessageCount && (followBottom || isNearBottom())) {
+          lastCommentMessageCount = nextCount;
+          scheduleScrollToBottom({ force: true });
+        } else {
+          lastCommentMessageCount = nextCount;
+        }
+      } else if (!opts?.silent) {
+        commentMessages = [];
+        lastCommentThreadId = null;
+        lastCommentMessageCount = 0;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      commentError = msg;
+    } finally {
+      if (shouldShowLoader) commentLoading = false;
+    }
+  };
+
+  const scheduleCommentReload = () => {
+    if (commentReloadTimer) return;
+    commentReloadTimer = setTimeout(() => {
+      commentReloadTimer = null;
+      void loadCommentThreads({ silent: true });
+    }, 150);
+  };
+
+  const sendCommentMessage = async () => {
+    if (mode !== 'comments') return;
+    if (!$workspaceCanComment || commentThreadResolved) return;
+    if (!commentContextType || !commentContextId) return;
+    const trimmed = commentInput.trim();
+    if (!trimmed) return;
+    try {
+      if (trimmed.includes('@') && mentionMembers.length === 0) {
+        await loadMentionMembers();
+      }
+      if (!assignedToUserId && mentionMembers.length > 0) {
+        const inferred = findAssignedUserFromText(trimmed);
+        if (inferred) {
+          assignedToUserId = inferred.userId;
+          assignedToLabel = mentionLabelFor(inferred);
+        }
+      }
+      if (commentThreadId) {
+        await createComment({
+          contextType: commentContextType,
+          contextId: commentContextId,
+          sectionKey: commentSectionKey || undefined,
+          content: trimmed,
+          threadId: commentThreadId,
+          assignedTo: assignedToUserId ?? undefined,
+        });
+      } else {
+        const nowIso = new Date().toISOString();
+        const currentUser = $session.user;
+        const res = await createComment({
+          contextType: commentContextType,
+          contextId: commentContextId,
+          sectionKey: commentSectionKey || undefined,
+          content: trimmed,
+          assignedTo: assignedToUserId ?? undefined,
+        });
+        commentThreadId = res.thread_id;
+        const assignedUserId = assignedToUserId ?? currentUser?.id ?? null;
+        const assignedMember = assignedToUserId
+          ? mentionMembers.find((m) => m.userId === assignedToUserId) ?? null
+          : null;
+        const optimisticComment: CommentItem = {
+          id: res.id,
+          context_type: commentContextType,
+          context_id: commentContextId,
+          section_key: commentSectionKey ?? null,
+          created_by: currentUser?.id ?? '',
+          assigned_to: assignedUserId,
+          status: 'open',
+          thread_id: res.thread_id,
+          content: trimmed,
+          created_at: nowIso,
+          updated_at: null,
+          created_by_user: currentUser
+            ? { id: currentUser.id, email: currentUser.email ?? null, displayName: currentUser.displayName ?? null }
+            : null,
+          assigned_to_user: assignedMember
+            ? {
+                id: assignedMember.userId,
+                email: assignedMember.email ?? null,
+                displayName: assignedMember.displayName ?? null,
+              }
+            : assignedUserId && currentUser
+              ? { id: currentUser.id, email: currentUser.email ?? null, displayName: currentUser.displayName ?? null }
+              : null,
+        };
+        commentItemsByThread = new Map(commentItemsByThread);
+        commentItemsByThread.set(res.thread_id, [optimisticComment]);
+        commentMessages = [optimisticComment];
+        const authorLabel = currentUser?.displayName || currentUser?.email || currentUser?.id || 'Moi';
+        commentThreads = [
+          {
+            id: res.thread_id,
+            sectionKey: commentSectionKey ?? null,
+            count: 1,
+            lastAt: nowIso,
+            preview: trimmed,
+            authorLabel,
+            status: 'open' as const,
+            assignedTo: assignedUserId,
+            rootId: res.id,
+            createdBy: currentUser?.id ?? '',
+          },
+          ...commentThreads,
+        ].filter((t, idx, arr) => arr.findIndex((x) => x.id === t.id) === idx);
+        lastCommentThreadId = res.thread_id;
+        lastCommentMessageCount = 1;
+      }
+      commentInput = '';
+      assignedToUserId = null;
+      assignedToLabel = null;
+      mentionQuery = '';
+      mentionMatches = [];
+      showMentionMenu = false;
+      followBottom = true;
+      await loadCommentThreads({ silent: true });
+      if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+        commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+      }
+      scheduleScrollToBottom({ force: true });
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  const saveCommentEdit = async (commentId: string, content: string) => {
+    if (mode !== 'comments') return;
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    try {
+      await updateComment(commentId, { content: trimmed });
+      await loadCommentThreads();
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  const startEditComment = (comment: CommentItem) => {
+    editingCommentId = comment.id;
+    editingCommentContent = comment.content;
+  };
+
+  const cancelEditComment = () => {
+    editingCommentId = null;
+    editingCommentContent = '';
+  };
+
+  $: if (mode === 'comments' && editingCommentId && commentThreadId) {
+    const items = commentItemsByThread.get(commentThreadId) ?? [];
+    if (!items.some((c) => c.id === editingCommentId)) {
+      cancelEditComment();
+    }
+  }
+
+  $: if (mode === 'comments' && editingCommentId) {
+    const last = commentMessages.length > 0 ? commentMessages[commentMessages.length - 1] : null;
+    if (last && last.id === editingCommentId) {
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
+    }
+  }
+
+  const commitEditComment = async () => {
+    if (!editingCommentId) return;
+    await saveCommentEdit(editingCommentId, editingCommentContent);
+    cancelEditComment();
+  };
+
+
+  $: if (mode === 'comments') {
+    if (commentSectionKey !== lastCommentSectionKey) {
+      lastCommentSectionKey = commentSectionKey;
+      commentThreads = [];
+      commentMessages = [];
+      commentItemsByThread = new Map();
+      lastCommentThreadId = null;
+      lastCommentMessageCount = 0;
+    }
+    const key = `${commentContextType || ''}:${commentContextId || ''}:${commentSectionKey || ''}`;
+    if (key !== lastCommentKey) {
+      lastCommentKey = key;
+      void loadCommentThreads();
+    }
+  }
+
+  $: if (mode === 'comments' && commentThreadId) {
+    const root = commentItemsByThread.get(commentThreadId)?.[0] ?? null;
+    commentThreadResolved = root?.status === 'closed';
+    commentThreadResolvedAt = (root?.updated_at ?? root?.created_at ?? null) as string | null;
+  } else {
+    commentThreadResolved = false;
+    commentThreadResolvedAt = null;
+  }
+
+  $: if (mode === 'comments') {
+    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+    } else if (!commentLoading) {
+      commentMessages = [];
+    }
+  }
+
+  $: if (mode === 'comments') {
+    const last = commentMessages.length > 0 ? commentMessages[commentMessages.length - 1] : null;
+    lastEditableCommentId =
+      commentThreadId && $session.user && last && isCommentByCurrentUser(last) ? last.id : null;
+  }
+
+  $: if (mode === 'comments') {
+    if (mentionSuppressUntilChange && commentInput.trimEnd() === mentionSuppressValue) {
+      mentionQuery = '';
+      showMentionMenu = false;
+      mentionMatches = [];
+    } else {
+      if (mentionSuppressUntilChange && commentInput.trimEnd() !== mentionSuppressValue) {
+        mentionSuppressUntilChange = false;
+        mentionSuppressValue = '';
+      }
+      const candidate = getMentionCandidate(commentInput);
+      if (candidate) {
+        mentionQuery = candidate.query;
+        showMentionMenu = true;
+        void loadMentionMembers();
+      } else {
+        mentionQuery = '';
+        showMentionMenu = false;
+      }
+      mentionMatches = showMentionMenu ? getMentionMatches(mentionQuery) : [];
+    }
+  }
+
+  $: if (mode === 'comments') {
+    if (commentThreadId !== lastSelectedCommentThreadId) {
+      lastSelectedCommentThreadId = commentThreadId;
+      lastCommentThreadId = commentThreadId;
+      lastCommentMessageCount = commentMessages.length;
+      if (commentThreadId) {
+        followBottom = true;
+        scheduleScrollToBottom({ force: true });
+      }
+    }
+  }
+
+  $: if (mode === 'comments' && commentContextType && commentContextId) {
+    if (!commentHubKey) commentHubKey = `commentThreads:${Math.random().toString(36).slice(2)}`;
+    streamHub.set(commentHubKey, (evt: any) => {
+      if (evt?.type !== 'comment_update') return;
+      if (evt.contextType !== commentContextType || evt.contextId !== commentContextId) return;
+      scheduleCommentReload();
+    });
+  } else if (commentHubKey) {
+    streamHub.delete(commentHubKey);
+    commentHubKey = '';
+  }
 
   const sessionDocStatusLabel = (s: string) => {
     if (s === 'uploaded') return 'En attente';
@@ -759,6 +1287,13 @@
     await loadMessages(id, { scrollToBottom: true });
   };
 
+  export const refreshCommentThreads = async () => {
+    await loadCommentThreads({ silent: true });
+    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+    }
+  };
+
   export const newSession = () => {
     sessionId = null;
     messages = [];
@@ -939,38 +1474,63 @@
   };
 
   $: {
-    const key = sessionId ? `chat_session:${sessionId}` : '';
-    if (key && key !== sessionDocsKey) {
-      sessionDocsKey = key;
-      sessionDocs = [];
-      void loadSessionDocs();
-    }
-    if (!key && sessionDocsKey) {
-      sessionDocsKey = '';
-      sessionDocs = [];
+    if (mode !== 'ai') {
+      if (sessionDocsKey) {
+        sessionDocsKey = '';
+        sessionDocs = [];
+      }
+    } else {
+      const key = sessionId ? `chat_session:${sessionId}` : '';
+      if (key && key !== sessionDocsKey) {
+        sessionDocsKey = key;
+        sessionDocs = [];
+        void loadSessionDocs();
+      }
+      if (!key && sessionDocsKey) {
+        sessionDocsKey = '';
+        sessionDocs = [];
+      }
     }
   }
 
   onMount(async () => {
-    await loadSessions();
-    if (sessionId && messages.length === 0) {
-      await loadMessages(sessionId, { scrollToBottom: true });
-    }
     updateComposerHeight();
-    ensureDefaultToolToggles();
-    loadPrefs(sessionId);
-    updateContextFromRoute();
+    if (mode === 'ai') {
+      await loadSessions();
+      if (sessionId && messages.length === 0) {
+        await loadMessages(sessionId, { scrollToBottom: true });
+      }
+      ensureDefaultToolToggles();
+      loadPrefs(sessionId);
+      updateContextFromRoute();
+    }
     handleDocumentClick = (event: MouseEvent) => {
-      if (!showComposerMenu) return;
       const target = event.target as Node | null;
       if (!target) return;
-      if (composerMenuRef?.contains(target)) return;
-      if (composerMenuButtonRef?.contains(target)) return;
-      showComposerMenu = false;
+      if (showComposerMenu) {
+        if (composerMenuRef?.contains(target)) return;
+        if (composerMenuButtonRef?.contains(target)) return;
+        showComposerMenu = false;
+      }
+      if (showMentionMenu) {
+        if (mentionMenuRef?.contains(target)) return;
+        showMentionMenu = false;
+      }
     };
     if (handleDocumentClick) {
       document.addEventListener('click', handleDocumentClick);
     }
+    if (mode === 'comments') {
+      void loadMentionMembers();
+      handleMentionRefresh = (event: Event) => {
+        const detail = (event as CustomEvent<any>).detail as { workspaceId?: string } | null;
+        const currentWs = getScopedWorkspaceIdForUser();
+        if (!currentWs || !detail?.workspaceId || detail.workspaceId !== currentWs) return;
+        void loadMentionMembers();
+      };
+      window.addEventListener('streamhub:workspace_membership_update', handleMentionRefresh);
+    }
+    if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
       if (ev.type !== 'job_update' || !('jobId' in ev)) return;
@@ -995,321 +1555,552 @@
     });
   });
 
-  $: if (sessionId && prefsKey !== getPrefsKey(sessionId)) {
+  $: if (mode === 'ai' && sessionId && prefsKey !== getPrefsKey(sessionId)) {
     loadPrefs(sessionId);
     ensureDefaultToolToggles();
     refreshContextLabels();
   }
 
-  $: if (!sessionId && prefsKey !== getPrefsKey(null)) {
+  $: if (mode === 'ai' && !sessionId && prefsKey !== getPrefsKey(null)) {
     loadPrefs(null);
     ensureDefaultToolToggles();
     refreshContextLabels();
   }
 
   let lastPath = '';
-  $: if ($page?.url?.pathname && $page.url.pathname !== lastPath) {
+  $: if (mode === 'ai' && $page?.url?.pathname && $page.url.pathname !== lastPath) {
     lastPath = $page.url.pathname;
     updateContextFromRoute();
   }
 
-  $: if ($organizationsStore || $foldersStore || $useCasesStore) {
+  $: if (mode === 'ai' && ($organizationsStore || $foldersStore || $useCasesStore)) {
     refreshContextLabels();
   }
 
   onDestroy(() => {
+    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
     if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
     sessionDocsReloadTimer = null;
     if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
     sessionDocsSseKey = '';
     if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
     sessionTitlesSseKey = '';
+    if (commentReloadTimer) clearTimeout(commentReloadTimer);
+    commentReloadTimer = null;
+    if (commentHubKey) streamHub.delete(commentHubKey);
+    commentHubKey = '';
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
+    }
+    if (handleMentionRefresh) {
+      window.removeEventListener('streamhub:workspace_membership_update', handleMentionRefresh);
     }
   });
 </script>
 
 <div class="flex flex-col h-full" bind:this={panelEl}>
+  {#if mode === 'comments' && commentSectionLabel}
+    {@const rootComment = commentThreadId ? (commentItemsByThread.get(commentThreadId)?.[0] ?? null) : null}
+    {@const assignedUser = rootComment?.assigned_to_user ?? null}
+    {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}
+    <div class="border-b border-slate-100 px-3 py-2">
+      <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+        <span>{commentSectionLabel}</span>
+        {#if rootComment?.status === 'closed' && commentThreadResolvedAt}
+          <span class="text-slate-400">•</span>
+          <span>Résolu {formatCommentTimestamp(commentThreadResolvedAt)}</span>
+        {:else if assignedUser}
+          <span class="text-slate-400">•</span>
+          <span>
+            {#if isAssignedToMe}
+              Vous est assigné
+            {:else}
+              Assigné à @{assignedUser.displayName || assignedUser.email || assignedUser.id}
+            {/if}
+          </span>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <div
-    class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 slim-scroll"
-    style="scrollbar-gutter: stable;"
-    bind:this={listEl}
-    on:scroll={onListScroll}
+    class="flex-1 min-h-0"
+    style={mode === 'comments' && commentThreadResolved ? 'background-color: #f1f5f9 !important;' : ''}
   >
-    {#if errorMsg}
-      <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
-        {errorMsg}
-      </div>
-    {/if}
-    {#if loadingMessages}
-      <div class="text-xs text-slate-500">Chargement…</div>
-    {:else if messages.length === 0}
-      <div class="text-xs text-slate-500">Aucun message. Écris un message pour démarrer.</div>
-    {:else}
-      {#each messages as m (m.id)}
-        {#if m.role === 'user'}
-          <div class="flex flex-col items-end group">
-            <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown">
-              {#if editingMessageId === m.id}
-                <div class="space-y-2">
-                  <EditableInput
-                    markdown={true}
-                    bind:value={editingContent}
-                    placeholder="Modifier le message…"
-                  />
-                  <div class="flex items-center justify-end gap-2 text-[11px]">
-                    <button
-                      class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
-                      type="button"
-                      on:click={cancelEditMessage}
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
-                      type="button"
-                      on:click={() => void saveEditMessage(m.id)}
-                    >
-                      Envoyer
-                    </button>
+    <div
+      class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
+      style={mode === 'comments' && commentThreadResolved
+        ? 'scrollbar-gutter: stable; background-color: #f1f5f9 !important;'
+        : 'scrollbar-gutter: stable;'}
+      bind:this={listEl}
+      on:scroll={onListScroll}
+    >
+    {#if mode === 'comments'}
+      {#if commentError}
+        <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          {commentError}
+        </div>
+      {/if}
+      {#if commentLoading && commentMessages.length === 0}
+        <div class="text-xs text-slate-500">Chargement…</div>
+      {:else if !commentThreadId}
+        <div class="text-xs text-slate-500">Sélectionne une conversation pour commencer ou écris un commentaire.</div>
+      {:else if commentMessages.length === 0}
+        <div class="text-xs text-slate-500">Aucun message dans cette conversation.</div>
+      {:else}
+        {#each commentMessages as c (c.id)}
+          {@const isMine = isCommentByCurrentUser(c)}
+          {@const canEdit = isMine && c.id === lastEditableCommentId && $workspaceCanComment}
+          {#if isMine}
+            <div class="flex flex-col items-end group">
+              <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown">
+                {#if editingCommentId === c.id}
+                  <div class="space-y-2">
+                    <EditableInput
+                      markdown={true}
+                      bind:value={editingCommentContent}
+                      placeholder="Modifier le message…"
+                      disabled={!$workspaceCanComment}
+                    />
+                    <div class="flex items-center justify-end gap-2 text-[11px]">
+                      <button
+                        class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                        type="button"
+                        on:click={cancelEditComment}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                        type="button"
+                        on:click={() => void commitEditComment()}
+                      >
+                        Envoyer
+                      </button>
+                    </div>
                   </div>
-                </div>
-              {:else}
-                <Streamdown content={m.content ?? ''} />
-              {/if}
-            </div>
-            <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-              on:click={async () => {
-                const text = m.content ?? '';
-                const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
-                if (ok) markCopied(m.id);
-              }}
-              type="button"
-              aria-label="Copier"
-              title="Copier"
-            >
-              {#if isCopied(m.id)}
-                <Check class="w-3.5 h-3.5 text-slate-900" />
-              {:else}
-                <Copy class="w-3.5 h-3.5" />
-              {/if}
-            </button>
-            <button
-              class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-              on:click={() => startEditMessage(m)}
-              type="button"
-              aria-label="Modifier"
-              title="Modifier"
-            >
-              <Pencil class="w-3.5 h-3.5" />
-            </button>
-            </div>
-          </div>
-        {:else if m.role === 'assistant'}
-          {@const sid = m._streamId ?? m.id}
-          {@const initEvents = initialEventsByMessageId.get(sid)}
-          {@const showDetailWaiter = !!m.content && streamDetailsLoading && initEvents === undefined}
-          {@const isUp = m.feedbackVote === 1}
-          {@const isDown = m.feedbackVote === -1}
-          {@const isTerminal = (m._localStatus ?? (m.content ? 'completed' : 'processing')) === 'completed'}
-          <div class="flex justify-start group">
-            <div class="max-w-[85%] w-full">
-              <StreamMessage
-                variant="chat"
-                streamId={sid}
-                status={m._localStatus ?? (m.content ? 'completed' : 'processing')}
-                finalContent={m.content ?? null}
-                historySource="stream"
-                initialEvents={initEvents}
-                historyPending={showDetailWaiter}
-                onStreamEvent={() => scheduleScrollToBottom()}
-                onTerminal={(t) => void handleAssistantTerminal(sid, t)}
-              />
-              {#if isTerminal}
-                <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                {:else}
+                  <Streamdown content={c.content ?? ''} />
+                {/if}
+              </div>
+              <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                  on:click={async () => {
+                    const text = c.content ?? '';
+                    const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
+                    if (ok) markCopied(c.id);
+                  }}
+                  type="button"
+                  aria-label="Copier"
+                  title="Copier"
+                >
+                  {#if isCopied(c.id)}
+                    <Check class="w-3.5 h-3.5 text-slate-900" />
+                  {:else}
+                    <Copy class="w-3.5 h-3.5" />
+                  {/if}
+                </button>
+                {#if canEdit && editingCommentId !== c.id}
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    on:click={() => startEditComment(c)}
+                    type="button"
+                    aria-label="Modifier"
+                    title="Modifier"
+                  >
+                    <Pencil class="w-3.5 h-3.5" />
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {:else}
+            <div class="flex items-start gap-2 group">
+              <div class="h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-600">
+                {getInitials(commentAuthorLabel(c))}
+              </div>
+              <div class="max-w-[85%] w-full">
+                <div class="text-[11px] text-slate-500 mb-1 flex items-center gap-2">
+                  <span>{commentAuthorLabel(c)}</span>
+                  {#if c.created_at}
+                    <span>{formatCommentTimestamp(c.created_at)}</span>
+                  {/if}
+                </div>
+                <div class="rounded border border-slate-200 bg-white text-xs px-3 py-2 break-words">
+                  <Streamdown content={c.content ?? ''} />
+                </div>
+              <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
-                      const text = m.content ?? '';
+                      const text = c.content ?? '';
                       const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
-                      if (ok) markCopied(m.id);
+                      if (ok) markCopied(c.id);
                     }}
                     type="button"
                     aria-label="Copier"
                     title="Copier"
                   >
-                    {#if isCopied(m.id)}
+                    {#if isCopied(c.id)}
                       <Check class="w-3.5 h-3.5 text-slate-900" />
                     {:else}
                       <Copy class="w-3.5 h-3.5" />
                     {/if}
                   </button>
-                  <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                    on:click={() => void retryFromAssistant(m.id)}
-                    type="button"
-                    aria-label="Réessayer"
-                    title="Réessayer"
-                  >
-                    <RotateCcw class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                    class:text-slate-900={isUp}
-                    class:bg-slate-100={isUp}
-                    on:click={() => void setFeedback(m.id, isUp ? 'clear' : 'up')}
-                    type="button"
-                    aria-label="Utile"
-                    title="Utile"
-                  >
-                    <ThumbsUp class="w-3.5 h-3.5" fill={isUp ? 'currentColor' : 'none'} />
-                  </button>
-                  <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                    class:text-slate-900={isDown}
-                    class:bg-slate-100={isDown}
-                    on:click={() => void setFeedback(m.id, isDown ? 'clear' : 'down')}
-                    type="button"
-                    aria-label="Pas utile"
-                    title="Pas utile"
-                  >
-                    <ThumbsDown class="w-3.5 h-3.5" fill={isDown ? 'currentColor' : 'none'} />
-                  </button>
                 </div>
-              {/if}
+              </div>
             </div>
-          </div>
-        {/if}
-      {/each}
+          {/if}
+        {/each}
+      {/if}
+      {#if commentLoading && commentMessages.length > 0}
+        <div class="text-[11px] text-slate-400 mt-2">Mise à jour…</div>
+      {/if}
+    {:else}
+      {#if errorMsg}
+        <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          {errorMsg}
+        </div>
+      {/if}
+      {#if loadingMessages}
+        <div class="text-xs text-slate-500">Chargement…</div>
+      {:else if messages.length === 0}
+        <div class="text-xs text-slate-500">Aucun message. Écris un message pour démarrer.</div>
+      {:else}
+        {#each messages as m (m.id)}
+          {#if m.role === 'user'}
+            <div class="flex flex-col items-end group">
+              <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown">
+                {#if editingMessageId === m.id}
+                  <div class="space-y-2">
+                    <EditableInput
+                      markdown={true}
+                      bind:value={editingContent}
+                      placeholder="Modifier le message…"
+                    />
+                    <div class="flex items-center justify-end gap-2 text-[11px]">
+                      <button
+                        class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                        type="button"
+                        on:click={cancelEditMessage}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                        type="button"
+                        on:click={() => void saveEditMessage(m.id)}
+                      >
+                        Envoyer
+                      </button>
+                    </div>
+                  </div>
+                {:else}
+                  <Streamdown content={m.content ?? ''} />
+                {/if}
+              </div>
+              <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                on:click={async () => {
+                  const text = m.content ?? '';
+                  const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
+                  if (ok) markCopied(m.id);
+                }}
+                type="button"
+                aria-label="Copier"
+                title="Copier"
+              >
+                {#if isCopied(m.id)}
+                  <Check class="w-3.5 h-3.5 text-slate-900" />
+                {:else}
+                  <Copy class="w-3.5 h-3.5" />
+                {/if}
+              </button>
+              <button
+                class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                on:click={() => startEditMessage(m)}
+                type="button"
+                aria-label="Modifier"
+                title="Modifier"
+              >
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              </div>
+            </div>
+          {:else if m.role === 'assistant'}
+            {@const sid = m._streamId ?? m.id}
+            {@const initEvents = initialEventsByMessageId.get(sid)}
+            {@const showDetailWaiter = !!m.content && streamDetailsLoading && initEvents === undefined}
+            {@const isUp = m.feedbackVote === 1}
+            {@const isDown = m.feedbackVote === -1}
+            {@const isTerminal = (m._localStatus ?? (m.content ? 'completed' : 'processing')) === 'completed'}
+            <div class="flex justify-start group">
+              <div class="max-w-[85%] w-full">
+                <StreamMessage
+                  variant="chat"
+                  streamId={sid}
+                  status={m._localStatus ?? (m.content ? 'completed' : 'processing')}
+                  finalContent={m.content ?? null}
+                  historySource="stream"
+                  initialEvents={initEvents}
+                  historyPending={showDetailWaiter}
+                  onStreamEvent={() => scheduleScrollToBottom()}
+                  onTerminal={(t) => void handleAssistantTerminal(sid, t)}
+                />
+                {#if isTerminal}
+                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      on:click={async () => {
+                        const text = m.content ?? '';
+                        const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
+                        if (ok) markCopied(m.id);
+                      }}
+                      type="button"
+                      aria-label="Copier"
+                      title="Copier"
+                    >
+                      {#if isCopied(m.id)}
+                        <Check class="w-3.5 h-3.5 text-slate-900" />
+                      {:else}
+                        <Copy class="w-3.5 h-3.5" />
+                      {/if}
+                    </button>
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      on:click={() => void retryFromAssistant(m.id)}
+                      type="button"
+                      aria-label="Réessayer"
+                      title="Réessayer"
+                    >
+                      <RotateCcw class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      class:text-slate-900={isUp}
+                      class:bg-slate-100={isUp}
+                      on:click={() => void setFeedback(m.id, isUp ? 'clear' : 'up')}
+                      type="button"
+                      aria-label="Utile"
+                      title="Utile"
+                    >
+                      <ThumbsUp class="w-3.5 h-3.5" fill={isUp ? 'currentColor' : 'none'} />
+                    </button>
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      class:text-slate-900={isDown}
+                      class:bg-slate-100={isDown}
+                      on:click={() => void setFeedback(m.id, isDown ? 'clear' : 'down')}
+                      type="button"
+                      aria-label="Pas utile"
+                      title="Pas utile"
+                    >
+                      <ThumbsDown class="w-3.5 h-3.5" fill={isDown ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        {/each}
+      {/if}
     {/if}
+    </div>
   </div>
 
   <div class="p-3 border-t border-slate-200">
     <div class="relative flex items-center gap-2">
-      <button
-        class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
-        aria-label="Ouvrir le menu"
-        title="Ouvrir le menu"
-        type="button"
-        bind:this={composerMenuButtonRef}
-        on:click={() => (showComposerMenu = !showComposerMenu)}
-      >
-        <Plus class="w-4 h-4" />
-      </button>
-      {#if showComposerMenu}
-        <div
-          class="absolute bottom-12 left-0 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3"
-          bind:this={composerMenuRef}
+      {#if mode === 'ai'}
+        <button
+          class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
+          aria-label="Ouvrir le menu"
+          title="Ouvrir le menu"
+          type="button"
+          bind:this={composerMenuButtonRef}
+          on:click={() => (showComposerMenu = !showComposerMenu)}
         >
-          <label
-            class={"flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 " +
-              (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
-            aria-label="Ajouter un fichier"
-            title="Ajouter un fichier"
+          <Plus class="w-4 h-4" />
+        </button>
+        {#if showComposerMenu}
+          <div
+            class="absolute bottom-12 left-0 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3"
+            bind:this={composerMenuRef}
           >
-            <input
-              class="hidden"
-              type="file"
-              on:change={onPickSessionDoc}
-              disabled={sessionDocsUploading}
-              accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
-            />
-            <Paperclip class="w-4 h-4" />
-            <span>Ajouter un fichier</span>
-          </label>
-          <div class="border-t border-slate-100 pt-2"></div>
-          <div class="text-xs font-semibold text-slate-600">Contexte(s)</div>
-          {#if contextEntries.length === 0}
-            <div class="text-[11px] text-slate-500">Aucun contexte actif.</div>
-          {:else}
-            <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
-              {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
-                <button
-                  class={`flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] hover:bg-slate-50 ${
-                    c.active ? 'text-slate-900' : 'text-slate-400'
-                  }`}
-                  type="button"
-                  on:click={() => toggleContextActive(c)}
-                >
-                  <svelte:component
-                    this={getContextIcon(c.contextType)}
-                    class="w-4 h-4"
-                  />
-                  <span class="truncate max-w-[220px]">{c.label}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
+            <label
+              class={"flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 " +
+                (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
+              aria-label="Ajouter un fichier"
+              title="Ajouter un fichier"
+            >
+              <input
+                class="hidden"
+                type="file"
+                on:change={onPickSessionDoc}
+                disabled={sessionDocsUploading}
+                accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
+              />
+              <Paperclip class="w-4 h-4" />
+              <span>Ajouter un fichier</span>
+            </label>
+            <div class="border-t border-slate-100 pt-2"></div>
+            <div class="text-xs font-semibold text-slate-600">Contexte(s)</div>
+            {#if contextEntries.length === 0}
+              <div class="text-[11px] text-slate-500">Aucun contexte actif.</div>
+            {:else}
+              <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
+                {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
+                  <button
+                    class={`flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] hover:bg-slate-50 ${
+                      c.active ? 'text-slate-900' : 'text-slate-400'
+                    }`}
+                    type="button"
+                    on:click={() => toggleContextActive(c)}
+                  >
+                    <svelte:component
+                      this={getContextIcon(c.contextType)}
+                      class="w-4 h-4"
+                    />
+                    <span class="truncate max-w-[220px]">{c.label}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
 
-          <div class="border-t border-slate-100 pt-2">
-            <div class="text-xs font-semibold text-slate-600 mb-1">Outils</div>
-            <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
-              {#each TOOL_TOGGLES as t (t.id)}
-                <button
-                  class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                  type="button"
-                  on:click={() => toggleTool(t.id)}
-                >
-                  <svelte:component
-                    this={t.icon}
-                    class={`w-4 h-4 ${toolEnabledById[t.id] !== false ? 'text-slate-900' : 'text-slate-400'}`}
-                  />
-                  <span class="truncate">{t.label}</span>
-                </button>
-              {/each}
+            <div class="border-t border-slate-100 pt-2">
+              <div class="text-xs font-semibold text-slate-600 mb-1">Outils</div>
+              <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
+                {#each TOOL_TOGGLES as t (t.id)}
+                  <button
+                    class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                    type="button"
+                    on:click={() => toggleTool(t.id)}
+                  >
+                    <svelte:component
+                      this={t.icon}
+                      class={`w-4 h-4 ${toolEnabledById[t.id] !== false ? 'text-slate-900' : 'text-slate-400'}`}
+                    />
+                    <span class="truncate">{t.label}</span>
+                  </button>
+                {/each}
+              </div>
             </div>
           </div>
-        </div>
+        {/if}
       {/if}
       <div
-        class="flex-1 min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
+        class="relative flex-1 min-w-0 rounded border border-slate-300 px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
         class:composer-single-line={!composerIsMultiline}
+        class:bg-white={$workspaceCanComment && !commentThreadResolved || mode !== 'comments'}
+        class:bg-slate-50={(mode === 'comments' && (!$workspaceCanComment || commentThreadResolved))}
         style={`max-height: ${composerMaxHeight}px; min-height: ${COMPOSER_BASE_HEIGHT}px;`}
         bind:this={composerEl}
         role="textbox"
         aria-label="Composer"
-        tabindex="0"
+        aria-disabled={mode === 'comments' && (!$workspaceCanComment || commentThreadResolved)}
+        tabindex={mode === 'comments' && (!$workspaceCanComment || commentThreadResolved) ? -1 : 0}
         on:keydown={handleKeyDown}
       >
-        {#if sessionDocsError}
-          <div class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700">
-            {sessionDocsError}
-          </div>
+        {#if mode === 'ai'}
+          {#if sessionDocsError}
+            <div class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700">
+              {sessionDocsError}
+            </div>
+          {/if}
+          {#if sessionDocs.length > 0}
+            <div class="mb-2 flex flex-wrap gap-2">
+              {#each sessionDocs as doc (doc.id)}
+                <div class="flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
+                  <div class="max-w-[220px] truncate">{doc.filename}</div>
+                  <span class="text-slate-400">· {sessionDocStatusLabel(doc.status)}</span>
+                  <button
+                    class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
+                    type="button"
+                    aria-label="Supprimer le document"
+                    title="Supprimer"
+                    on:click={() => void removeSessionDoc(doc)}
+                  >
+                    <X class="w-3 h-3" />
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+          <EditableInput
+            markdown={true}
+            bind:value={input}
+            placeholder="Écrire un message…"
+            on:change={handleComposerChange}
+          />
+        {:else}
+          {#if (commentThreadResolved || !$workspaceCanComment) && commentInput.trim().length === 0}
+            <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+              {commentPlaceholder}
+            </div>
+          {/if}
+          {#if assignedToLabel}
+            <div class="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+              <span>Assigner à @{assignedToLabel}</span>
+              <button
+                type="button"
+                class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                on:click={() => {
+                  assignedToUserId = null;
+                  assignedToLabel = null;
+                }}
+                aria-label="Retirer l'assignation"
+                title="Retirer l'assignation"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+          {/if}
+          <EditableInput
+            markdown={true}
+            bind:value={commentInput}
+            placeholder={commentPlaceholder}
+            on:change={handleComposerChange}
+            disabled={!$workspaceCanComment || commentThreadResolved}
+          />
         {/if}
-        {#if sessionDocs.length > 0}
-          <div class="mb-2 flex flex-wrap gap-2">
-            {#each sessionDocs as doc (doc.id)}
-              <div class="flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
-                <div class="max-w-[220px] truncate">{doc.filename}</div>
-                <span class="text-slate-400">· {sessionDocStatusLabel(doc.status)}</span>
-                <button
-                  class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
-                  type="button"
-                  aria-label="Supprimer le document"
-                  title="Supprimer"
-                  on:click={() => void removeSessionDoc(doc)}
-                >
-                  <X class="w-3 h-3" />
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        <EditableInput
-          markdown={true}
-          bind:value={input}
-          placeholder="Écrire un message…"
-          on:change={handleComposerChange}
-        />
       </div>
+      {#if mode === 'comments' && showMentionMenu}
+        <div
+          class="absolute bottom-12 left-0 z-30 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-2"
+          bind:this={mentionMenuRef}
+        >
+          {#if mentionLoading && mentionDelayElapsed}
+            <div class="px-2 py-1 text-[11px] text-slate-500">Chargement…</div>
+          {:else if mentionError}
+            <div class="px-2 py-1 text-[11px] text-red-600">Erreur de chargement</div>
+          {:else if !mentionLoading && mentionMatches.length === 0}
+            <div class="px-2 py-1 text-[11px] text-slate-500">Aucun membre</div>
+          {:else}
+            <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
+              {#each mentionMatches as member (member.userId)}
+                <button
+                  class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                  type="button"
+                  on:click={() => selectMentionMember(member)}
+                >
+                  <div class="font-medium text-slate-900 truncate">{mentionLabelFor(member)}</div>
+                  {#if member.email}
+                    <div class="text-[10px] text-slate-400 truncate">{member.email}</div>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
       <button
         class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
-        on:click={() => void sendMessage()}
-        disabled={sending || input.trim().length === 0}
+        on:click={() => (mode === 'comments' ? void sendCommentMessage() : void sendMessage())}
+        disabled={
+          mode === 'comments'
+            ? commentInput.trim().length === 0 || !commentContextType || !commentContextId || !$workspaceCanComment || commentThreadResolved
+            : sending || input.trim().length === 0
+        }
         type="button"
         aria-label="Envoyer"
       >

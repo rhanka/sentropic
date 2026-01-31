@@ -21,9 +21,9 @@
 
   let membersLoading = false;
   let membersError: string | null = null;
-  let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'editor' | 'admin' }> = [];
+  let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }> = [];
   let addMemberEmail = '';
-  let addMemberRole: 'viewer' | 'editor' | 'admin' = 'viewer';
+  let addMemberRole: 'viewer' | 'commenter' | 'editor' | 'admin' = 'viewer';
   let lastMembersWorkspaceId: string | null = null;
 
   const HUB_KEY = 'workspace-settings-sse';
@@ -145,7 +145,7 @@
     membersError = null;
     try {
       const data = await apiGet<{
-        items: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'editor' | 'admin' }>;
+        items: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }>;
       }>(`/workspaces/${selectedWorkspace.id}/members`);
       members = data.items || [];
     } catch (e: any) {
@@ -180,7 +180,7 @@
     }
   }
 
-  async function updateMember(userId: string, role: 'viewer' | 'editor' | 'admin') {
+  async function updateMember(userId: string, role: 'viewer' | 'commenter' | 'editor' | 'admin') {
     if (!selectedWorkspace?.id) return;
     try {
       await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
@@ -190,6 +190,11 @@
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur update rôle' });
     }
+  }
+
+  function handleMemberRoleChange(event: Event, userId: string) {
+    const role = (event.currentTarget as HTMLSelectElement).value as 'viewer' | 'commenter' | 'editor' | 'admin';
+    void updateMember(userId, role);
   }
 
   async function removeMember(userId: string) {
@@ -374,6 +379,7 @@
             <div class="text-slate-600">Rôle</div>
             <select class="mt-1 rounded border border-slate-200 px-3 py-2" bind:value={addMemberRole}>
               <option value="viewer">viewer</option>
+              <option value="commenter">commenter</option>
               <option value="editor">editor</option>
               <option value="admin">admin</option>
             </select>
@@ -407,10 +413,11 @@
                       <select
                         class="rounded border border-slate-200 px-2 py-1"
                         value={m.role}
-                        on:change={(e) => updateMember(m.userId, (e.currentTarget as HTMLSelectElement).value as any)}
+                        on:change={(e) => handleMemberRoleChange(e, m.userId)}
                         disabled={m.userId === $session.user?.id}
                       >
                         <option value="viewer">viewer</option>
+                        <option value="commenter">commenter</option>
                         <option value="editor">editor</option>
                         <option value="admin">admin</option>
                       </select>
