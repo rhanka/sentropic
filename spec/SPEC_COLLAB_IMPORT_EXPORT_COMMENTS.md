@@ -74,6 +74,10 @@ documents/
 - The archive includes only data within the requested scope and current workspace.
 - Relationships are preserved by IDs in JSON fields.
 - Documents follow existing S3 layout and are bundled inside the ZIP with the same path.
+ - **Permissions**:
+   - Workspace export requires **admin** role.
+   - Object export (folder/usecase/organization/matrix) allowed for **admin** and **editor** only.
+   - Commenter/viewer cannot export.
 
 ### Scope Behavior
 - `workspace`: all workspace-scoped data (organizations, folders, use cases, matrix, comments, documents).
@@ -86,6 +90,11 @@ documents/
 - Import is performed via a single generic endpoint.
 - The API is the sole owner of new IDs.
 - Import must validate the manifest and file hashes before any DB writes.
+ - **Permissions**:
+   - Workspace import into a **new** workspace is allowed for any authenticated user (API creates workspace).
+   - Workspace import into an **existing** workspace requires **admin** role.
+   - Object import into an existing workspace allowed for **admin** and **editor** only.
+   - Commenter/viewer cannot import.
 
 ### Target Workspace Rules
 - If `target_workspace_id` is **not provided**:

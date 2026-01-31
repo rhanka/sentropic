@@ -238,6 +238,14 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Timestamps:
   - Display uses browser timezone from the ISO timestamp (backend sends timezone offset).
 
+15) Collaboration — Import/Export (permissions)
+- Workspace export: **admin only**.
+- Object export (folder/usecase/organization/matrix): **admin + editor**.
+- Workspace import into a **new** workspace: any authenticated user (API creates workspace).
+- Workspace import into the **current** workspace: **admin only**.
+- Object import into current workspace: **admin + editor**.
+- Commenter/viewer: cannot import/export.
+
 Variables sous-jacentes clés côté backend/API:
 - Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).
 - Contexte de génération: `currentOrganizationId`, association dossier→organisation, prompts/configs.

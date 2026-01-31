@@ -169,6 +169,19 @@ Reuse existing `/streams/sse` channel:
 
 - Include/exclude comments (checkbox).
 
+### Export Permissions
+
+- **Workspace export**: admin only.
+- **Object export** (folder/usecase/organization/matrix): admin and editor.
+- **Commenter/viewer**: cannot export.
+
+### Import Permissions
+
+- **Workspace import into a new workspace**: any authenticated user can import; API creates the workspace.
+- **Workspace import into current workspace**: admin only.
+- **Object import into current workspace**: admin and editor.
+- **Commenter/viewer**: cannot import.
+
 ## Lot 4 — Comments (table + UI + @mentions + close)
 
 - DB: comments table + relations (object + section)
