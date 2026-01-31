@@ -21,6 +21,7 @@ Collaboration features enable multi-user workspace sharing with role-based acces
 ### Workspace Membership Roles
 
 - **`viewer`**: Can view all objects in workspace, cannot edit.
+- **`commenter`**: Can view all objects and create/edit comments, cannot edit objects.
 - **`editor`**: Can view and edit all objects in workspace, cannot manage members or workspace lifecycle.
 - **`admin`**: Can view/edit all objects, manage members (add/remove/change roles), hide/unhide workspace, perform final suppression/export.
 
@@ -125,15 +126,26 @@ Reuse existing `/streams/sse` channel:
 ### Comment Model
 
 - **Target**: Any object and any "data part" within an object (e.g., use case section, matrix cell).
-- **Threading**: One-level replies only (no sub-replies).
-- **Assignment**: Comments can be assigned via `@mention` (autocomplete restricted to workspace members).
+- **Threading**: Flat conversation per `thread_id` (no nested replies).
+- **Assignment**: Comments can be assigned via `@mention` (autocomplete restricted to workspace members). Assignment is stored at the **thread level**.
 - **Default assignee**: If no `@mention`, creator is the default assignee.
-- **Closing**: Only the last assigned user can close a comment.
+- **Resolution**: A thread can be **resolved** (`status=closed`) and later **reopened** (`status=open`). Resolution applies to the **whole thread**.
+- **Resolve permissions**: Only the **thread creator** or a **workspace admin** can resolve/reopen.
+- **Deletion**: Delete removes the root comment and its thread data (hard delete).
 
 ### UI Indicators
 
 - Comment count badge on section headers.
 - Clicking badge opens comment panel with relevant comments.
+- Comment timestamps are displayed using the **browser timezone** while parsing the server `created_at` ISO string **with timezone offset**, so cross-timezone shifts are rendered correctly.
+- Resolved threads are **excluded** from badge counts.
+
+### Comments UI Behavior
+- Comments menu lists **all threads for the current object view** (no section filter in the menu).
+- Threads can be toggled to show **resolved** items; resolved items are shown **struck-through**.
+- Resolving a thread moves selection to the **next open thread** in the same section, else the next open thread in another section; if none, selection is cleared.
+- When a thread is resolved, the sub-header shows **"Resolved {date}"** instead of assignment.
+- Comment composer is **disabled** for resolved threads and for `viewer` role (different placeholder).
 
 ## Import/Export
 
@@ -318,7 +330,7 @@ For a good UX and to avoid misleading feedback:
 - `created_by` (FK users.id)
 - `assigned_to` (FK users.id, nullable)
 - `status` ('open'|'closed')
-- `parent_comment_id` (FK comments.id, nullable): For one-level replies
+- `thread_id`: Conversation identifier (flat conversation, no replies)
 - `content` (text)
 - `created_at` (timestamp)
 - `updated_at` (timestamp)

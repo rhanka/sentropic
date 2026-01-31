@@ -103,8 +103,9 @@ documents/
 
 ## Comments
 - Stored in `comments.json` when `include_comments=true`.
-- Each comment has `context_type`, `context_id`, `section_key`, `assigned_to`, `status`, `parent_comment_id`.
-- Replies are only one level deep.
+- Each comment has `context_type`, `context_id`, `section_key`, `assigned_to`, `status`, `thread_id`.
+- Threads are **flat**: all messages in a thread share the same `thread_id`.
+- `status` is **thread-level** (`open`/`closed`); resolving updates the entire thread.
 
 ## Documents
 - Included when `include_documents=true`.

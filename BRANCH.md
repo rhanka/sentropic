@@ -86,17 +86,56 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] Return comment counts for sections if needed by UI.
     - [x] `make typecheck` + `make lint`
 
-- [ ] **Lot 3 — Comments UI**
-    - [ ] Add comment indicators on section headers/cards.
-    - [ ] Add comment panel listing + one-level replies.
-    - [ ] Add @mention autocomplete in composer.
-    - [ ] Add close/reopen flow (respect role + last assignee).
-    - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 3 (user-run)
-        - [ ] Type `@` and ensure autocomplete is restricted to workspace members.
-        - [ ] Assign a comment to another user and verify assignee changes.
-        - [ ] Add multiple comments across sections.
-        - [ ] Verify header badges display counts and update live.
+- [x] **Lot 3 — Comments UI**
+    - [x] Add comment indicators on section headers/cards.
+    - [x] Add comment panel listing + one-level replies.
+    - [x] Add @mention autocomplete in composer.
+    - [x] Add close/reopen flow (respect role + last assignee).
+    - [x] `make typecheck` + `make lint`
+
+- [x] **Lot 3bis — Chat UI tabs + comments**
+    - [x] Replace header select with tabs: Commentaires / Chat IA / Jobs IA.
+    - [x] Move session selector into a chat-only menu icon.
+    - [x] Reorder header actions (resize just left of close).
+    - [x] Make `ChatPanel` configurable (`ai` vs `comments`).
+    - [x] Comments tab uses chat-style conversation UI (avatars, copy, edit last).
+    - [x] List comment conversations in menu with comment count.
+    - [x] `make typecheck` + `make lint`
+    - [ ] UAT lot 3 + 3bis (user-run)
+        - [x] Switch tabs without chat reload.
+        - [x] Open comment menu and switch conversations.
+        - [x] Verify comments tab shows section label (Description / Général).
+        - [x] Type `@` and ensure autocomplete is restricted to workspace members.
+        - [x] Assign a comment to another user and verify assignee changes.
+        - [x] Add multiple comments across sections.
+        - [x] Verify header badges display counts and update live.
+        - [x] Click on header badge open last comment corresponding to the section
+        - [x] New comment thread auto-selects after creation.
+        - [x] No tab "blink" when sending a new comment.
+        - [x] Automatic scroll to last message
+        - [x] Comment composer UI matches Chat IA (no extra wrapper).
+        - [x] Comments tab shows + and trash actions (same order as Chat IA).
+        - [x] Only comments for the current view/section are shown.
+        - [x] User can modify its last message (if no one commented after)
+        - [x] Empty state copy: "Sélectionne une conversation pour commencer ou écris
+         un commentaire".
+        - [x] Subheader ("Description - Assigné à ") must always be visible when scrolling in conversation
+        - [x] Viewer can't comment / input is grayed
+        - [x] Admin, Editor, Commenter roles can comment
+        - [x] Date of comment are displayed
+        - [x] Resolve comment with a check button in the top header of chatwidget
+        - [x] Close comment once resolved and skip to next comment
+        - [x] Remove comment from menu once resolved (when menu is in resolved message masking mode)
+        - [x] Display resolved comments through menu (still strikethrough)
+        - [x] Enable to repoen resolved comment
+        - [x] Resolved comments are not counted in the badge
+        - [x] Background of conversation of a resolved message is grayed
+        - [x] When displaying a closed message we see the date of the resolution
+        - [x] Only the initial creator of the conversation or an admin of the object can resolve a message
+        - [x] Only the initial creator of the conversation or an admin of the object can delete a message
+        - [ ] Fix blink in parameters view when admin workspace change role of user
+        - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
+
 
 - [ ] **Lot 4 — Import/Export API**
     - [ ] Implement generic export endpoint for `.zip` (scope-based, include `matrix`).

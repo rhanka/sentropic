@@ -219,6 +219,25 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Intention: vue technique/outillage (tableaux, prévisualisation de données).
 - API: endpoints utilitaires si nécessaire (facultatif), sinon mock/démo.
 
+14) Collaboration — Comments (ChatWidget)
+- Scope: comments are scoped to the **current object view** (contextType + contextId), not to the whole workspace.
+- Menu: comment menu lists **all threads for the current object view** (no section filter in the menu).
+- Threads: flat conversations by `thread_id` (no nested replies).
+- Roles:
+  - `viewer`: read-only, cannot comment.
+  - `commenter`: can comment but cannot edit objects.
+  - `editor`/`admin`: can edit objects and comment.
+- Resolve flow:
+  - Resolve/reopen is **thread-level** (`status=open|closed`).
+  - Only the **thread creator** or **workspace admin** can resolve/reopen.
+  - On resolve, selection moves to the next open thread (same section → next section → none).
+- Resolved visibility:
+  - Toggle in comment menu to show resolved items (strikethrough).
+  - Resolved threads are **excluded** from badge counts.
+  - Comment composer is disabled for resolved threads (distinct placeholder).
+- Timestamps:
+  - Display uses browser timezone from the ISO timestamp (backend sends timezone offset).
+
 Variables sous-jacentes clés côté backend/API:
 - Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).
 - Contexte de génération: `currentOrganizationId`, association dossier→organisation, prompts/configs.

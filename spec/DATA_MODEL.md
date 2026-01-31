@@ -22,7 +22,7 @@ erDiagram
     organizations ||--o{ use_cases : "organization_id (optional)"
     users ||--o{ comments : "created_by"
     users ||--o{ comments : "assigned_to (optional)"
-    comments ||--o{ comments : "parent_comment_id (optional)"
+    comments ||--o{ comments : "thread_id"
 
     workspaces {
         text id PK
@@ -125,7 +125,7 @@ erDiagram
         text created_by FK
         text assigned_to "FK users.id (nullable)"
         text status
-        text parent_comment_id "FK comments.id (nullable)"
+        text thread_id
         text content
         timestamp created_at
         timestamp updated_at
@@ -138,7 +138,7 @@ Notes :
 - `workspaces.owner_user_id` est **nullable** (plus de contrainte unique).
 - `workspaces.hidden_at` indique la visibilité (workspaces cachés).
 - `workspace_memberships` est la source de vérité des rôles (`viewer` | `editor` | `admin`).
-- `comments` stocke les commentaires avec réponses à un seul niveau, scoppés par workspace.
+- `comments` stocke les commentaires dans des conversations à plat (`thread_id`), scoppés par workspace.
 
 ## Prompts (état actuel vs cible)
 
