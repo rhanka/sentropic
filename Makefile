@@ -93,6 +93,14 @@ git-stats: ## Show git stats (commits, merged PR via merge commits)
 	  echo "Note: les PR squash/rebase ne laissent pas toujours de trace fiable dans git; utiliser l’API GitHub pour un chiffre exact."; \
 	fi
 
+.PHONY: commit
+commit: ## Create a git commit (MSG="type: message")
+	@if [ -z "$(MSG)" ]; then \
+		echo "❌ Error: MSG is required (e.g., make commit MSG='docs: update spec')"; \
+		exit 1; \
+	fi
+	@HUSKY=0 git commit -m "$(MSG)"
+
 # -----------------------------------------------------------------------------
 # Installation & Build
 # -----------------------------------------------------------------------------
