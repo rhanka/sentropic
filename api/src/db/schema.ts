@@ -431,7 +431,7 @@ export const workspaceMemberships = pgTable('workspace_memberships', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'viewer' | 'editor' | 'admin'
+  role: text('role').notNull(), // 'viewer' | 'commenter' | 'editor' | 'admin'
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
 }, (table) => ({
   workspaceUserUnique: uniqueIndex('workspace_memberships_workspace_id_user_id_unique').on(table.workspaceId, table.userId),
@@ -466,7 +466,7 @@ export const objectLocks = pgTable('object_locks', {
 
 export type ObjectLockRow = typeof objectLocks.$inferSelect;
 
-// Lot 4: Comments (one-level replies, workspace-scoped)
+// Lot 4: Comments (flat conversations, workspace-scoped)
 export const comments = pgTable('comments', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id')
@@ -480,18 +480,14 @@ export const comments = pgTable('comments', {
     .references(() => users.id, { onDelete: 'cascade' }),
   assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('open'), // 'open' | 'closed'
-  parentCommentId: text('parent_comment_id'),
+  threadId: text('thread_id').notNull(),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
-  parentCommentFk: foreignKey({
-    columns: [table.parentCommentId],
-    foreignColumns: [table.id],
-  }).onDelete('cascade'),
   workspaceIdIdx: index('comments_workspace_id_idx').on(table.workspaceId),
   contextIdx: index('comments_context_idx').on(table.contextType, table.contextId),
-  parentCommentIdx: index('comments_parent_comment_id_idx').on(table.parentCommentId),
+  threadIdIdx: index('comments_thread_id_idx').on(table.threadId),
   assignedToIdx: index('comments_assigned_to_idx').on(table.assignedTo),
   statusIdx: index('comments_status_idx').on(table.status),
 }));

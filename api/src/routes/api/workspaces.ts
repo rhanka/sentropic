@@ -18,10 +18,11 @@ import { and, desc, eq } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess } from '../../services/workspace-access';
+import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 
 export const workspacesRouter = new Hono();
 
-const roleSchema = z.enum(['viewer', 'editor', 'admin']);
+const roleSchema = z.enum(['viewer', 'commenter', 'editor', 'admin']);
 
 function escapeNotifyPayload(payload: Record<string, unknown>): string {
   return JSON.stringify(payload).replace(/'/g, "''");
@@ -212,15 +213,8 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
 
 // --- Members management (admin-only) ---
 
-workspacesRouter.get('/:id/members', async (c) => {
-  const user = c.get('user') as { userId: string };
+workspacesRouter.get('/:id/members', requireWorkspaceAccessRole(), async (c) => {
   const workspaceId = c.req.param('id');
-
-  try {
-    await requireWorkspaceAdmin(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
 
   const rows = await db
     .select({

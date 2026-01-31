@@ -4,7 +4,7 @@ import { zValidator } from '@hono/zod-validator';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { comments, folders, organizations, useCases, users, workspaceMemberships } from '../../db/schema';
-import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { requireWorkspaceAccessRole, requireWorkspaceCommenterRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceAdmin } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
 
@@ -125,7 +125,7 @@ commentsRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
       created_by: row.createdBy,
       assigned_to: row.assignedTo,
       status: row.status,
-      parent_comment_id: row.parentCommentId,
+      thread_id: row.threadId,
       content: row.content,
       created_at: row.createdAt,
       updated_at: row.updatedAt,
@@ -141,34 +141,38 @@ const createSchema = z.object({
   section_key: z.string().optional(),
   content: z.string().min(1),
   assigned_to: z.string().optional(),
-  parent_comment_id: z.string().optional(),
+  thread_id: z.string().optional(),
 });
 
-commentsRouter.post('/', requireWorkspaceEditorRole(), zValidator('json', createSchema), async (c) => {
+commentsRouter.post('/', requireWorkspaceCommenterRole(), zValidator('json', createSchema), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const body = c.req.valid('json');
 
   const ok = await ensureContextExists(body.context_type, body.context_id, user.workspaceId);
   if (!ok) return c.json({ message: 'Not found' }, 404);
 
-  let parentCommentId: string | null = null;
-  if (body.parent_comment_id) {
-    const [parent] = await db
-      .select()
+  let threadId = body.thread_id?.trim() || null;
+  let existingAssignedTo: string | null = null;
+  if (threadId) {
+    const [threadRow] = await db
+      .select({ id: comments.id, assignedTo: comments.assignedTo })
       .from(comments)
-      .where(and(eq(comments.id, body.parent_comment_id), eq(comments.workspaceId, user.workspaceId)))
+      .where(
+        and(
+          eq(comments.workspaceId, user.workspaceId),
+          eq(comments.contextType, body.context_type),
+          eq(comments.contextId, body.context_id),
+          eq(comments.threadId, threadId),
+        )
+      )
       .limit(1);
-    if (!parent) return c.json({ message: 'Parent comment not found' }, 404);
-    if (parent.parentCommentId) {
-      return c.json({ message: 'Only one-level replies are allowed' }, 400);
-    }
-    if (parent.contextType !== body.context_type || parent.contextId !== body.context_id) {
-      return c.json({ message: 'Parent comment context mismatch' }, 400);
-    }
-    parentCommentId = parent.id;
+    if (!threadRow) return c.json({ message: 'Thread not found' }, 404);
+    existingAssignedTo = threadRow.assignedTo ?? null;
+  } else {
+    threadId = createId();
   }
 
-  const assignedTo = body.assigned_to ?? user.userId;
+  const assignedTo = body.assigned_to ?? existingAssignedTo ?? user.userId;
   if (!(await ensureWorkspaceMember(assignedTo, user.workspaceId))) {
     return c.json({ message: 'Assigned user not in workspace' }, 400);
   }
@@ -184,14 +188,21 @@ commentsRouter.post('/', requireWorkspaceEditorRole(), zValidator('json', create
     createdBy: user.userId,
     assignedTo,
     status: 'open',
-    parentCommentId,
+    threadId,
     content: body.content.trim(),
     createdAt: now,
     updatedAt: now,
   });
 
+  if (body.assigned_to && threadId) {
+    await db
+      .update(comments)
+      .set({ assignedTo, updatedAt: now })
+      .where(and(eq(comments.workspaceId, user.workspaceId), eq(comments.threadId, threadId)));
+  }
+
   await notifyCommentEvent(user.workspaceId, body.context_type, body.context_id, { action: 'created', comment_id: id });
-  return c.json({ id }, 201);
+  return c.json({ id, thread_id: threadId }, 201);
 });
 
 const updateSchema = z.object({
@@ -199,7 +210,7 @@ const updateSchema = z.object({
   assigned_to: z.string().nullable().optional(),
 });
 
-commentsRouter.patch('/:id', requireWorkspaceEditorRole(), zValidator('json', updateSchema), async (c) => {
+commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json', updateSchema), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const body = c.req.valid('json');
@@ -231,12 +242,19 @@ commentsRouter.patch('/:id', requireWorkspaceEditorRole(), zValidator('json', up
   }
   if (Object.keys(updates).length === 1) return c.json({ message: 'No updates' }, 400);
 
-  await db.update(comments).set(updates).where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+  if (updates.assignedTo) {
+    await db
+      .update(comments)
+      .set(updates)
+      .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
+  } else {
+    await db.update(comments).set(updates).where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+  }
   await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'updated', comment_id: id });
   return c.json({ success: true });
 });
 
-commentsRouter.post('/:id/close', requireWorkspaceEditorRole(), async (c) => {
+commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
 
@@ -246,20 +264,26 @@ commentsRouter.post('/:id/close', requireWorkspaceEditorRole(), async (c) => {
     .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
     .limit(1);
   if (!row) return c.json({ message: 'Not found' }, 404);
-  if (row.assignedTo !== user.userId) {
-    return c.json({ message: 'Only the assigned user can close the comment' }, 403);
+  const isCreator = row.createdBy === user.userId;
+  if (!isCreator) {
+    try {
+      await requireWorkspaceAdmin(user.userId, user.workspaceId);
+    } catch {
+      return c.json({ message: 'Only the creator or admin can close the comment' }, 403);
+    }
   }
 
+  const now = new Date();
   await db
     .update(comments)
-    .set({ status: 'closed', updatedAt: new Date() })
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+    .set({ status: 'closed', updatedAt: now })
+    .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
 
   await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'closed', comment_id: id });
   return c.json({ success: true });
 });
 
-commentsRouter.post('/:id/reopen', requireWorkspaceEditorRole(), async (c) => {
+commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
 
@@ -269,15 +293,46 @@ commentsRouter.post('/:id/reopen', requireWorkspaceEditorRole(), async (c) => {
     .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
     .limit(1);
   if (!row) return c.json({ message: 'Not found' }, 404);
-  if (row.assignedTo !== user.userId) {
-    return c.json({ message: 'Only the assigned user can reopen the comment' }, 403);
+  const isCreator = row.createdBy === user.userId;
+  if (!isCreator) {
+    try {
+      await requireWorkspaceAdmin(user.userId, user.workspaceId);
+    } catch {
+      return c.json({ message: 'Only the creator or admin can reopen the comment' }, 403);
+    }
   }
 
+  const now = new Date();
   await db
     .update(comments)
-    .set({ status: 'open', updatedAt: new Date() })
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+    .set({ status: 'open', updatedAt: now })
+    .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
 
   await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'reopened', comment_id: id });
+  return c.json({ success: true });
+});
+
+commentsRouter.delete('/:id', requireWorkspaceCommenterRole(), async (c) => {
+  const user = c.get('user') as { workspaceId: string; userId: string };
+  const id = c.req.param('id');
+
+  const [row] = await db
+    .select()
+    .from(comments)
+    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!row) return c.json({ message: 'Not found' }, 404);
+
+  const isCreator = row.createdBy === user.userId;
+  if (!isCreator) {
+    try {
+      await requireWorkspaceAdmin(user.userId, user.workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
+  }
+
+  await db.delete(comments).where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+  await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'deleted', comment_id: id });
   return c.json({ success: true });
 });
