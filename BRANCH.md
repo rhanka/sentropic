@@ -133,8 +133,6 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] When displaying a closed message we see the date of the resolution
         - [x] Only the initial creator of the conversation or an admin of the object can resolve a message
         - [x] Only the initial creator of the conversation or an admin of the object can delete a message
-        - [ ] Fix blink in parameters view when admin workspace change role of user
-        - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
 
 
 - [ ] **Lot 4 — Import/Export API**
@@ -163,6 +161,11 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [ ] Trigger export from UI with options (comments/documents).
         - [ ] Trigger import from UI and verify success state and counts.
         - [ ] Import into another workspace via target selector.
+
+- [ ] **Lot 5bis - fixes from UATs
+    - [ ] Fix blink in parameters view when admin workspace change role of user
+    - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
+
 
 - [ ] **Lot 6 — Docs (spec updates)**
     - [ ] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
