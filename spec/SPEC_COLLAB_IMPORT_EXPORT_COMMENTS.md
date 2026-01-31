@@ -71,6 +71,7 @@ documents/
 
 ## Export Rules
 - Export is performed via a single generic endpoint.
+- Endpoint: `POST /api/v1/exports` (JSON body, response is a ZIP).
 - The archive includes only data within the requested scope and current workspace.
 - Relationships are preserved by IDs in JSON fields.
 - Documents follow existing S3 layout and are bundled inside the ZIP with the same path.
@@ -88,6 +89,7 @@ documents/
 
 ## Import Rules
 - Import is performed via a single generic endpoint.
+- Endpoint: `POST /api/v1/imports` (multipart form-data with `file` + optional `target_workspace_id`).
 - The API is the sole owner of new IDs.
 - Import must validate the manifest and file hashes before any DB writes.
  - **Permissions**:

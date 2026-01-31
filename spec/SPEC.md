@@ -245,6 +245,9 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Workspace import into the **current** workspace: **admin only**.
 - Object import into current workspace: **admin + editor**.
 - Commenter/viewer: cannot import/export.
+- Endpoints:
+  - `POST /api/v1/exports` (JSON body, ZIP response)
+  - `POST /api/v1/imports` (multipart form-data: `file`, optional `target_workspace_id`)
 
 Variables sous-jacentes clés côté backend/API:
 - Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).

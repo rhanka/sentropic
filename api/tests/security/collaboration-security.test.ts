@@ -98,6 +98,15 @@ describe('Collaboration security', () => {
       body: form as any,
     });
     expect(docRes.status).toBe(403);
+
+    const exportRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/exports',
+      viewer.sessionToken!,
+      { scope: 'workspace', include_comments: false, include_documents: false }
+    );
+    expect(exportRes.status).toBe(403);
   });
 
   it('returns 403 for editor member management + workspace lifecycle', async () => {

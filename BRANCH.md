@@ -136,22 +136,36 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 
 
 - [ ] **Lot 4 — Import/Export API**
-    - [ ] Implement generic export endpoint for `.zip` (scope-based, include `matrix`).
-    - [ ] Add export options (include/exclude comments, include/exclude documents).
-    - [ ] Implement generic import endpoint with validation and workspace scoping.
-    - [ ] Support importing into another workspace (`target_workspace_id`).
-    - [ ] Ensure documents follow S3 layout and are included/excluded per spec.
-    - [ ] Enforce import rules:
-        - [ ] If `target_workspace_id` is missing, API creates a new workspace.
-        - [ ] If `target_workspace_id` exists, merge into it (no id override from UI).
-        - [ ] If `target_workspace_id` does not exist, refuse (do not create with UI-provided id).
-        - [ ] If `target_workspace_id` is not admin-owned by requester, refuse.
-    - [ ] `make typecheck` + `make lint`
+    - [x] Add dependency for ZIP + SHA-256 helpers (API container only).
+    - [x] Create `api/src/routes/api/import-export.ts` with:
+        - [x] `POST /exports` (JSON body, scope-based).
+        - [x] `POST /imports` (multipart ZIP upload).
+    - [x] Register routes in `api/src/routes/api/index.ts`.
+    - [x] Export implementation:
+        - [x] Collect data by scope (workspace/folder/usecase/organization/matrix).
+        - [x] Optional comments/documents inclusion.
+        - [x] Build `manifest.json` + `meta.json`.
+        - [x] Zip JSON files + document blobs following S3 layout.
+        - [x] Stream ZIP response with correct headers.
+    - [x] Import implementation:
+        - [x] Validate ZIP structure + `manifest.json` + hashes.
+        - [x] Enforce workspace rules (new workspace vs existing target).
+        - [x] Remap all IDs; never trust UI-provided IDs.
+        - [x] Insert records in dependency order (workspace → orgs/folders/usecases → comments → documents).
+        - [x] Store documents in S3 using new workspace/context IDs.
+    - [x] Permissions enforcement:
+        - [x] Export workspace: admin only.
+        - [x] Export objects: admin/editor only.
+        - [x] Import into new workspace: authenticated user.
+        - [x] Import into existing workspace: admin only.
+        - [x] Import objects into existing workspace: admin/editor only.
+    - [x] `make typecheck` + `make lint`
     - [ ] UAT lot 4 (user-run)
-        - [ ] Export `.zip` with comments.
-        - [ ] Export `.zip` without comments.
-        - [ ] Import back and verify comment presence/absence.
-        - [ ] Import into another workspace (target selected).
+        - [ ] Export `.zip` with comments + documents.
+        - [ ] Export `.zip` without comments + documents.
+        - [ ] Import to new workspace (no target id).
+        - [ ] Import into existing workspace (target selected, admin only).
+        - [ ] Verify permissions: editor can export objects; commenter/viewer cannot export/import.
 
 - [ ] **Lot 5 — Import/Export UI**
     - [ ] Add UI actions for export with options.
@@ -177,12 +191,11 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 
 - [ ] **Lot 7 — Tests + Final validation**
     - [ ] API tests:
-        - [ ] New `tests/api/comments.test.ts`: CRUD, replies, @mention assignment, close rules.
-        - [ ] Update `tests/security/collaboration-security.test.ts`: role/tenancy for comments + import/export.
-        - [ ] Update `tests/api/workspaces.test.ts`: export/import scoping + visibility.
-        - [ ] Update `tests/api/locks.test.ts`: comments do not break lock presence.
-        - [ ] Update `tests/api/use-cases.test.ts`: comment counts/metadata if returned.
-        - [ ] Regression: `tests/api/organizations.test.ts`, `tests/api/folders.test.ts` for export/import.
+        - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
+        - [x] Update `tests/security/collaboration-security.test.ts`: role/tenancy for import/export.
+        - [ ] Update `tests/api/workspaces.test.ts`: workspace import/export permission gates.
+        - [ ] Regression: `tests/api/organizations.test.ts`, `tests/api/folders.test.ts`, `tests/api/use-cases.test.ts` (export/import visibility).
+        - [ ] Comments regressions remain covered by existing comment tests.
     - [ ] UI tests:
         - [ ] Update `tests/stores/useCases.test.ts`: comment count indicators and store updates.
         - [ ] Update `tests/stores/folders.test.ts`: comment badge propagation (if needed).
