@@ -11,10 +11,12 @@
   import { API_BASE_URL } from '$lib/config';
   import { fetchUseCases } from '$lib/stores/useCases';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, selectedWorkspace } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X, Lock } from '@lucide/svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -31,6 +33,9 @@
   let availableFolders: Folder[] = [];
   let selectedFolderToCopy = '';
   let isReadOnly = false;
+  let showExportDialog = false;
+  let currentFolderName = '';
+  $: workspaceName = $selectedWorkspace?.name || '';
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
@@ -266,6 +271,7 @@
     isLoading = true;
     try {
       const folder = await apiGet(`/folders/${$currentFolderId}`);
+      currentFolderName = folder.name || '';
       
       if (folder.matrixConfig) {
         const matrix = typeof folder.matrixConfig === 'string' 
@@ -824,6 +830,19 @@
 <div class="mb-6 flex items-start justify-between gap-4">
   <h1 class="text-3xl font-bold text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
   <div class="flex items-center gap-2 flex-wrap justify-end">
+    {#if $currentFolderId}
+      <FileMenu
+        showNew={false}
+        showImport={false}
+        showExport={true}
+        showPrint={false}
+        showDelete={false}
+        disabledExport={isReadOnly}
+        onExport={() => (showExportDialog = true)}
+        triggerTitle="Actions matrice"
+        triggerAriaLabel="Actions matrice"
+      />
+    {/if}
     <LockPresenceBadge
       {lock}
       {lockLoading}
@@ -1282,6 +1301,20 @@
     </div>
   </div>
 {/if}
+
+<ImportExportDialog
+  bind:open={showExportDialog}
+  mode="export"
+  title="Exporter la matrice"
+  scope="matrix"
+  scopeId={$currentFolderId || ''}
+  allowScopeSelect={false}
+  allowScopeIdEdit={false}
+  workspaceName={workspaceName}
+  objectName={currentFolderName || 'Matrice'}
+  commentsAvailable={false}
+  documentsAvailable={false}
+/>
 
 <!-- Dialog for creating a new matrix -->
 {#if showCreateMatrixDialog}

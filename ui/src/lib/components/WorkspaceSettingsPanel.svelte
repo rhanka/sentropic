@@ -6,10 +6,15 @@
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
 
   let creatingWorkspace = false;
   let newWorkspaceName = '';
+  let newWorkspaceInputRef: HTMLInputElement | null = null;
+  let showWorkspaceExportDialog = false;
+  let showWorkspaceImportDialog = false;
 
   let selectedWorkspace: UserWorkspace | null = null;
   let isWorkspaceAdmin = false;
@@ -44,6 +49,10 @@
       membersReloadTimer = null;
       await loadMembers();
     }, 150);
+  }
+
+  async function handleImportComplete() {
+    await loadUserWorkspaces();
   }
 
   function shouldIgnoreRowClick(event: MouseEvent): boolean {
@@ -242,6 +251,7 @@
         class="mt-1 w-72 rounded border border-slate-200 px-3 py-2"
         placeholder="Nom du workspace"
         bind:value={newWorkspaceName}
+        bind:this={newWorkspaceInputRef}
       />
     </label>
     <button
@@ -251,6 +261,19 @@
     >
       Créer
     </button>
+    <FileMenu
+      showNew={true}
+      showImport={true}
+      showExport={true}
+      showPrint={false}
+      showDelete={false}
+      disabledExport={!isWorkspaceAdmin}
+      onNew={() => newWorkspaceInputRef?.focus()}
+      onImport={() => (showWorkspaceImportDialog = true)}
+      onExport={() => (showWorkspaceExportDialog = true)}
+      triggerTitle="Actions workspace"
+      triggerAriaLabel="Actions workspace"
+    />
   </div>
 
   {#if !noWorkspaces}
@@ -442,5 +465,31 @@
       </div>
     </div>
   {/if}
+
+  <ImportExportDialog
+    bind:open={showWorkspaceExportDialog}
+    mode="export"
+    title="Exporter un workspace"
+    scope="workspace"
+    allowScopeSelect={false}
+    allowScopeIdEdit={false}
+    workspaceName={selectedWorkspace?.name ?? ''}
+    includeOptions={[
+      { id: 'organizations', label: 'Inclure les organisations', defaultChecked: true },
+      { id: 'folders', label: 'Inclure les dossiers', defaultChecked: true },
+      { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
+      { id: 'matrix', label: 'Inclure les matrices', defaultChecked: true },
+    ]}
+  />
+
+  <ImportExportDialog
+    bind:open={showWorkspaceImportDialog}
+    mode="import"
+    title="Importer un workspace"
+    scope="workspace"
+    allowScopeSelect={true}
+    allowScopeIdEdit={true}
+    on:imported={handleImportComplete}
+  />
 
 

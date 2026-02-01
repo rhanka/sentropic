@@ -12,11 +12,14 @@
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, workspaceScope } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { listComments } from '$lib/utils/comments';
-  import { Trash2, Lock } from '@lucide/svelte';
+  import { fetchFolders } from '$lib/stores/folders';
+  import { Lock } from '@lucide/svelte';
 
   let organization: Organization | null = null;
   let error = '';
@@ -33,7 +36,10 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
+  let showExportDialog = false;
   let commentCounts: Record<string, number> = {};
+  let hasDocuments = false;
+  let organizationFolderCount = 0;
   let workspaceId: string | null = null;
   let commentUserId: string | null = null;
   let lastCommentCountsKey = '';
@@ -75,6 +81,9 @@
   $: organizationId = $page.params.id;
   $: workspaceId = $workspaceScope.selectedId ?? null;
   $: commentUserId = $session.user?.id ?? null;
+  $: workspaceName =
+    ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId)?.name ?? '';
+  $: commentsTotal = Object.values(commentCounts).reduce((sum, v) => sum + v, 0);
 
   const subscribeLock = (organizationId: string) => {
     if (lockHubKey) streamHub.delete(lockHubKey);
@@ -108,7 +117,7 @@
     });
   };
 
-  onMount(() => {
+  onMount(async () => {
     void loadOrganization();
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handleLeave);
@@ -117,6 +126,14 @@
     if (organizationId) {
       setupOrganizationHub(organizationId);
       lastOrganizationIdForCounts = organizationId;
+    }
+    if (organizationId) {
+      try {
+        const folders = await fetchFolders({ organizationId });
+        organizationFolderCount = folders.length;
+      } catch (error) {
+        console.error('Failed to load folders:', error);
+      }
     }
     hasMounted = true;
   });
@@ -218,7 +235,7 @@
     if (commentCountsLoading) return;
     commentCountsLoading = true;
     try {
-      const res = await listComments({ contextType: 'organization', contextId: organizationId });
+      const res = await listComments({ contextType: 'organization', contextId: organizationId! });
       const counts: Record<string, number> = {};
       const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
       for (const item of res.items || []) {
@@ -432,7 +449,7 @@
 
 {#if organization}
   <OrganizationForm
-    organization={organization as any}
+    organization={organization}
     {organizationData}
     apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
     locked={isLockedByOther || isReadOnlyRole}
@@ -460,16 +477,20 @@
         on:forceUnlock={handleForceUnlock}
         on:releaseLock={handleReleaseLock}
       />
-      {#if canDelete}
-        <button
-          class="rounded p-2 transition text-warning hover:bg-slate-100"
-          title="Supprimer"
-          aria-label="Supprimer"
-          on:click={handleDelete}
-        >
-          <Trash2 class="w-5 h-5" />
-        </button>
-      {:else if showReadOnlyLock && !showPresenceBadge}
+      <FileMenu
+        showNew={false}
+        showImport={false}
+        showExport={true}
+        showPrint={false}
+        showDelete={canDelete}
+        disabledImport={isReadOnlyRole}
+        disabledExport={isReadOnlyRole}
+        onExport={() => (showExportDialog = true)}
+        onDelete={handleDelete}
+        triggerTitle="Actions"
+        triggerAriaLabel="Actions"
+      />
+      {#if !canDelete && showReadOnlyLock && !showPresenceBadge}
         <button
           class="rounded p-2 transition text-slate-400 cursor-not-allowed"
           title="Mode lecture seule : création / suppression désactivées."
@@ -483,7 +504,13 @@
     </div>
 
     <div slot="underHeader">
-      <DocumentsBlock contextType="organization" contextId={organization.id} />
+      <DocumentsBlock
+        contextType="organization"
+        contextId={organization.id}
+        on:state={(event) => {
+          hasDocuments = (event.detail?.items || []).length > 0;
+        }}
+      />
     </div>
 
     <div slot="bottom">
@@ -510,6 +537,29 @@
   <div class="text-center py-12">
     <p class="text-slate-500">Chargement...</p>
   </div>
+{/if}
+
+{#if organization}
+  <ImportExportDialog
+    bind:open={showExportDialog}
+    mode="export"
+    title="Exporter l'organisation"
+    scope="organization"
+    scopeId={organization.id}
+    allowScopeSelect={false}
+    allowScopeIdEdit={false}
+    workspaceName={workspaceName}
+    objectName={organization?.name || ''}
+    commentsAvailable={commentsTotal > 0}
+    documentsAvailable={hasDocuments}
+    includeOptions={
+      organizationFolderCount > 0
+        ? [{ id: 'folders', label: 'Inclure les dossiers rattachés', defaultChecked: false }]
+        : []
+    }
+    includeAffectsComments={['folders']}
+    includeAffectsDocuments={['folders']}
+  />
 {/if}
 
 

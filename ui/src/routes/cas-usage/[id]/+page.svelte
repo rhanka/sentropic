@@ -12,11 +12,13 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, workspaceScope } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { listComments } from '$lib/utils/comments';
-  import { Printer, Trash2, Lock } from '@lucide/svelte';
+  import { Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
   let useCase: any = undefined;
@@ -38,7 +40,9 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
+  let showExportDialog = false;
   let commentCounts: Record<string, number> = {};
+  let hasDocuments = false;
   let workspaceId: string | null = null;
   let commentUserId: string | null = null;
   let lastCommentCountsKey = '';
@@ -60,6 +64,9 @@
   $: useCaseId = $page.params.id;
   $: workspaceId = $workspaceScope.selectedId ?? null;
   $: commentUserId = $session.user?.id ?? null;
+  $: workspaceName =
+    ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId)?.name ?? '';
+  $: commentsTotal = Object.values(commentCounts).reduce((sum, v) => sum + v, 0);
 
   onMount(() => {
     loadUseCase();
@@ -560,22 +567,21 @@
               on:forceUnlock={handleForceUnlock}
               on:releaseLock={handleReleaseLock}
             />
-            <button
-              on:click={() => window.print()}
-              class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
-              title="Imprimer ou exporter en PDF"
-            >
-              <Printer class="w-5 h-5" />
-            </button>
-            {#if !isReadOnly}
-            <button 
-              on:click={handleDelete}
-              class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
-              title="Supprimer le cas d'usage"
-            >
-              <Trash2 class="w-5 h-5" />
-            </button>
-            {:else if showReadOnlyLock && !showPresenceBadge}
+            <FileMenu
+              showNew={false}
+              showImport={false}
+              showExport={true}
+              showPrint={true}
+              showDelete={!isReadOnly}
+              disabledImport={isReadOnly}
+              disabledExport={isReadOnly}
+              onExport={() => (showExportDialog = true)}
+              onPrint={() => window.print()}
+              onDelete={handleDelete}
+              triggerTitle="Actions"
+              triggerAriaLabel="Actions"
+            />
+            {#if isReadOnly && showReadOnlyLock && !showPresenceBadge}
               <button
                 class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
                 title="Mode lecture seule : création / suppression désactivées."
@@ -589,10 +595,42 @@
       </svelte:fragment>
     </UseCaseDetail>
 
-    <DocumentsBlock contextType="usecase" contextId={useCase.id} />
+    <DocumentsBlock
+      contextType="usecase"
+      contextId={useCase.id}
+      on:state={(event) => {
+        hasDocuments = (event.detail?.items || []).length > 0;
+      }}
+    />
   {/if}
 </section>
 
 {#if useCase}
   <!-- Commentaires gérés par ChatWidget -->
+{/if}
+
+{#if useCase}
+  <ImportExportDialog
+    bind:open={showExportDialog}
+    mode="export"
+    title="Exporter le cas d'usage"
+    scope="usecase"
+    scopeId={useCase.id}
+    allowScopeSelect={false}
+    allowScopeIdEdit={false}
+    workspaceName={workspaceName}
+    objectName={useCase?.data?.name || useCase?.name || ''}
+    commentsAvailable={commentsTotal > 0}
+    documentsAvailable={hasDocuments}
+    includeOptions={[
+      { id: 'folders', label: 'Inclure le dossier', defaultChecked: true },
+      { id: 'matrix', label: 'Inclure la matrice du dossier', defaultChecked: true },
+      ...(organizationId
+        ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+        : []),
+    ]}
+    includeDependencies={{ matrix: ['folders'] }}
+    includeAffectsComments={['folders', 'matrix', 'organization']}
+    includeAffectsDocuments={['folders', 'matrix', 'organization']}
+  />
 {/if}
