@@ -149,25 +149,55 @@ Reuse existing `/streams/sse` channel:
 
 ## Import/Export
 
-### Archive Formats
+### Archive Format (ZIP)
 
-- **`.topw`** (workspace): ZIP containing workspace JSON + organizations JSON + folders JSON + use cases JSON + comments JSON (optional) + documents (if any) + metadata (DB migration version).
-- **`.topf`** (folder): ZIP containing folder JSON + use cases JSON + documents (if any).
-- **`.topu`** (use case(s)): ZIP containing use cases JSON array + documents (if any).
-- **`.topo`** (organization(s)): ZIP containing organization JSON (single or array) + documents (if any).
+Top-level files:
+```
+manifest.json
+meta.json
+workspaces.json
+workspace_memberships.json
+organization_<uuid>.json
+folder_<uuid>.json
+usecase_<uuid>.json
+matrix_<folder_id>.json
+documents/
+  <workspace_id>/<context_type>/<context_id>/<document_id>-<filename>
+```
+
+Notes:
+- `workspaces.json` and `workspace_memberships.json` are arrays.
+- Per-object JSON files are single objects and may include a `comments` array when requested.
+- `matrix_<folder_id>.json` uses folder id (no separate matrix id).
+- `matrix_config` and `executive_summary` are JSON objects (not stringified).
 
 ### Import Process
 
-1. Create temporary schema.
-2. Apply migrations up to version specified in archive metadata.
-3. Import objects into temporary schema.
-4. Validate relationships.
-5. Move objects to target workspace.
-6. Cleanup temporary schema.
+1. Validate `manifest.json` + file hashes.
+2. Remap all IDs (API-owned).
+3. Insert in dependency order (workspaces → orgs/folders/usecases → comments → documents).
 
 ### Export Options
 
-- Include/exclude comments (checkbox).
+- Include/exclude comments.
+- Include/exclude documents.
+- `include[]` can limit related data (e.g. `folders`, `organizations`, `usecases`, `matrix`).
+- `export_kind` is used for workspace list exports (organizations or folders) to build filenames.
+
+### Import UX (context-driven)
+
+- After selecting a ZIP, show a **preview list** of objects (display name/title, not IDs).
+- Allow **selecting objects** to import (checkboxes).
+- Provide a **target selector** (type + object), defaulting to the current view context.
+- Comments/documents options apply to selected objects only.
+
+#### View-specific rules
+- `/dossiers/[id]`: import **use cases** into the **current folder**.
+  - Ignore folder metadata inside the ZIP.
+  - Do **not** create a new folder during import.
+- `/dossiers`: import **folders** into the current workspace.
+- `/organisations`: import **organizations** into the current workspace.
+- `/parametres`: import **workspaces** into new or current workspace (role-gated).
 
 ### Export Permissions
 

@@ -21,19 +21,20 @@ manifest.json
 meta.json
 workspaces.json
 workspace_memberships.json
-organizations.json
-folders.json
-use_cases.json
-matrix.json
-comments.json
+organization_<uuid>.json
+folder_<uuid>.json
+usecase_<uuid>.json
+matrix_<folder_id>.json
 documents/
   <workspace_id>/<context_type>/<context_id>/<document_id>-<filename>
 ```
 
 ### JSON Files
-- `*.json` files are standard JSON.
-- Each file contains either an array of objects or a single object, depending on scope.
-- The archive contents are sufficient to map all relations without relying on filenames.
+- `workspaces.json` and `workspace_memberships.json` are arrays.
+- `organization_*.json`, `folder_*.json`, `usecase_*.json`, `matrix_*.json` are single-object JSON files.
+- Per-object JSON files may include a `comments` array when `include_comments=true`.
+- `matrix_<folder_id>.json` uses the folder id as identifier (no separate matrix id).
+- `matrix_config` and `executive_summary` are exported as JSON objects (not stringified).
 
 ### Manifest
 `manifest.json` contains:
@@ -46,8 +47,10 @@ documents/
   "scope_id": "<id|null>",
   "include_comments": true,
   "include_documents": true,
+  "include": ["comments", "documents", "organization", "organizations", "folders", "usecases", "matrix"],
+  "export_kind": "organizations|folders",
   "files": [
-    { "path": "organizations.json", "bytes": 1234, "sha256": "<hash>" }
+    { "path": "organization_<uuid>.json", "bytes": 1234, "sha256": "<hash>" }
   ],
   "manifest_hash": "<sha256 of manifest without manifest_hash>"
 }
@@ -81,11 +84,11 @@ documents/
    - Commenter/viewer cannot export.
 
 ### Scope Behavior
-- `workspace`: all workspace-scoped data (organizations, folders, use cases, matrix, comments, documents).
-- `folder`: the folder + related use cases + optional documents/comments.
-- `usecase`: one or more use cases + related documents/comments.
-- `organization`: one or more organizations + related folders/use cases/documents/comments.
-- `matrix`: matrix config for the workspace (or for a folder if matrix is folder-scoped).
+- `workspace`: all workspace-scoped data, filtered by `include[]` when provided.
+- `folder`: the folder + related use cases + optional organization (if requested).
+- `usecase`: one use case + related folder + optional documents/comments.
+- `organization`: the organization + optional folders/use cases (controlled via `include[]`).
+- `matrix`: matrix config for a folder.
 
 ## Import Rules
 - Import is performed via a single generic endpoint.
@@ -113,7 +116,7 @@ documents/
 - No overwrites unless explicitly specified by a future `mode` option.
 
 ## Comments
-- Stored in `comments.json` when `include_comments=true`.
+- Comments are embedded under each object as `comments` when `include_comments=true`.
 - Each comment has `context_type`, `context_id`, `section_key`, `assigned_to`, `status`, `thread_id`.
 - Threads are **flat**: all messages in a thread share the same `thread_id`.
 - `status` is **thread-level** (`open`/`closed`); resolving updates the entire thread.
@@ -126,18 +129,52 @@ documents/
 
 ## API Endpoints (Generic)
 - `POST /exports`
-  - Body: `{ scope, scope_id?, include_comments, include_documents }`
+  - Body: `{ scope, scope_id?, include_comments, include_documents, include?, export_kind? }`
+  - `include` is an optional array to control related data (e.g., `folders`, `organizations`, `usecases`, `matrix`).
+  - `export_kind` is used for workspace list exports (`organizations` or `folders`) to build the filename.
   - Response: ZIP stream
+- `POST /imports/preview`
+  - Multipart: ZIP file
+  - Response: `{ scope, objects, has_comments, has_documents }`
+  - `objects` contains arrays of `{ id, name }` for `organizations`, `folders`, `usecases`, `matrix`
 - `POST /imports`
   - Multipart: ZIP file
-  - Body: `{ target_workspace_id?, mode? }`
+  - Body: `{ target_workspace_id?, target_folder_id?, target_folder_create?, target_folder_source_id?, selected_types?, include_comments?, include_documents?, mode? }`
+  - `selected_types` is an optional array (e.g. `['usecases']`) to import only selected object types.
+  - `target_folder_create=true` creates a new folder from imported metadata when importing use cases.
+  - `target_folder_source_id` picks which imported folder metadata to use for creation.
 
 ## UI
-- Provide export/import actions in workspace settings and object detail pages.
+### Export
+- Provide export actions in workspace settings and object detail pages.
 - Offer options:
   - Include comments
   - Include documents
-  - Target workspace selector on import (optional)
+  - Include related objects (folders/organizations/usecases/matrix) when relevant
+
+### Import
+- Provide import actions in workspace settings and object detail pages.
+- The import flow mirrors export and is **context-driven** by the current view.
+- After selecting a ZIP file, show a **preview list** of objects found in the archive:
+  - Display **name/title** (not IDs).
+  - Allow **selecting which objects** to import.
+- Provide a **target selector**:
+  - Default target is the current view (e.g., current folder).
+  - Targets are listed by **name/title**, not ID.
+- Options:
+  - Include comments (if present in ZIP)
+  - Include documents (if present in ZIP)
+
+#### View-specific rules
+- `/dossiers/[id]`: import **use cases only** into the **current folder**.
+  - Ignore any folder metadata from the ZIP.
+  - Do **not** create a new folder during import.
+- `/dossiers/[id]` can also select a different workspace and/or target folder:
+  - If `target_folder_create=true`, a new folder is created using imported folder metadata.
+  - If `target_folder_source_id` is set, use that imported folder metadata for the new folder.
+- `/dossiers`: import **folders** into the current workspace.
+- `/organisations`: import **organizations** into the current workspace.
+- `/parametres`: import **workspace** into new or current workspace (role-gated).
 
 ## UAT
 - Export `.zip` with/without comments and verify content.
