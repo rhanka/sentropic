@@ -259,12 +259,14 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         | Area | File | Change |
         | --- | --- | --- |
         | API | `api/tests/api/import-export.test.ts` | Add coverage for `include[]` (organization/folder options + list exports). |
-        | UI | `ui/tests/components/ImportExportDialog.test.ts` (new) | Verify include options rendering + payload include array. |
+        | API | `api/tests/api/import-export.test.ts` | Add coverage for `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`. |
+        | UI | `ui/tests/components/ImportExportDialog.test.ts` (new) | Verify import preview + type selection + target workspace/folder order. |
         | UI | `ui/tests/routes/organisations.test.ts` (new or existing) | Export-all organizations dialog + include folders option. |
         | UI | `ui/tests/routes/dossiers.test.ts` (new or existing) | Export-all folders dialog + include organizations option. |
         | E2E | `e2e/tests/05-folders.spec.ts` | Export-all folders from list + include organizations toggle. |
         | E2E | `e2e/tests/06-organizations.spec.ts` | Export-all organizations from list + include folders toggle. |
         | E2E | `e2e/tests/07-matrix.spec.ts` (new) | Matrix export menu + download. |
+        | E2E | `e2e/tests/09-import-export.spec.ts` (new) | Import preview, type selection, create folder, switch workspace. |
     - [ ] API tests:
         - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
         - [x] Update `tests/security/collaboration-security.test.ts`: role/tenancy for import/export.
