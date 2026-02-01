@@ -18,6 +18,13 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 - Each committable lot must pass `make typecheck` and `make lint`.
 - Final tests (after user UAT): `make test-api`, `make test-ui`, `make clean test-e2e`.
 
+## Test Structure (current baseline)
+- API unit/integration tests: `api/tests/**` (Vitest).
+- UI unit tests: `ui/tests/**` (Vitest).
+- E2E tests: `e2e/tests/**` (Playwright).
+- UI helper mocks: `ui/tests/mocks/**`.
+- E2E helpers: `e2e/helpers/**` and `e2e/tests/helpers/**`.
+
 ## Plan / Todo (detailed, lot-based)
 - [x] **Lot 0 — Analysis and touchpoints**
     - [x] Review `spec/COLLAB.md` and extract comment + import/export requirements.
@@ -160,23 +167,74 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] Import into existing workspace: admin only.
         - [x] Import objects into existing workspace: admin/editor only.
     - [x] `make typecheck` + `make lint`
-    - [ ] UAT lot 4 (user-run)
-        - [ ] Export `.zip` with comments + documents.
-        - [ ] Export `.zip` without comments + documents.
-        - [ ] Import to new workspace (no target id).
-        - [ ] Import into existing workspace (target selected, admin only).
-        - [ ] Verify permissions: editor can export objects; commenter/viewer cannot export/import.
 
-- [ ] **Lot 5 — Import/Export UI**
-    - [ ] Add UI actions for export with options.
-    - [ ] Add UI for import and result reporting.
+- [x] **Lot 5 — Import/Export UI**
+    - [x] **UI components (menu standards)**
+        - [x] Create a shared menu wrapper component (popover container + placement + outside click).
+        - [x] Create a shared menu trigger button using `circle-chevron-down` icon.
+        - [x] Create a standard “File menu” component (uses wrapper + trigger).
+        - [x] File menu item order = Office “File” menu order: New → Import → Export → Print → Delete.
+        - [x] Ensure lock actions remain outside File menu.
+        - [x] Reuse existing icon set/button styles (no new styling, no custom icons).
+    - [x] **Refactor existing menus to wrapper**
+        - [x] Chat “+” menu uses wrapper (popup upwards).
+        - [x] Comment conversation menu uses wrapper (popup downwards).
+    - [x] **Object-level actions**
+        - [x] Integrate File menu into object headers (Organization, Folder, Use Case, Organization list).
+        - [x] Map “New” to existing creation flows (Folder/Use Case/Organization where relevant).
+        - [x] “Print” uses existing print flows (if available) or disabled with tooltip.
+    - [x] **Workspace settings actions**
+        - [x] Add File menu in the Workspace section of Settings.
+        - [x] Items: New workspace, Import workspace, Export workspace.
+        - [x] Import includes choice: new workspace vs current workspace.
+    - [x] **Export UI**
+        - [x] Modal/drawer matching existing patterns (icons, button styles, spacing).
+        - [x] Scope selector (workspace / folder / use case / organization / matrix).
+        - [x] Optional scope id selector where applicable.
+        - [x] Toggles: include comments, include documents.
+        - [x] Primary action triggers `POST /api/v1/exports` and downloads ZIP.
+        - [x] Error handling uses existing toast pattern.
+    - [x] **Import UI (reworked)**
+        - [x] Modal/drawer matching existing patterns (icons, button styles, spacing).
+        - [x] File picker for ZIP.
+        - [x] Preview ZIP contents with object list (name/title, not id).
+        - [x] Allow selecting object types to import (checkboxes).
+        - [x] Allow selecting target workspace + target object (default to current view).
+        - [x] For `/dossiers/[id]`, import use cases into current folder (ignore folder metadata).
+        - [x] Comments/documents options applied to selected objects.
+        - [x] Primary action uploads to `POST /api/v1/imports`.
+        - [x] Success state shows created/target workspace id.
+        - [x] Error handling uses existing toast pattern.
     - [ ] `make typecheck` + `make lint`
-    - [ ] UAT lot 5 (user-run)
-        - [ ] Trigger export from UI with options (comments/documents).
-        - [ ] Trigger import from UI and verify success state and counts.
-        - [ ] Import into another workspace via target selector.
+    - [x] UAT lot 5 (user-run)
+        - [x] Menus Chat history is ok (click on old conversation etc)
+        - [x] Menus Chat tools is ok (activate context & tools ok)
+        - [x] Menu/Comments: when clicking hide/view resolved commenct, the menu shall not close
+        - [x] Export workspace
+        - [x] Export organisation
+        - [x] Export dossier
+        - [x] Export cas d'usage
+        - [x] Export matrice
+        - [x] Import workspace
+        - [x] Import dossier dans dossiers (courant)
+        - [x] Import dossier dans dossiers (nouveau workspace + )
+        - [x] Import cas d'usage dans dossier (courant)
+        - [x] Import cas d'usage dans dossier (nouveau dossier)
+        - [x] Import cas d'usage dans dossier (dossier d'import)
+        - [x] Import d'objet sans documents
+        - [x] Import d'objet sans commentaire
+        - [x] Un éditeur ne peut pas exporter le workspace
+        - [x] Viewer/commenter cannot export.
+        - [x] Viewer/commenter cannot import.
 
-- [ ] **Lot 5bis - fixes from UATs
+- [ ] **Lot 5bis - comment tool
+    - [ ] Add a comment tool for chat to enable to analyse comments & status, propose actions to resolve comments on provided scope (current view scope, mimic scope for chat eg. folder can access usecases so comment tool can access to usecases comment tool)
+
+- [ ] **Lot 5ter - fixes from UATs
+    - [ ] Retirer le "Insufficient permissions" présent en tant que viewer sur certaines vues (ça n'a pas d'utilité)
+    - [ ] In comment input, when using @ to attribue a comment, after clicking, the input on Editableinput is lost (the focus should be put again there)
+    - [ ] In usecase/[id] view, when title is multiline, the button "organization" should be vertically aligned with the "Files/menu" button and the center of the title
+    - [ ] Fix non squared comment header badge
     - [ ] Fix blink in parameters view when admin workspace change role of user
     - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
 
@@ -188,8 +246,25 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [ ] Update `spec/COLLAB.md` with final API/UI behaviors and UAT notes.
     - [ ] Update `spec/SPEC.md` if new endpoints/screens are introduced.
     - [ ] Verify doc consistency with `TODO.md` scope.
+    - [ ] **Spec inventory (to complete)**
+        | Spec file | Status | Notes |
+        | --- | --- | --- |
+        | `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md` | In progress | Needs final include[] rules + UI scope rules. |
+        | `spec/COLLAB.md` | In progress | Must align with final import/export UX + permissions. |
+        | `spec/DATA_MODEL.md` | Done (Lot 1) | Update only if schema changes. |
+        | `spec/SPEC.md` | In progress | Ensure endpoints + UI screens listed. |
 
 - [ ] **Lot 7 — Tests + Final validation**
+    - [ ] **Current batch test impacts (table format)**
+        | Area | File | Change |
+        | --- | --- | --- |
+        | API | `api/tests/api/import-export.test.ts` | Add coverage for `include[]` (organization/folder options + list exports). |
+        | UI | `ui/tests/components/ImportExportDialog.test.ts` (new) | Verify include options rendering + payload include array. |
+        | UI | `ui/tests/routes/organisations.test.ts` (new or existing) | Export-all organizations dialog + include folders option. |
+        | UI | `ui/tests/routes/dossiers.test.ts` (new or existing) | Export-all folders dialog + include organizations option. |
+        | E2E | `e2e/tests/05-folders.spec.ts` | Export-all folders from list + include organizations toggle. |
+        | E2E | `e2e/tests/06-organizations.spec.ts` | Export-all organizations from list + include folders toggle. |
+        | E2E | `e2e/tests/07-matrix.spec.ts` (new) | Matrix export menu + download. |
     - [ ] API tests:
         - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
         - [x] Update `tests/security/collaboration-security.test.ts`: role/tenancy for import/export.
@@ -206,6 +281,18 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [ ] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
         - [ ] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
         - [ ] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
+    - [ ] Import/Export UI tests (from Lot 5)
+        - [ ] UI unit (Vitest)
+            - [ ] `ui/tests/utils/api.test.ts`: new export/import helpers (blob + form data).
+            - [ ] `ui/tests/stores/workspaceScope.test.ts`: workspace list used by import target selector.
+            - [ ] `ui/tests/stores/useCases.test.ts`: menu-triggered export state (if store helper added).
+            - [ ] `ui/tests/stores/folders.test.ts`: menu-triggered export state (if store helper added).
+            - [ ] `ui/tests/stores/organizations.test.ts`: menu-triggered export state (if store helper added).
+        - [ ] E2E (Playwright)
+            - [ ] `e2e/tests/06-settings.spec.ts`: workspace import/export menu + dialog flow.
+            - [ ] `e2e/tests/05-usecase-detail.spec.ts`: use case export menu + download.
+            - [ ] `e2e/tests/05-folders.spec.ts`: folder export menu + download.
+            - [ ] `e2e/tests/06-organizations.spec.ts`: organization export menu + download.
     - [ ] Run gates: `make typecheck` + `make lint`.
     - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
 
@@ -218,6 +305,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 - `spec/COLLAB.md`: update with final API/UI behaviors + UAT validation notes.
 - `spec/DATA_MODEL.md`: align with final schema.
 - `spec/SPEC.md`: update if new screens/endpoints need documentation.
+- `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`: align UI flows + permissions + payloads.
 - `spec/TOOLS.md` and `spec/JSON_STREAMING.md`: only if import/export tooling affects logging/streaming.
 
 ## Documentation Timing
