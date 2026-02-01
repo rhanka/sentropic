@@ -15,6 +15,7 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import MenuPopover from '$lib/components/MenuPopover.svelte';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { useCasesStore } from '$lib/stores/useCases';
@@ -400,7 +401,6 @@
   let sessionTitlesSseKey = '';
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
   let showComposerMenu = false;
-  let composerMenuRef: HTMLDivElement | null = null;
   let composerMenuButtonRef: HTMLButtonElement | null = null;
   // eslint-disable-next-line no-unused-vars
   let handleDocumentClick: ((_: MouseEvent) => void) | null = null;
@@ -1507,11 +1507,6 @@
     handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (showComposerMenu) {
-        if (composerMenuRef?.contains(target)) return;
-        if (composerMenuButtonRef?.contains(target)) return;
-        showComposerMenu = false;
-      }
       if (showMentionMenu) {
         if (mentionMenuRef?.contains(target)) return;
         showMentionMenu = false;
@@ -1912,21 +1907,27 @@
   <div class="p-3 border-t border-slate-200">
     <div class="relative flex items-center gap-2">
       {#if mode === 'ai'}
-        <button
-          class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
-          aria-label="Ouvrir le menu"
-          title="Ouvrir le menu"
-          type="button"
-          bind:this={composerMenuButtonRef}
-          on:click={() => (showComposerMenu = !showComposerMenu)}
+        <MenuPopover
+          placement="up"
+          align="left"
+          widthClass="w-80"
+          menuClass="p-3 space-y-3"
+          bind:open={showComposerMenu}
+          bind:triggerRef={composerMenuButtonRef}
         >
-          <Plus class="w-4 h-4" />
-        </button>
-        {#if showComposerMenu}
-          <div
-            class="absolute bottom-12 left-0 z-20 w-80 rounded-lg border border-slate-200 bg-white shadow-lg p-3 space-y-3"
-            bind:this={composerMenuRef}
-          >
+          <svelte:fragment slot="trigger" let:toggle>
+            <button
+              class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
+              aria-label="Ouvrir le menu"
+              title="Ouvrir le menu"
+              type="button"
+              bind:this={composerMenuButtonRef}
+              on:click={toggle}
+            >
+              <Plus class="w-4 h-4" />
+            </button>
+          </svelte:fragment>
+          <svelte:fragment slot="menu">
             <label
               class={"flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 " +
                 (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
@@ -1985,8 +1986,8 @@
                 {/each}
               </div>
             </div>
-          </div>
-        {/if}
+          </svelte:fragment>
+        </MenuPopover>
       {/if}
       <div
         class="relative flex-1 min-w-0 rounded border border-slate-300 px-3 py-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
