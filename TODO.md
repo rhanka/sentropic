@@ -110,6 +110,21 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
+- [ ] Visual templates / doc exports (Design session)
+  - [ ] Offre une ui pour designer l'agencement d'un objet dans sa présentation UI
+  - [ ] Gere les objets incluant des listes
+  - [ ] Ajoute la gestion d'images illustratives
+  - [ ] Ajoute la gestion de graphiques illustratives (chartjs comme la matrice priorisation)
+  - [ ] Gestion d'objet dérivé (pptx d'un docx): agents de présentation
+  - [ ] Gere le mode print (design complémentaire cf synthèse exec qui est une vue particulière de l'objet folder)
+  - [ ] Document managé (avec des tags dans le xml pour permettre le reprage)
+    - [ ] Gère le design d'un docx templaté
+    - [ ] Gère le design d'un powerpoint templaté
+    - [ ] Gère le design d'un excel templaté
+    - [ ] Gère l'édition synchronisée (sauvegarde db > sync gdrive + supervision de modif du doc gdrive > sync db)
+    - [ ] Gestion des conflits (édition sur le gdrive du doc en confit sur une section)
+  - [ ] Gestion de bibliothèque de style
+    - [ ] Template de slides
 - [ ] Streamline des directives mdc
   - [ ] analyse des meilleurs pratique (conductor model, model testing Bmad)
   - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
@@ -152,6 +167,7 @@
   - [ ] Favoriser le templating d'agent (gestion de librairies d'agents, export/import, versionnement)
   - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration) ou un autre modèle
   - [ ] Permettre à l'utilisateur de configurer le modèle de l'agent en cours d'utilisation (soit change de llm ou de puissance de réflexion)
+  - [ ] Ajouter un mode plan avec todo
   - [ ] Versionner les prompts et agents du chat et les rendre accessible à configuration dans l'UI, avec une gestion intelligente de objets, tools et du workflow configurable via l'UI
   A livrer:
   - [ ] Spécification de la nouvelle structure agentique cible
