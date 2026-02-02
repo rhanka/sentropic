@@ -227,8 +227,22 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] Viewer/commenter cannot export.
         - [x] Viewer/commenter cannot import.
 
-- [ ] **Lot 5bis - comment tool
-    - [ ] Add a comment tool for chat to enable to analyse comments & status, propose actions to resolve comments on provided scope (current view scope, mimic scope for chat eg. folder can access usecases so comment tool can access to usecases comment tool)
+- [ ] **Lot 5bis - comment tool**
+    - [ ] Review `spec/TOOLS.md` and existing context handlers (`context-*`).
+    - [ ] Add `context-comments.ts` to mirror context wiring patterns.
+    - [ ] Define tool contract (batch-capable, action mode with confirmation).
+    - [ ] Scope rules (mimic existing tool expansion):
+        - [ ] usecase strict; folder = current + children; org = current + children.
+    - [ ] Role rules:
+        - [ ] Resolve allowed for thread creator (commenter/editor) and admin.
+    - [ ] Add tool definitions in `api/src/services/tools.ts` (comments analyze + resolve).
+    - [ ] Add ToolService methods (list threads, resolve, add AI trace note).
+    - [ ] Wire tool execution in `api/src/services/chat-service.ts` with scope checks.
+    - [ ] Add `context-comments.ts` prompts and hook into context builder.
+    - [ ] UI: add Chat tool option + response formatting + validation loop.
+    - [ ] Implement tool execution + confirmation flow (plan → user confirm → apply).
+    - [ ] Add trace note when AI is used (visible to collaborators).
+    - [ ] UI: Chat markdown response with explicit confirmation options (Yes/No or fixed list).
 
 - [ ] **Lot 5ter - fixes from UATs
     - [ ] Retirer le "Insufficient permissions" présent en tant que viewer sur certaines vues (ça n'a pas d'utilité)

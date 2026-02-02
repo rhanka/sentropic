@@ -121,6 +121,44 @@ documents/
 - Threads are **flat**: all messages in a thread share the same `thread_id`.
 - `status` is **thread-level** (`open`/`closed`); resolving updates the entire thread.
 
+## Comment Resolution Tool (Chat)
+
+### Purpose
+Provide an AI-assisted tool to analyze open comment threads in the current context and propose resolution actions. The tool can execute actions **only after explicit user confirmation**.
+
+### Context Scoping (mimic existing tool context rules)
+- `primaryContextType=usecase`: **strict** (use case only).
+- `primaryContextType=folder`: current folder **+ child use cases**.
+- `primaryContextType=organization`: current organization **+ child folders/use cases** (same logic as existing context expansion).
+- `primaryContextType=matrix` / `executive_summary`: follow folder-based expansion rules.
+
+### Roles & Permissions
+- **Resolve** is allowed to:
+  - Thread creator (role `commenter` or `editor`)
+  - Workspace admin
+- Viewer cannot resolve or execute tool actions.
+- Editor can resolve when they are the thread creator.
+- Admin can resolve any thread.
+
+### Tool Contract (high level)
+- A new context handler is expected (e.g., `context-comments.ts`) mirroring other `context-*` handlers.
+- Tool output is **actionable** (batch allowed), but must always include a **confirmation step**:
+  1) AI proposes a plan (list of actions).
+  2) User explicitly validates.
+  3) Actions are executed.
+
+### Action Types (batch-enabled)
+- Close thread (set status `closed`)
+- Reassign thread (optional)
+- Add a resolution note (optional)
+
+### Traceability
+When AI is used for a resolution action, a **visible trace** is stored (e.g., a system note in the thread) so collaborators know the action was AI-assisted.
+
+### UI Behavior (Chat)
+- Present the AI proposal as structured Markdown with a **clear confirmation prompt**.
+- If possible, provide **fixed options** (Yes/No or a short list). If user responds with free text, the system re-prompts until a valid option is chosen.
+
 ## Documents
 - Included when `include_documents=true`.
 - Binary files are stored under `documents/` with the same S3-like layout:
