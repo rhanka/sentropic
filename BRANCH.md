@@ -280,13 +280,19 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 
 - [ ] **Lot 7 — Tests + Final validation**
     - [ ] API tests:
-        - [ ] `api/tests/api/import-export.test.ts`: add `include[]` (organization/folder options + list exports).
-        - [ ] `api/tests/api/import-export.test.ts`: add `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`.
+        - [x] `api/tests/api/import-export.test.ts`: add `include[]` (organization/folder options + list exports).
+        - [x] `api/tests/api/import-export.test.ts`: add `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`.
         - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
         - [x] Update `tests/security/collaboration-security.test.ts`: role/tenancy for import/export.
-        - [ ] Update `tests/api/workspaces.test.ts`: workspace import/export permission gates.
-        - [ ] Regression: `tests/api/organizations.test.ts`, `tests/api/folders.test.ts`, `tests/api/use-cases.test.ts` (export/import visibility).
-        - [ ] Comments regressions remain covered by existing comment tests.
+        - [x] Update `tests/api/workspaces.test.ts`: workspace import/export permission gates.
+        - [x] Regression: `tests/api/organizations.test.ts`, `tests/api/folders.test.ts`, `tests/api/use-cases.test.ts` (export/import visibility).
+        - [x] `api/tests/api/comments.test.ts`: cover `tool_call_id` round-trip (list/create) and thread status rules.
+        - [x] `api/tests/api/comments.test.ts`: add local helpers (create org/folder/usecase/comment) to mirror existing API test style.
+        - [x] `api/tests/api/chat-tools.test.ts` (new): `comment_assistant` suggest/resolve flow + confirmation gate.
+        - [x] `api/tests/api/chat-tools.test.ts` (new): permission matrix (viewer blocked; creator/editor allowed; admin allowed).
+        - [x] `api/tests/api/chat-tools.test.ts` (new): context scoping (usecase strict; folder/org expand).
+        - [x] `api/tests/api/import-export.test.ts`: export/import includes `tool_call_id` in comments.
+        - [x] `make test-api` full api test validation gate
     - [ ] UI tests:
         - [ ] (manual UAT) workspace create modal via “+” menu (no automated test update).
         - [ ] `ui/tests/components/ImportExportDialog.test.ts` (new): import preview + type selection + target workspace/folder order.
@@ -302,6 +308,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [ ] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
         - [ ] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
         - [ ] Update `05-usecase-detail.spec.ts`: comment create/reply/close + header badge.
+        - [ ] Update E2E seed (`api/tests/utils/seed-test-data.ts`) to include comment threads + `tool_call_id`.
         - [ ] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
         - [ ] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
         - [ ] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
