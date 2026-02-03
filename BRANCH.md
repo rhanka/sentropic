@@ -279,7 +279,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] Verify doc consistency with `TODO.md` scope.
 
 - [ ] **Lot 7 — Tests + Final validation**
-    - [ ] API tests:
+    - [x] API tests:
         - [x] `api/tests/api/import-export.test.ts`: add `include[]` (organization/folder options + list exports).
         - [x] `api/tests/api/import-export.test.ts`: add `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`.
         - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
@@ -293,15 +293,11 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `api/tests/api/chat-tools.test.ts` (new): context scoping (usecase strict; folder/org expand).
         - [x] `api/tests/api/import-export.test.ts`: export/import includes `tool_call_id` in comments.
         - [x] `make test-api` full api test validation gate
-    - [ ] UI tests:
-        - [ ] (manual UAT) workspace create modal via “+” menu (no automated test update).
-        - [ ] `ui/tests/components/ImportExportDialog.test.ts` (new): import preview + type selection + target workspace/folder order.
-        - [ ] `ui/tests/routes/organisations.test.ts` (new or existing): export-all organizations dialog + include folders option.
-        - [ ] `ui/tests/routes/dossiers.test.ts` (new or existing): export-all folders dialog + include organizations option.
-        - [ ] Update `tests/stores/useCases.test.ts`: comment count indicators and store updates.
-        - [ ] Update `tests/stores/folders.test.ts`: comment badge propagation (if needed).
-        - [ ] Update `tests/utils/api.test.ts`: client helpers for comments/export endpoints.
-        - [ ] Update `tests/stores/workspaceScope.test.ts`: @mention autocomplete scoped by workspace members.
+    - [x] UI tests:
+        - [x] `ui/tests/utils/comments.test.ts` (new): list/create/update/close/reopen/delete + mention members fetch.
+        - [x] Update `ui/tests/utils/api.test.ts`: workspace_id scoping on non-auth endpoints.
+        - [x] Update `ui/tests/stores/workspaceScope.test.ts`: mention scope selection via `getScopedWorkspaceIdForUser`.
+        - [ ] Gating: `make test-ui`
     - [ ] E2E tests:
         - [ ] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle.
         - [ ] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle.

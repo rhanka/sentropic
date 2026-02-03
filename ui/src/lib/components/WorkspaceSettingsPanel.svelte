@@ -25,7 +25,6 @@
   let originalSelectedWorkspaceName = '';
   let lastWorkspaceIdForName: string | null = null;
 
-  let membersLoading = false;
   let membersError: string | null = null;
   let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }> = [];
   let addMemberEmail = '';
@@ -149,11 +148,9 @@
     }
   }
 
-  async function loadMembers(opts?: { silent?: boolean }) {
+  async function loadMembers() {
     if (!selectedWorkspace?.id) return;
     if (!isWorkspaceAdmin) return;
-    const silent = !!opts?.silent;
-    if (!silent) membersLoading = true;
     membersError = null;
     try {
       const data = await apiGet<{
@@ -162,8 +159,6 @@
       members = data.items || [];
     } catch (e: any) {
       membersError = e?.message ?? 'Erreur chargement membres';
-    } finally {
-      if (!silent) membersLoading = false;
     }
   }
 
@@ -185,7 +180,7 @@
       addToast({ type: 'success', message: 'Membre ajouté' });
       addMemberEmail = '';
       addMemberRole = 'viewer';
-      await loadMembers({ silent: true });
+      await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur ajout membre' });
@@ -197,7 +192,7 @@
     try {
       await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
       addToast({ type: 'success', message: 'Rôle mis à jour' });
-      await loadMembers({ silent: true });
+      await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur update rôle' });
@@ -215,7 +210,7 @@
     try {
       await apiDelete(`/workspaces/${selectedWorkspace.id}/members/${userId}`);
       addToast({ type: 'success', message: 'Membre retiré' });
-      await loadMembers({ silent: true });
+      await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur suppression membre' });
