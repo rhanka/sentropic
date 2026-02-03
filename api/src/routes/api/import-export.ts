@@ -323,6 +323,7 @@ function mapComment(row: typeof comments.$inferSelect): Record<string, unknown> 
     status: row.status,
     thread_id: row.threadId,
     content: row.content,
+    tool_call_id: row.toolCallId ?? null,
     created_at: toIso(row.createdAt),
     updated_at: toIso(row.updatedAt),
   };
@@ -1524,6 +1525,7 @@ importsRouter.post('/', async (c) => {
           status: comment.status === 'closed' ? 'closed' : 'open',
           threadId,
           content: typeof comment.content === 'string' ? comment.content : '',
+          toolCallId: typeof comment.tool_call_id === 'string' ? comment.tool_call_id : null,
           createdAt: parseDate(comment.created_at as string | null),
           updatedAt: parseDate(comment.updated_at as string | null),
         });

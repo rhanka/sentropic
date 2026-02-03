@@ -127,6 +127,7 @@ commentsRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
       status: row.status,
       thread_id: row.threadId,
       content: row.content,
+      tool_call_id: row.toolCallId ?? null,
       created_at: row.createdAt,
       updated_at: row.updatedAt,
       created_by_user: usersById.get(row.createdBy) ?? null,

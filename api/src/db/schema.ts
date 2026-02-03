@@ -482,6 +482,7 @@ export const comments = pgTable('comments', {
   status: text('status').notNull().default('open'), // 'open' | 'closed'
   threadId: text('thread_id').notNull(),
   content: text('content').notNull(),
+  toolCallId: text('tool_call_id'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -490,6 +491,7 @@ export const comments = pgTable('comments', {
   threadIdIdx: index('comments_thread_id_idx').on(table.threadId),
   assignedToIdx: index('comments_assigned_to_idx').on(table.assignedTo),
   statusIdx: index('comments_status_idx').on(table.status),
+  toolCallIdIdx: index('comments_tool_call_id_idx').on(table.toolCallId),
 }));
 
 export type CommentRow = typeof comments.$inferSelect;

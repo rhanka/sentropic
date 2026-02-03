@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS "comments" (
   "status" text NOT NULL DEFAULT 'open',
   "thread_id" text NOT NULL,
   "content" text NOT NULL,
+  "tool_call_id" text,
   "created_at" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
@@ -19,3 +20,4 @@ CREATE INDEX IF NOT EXISTS "comments_context_idx" ON "comments" ("context_type",
 CREATE INDEX IF NOT EXISTS "comments_thread_id_idx" ON "comments" ("thread_id");
 CREATE INDEX IF NOT EXISTS "comments_assigned_to_idx" ON "comments" ("assigned_to");
 CREATE INDEX IF NOT EXISTS "comments_status_idx" ON "comments" ("status");
+CREATE INDEX IF NOT EXISTS "comments_tool_call_id_idx" ON "comments" ("tool_call_id");
