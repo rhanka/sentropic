@@ -48,7 +48,7 @@
     if (membersReloadTimer) return;
     membersReloadTimer = setTimeout(async () => {
       membersReloadTimer = null;
-      await loadMembers();
+      await loadMembers({ silent: true });
     }, 150);
   }
 
@@ -149,10 +149,11 @@
     }
   }
 
-  async function loadMembers() {
+  async function loadMembers(opts?: { silent?: boolean }) {
     if (!selectedWorkspace?.id) return;
     if (!isWorkspaceAdmin) return;
-    membersLoading = true;
+    const silent = !!opts?.silent;
+    if (!silent) membersLoading = true;
     membersError = null;
     try {
       const data = await apiGet<{
@@ -162,7 +163,7 @@
     } catch (e: any) {
       membersError = e?.message ?? 'Erreur chargement membres';
     } finally {
-      membersLoading = false;
+      if (!silent) membersLoading = false;
     }
   }
 
@@ -184,7 +185,7 @@
       addToast({ type: 'success', message: 'Membre ajouté' });
       addMemberEmail = '';
       addMemberRole = 'viewer';
-      await loadMembers();
+      await loadMembers({ silent: true });
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur ajout membre' });
@@ -196,7 +197,7 @@
     try {
       await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
       addToast({ type: 'success', message: 'Rôle mis à jour' });
-      await loadMembers();
+      await loadMembers({ silent: true });
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur update rôle' });
@@ -214,7 +215,7 @@
     try {
       await apiDelete(`/workspaces/${selectedWorkspace.id}/members/${userId}`);
       addToast({ type: 'success', message: 'Membre retiré' });
-      await loadMembers();
+      await loadMembers({ silent: true });
       await loadUserWorkspaces();
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur suppression membre' });
@@ -399,56 +400,53 @@
           </button>
         </div>
 
-  {#if membersLoading}
-          <div class="text-sm text-slate-600">Chargement…</div>
-        {:else if membersError}
+        {#if membersError}
           <div class="text-sm text-rose-700">{membersError}</div>
-        {:else}
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead class="border-b border-slate-200 text-left text-slate-600">
-                <tr>
-                  <th class="py-2 pr-3">Email</th>
-                  <th class="py-2 pr-3">Nom</th>
-                  <th class="py-2 pr-3">Rôle</th>
-                  <th class="py-2 pr-3 text-right"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each members as m (m.userId)}
-                  <tr class="border-b border-slate-100">
-                    <td class="py-2 pr-3">{m.email ?? '—'}</td>
-                    <td class="py-2 pr-3">{m.displayName ?? '—'}</td>
-                    <td class="py-2 pr-3">
-                      <select
-                        class="rounded border border-slate-200 px-2 py-1"
-                        value={m.role}
-                        on:change={(e) => handleMemberRoleChange(e, m.userId)}
-                        disabled={m.userId === $session.user?.id}
-                      >
-                        <option value="viewer">viewer</option>
-                        <option value="commenter">commenter</option>
-                        <option value="editor">editor</option>
-                        <option value="admin">admin</option>
-                      </select>
-                    </td>
-                    <td class="py-2 pr-3 text-right">
-                      {#if m.userId !== $session.user?.id}
-                        <button
-                          class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
-                          title="Retirer ce membre"
-                          on:click={() => removeMember(m.userId)}
-                        >
-                          <Trash2 class="h-4 w-4" />
-                        </button>
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-  </div>
         {/if}
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="border-b border-slate-200 text-left text-slate-600">
+              <tr>
+                <th class="py-2 pr-3">Email</th>
+                <th class="py-2 pr-3">Nom</th>
+                <th class="py-2 pr-3">Rôle</th>
+                <th class="py-2 pr-3 text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each members as m (m.userId)}
+                <tr class="border-b border-slate-100">
+                  <td class="py-2 pr-3">{m.email ?? '—'}</td>
+                  <td class="py-2 pr-3">{m.displayName ?? '—'}</td>
+                  <td class="py-2 pr-3">
+                    <select
+                      class="rounded border border-slate-200 px-2 py-1"
+                      value={m.role}
+                      on:change={(e) => handleMemberRoleChange(e, m.userId)}
+                      disabled={m.userId === $session.user?.id}
+                    >
+                      <option value="viewer">viewer</option>
+                      <option value="commenter">commenter</option>
+                      <option value="editor">editor</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </td>
+                  <td class="py-2 pr-3 text-right">
+                    {#if m.userId !== $session.user?.id}
+                      <button
+                        class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
+                        title="Retirer ce membre"
+                        on:click={() => removeMember(m.userId)}
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   {/if}
