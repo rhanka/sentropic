@@ -1,7 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { organizationsStore, fetchOrganizationById, deleteOrganization, type Organization } from '$lib/stores/organizations';
+  import {
+    organizationsStore,
+    fetchOrganizationById,
+    deleteOrganization,
+    type Organization,
+    openOrganizationExport,
+    closeOrganizationExport,
+    organizationExportState,
+  } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
   import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -36,7 +44,6 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
-  let showExportDialog = false;
   let commentCounts: Record<string, number> = {};
   let hasDocuments = false;
   let organizationFolderCount = 0;
@@ -485,7 +492,7 @@
         showDelete={canDelete}
         disabledImport={isReadOnlyRole}
         disabledExport={isReadOnlyRole}
-        onExport={() => (showExportDialog = true)}
+        onExport={() => organization && openOrganizationExport(organization.id)}
         onDelete={handleDelete}
         triggerTitle="Actions"
         triggerAriaLabel="Actions"
@@ -541,11 +548,11 @@
 
 {#if organization}
   <ImportExportDialog
-    bind:open={showExportDialog}
+    bind:open={$organizationExportState.open}
     mode="export"
     title="Exporter l'organisation"
     scope="organization"
-    scopeId={organization.id}
+    scopeId={$organizationExportState.organizationId ?? organization.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={workspaceName}
@@ -559,6 +566,7 @@
     }
     includeAffectsComments={['folders']}
     includeAffectsDocuments={['folders']}
+    on:close={closeOrganizationExport}
   />
 {/if}
 

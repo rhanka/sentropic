@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { 
-  useCasesStore, 
-  fetchUseCases, 
-  createUseCase, 
-  updateUseCase, 
+import {
+  useCasesStore,
+  fetchUseCases,
+  createUseCase,
+  updateUseCase,
   deleteUseCase,
   generateUseCases,
-  detailUseCase
+  detailUseCase,
+  useCaseExportState,
+  openUseCaseExport,
+  closeUseCaseExport,
 } from '../../src/lib/stores/useCases';
 import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
@@ -240,6 +243,16 @@ describe('Use Cases Store', () => {
       }];
       useCasesStore.set(useCases);
       expect(get(useCasesStore)).toEqual(useCases);
+    });
+
+    it('opens and closes use case export state', () => {
+      expect(get(useCaseExportState)).toEqual({ open: false, useCaseId: null });
+
+      openUseCaseExport('uc-1');
+      expect(get(useCaseExportState)).toEqual({ open: true, useCaseId: 'uc-1' });
+
+      closeUseCaseExport();
+      expect(get(useCaseExportState)).toEqual({ open: false, useCaseId: null });
     });
   });
 });
