@@ -8,13 +8,14 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
-  import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
+  import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
 
   let creatingWorkspace = false;
   let newWorkspaceName = '';
   let newWorkspaceInputRef: HTMLInputElement | null = null;
   let showWorkspaceExportDialog = false;
   let showWorkspaceImportDialog = false;
+  let showWorkspaceCreateDialog = false;
 
   let selectedWorkspace: UserWorkspace | null = null;
   let isWorkspaceAdmin = false;
@@ -109,6 +110,7 @@
       newWorkspaceName = '';
       await loadUserWorkspaces();
       if (res?.id) setWorkspaceScope(res.id);
+      showWorkspaceCreateDialog = false;
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur création workspace' });
     } finally {
@@ -226,7 +228,24 @@
   }
 </script>
 
-{#if $hiddenWorkspaceLock}
+  <div class="relative">
+    <div class="absolute -top-9 right-0">
+      <FileMenu
+        showNew={true}
+        showImport={true}
+        showExport={true}
+        showPrint={false}
+        showDelete={false}
+        disabledExport={!isWorkspaceAdmin}
+        onNew={() => (showWorkspaceCreateDialog = true)}
+        onImport={() => (showWorkspaceImportDialog = true)}
+        onExport={() => (showWorkspaceExportDialog = true)}
+        triggerTitle="Actions workspace"
+        triggerAriaLabel="Actions workspace"
+      />
+    </div>
+
+  {#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
     </div>
@@ -243,38 +262,6 @@
       Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
     </div>
   {/if}
-
-  <div class="flex flex-wrap items-end gap-2">
-    <label class="block text-sm">
-      <div class="text-slate-600">Créer un workspace</div>
-      <input
-        class="mt-1 w-72 rounded border border-slate-200 px-3 py-2"
-        placeholder="Nom du workspace"
-        bind:value={newWorkspaceName}
-        bind:this={newWorkspaceInputRef}
-      />
-    </label>
-    <button
-      class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      on:click={createWorkspace}
-      disabled={creatingWorkspace || !newWorkspaceName.trim()}
-    >
-      Créer
-    </button>
-    <FileMenu
-      showNew={true}
-      showImport={true}
-      showExport={true}
-      showPrint={false}
-      showDelete={false}
-      disabledExport={!isWorkspaceAdmin}
-      onNew={() => newWorkspaceInputRef?.focus()}
-      onImport={() => (showWorkspaceImportDialog = true)}
-      onExport={() => (showWorkspaceExportDialog = true)}
-      triggerTitle="Actions workspace"
-      triggerAriaLabel="Actions workspace"
-    />
-  </div>
 
   {#if !noWorkspaces}
     <div class="overflow-x-auto rounded border border-slate-200">
@@ -412,7 +399,7 @@
           </button>
         </div>
 
-        {#if membersLoading}
+  {#if membersLoading}
           <div class="text-sm text-slate-600">Chargement…</div>
         {:else if membersError}
           <div class="text-sm text-rose-700">{membersError}</div>
@@ -460,7 +447,7 @@
                 {/each}
               </tbody>
             </table>
-          </div>
+  </div>
         {/if}
       </div>
     </div>
@@ -492,4 +479,50 @@
     on:imported={handleImportComplete}
   />
 
+  {#if showWorkspaceCreateDialog}
+    <div class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg max-w-md w-full mx-4">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h3 class="text-lg font-semibold">Nouveau workspace</h3>
+          <button
+            class="text-slate-400 hover:text-slate-600"
+            aria-label="Fermer"
+            type="button"
+            on:click={() => (showWorkspaceCreateDialog = false)}
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="px-5 py-4 space-y-4">
+          <label class="block text-sm">
+            <div class="text-slate-600">Nom du workspace</div>
+            <input
+              class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
+              placeholder="Nom du workspace"
+              bind:value={newWorkspaceName}
+              bind:this={newWorkspaceInputRef}
+            />
+          </label>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button
+            class="px-3 py-2 rounded border border-slate-200 text-slate-700 hover:bg-slate-50"
+            type="button"
+            on:click={() => (showWorkspaceCreateDialog = false)}
+          >
+            Annuler
+          </button>
+          <button
+            class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+            type="button"
+            on:click={createWorkspace}
+            disabled={creatingWorkspace || !newWorkspaceName.trim()}
+          >
+            Créer
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
+  </div>
