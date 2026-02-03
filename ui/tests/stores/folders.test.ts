@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { 
-  foldersStore, 
-  currentFolderId, 
-  fetchFolders, 
-  createFolder, 
+import {
+  foldersStore,
+  currentFolderId,
+  fetchFolders,
+  createFolder,
   createDraftFolder,
-  updateFolder, 
-  deleteFolder
+  updateFolder,
+  deleteFolder,
+  folderExportState,
+  openFolderExport,
+  closeFolderExport,
 } from '../../src/lib/stores/folders';
 import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
@@ -207,6 +210,16 @@ describe('Folders Store', () => {
     it('should update current folder ID', () => {
       currentFolderId.set('1');
       expect(get(currentFolderId)).toBe('1');
+    });
+
+    it('opens and closes folder export state', () => {
+      expect(get(folderExportState)).toEqual({ open: false, folderId: null });
+
+      openFolderExport('folder-1');
+      expect(get(folderExportState)).toEqual({ open: true, folderId: 'folder-1' });
+
+      closeFolderExport();
+      expect(get(folderExportState)).toEqual({ open: false, folderId: null });
     });
   });
 });

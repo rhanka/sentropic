@@ -52,6 +52,17 @@ export type UseCase = {
 
 export const useCasesStore = writable<UseCase[]>([]);
 
+export type UseCaseExportState = { open: boolean; useCaseId: string | null };
+export const useCaseExportState = writable<UseCaseExportState>({ open: false, useCaseId: null });
+
+export const openUseCaseExport = (useCaseId: string) => {
+  useCaseExportState.set({ open: true, useCaseId });
+};
+
+export const closeUseCaseExport = () => {
+  useCaseExportState.set({ open: false, useCaseId: null });
+};
+
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 
 // Fonctions API

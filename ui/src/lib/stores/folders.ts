@@ -24,6 +24,17 @@ export type Folder = {
 
 export const foldersStore = writable<Folder[]>([]);
 
+export type FolderExportState = { open: boolean; folderId: string | null };
+export const folderExportState = writable<FolderExportState>({ open: false, folderId: null });
+
+export const openFolderExport = (folderId: string) => {
+  folderExportState.set({ open: true, folderId });
+};
+
+export const closeFolderExport = () => {
+  folderExportState.set({ open: false, folderId: null });
+};
+
 // Persistent store for currentFolderId
 const STORAGE_KEY = 'currentFolderId';
 

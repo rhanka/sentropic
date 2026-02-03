@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { useCasesStore } from '$lib/stores/useCases';
+import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
   import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
@@ -40,7 +40,6 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
-  let showExportDialog = false;
   let commentCounts: Record<string, number> = {};
   let hasDocuments = false;
   let workspaceId: string | null = null;
@@ -575,7 +574,7 @@
               showDelete={!isReadOnly}
               disabledImport={isReadOnly}
               disabledExport={isReadOnly}
-              onExport={() => (showExportDialog = true)}
+              onExport={() => openUseCaseExport(useCaseId)}
               onPrint={() => window.print()}
               onDelete={handleDelete}
               triggerTitle="Actions"
@@ -611,11 +610,11 @@
 
 {#if useCase}
   <ImportExportDialog
-    bind:open={showExportDialog}
+    bind:open={$useCaseExportState.open}
     mode="export"
     title="Exporter le cas d'usage"
     scope="usecase"
-    scopeId={useCase.id}
+    scopeId={$useCaseExportState.useCaseId ?? useCase.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={workspaceName}
@@ -632,5 +631,6 @@
     includeDependencies={{ matrix: ['folders'] }}
     includeAffectsComments={['folders', 'matrix', 'organization']}
     includeAffectsDocuments={['folders', 'matrix', 'organization']}
+    on:close={closeUseCaseExport}
   />
 {/if}
