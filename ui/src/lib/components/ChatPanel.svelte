@@ -300,6 +300,7 @@
     mentionMatches = [];
     mentionSuppressUntilChange = true;
     mentionSuppressValue = nextInput.trimEnd();
+    void focusComposerEnd();
   };
 
   const buildCommentThreads = (items: CommentItem[]) => {
@@ -1215,6 +1216,20 @@
     await tick();
     const target = composerEl?.querySelector('.ProseMirror') as HTMLElement | null;
     target?.focus();
+  };
+
+  const focusComposerEnd = async () => {
+    await tick();
+    const target = composerEl?.querySelector('.ProseMirror') as HTMLElement | null;
+    if (!target) return;
+    target.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
   };
 
   const scrollChatToBottomStable = async () => {
