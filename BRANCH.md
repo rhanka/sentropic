@@ -205,7 +205,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] Primary action uploads to `POST /api/v1/imports`.
         - [x] Success state shows created/target workspace id.
         - [x] Error handling uses existing toast pattern.
-    - [ ] `make typecheck` + `make lint`
+    - [x] `make typecheck` + `make lint`
     - [x] UAT lot 5 (user-run)
         - [x] Menus Chat history is ok (click on old conversation etc)
         - [x] Menus Chat tools is ok (activate context & tools ok)
@@ -228,30 +228,46 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] Viewer/commenter cannot import.
 
 - [ ] **Lot 5bis - comment tool**
-    - [ ] Review `spec/TOOLS.md` and existing context handlers (`context-*`).
-    - [ ] Add `context-comments.ts` to mirror context wiring patterns.
-    - [ ] Define tool contract (batch-capable, action mode with confirmation).
-    - [ ] Scope rules (mimic existing tool expansion):
-        - [ ] usecase strict; folder = current + children; org = current + children.
-    - [ ] Role rules:
-        - [ ] Resolve allowed for thread creator (commenter/editor) and admin.
-    - [ ] Add tool definitions in `api/src/services/tools.ts` (comments analyze + resolve).
-    - [ ] Add ToolService methods (list threads, resolve, add AI trace note).
-    - [ ] Wire tool execution in `api/src/services/chat-service.ts` with scope checks.
-    - [ ] Add `context-comments.ts` prompts and hook into context builder.
-    - [ ] UI: add Chat tool option + response formatting + validation loop.
-    - [ ] Implement tool execution + confirmation flow (plan → user confirm → apply).
-    - [ ] Add trace note when AI is used (visible to collaborators).
-    - [ ] UI: Chat markdown response with explicit confirmation options (Yes/No or fixed list).
+    - [x] Add `context-comments.ts` to mirror context wiring patterns.
+    - [x] Define tool contract (batch-capable, action mode with confirmation).
+    - [x] Scope rules (mimic existing tool expansion):
+        - [x] usecase strict; folder = current + children; org = current + children.
+    - [x] Role rules:
+        - [x] Resolve allowed for thread creator (commenter/editor) and admin.
+    - [x] Add tool definitions in `api/src/services/tools.ts` (comments analyze + resolve).
+    - [x] Add ToolService methods (list threads, resolve, add AI trace note).
+    - [x] Wire tool execution in `api/src/services/chat-service.ts` with scope checks.
+    - [x] Add `context-comments.ts` prompts and hook into context builder.
+    - [x] UI: add Chat tool option + response formatting + validation loop.
+    - [x] Implement tool execution + confirmation flow (plan → user confirm → apply).
+    - [x] Add trace note when AI is used (visible to collaborators).
+    - [x] Add `comments.tool_call_id` (reuse migration 0020) and expose in API/UI.
+    - [x] Show AI badge for comments with `tool_call_id` and assistant chat messages.
+    - [x] Fix AI trace note visibility in UI (ensure note is rendered in thread).
+    - [x] UI: Chat markdown response with explicit confirmation options (Yes/No or fixed list).
+    - [x] `make typecheck` + `make lint`
+    - [x] UAT lot 5bis (user-run)
+        - [x] Enable/Disable “Commentaires (résolution)” in Chat tools menu.
+        - [x] Ask for a proposal (mode=suggest) in a context (usecase)
+        - [x] Verify proposal is a structured markdown list + explicit “Confirmer/Annuler”.
+        - [x] Reply with a non-confirmation (e.g., “peut-être”) and ensure the assistant re-prompts.
+        - [x] Reply “Confirmer” and verify actions are applied (close/reassign/note).
+        - [x] Verify AI badge on comment messages created by the tool.
+        - [x] Verify AI badge on closure messages.
+        - [x] Ensure viewers cannot resolve (tool refuses or no changes applied).
+        - [x] Ensure thread creator (commenter/editor) can resolve.
+        - [x] Ensure admin can resolve any thread.
 
-- [ ] **Lot 5ter - fixes from UATs
+- [ ] **Lot 5ter - fixes from UATs**
+    - [x] Déplacer l'icone File/menu en haut à droite du cadre du workspace dans paramètre
+    - [ ] Dans workspace, le menu "+" nouveau devrait pointer vers un modal et l'input "Créer" y être déplacé
+    - [ ] Quand on scroll vers le bas, la suite de l'affichage est blanc  (vue cas-usage) il faut scroller haut/bas plusieurs fois pour avoir le contenu
     - [ ] Retirer le "Insufficient permissions" présent en tant que viewer sur certaines vues (ça n'a pas d'utilité)
     - [ ] In comment input, when using @ to attribue a comment, after clicking, the input on Editableinput is lost (the focus should be put again there)
     - [ ] In usecase/[id] view, when title is multiline, the button "organization" should be vertically aligned with the "Files/menu" button and the center of the title
-    - [ ] Fix non squared comment header badge
+    - [ ] Fix bounding box (should be squared like other icons) of comment header badge
     - [ ] Fix blink in parameters view when admin workspace change role of user
     - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
-
 
 - [ ] **Lot 6 — Docs (spec updates)**
     - [ ] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
