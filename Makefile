@@ -99,7 +99,7 @@ commit: ## Create a git commit (MSG="type: message")
 		echo "❌ Error: MSG is required (e.g., make commit MSG='docs: update spec')"; \
 		exit 1; \
 	fi
-	@HUSKY=0 git commit -m "$(MSG)"
+	@HUSKY=0 git commit -m "$$(printf "%b" "$(MSG)")"
 
 # -----------------------------------------------------------------------------
 # Installation & Build
