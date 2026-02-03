@@ -47,7 +47,7 @@
     if (membersReloadTimer) return;
     membersReloadTimer = setTimeout(async () => {
       membersReloadTimer = null;
-      await loadMembers({ silent: true });
+      await loadMembers();
     }, 150);
   }
 

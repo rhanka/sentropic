@@ -297,19 +297,17 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `ui/tests/utils/comments.test.ts` (new): list/create/update/close/reopen/delete + mention members fetch.
         - [x] Update `ui/tests/utils/api.test.ts`: workspace_id scoping on non-auth endpoints.
         - [x] Update `ui/tests/stores/workspaceScope.test.ts`: mention scope selection via `getScopedWorkspaceIdForUser`.
-        - [ ] `ui/tests/stores/useCases.test.ts`: menu-triggered export state (if store helper added).
-        - [ ] `ui/tests/stores/folders.test.ts`: menu-triggered export state (if store helper added).
-        - [ ] `ui/tests/stores/organizations.test.ts`: menu-triggered export state (if store helper added).
-        - [ ] Gating: `make test-ui`
+        - [x] `ui/tests/stores/useCases.test.ts`: menu-triggered export state (if store helper added).
+        - [x] `ui/tests/stores/folders.test.ts`: menu-triggered export state (if store helper added).
+        - [x] `ui/tests/stores/organizations.test.ts`: menu-triggered export state (if store helper added).
+        - [x] Gating: `make test-ui`
     - [ ] E2E tests:
-        - [ ] study seed data evolution to reach global objectives
-        - [ ] build using `make build-api build-ui-image`prior testing e2e
-        - [ ] progressively tests using `make clean`between each test, and scoping using `make test-e2e E2E_SPEC=tests/test-file.ts
-        - [ ] Update E2E seed (`api/tests/utils/seed-test-data.ts`) to include comment threads + `tool_call_id`, and other as studie in first task
-        - [ ] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle.
-        - [ ] `e2e/tests/05-folders.spec.ts`: folder export menu + download.
-        - [ ] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle.
-        - [ ] `e2e/tests/06-organizations.spec.ts`: organization export menu + download.
+        - [x] study seed data evolution to reach global objectives
+        - [x] build using `make build-api build-ui-image` prior testing e2e
+        - [x] progressively tests using `make clean`between each test, and scoping using `make test-e2e E2E_SPEC=tests/test-file.ts
+        - [x] Update E2E seed (`api/tests/utils/seed-test-data.ts`) to include comment threads + `tool_call_id`, and other as studie in first task
+        - [ ] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle + download
+        - [ ] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle + download
         - [ ] `e2e/tests/06-settings.spec.ts`: workspace import/export menu + dialog flow.
         - [ ] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
         - [ ] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
@@ -320,6 +318,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [ ] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
     - [ ] Run gates: `make typecheck` + `make lint`.
     - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
+    - [ ] Commit: `make commit MSG=...` incluant BRANCH.md une fois coché.
 
 ## Data Model (single evolution)
 - Add `comments` table (workspace-scoped, one-level replies).

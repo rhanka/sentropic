@@ -5,7 +5,14 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
 
-  import { foldersStore, currentFolderId, type Folder } from '$lib/stores/folders';
+  import {
+    foldersStore,
+    currentFolderId,
+    type Folder,
+    openFolderExport,
+    closeFolderExport,
+    folderExportState,
+  } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
@@ -45,7 +52,6 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
-  let showExportDialog = false;
   let showImportDialog = false;
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
@@ -552,7 +558,7 @@
           disabledImport={isReadOnly}
           disabledExport={isReadOnly}
           onImport={() => (showImportDialog = true)}
-          onExport={() => (showExportDialog = true)}
+          onExport={() => openFolderExport(folderId)}
           onDelete={handleDeleteFolder}
           triggerTitle="Actions"
           triggerAriaLabel="Actions"
@@ -755,11 +761,11 @@
 
 {#if currentFolder}
   <ImportExportDialog
-    bind:open={showExportDialog}
+    bind:open={$folderExportState.open}
     mode="export"
     title="Exporter le dossier"
     scope="folder"
-    scopeId={currentFolder.id}
+    scopeId={$folderExportState.folderId ?? currentFolder.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={workspaceName}
@@ -777,6 +783,7 @@
     }
     includeAffectsComments={['organization', 'usecases', 'matrix']}
     includeAffectsDocuments={['organization', 'usecases', 'matrix']}
+    on:close={closeFolderExport}
   />
   <ImportExportDialog
     bind:open={showImportDialog}
