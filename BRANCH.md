@@ -269,14 +269,14 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
 
 - [ ] **Lot 6 — Docs (spec updates)**
-    - [ ] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
-    - [ ] Merge/align into `spec/SPEC.md`and `spec/COLLAB.md` and `spec/TOOLS.md`
+    - [x] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
+    - [x] Merge/align into `spec/SPEC.md`and `spec/COLLAB.md` and `spec/TOOLS.md`
     (global source of truth)
-    - [ ] Update `spec/DATA_MODEL.md` after schema is finalized.
-    - [ ] Update `spec/TOOLS.md` with final comment_assistant tools behaviors and UAT notes.
-    - [ ] Update `spec/COLLAB.md` with final API/UI behaviors and UAT notes.
-    - [ ] Update `spec/SPEC.md` if new endpoints/screens are introduced.
-    - [ ] Verify doc consistency with `TODO.md` scope.
+    - [x] Update `spec/DATA_MODEL.md` after schema is finalized.
+    - [x] Update `spec/TOOLS.md` with final comment_assistant tools behaviors and UAT notes.
+    - [x] Update `spec/COLLAB.md` with final API/UI behaviors and UAT notes.
+    - [x] Update `spec/SPEC.md` if new endpoints/screens are introduced.
+    - [x] Verify doc consistency with `TODO.md` scope.
 
 - [ ] **Lot 7 — Tests + Final validation**
     - [ ] API tests:

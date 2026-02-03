@@ -185,19 +185,19 @@
 - API & UI Refacto
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
-- [ ] Collaboration part 2
-    - [ ] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension topw)
-    - [ ] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension topf)
-    - [ ] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extensions topu et topo)
-  - [ ] Comments
-    - [ ] Each object and data part of object can have on or many comments
-    - [ ] There is a table of comments
-    - [ ] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
-    - [ ] A comment can be attributed to a user using @ (auto complete with users of the workspace).
-    - [ ] If no attribution, the user is the initial comment creator
-    - [ ] Each comment can be "closed" by the last attributed user
-    - [ ] Comments are visible on the header on the card of the data part
-    - [ ] Options d'export : avec ou sans commentaire
+- [x] Collaboration part 2
+    - [x] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension zip)
+    - [x] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension zip)
+    - [x] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extension zip)
+  - [x] Comments
+    - [x] Each object and data part of object can have on or many comments
+    - [x] There is a table of comments
+    - [x] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
+    - [x] A comment can be attributed to a user using @ (auto complete with users of the workspace).
+    - [x] If no attribution, the user is the initial comment creator
+    - [x] Each comment can be "closed" by the last attributed user
+    - [x] Comments are visible on the header on the card of the data part
+    - [x] Options d'export : avec ou sans commentaire
 - [ ] Introduire la notion de workflow (lister les opportunités/évaluer/prioriser) / objet (usecase etc) / agentic (prompts aujourd'hui) templates (Design session)
   Dans l'esprit, l'ensemble des activités top ai ideas serait un workflow basé sur des objets (use case, folder, organisation, synthèse exec) associé à de l'agentique (agent d'idéation pour créer un ensemble d'opportunités, agent d'approfondissement d'idée/usecase et évaluation, objet d'évaluation d'un autre objet (matrice), objet de priorisation (synthèse exec)).
   Les objets d'évaluation sont un peu spécifiques, et il y a aussi des objets de restitution qui manquent. On pourrait les appeler des outils, mais ce ne sont pas des outils pour l'IA, donc il faut déterminer un concept. Il pourrait dans la même game y avoir les évaluation de plan (déf de workpackages / jalons / charge x profils ).

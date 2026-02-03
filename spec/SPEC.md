@@ -237,6 +237,12 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
   - Comment composer is disabled for resolved threads (distinct placeholder).
 - Timestamps:
   - Display uses browser timezone from the ISO timestamp (backend sends timezone offset).
+- AI traceability:
+  - Comments created by the tool carry `tool_call_id`.
+  - UI renders an AI badge on comments with `tool_call_id`.
+- Comment resolution tool:
+  - Proposes actions (close/reassign/note) and requires explicit confirmation before applying.
+  - Context scoping follows existing tool expansion rules (usecase strict; folder/org expand).
 
 15) Collaboration — Import/Export (permissions)
 - Workspace export: **admin only**.
@@ -247,7 +253,19 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Commenter/viewer: cannot import/export.
 - Endpoints:
   - `POST /api/v1/exports` (JSON body, ZIP response)
+  - `POST /api/v1/imports/preview` (multipart form-data: `file`)
   - `POST /api/v1/imports` (multipart form-data: `file`, optional `target_workspace_id`)
+- Export options:
+  - `include[]` controls related data (folders/organizations/usecases/matrix).
+  - `export_kind` identifies workspace list exports (organizations/folders) for filenames.
+  - Filename pattern: `<scope>_<slug>_YYYYMMDD.zip`.
+- Import options:
+  - `selected_types` to import only selected object types.
+  - `target_folder_id`, `target_folder_create`, `target_folder_source_id` for folder-scoped imports.
+- Import UI:
+  - Type-based selection (organizations/folders/usecases/matrix).
+  - Target workspace selection with "create new workspace".
+  - Folder target selection for folder-scoped imports (existing / create new / from imported metadata).
 
 Variables sous-jacentes clés côté backend/API:
 - Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).

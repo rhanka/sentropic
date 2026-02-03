@@ -127,6 +127,7 @@ erDiagram
         text status
         text thread_id
         text content
+        text tool_call_id
         timestamp created_at
         timestamp updated_at
     }
@@ -137,8 +138,9 @@ Notes :
 - `use_cases.data` est **JSONB** (contient `name`, `description`, scores, etc. – migration 0008).
 - `workspaces.owner_user_id` est **nullable** (plus de contrainte unique).
 - `workspaces.hidden_at` indique la visibilité (workspaces cachés).
-- `workspace_memberships` est la source de vérité des rôles (`viewer` | `editor` | `admin`).
+- `workspace_memberships` est la source de vérité des rôles (`viewer` | `commenter` | `editor` | `admin`).
 - `comments` stocke les commentaires dans des conversations à plat (`thread_id`), scoppés par workspace.
+- `comments.tool_call_id` trace AI-assisted notes/comments.
 
 ## Prompts (état actuel vs cible)
 
