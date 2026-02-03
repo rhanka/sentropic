@@ -297,29 +297,27 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `ui/tests/utils/comments.test.ts` (new): list/create/update/close/reopen/delete + mention members fetch.
         - [x] Update `ui/tests/utils/api.test.ts`: workspace_id scoping on non-auth endpoints.
         - [x] Update `ui/tests/stores/workspaceScope.test.ts`: mention scope selection via `getScopedWorkspaceIdForUser`.
+        - [ ] `ui/tests/stores/useCases.test.ts`: menu-triggered export state (if store helper added).
+        - [ ] `ui/tests/stores/folders.test.ts`: menu-triggered export state (if store helper added).
+        - [ ] `ui/tests/stores/organizations.test.ts`: menu-triggered export state (if store helper added).
         - [ ] Gating: `make test-ui`
     - [ ] E2E tests:
+        - [ ] study seed data evolution to reach global objectives
+        - [ ] build using `make build-api build-ui-image`prior testing e2e
+        - [ ] progressively tests using `make clean`between each test, and scoping using `make test-e2e E2E_SPEC=tests/test-file.ts
+        - [ ] Update E2E seed (`api/tests/utils/seed-test-data.ts`) to include comment threads + `tool_call_id`, and other as studie in first task
         - [ ] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle.
+        - [ ] `e2e/tests/05-folders.spec.ts`: folder export menu + download.
         - [ ] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle.
+        - [ ] `e2e/tests/06-organizations.spec.ts`: organization export menu + download.
+        - [ ] `e2e/tests/06-settings.spec.ts`: workspace import/export menu + dialog flow.
         - [ ] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
         - [ ] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
         - [ ] Update `05-usecase-detail.spec.ts`: comment create/reply/close + header badge.
-        - [ ] Update E2E seed (`api/tests/utils/seed-test-data.ts`) to include comment threads + `tool_call_id`.
+        - [ ] `e2e/tests/05-usecase-detail.spec.ts`: use case export menu + download.
         - [ ] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
         - [ ] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
         - [ ] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
-    - [ ] Import/Export UI tests (from Lot 5)
-        - [ ] UI unit (Vitest)
-            - [ ] `ui/tests/utils/api.test.ts`: new export/import helpers (blob + form data).
-            - [ ] `ui/tests/stores/workspaceScope.test.ts`: workspace list used by import target selector.
-            - [ ] `ui/tests/stores/useCases.test.ts`: menu-triggered export state (if store helper added).
-            - [ ] `ui/tests/stores/folders.test.ts`: menu-triggered export state (if store helper added).
-            - [ ] `ui/tests/stores/organizations.test.ts`: menu-triggered export state (if store helper added).
-        - [ ] E2E (Playwright)
-            - [ ] `e2e/tests/06-settings.spec.ts`: workspace import/export menu + dialog flow.
-            - [ ] `e2e/tests/05-usecase-detail.spec.ts`: use case export menu + download.
-            - [ ] `e2e/tests/05-folders.spec.ts`: folder export menu + download.
-            - [ ] `e2e/tests/06-organizations.spec.ts`: organization export menu + download.
     - [ ] Run gates: `make typecheck` + `make lint`.
     - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
 
