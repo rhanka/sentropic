@@ -21,6 +21,7 @@ import {
   chatSessions,
   chatStreamEvents,
   contextModificationHistory,
+  comments,
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
@@ -41,6 +42,7 @@ export async function seedTestData() {
     await db.delete(contextModificationHistory);
     await db.delete(objectLocks);
 
+    await db.delete(comments); // Depends on users/workspaces
     await db.delete(useCases); // Depends on folders and organizations
     await db.delete(folders); // Depends on organizations
     await db.delete(organizations); // Depends on workspaces
@@ -473,6 +475,62 @@ export async function seedTestData() {
       console.log(`✅ Use Case: ${(useCase as any).data?.name ?? useCase.id} (${useCase.status})`);
     }
 
+    // 3.5 Comments (threads + tool_call_id) for E2E coverage
+    const commentThreads = [
+      {
+        workspaceId: E2E_WS_A,
+        contextType: 'usecase',
+        contextId: 'e2e-uc-a-1',
+        sectionKey: 'description',
+        threadId: 'e2e-thread-uc-a-1',
+        createdBy: E2E_USER_A_ID,
+        assignedTo: E2E_USER_A_ID,
+        toolCallId: null,
+        content: 'E2E comment on use case A1.',
+      },
+      {
+        workspaceId: E2E_WS_A,
+        contextType: 'folder',
+        contextId: 'e2e-folder-a',
+        sectionKey: 'summary',
+        threadId: 'e2e-thread-folder-a-1',
+        createdBy: E2E_USER_A_ID,
+        assignedTo: E2E_USER_A_ID,
+        toolCallId: 'tool_call_e2e_001',
+        content: 'E2E AI comment on folder A (tool call).',
+      },
+      {
+        workspaceId: E2E_WS_ADMIN,
+        contextType: 'organization',
+        contextId: 'e2e-organization-admin-bombardier',
+        sectionKey: 'general',
+        threadId: 'e2e-thread-org-admin-1',
+        createdBy: E2E_ADMIN_ID,
+        assignedTo: null,
+        toolCallId: null,
+        content: 'E2E comment on admin organization.',
+      },
+    ];
+
+    for (const [idx, thread] of commentThreads.entries()) {
+      await db.insert(comments).values({
+        id: `e2e-comment-${idx + 1}`,
+        workspaceId: thread.workspaceId,
+        contextType: thread.contextType,
+        contextId: thread.contextId,
+        sectionKey: thread.sectionKey,
+        createdBy: thread.createdBy,
+        assignedTo: thread.assignedTo,
+        status: 'open',
+        threadId: thread.threadId,
+        content: thread.content,
+        toolCallId: thread.toolCallId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(`✅ Comment: ${thread.threadId} (${thread.contextType})`);
+    }
+
     // 4. Settings: matrice par défaut
     const defaultMatrix = {
       key: 'default-matrix',
@@ -499,6 +557,7 @@ export async function seedTestData() {
     console.log(`- Matrix: 1`);
     console.log(`- Workspaces: 4`);
     console.log(`- Users: 5`);
+    console.log(`- Comments: ${commentThreads.length}`);
 
   } catch (error) {
     console.error('❌ Error seeding test data:', error);

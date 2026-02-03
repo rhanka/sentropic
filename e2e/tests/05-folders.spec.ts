@@ -111,6 +111,58 @@ test.describe('Gestion des dossiers', () => {
     }
   });
 
+  test('devrait exporter tous les dossiers avec le toggle organisations', async ({ page }) => {
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+
+    const actionsButton = page.locator('button[aria-label="Actions dossier"]');
+    if (await actionsButton.count() === 0) return;
+    await actionsButton.click();
+
+    const exportAction = page.locator('button:has-text("Exporter")');
+    await expect(exportAction).toBeVisible();
+    await exportAction.click();
+
+    const exportDialog = page.locator('h3:has-text("Exporter les dossiers")');
+    await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+
+    const includeOrgs = page.locator('label:has-text("Inclure les organisations") input[type="checkbox"]');
+    if (await includeOrgs.isVisible()) {
+      await includeOrgs.check();
+    }
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.locator('button:has-text("Exporter")').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  });
+
+  test('devrait exporter le dossier depuis le menu detail', async ({ page }) => {
+    await page.goto('/dossiers');
+    await page.waitForLoadState('domcontentloaded');
+
+    const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
+    if (await folderItems.count() === 0) return;
+    await folderItems.first().click();
+
+    await page.waitForURL(/\/dossiers\//, { timeout: 5000 });
+    await page.waitForLoadState('domcontentloaded');
+
+    const actionsButton = page.locator('button[aria-label="Actions"]');
+    await expect(actionsButton).toBeVisible();
+    await actionsButton.click();
+
+    const exportAction = page.locator('button:has-text("Exporter")');
+    await expect(exportAction).toBeVisible();
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      exportAction.click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  });
+
   test.describe('Read-only (viewer)', () => {
     test.use({ storageState: USER_B_STATE });
 

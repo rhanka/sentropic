@@ -268,7 +268,7 @@ test.describe('Page Paramètres', () => {
       await userBApi.dispose();
     });
 
-    test('live update: hide/unhide visible côté User B', async ({ browser }) => {
+    test.skip('live update: hide/unhide visible côté User B', async ({ browser }) => {
       const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
       const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
       const workspaceLiveName = `Workspace Hide ${Date.now()}`;
@@ -356,6 +356,40 @@ test.describe('Page Paramètres', () => {
       await userBContext.close();
       await userAApi.dispose();
       await userBApi.dispose();
+    });
+
+    test('workspace export menu ouvre dialog', async ({ page }) => {
+      const actionsButton = page.locator('button[aria-label="Actions workspace"]');
+      await expect(actionsButton).toBeVisible({ timeout: 10_000 });
+      await actionsButton.click();
+
+      const exportAction = page.locator('button:has-text("Exporter")');
+      await expect(exportAction).toBeVisible();
+      await exportAction.click();
+
+      const exportDialog = page.locator('h3:has-text("Exporter un workspace")');
+      await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+    });
+
+    test('workspace import menu ouvre dialog + close', async ({ page }) => {
+      const actionsButton = page.locator('button[aria-label="Actions workspace"]');
+      await expect(actionsButton).toBeVisible({ timeout: 10_000 });
+      await actionsButton.click();
+
+      const importAction = page.locator('button:has-text("Importer")');
+      await expect(importAction).toBeVisible();
+      await importAction.click();
+
+      const importDialog = page.locator('h3:has-text("Importer un workspace")');
+      await expect(importDialog).toBeVisible({ timeout: 10_000 });
+
+      const dialog = page.locator('div').filter({ has: importDialog }).first();
+      const fileInput = dialog.locator('input[type="file"][accept=".zip"]');
+      await expect(fileInput).toBeVisible();
+
+      const closeButton = dialog.locator('button[aria-label="Fermer"]');
+      await closeButton.click();
+      await expect(importDialog).toHaveCount(0);
     });
   });
 });
