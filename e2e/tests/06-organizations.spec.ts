@@ -55,9 +55,17 @@ test.describe('Gestion des organisations', () => {
     }, ADMIN_WORKSPACE_ID);
   });
 
-  const createOrgButton = (page: any) => page.getByRole('button', { name: 'Créer une organisation' });
+  const actionsMenuButton = (page: any) => page.locator('button[aria-label="Actions organisation"]');
   const createButton = (page: any) => page.getByRole('button', { name: 'Créer' });
   const deleteButton = (page: any) => page.getByRole('button', { name: 'Supprimer' });
+  const openNewOrganization = async (page: any) => {
+    const actions = actionsMenuButton(page);
+    await expect(actions).toBeVisible();
+    await actions.click();
+    const newAction = page.locator('button:has-text("Nouveau")');
+    await expect(newAction).toBeVisible();
+    await newAction.click();
+  };
 
   test('devrait afficher la page des organisations', async ({ page }) => {
     await page.goto('/organisations');
@@ -68,16 +76,16 @@ test.describe('Gestion des organisations', () => {
     // Vérifier le titre
     await expect(page.locator('h1')).toContainText('Organisations');
     
-    // Vérifier le bouton d'ajout (icône + aria-label)
-    await expect(createOrgButton(page)).toBeVisible();
+    // Vérifier le menu d'actions
+    await expect(actionsMenuButton(page)).toBeVisible();
   });
 
   test('devrait permettre de créer une organisation', async ({ page }) => {
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
-    // Cliquer sur le bouton d'ajout et attendre la page de création
-    await createOrgButton(page).click();
+    // Ouvrir le menu d'actions et aller à la page de création
+    await openNewOrganization(page);
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Renseigner le nom via l'EditableInput dans le H1 (textarea pour multiline)
@@ -141,7 +149,7 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Aller à la page de création
-    await createOrgButton(page).click();
+    await openNewOrganization(page);
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]');
@@ -159,7 +167,7 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Créer une organisation d'abord
-    await createOrgButton(page).click();
+    await openNewOrganization(page);
     await expect(page).toHaveURL(/\/organisations\/new$/);
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Organization to Delete');
@@ -179,8 +187,11 @@ test.describe('Gestion des organisations', () => {
     const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await expect(detailNameInput).toHaveValue('Organization to Delete', { timeout: 5000 });
 
-    // Supprimer via l'UI: cliquer sur le bouton Supprimer et confirmer
+    // Supprimer via le menu d'actions
     page.on('dialog', dialog => dialog.accept());
+    const detailActions = page.locator('button[aria-label="Actions"]');
+    await expect(detailActions).toBeVisible({ timeout: 10_000 });
+    await detailActions.click();
     const deleteBtn = deleteButton(page).first();
     await expect(deleteBtn).toBeVisible({ timeout: 10_000 });
     await deleteBtn.click();
@@ -224,7 +235,7 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Créer une organisation et lancer l'enrichissement IA depuis la page New
-    await createOrgButton(page).click();
+    await openNewOrganization(page);
     await expect(page).toHaveURL(/\/organisations\/new$/);
     const nameInput2 = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput2.fill('MicrosoftAITest');
@@ -240,12 +251,64 @@ test.describe('Gestion des organisations', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Naviguer vers la page de création sans renseigner de nom
-    await createOrgButton(page).click();
+    await openNewOrganization(page);
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Vérifier que le bouton "Créer" est désactivé tant que le nom est vide
     const createBtn2 = createButton(page);
     await expect(createBtn2).toBeDisabled();
+  });
+
+  test('devrait exporter toutes les organisations avec le toggle dossiers', async ({ page }) => {
+    await page.goto('/organisations');
+    await page.waitForLoadState('domcontentloaded');
+
+    const actionsButton = page.locator('button[aria-label="Actions organisation"]');
+    if (await actionsButton.count() === 0) return;
+    await actionsButton.click();
+
+    const exportAction = page.locator('button:has-text("Exporter")');
+    await expect(exportAction).toBeVisible();
+    await exportAction.click();
+
+    const exportDialog = page.locator('h3:has-text("Exporter les organisations")');
+    await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+
+    const includeFolders = page.locator('label:has-text("Inclure les dossiers rattachés") input[type="checkbox"]');
+    if (await includeFolders.isVisible()) {
+      await includeFolders.check();
+    }
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.locator('button:has-text("Exporter")').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  });
+
+  test('devrait exporter l\'organisation depuis le menu detail', async ({ page }) => {
+    await page.goto('/organisations');
+    await page.waitForLoadState('domcontentloaded');
+
+    const organizationItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
+    if (await organizationItems.count() === 0) return;
+    await organizationItems.first().click();
+
+    await page.waitForURL(/\/organisations\//, { timeout: 5000 });
+    await page.waitForLoadState('domcontentloaded');
+
+    const actionsButton = page.locator('button[aria-label="Actions"]');
+    await expect(actionsButton).toBeVisible();
+    await actionsButton.click();
+
+    const exportAction = page.locator('button:has-text("Exporter")');
+    await expect(exportAction).toBeVisible();
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      exportAction.click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
   });
 
   test.describe('Read-only (viewer)', () => {
@@ -265,7 +328,7 @@ test.describe('Gestion des organisations', () => {
       await page.goto('/organisations');
       await page.waitForLoadState('domcontentloaded');
 
-      await expect(createOrgButton(page)).toHaveCount(0);
+      await expect(actionsMenuButton(page)).toHaveCount(0);
       await expect(deleteButton(page)).toHaveCount(0);
 
       const lockIcon = page.locator('button[aria-label="Mode lecture seule : création / suppression désactivées."]');
