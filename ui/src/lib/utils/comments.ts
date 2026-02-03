@@ -19,6 +19,7 @@ export type CommentItem = {
   status: CommentStatus;
   thread_id: string;
   content: string;
+  tool_call_id?: string | null;
   created_at: string;
   updated_at: string | null;
   created_by_user: CommentUser | null;

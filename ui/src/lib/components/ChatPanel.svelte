@@ -40,7 +40,9 @@
     Folder,
     Lightbulb,
     Table,
-    ScrollText
+    ScrollText,
+    Brain,
+    MessageCircle
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
@@ -201,6 +203,8 @@
     if (user.email && comment.created_by_user?.email === user.email) return true;
     return false;
   };
+
+  const isAiComment = (comment: CommentItem) => Boolean(comment.tool_call_id);
 
   const getMentionCandidate = (text: string) => {
     if (!text) return null;
@@ -477,6 +481,13 @@
       icon: FileText
     },
     {
+      id: 'comment_assistant',
+      label: 'Commentaires (résolution)',
+      description: 'Analyser et proposer des résolutions',
+      toolIds: ['comment_assistant'],
+      icon: MessageCircle
+    },
+    {
       id: 'web_search',
       label: 'Web search',
       description: 'Rechercher des infos sur le web',
@@ -589,10 +600,21 @@
   };
 
   const ensureDefaultToolToggles = () => {
-    if (Object.keys(toolEnabledById).length > 0) return;
     const defaults: Record<string, boolean> = {};
     for (const t of TOOL_TOGGLES) defaults[t.id] = true;
-    toolEnabledById = defaults;
+    if (Object.keys(toolEnabledById).length === 0) {
+      toolEnabledById = defaults;
+      return;
+    }
+    const next = { ...toolEnabledById };
+    let changed = false;
+    for (const [key, value] of Object.entries(defaults)) {
+      if (!(key in next)) {
+        next[key] = value;
+        changed = true;
+      }
+    }
+    if (changed) toolEnabledById = next;
   };
 
   const updateContextFromRoute = () => {
@@ -667,7 +689,7 @@
   const getEnabledToolIds = () => {
     const enabled = new Set<string>();
     for (const t of TOOL_TOGGLES) {
-      if (toolEnabledById[t.id]) {
+      if (toolEnabledById[t.id] !== false) {
         t.toolIds.forEach((id) => enabled.add(id));
       }
     }
@@ -685,7 +707,8 @@
   };
 
   const toggleTool = (id: string) => {
-    toolEnabledById = { ...toolEnabledById, [id]: !toolEnabledById[id] };
+    const isEnabled = toolEnabledById[id] !== false;
+    toolEnabledById = { ...toolEnabledById, [id]: !isEnabled };
     savePrefs();
   };
 
@@ -1500,8 +1523,8 @@
       if (sessionId && messages.length === 0) {
         await loadMessages(sessionId, { scrollToBottom: true });
       }
-      ensureDefaultToolToggles();
       loadPrefs(sessionId);
+      ensureDefaultToolToggles();
       updateContextFromRoute();
     }
     handleDocumentClick = (event: MouseEvent) => {
@@ -1648,6 +1671,16 @@
           {@const canEdit = isMine && c.id === lastEditableCommentId && $workspaceCanComment}
           {#if isMine}
             <div class="flex flex-col items-end group">
+              {#if isAiComment(c)}
+                <div class="mb-1 flex items-center justify-end">
+                  <div class="relative h-7 w-7 rounded-full bg-slate-900 text-white border border-slate-800 flex items-center justify-center text-[11px]">
+                    {getInitials(commentAuthorLabel(c))}
+                    <span class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+                      <Brain class="w-2.5 h-2.5 text-slate-700" />
+                    </span>
+                  </div>
+                </div>
+              {/if}
               <div class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown">
                 {#if editingCommentId === c.id}
                   <div class="space-y-2">
@@ -1711,12 +1744,17 @@
             </div>
           {:else}
             <div class="flex items-start gap-2 group">
-              <div class="h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-600">
+              <div class="relative h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-600">
                 {getInitials(commentAuthorLabel(c))}
+                {#if isAiComment(c)}
+                  <span class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+                    <Brain class="w-2.5 h-2.5 text-slate-700" />
+                  </span>
+                {/if}
               </div>
               <div class="max-w-[85%] w-full">
                 <div class="text-[11px] text-slate-500 mb-1 flex items-center gap-2">
-                  <span>{commentAuthorLabel(c)}</span>
+                  <span>{commentAuthorLabel(c)}{isAiComment(c) ? ', Assistant IA' : ''}</span>
                   {#if c.created_at}
                     <span>{formatCommentTimestamp(c.created_at)}</span>
                   {/if}
