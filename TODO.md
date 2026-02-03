@@ -236,7 +236,7 @@
 - [ ] **Chatbot Lot D — Audit, diff et résilience** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] Composant `DiffViewer` pour afficher les différences avant/après
   - [ ] Rollback via snapshots (API + UI)
-  - [ ] Onglet "Historique" dans les vues objets (folder, use case, company)
+  - [ ] Onglet "Historique" dans les vues objets (folder, use case, company + comments)
   - [ ] Liste des sessions ayant modifié l'objet
   - [ ] Preview des modifications avant application (diff visuel)
   - [ ] Confirmation explicite avant d'appliquer une modification (bouton "Appliquer")

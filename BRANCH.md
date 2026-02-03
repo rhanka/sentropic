@@ -270,18 +270,13 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 
 - [ ] **Lot 6 — Docs (spec updates)**
     - [ ] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
-    - [ ] Merge/align into `spec/COLLAB.md` (global source of truth).
+    - [ ] Merge/align into `spec/SPEC.md`and `spec/COLLAB.md` and `spec/TOOLS.md`
+    (global source of truth)
     - [ ] Update `spec/DATA_MODEL.md` after schema is finalized.
+    - [ ] Update `spec/TOOLS.md` with final comment_assistant tools behaviors and UAT notes.
     - [ ] Update `spec/COLLAB.md` with final API/UI behaviors and UAT notes.
     - [ ] Update `spec/SPEC.md` if new endpoints/screens are introduced.
     - [ ] Verify doc consistency with `TODO.md` scope.
-    - [ ] **Spec inventory (to complete)**
-        | Spec file | Status | Notes |
-        | --- | --- | --- |
-        | `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md` | In progress | Needs final include[] rules + UI scope rules. |
-        | `spec/COLLAB.md` | In progress | Must align with final import/export UX + permissions. |
-        | `spec/DATA_MODEL.md` | Done (Lot 1) | Update only if schema changes. |
-        | `spec/SPEC.md` | In progress | Ensure endpoints + UI screens listed. |
 
 - [ ] **Lot 7 — Tests + Final validation**
     - [ ] API tests:
