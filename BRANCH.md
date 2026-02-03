@@ -266,7 +266,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] In dossiers/[id] view, when title is multiline, the button "organization" should be vertically aligned with the "Files/menu" button and the center of the title
     - [x] Fix bounding box (should be squared like other icons) of comment header badge
     - [x] Fix blink in parameters view when adding user in workspace or change role of user
-    - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
+    - [x] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
 
 - [ ] **Lot 6 — Docs (spec updates)**
     - [ ] Complete `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`.
