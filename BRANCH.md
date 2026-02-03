@@ -260,7 +260,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
 
 - [ ] **Lot 5ter - fixes from UATs**
     - [x] Déplacer l'icone File/menu en haut à droite du cadre du workspace dans paramètre
-    - [ ] Dans workspace, le menu "+" nouveau devrait pointer vers un modal et l'input "Créer" y être déplacé
+    - [x] Dans workspace, le menu "+" nouveau devrait pointer vers un modal et l'input "Créer" y être déplacé
     - [ ] Quand on scroll vers le bas, la suite de l'affichage est blanc  (vue cas-usage) il faut scroller haut/bas plusieurs fois pour avoir le contenu
     - [ ] Retirer le "Insufficient permissions" présent en tant que viewer sur certaines vues (ça n'a pas d'utilité)
     - [ ] In comment input, when using @ to attribue a comment, after clicking, the input on Editableinput is lost (the focus should be put again there)
@@ -285,30 +285,28 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         | `spec/SPEC.md` | In progress | Ensure endpoints + UI screens listed. |
 
 - [ ] **Lot 7 — Tests + Final validation**
-    - [ ] **Current batch test impacts (table format)**
-        | Area | File | Change |
-        | --- | --- | --- |
-        | API | `api/tests/api/import-export.test.ts` | Add coverage for `include[]` (organization/folder options + list exports). |
-        | API | `api/tests/api/import-export.test.ts` | Add coverage for `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`. |
-        | UI | `ui/tests/components/ImportExportDialog.test.ts` (new) | Verify import preview + type selection + target workspace/folder order. |
-        | UI | `ui/tests/routes/organisations.test.ts` (new or existing) | Export-all organizations dialog + include folders option. |
-        | UI | `ui/tests/routes/dossiers.test.ts` (new or existing) | Export-all folders dialog + include organizations option. |
-        | E2E | `e2e/tests/05-folders.spec.ts` | Export-all folders from list + include organizations toggle. |
-        | E2E | `e2e/tests/06-organizations.spec.ts` | Export-all organizations from list + include folders toggle. |
-        | E2E | `e2e/tests/07-matrix.spec.ts` (new) | Matrix export menu + download. |
-        | E2E | `e2e/tests/09-import-export.spec.ts` (new) | Import preview, type selection, create folder, switch workspace. |
     - [ ] API tests:
+        - [ ] `api/tests/api/import-export.test.ts`: add `include[]` (organization/folder options + list exports).
+        - [ ] `api/tests/api/import-export.test.ts`: add `imports/preview`, `selected_types`, and `target_folder_create/target_folder_source_id`.
         - [x] New `tests/api/import-export.test.ts`: export/import scopes, manifest integrity, id remap.
         - [x] Update `tests/security/collaboration-security.test.ts`: role/tenancy for import/export.
         - [ ] Update `tests/api/workspaces.test.ts`: workspace import/export permission gates.
         - [ ] Regression: `tests/api/organizations.test.ts`, `tests/api/folders.test.ts`, `tests/api/use-cases.test.ts` (export/import visibility).
         - [ ] Comments regressions remain covered by existing comment tests.
     - [ ] UI tests:
+        - [ ] (manual UAT) workspace create modal via “+” menu (no automated test update).
+        - [ ] `ui/tests/components/ImportExportDialog.test.ts` (new): import preview + type selection + target workspace/folder order.
+        - [ ] `ui/tests/routes/organisations.test.ts` (new or existing): export-all organizations dialog + include folders option.
+        - [ ] `ui/tests/routes/dossiers.test.ts` (new or existing): export-all folders dialog + include organizations option.
         - [ ] Update `tests/stores/useCases.test.ts`: comment count indicators and store updates.
         - [ ] Update `tests/stores/folders.test.ts`: comment badge propagation (if needed).
         - [ ] Update `tests/utils/api.test.ts`: client helpers for comments/export endpoints.
         - [ ] Update `tests/stores/workspaceScope.test.ts`: @mention autocomplete scoped by workspace members.
     - [ ] E2E tests:
+        - [ ] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle.
+        - [ ] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle.
+        - [ ] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
+        - [ ] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
         - [ ] Update `05-usecase-detail.spec.ts`: comment create/reply/close + header badge.
         - [ ] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
         - [ ] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
