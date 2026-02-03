@@ -509,7 +509,7 @@
           </h1>
         {/if}
       </div>
-      <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
+      <div class="col-span-4 flex items-center justify-end gap-2 flex-wrap pt-1">
         {#if currentFolder.organizationId}
           {@const orgId = currentFolder.organizationId}
           <button

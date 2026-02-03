@@ -263,7 +263,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
     - [x] Dans workspace, le menu "+" nouveau devrait pointer vers un modal et l'input "Créer" y être déplacé
     - [x] Retirer le "Insufficient permissions" présent en tant que viewer sur certaines vues (ça n'a pas d'utilité)
     - [x] In comment input, when using @ to attribue a comment, after clicking, the input on Editableinput is lost (the focus should be put again there)
-    - [ ] In usecase/[id] view, when title is multiline, the button "organization" should be vertically aligned with the "Files/menu" button and the center of the title
+    - [x] In dossiers/[id] view, when title is multiline, the button "organization" should be vertically aligned with the "Files/menu" button and the center of the title
     - [ ] Fix bounding box (should be squared like other icons) of comment header badge
     - [ ] Fix blink in parameters view when admin workspace change role of user
     - [ ] When ChatWidget is in docker mode, the scroll bar of the main view should be on the left of the ChatWidget, not on the right. Moreover, the scroll bar should have the same style (slim) than all bars
