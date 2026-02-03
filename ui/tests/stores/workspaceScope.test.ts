@@ -99,4 +99,24 @@ describe('workspaceScope store', () => {
 
     expect(getScopedWorkspaceIdForUser()).toBe('ws-123');
   });
+
+  it('returns null when user is present but workspace is not selected', () => {
+    setUser(user);
+    setWorkspaceScope(null);
+
+    expect(getScopedWorkspaceIdForUser()).toBeNull();
+  });
+
+  it('returns null when no user is set', () => {
+    setWorkspaceScope('ws-123');
+
+    expect(getScopedWorkspaceIdForUser()).toBeNull();
+  });
+
+  it('returns null when selected workspace is blank', () => {
+    setUser(user);
+    setWorkspaceScope('   ');
+
+    expect(getScopedWorkspaceIdForUser()).toBeNull();
+  });
 });
