@@ -13,6 +13,9 @@ import { db } from '../../src/db/client';
 import { workspaceMemberships } from '../../src/db/schema';
 
 describe('Organizations API', () => {
+  const createUser = (role: Parameters<typeof createAuthenticatedUser>[0]) =>
+    createAuthenticatedUser(role, `${role}-${createTestId()}@example.com`);
+
   afterEach(async () => {
     await cleanupAuthData();
   });
@@ -50,7 +53,7 @@ describe('Organizations API', () => {
 
   // ===== PERMISSION TESTS (role-based access) =====
   it('should allow editors to create organizations', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     const companyData = {
       name: `Test Company ${createTestId()}`,
       industry: testOrganizations.valid.industry,
@@ -60,8 +63,43 @@ describe('Organizations API', () => {
     expect(res.status).toBe(201);
   });
 
+  it('enforces export permissions for organization scope', async () => {
+    const editor = await createUser('editor');
+    const viewer = await createUser('guest');
+    if (editor.workspaceId) {
+      await db
+        .insert(workspaceMemberships)
+        .values({ workspaceId: editor.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
+        .onConflictDoNothing();
+    }
+
+    const companyData = {
+      name: `Test Company ${createTestId()}`,
+      industry: testOrganizations.valid.industry,
+    };
+    const createRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', editor.sessionToken!, companyData);
+    expect(createRes.status).toBe(201);
+    const orgId = (await createRes.json()).id;
+
+    const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', editor.sessionToken!, {
+      scope: 'organization',
+      scope_id: orgId,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resEditor.status).toBe(200);
+
+    const resViewer = await authenticatedRequest(app, 'POST', '/api/v1/exports', viewer.sessionToken!, {
+      scope: 'organization',
+      scope_id: orgId,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resViewer.status).toBe(403);
+  });
+
   it('should forbid viewers from creating organizations', async () => {
-    const viewer = await createAuthenticatedUser('guest');
+    const viewer = await createUser('guest');
     const companyData = {
       name: `Test Company ${createTestId()}`,
       industry: testOrganizations.valid.industry,
@@ -72,7 +110,7 @@ describe('Organizations API', () => {
   });
 
   it('should allow guests to read organizations (200)', async () => {
-    const user = await createAuthenticatedUser('guest');
+    const user = await createUser('guest');
     
     const res = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken!);
     expect(res.status).toBe(200);
@@ -104,7 +142,7 @@ describe('Organizations API', () => {
 
   // ===== FUNCTIONAL TESTS (with authentication) =====
   it('should create an organization with authentication', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     const companyData = {
       name: `Test Company ${createTestId()}`,
       industry: testOrganizations.valid.industry,
@@ -119,8 +157,8 @@ describe('Organizations API', () => {
   });
 
   it('should forbid viewers from updating and deleting organizations', async () => {
-    const editor = await createAuthenticatedUser('editor');
-    const viewer = await createAuthenticatedUser('guest');
+    const editor = await createUser('editor');
+    const viewer = await createUser('guest');
 
     await db
       .insert(workspaceMemberships)
@@ -158,7 +196,7 @@ describe('Organizations API', () => {
   });
 
   it('should get all organizations with authentication', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     
     const res = await authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken!);
     
@@ -168,7 +206,7 @@ describe('Organizations API', () => {
   });
 
   it('should get a specific organization with authentication', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     
     // First create an organization
     const companyData = {
@@ -191,7 +229,7 @@ describe('Organizations API', () => {
   });
 
   it('should update an organization with authentication', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     // First create an organization
     const companyData = {
       name: `Test Company ${createTestId()}`,
@@ -217,7 +255,7 @@ describe('Organizations API', () => {
   });
 
   it('should delete an organization with authentication', async () => {
-    const user = await createAuthenticatedUser('editor');
+    const user = await createUser('editor');
     // First create an organization
     const companyData = {
       name: `Test Company ${createTestId()}`,

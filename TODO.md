@@ -110,6 +110,17 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
+- [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
+- [ ] Ajouter un tool de planning
+  - [ ] api endpoints et structure 100% alignée avec les autres tools
+  - [ ] IA Gère un plan détaillé avec des étapes de haut niveau incluant l'appel aux autres tools
+  - [ ] IA Gère le cadrage du plan (options/question multichoix) et ses contraintes
+  - [ ] IA Gère l'écart au plan (découvertes pendant exécution sortant du cadre de contraintes ou spécification) avec une stratégie d'évitement (préfère poser les question en lot en évitant les interruptions et limitant les questions à l'utilisateur)
+  - [ ] Gère les interruption utilisateur sans perdre le fil du plan
+  - [ ] Gère les écarts liées au interruption utilisateur pour les modification du plan (nouvelle séance de cadrage et replanificatoin le cas échéant, explicitant les écarts au plan)
+  - [ ] IA Gère l'évaluation du niveau de réflexion pour les sous tâches (économie de tokens) selon paramétrage utilisateur
+  - [ ] UI Présente les questions réponses (cadrage)
+  - [ ] UI Présente les étapes d'avancement au fur et a mesure
 - [ ] Visual templates / doc exports (Design session)
   - [ ] Offre une ui pour designer l'agencement d'un objet dans sa présentation UI
   - [ ] Gere les objets incluant des listes
