@@ -492,7 +492,7 @@ export async function seedTestData() {
         workspaceId: E2E_WS_A,
         contextType: 'folder',
         contextId: 'e2e-folder-a',
-        sectionKey: 'summary',
+        sectionKey: 'description',
         threadId: 'e2e-thread-folder-a-1',
         createdBy: E2E_USER_A_ID,
         assignedTo: E2E_USER_A_ID,
