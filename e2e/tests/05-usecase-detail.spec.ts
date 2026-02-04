@@ -217,6 +217,109 @@ test.describe('Détail des cas d\'usage', () => {
     }
   });
 
+  test('commentaires: créer, répondre, fermer + badge', async ({ browser }) => {
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+    });
+    const page = await userAContext.newPage();
+    await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const descriptionSection = page.locator('[data-comment-section="description"]');
+    await expect(descriptionSection).toBeVisible({ timeout: 10_000 });
+
+    const commentButton = descriptionSection.locator('button[aria-label="Commentaires"]');
+    await descriptionSection.hover();
+    await commentButton.click({ force: true });
+
+    const widget = page.locator('#chat-widget-dialog');
+    await expect(widget).toBeVisible({ timeout: 10_000 });
+    await widget.locator('button:has-text("Commentaires")').click();
+
+    const emptyState = widget.locator('text=Sélectionne une conversation pour commencer');
+    if (await emptyState.isVisible().catch(() => false)) {
+      const menuButton = widget.locator('button[aria-label="Choisir une conversation"]');
+      await menuButton.click();
+      const newThreadButton = widget.locator('button').filter({ hasText: 'Nouvelle conversation' }).first();
+      if (await newThreadButton.isVisible().catch(() => false)) {
+        await newThreadButton.click();
+      }
+    }
+
+    const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
+    await expect(composer).toBeVisible();
+    const isComposerDisabled = (await composer.getAttribute('aria-disabled')) === 'true';
+    if (isComposerDisabled) {
+      const menuButton = widget.locator('button[aria-label="Choisir une conversation"]');
+      await menuButton.click();
+      const newThreadButton = widget.locator('button').filter({ hasText: 'Nouvelle conversation' }).first();
+      if (await newThreadButton.isVisible().catch(() => false)) {
+        await newThreadButton.click();
+      } else {
+        const firstThread = widget.locator('button').first();
+        if (await firstThread.isVisible().catch(() => false)) {
+          await firstThread.click();
+        }
+      }
+      await expect(composer).not.toHaveAttribute('aria-disabled', 'true');
+    }
+    const sendButton = widget.locator('button[aria-label="Envoyer"]:visible');
+
+    const sendComment = async (text: string) => {
+      const editable = composer.locator('[contenteditable="true"]');
+      await editable.click();
+      await page.keyboard.type(text);
+      await expect(sendButton).toBeEnabled({ timeout: 10_000 });
+      await sendButton.click();
+      await expect(widget.locator('.userMarkdown').filter({ hasText: text })).toBeVisible({ timeout: 10_000 });
+    };
+
+    await sendComment('Commentaire E2E #1');
+    await expect
+      .poll(async () => Number((await commentButton.locator('span').textContent()) ?? 0), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
+
+    await sendComment('Commentaire E2E #2');
+    await expect
+      .poll(async () => Number((await commentButton.locator('span').textContent()) ?? 0), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
+
+    const resolveButton = widget.locator('button[aria-label="Résoudre"]:visible');
+    await expect(resolveButton).toBeVisible({ timeout: 10_000 });
+    await resolveButton.click();
+    await expect
+      .poll(async () => commentButton.locator('span').count(), { timeout: 10_000 })
+      .toBe(0);
+    await userAContext.close();
+  });
+
+  test('devrait exporter le cas d\'usage depuis le menu actions', async ({ browser }) => {
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+    });
+    const page = await userAContext.newPage();
+    await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const actionsButton = page.locator('button[aria-label="Actions"]');
+    await expect(actionsButton).toBeVisible({ timeout: 10_000 });
+    await actionsButton.click();
+
+    const exportAction = page.locator('button:has-text("Exporter")');
+    await expect(exportAction).toBeVisible();
+    await exportAction.click();
+
+    const exportDialog = page.locator('h3:has-text("Exporter le cas d\'usage")');
+    await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.locator('button:has-text("Exporter")').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    await userAContext.close();
+  });
+
   test('devrait afficher les scores de valeur et complexité en détail', async ({ page }) => {
     await page.goto('/cas-usage');
     await page.waitForLoadState('domcontentloaded');
@@ -432,10 +535,10 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
     const userAContext = await browser.newContext({
-      storageState: USER_A_STATE,
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const userBContext = await browser.newContext({
-      storageState: USER_B_STATE,
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
@@ -566,17 +669,16 @@ test.describe('Détail des cas d\'usage', () => {
   test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
     test.setTimeout(60_000);
     const userAContext = await browser.newContext({
-      storageState: USER_A_STATE,
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const userBContext = await browser.newContext({
-      storageState: USER_B_STATE,
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
     const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
 
-    await warmUpWorkspaceScope(pageA, workspaceName, workspaceAId);
-    await warmUpWorkspaceScope(pageB, workspaceName, workspaceAId);
+    // workspaceScopeId hydrated via storageState
 
     await pageA.goto(`/cas-usage/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
