@@ -1,6 +1,6 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
-import { warmUpWorkspaceScope, withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
   const FILE_TAG = 'e2e:matrix.spec.ts';
