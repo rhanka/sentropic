@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Dashboard', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -86,24 +87,20 @@ test.describe('Dashboard', () => {
   });
 
   test.describe('Read-only', () => {
-    test.use({ storageState: USER_B_STATE });
-
-    test.beforeEach(async ({ page }) => {
-      await page.addInitScript((id: string) => {
-        try {
-          localStorage.setItem('workspaceScopeId', id);
-        } catch {
-          // ignore
-        }
-      }, workspaceAId);
-      await page.goto('/dashboard');
-      await page.waitForLoadState('domcontentloaded');
-    });
-
-    test('viewer voit l’icône lock (print-hidden)', async ({ page }) => {
-      const lockButton = page.locator('button[aria-label="Mode lecture seule : édition / génération désactivées."]');
-      await expect(lockButton).toBeVisible({ timeout: 10_000 });
-      await expect(lockButton).toHaveClass(/print-hidden/);
+    test('viewer voit l’icône lock (print-hidden)', async ({ browser }) => {
+      const context = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto('/dashboard');
+        await page.waitForLoadState('domcontentloaded');
+        const lockButton = page.locator('button[aria-label="Mode lecture seule : édition / génération désactivées."]');
+        await expect(lockButton).toBeVisible({ timeout: 10_000 });
+        await expect(lockButton).toHaveClass(/print-hidden/);
+      } finally {
+        await context.close();
+      }
     });
   });
 
