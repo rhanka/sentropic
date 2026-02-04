@@ -320,6 +320,25 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
         - [x] `e2e/tests/09_comment_assistant.spec.ts` (new): tool enabled by default + API call includes tool.
         - [x] `e2e/tests/09_comment_assistant.spec.ts` (new): AI posts comment + badge trace.
-    - [x] Run gates: `make typecheck` + `make lint`.
-    - [x] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
+        - [ ] Refactor remaining E2E specs to use `storageState`-scoped contexts (avoid `localStorage` + reload): `05-folders`, `06-organizations`, `06-settings`, `06-streams`, `03-chat`, `03-dashboard`, `04-documents-ui-actions`, `04-dossiers-reload-draft`, `06-usecase`, `05-error-handling`, `08-workflow`, `00-ai-generation`, `09-import-export`, `09_comment_assistant`.
+    - [ ] Run gates: `make typecheck` + `make lint`.
+    - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
+    - [ ] Commit: `make commit MSG=...` incluant BRANCH.md une fois coché.
+
+## Data Model (single evolution)
+- Add `comments` table (workspace-scoped, one-level replies).
+- Keep all schema changes within **one migration** only.
+- Update `spec/DATA_MODEL.md` immediately after migration.
+
+## Specs to Complete (spec/*)
+- `spec/COLLAB.md`: update with final API/UI behaviors + UAT validation notes.
+- `spec/DATA_MODEL.md`: align with final schema.
+- `spec/SPEC.md`: update if new screens/endpoints need documentation.
+- `spec/SPEC_COLLAB_IMPORT_EXPORT_COMMENTS.md`: align UI flows + permissions + payloads.
+- `spec/TOOLS.md` and `spec/JSON_STREAMING.md`: only if import/export tooling affects logging/streaming.
+
+## Documentation Timing
+- After data model + API stabilized: update `spec/DATA_MODEL.md`.
+- After UI behavior finalized: update `spec/COLLAB.md`.
+- Before final tests: ensure `spec/SPEC.md` references new endpoints.
 

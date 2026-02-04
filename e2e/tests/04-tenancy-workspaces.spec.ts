@@ -1,6 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { warmUpWorkspaceScope } from '../helpers/workspace-scope';
-
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 const USER_A_STATE = './.auth/user-a.json';
 const USER_B_STATE = './.auth/user-b.json';
@@ -12,30 +11,34 @@ const WORKSPACE_B_ID = 'e2e-ws-b';
 test.describe.serial('Tenancy / cloisonnement workspace', () => {
 
   test.describe('Workspace A', () => {
-    test.use({ storageState: USER_A_STATE });
-
-    test('ne devrait pas voir les données du workspace B', async ({ page }) => {
-      await warmUpWorkspaceScope(page, 'Workspace A (E2E)', WORKSPACE_A_ID);
+    test('ne devrait pas voir les données du workspace B', async ({ browser }) => {
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, WORKSPACE_A_ID),
+      });
+      const page = await userAContext.newPage();
       await page.goto('/organisations');
       await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
       await expect(page.locator('body')).toContainText('Pomerleau', { timeout: 15_000 });
       await expect(page.locator('body')).not.toContainText('Groupe BMR', { timeout: 15_000 });
+      await userAContext.close();
     });
   });
 
   test.describe('Workspace B', () => {
-    test.use({ storageState: USER_B_STATE });
-
-    test('ne devrait pas voir les données du workspace A', async ({ page }) => {
-      await warmUpWorkspaceScope(page, 'Workspace B (E2E)', WORKSPACE_B_ID);
+    test('ne devrait pas voir les données du workspace A', async ({ browser }) => {
+      const userBContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, WORKSPACE_B_ID),
+      });
+      const page = await userBContext.newPage();
       await page.goto('/organisations');
       await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
       await expect(page.locator('body')).toContainText('Groupe BMR', { timeout: 15_000 });
       await expect(page.locator('body')).not.toContainText('Pomerleau', { timeout: 15_000 });
+      await userBContext.close();
     });
   });
 
@@ -59,16 +62,9 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     }
 
     const userBContext = await browser.newContext({
-      storageState: USER_B_STATE,
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
     });
     const pageB = await userBContext.newPage();
-    await pageB.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceId);
     await pageB.goto('/parametres');
     await pageB.waitForLoadState('domcontentloaded');
     const rowB = pageB.locator('tbody tr').filter({ hasText: workspaceName }).first();
@@ -97,6 +93,98 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     await userAApi.dispose();
   });
 
+  test('autocomplete @ mention respecte le scope workspace', async ({ browser }) => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+    const workspaceAName = `Workspace Mention A ${Date.now()}`;
+    const workspaceBName = `Workspace Mention B ${Date.now()}`;
+
+    const wsARes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceAName } });
+    if (!wsARes.ok()) throw new Error(`Impossible de créer workspace A (${wsARes.status()})`);
+    const wsAJson = await wsARes.json().catch(() => null);
+    const wsAId = String(wsAJson?.id || '');
+
+    const wsBRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceBName } });
+    if (!wsBRes.ok()) throw new Error(`Impossible de créer workspace B (${wsBRes.status()})`);
+    const wsBJson = await wsBRes.json().catch(() => null);
+    const wsBId = String(wsBJson?.id || '');
+
+    await userAApi.post(`/api/v1/workspaces/${wsAId}/members`, {
+      data: { email: 'e2e-user-b@example.com', role: 'commenter' },
+    });
+    await userAApi.post(`/api/v1/workspaces/${wsBId}/members`, {
+      data: { email: 'e2e-user-victim@example.com', role: 'commenter' },
+    });
+
+    const orgARes = await userAApi.post(`/api/v1/organizations?workspace_id=${wsAId}`, {
+      data: { name: 'Org Mention A', status: 'completed' },
+    });
+    const orgAJson = await orgARes.json().catch(() => null);
+    const folderARes = await userAApi.post(`/api/v1/folders?workspace_id=${wsAId}`, {
+      data: { name: 'Dossier Mention A', organizationId: orgAJson?.id },
+    });
+    const folderAJson = await folderARes.json().catch(() => null);
+    const useCaseARes = await userAApi.post(`/api/v1/use-cases?workspace_id=${wsAId}`, {
+      data: { folderId: folderAJson?.id, name: 'Cas d\'usage Mention A' },
+    });
+    const useCaseAJson = await useCaseARes.json().catch(() => null);
+
+    const orgBRes = await userAApi.post(`/api/v1/organizations?workspace_id=${wsBId}`, {
+      data: { name: 'Org Mention B', status: 'completed' },
+    });
+    const orgBJson = await orgBRes.json().catch(() => null);
+    const folderBRes = await userAApi.post(`/api/v1/folders?workspace_id=${wsBId}`, {
+      data: { name: 'Dossier Mention B', organizationId: orgBJson?.id },
+    });
+    const folderBJson = await folderBRes.json().catch(() => null);
+    const useCaseBRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${wsBId}`, {
+      data: { folderId: folderBJson?.id, name: 'Cas d\'usage Mention B' },
+    });
+    const useCaseBJson = await useCaseBRes.json().catch(() => null);
+
+    await userAApi.dispose();
+
+    const wsAStorage = await withWorkspaceStorageState(USER_A_STATE, wsAId);
+    const wsBStorage = await withWorkspaceStorageState(USER_A_STATE, wsBId);
+    const wsAContext = await browser.newContext({ storageState: wsAStorage });
+    const wsBContext = await browser.newContext({ storageState: wsBStorage });
+    const pageA = await wsAContext.newPage();
+    const pageB = await wsBContext.newPage();
+
+    const openMentionMenu = async (page: typeof pageA, useCaseId: string) => {
+      await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+      await page.waitForLoadState('domcontentloaded');
+
+      const section = page.locator('[data-comment-section="description"]');
+      await section.hover();
+      await section.locator('button[aria-label="Commentaires"]').click({ force: true });
+
+      const widget = page.locator('#chat-widget-dialog');
+      await expect(widget).toBeVisible({ timeout: 10_000 });
+      await widget.locator('button:has-text("Commentaires")').click();
+
+      const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
+      const editable = composer.locator('[contenteditable="true"]');
+      await editable.click();
+      await page.keyboard.type('@');
+
+      return widget;
+    };
+
+    const widgetA = await openMentionMenu(pageA, useCaseAJson?.id);
+    await expect(widgetA.locator('button:has-text("e2e-user-b@example.com")')).toBeVisible({ timeout: 10_000 });
+    await expect(widgetA.locator('button:has-text("e2e-user-victim@example.com")')).toHaveCount(0);
+
+    const widgetB = await openMentionMenu(pageB, useCaseBJson?.id);
+    await expect(widgetB.locator('button:has-text("e2e-user-victim@example.com")')).toBeVisible({ timeout: 10_000 });
+    await expect(widgetB.locator('button:has-text("e2e-user-b@example.com")')).toHaveCount(0);
+
+    await wsAContext.close();
+    await wsBContext.close();
+  });
+
   test('Hidden workspace lock + User B non-admin ne voit pas le workspace', async ({ browser }) => {
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
@@ -117,16 +205,9 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     }
 
     const userAContext = await browser.newContext({
-      storageState: USER_A_STATE,
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceId),
     });
     const pageA = await userAContext.newPage();
-    await pageA.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceId);
     await pageA.goto('/parametres');
     await pageA.waitForLoadState('domcontentloaded');
     const rowA = pageA.locator('tbody tr').filter({ has: pageA.locator('.editable-input') }).first();
