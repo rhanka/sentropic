@@ -292,6 +292,8 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `api/tests/api/chat-tools.test.ts` (new): permission matrix (viewer blocked; creator/editor allowed; admin allowed).
         - [x] `api/tests/api/chat-tools.test.ts` (new): context scoping (usecase strict; folder/org expand).
         - [x] `api/tests/api/import-export.test.ts`: export/import includes `tool_call_id` in comments.
+        - [x] `api/tests/ai/comment-assistant.test.ts` (new): tool exposed + default activation.
+        - [ ] `api/tests/ai/comment-assistant.test.ts` (new): permissions (viewer blocked; commenter/editor allowed; admin can resolve).
         - [x] `make test-api` full api test validation gate
     - [x] UI tests:
         - [x] `ui/tests/utils/comments.test.ts` (new): list/create/update/close/reopen/delete + mention members fetch.
@@ -309,13 +311,15 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `e2e/tests/05-folders.spec.ts`: export-all folders from list + include organizations toggle + download
         - [x] `e2e/tests/06-organizations.spec.ts`: export-all organizations from list + include folders toggle + download
         - [x] `e2e/tests/06-settings.spec.ts`: workspace import/export menu + dialog flow.
-        - [ ] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
-        - [ ] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
-        - [ ] Update `05-usecase-detail.spec.ts`: comment create/reply/close + header badge.
-        - [ ] `e2e/tests/05-usecase-detail.spec.ts`: use case export menu + download.
-        - [ ] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
-        - [ ] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
-        - [ ] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
+        - [x] `e2e/tests/07-matrix.spec.ts` (new): matrix export menu + download.
+        - [x] `e2e/tests/09-import-export.spec.ts` (new): import preview, type selection, create folder, switch workspace.
+        - [x] Update `05-usecase-detail.spec.ts`: comment create/reply/close + header badge.
+        - [x] `e2e/tests/05-usecase-detail.spec.ts`: use case export menu + download.
+        - [x] Update `04-tenancy-workspaces.spec.ts`: @mention autocomplete scope + isolation.
+        - [x] Update `08-workflow.spec.ts` (or new `09-import-export.spec.ts`): export/import round-trip (generic ZIP + target workspace).
+        - [x] Update `00-access-control.spec.ts`: viewer/editor/admin comment permissions.
+        - [ ] `e2e/tests/09_comment_assistant.spec.ts` (new): tool enabled by default + API call includes tool.
+        - [ ] `e2e/tests/09_comment_assistant.spec.ts` (new): AI posts comment + badge trace.
     - [ ] Run gates: `make typecheck` + `make lint`.
     - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
     - [ ] Commit: `make commit MSG=...` incluant BRANCH.md une fois coché.
