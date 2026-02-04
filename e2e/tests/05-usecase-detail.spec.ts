@@ -1,7 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
-import { warmUpWorkspaceScope, withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
   const FILE_TAG = 'e2e:usecase-detail.spec.ts';
@@ -735,17 +735,14 @@ test.describe('Détail des cas d\'usage', () => {
 
   test.skip('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
     const userAContext = await browser.newContext({
-      storageState: USER_A_STATE,
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const userBContext = await browser.newContext({
-      storageState: USER_B_STATE,
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
     const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
-
-    await warmUpWorkspaceScope(pageA, workspaceName, workspaceAId);
-    await warmUpWorkspaceScope(pageB, workspaceName, workspaceAId);
     await runLockBreaksOnLeaveScenario({
       pageA,
       pageB,

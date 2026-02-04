@@ -6,6 +6,7 @@ test.describe('Dossiers — reload & brouillons', () => {
   const FILE_TAG = 'e2e:dossiers-reload-draft.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+  const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
   const USER_C_STATE = './.auth/user-victim.json';
@@ -75,65 +76,70 @@ test.describe('Dossiers — reload & brouillons', () => {
     await userAApi.dispose();
   });
 
-  test.beforeEach(async ({ page }, testInfo) => {
-    // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule" possible).
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, ADMIN_WORKSPACE_ID);
-  });
-
-  test('CTRL+R: reload sur /dossiers/[id] ne casse pas (fallback SPA)', async ({ page }) => {
-    // Récupérer un dossier existant via API (seed E2E)
-    const foldersRes = await page.request.get(`${API_BASE_URL}/api/v1/folders`);
-    expect(foldersRes.ok()).toBeTruthy();
-    const foldersJson = await foldersRes.json().catch(() => null);
-    const items: any[] = (foldersJson as any)?.items ?? [];
-    expect(items.length).toBeGreaterThan(0);
-    const folderId = String(items[0]?.id ?? '');
-    expect(folderId).toBeTruthy();
-
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    // Signal minimal que la page est hydratée
-    await expect(page.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
-
-    // Simuler un refresh (CTRL+R). On utilise reload() (équivalent E2E).
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-
-    // Toujours OK après reload
-    await expect(page.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('Draft: cliquer la carte “Brouillon” renvoie vers /dossier/new?draft=...', async ({ page }) => {
-    // Créer un draft dédié (évite les flakys + dépendance au seed)
-    const draftName = `E2E Draft ${Date.now()}`;
-    const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
-      data: { name: draftName, description: 'Draft created by dossiers-reload-draft.spec.ts' }
+  test('CTRL+R: reload sur /dossiers/[id] ne casse pas (fallback SPA)', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
     });
-    expect(draftRes.ok()).toBeTruthy();
-    const draftJson = await draftRes.json().catch(() => null);
-    const draftId = String((draftJson as any)?.id ?? '');
-    expect(draftId).toBeTruthy();
+    const page = await context.newPage();
+    try {
+      // Récupérer un dossier existant via API (seed E2E)
+      const foldersRes = await page.request.get(`${API_BASE_URL}/api/v1/folders`);
+      expect(foldersRes.ok()).toBeTruthy();
+      const foldersJson = await foldersRes.json().catch(() => null);
+      const items: any[] = (foldersJson as any)?.items ?? [];
+      expect(items.length).toBeGreaterThan(0);
+      const folderId = String(items[0]?.id ?? '');
+      expect(folderId).toBeTruthy();
 
-    await page.goto('/dossiers');
-    await page.waitForLoadState('domcontentloaded');
+      await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await page.waitForLoadState('domcontentloaded');
 
-    const draftCard = page.locator('.grid.gap-4 > article').filter({ hasText: draftName }).first();
-    await expect(draftCard).toBeVisible({ timeout: 10_000 });
+      // Signal minimal que la page est hydratée
+      await expect(page.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
 
-    await draftCard.click();
-    await page.waitForURL(new RegExp(`/dossier/new\\?draft=${draftId}$`), { timeout: 10_000 });
+      // Simuler un refresh (CTRL+R). On utilise reload() (équivalent E2E).
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
 
-    // Vérifier que le nom est bien celui du draft (EditableInput dans H1)
-    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
-    await expect(nameInput).toBeVisible({ timeout: 10_000 });
-    await expect(nameInput).toHaveValue(draftName);
+      // Toujours OK après reload
+      await expect(page.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('Draft: cliquer la carte “Brouillon” renvoie vers /dossier/new?draft=...', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await context.newPage();
+    try {
+      // Créer un draft dédié (évite les flakys + dépendance au seed)
+      const draftName = `E2E Draft ${Date.now()}`;
+      const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
+        data: { name: draftName, description: 'Draft created by dossiers-reload-draft.spec.ts' }
+      });
+      expect(draftRes.ok()).toBeTruthy();
+      const draftJson = await draftRes.json().catch(() => null);
+      const draftId = String((draftJson as any)?.id ?? '');
+      expect(draftId).toBeTruthy();
+
+      await page.goto('/dossiers');
+      await page.waitForLoadState('domcontentloaded');
+
+      const draftCard = page.locator('.grid.gap-4 > article').filter({ hasText: draftName }).first();
+      await expect(draftCard).toBeVisible({ timeout: 10_000 });
+
+      await draftCard.click();
+      await page.waitForURL(new RegExp(`/dossier/new\\?draft=${draftId}$`), { timeout: 10_000 });
+
+      // Vérifier que le nom est bien celui du draft (EditableInput dans H1)
+      const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
+      await expect(nameInput).toBeVisible({ timeout: 10_000 });
+      await expect(nameInput).toHaveValue(draftName);
+    } finally {
+      await context.close();
+    }
   });
 
 });

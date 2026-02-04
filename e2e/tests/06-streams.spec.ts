@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Streams — SSE scoping', () => {
   const FILE_TAG = 'e2e:streams.spec.ts';
@@ -54,17 +55,16 @@ test.describe('Streams — SSE scoping', () => {
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
     });
-    const pageA = await (await browser.newContext({ storageState: USER_A_STATE })).newPage();
-    const pageB = await (await browser.newContext({ storageState: USER_B_STATE })).newPage();
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+    });
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceBId),
+    });
+    const pageA = await userAContext.newPage();
+    const pageB = await userBContext.newPage();
 
     const initSse = async (page: typeof pageA, workspaceId: string) => {
-      await page.addInitScript((id: string) => {
-        try {
-          localStorage.setItem('workspaceScopeId', id);
-        } catch {
-          // ignore
-        }
-      }, workspaceId);
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
       await page.evaluate((id) => {
@@ -109,8 +109,8 @@ test.describe('Streams — SSE scoping', () => {
 
     await pageA.evaluate(() => (window as any).__eventSource?.close?.());
     await pageB.evaluate(() => (window as any).__eventSource?.close?.());
-    await pageA.context().close();
-    await pageB.context().close();
+    await userAContext.close();
+    await userBContext.close();
     await userAApi.dispose();
   });
 

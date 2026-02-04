@@ -1,5 +1,6 @@
 import { test, expect, request } from '@playwright/test';
 import path from 'node:path';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
@@ -287,19 +288,18 @@ test.describe.serial('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     
-    // Basculer vers Jobs IA via le sélecteur dans le header
-    // Le select contient "Nouvelle session", les sessions existantes, et "Jobs IA"
-    const headerSelect = page.locator('select[title="Session / Jobs"]');
-    await expect(headerSelect).toBeVisible({ timeout: 5000 });
-    
-    // Sélectionner l'option Jobs IA par sa valeur
-    await headerSelect.selectOption({ value: '__jobs__' });
+    // Basculer vers Jobs IA via l'onglet
+    const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: 'Jobs IA' }).first();
+    await expect(jobsTab).toBeVisible({ timeout: 5000 });
+    await jobsTab.click();
     
     // Vérifier que le panneau Jobs IA est visible (pas le chat)
     await expect(composer).not.toBeVisible({ timeout: 1000 });
     
     // Basculer de retour vers Chat
-    await headerSelect.selectOption('__new__');
+    const chatTab = page.locator('button, [role="tab"]').filter({ hasText: 'Chat IA' }).first();
+    await expect(chatTab).toBeVisible({ timeout: 5000 });
+    await chatTab.click();
     
     // Vérifier que le panneau chat est de nouveau visible
     await expect(composer).toBeVisible({ timeout: 1000 });
@@ -424,9 +424,15 @@ test.describe.serial('Chat', () => {
 
     await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
 
-    const headerSelect = page.locator('select[title="Session / Jobs"]');
+    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
+    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    await sessionMenuButton.click();
+    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+
+    const selectedSession = sessionMenu.locator('button.font-semibold').first();
     await expect.poll(async () => {
-      const text = (await headerSelect.locator('option:checked').textContent())?.trim() ?? '';
+      const text = (await selectedSession.textContent())?.trim() ?? '';
       return text;
     }, { timeout: 90_000 }).not.toMatch(/^Conversation\s/);
   });
@@ -446,15 +452,10 @@ test.describe.serial('Chat', () => {
     expect(addMemberRes.ok()).toBeTruthy();
     await adminApi.dispose();
 
-    const userContext = await browser.newContext({ storageState: USER_A_STATE });
+    const userContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, adminWorkspaceId),
+    });
     const page = await userContext.newPage();
-    await page.addInitScript((id) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, adminWorkspaceId);
 
     await page.goto('/dossiers');
     await page.waitForLoadState('domcontentloaded');
@@ -589,12 +590,14 @@ test.describe.serial('Chat', () => {
       throw e;
     }
     
-    // Vérifier que le sélecteur contient maintenant une session (en plus de "Nouvelle session" et "Jobs IA")
-    const headerSelect = page.locator('select[title="Session / Jobs"]');
-    const options = headerSelect.locator('option');
-    const optionCount = await options.count();
-    // Au minimum : "Nouvelle session" + "Jobs IA" + au moins 1 session = 3 options minimum
-    expect(optionCount).toBeGreaterThanOrEqual(3);
+    // Vérifier que le menu de sessions contient maintenant au moins une conversation
+    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
+    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    await sessionMenuButton.click();
+    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+    const sessionItems = sessionMenu.locator('div.max-h-48 button');
+    expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
   });
 
   test('devrait supprimer une session', async ({ page }) => {
@@ -632,10 +635,14 @@ test.describe.serial('Chat', () => {
       throw e;
     }
     
-    // Vérifier qu'une session existe dans le sélecteur
-    const headerSelect = page.locator('select[title="Session / Jobs"]');
-    const initialOptionCount = await headerSelect.locator('option').count();
-    expect(initialOptionCount).toBeGreaterThanOrEqual(3); // Au moins "Nouvelle session" + "Jobs IA" + 1 session
+    // Vérifier qu'une session existe dans le menu
+    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
+    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    await sessionMenuButton.click();
+    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+    const sessionItems = sessionMenu.locator('div.max-h-48 button');
+    expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
     
     // Cliquer sur le bouton de suppression (icône poubelle)
     const deleteButton = page.locator('button[title="Supprimer la conversation"]');
@@ -659,10 +666,10 @@ test.describe.serial('Chat', () => {
     // Attendre que l'UI revienne à l'état "nouvelle session" (messages vides)
     await expect(page.getByText('Aucun message. Écris un message pour démarrer.')).toBeVisible({ timeout: 15_000 });
     
-    // Vérifier que le sélecteur est revenu à "Nouvelle session" ou qu'il n'y a plus de messages
-    const finalOptionCount = await headerSelect.locator('option').count();
-    // Après suppression, on devrait avoir au moins "Nouvelle session" + "Jobs IA" = 2 options minimum
-    expect(finalOptionCount).toBeGreaterThanOrEqual(2);
+    // Vérifier que le menu est revenu à "Aucune conversation"
+    await sessionMenuButton.click();
+    const emptyLabel = page.locator('div').filter({ hasText: 'Aucune conversation' }).first();
+    await expect(emptyLabel).toBeVisible({ timeout: 5000 });
   });
 
 });
