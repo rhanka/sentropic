@@ -1,12 +1,13 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
-import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { warmUpWorkspaceScope, withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
   const FILE_TAG = 'e2e:matrix.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
+  let workspaceName = '';
   let workspaceAId = '';
   let folderId = '';
 
@@ -17,7 +18,7 @@ test.describe('Configuration de la matrice', () => {
     });
     
     // Créer un workspace unique pour ce fichier de test (isolation des ressources)
-    const workspaceName = `Matrix E2E ${Date.now()}`;
+    workspaceName = `Matrix E2E ${Date.now()}`;
     const createRes = await userAApi.post('/api/v1/workspaces', { data: { name: workspaceName } });
     if (!createRes.ok()) throw new Error(`Impossible de créer workspace (status ${createRes.status()})`);
     const created = await createRes.json().catch(() => null);
@@ -56,6 +57,11 @@ test.describe('Configuration de la matrice', () => {
     const folderJson = await folderRes.json().catch(() => null);
     folderId = String(folderJson?.id || '');
     if (!folderId) throw new Error('folderId introuvable');
+
+    const useCaseRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+      data: { folderId, name: 'Cas E2E Matrix', problem: 'P', solution: 'S' },
+    });
+    if (!useCaseRes.ok()) throw new Error(`Impossible de créer cas d'usage matrix (status ${useCaseRes.status()})`);
 
     await userAApi.dispose();
   });
@@ -124,6 +130,67 @@ test.describe('Configuration de la matrice', () => {
       await expect(page.locator('th:has-text("Poids")')).toBeVisible();
       await expect(page.locator('th:has-text("Action")')).toBeVisible();
     }
+  });
+
+  test.describe('Export matrice', () => {
+    test.use({ storageState: USER_B_STATE });
+
+    test('devrait exporter la matrice depuis le menu d\'actions', async ({ page }) => {
+      await page.addInitScript(
+        ({ wsId }) => {
+          try {
+            localStorage.setItem('workspaceScopeId', wsId);
+          } catch {
+            // ignore
+          }
+        },
+        { wsId: workspaceAId }
+      );
+      await page.addInitScript(
+        ({ wsId }) => {
+          try {
+            localStorage.setItem('workspaceScopeId', wsId);
+          } catch {
+            // ignore
+          }
+        },
+        { wsId: workspaceAId }
+      );
+      await page.goto('/dossiers');
+      await page.waitForLoadState('domcontentloaded');
+      await page
+        .waitForResponse((res) => res.url().includes('/api/v1/folders') && res.request().method() === 'GET', {
+          timeout: 10_000,
+        })
+        .catch(() => {});
+      const folderRow = page
+        .locator('article[role="button"]')
+        .filter({ has: page.locator('h2', { hasText: 'Dossier Test' }) })
+        .first();
+      await expect(folderRow).toBeVisible({ timeout: 10_000 });
+      await folderRow.scrollIntoViewIfNeeded();
+      await folderRow.click({ force: true });
+      await page.waitForURL(new RegExp(`/dossiers/${folderId}`), { timeout: 10_000 });
+      await page.locator('a[href="/matrice"]').click();
+      await page.waitForLoadState('domcontentloaded');
+
+      const actionsButton = page.locator('button[aria-label="Actions matrice"]');
+      await expect(actionsButton).toBeVisible();
+      await actionsButton.click();
+
+      const exportAction = page.locator('button:has-text("Exporter")');
+      await expect(exportAction).toBeVisible();
+      await exportAction.click();
+
+      const exportDialog = page.locator('h3:has-text("Exporter la matrice")');
+      await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 20_000 }),
+        page.locator('button:has-text("Exporter")').click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    });
   });
 
   test('devrait permettre de modifier les poids des axes', async ({ page }) => {
