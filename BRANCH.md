@@ -293,7 +293,7 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `api/tests/api/chat-tools.test.ts` (new): context scoping (usecase strict; folder/org expand).
         - [x] `api/tests/api/import-export.test.ts`: export/import includes `tool_call_id` in comments.
         - [x] `api/tests/ai/comment-assistant.test.ts` (new): tool exposed + default activation.
-        - [ ] `api/tests/ai/comment-assistant.test.ts` (new): permissions (viewer blocked; commenter/editor allowed; admin can resolve).
+        - [x] `api/tests/ai/comment-assistant.test.ts` (new): permissions (viewer blocked; commenter/editor allowed; admin can resolve).
         - [x] `make test-api` full api test validation gate
     - [x] UI tests:
         - [x] `ui/tests/utils/comments.test.ts` (new): list/create/update/close/reopen/delete + mention members fetch.
