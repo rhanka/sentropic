@@ -321,9 +321,8 @@ Deliver Collaboration Part 2 from `TODO.md` (import/export + comments) with a si
         - [x] `e2e/tests/09_comment_assistant.spec.ts` (new): tool enabled by default + API call includes tool.
         - [x] `e2e/tests/09_comment_assistant.spec.ts` (new): AI posts comment + badge trace.
         - [x] Refactor remaining E2E specs to use `storageState`-scoped (remove warmUpWorkspaceScope) contexts (avoid `localStorage` + reload): `05-folders`, `06-organizations`, `06-settings`, `06-streams`, `03-chat`, `03-dashboard`, `04-documents-ui-actions`, `04-dossiers-reload-draft`, `06-usecase`, `05-error-handling`, `08-workflow`.
-    - [ ] Run gates: `make typecheck` + `make lint`.
+    - [x] Run gates: `make typecheck` + `make lint`.
     - [ ] Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`.
-    - [ ] Commit: `make commit MSG=...` incluant BRANCH.md une fois coché.
 
 ## Data Model (single evolution)
 - Add `comments` table (workspace-scoped, one-level replies).
