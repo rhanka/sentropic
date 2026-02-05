@@ -29,6 +29,13 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] `matrix_get`
 - [x] `matrix_update` (replaces matrixConfig; blocked in read-only workspace)
 
+### Comment tools
+- [x] `comment_assistant` (proposal + confirm + apply)
+  - `mode=suggest` returns a structured proposal for comment threads in scope
+  - `mode=resolve` applies actions only after explicit user confirmation
+  - Actions: close thread, reassign, add note (batch-enabled)
+  - Traceability: comments created by the tool include `tool_call_id`
+
 ## Implemented wiring / behavior ✅
 
 ### Contexts enabled in API (tool availability)
@@ -36,6 +43,7 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] `primaryContextType=organization`: organizations tools (+ folders_list) + web tools
 - [x] `primaryContextType=folder`: folder tools + usecases_list + executive summary tools + matrix tools + organization_get (restricted) + web tools
 - [x] `primaryContextType=executive_summary`: executive summary tools + usecases_list + folder_get + matrix_get + organization_get (restricted) + web tools
+- [x] Comment contexts: `comment_assistant` enabled when comment contexts are available for the active view
 
 ### Security / scope rules
 - [x] Workspace scope enforced via `workspaceId` in ToolService queries

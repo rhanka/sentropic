@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 const USER_A_STATE = './.auth/user-a.json';
 const USER_B_STATE = './.auth/user-b.json';
@@ -17,7 +18,7 @@ test.describe('Access control — UI admin', () => {
 
     // Vérifier que la section workspace est visible pour un utilisateur non-admin
     await expect(page.locator('h2', { hasText: 'Compte & Workspace' })).toBeVisible();
-    await expect(page.locator('text=Créer un workspace')).toBeVisible();
+    await expect(page.locator('button[aria-label="Actions workspace"]')).toBeVisible();
   });
 });
 
@@ -26,6 +27,8 @@ test.describe.serial('Access control — roles workspace', () => {
   const workspaceName = `Workspace Access ${Date.now()}`;
   let workspaceId = '';
   let organizationId = '';
+  let folderId = '';
+  let useCaseId = '';
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -50,6 +53,22 @@ test.describe.serial('Access control — roles workspace', () => {
     organizationId = String(orgJson?.id || '');
     if (!organizationId) throw new Error('organizationId introuvable');
 
+    const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceId}`, {
+      data: { name: `Folder Access ${Date.now()}`, description: 'Folder access control', organizationId },
+    });
+    if (!folderRes.ok()) throw new Error(`Impossible de créer dossier access (status ${folderRes.status()})`);
+    const folderJson = await folderRes.json().catch(() => null);
+    folderId = String(folderJson?.id || '');
+    if (!folderId) throw new Error('folderId introuvable');
+
+    const useCaseRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceId}`, {
+      data: { folderId, name: `Usecase Access ${Date.now()}`, problem: 'Problème', solution: 'Solution' },
+    });
+    if (!useCaseRes.ok()) throw new Error(`Impossible de créer cas d'usage access (status ${useCaseRes.status()})`);
+    const useCaseJson = await useCaseRes.json().catch(() => null);
+    useCaseId = String(useCaseJson?.id || '');
+    if (!useCaseId) throw new Error('useCaseId introuvable');
+
     await userAApi.dispose();
   });
 
@@ -68,15 +87,12 @@ test.describe.serial('Access control — roles workspace', () => {
     await userAApi.dispose();
   };
 
-  test('User B viewer: pas de création + editors verrouillés', async ({ page }) => {
+  test('User B viewer: pas de création + editors verrouillés', async ({ browser }) => {
     await setRole('viewer');
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceId);
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
+    });
+    const page = await userBContext.newPage();
 
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
@@ -90,17 +106,15 @@ test.describe.serial('Access control — roles workspace', () => {
     await page.waitForLoadState('domcontentloaded');
     const editable = page.locator('.editable-input, .editable-textarea').first();
     await expect(editable).toBeDisabled({ timeout: 10_000 });
+    await userBContext.close();
   });
 
-  test('User B editor: édition OK, pas gestion membres', async ({ page }) => {
+  test('User B editor: édition OK, pas gestion membres', async ({ browser }) => {
     await setRole('editor');
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceId);
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
+    });
+    const page = await userBContext.newPage();
 
     await page.goto(`/organisations/${encodeURIComponent(organizationId)}`);
     await page.waitForLoadState('domcontentloaded');
@@ -110,9 +124,10 @@ test.describe.serial('Access control — roles workspace', () => {
     await page.goto('/parametres');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h4', { hasText: 'Membres' })).toHaveCount(0);
+    await userBContext.close();
   });
 
-  test('User B admin: peut gérer membres + cacher/décacher + supprimer caché', async ({ page }) => {
+  test('User B admin: peut gérer membres + cacher/décacher + supprimer caché', async ({ browser }) => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     const userBApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_B_STATE });
     const adminWorkspaceName = `Workspace Admin ${Date.now()}`;
@@ -129,14 +144,10 @@ test.describe.serial('Access control — roles workspace', () => {
     }
     await userAApi.dispose();
 
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, adminWorkspaceId);
-
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, adminWorkspaceId),
+    });
+    const page = await userBContext.newPage();
     await page.goto('/parametres');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h4', { hasText: 'Membres' })).toBeVisible();
@@ -177,6 +188,86 @@ test.describe.serial('Access control — roles workspace', () => {
       }, { timeout: 10_000 })
       .toBe(false);
     await userBApi.dispose();
+    await userBContext.close();
+  });
+
+  test('permissions commentaires: viewer/editor/admin', async ({ browser }) => {
+    const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const commentRes = await userAApi.post('/api/v1/comments', {
+      data: {
+        context_type: 'usecase',
+        context_id: useCaseId,
+        section_key: 'description',
+        content: 'Commentaire racine',
+      },
+    });
+    if (!commentRes.ok()) throw new Error(`Impossible de créer commentaire racine (${commentRes.status()})`);
+    await userAApi.dispose();
+
+    const openComments = async (page: import('@playwright/test').Page) => {
+      await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+      await page.waitForLoadState('domcontentloaded');
+
+      const section = page.locator('[data-comment-section="description"]');
+      await section.hover();
+      await section.locator('button[aria-label="Commentaires"]').click({ force: true });
+      const widget = page.locator('#chat-widget-dialog');
+      await expect(widget).toBeVisible({ timeout: 10_000 });
+      await widget.locator('button:has-text("Commentaires")').click();
+
+      const emptyState = widget.locator('text=Sélectionne une conversation pour commencer');
+      if (await emptyState.isVisible().catch(() => false)) {
+        const menuButton = widget.locator('button[aria-label="Choisir une conversation"]');
+        await menuButton.click();
+        const firstThread = widget.locator('button').filter({ hasText: 'Description' }).first();
+        if (await firstThread.isVisible()) await firstThread.click();
+      }
+
+      return widget;
+    };
+
+    await setRole('viewer');
+    const viewerContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
+    });
+    const viewerPage = await viewerContext.newPage();
+    let widget = await openComments(viewerPage);
+    const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
+    const sendButton = widget.locator('button[aria-label="Envoyer"]:visible');
+    const resolveButton = widget.locator('button[aria-label="Résoudre"]:visible');
+    await expect(composer).toHaveAttribute('aria-disabled', 'true');
+    await expect(sendButton).toBeDisabled();
+    await expect(resolveButton).toBeDisabled();
+    await viewerContext.close();
+
+    await setRole('editor');
+    const editorContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
+    });
+    const editorPage = await editorContext.newPage();
+    widget = await openComments(editorPage);
+    const editable = widget.locator('[role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]');
+    await editable.click();
+    await editorPage.keyboard.type('Commentaire editor');
+    const createPromise = editorPage.waitForResponse(
+      (res) => res.url().includes('/api/v1/comments') && res.request().method() === 'POST'
+    );
+    await widget.locator('button[aria-label="Envoyer"]:visible').click();
+    const createResponse = await createPromise;
+    expect(createResponse.ok()).toBe(true);
+    await expect(widget.locator('.userMarkdown').filter({ hasText: 'Commentaire editor' })).toBeVisible();
+    await expect(widget.locator('button[aria-label="Résoudre"]')).toBeDisabled();
+    await editorContext.close();
+
+    await setRole('admin');
+    const adminContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
+    });
+    const adminPage = await adminContext.newPage();
+    widget = await openComments(adminPage);
+    const resolveButtonAdmin = widget.locator('button[aria-label="Résoudre"]:visible');
+    await expect(resolveButtonAdmin).toBeEnabled();
+    await adminContext.close();
   });
 });
 

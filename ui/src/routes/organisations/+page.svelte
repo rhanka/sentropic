@@ -7,14 +7,19 @@
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
+import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspace } from '$lib/stores/workspaceScope';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
-  import { Trash2, CirclePlus, Lock } from '@lucide/svelte';
+  import { Lock, Trash2 } from '@lucide/svelte';
 
   const HUB_KEY = 'organizationsList';
   let isReadOnly = false;
   $: isReadOnly = $workspaceReadOnlyScope;
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+let showImportDialog = false;
+let showExportDialog = false;
+$: workspaceName = $selectedWorkspace?.name || '';
 
   onMount(() => {
     void (async () => {
@@ -73,6 +78,10 @@
     }
   };
 
+const handleImportComplete = async () => {
+  await loadOrganizations();
+};
+
   const handleDeleteOrganization = async (id: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
 
@@ -93,6 +102,7 @@
     }
   };
 
+
   const openOrganization = (organization: { id: string; status?: string }) => {
     const isDraft = organization.status === 'draft';
     // UX: un brouillon se reprend via la vue `new` (icônes IA / save / annuler).
@@ -108,15 +118,18 @@
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Organisations</h1>
     {#if !isReadOnly}
-      <button
-        class="rounded p-2 transition text-primary hover:bg-slate-100"
-        on:click={() => goto('/organisations/new')}
-        title="Créer une organisation"
-        aria-label="Créer une organisation"
-        type="button"
-      >
-        <CirclePlus class="w-5 h-5" />
-      </button>
+      <FileMenu
+        showNew={true}
+        showImport={true}
+        showExport={true}
+        showPrint={false}
+        showDelete={false}
+        onNew={() => goto('/organisations/new')}
+        onImport={() => (showImportDialog = true)}
+        onExport={() => (showExportDialog = true)}
+        triggerTitle="Actions organisation"
+        triggerAriaLabel="Actions organisation"
+      />
     {:else if showReadOnlyLock}
       <button
         class="rounded p-2 transition text-slate-400 cursor-not-allowed"
@@ -149,7 +162,7 @@
             {#if !isReadOnly}
               <button
                 class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
-                      on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
+                on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
                 title="Supprimer l'organisation"
               >
                 <Trash2 class="w-4 h-4" />
@@ -173,7 +186,7 @@
               {#if !isReadOnly}
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                          on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
+                  on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
                   title="Supprimer"
                 >
                   <Trash2 class="w-4 h-4" />
@@ -227,5 +240,33 @@
     {/each}
   </div>
 </section>
+
+<ImportExportDialog
+  bind:open={showImportDialog}
+  mode="import"
+  title="Importer une organisation"
+  scope="organization"
+  defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
+  importObjectTypes={['organizations']}
+  on:imported={handleImportComplete}
+/>
+
+<ImportExportDialog
+  bind:open={showExportDialog}
+  mode="export"
+  title="Exporter les organisations"
+  scope="workspace"
+  allowScopeSelect={false}
+  allowScopeIdEdit={false}
+  workspaceName={workspaceName}
+  objectName="Toutes les organisations"
+  objectLabel="Organisation"
+  fixedInclude={['organizations']}
+  includeOptions={[{ id: 'folders', label: 'Inclure les dossiers rattachés', defaultChecked: false }]}
+  includeDependencies={{ folders: ['usecases', 'matrix'] }}
+  includeAffectsComments={['folders']}
+  includeAffectsDocuments={['folders']}
+  exportKind="organizations"
+/>
 
 

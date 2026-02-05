@@ -31,6 +31,17 @@ export type OrganizationEnrichmentData = {
 export const organizationsStore = writable<Organization[]>([]);
 export const currentOrganizationId = writable<string | null>(null);
 
+export type OrganizationExportState = { open: boolean; organizationId: string | null };
+export const organizationExportState = writable<OrganizationExportState>({ open: false, organizationId: null });
+
+export const openOrganizationExport = (organizationId: string) => {
+  organizationExportState.set({ open: true, organizationId });
+};
+
+export const closeOrganizationExport = () => {
+  organizationExportState.set({ open: false, organizationId: null });
+};
+
 export const fetchOrganizations = async (): Promise<Organization[]> => {
   const data = await apiGet<{ items: Organization[] }>(`/organizations`);
   return data.items;

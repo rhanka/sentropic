@@ -6,14 +6,19 @@
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
-  import { FileText, Trash2, CirclePlus, Lock } from '@lucide/svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
+  import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspace } from '$lib/stores/workspaceScope';
+  import { FileText, Lock, Trash2 } from '@lucide/svelte';
 
   let isLoading = false;
   const HUB_KEY = 'foldersPage';
   let isReadOnly = false;
   $: isReadOnly = $workspaceReadOnlyScope;
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  let showImportDialog = false;
+  let showExportDialog = false;
+  $: workspaceName = $selectedWorkspace?.name || '';
 
   onMount(() => {
     void (async () => {
@@ -105,6 +110,10 @@
     }
   };
 
+  const handleImportComplete = async () => {
+    await loadFolders();
+  };
+
   // Polling désactivé: dossiers/cas d'usage se mettent à jour via SSE (folder_update/usecase_update)
 
   const handleFolderClick = (folderId: string, folderStatus: string) => {
@@ -165,20 +174,25 @@
       });
     }
   };
+
 </script>
 
 <section class="space-y-6">
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold">Dossiers</h1>
     {#if !isReadOnly}
-      <button
-        class="rounded p-2 transition text-primary hover:bg-slate-100"
-        on:click={() => goto('/dossier/new')}
-        title="Nouveau dossier"
-        aria-label="Nouveau dossier"
-      >
-        <CirclePlus class="w-5 h-5" />
-      </button>
+      <FileMenu
+        showNew={true}
+        showImport={true}
+        showExport={true}
+        showPrint={false}
+        showDelete={false}
+        onNew={() => goto('/dossier/new')}
+        onImport={() => (showImportDialog = true)}
+        onExport={() => (showExportDialog = true)}
+        triggerTitle="Actions dossier"
+        triggerAriaLabel="Actions dossier"
+      />
     {:else if showReadOnlyLock}
       <button
         class="rounded p-2 transition text-slate-400 cursor-not-allowed"
@@ -279,3 +293,30 @@
 
   <!-- Création déplacée vers /dossier/new (plus de modal ici) -->
 </section>
+
+<ImportExportDialog
+  bind:open={showImportDialog}
+  mode="import"
+  title="Importer un dossier"
+  scope="folder"
+  defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
+  importObjectTypes={['folders', 'usecases', 'organizations', 'matrix']}
+  on:imported={handleImportComplete}
+/>
+
+<ImportExportDialog
+  bind:open={showExportDialog}
+  mode="export"
+  title="Exporter les dossiers"
+  scope="workspace"
+  allowScopeSelect={false}
+  allowScopeIdEdit={false}
+  workspaceName={workspaceName}
+  objectName="Tous les dossiers"
+  objectLabel="Dossier"
+  fixedInclude={['folders', 'usecases', 'matrix']}
+  includeOptions={[{ id: 'organizations', label: 'Inclure les organisations', defaultChecked: false }]}
+  includeAffectsComments={['organizations']}
+  includeAffectsDocuments={['organizations']}
+  exportKind="folders"
+/>

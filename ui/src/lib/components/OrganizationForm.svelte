@@ -1,5 +1,7 @@
 <script lang="ts">
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import CommentBadge from '$lib/components/CommentBadge.svelte';
+  import type { OpenCommentsHandler } from '$lib/types/comments';
   import type { OnFieldUpdate } from '$lib/components/organization-form.types';
 
   export let organization: Record<string, any> | null = null;
@@ -10,6 +12,8 @@
   // UX: sur `organisations/new`, afficher un label explicite. Sur `[id]`, pas de label (titre seul).
   export let nameLabel: string = '';
   export let locked: boolean = false;
+  export let commentCounts: Record<string, number> | null = null;
+  export let onOpenComments: OpenCommentsHandler | null = null;
 </script>
 
 {#if organization}
@@ -57,8 +61,15 @@
     <slot name="underHeader" />
 
     <div class="grid gap-6 md:grid-cols-2">
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <h3 class="font-semibold text-slate-900 mb-2">Taille</h3>
+      <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="size">
+      <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+        Taille
+        <CommentBadge
+          count={commentCounts?.size ?? 0}
+          disabled={!onOpenComments}
+          on:click={() => onOpenComments?.('size')}
+        />
+      </h3>
         <div class="text-slate-600">
           <EditableInput
             value={organizationData?.size || organization.size || ''}
@@ -75,8 +86,15 @@
         </div>
       </div>
 
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <h3 class="font-semibold text-slate-900 mb-2">Technologies</h3>
+      <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="technologies">
+      <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+        Technologies
+        <CommentBadge
+          count={commentCounts?.technologies ?? 0}
+          disabled={!onOpenComments}
+          on:click={() => onOpenComments?.('technologies')}
+        />
+      </h3>
         <div class="text-slate-600">
           <EditableInput
             value={organizationData?.technologies || organization.technologies || ''}
@@ -94,8 +112,15 @@
       </div>
     </div>
 
-    <div class="rounded border border-slate-200 bg-white p-4">
-      <h3 class="font-semibold text-slate-900 mb-2">Produits et Services</h3>
+    <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="products">
+    <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+      Produits et Services
+      <CommentBadge
+        count={commentCounts?.products ?? 0}
+        disabled={!onOpenComments}
+        on:click={() => onOpenComments?.('products')}
+      />
+    </h3>
       <div class="text-slate-600">
         <EditableInput
           value={organizationData?.products || organization.products || ''}
@@ -112,8 +137,15 @@
       </div>
     </div>
 
-    <div class="rounded border border-slate-200 bg-white p-4">
-      <h3 class="font-semibold text-slate-900 mb-2">Processus Métier</h3>
+    <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="processes">
+    <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+      Processus Métier
+      <CommentBadge
+        count={commentCounts?.processes ?? 0}
+        disabled={!onOpenComments}
+        on:click={() => onOpenComments?.('processes')}
+      />
+    </h3>
       <div class="text-slate-600">
         <EditableInput
           value={organizationData?.processes || organization.processes || ''}
@@ -133,8 +165,15 @@
     <slot name="afterProcesses" />
 
     {#if showKpis}
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <h3 class="font-semibold text-slate-900 mb-2">Indicateurs de performance</h3>
+      <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="kpis">
+      <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+        Indicateurs de performance
+        <CommentBadge
+          count={commentCounts?.kpis ?? 0}
+          disabled={!onOpenComments}
+          on:click={() => onOpenComments?.('kpis')}
+        />
+      </h3>
         <div class="text-slate-600">
           <EditableInput
             value={organizationData?.kpis || organization.kpis || ''}
@@ -153,8 +192,15 @@
       </div>
     {/if}
 
-    <div class="rounded border border-slate-200 bg-white p-4">
-      <h3 class="font-semibold text-slate-900 mb-2">Défis Principaux</h3>
+    <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="challenges">
+    <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+      Défis Principaux
+      <CommentBadge
+        count={commentCounts?.challenges ?? 0}
+        disabled={!onOpenComments}
+        on:click={() => onOpenComments?.('challenges')}
+      />
+    </h3>
       <div class="text-slate-600">
         <EditableInput
           value={organizationData?.challenges || organization.challenges || ''}
@@ -171,8 +217,15 @@
       </div>
     </div>
 
-    <div class="rounded border border-slate-200 bg-white p-4">
-      <h3 class="font-semibold text-slate-900 mb-2">Objectifs Stratégiques</h3>
+    <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="objectives">
+    <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
+      Objectifs Stratégiques
+      <CommentBadge
+        count={commentCounts?.objectives ?? 0}
+        disabled={!onOpenComments}
+        on:click={() => onOpenComments?.('objectives')}
+      />
+    </h3>
       <div class="text-slate-600">
         <EditableInput
           value={organizationData?.objectives || organization.objectives || ''}

@@ -6,10 +6,16 @@
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
+  import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
 
   let creatingWorkspace = false;
   let newWorkspaceName = '';
+  let newWorkspaceInputRef: HTMLInputElement | null = null;
+  let showWorkspaceExportDialog = false;
+  let showWorkspaceImportDialog = false;
+  let showWorkspaceCreateDialog = false;
 
   let selectedWorkspace: UserWorkspace | null = null;
   let isWorkspaceAdmin = false;
@@ -19,11 +25,10 @@
   let originalSelectedWorkspaceName = '';
   let lastWorkspaceIdForName: string | null = null;
 
-  let membersLoading = false;
   let membersError: string | null = null;
-  let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'editor' | 'admin' }> = [];
+  let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }> = [];
   let addMemberEmail = '';
-  let addMemberRole: 'viewer' | 'editor' | 'admin' = 'viewer';
+  let addMemberRole: 'viewer' | 'commenter' | 'editor' | 'admin' = 'viewer';
   let lastMembersWorkspaceId: string | null = null;
 
   const HUB_KEY = 'workspace-settings-sse';
@@ -44,6 +49,10 @@
       membersReloadTimer = null;
       await loadMembers();
     }, 150);
+  }
+
+  async function handleImportComplete() {
+    await loadUserWorkspaces();
   }
 
   function shouldIgnoreRowClick(event: MouseEvent): boolean {
@@ -100,6 +109,7 @@
       newWorkspaceName = '';
       await loadUserWorkspaces();
       if (res?.id) setWorkspaceScope(res.id);
+      showWorkspaceCreateDialog = false;
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur création workspace' });
     } finally {
@@ -141,17 +151,14 @@
   async function loadMembers() {
     if (!selectedWorkspace?.id) return;
     if (!isWorkspaceAdmin) return;
-    membersLoading = true;
     membersError = null;
     try {
       const data = await apiGet<{
-        items: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'editor' | 'admin' }>;
+        items: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }>;
       }>(`/workspaces/${selectedWorkspace.id}/members`);
       members = data.items || [];
     } catch (e: any) {
       membersError = e?.message ?? 'Erreur chargement membres';
-    } finally {
-      membersLoading = false;
     }
   }
 
@@ -180,7 +187,7 @@
     }
   }
 
-  async function updateMember(userId: string, role: 'viewer' | 'editor' | 'admin') {
+  async function updateMember(userId: string, role: 'viewer' | 'commenter' | 'editor' | 'admin') {
     if (!selectedWorkspace?.id) return;
     try {
       await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
@@ -190,6 +197,11 @@
     } catch (e: any) {
       addToast({ type: 'error', message: e?.message ?? 'Erreur update rôle' });
     }
+  }
+
+  function handleMemberRoleChange(event: Event, userId: string) {
+    const role = (event.currentTarget as HTMLSelectElement).value as 'viewer' | 'commenter' | 'editor' | 'admin';
+    void updateMember(userId, role);
   }
 
   async function removeMember(userId: string) {
@@ -212,7 +224,24 @@
   }
 </script>
 
-{#if $hiddenWorkspaceLock}
+  <div class="relative">
+    <div class="absolute -top-9 right-0">
+      <FileMenu
+        showNew={true}
+        showImport={true}
+        showExport={true}
+        showPrint={false}
+        showDelete={false}
+        disabledExport={!isWorkspaceAdmin}
+        onNew={() => (showWorkspaceCreateDialog = true)}
+        onImport={() => (showWorkspaceImportDialog = true)}
+        onExport={() => (showWorkspaceExportDialog = true)}
+        triggerTitle="Actions workspace"
+        triggerAriaLabel="Actions workspace"
+      />
+    </div>
+
+  {#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
     </div>
@@ -229,24 +258,6 @@
       Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
     </div>
   {/if}
-
-  <div class="flex flex-wrap items-end gap-2">
-    <label class="block text-sm">
-      <div class="text-slate-600">Créer un workspace</div>
-      <input
-        class="mt-1 w-72 rounded border border-slate-200 px-3 py-2"
-        placeholder="Nom du workspace"
-        bind:value={newWorkspaceName}
-      />
-    </label>
-    <button
-      class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      on:click={createWorkspace}
-      disabled={creatingWorkspace || !newWorkspaceName.trim()}
-    >
-      Créer
-    </button>
-  </div>
 
   {#if !noWorkspaces}
     <div class="overflow-x-auto rounded border border-slate-200">
@@ -374,6 +385,7 @@
             <div class="text-slate-600">Rôle</div>
             <select class="mt-1 rounded border border-slate-200 px-3 py-2" bind:value={addMemberRole}>
               <option value="viewer">viewer</option>
+              <option value="commenter">commenter</option>
               <option value="editor">editor</option>
               <option value="admin">admin</option>
             </select>
@@ -383,57 +395,127 @@
           </button>
         </div>
 
-        {#if membersLoading}
-          <div class="text-sm text-slate-600">Chargement…</div>
-        {:else if membersError}
+        {#if membersError}
           <div class="text-sm text-rose-700">{membersError}</div>
-        {:else}
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead class="border-b border-slate-200 text-left text-slate-600">
-                <tr>
-                  <th class="py-2 pr-3">Email</th>
-                  <th class="py-2 pr-3">Nom</th>
-                  <th class="py-2 pr-3">Rôle</th>
-                  <th class="py-2 pr-3 text-right"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each members as m (m.userId)}
-                  <tr class="border-b border-slate-100">
-                    <td class="py-2 pr-3">{m.email ?? '—'}</td>
-                    <td class="py-2 pr-3">{m.displayName ?? '—'}</td>
-                    <td class="py-2 pr-3">
-                      <select
-                        class="rounded border border-slate-200 px-2 py-1"
-                        value={m.role}
-                        on:change={(e) => updateMember(m.userId, (e.currentTarget as HTMLSelectElement).value as any)}
-                        disabled={m.userId === $session.user?.id}
-                      >
-                        <option value="viewer">viewer</option>
-                        <option value="editor">editor</option>
-                        <option value="admin">admin</option>
-                      </select>
-                    </td>
-                    <td class="py-2 pr-3 text-right">
-                      {#if m.userId !== $session.user?.id}
-                        <button
-                          class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
-                          title="Retirer ce membre"
-                          on:click={() => removeMember(m.userId)}
-                        >
-                          <Trash2 class="h-4 w-4" />
-                        </button>
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
         {/if}
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="border-b border-slate-200 text-left text-slate-600">
+              <tr>
+                <th class="py-2 pr-3">Email</th>
+                <th class="py-2 pr-3">Nom</th>
+                <th class="py-2 pr-3">Rôle</th>
+                <th class="py-2 pr-3 text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each members as m (m.userId)}
+                <tr class="border-b border-slate-100">
+                  <td class="py-2 pr-3">{m.email ?? '—'}</td>
+                  <td class="py-2 pr-3">{m.displayName ?? '—'}</td>
+                  <td class="py-2 pr-3">
+                    <select
+                      class="rounded border border-slate-200 px-2 py-1"
+                      value={m.role}
+                      on:change={(e) => handleMemberRoleChange(e, m.userId)}
+                      disabled={m.userId === $session.user?.id}
+                    >
+                      <option value="viewer">viewer</option>
+                      <option value="commenter">commenter</option>
+                      <option value="editor">editor</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </td>
+                  <td class="py-2 pr-3 text-right">
+                    {#if m.userId !== $session.user?.id}
+                      <button
+                        class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
+                        title="Retirer ce membre"
+                        on:click={() => removeMember(m.userId)}
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   {/if}
 
+  <ImportExportDialog
+    bind:open={showWorkspaceExportDialog}
+    mode="export"
+    title="Exporter un workspace"
+    scope="workspace"
+    allowScopeSelect={false}
+    allowScopeIdEdit={false}
+    workspaceName={selectedWorkspace?.name ?? ''}
+    includeOptions={[
+      { id: 'organizations', label: 'Inclure les organisations', defaultChecked: true },
+      { id: 'folders', label: 'Inclure les dossiers', defaultChecked: true },
+      { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
+      { id: 'matrix', label: 'Inclure les matrices', defaultChecked: true },
+    ]}
+  />
 
+  <ImportExportDialog
+    bind:open={showWorkspaceImportDialog}
+    mode="import"
+    title="Importer un workspace"
+    scope="workspace"
+    allowScopeSelect={true}
+    allowScopeIdEdit={true}
+    on:imported={handleImportComplete}
+  />
+
+  {#if showWorkspaceCreateDialog}
+    <div class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg max-w-md w-full mx-4">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h3 class="text-lg font-semibold">Nouveau workspace</h3>
+          <button
+            class="text-slate-400 hover:text-slate-600"
+            aria-label="Fermer"
+            type="button"
+            on:click={() => (showWorkspaceCreateDialog = false)}
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="px-5 py-4 space-y-4">
+          <label class="block text-sm">
+            <div class="text-slate-600">Nom du workspace</div>
+            <input
+              class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
+              placeholder="Nom du workspace"
+              bind:value={newWorkspaceName}
+              bind:this={newWorkspaceInputRef}
+            />
+          </label>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button
+            class="px-3 py-2 rounded border border-slate-200 text-slate-700 hover:bg-slate-50"
+            type="button"
+            on:click={() => (showWorkspaceCreateDialog = false)}
+          >
+            Annuler
+          </button>
+          <button
+            class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+            type="button"
+            on:click={createWorkspace}
+            disabled={creatingWorkspace || !newWorkspaceName.trim()}
+          >
+            Créer
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  </div>

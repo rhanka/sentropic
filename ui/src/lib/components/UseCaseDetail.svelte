@@ -5,6 +5,8 @@
   
   import References from '$lib/components/References.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import CommentBadge from '$lib/components/CommentBadge.svelte';
+  import type { OpenCommentsHandler } from '$lib/types/comments';
   import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { onMount } from 'svelte';
@@ -37,9 +39,15 @@
   export let organizationId: string | null = null;
   export let organizationName: string | null = null;
   export let locked: boolean = false;
+  export let commentCounts: Record<string, number> | null = null;
+  export let onOpenComments: OpenCommentsHandler | null = null;
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+  const openComments = (sectionKey: string) => {
+    if (onOpenComments) onOpenComments(sectionKey);
+  };
 
   // Fonction pour recharger le cas d'usage après sauvegarde (debounced)
   let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -596,11 +604,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         </div>
       {/if}
       <!-- Délai -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="deadline">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             <Clock class="w-5 h-5 text-slate-500" />
             Délai
+            <CommentBadge
+              count={commentCounts?.deadline ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('deadline')}
+            />
           </h3>
         </div>
         {#if isPrinting}
@@ -634,11 +647,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
     <div class="grid gap-6 lg:grid-cols-3 layout-main">
       <!-- Description (100% de COLUMN A, 2/3 page) -->
       <div class="lg:col-span-2 column-a colspan-2-print">
-        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="description">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2">
+            <h3 class="font-semibold flex items-center gap-2 group">
               <FileText class="w-5 h-5 text-slate-500" />
               Description
+              <CommentBadge
+                count={commentCounts?.description ?? 0}
+                disabled={!onOpenComments}
+                on:click={() => openComments('description')}
+              />
             </h3>
           </div>
           {#if isPrinting}
@@ -670,11 +688,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <!-- Problème et Solution (2 colonnes équilibrées) -->
         <div class="grid gap-6 lg:grid-cols-2">
           <!-- Problème -->
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="problem">
             <div class="bg-orange-100 text-orange-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
+              <h3 class="font-semibold flex items-center gap-2 group">
                 <AlertTriangle class="w-5 h-5" />
                 Problème
+                <CommentBadge
+                  count={commentCounts?.problem ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('problem')}
+                />
               </h3>
             </div>
             {#if isPrinting}
@@ -704,11 +727,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
 
           <!-- Solution -->
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="solution">
             <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
+              <h3 class="font-semibold flex items-center gap-2 group">
                 <Lightbulb class="w-5 h-5" />
                 Solution
+                <CommentBadge
+                  count={commentCounts?.solution ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('solution')}
+                />
               </h3>
             </div>
             {#if isPrinting}
@@ -742,11 +770,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <!-- Groupe Bénéfices + (Risques + Mesures du succès) (span 2 colonnes, lui-même en 2 colonnes) -->
         <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2">
           <!-- Bénéfices -->
-          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="benefits">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-              <h3 class="font-semibold flex items-center gap-2">
+              <h3 class="font-semibold flex items-center gap-2 group">
                 <TrendingUp class="w-5 h-5" />
                 Bénéfices recherchés
+                <CommentBadge
+                  count={commentCounts?.benefits ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('benefits')}
+                />
               </h3>
             </div>
             {#if isPrinting}
@@ -782,11 +815,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <!-- Colonne 2 : Risques + Mesures du succès (empilés verticalement) -->
           <div class="space-y-6">
             <!-- Risques -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="risks">
               <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2">
+                <h3 class="font-semibold flex items-center gap-2 group">
                   <AlertTriangle class="w-5 h-5" />
                   Risques
+                  <CommentBadge
+                    count={commentCounts?.risks ?? 0}
+                    disabled={!onOpenComments}
+                    on:click={() => openComments('risks')}
+                  />
                 </h3>
               </div>
               {#if isPrinting}
@@ -820,11 +858,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             </div>
 
             <!-- Mesures du succès -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="metrics">
               <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2">
+                <h3 class="font-semibold flex items-center gap-2 group">
                   <BarChart3 class="w-5 h-5" />
                   Mesures du succès
+                  <CommentBadge
+                    count={commentCounts?.metrics ?? 0}
+                    disabled={!onOpenComments}
+                    on:click={() => openComments('metrics')}
+                  />
                 </h3>
               </div>
               {#if isPrinting}
@@ -863,11 +906,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- COL B 1/3 Col -->
       <div class="lg:col-span-1 column-b">
       <!-- Informations -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="contact">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             <Info class="w-5 h-5 text-slate-500" />
             Informations
+            <CommentBadge
+              count={commentCounts?.contact ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('contact')}
+            />
           </h3>
         </div>
         <div class="space-y-3">
@@ -902,11 +950,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
 
       <!-- Technologies -->
       {#if (useCase?.data?.technologies || useCase?.technologies) && (useCase?.data?.technologies || useCase?.technologies || []).length > 0}
-        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="technologies">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2">
+            <h3 class="font-semibold flex items-center gap-2 group">
               <Monitor class="w-5 h-5 text-slate-500" />
               Technologies
+              <CommentBadge
+                count={commentCounts?.technologies ?? 0}
+                disabled={!onOpenComments}
+                on:click={() => openComments('technologies')}
+              />
             </h3>
           </div>
           {#if isPrinting}
@@ -944,11 +997,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       {/if}
 
       <!-- Sources -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="dataSources">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             <Database class="w-5 h-5 text-slate-500" />
             Sources des données
+            <CommentBadge
+              count={commentCounts?.dataSources ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('dataSources')}
+            />
           </h3>
         </div>
         {#if isPrinting}
@@ -988,11 +1046,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       </div>
 
       <!-- Données liées -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="dataObjects">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">
             <Database class="w-5 h-5 text-slate-500" />
             Données
+            <CommentBadge
+              count={commentCounts?.dataObjects ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('dataObjects')}
+            />
           </h3>
         </div>
         {#if isPrinting}
@@ -1036,11 +1099,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   <!-- Matrice détaillée en 2 colonnes séparées -->
   <div class={`grid gap-6 md:grid-cols-2 layout-bottom ${showReferences ? '' : 'no-references'}`}>
     <!-- Prochaines étapes -->
-    <div class={`layout-bottom-nextsteps rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${showReferences ? '' : 'md:col-span-2'}`}>
+    <div class={`layout-bottom-nextsteps rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${showReferences ? '' : 'md:col-span-2'}`} data-comment-section="nextSteps">
       <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-        <h3 class="font-semibold flex items-center gap-2">
+        <h3 class="font-semibold flex items-center gap-2 group">
           <ClipboardList class="w-5 h-5" />
           Prochaines étapes
+          <CommentBadge
+            count={commentCounts?.nextSteps ?? 0}
+            disabled={!onOpenComments}
+            on:click={() => openComments('nextSteps')}
+          />
         </h3>
       </div>
       {#if isPrinting}
@@ -1075,10 +1143,15 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
 
     <!-- Références (désormais en 1/3, sous Données) -->
     {#if showReferences}
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="references">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             Références
+            <CommentBadge
+              count={commentCounts?.references ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('references')}
+            />
           </h3>
         </div>
         <References references={references} {referencesScaleFactor} />

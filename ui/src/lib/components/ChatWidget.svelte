@@ -1,18 +1,39 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
+  import { page } from '$app/stores';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import { isAuthenticated, session } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
-  import { MessageCircle, Loader2, Clock, X, Plus, Trash2, Minus, Maximize2, Minimize2, Menu } from '@lucide/svelte';
+  import { currentFolderId } from '$lib/stores/folders';
+  import { workspaceCanComment, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { closeComment, reopenComment, deleteComment } from '$lib/utils/comments';
+  import {
+    MessageCircle,
+    Loader2,
+    Clock,
+    X,
+    Plus,
+    Trash2,
+    Minus,
+    Maximize2,
+    Minimize2,
+    Menu,
+    List,
+    Check,
+    FolderOpen,
+    Eye,
+    EyeOff
+  } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
+  import MenuPopover from '$lib/components/MenuPopover.svelte';
 
-  type Tab = 'chat' | 'queue';
+  type Tab = 'chat' | 'queue' | 'comments';
   let activeTab: Tab = 'chat';
   let isVisible = false;
   let hasOpenedOnce = false;
@@ -28,7 +49,64 @@
   let chatSessions: ChatSession[] = [];
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
-  let headerSelection: string = '__new__'; // '__new__' | '__jobs__' | sessionId
+  let commentContext: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
+  let commentContextOverride: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
+  let commentSectionKey: string | null = null;
+  let commentSectionLabel: string | null = null;
+  let commentThreadId: string | null = null;
+  let commentLoading = false;
+  let commentThreads: Array<{
+    id: string;
+    sectionKey: string | null;
+    count: number;
+    lastAt: string;
+    preview: string;
+    authorLabel: string;
+    status: 'open' | 'closed';
+    assignedTo: string | null;
+    rootId: string;
+    createdBy: string;
+  }> = [];
+  let pendingCommentAutoSelect = false;
+  let pendingCommentAutoSelectReady = false;
+  let lastCommentContextKey = '';
+  let lastCommentRouteKey = '';
+  let showResolvedComments = false;
+  let currentCommentThread: {
+    id: string;
+    sectionKey: string | null;
+    count: number;
+    lastAt: string;
+    preview: string;
+    authorLabel: string;
+    status: 'open' | 'closed';
+    assignedTo: string | null;
+    rootId: string;
+    createdBy: string;
+  } | null = null;
+  let visibleCommentThreads: Array<{
+    id: string;
+    sectionKey: string | null;
+    count: number;
+    lastAt: string;
+    preview: string;
+    authorLabel: string;
+    status: 'open' | 'closed';
+    assignedTo: string | null;
+    rootId: string;
+  }> = [];
+  let resolvedThreads: typeof visibleCommentThreads = [];
+  let resolvedCount = 0;
+  let isCurrentResolved = false;
+  let canResolveCurrent = false;
+  let showSessionMenu = false;
+  let sessionMenuButtonRef: HTMLButtonElement | null = null;
+  let showCommentMenu = false;
+  let commentMenuButtonRef: HTMLButtonElement | null = null;
+  // eslint-disable-next-line no-unused-vars
+  let handleCommentSectionClick: ((_: MouseEvent) => void) | null = null;
+  // eslint-disable-next-line no-unused-vars
+  let handleOpenComments: ((_: CustomEvent) => void) | null = null;
 
   type DisplayMode = 'floating' | 'docked';
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
@@ -40,7 +118,6 @@
   let dialogEl: HTMLDivElement | null = null;
   let lastActiveElement: HTMLElement | null = null;
   let resizeHandler: (() => void) | null = null;
-  let headerSelectEl: HTMLSelectElement | null = null;
   let closeButtonEl: HTMLButtonElement | null = null;
   let isMobileViewport = false;
   let effectiveMode: DisplayMode = 'floating';
@@ -157,10 +234,10 @@
     const active = document.activeElement as HTMLElement | null;
     if (!active) return;
 
-    // UX: from chat composer -> header select (menus) is the next meaningful target
-    if (!e.shiftKey && active.tagName.toLowerCase() === 'textarea' && headerSelectEl) {
+    // UX: from chat composer -> conversations menu button
+    if (!e.shiftKey && active.tagName.toLowerCase() === 'textarea' && sessionMenuButtonRef) {
       e.preventDefault();
-      headerSelectEl.focus();
+      sessionMenuButtonRef.focus();
       return;
     }
     // UX: shift+tab from composer -> close button
@@ -188,42 +265,172 @@
     return `Conversation ${s.id.slice(0, 6)}`;
   };
 
-  $: jobsTotal = $queueStore.jobs.length;
   $: activeJobsCount = $queueStore.jobs.filter((job) => job.status === 'pending' || job.status === 'processing').length;
   $: hasActiveJobs = activeJobsCount > 0;
   $: failedJobsCount = $queueStore.jobs.filter((job) => job.status === 'failed').length;
   $: hasFailedJobs = failedJobsCount > 0;
 
-  $: {
-    if (activeTab === 'queue') headerSelection = '__jobs__';
-    else if (chatSessionId) headerSelection = chatSessionId;
-    else headerSelection = '__new__';
-  }
-
-  const handleHeaderSelectionChange = async (value: string) => {
-    if (value === '__jobs__') {
-      activeTab = 'queue';
-      return;
+  const detectCommentContextFromRoute = (
+    routeId: string | null,
+    params: Record<string, string>,
+    folderId: string | null
+  ): { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null => {
+    if (routeId === '/cas-usage/[id]' && params.id) {
+      return { type: 'usecase', id: params.id };
     }
-    activeTab = 'chat';
-    if (value === '__new__') {
-      chatPanelRef?.newSession?.();
-      chatSessionId = null;
-      return;
+    if (routeId === '/cas-usage' && folderId) {
+      return { type: 'folder', id: folderId };
     }
-    // Important: si on revient sur la même session (après être passé sur Jobs),
-    // ne pas recharger les messages/streams, juste réafficher le panel.
-    if (value === chatSessionId) {
-      return;
+    if (routeId === '/dashboard' && folderId) {
+      return { type: 'folder', id: folderId };
     }
-    chatSessionId = value;
-    await chatPanelRef?.selectSession?.(value);
+    if (routeId === '/matrice' && folderId) {
+      return { type: 'folder', id: folderId };
+    }
+    if (routeId === '/dossiers/[id]' && params.id) {
+      return { type: 'folder', id: params.id };
+    }
+    if (routeId === '/organisations/[id]' && params.id) {
+      return { type: 'organization', id: params.id };
+    }
+    return null;
   };
 
-  const onHeaderSelectionChange = (event: Event) => {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    const value = target?.value ?? '__new__';
-    void handleHeaderSelectionChange(value);
+  $: commentContext =
+    commentContextOverride ?? detectCommentContextFromRoute($page.route.id ?? null, $page.params, $currentFolderId);
+  $: if (activeTab !== 'chat' && showSessionMenu) showSessionMenu = false;
+  $: if (activeTab !== 'comments' && showCommentMenu) showCommentMenu = false;
+
+  $: {
+    const detected = detectCommentContextFromRoute($page.route.id ?? null, $page.params, $currentFolderId);
+    if (
+      commentContextOverride &&
+      (!detected ||
+        detected.type !== commentContextOverride.type ||
+        detected.id !== commentContextOverride.id)
+    ) {
+      commentContextOverride = null;
+    }
+  }
+
+  const SECTION_LABELS: Record<string, Record<string, string>> = {
+    usecase: {
+      description: 'Description',
+      problem: 'Problème',
+      solution: 'Solution',
+      benefits: 'Bénéfices recherchés',
+      risks: 'Risques',
+      metrics: 'Mesures du succès',
+      nextSteps: 'Prochaines étapes',
+      technologies: 'Technologies',
+      dataSources: 'Sources des données',
+      dataObjects: 'Données',
+      references: 'Références',
+      contact: 'Contact',
+      deadline: 'Délai',
+    },
+    organization: {
+      size: 'Taille',
+      technologies: 'Technologies',
+      products: 'Produits et Services',
+      processes: 'Processus Métier',
+      kpis: 'Indicateurs de performance',
+      challenges: 'Défis Principaux',
+      objectives: 'Objectifs Stratégiques',
+      references: 'Références',
+    },
+    folder: {
+      description: 'Contexte',
+      name: 'Nom du dossier',
+    },
+    executive_summary: {
+      introduction: 'Introduction',
+      analyse: 'Analyse',
+      recommandation: 'Recommandations',
+      synthese: 'Synthèse',
+    },
+  };
+
+  const getSectionLabel = (type: string | null, key: string | null) => {
+    if (!type) return null;
+    if (!key) return 'Général';
+    return SECTION_LABELS[type]?.[key] ?? key;
+  };
+
+  $: commentSectionLabel = getSectionLabel(commentContext?.type ?? null, commentSectionKey);
+
+  $: if (commentContext?.id && commentContext?.type) {
+    const nextKey = `${commentContext.type}:${commentContext.id}`;
+    if (nextKey !== lastCommentContextKey) {
+      lastCommentContextKey = nextKey;
+      commentThreadId = null;
+      commentSectionKey = null;
+      commentSectionLabel = null;
+      commentThreads = [];
+      pendingCommentAutoSelectReady = false;
+    }
+  }
+
+  $: {
+    const routeKey = `${$page.route.id ?? ''}:${$page.params?.id ?? ''}:${$currentFolderId ?? ''}`;
+    if (routeKey !== lastCommentRouteKey) {
+      lastCommentRouteKey = routeKey;
+      // Reset selection when changing view to avoid stale section/thread.
+      commentThreadId = null;
+      commentSectionKey = null;
+      commentSectionLabel = null;
+      commentThreads = [];
+      pendingCommentAutoSelect = true;
+      pendingCommentAutoSelectReady = false;
+    }
+  }
+
+  $: if (pendingCommentAutoSelect) {
+    if (commentLoading) {
+      pendingCommentAutoSelectReady = true;
+    } else if (pendingCommentAutoSelectReady || commentThreads.length > 0) {
+      const matches = commentSectionKey
+        ? commentThreads.filter((t) => t.sectionKey === commentSectionKey && t.status !== 'closed')
+        : commentThreads.filter((t) => t.status !== 'closed');
+      const next = matches[0] ?? null;
+      commentThreadId = next?.id ?? null;
+      if (next && next.sectionKey !== commentSectionKey) {
+        commentSectionKey = next.sectionKey;
+      }
+      pendingCommentAutoSelect = false;
+      pendingCommentAutoSelectReady = false;
+    }
+  }
+
+  $: currentCommentThread = commentThreadId
+    ? commentThreads.find((t) => t.id === commentThreadId) ?? null
+    : null;
+  $: isCurrentResolved = currentCommentThread?.status === 'closed';
+  $: canResolveCurrent =
+    Boolean(currentCommentThread) &&
+    (currentCommentThread?.createdBy === $session.user?.id || $selectedWorkspaceRole === 'admin') &&
+    $workspaceCanComment;
+  $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
+  $: resolvedCount = resolvedThreads.length;
+  $: visibleCommentThreads = showResolvedComments
+    ? commentThreads
+    : commentThreads.filter((t) => t.status !== 'closed');
+
+  $: if (activeTab === 'comments' && commentThreadId && commentThreads.length > 0 && !commentLoading) {
+    const exists = commentThreads.some((t) => t.id === commentThreadId);
+    if (!exists) commentThreadId = null;
+  }
+
+
+  const handleSelectSession = async (id: string) => {
+    if (id === chatSessionId) return;
+    chatSessionId = id;
+    await chatPanelRef?.selectSession?.(id);
+  };
+
+  const handleNewSession = () => {
+    chatPanelRef?.newSession?.();
+    chatSessionId = null;
   };
 
   const onJobUpdate = (evt: any) => {
@@ -266,6 +473,31 @@
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
     window.addEventListener('topai:close-chat', onExternalCloseChat as any);
+    handleCommentSectionClick = (event: MouseEvent) => {
+      if (!commentContext?.id || !commentContext?.type) return;
+      const target = event.target as HTMLElement | null;
+      const sectionEl = target?.closest?.('[data-comment-section]') as HTMLElement | null;
+      if (!sectionEl) return;
+      const sectionKey = sectionEl.getAttribute('data-comment-section');
+      if (!sectionKey || sectionKey === commentSectionKey) return;
+      commentSectionKey = sectionKey;
+      commentThreadId = null;
+      pendingCommentAutoSelect = true;
+      pendingCommentAutoSelectReady = false;
+    };
+    document.addEventListener('click', handleCommentSectionClick, true);
+    handleOpenComments = (event: CustomEvent) => {
+      const detail = event?.detail as { contextType?: string; contextId?: string; sectionKey?: string } | null;
+      if (!detail?.contextType || !detail?.contextId) return;
+      commentContextOverride = { type: detail.contextType as any, id: detail.contextId };
+      activeTab = 'comments';
+      commentSectionKey = detail.sectionKey ?? null;
+      commentThreadId = null;
+      pendingCommentAutoSelect = true;
+      pendingCommentAutoSelectReady = false;
+      void openWidget();
+    };
+    window.addEventListener('topai:open-comments', handleOpenComments as any);
     syncScrollLock();
     if ($isAuthenticated) await loadJobs();
   });
@@ -308,6 +540,72 @@
     syncScrollLock();
     publishLayout();
     if (isVisible) void focusFirstFocusable();
+  };
+
+  const openWidget = async () => {
+    if (isVisible) return;
+    if (browser) lastActiveElement = (document.activeElement as HTMLElement | null) ?? null;
+    isVisible = true;
+    hasOpenedOnce = true;
+    syncScrollLock();
+    publishLayout();
+    await focusFirstFocusable();
+  };
+
+  const handleNewCommentThread = () => {
+    commentThreadId = null;
+    pendingCommentAutoSelect = false;
+  };
+
+  const handleDeleteCommentThread = async () => {
+    if (!commentThreadId || !currentCommentThread) return;
+    if (!confirm('Supprimer cette conversation de commentaires ?')) return;
+    try {
+      await deleteComment(currentCommentThread.rootId);
+      commentThreadId = null;
+      pendingCommentAutoSelect = false;
+    } catch {
+      // ignore for now
+    }
+  };
+
+  const selectNextOpenThreadAfterResolve = (current: typeof currentCommentThread) => {
+    const openThreads = commentThreads.filter((t) => t.status !== 'closed' && t.id !== current?.id);
+    if (openThreads.length === 0) {
+      commentThreadId = null;
+      return;
+    }
+    if (commentSectionKey) {
+      const nextSameSection = openThreads.find((t) => t.sectionKey === commentSectionKey);
+      if (nextSameSection) {
+        commentThreadId = nextSameSection.id;
+        return;
+      }
+      commentThreadId = null;
+      return;
+    }
+    const nextSectionThread = openThreads.find((t) => t.sectionKey && t.sectionKey !== current?.sectionKey) ?? openThreads[0];
+    commentThreadId = nextSectionThread?.id ?? null;
+    if (nextSectionThread?.sectionKey) {
+      commentSectionKey = nextSectionThread.sectionKey;
+    }
+  };
+
+  const handleResolveCommentThread = async () => {
+    if (!currentCommentThread || !canResolveCurrent) return;
+    try {
+      if (currentCommentThread.status === 'closed') {
+        await reopenComment(currentCommentThread.rootId);
+      } else {
+        await closeComment(currentCommentThread.rootId);
+      }
+      await chatPanelRef?.refreshCommentThreads?.();
+      if (currentCommentThread.status !== 'closed') {
+        selectNextOpenThreadAfterResolve(currentCommentThread);
+      }
+    } catch {
+      // ignore for now
+    }
   };
 
   const close = () => {
@@ -365,6 +663,8 @@
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
     window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
+    if (handleCommentSectionClick) document.removeEventListener('click', handleCommentSectionClick, true);
+    if (handleOpenComments) window.removeEventListener('topai:open-comments', handleOpenComments as any);
     setBodyScrollLocked(false);
     publishLayout();
     streamHub.delete('chatWidgetJobs');
@@ -437,57 +737,97 @@
       style={isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
     >
-      <!-- Header commun (sélecteur unique: sessions + jobs) -->
+      <!-- Header commun (tabs) -->
       <div class="px-4 h-14 border-b border-gray-200 flex items-center">
         <div class="flex w-full items-center justify-between gap-2">
-          <!-- Session / Jobs -->
-          {#if isDocked && isMobileViewport}
-            <button
-              class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
-              on:click={() => window.dispatchEvent(new CustomEvent('topai:toggle-burger-menu'))}
-              aria-label="Menu"
-              type="button"
-            >
-              <Menu class="h-5 w-5" aria-hidden="true" />
-            </button>
-          {/if}
-
-          <select
-            class="w-52 min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs"
-            bind:value={headerSelection}
-            bind:this={headerSelectEl}
-            disabled={chatLoadingSessions}
-            on:change={onHeaderSelectionChange}
-            title="Session / Jobs"
-            aria-label="Session / Jobs"
-          >
-            <option value="__new__">Nouvelle session</option>
-            {#if chatSessions.length > 0}
-              <optgroup label="Sessions">
-                {#each chatSessions as s (s.id)}
-                  <option value={s.id}>{formatSessionLabel(s)}</option>
-                {/each}
-              </optgroup>
+          <div class="flex items-center gap-2">
+            {#if isDocked && isMobileViewport}
+              <button
+                class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
+                on:click={() => window.dispatchEvent(new CustomEvent('topai:toggle-burger-menu'))}
+                aria-label="Menu"
+                type="button"
+              >
+                <Menu class="h-5 w-5" aria-hidden="true" />
+              </button>
             {/if}
-            <option value="__jobs__">Jobs IA {jobsTotal ? `(${jobsTotal})` : ''}</option>
-          </select>
+
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+              <button
+                class="rounded px-2 py-1 text-xs transition {activeTab === 'comments' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
+                type="button"
+                on:click={() => (activeTab = 'comments')}
+              >
+                Commentaires
+              </button>
+              <button
+                class="rounded px-2 py-1 text-xs transition {activeTab === 'chat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
+                type="button"
+                on:click={() => (activeTab = 'chat')}
+              >
+                Chat IA
+              </button>
+              <button
+                class="rounded px-2 py-1 text-xs transition {activeTab === 'queue' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
+                type="button"
+                on:click={() => (activeTab = 'queue')}
+              >
+                Jobs IA
+              </button>
+              </div>
+            </div>
+          </div>
 
           <div class="flex items-center gap-2">
-            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-            <button
-              class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-              on:click={toggleDisplayMode}
-              title={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
-              aria-label={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
-              type="button"
-            >
-              {#if isDocked}
-                <Minimize2 class="w-4 h-4" aria-hidden="true" />
-              {:else}
-                <Maximize2 class="w-4 h-4" aria-hidden="true" />
-              {/if}
-            </button>
             {#if activeTab === 'chat'}
+              <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
+                <svelte:fragment slot="trigger" let:toggle>
+                  <button
+                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                    on:click={toggle}
+                    title="Choisir une conversation"
+                    aria-label="Choisir une conversation"
+                    type="button"
+                    bind:this={sessionMenuButtonRef}
+                  >
+                    <List class="w-4 h-4" />
+                  </button>
+                </svelte:fragment>
+                <svelte:fragment slot="menu" let:close>
+                  <button
+                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                    type="button"
+                    on:click={() => {
+                      close();
+                      handleNewSession();
+                    }}
+                  >
+                    Nouvelle session
+                  </button>
+                  <div class="border-t border-slate-100 my-1"></div>
+                  {#if chatLoadingSessions}
+                    <div class="px-2 py-1 text-[11px] text-slate-500">Chargement...</div>
+                  {:else if chatSessions.length === 0}
+                    <div class="px-2 py-1 text-[11px] text-slate-500">Aucune conversation</div>
+                  {:else}
+                    <div class="max-h-48 overflow-auto slim-scroll">
+                      {#each chatSessions as s (s.id)}
+                        <button
+                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
+                          type="button"
+                          on:click={() => {
+                            close();
+                            void handleSelectSession(s.id);
+                          }}
+                        >
+                          {formatSessionLabel(s)}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </svelte:fragment>
+              </MenuPopover>
               <button
                 class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 on:click={() => chatPanelRef?.newSession?.()}
@@ -505,6 +845,118 @@
                 aria-label="Supprimer la conversation"
                 type="button"
                 disabled={!chatSessionId}
+              >
+                <Trash2 class="w-4 h-4" />
+              </button>
+            {/if}
+            {#if activeTab === 'comments'}
+              <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-64">
+                <svelte:fragment slot="trigger" let:toggle>
+                  <button
+                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                    on:click={toggle}
+                    title="Choisir une conversation"
+                    aria-label="Choisir une conversation"
+                    type="button"
+                    bind:this={commentMenuButtonRef}
+                  >
+                    <List class="w-4 h-4" />
+                  </button>
+                </svelte:fragment>
+                <svelte:fragment slot="menu" let:close>
+                  {#if resolvedCount > 0}
+                    <button
+                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
+                      type="button"
+                      on:click|stopPropagation={() => {
+                        showResolvedComments = !showResolvedComments;
+                        showCommentMenu = true;
+                      }}
+                    >
+                      {#if showResolvedComments}
+                        <Eye class="w-3.5 h-3.5" />
+                        <span>Masquer les commentaires résolus</span>
+                      {:else}
+                        <EyeOff class="w-3.5 h-3.5" />
+                        <span>Afficher les commentaires résolus</span>
+                      {/if}
+                    </button>
+                    <div class="border-t border-slate-100 my-1"></div>
+                  {/if}
+                  <button
+                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                    type="button"
+                    on:click={() => {
+                      close();
+                      commentThreadId = null;
+                    }}
+                  >
+                    Nouvelle conversation{commentSectionLabel ? ` — ${commentSectionLabel}` : ''}
+                  </button>
+                  <div class="border-t border-slate-100 my-1"></div>
+                  {#if visibleCommentThreads.length === 0}
+                    <div class="px-2 py-1 text-[11px] text-slate-500">Aucune conversation</div>
+                  {:else}
+                    <div class="max-h-56 overflow-auto slim-scroll space-y-1">
+                      {#each visibleCommentThreads as t (t.id)}
+                        <button
+                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
+                          type="button"
+                          on:click={() => {
+                            close();
+                            commentThreadId = t.id;
+                            commentSectionKey = t.sectionKey;
+                            commentSectionLabel = getSectionLabel(commentContext?.type ?? null, t.sectionKey);
+                          }}
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="truncate">
+                              {getSectionLabel(commentContext?.type ?? null, t.sectionKey) || 'Commentaires'}
+                            </span>
+                            <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                              <MessageCircle class="w-3 h-3" />
+                              {t.count}
+                            </span>
+                          </div>
+                          <div class="text-[10px] text-slate-400 truncate">
+                            {t.authorLabel} — {t.preview}
+                          </div>
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </svelte:fragment>
+              </MenuPopover>
+              <button
+                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={handleNewCommentThread}
+                title="Nouvelle conversation"
+                aria-label="Nouvelle conversation"
+                type="button"
+              >
+                <Plus class="w-4 h-4" />
+              </button>
+              <button
+                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
+                on:click={() => void handleResolveCommentThread()}
+                title={isCurrentResolved ? 'Réouvrir' : 'Résoudre'}
+                aria-label={isCurrentResolved ? 'Réouvrir' : 'Résoudre'}
+                type="button"
+                disabled={!currentCommentThread || !canResolveCurrent}
+              >
+                {#if isCurrentResolved}
+                  <FolderOpen class="w-4 h-4" />
+                {:else}
+                  <Check class="w-4 h-4" />
+                {/if}
+              </button>
+              <button
+                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                on:click={() => void handleDeleteCommentThread()}
+                title="Supprimer la conversation"
+                aria-label="Supprimer la conversation"
+                type="button"
+                disabled={!commentThreadId}
               >
                 <Trash2 class="w-4 h-4" />
               </button>
@@ -531,6 +983,20 @@
                 </button>
               {/if}
             {/if}
+            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
+            <button
+              class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+              on:click={toggleDisplayMode}
+              title={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
+              aria-label={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
+              type="button"
+            >
+              {#if isDocked}
+                <Minimize2 class="w-4 h-4" aria-hidden="true" />
+              {:else}
+                <Maximize2 class="w-4 h-4" aria-hidden="true" />
+              {/if}
+            </button>
             <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label="Fermer" type="button" bind:this={closeButtonEl}>
               <X class="w-5 h-5" />
             </button>
@@ -545,6 +1011,26 @@
             <QueueMonitor />
           </div>
         {/if}
+        {#if activeTab === 'comments'}
+          <div class="h-full min-h-0">
+            {#if commentContext?.id}
+              <ChatPanel
+                mode="comments"
+                bind:commentThreads
+                bind:commentThreadId
+                bind:commentLoading
+                {commentSectionKey}
+                {commentSectionLabel}
+                commentContextType={commentContext.type}
+                commentContextId={commentContext.id}
+              />
+            {:else}
+              <div class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                Aucun contexte sélectionné. Ouvre un dossier, une organisation ou un cas d’usage.
+              </div>
+            {/if}
+          </div>
+        {/if}
         <div class="h-full" class:hidden={activeTab !== 'chat'}>
           <ChatPanel
             bind:this={chatPanelRef}
@@ -557,12 +1043,4 @@
     </div>
   {/if}
 </div>
-
-<style>
-  /* Mettre "Jobs IA" en gras dans le sélecteur (support dépend du navigateur, mais OK sur Chromium) */
-  select option[value="__jobs__"] {
-    font-weight: 700;
-  }
-</style>
-
 

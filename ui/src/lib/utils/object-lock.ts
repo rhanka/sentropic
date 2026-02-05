@@ -50,6 +50,14 @@ export async function acquireLock(
       const data = err.data as { lock?: LockSnapshot | null } | undefined;
       return { lock: data?.lock ?? null, acquired: false };
     }
+    if (err instanceof ApiError && err.status === 403) {
+      try {
+        const lock = await fetchLock(objectType, objectId);
+        return { lock, acquired: false };
+      } catch {
+        return { lock: null, acquired: false };
+      }
+    }
     throw err;
   }
 }
