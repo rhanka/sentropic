@@ -119,12 +119,14 @@ test.describe('Import / Export', () => {
     await fileInput.setInputFiles(exportZipPath);
 
     await expect(dialog.locator('text=Types à importer')).toBeVisible({ timeout: 10_000 });
-    await expect(dialog.locator('label:has-text("Organisations")')).toBeVisible();
-    await expect(dialog.locator('label:has-text("Dossiers")')).toBeVisible();
-    await expect(dialog.locator('label:has-text("Cas d\'usage")')).toBeVisible();
-    await expect(dialog.locator('label:has-text("Matrices")')).toBeVisible();
+    const typeLabels = (labelText: RegExp) =>
+      dialog.locator('label').filter({ has: dialog.locator('input[type="checkbox"]') }).filter({ hasText: labelText });
+    await expect(typeLabels(/^Organisations/)).toBeVisible();
+    await expect(typeLabels(/^Dossiers/)).toBeVisible();
+    await expect(typeLabels(/^Cas d\'usage/)).toBeVisible();
+    await expect(typeLabels(/^Matrices/)).toBeVisible();
 
-    const orgCheckbox = dialog.locator('label:has-text("Organisations") input[type="checkbox"]');
+    const orgCheckbox = typeLabels(/^Organisations/).locator('input[type="checkbox"]');
     if (await orgCheckbox.isEnabled()) {
       await orgCheckbox.uncheck();
     }
