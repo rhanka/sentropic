@@ -110,6 +110,12 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
+- [ ] Workflow / Authoring
+  - [ ] Gérer le statut de validation de chaque objet
+  - [ ] Gérer les modèles d'autorisation / partie d'objet
+  - [ ] UI Badges de validation
+  - [ ] UI Outil de révision
+  - [ ] UI Outil de modélisation de worflow
 - [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
 - [ ] Ajouter un tool de planning
   - [ ] api endpoints et structure 100% alignée avec les autres tools
