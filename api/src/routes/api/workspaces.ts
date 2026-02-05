@@ -17,11 +17,12 @@ import {
 import { and, desc, eq } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
-import { getUserWorkspaces, requireWorkspaceAdmin } from '../../services/workspace-access';
+import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess } from '../../services/workspace-access';
+import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 
 export const workspacesRouter = new Hono();
 
-const roleSchema = z.enum(['viewer', 'editor', 'admin']);
+const roleSchema = z.enum(['viewer', 'commenter', 'editor', 'admin']);
 
 function escapeNotifyPayload(payload: Record<string, unknown>): string {
   return JSON.stringify(payload).replace(/'/g, "''");
@@ -212,12 +213,32 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
 
 // --- Members management (admin-only) ---
 
-workspacesRouter.get('/:id/members', async (c) => {
+workspacesRouter.get('/:id/members', requireWorkspaceAccessRole(), async (c) => {
+  const workspaceId = c.req.param('id');
+
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      role: workspaceMemberships.role,
+      createdAt: workspaceMemberships.createdAt,
+    })
+    .from(workspaceMemberships)
+    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
+    .where(eq(workspaceMemberships.workspaceId, workspaceId))
+    .orderBy(desc(workspaceMemberships.createdAt));
+
+  return c.json({ items: rows });
+});
+
+// Members list for @mentions (workspace access required)
+workspacesRouter.get('/:id/members/mentions', async (c) => {
   const user = c.get('user') as { userId: string };
   const workspaceId = c.req.param('id');
 
   try {
-    await requireWorkspaceAdmin(user.userId, workspaceId);
+    await requireWorkspaceAccess(user.userId, workspaceId);
   } catch {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
@@ -228,7 +249,6 @@ workspacesRouter.get('/:id/members', async (c) => {
       email: users.email,
       displayName: users.displayName,
       role: workspaceMemberships.role,
-      createdAt: workspaceMemberships.createdAt,
     })
     .from(workspaceMemberships)
     .innerJoin(users, eq(workspaceMemberships.userId, users.id))

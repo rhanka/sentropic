@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe.serial('Workflow métier complet', () => {
   // Ce spec crée du contenu et enchaîne plusieurs pages: le laisser plus de marge + éviter la concurrence.
@@ -6,25 +7,25 @@ test.describe.serial('Workflow métier complet', () => {
 
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+  const ADMIN_STATE = './.auth/state.json';
 
-  test.beforeEach(async ({ page }) => {
-    // Stabiliser: forcer le scope admin sur la workspace admin (sinon mode "lecture seule")
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, ADMIN_WORKSPACE_ID);
-  });
-
-  test('devrait exécuter le workflow complet : organisation → génération → dossiers → cas d\'usage → dashboard', async ({ page }) => {
+  test('devrait exécuter le workflow complet : organisation → génération → dossiers → cas d\'usage → dashboard', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await context.newPage();
+    try {
     // Étape 1: Créer une organisation
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
     
-    // Cliquer sur le bouton d'ajout (redirige vers /organisations/new)
-    await page.getByRole('button', { name: 'Créer une organisation' }).click();
+    // Ouvrir le menu d'actions et aller à la création (redirige vers /organisations/new)
+    const actionsButton = page.locator('button[aria-label="Actions organisation"]');
+    await expect(actionsButton).toBeVisible({ timeout: 10_000 });
+    await actionsButton.click();
+    const newAction = page.locator('button:has-text("Nouveau")');
+    await expect(newAction).toBeVisible({ timeout: 10_000 });
+    await newAction.click();
     await expect(page).toHaveURL(/\/organisations\/new$/);
     
     // Remplir le nom via l'EditableInput dans le H1 (textarea pour multiline)
@@ -115,79 +116,106 @@ test.describe.serial('Workflow métier complet', () => {
     
     // Vérifier le graphique scatter plot (nouvelle structure)
     const scatterPlotContainer = page.locator('.report-scatter-plot-container');
-    await expect(scatterPlotContainer).toBeVisible({ timeout: 10000 });
-  });
-
-  test('devrait gérer la génération asynchrone des cas d\'usage', async ({ page }) => {
-    // Aller directement aux cas d'usage
-    await page.goto('/cas-usage');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Vérifier les différents statuts possibles
-    const statusElements = page.locator('.inline-flex.items-center.px-2.py-1.rounded-full');
-    
-    if (await statusElements.count() > 0) {
-      // Vérifier qu'il y a au moins un statut visible
-      await expect(statusElements.first()).toBeVisible();
-      
-      // Vérifier les différents types de statuts
-      const statusTexts = await statusElements.allTextContents();
-      const hasGeneratingStatus = statusTexts.some(text => 
-        text.includes('Génération') || text.includes('Détail en cours') || text.includes('Brouillon')
-      );
-      
-      // Au moins un statut devrait être présent
-      expect(statusTexts.length).toBeGreaterThan(0);
+      await expect(scatterPlotContainer).toBeVisible({ timeout: 10000 });
+    } finally {
+      await context.close();
     }
   });
 
-  test('devrait permettre de voir les détails d\'un cas d\'usage', async ({ page }) => {
-    // Aller aux cas d'usage
-    await page.goto('/cas-usage');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Chercher un cas d'usage cliquable (pas en génération)
-    const useCaseCards = page.locator('article, .use-case-card, [data-testid="use-case-card"]');
-    
-    if (await useCaseCards.count() > 0) {
-      const firstCard = useCaseCards.first();
+  test('devrait gérer la génération asynchrone des cas d\'usage', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await context.newPage();
+    try {
+      // Aller directement aux cas d'usage
+      await page.goto('/cas-usage');
+      await page.waitForLoadState('domcontentloaded');
       
-      // Vérifier que la carte n'est pas en état de génération
-      const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible();
+      // Vérifier les différents statuts possibles
+      const statusElements = page.locator('.inline-flex.items-center.px-2.py-1.rounded-full');
       
-      if (!isGenerating) {
-        // Cliquer sur la carte
-        await firstCard.click();
+      if (await statusElements.count() > 0) {
+        // Vérifier qu'il y a au moins un statut visible
+        await expect(statusElements.first()).toBeVisible();
         
-        // Attendre la redirection vers la page de détail
-        await page.waitForLoadState('domcontentloaded');
+        // Vérifier les différents types de statuts
+        const statusTexts = await statusElements.allTextContents();
+        const hasGeneratingStatus = statusTexts.some(text => 
+          text.includes('Génération') || text.includes('Détail en cours') || text.includes('Brouillon')
+        );
         
-        // Vérifier qu'on est sur une page de détail (URL contient un ID)
-        const currentUrl = page.url();
-        expect(currentUrl).toMatch(/\/cas-usage\/[a-zA-Z0-9-]+/);
+        // Au moins un statut devrait être présent
+        expect(statusTexts.length).toBeGreaterThan(0);
       }
+    } finally {
+      await context.close();
     }
   });
 
-  test('devrait mettre à jour les métriques du dashboard en temps réel', async ({ page }) => {
-    // Aller au dashboard
-    await page.goto('/dashboard');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Vérifier que les métriques sont présentes
-    const totalMetric = page.locator('text=Total').locator('..').locator('p.text-2xl');
-    const completedMetric = page.locator('text=Terminés').locator('..').locator('p.text-2xl');
-    const inProgressMetric = page.locator('text=En cours').locator('..').locator('p.text-2xl');
-    
-    if (await totalMetric.isVisible()) {
-      // Vérifier que les métriques sont des nombres
-      const totalText = await totalMetric.textContent();
-      const completedText = await completedMetric.textContent();
-      const inProgressText = await inProgressMetric.textContent();
+  test('devrait permettre de voir les détails d\'un cas d\'usage', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await context.newPage();
+    try {
+      // Aller aux cas d'usage
+      await page.goto('/cas-usage');
+      await page.waitForLoadState('domcontentloaded');
       
-      expect(totalText).toMatch(/^\d+$/);
-      expect(completedText).toMatch(/^\d+$/);
-      expect(inProgressText).toMatch(/^\d+$/);
+      // Chercher un cas d'usage cliquable (pas en génération)
+      const useCaseCards = page.locator('article, .use-case-card, [data-testid="use-case-card"]');
+      
+      if (await useCaseCards.count() > 0) {
+        const firstCard = useCaseCards.first();
+        
+        // Vérifier que la carte n'est pas en état de génération
+        const isGenerating = await firstCard.locator('.opacity-60.cursor-not-allowed').isVisible();
+        
+        if (!isGenerating) {
+          // Cliquer sur la carte
+          await firstCard.click();
+          
+          // Attendre la redirection vers la page de détail
+          await page.waitForLoadState('domcontentloaded');
+          
+          // Vérifier qu'on est sur une page de détail (URL contient un ID)
+          const currentUrl = page.url();
+          expect(currentUrl).toMatch(/\/cas-usage\/[a-zA-Z0-9-]+/);
+        }
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('devrait mettre à jour les métriques du dashboard en temps réel', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await context.newPage();
+    try {
+      // Aller au dashboard
+      await page.goto('/dashboard');
+      await page.waitForLoadState('domcontentloaded');
+      
+      // Vérifier que les métriques sont présentes
+      const totalMetric = page.locator('text=Total').locator('..').locator('p.text-2xl');
+      const completedMetric = page.locator('text=Terminés').locator('..').locator('p.text-2xl');
+      const inProgressMetric = page.locator('text=En cours').locator('..').locator('p.text-2xl');
+      
+      if (await totalMetric.isVisible()) {
+        // Vérifier que les métriques sont des nombres
+        const totalText = await totalMetric.textContent();
+        const completedText = await completedMetric.textContent();
+        const inProgressText = await inProgressMetric.textContent();
+        
+        expect(totalText).toMatch(/^\d+$/);
+        expect(completedText).toMatch(/^\d+$/);
+        expect(inProgressText).toMatch(/^\d+$/);
+      }
+    } finally {
+      await context.close();
     }
   });
 

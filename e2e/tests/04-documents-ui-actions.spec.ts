@@ -2,10 +2,12 @@ import { test, expect, request } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Documents — UI actions (icônes + suppression)', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+  const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
   let workspaceAId = '';
@@ -62,35 +64,31 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     await userBApi.dispose();
   });
 
-  test.beforeEach(async ({ page }) => {
-    // Assurer un scope admin "normal" (pas read-only) et éviter les confirm() natifs (flaky).
-    await page.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
+  test('ordre + styles icônes ; suppression via UI supprime vraiment le document', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const adminContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+    });
+    const page = await adminContext.newPage();
+    await page.addInitScript(() => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).confirm = () => true;
       } catch {
         // ignore
       }
-    }, ADMIN_WORKSPACE_ID);
-  });
-
-  test('ordre + styles icônes ; suppression via UI supprime vraiment le document', async ({ page }) => {
-    test.setTimeout(180_000);
-
-    // 1) Créer un dossier draft dédié
-    const folderName = `E2E Docs UI ${Date.now()}`;
-    const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
-      data: { name: folderName, description: 'Docs UI actions e2e' }
     });
-    expect(draftRes.ok()).toBeTruthy();
-    const draftJson = await draftRes.json().catch(() => null);
-    const folderId = String((draftJson as any)?.id ?? '');
-    expect(folderId).toBeTruthy();
+
+    try {
+      // 1) Créer un dossier draft dédié
+      const folderName = `E2E Docs UI ${Date.now()}`;
+      const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
+        data: { name: folderName, description: 'Docs UI actions e2e' }
+      });
+      expect(draftRes.ok()).toBeTruthy();
+      const draftJson = await draftRes.json().catch(() => null);
+      const folderId = String((draftJson as any)?.id ?? '');
+      expect(folderId).toBeTruthy();
 
     // 2) Upload d’un doc "court" (README fixture) via API (multipart)
     const filename = `README-ui-${Date.now()}.md`;
@@ -204,7 +202,10 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     // Et la ligne disparaît en UI (reload pour refléter)
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(docRow).toHaveCount(0, { timeout: 20_000 });
+      await expect(docRow).toHaveCount(0, { timeout: 20_000 });
+    } finally {
+      await adminContext.close();
+    }
   });
 
   test('documents scoping: User B voit le doc en workspace A, pas en workspace B', async ({ browser }) => {
@@ -243,15 +244,10 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     }
     expect(docId).toBeTruthy();
 
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+    });
     const pageB = await userBContext.newPage();
-    await pageB.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceAId);
     await pageB.goto(`/organisations/${encodeURIComponent(organizationAId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await expect(pageB.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });

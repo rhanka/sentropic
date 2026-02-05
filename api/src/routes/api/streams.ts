@@ -155,6 +155,11 @@ function ssePresenceEvent(objectType: string, objectId: string, data: unknown): 
   return `event: presence_update\nid: presence:${objectType}:${objectId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function sseCommentEvent(contextType: string, contextId: string, data: unknown): string {
+  const payload = JSON.stringify({ contextType, contextId, data });
+  return `event: comment_update\nid: comment:${contextType}:${contextId}:${Date.now()}\ndata: ${payload}\n\n`;
+}
+
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === 'object') return value as Record<string, unknown>;
@@ -654,6 +659,7 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN presence_events');
           await client.query('UNLISTEN workspace_events');
           await client.query('UNLISTEN workspace_membership_events');
+          await client.query('UNLISTEN comment_events');
         } catch {
           // ignore
         } finally {
@@ -755,6 +761,19 @@ streamsRouter.get('/sse', async (c) => {
               const data = (payload.data ?? {}) as Record<string, unknown>;
               push(sseWorkspaceMembershipEvent(workspaceId, targetUserId, data));
             })().catch(() => {});
+          } else if (msg.channel === 'comment_events') {
+            const workspaceId = payload.workspace_id;
+            if (!workspaceId || typeof workspaceId !== 'string') return;
+            const contextType = payload.context_type;
+            const contextId = payload.context_id;
+            if (!contextType || typeof contextType !== 'string') return;
+            if (!contextId || typeof contextId !== 'string') return;
+            void (async () => {
+              const allowed = await shouldEmitWorkspaceEvent(payload);
+              if (!allowed) return;
+              const data = (payload.data ?? {}) as Record<string, unknown>;
+              push(sseCommentEvent(contextType, contextId, data));
+            })().catch(() => {});
           }
         } catch {
           // ignore
@@ -771,6 +790,7 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN presence_events');
       await client.query('LISTEN workspace_events');
       await client.query('LISTEN workspace_membership_events');
+      await client.query('LISTEN comment_events');
 
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {
