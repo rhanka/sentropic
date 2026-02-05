@@ -116,17 +116,26 @@ test.describe('Import / Export', () => {
 
     const fileInput = dialog.locator('input[type="file"][accept=".zip"]');
     await expect(fileInput).toBeVisible();
+    const previewResponsePromise = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && res.url().includes('/api/v1/imports/preview'),
+      { timeout: 30_000 }
+    );
     await fileInput.setInputFiles(exportZipPath);
+    const previewRes = await previewResponsePromise;
+    if (!previewRes.ok()) {
+      const body = await previewRes.text().catch(() => '');
+      throw new Error(`Erreur prévisualisation import: ${previewRes.status()} ${body.slice(0, 200)}`);
+    }
 
-    await expect(dialog.locator('text=Types à importer')).toBeVisible({ timeout: 10_000 });
-    const typeLabels = (labelText: RegExp) =>
-      dialog.locator('label').filter({ has: dialog.locator('input[type="checkbox"]') }).filter({ hasText: labelText });
-    await expect(typeLabels(/^Organisations/)).toBeVisible();
-    await expect(typeLabels(/^Dossiers/)).toBeVisible();
-    await expect(typeLabels(/^Cas d\'usage/)).toBeVisible();
-    await expect(typeLabels(/^Matrices/)).toBeVisible();
-
-    const orgCheckbox = typeLabels(/^Organisations/).locator('input[type="checkbox"]');
+    await expect(page.getByText('Types à importer')).toBeVisible({ timeout: 30_000 });
+    const orgCheckbox = page.getByRole('checkbox', { name: /^Organisations/ });
+    const foldersCheckbox = page.getByRole('checkbox', { name: /^Dossiers/ });
+    const usecasesCheckbox = page.getByRole('checkbox', { name: /^Cas d\'usage/ });
+    const matrixCheckbox = page.getByRole('checkbox', { name: /^Matrices/ });
+    await expect(orgCheckbox).toBeVisible();
+    await expect(foldersCheckbox).toBeVisible();
+    await expect(usecasesCheckbox).toBeVisible();
+    await expect(matrixCheckbox).toBeVisible();
     if (await orgCheckbox.isEnabled()) {
       await orgCheckbox.uncheck();
     }
