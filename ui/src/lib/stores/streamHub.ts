@@ -16,6 +16,7 @@ export type StreamHubEvent =
   | { type: 'organization_update'; organizationId: string; data: any }
   | { type: 'folder_update'; folderId: string; data: any }
   | { type: 'usecase_update'; useCaseId: string; data: any }
+  | { type: 'comment_update'; contextType: string; contextId: string; data: any }
   | { type: 'lock_update'; objectType: string; objectId: string; data: any }
   | { type: 'presence_update'; objectType: string; objectId: string; data: any }
   | { type: 'workspace_update'; workspaceId: string; data: any }
@@ -35,6 +36,7 @@ const EVENT_TYPES = [
   'organization_update',
   'folder_update',
   'usecase_update',
+  'comment_update',
   'lock_update',
   'presence_update',
   'workspace_update',
@@ -62,6 +64,7 @@ class StreamHub {
   private lastOrganizationEventById = new Map<string, StreamHubEvent>();
   private lastFolderEventById = new Map<string, StreamHubEvent>();
   private lastUseCaseEventById = new Map<string, StreamHubEvent>();
+  private lastCommentEventByKey = new Map<string, StreamHubEvent>();
   private lastLockEventByKey = new Map<string, StreamHubEvent>();
   // Historique compact par stream_id (on garde surtout les tool calls + un état courant reasoning/content)
   private streamHistoryById = new Map<string, StreamHubEvent[]>();
@@ -77,6 +80,7 @@ class StreamHub {
     this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
+    this.lastCommentEventByKey.clear();
     this.lastLockEventByKey.clear();
     this.streamHistoryById.clear();
     this.close();
@@ -92,6 +96,7 @@ class StreamHub {
     this.lastOrganizationEventById.clear();
     this.lastFolderEventById.clear();
     this.lastUseCaseEventById.clear();
+    this.lastCommentEventByKey.clear();
     this.lastLockEventByKey.clear();
     this.streamHistoryById.clear();
   }
@@ -104,6 +109,7 @@ class StreamHub {
       for (const ev of this.lastOrganizationEventById.values()) onEvent(ev);
       for (const ev of this.lastFolderEventById.values()) onEvent(ev);
       for (const ev of this.lastUseCaseEventById.values()) onEvent(ev);
+      for (const ev of this.lastCommentEventByKey.values()) onEvent(ev);
       for (const ev of this.lastLockEventByKey.values()) onEvent(ev);
       for (const events of this.streamHistoryById.values()) {
         for (const ev of events) onEvent(ev);
@@ -178,6 +184,9 @@ class StreamHub {
     } else if ((event as any).type === 'usecase_update') {
       const e = event as any;
       if (e.useCaseId) this.lastUseCaseEventById.set(e.useCaseId, event);
+    } else if ((event as any).type === 'comment_update') {
+      const e = event as any;
+      if (e.contextType && e.contextId) this.lastCommentEventByKey.set(`${e.contextType}:${e.contextId}`, event);
     } else if ((event as any).type === 'lock_update') {
       const e = event as any;
       if (e.objectType && e.objectId) this.lastLockEventByKey.set(`${e.objectType}:${e.objectId}`, event);
@@ -307,6 +316,10 @@ class StreamHub {
         }
         if (type === 'usecase_update') {
           this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
+          return;
+        }
+        if (type === 'comment_update') {
+          this.dispatch({ type, contextType: parsed.contextType, contextId: parsed.contextId, data: parsed.data });
           return;
         }
         if (type === 'lock_update') {

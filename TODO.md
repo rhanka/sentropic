@@ -110,9 +110,88 @@
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
 
 **⏳ À faire :**
-- [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration)
-- [ ] Versionner les prompts du chat et les rendre accessible à configuration dans l'UI
-- [ ] Choisir le modele GPT par prompt
+- [ ] Workflow / Authoring
+  - [ ] Gérer le statut de validation de chaque objet
+  - [ ] Gérer les modèles d'autorisation / partie d'objet
+  - [ ] UI Badges de validation
+  - [ ] UI Outil de révision
+  - [ ] UI Outil de modélisation de worflow
+- [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
+- [ ] Ajouter un tool de planning
+  - [ ] api endpoints et structure 100% alignée avec les autres tools
+  - [ ] IA Gère un plan détaillé avec des étapes de haut niveau incluant l'appel aux autres tools
+  - [ ] IA Gère le cadrage du plan (options/question multichoix) et ses contraintes
+  - [ ] IA Gère l'écart au plan (découvertes pendant exécution sortant du cadre de contraintes ou spécification) avec une stratégie d'évitement (préfère poser les question en lot en évitant les interruptions et limitant les questions à l'utilisateur)
+  - [ ] Gère les interruption utilisateur sans perdre le fil du plan
+  - [ ] Gère les écarts liées au interruption utilisateur pour les modification du plan (nouvelle séance de cadrage et replanificatoin le cas échéant, explicitant les écarts au plan)
+  - [ ] IA Gère l'évaluation du niveau de réflexion pour les sous tâches (économie de tokens) selon paramétrage utilisateur
+  - [ ] UI Présente les questions réponses (cadrage)
+  - [ ] UI Présente les étapes d'avancement au fur et a mesure
+- [ ] Visual templates / doc exports (Design session)
+  - [ ] Offre une ui pour designer l'agencement d'un objet dans sa présentation UI
+  - [ ] Gere les objets incluant des listes
+  - [ ] Ajoute la gestion d'images illustratives
+  - [ ] Ajoute la gestion de graphiques illustratives (chartjs comme la matrice priorisation)
+  - [ ] Gestion d'objet dérivé (pptx d'un docx): agents de présentation
+  - [ ] Gere le mode print (design complémentaire cf synthèse exec qui est une vue particulière de l'objet folder)
+  - [ ] Document managé (avec des tags dans le xml pour permettre le reprage)
+    - [ ] Gère le design d'un docx templaté
+    - [ ] Gère le design d'un powerpoint templaté
+    - [ ] Gère le design d'un excel templaté
+    - [ ] Gère l'édition synchronisée (sauvegarde db > sync gdrive + supervision de modif du doc gdrive > sync db)
+    - [ ] Gestion des conflits (édition sur le gdrive du doc en confit sur une section)
+  - [ ] Gestion de bibliothèque de style
+    - [ ] Template de slides
+- [ ] Streamline des directives mdc
+  - [ ] analyse des meilleurs pratique (conductor model, model testing Bmad)
+  - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
+  - [ ] création d'un template de branche, incluant les UAT partiels à chaque lot
+  - [ ] tout-make: clarifier les obligation d'usage de make
+  - [ ] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+- [ ] Storybook (spec)
+  - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
+  - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
+  - [ ] proposer un plan d'implémentation en une branche
+- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
+  - l'autodiscovery d'un utilisateur sur ce template (design phase)
+    - [ ] aide complete initiale : parcourir les écrans, donner des tips
+    - [ ] aide locale : en mode "discovery", l'agent intervient lorsqu'une vue n'a pas encore été activée
+    - [ ] aide étendue : l'agent supervise les actions de l'utilisateur, et détecte des amlériorations possible dans sont interaction avec l'UI et les agents
+  - l'auto documentation
+    - génération de doc from scratch
+    - génération d'incrément de doc
+    - screeshots
+    - automatisation ci
+  - l'auto test
+    - [ ] pendant la phase de dév, à partir des tests UAT proposé dans le contexte d'un branche.md, faire les screenshots et documenter
+    - [ ] être activable via une target make pour livrer constats et screenshot (pour utilisation par cursor)
+  - [ ] principes
+    - [ ] doit reposer sur des mécanismes de tag de div pour permettre une interaction entre l'agent et des actions UI de mise en exergue
+    - [ ] doit permettre d'avoir une conscience des codes sources, a minimal de l'UI, pour aider au débug ou à une compréhension avancée selon le public (dév, support, end-user)
+    - [ ] doit être concu pour une maintenance récurrence simple
+    - [ ] désactivable
+  - [ ] Livrables
+    - [ ] une spec md
+    - [ ] un modele de données
+    - [ ] un modèle d'opération (ci etc quand je livre les artefacts et les commit, ce peut être un make update-doc etc)
+    - [ ] un plan d'implémentation (potntiellement multibranche/mulit-sous-lots, chaque branche visant une mise en production)
+- [ ] Agent auto-doc: pour une version, gérer un agent favorisant permettant de créer la documentation utilisateur et les documents de support, incluant les screenshots via playwright
+  - [ ] Créer une cible / environnemnt spécifique (peut être basé sur le mode dev, mais avec playwright activé, pas en mode test e2e mais sur la même flavor)
+  - [ ] Un agent passif gère les déroulés dans l'écran
+- [ ] Renforcement de la structure agentique (phase design)
+  Etudier les finalités/opportunités suivantes afin de définir le meilleur modele cible
+  - [ ] Opportunité du RL / modele adaptatif
+  - [ ] Favoriser le templating d'agent (gestion de librairies d'agents, export/import, versionnement)
+  - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration) ou un autre modèle
+  - [ ] Permettre à l'utilisateur de configurer le modèle de l'agent en cours d'utilisation (soit change de llm ou de puissance de réflexion)
+  - [ ] Ajouter un mode plan avec todo
+  - [ ] Versionner les prompts et agents du chat et les rendre accessible à configuration dans l'UI, avec une gestion intelligente de objets, tools et du workflow configurable via l'UI
+  A livrer:
+  - [ ] Spécification de la nouvelle structure agentique cible
+  - [ ] Composant API et UI cible
+  - [ ] Modèle de données cible
+  - [ ] Etude d'impact incluant la continuité dans la gestion du streaming, les prompts d'évaluation de raisonnement, et l'exhaustivité des agents existant
+  - [ ] Plan de transition éventuellement allotti en plusieurs branche et sous lots, chaque branche devant aboutir à une MEP
 - [ ] Citations objets et liens iconifiés dans le chat
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] Remplacer Tavily par DataForSeo + Jina
@@ -123,20 +202,44 @@
 - API & UI Refacto
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
-- [ ] Collaboration part 2
-    - [ ] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension topw)
-    - [ ] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension topf)
-    - [ ] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extensions topu et topo)
-  - [ ] Comments
-    - [ ] Each object and data part of object can have on or many comments
-    - [ ] There is a table of comments
-    - [ ] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
-    - [ ] A comment can be attributed to a user using @ (auto complete with users of the workspace).
-    - [ ] If no attribution, the user is the initial comment creator
-    - [ ] Each comment can be "closed" by the last attributed user
-    - [ ] Comments are visible on the header on the card of the data part
-    - [ ] Options d'export : avec ou sans commentaire
-- [ ] chat / json
+- [x] Collaboration part 2
+    - [x] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension zip)
+    - [x] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension zip)
+    - [x] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extension zip)
+  - [x] Comments
+    - [x] Each object and data part of object can have on or many comments
+    - [x] There is a table of comments
+    - [x] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
+    - [x] A comment can be attributed to a user using @ (auto complete with users of the workspace).
+    - [x] If no attribution, the user is the initial comment creator
+    - [x] Each comment can be "closed" by the last attributed user
+    - [x] Comments are visible on the header on the card of the data part
+    - [x] Options d'export : avec ou sans commentaire
+- [ ] Introduire la notion de workflow (lister les opportunités/évaluer/prioriser) / objet (usecase etc) / agentic (prompts aujourd'hui) templates (Design session)
+  Dans l'esprit, l'ensemble des activités top ai ideas serait un workflow basé sur des objets (use case, folder, organisation, synthèse exec) associé à de l'agentique (agent d'idéation pour créer un ensemble d'opportunités, agent d'approfondissement d'idée/usecase et évaluation, objet d'évaluation d'un autre objet (matrice), objet de priorisation (synthèse exec)).
+  Les objets d'évaluation sont un peu spécifiques, et il y a aussi des objets de restitution qui manquent. On pourrait les appeler des outils, mais ce ne sont pas des outils pour l'IA, donc il faut déterminer un concept. Il pourrait dans la même game y avoir les évaluation de plan (déf de workpackages / jalons / charge x profils ).
+  Il y a aussi les objets de restitution spécifique, comme le dashboard valeur/complexité: roadmap (timeline), diagramme d'organisation d'équipe, diagrammes d'architecture / de process / de business vision (sens archimate)
+  La session vise à modéliser au mieux et de facon la plus générique la notion de template (=workflow+objets+agentc) avec les abstractions nécessaires et la réutilisation suffisante pour permettre de couvrir les processus suivants:
+    - [ ] Gestion d'opportunité multi-client pour une société de conseil
+    - [ ] Gestion de proposition pour une société de conseil (incluant la scénarisation de dispositifs / plan charges / profil / exclusion / assumptions / prix / offre finale / présentation d'offre)
+    - [ ] Gestion de référentiel de processus et de processus eux même (à approfondir)
+    - [ ] Gestion de roadmap d'architecture d'entreprise (applications / infrastructures / plan d'évolution / scénarios / critères de priorisation / vision planifiée / gestion des risques)
+    - [ ] High level design dossier (movitation for change / diagramme system as-is / composants du system as-is / évaluation SWOT de ces composants / vision business au sens archimate / architecture drivers (constraints, standard, principles) / buisness requirements / non-functional requirements / business objects / high level design scenario = descriptions & schema avec composants / scenario evaluation selon critères / vue de transition / présentation de l'initiative=scenario privilégié (description intiative, Digital scope for initiative, initial goals, prerequisites, buisness outcomes, estimation budget, initiative timelines/milestones, risks, archi dimension) )
+    - [ ] Business case management / Porfolio
+    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences 
+    - [ ] Définition d'un business plan (à approfondir)
+    - [ ] Evaluation d'intelligence économique (des docs seront fournis)
+    - [ ] Veille stratégique (à approfondir)
+    - [ ] autres idées (à approfondir)
+    Les travaux devront aussi définir les intégration potentielles (Collab Gdrive, ERP, Workday, Signature électronique ...) et les features clés (e.g révision / validation avec role d'objet = workflow de validation formel). Envisager cela à haut niveau permettra
+    En sortie on attendra:
+    - [ ] Une spécification détaillée du modèle coeur
+    - [ ] Une spécification des composant cibles, api et ui
+    - [ ] Une proposition d'évolution (drastique potentiellement) du data model
+    - [ ] Une liste d'intégration must-have et should have par business case
+    - [ ] Un plan de transition pour l'application as-is avec les lots, sous-lots et étaps (soit en une branche, soit multibranche sachant qu'à chaque fin de branche il y a une mise en prod)
+    - [ ] Evaluation des charges des lots
+    - [ ] Evaluation d'opportunité de chaque feature vs potentiels clients du produit
   - [ ] ajouter le rendu de résultat des tools et l'historiser
   - [ ] gérer le streaming json (sortie de réponse, entree et sortie de tool même si ce dernier est en bloc) avec la complexité cf spec/MARKDOWN_STREAMING.md
 - [ ] **Chatbot Lot C — Tool-calls parallèles et appels structurés** (cf. spec/SPEC_CHATBOT.md - source de vérité)
@@ -150,7 +253,7 @@
 - [ ] **Chatbot Lot D — Audit, diff et résilience** (cf. spec/SPEC_CHATBOT.md - source de vérité)
   - [ ] Composant `DiffViewer` pour afficher les différences avant/après
   - [ ] Rollback via snapshots (API + UI)
-  - [ ] Onglet "Historique" dans les vues objets (folder, use case, company)
+  - [ ] Onglet "Historique" dans les vues objets (folder, use case, company + comments)
   - [ ] Liste des sessions ayant modifié l'objet
   - [ ] Preview des modifications avant application (diff visuel)
   - [ ] Confirmation explicite avant d'appliquer une modification (bouton "Appliquer")

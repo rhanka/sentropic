@@ -219,6 +219,54 @@ Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKi
 - Intention: vue technique/outillage (tableaux, prévisualisation de données).
 - API: endpoints utilitaires si nécessaire (facultatif), sinon mock/démo.
 
+14) Collaboration — Comments (ChatWidget)
+- Scope: comments are scoped to the **current object view** (contextType + contextId), not to the whole workspace.
+- Menu: comment menu lists **all threads for the current object view** (no section filter in the menu).
+- Threads: flat conversations by `thread_id` (no nested replies).
+- Roles:
+  - `viewer`: read-only, cannot comment.
+  - `commenter`: can comment but cannot edit objects.
+  - `editor`/`admin`: can edit objects and comment.
+- Resolve flow:
+  - Resolve/reopen is **thread-level** (`status=open|closed`).
+  - Only the **thread creator** or **workspace admin** can resolve/reopen.
+  - On resolve, selection moves to the next open thread (same section → next section → none).
+- Resolved visibility:
+  - Toggle in comment menu to show resolved items (strikethrough).
+  - Resolved threads are **excluded** from badge counts.
+  - Comment composer is disabled for resolved threads (distinct placeholder).
+- Timestamps:
+  - Display uses browser timezone from the ISO timestamp (backend sends timezone offset).
+- AI traceability:
+  - Comments created by the tool carry `tool_call_id`.
+  - UI renders an AI badge on comments with `tool_call_id`.
+- Comment resolution tool:
+  - Proposes actions (close/reassign/note) and requires explicit confirmation before applying.
+  - Context scoping follows existing tool expansion rules (usecase strict; folder/org expand).
+
+15) Collaboration — Import/Export (permissions)
+- Workspace export: **admin only**.
+- Object export (folder/usecase/organization/matrix): **admin + editor**.
+- Workspace import into a **new** workspace: any authenticated user (API creates workspace).
+- Workspace import into the **current** workspace: **admin only**.
+- Object import into current workspace: **admin + editor**.
+- Commenter/viewer: cannot import/export.
+- Endpoints:
+  - `POST /api/v1/exports` (JSON body, ZIP response)
+  - `POST /api/v1/imports/preview` (multipart form-data: `file`)
+  - `POST /api/v1/imports` (multipart form-data: `file`, optional `target_workspace_id`)
+- Export options:
+  - `include[]` controls related data (folders/organizations/usecases/matrix).
+  - `export_kind` identifies workspace list exports (organizations/folders) for filenames.
+  - Filename pattern: `<scope>_<slug>_YYYYMMDD.zip`.
+- Import options:
+  - `selected_types` to import only selected object types.
+  - `target_folder_id`, `target_folder_create`, `target_folder_source_id` for folder-scoped imports.
+- Import UI:
+  - Type-based selection (organizations/folders/usecases/matrix).
+  - Target workspace selection with "create new workspace".
+  - Folder target selection for folder-scoped imports (existing / create new / from imported metadata).
+
 Variables sous-jacentes clés côté backend/API:
 - Gestion des entités: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, poids, thresholds, descriptions), `BusinessConfig` (sectors, processes).
 - Contexte de génération: `currentOrganizationId`, association dossier→organisation, prompts/configs.

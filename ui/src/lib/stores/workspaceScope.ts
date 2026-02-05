@@ -5,7 +5,7 @@ import { session } from '$lib/stores/session';
 
 const STORAGE_KEY = 'workspaceScopeId';
 
-export type UserWorkspaceRole = 'viewer' | 'editor' | 'admin';
+export type UserWorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
 export type UserWorkspace = {
   id: string;
@@ -75,6 +75,11 @@ export const hiddenWorkspaceLock = derived([session, selectedWorkspace], ([$sess
 export const workspaceReadOnlyScope = derived([session, selectedWorkspaceRole], ([$session, role]) => {
   if (!$session.user) return true;
   return role !== 'editor' && role !== 'admin';
+});
+
+export const workspaceCanComment = derived([session, selectedWorkspaceRole], ([$session, role]) => {
+  if (!$session.user) return false;
+  return role === 'commenter' || role === 'editor' || role === 'admin';
 });
 
 export function getScopedWorkspaceIdForUser(): string | null {

@@ -15,8 +15,8 @@ describe('Folders API', () => {
   let viewer: any;
 
   beforeEach(async () => {
-    user = await createAuthenticatedUser('editor');
-    viewer = await createAuthenticatedUser('guest');
+    user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
+    viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     if (user.workspaceId) {
       await db
         .insert(workspaceMemberships)
@@ -73,6 +73,27 @@ describe('Folders API', () => {
       const data = await response.json();
       expect(Array.isArray(data.items)).toBe(true);
     });
+  });
+
+  it('enforces export permissions for folder scope', async () => {
+    const organizationId = await createTestOrganization();
+    const folder = await createTestFolder(organizationId);
+
+    const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', user.sessionToken!, {
+      scope: 'folder',
+      scope_id: folder.id,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resEditor.status).toBe(200);
+
+    const resViewer = await authenticatedRequest(app, 'POST', '/api/v1/exports', viewer.sessionToken!, {
+      scope: 'folder',
+      scope_id: folder.id,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resViewer.status).toBe(403);
   });
 
   describe('POST /folders', () => {

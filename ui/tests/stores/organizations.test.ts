@@ -9,7 +9,10 @@ import {
   deleteOrganization,
   enrichOrganization,
   createDraftOrganization,
-  startOrganizationEnrichment
+  startOrganizationEnrichment,
+  organizationExportState,
+  openOrganizationExport,
+  closeOrganizationExport,
 } from '../../src/lib/stores/organizations';
 import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
@@ -147,6 +150,16 @@ describe('Organizations Store', () => {
     it('should update current organization ID', () => {
       currentOrganizationId.set('1');
       expect(get(currentOrganizationId)).toBe('1');
+    });
+
+    it('opens and closes organization export state', () => {
+      expect(get(organizationExportState)).toEqual({ open: false, organizationId: null });
+
+      openOrganizationExport('org-1');
+      expect(get(organizationExportState)).toEqual({ open: true, organizationId: 'org-1' });
+
+      closeOrganizationExport();
+      expect(get(organizationExportState)).toEqual({ open: false, organizationId: null });
     });
   });
 });

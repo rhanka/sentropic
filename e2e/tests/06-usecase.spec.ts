@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Gestion des cas d\'usage', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
@@ -128,40 +129,44 @@ test.describe('Gestion des cas d\'usage', () => {
   });
 
   test.describe('Read-only (viewer)', () => {
-    test.use({ storageState: USER_B_STATE });
+    test('liste: consulter sans actions d’édition', async ({ browser }) => {
+      const context = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+        await page.waitForLoadState('domcontentloaded');
 
-    test.beforeEach(async ({ page }) => {
-      await page.addInitScript((id: string) => {
-        try {
-          localStorage.setItem('workspaceScopeId', id);
-        } catch {
-          // ignore
+        if (useCaseName) {
+          const useCaseCard = page.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
+          await expect(useCaseCard).toBeVisible({ timeout: 10_000 });
         }
-      }, workspaceAId);
-    });
 
-    test('liste: consulter sans actions d’édition', async ({ page }) => {
-      await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
-      await page.waitForLoadState('domcontentloaded');
-
-      if (useCaseName) {
-        const useCaseCard = page.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
-        await expect(useCaseCard).toBeVisible({ timeout: 10_000 });
+        const deleteButtons = page.locator('button[title="Supprimer le cas d\'usage"], button:has-text("Supprimer le cas d\'usage")');
+        await expect(deleteButtons).toHaveCount(0);
+      } finally {
+        await context.close();
       }
-
-      const deleteButtons = page.locator('button[title="Supprimer le cas d\'usage"], button:has-text("Supprimer le cas d\'usage")');
-      await expect(deleteButtons).toHaveCount(0);
     });
 
-    test('détail: champs non éditables', async ({ page }) => {
-      await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
-      await page.waitForLoadState('domcontentloaded');
+    test('détail: champs non éditables', async ({ browser }) => {
+      const context = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+        await page.waitForLoadState('domcontentloaded');
 
-      const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
-      await expect(disabledField).toBeVisible({ timeout: 10_000 });
+        const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
+        await expect(disabledField).toBeVisible({ timeout: 10_000 });
 
-      const deleteButton = page.locator('button[title="Supprimer le cas d\'usage"]');
-      await expect(deleteButton).toHaveCount(0);
+        const deleteButton = page.locator('button[title="Supprimer le cas d\'usage"]');
+        await expect(deleteButton).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
     });
   });
 
@@ -172,15 +177,10 @@ test.describe('Gestion des cas d\'usage', () => {
     });
     if (!setViewer.ok()) throw new Error(`Impossible de repasser User B en viewer (status ${setViewer.status()})`);
 
-    const userBContext = await browser.newContext({ storageState: USER_B_STATE });
+    const userBContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
+    });
     const pageB = await userBContext.newPage();
-    await pageB.addInitScript((id: string) => {
-      try {
-        localStorage.setItem('workspaceScopeId', id);
-      } catch {
-        // ignore
-      }
-    }, workspaceAId);
     await pageB.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});

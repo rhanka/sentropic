@@ -82,8 +82,13 @@ test.describe.serial('Génération IA', () => {
     await page.goto('/organisations');
     await page.waitForLoadState('domcontentloaded');
 
-    // Aller à la page de création (bouton icône + aria-label)
-    await page.getByRole('button', { name: 'Créer une organisation' }).click();
+    // Aller à la page de création via le menu d'actions
+    const actionsButton = page.locator('button[aria-label="Actions organisation"]');
+    await expect(actionsButton).toBeVisible();
+    await actionsButton.click();
+    const newAction = page.locator('button:has-text("Nouveau")');
+    await expect(newAction).toBeVisible();
+    await newAction.click();
     await page.waitForURL('/organisations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 

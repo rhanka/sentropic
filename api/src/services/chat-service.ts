@@ -27,19 +27,27 @@ import {
   executiveSummaryUpdateTool,
   matrixGetTool,
   matrixUpdateTool,
-  documentsTool
+  documentsTool,
+  commentAssistantTool
 } from './tools';
 import { toolService } from './tool-service';
 import { ensureWorkspaceForUser } from './workspace-service';
-import { hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
+import { getWorkspaceRole, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
+import { generateCommentResolutionProposal } from './context-comments';
 
 export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
 const CHAT_CONTEXT_TYPES = ['organization', 'folder', 'usecase', 'executive_summary'] as const;
 function isChatContextType(value: unknown): value is ChatContextType {
   return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
+}
+
+export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
+const COMMENT_CONTEXT_TYPES = ['organization', 'folder', 'usecase', 'matrix', 'executive_summary'] as const;
+function isCommentContextType(value: unknown): value is CommentContextType {
+  return typeof value === 'string' && (COMMENT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -588,6 +596,80 @@ export class ChatService {
     return out;
   }
 
+  private async getAllowedCommentContexts(opts: {
+    primaryContextType: ChatContextType | null | undefined;
+    primaryContextId: string | null | undefined;
+    workspaceId: string;
+    extraContexts?: Array<{ contextType: ChatContextType; contextId: string }>;
+  }): Promise<Array<{ contextType: CommentContextType; contextId: string }>> {
+    const out: Array<{ contextType: CommentContextType; contextId: string }> = [];
+    const pushUnique = (contextType: CommentContextType, contextId: string) => {
+      if (!contextId) return;
+      const key = `${contextType}:${contextId}`;
+      if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) return;
+      out.push({ contextType, contextId });
+    };
+
+    const appendFolderUseCases = async (folderId: string) => {
+      try {
+        const res = await toolService.listUseCasesForFolder(folderId, {
+          workspaceId: opts.workspaceId,
+          idsOnly: true
+        });
+        if ('ids' in res) {
+          for (const id of res.ids) pushUnique('usecase', id);
+        }
+      } catch {
+        // ignore missing folder
+      }
+    };
+
+    const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
+      const id = (idRaw ?? '').trim();
+      if (!type || !id) return;
+      if (type === 'usecase') {
+        pushUnique('usecase', id);
+        return;
+      }
+      if (type === 'folder') {
+        pushUnique('folder', id);
+        await appendFolderUseCases(id);
+        return;
+      }
+      if (type === 'executive_summary') {
+        pushUnique('executive_summary', id);
+        pushUnique('folder', id);
+        await appendFolderUseCases(id);
+        return;
+      }
+      if (type === 'organization') {
+        pushUnique('organization', id);
+        try {
+          const res = await toolService.listFolders({
+            workspaceId: opts.workspaceId,
+            organizationId: id,
+            idsOnly: true
+          });
+          if ('ids' in res) {
+            for (const folderId of res.ids) {
+              pushUnique('folder', folderId);
+              await appendFolderUseCases(folderId);
+            }
+          }
+        } catch {
+          // ignore missing organization
+        }
+      }
+    };
+
+    await appendContext(opts.primaryContextType ?? null, opts.primaryContextId);
+    for (const ctx of opts.extraContexts ?? []) {
+      await appendContext(ctx.contextType, ctx.contextId);
+    }
+
+    return out;
+  }
+
   /**
    * Exécute la génération assistant pour un message placeholder déjà créé.
    * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
@@ -617,6 +699,7 @@ export class ChatService {
     const hidden = await isWorkspaceDeleted(sessionWorkspaceId);
     const canWrite = !hidden ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor') : false;
     const readOnly = hidden || !canWrite;
+    const currentUserRole = await getWorkspaceRole(options.userId, sessionWorkspaceId);
 
     const normalizeContexts = (items?: Array<{ contextType: string; contextId: string }>) => {
       const out: Array<{ contextType: ChatContextType; contextId: string }> = [];
@@ -723,6 +806,14 @@ export class ChatService {
       extraContexts: contextsOverride
     });
 
+    const allowedCommentContexts = await this.getAllowedCommentContexts({
+      primaryContextType,
+      primaryContextId,
+      workspaceId: sessionWorkspaceId,
+      extraContexts: contextsOverride
+    });
+    const hasCommentContexts = allowedCommentContexts.length > 0;
+
     const hasDocuments = await (async () => {
       if (allowedDocContexts.length === 0) return false;
       try {
@@ -811,6 +902,9 @@ export class ChatService {
     }
     if (hasDocuments) {
       addTools([documentsTool]);
+    }
+    if (hasCommentContexts) {
+      addTools([commentAssistantTool]);
     }
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
 
@@ -968,6 +1062,10 @@ Règles :
     if (historyContexts.length > 0) {
       const historyLines = historyContexts.map((c) => `- ${c.contextType}:${c.contextId}`).join('\n');
       contextBlock += `\n\nContexte(s) historique(s) :\n${historyLines}\n\nRègle : prioriser le contexte focus, utiliser l’historique seulement si nécessaire.`;
+    }
+
+    if (hasCommentContexts) {
+      contextBlock += `\n\nComment resolution tool:\n- \`comment_assistant\` (mode=suggest) to analyze comment threads and propose actions.\n- Always present the proposal as French markdown with a clear confirmation question.\n- Require an explicit user confirmation ("Confirmer" or "Annuler").\n- Only after confirmation, call \`comment_assistant\` with mode=resolve, include the same actions, and pass confirmation="yes".\n- If the user response is not an explicit confirmation, ask again with the fixed options.`;
     }
 
     const basePrompt = this.getPromptTemplate('chat_system_base')
@@ -1254,6 +1352,17 @@ Règles :
           if (folderOrgId && folderOrgId === orgId) return true;
         }
         return false;
+      };
+      const allowedCommentContextSet = new Set(
+        allowedCommentContexts.map((c) => `${c.contextType}:${c.contextId}`)
+      );
+      const lastUserMessage =
+        [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+      const isExplicitConfirmation = (text: string, confirmationArg: unknown): boolean => {
+        const normalized = (text || '').trim().toLowerCase();
+        const arg = typeof confirmationArg === 'string' ? confirmationArg.trim().toLowerCase() : '';
+        if (arg !== 'yes') return false;
+        return ['oui', 'yes', 'confirmer', 'confirme', 'confirm', 'ok'].includes(normalized);
       };
 
       for (const toolCall of toolCalls) {
@@ -1543,6 +1652,70 @@ Règles :
               options.assistantMessageId,
               'tool_call_result',
               { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'comment_assistant') {
+            const mode = typeof args.mode === 'string' ? args.mode : '';
+            const contextType = typeof args.contextType === 'string' ? args.contextType : '';
+            const contextId = typeof args.contextId === 'string' ? args.contextId.trim() : '';
+            if (!isCommentContextType(contextType) || !contextId) {
+              throw new Error('comment_assistant: contextType and contextId are required');
+            }
+            const allowedContext =
+              allowedCommentContextSet.has(`${contextType}:${contextId}`) ||
+              ((contextType === 'matrix' || contextType === 'executive_summary')
+                && allowedCommentContextSet.has(`folder:${contextId}`));
+            if (!allowedContext) {
+              throw new Error('Security: comment context is not allowed');
+            }
+            const effectiveCommentContexts = allowedCommentContexts.some(
+              (c) => c.contextType === contextType && c.contextId === contextId
+            )
+              ? allowedCommentContexts
+              : [...allowedCommentContexts, { contextType, contextId }];
+
+            if (mode === 'suggest') {
+              const statusFilter = args.status === 'closed' ? 'closed' : 'open';
+              const list = await toolService.listCommentThreadsForContexts({
+                workspaceId: sessionWorkspaceId,
+                contexts: effectiveCommentContexts,
+                status: statusFilter,
+                sectionKey: typeof args.sectionKey === 'string' ? args.sectionKey : null,
+                threadId: typeof args.threadId === 'string' ? args.threadId : null,
+                limit: 200
+              });
+              const proposal = await generateCommentResolutionProposal({
+                threads: list.threads,
+                users: list.users,
+                contextLabel: `${contextType}:${contextId}`,
+                currentUserId: options.userId,
+                currentUserRole: currentUserRole ?? null,
+                maxActions: 5
+              });
+              result = { status: 'completed', proposal, threads: list.threads };
+            } else if (mode === 'resolve') {
+              if (!isExplicitConfirmation(lastUserMessage, args.confirmation)) {
+                throw new Error('Explicit user confirmation is required before resolving comments');
+              }
+              const actions = Array.isArray(args.actions) ? args.actions : [];
+              const applied = await toolService.resolveCommentActions({
+                workspaceId: sessionWorkspaceId,
+                userId: options.userId,
+                allowedContexts: effectiveCommentContexts,
+                actions,
+                toolCallId: toolCall.id
+              });
+              result = { status: 'completed', ...applied };
+            } else {
+              throw new Error(`comment_assistant: unknown mode ${mode}`);
+            }
+
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result },
               streamSeq,
               options.assistantMessageId
             );

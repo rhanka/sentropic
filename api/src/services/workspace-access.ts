@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaceMemberships, workspaces } from '../db/schema';
 
-export type WorkspaceRole = 'viewer' | 'editor' | 'admin';
+export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
 export async function getWorkspaceRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
   const [membership] = await db
@@ -23,7 +23,7 @@ export async function hasWorkspaceRole(
   const current = await getWorkspaceRole(userId, workspaceId);
   if (!current) return false;
 
-  const rank: Record<WorkspaceRole, number> = { viewer: 1, editor: 2, admin: 3 };
+  const rank: Record<WorkspaceRole, number> = { viewer: 1, commenter: 2, editor: 3, admin: 4 };
   return rank[current] >= rank[role];
 }
 
@@ -36,6 +36,12 @@ export async function requireWorkspaceAdmin(userId: string, workspaceId: string)
 export async function requireWorkspaceEditor(userId: string, workspaceId: string): Promise<void> {
   if (!(await hasWorkspaceRole(userId, workspaceId, 'editor'))) {
     throw new Error('Workspace editor role required');
+  }
+}
+
+export async function requireWorkspaceCommenter(userId: string, workspaceId: string): Promise<void> {
+  if (!(await hasWorkspaceRole(userId, workspaceId, 'commenter'))) {
+    throw new Error('Workspace commenter role required');
   }
 }
 

@@ -15,8 +15,8 @@ describe('Use Cases API', () => {
   let viewer: any;
 
   beforeEach(async () => {
-    user = await createAuthenticatedUser('editor');
-    viewer = await createAuthenticatedUser('guest');
+    user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
+    viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     if (user.workspaceId) {
       await db
         .insert(workspaceMemberships)
@@ -82,6 +82,28 @@ describe('Use Cases API', () => {
         expect(data.items[0]).toHaveProperty('model');
       }
     });
+  });
+
+  it('enforces export permissions for usecase scope', async () => {
+    const orgId = await createTestOrganization();
+    const folderId = await createTestFolder(orgId);
+    const useCase = await createTestUseCase(folderId);
+
+    const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', user.sessionToken!, {
+      scope: 'usecase',
+      scope_id: useCase.id,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resEditor.status).toBe(200);
+
+    const resViewer = await authenticatedRequest(app, 'POST', '/api/v1/exports', viewer.sessionToken!, {
+      scope: 'usecase',
+      scope_id: useCase.id,
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resViewer.status).toBe(403);
   });
 
   describe('POST /use-cases', () => {

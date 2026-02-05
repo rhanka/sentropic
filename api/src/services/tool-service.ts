@@ -1,11 +1,23 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, contextDocuments, contextModificationHistory, folders, organizations, useCases } from '../db/schema';
+import {
+  chatContexts,
+  comments,
+  contextDocuments,
+  contextModificationHistory,
+  folders,
+  organizations,
+  useCases,
+  users,
+  workspaceMemberships
+} from '../db/schema';
 import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callOpenAI } from './openai';
 import { defaultPrompts } from '../config/default-prompts';
+import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
+import { hasWorkspaceRole } from './workspace-access';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -980,6 +992,244 @@ export class ToolService {
     return { items, selected: select, count: rows.length };
   }
 
+  // ---------------------------
+  // Comments (assistant support)
+  // ---------------------------
+
+  private async ensureWorkspaceMember(userId: string, workspaceId: string): Promise<boolean> {
+    if (!userId || !workspaceId) return false;
+    const [row] = await db
+      .select({ userId: workspaceMemberships.userId })
+      .from(workspaceMemberships)
+      .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)))
+      .limit(1);
+    return !!row;
+  }
+
+  async listCommentThreadsForContexts(opts: {
+    workspaceId: string;
+    contexts: Array<{ contextType: CommentContextType; contextId: string }>;
+    status?: 'open' | 'closed' | null;
+    sectionKey?: string | null;
+    threadId?: string | null;
+    limit?: number | null;
+  }): Promise<{ threads: CommentThreadSummary[]; users: CommentUserLabel[] }> {
+    const workspaceId = (opts.workspaceId || '').trim();
+    if (!workspaceId) throw new Error('workspaceId is required');
+    if (!opts.contexts || opts.contexts.length === 0) {
+      return { threads: [], users: [] };
+    }
+
+    const contextConditions = opts.contexts.map((c) =>
+      and(eq(comments.contextType, c.contextType), eq(comments.contextId, c.contextId))
+    );
+    const conditions = [eq(comments.workspaceId, workspaceId), or(...contextConditions)];
+    if (opts.status) conditions.push(eq(comments.status, opts.status));
+    if (opts.sectionKey) conditions.push(eq(comments.sectionKey, opts.sectionKey));
+    if (opts.threadId) conditions.push(eq(comments.threadId, opts.threadId));
+
+    const rows = await db
+      .select({
+        id: comments.id,
+        threadId: comments.threadId,
+        contextType: comments.contextType,
+        contextId: comments.contextId,
+        sectionKey: comments.sectionKey,
+        createdBy: comments.createdBy,
+        assignedTo: comments.assignedTo,
+        status: comments.status,
+        content: comments.content,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+      })
+      .from(comments)
+      .where(and(...conditions))
+      .orderBy(asc(comments.createdAt));
+
+    const byThread = new Map<string, CommentThreadSummary>();
+    const userIds = new Set<string>();
+
+    for (const row of rows) {
+      if (row.createdBy) userIds.add(row.createdBy);
+      if (row.assignedTo) userIds.add(row.assignedTo);
+      const key = row.threadId;
+      const createdAt = row.createdAt?.toISOString() ?? new Date().toISOString();
+      const updatedAt = row.updatedAt ? row.updatedAt.toISOString() : null;
+      if (!byThread.has(key)) {
+        byThread.set(key, {
+          threadId: row.threadId,
+          contextType: row.contextType as CommentContextType,
+          contextId: row.contextId,
+          sectionKey: row.sectionKey ?? null,
+          status: row.status === 'closed' ? 'closed' : 'open',
+          assignedTo: row.assignedTo ?? null,
+          createdBy: row.createdBy,
+          createdAt,
+          updatedAt,
+          messageCount: 1,
+          rootMessage: row.content,
+          rootMessageAt: createdAt,
+          lastMessage: row.content,
+          lastMessageAt: createdAt
+        });
+      } else {
+        const current = byThread.get(key)!;
+        current.messageCount += 1;
+        current.lastMessage = row.content;
+        current.lastMessageAt = createdAt;
+        current.updatedAt = updatedAt ?? current.updatedAt;
+        current.status = row.status === 'closed' ? 'closed' : current.status;
+        if (!current.assignedTo && row.assignedTo) current.assignedTo = row.assignedTo;
+      }
+    }
+
+    const usersRows =
+      userIds.size > 0
+        ? await db
+            .select({ id: users.id, email: users.email, displayName: users.displayName })
+            .from(users)
+            .where(inArray(users.id, Array.from(userIds)))
+        : [];
+
+    return {
+      threads: Array.from(byThread.values()).slice(0, opts.limit ?? 200),
+      users: usersRows.map((u) => ({ id: u.id, email: u.email, displayName: u.displayName }))
+    };
+  }
+
+  async resolveCommentActions(opts: {
+    workspaceId: string;
+    userId: string;
+    allowedContexts: Array<{ contextType: CommentContextType; contextId: string }>;
+    actions: Array<{
+      thread_id: string;
+      action: 'close' | 'reassign' | 'note';
+      reassign_to?: string | null;
+      note?: string | null;
+    }>;
+    toolCallId?: string | null;
+  }): Promise<{
+    applied: Array<{ thread_id: string; action: string; status: string }>;
+    notes: Array<{ thread_id: string; note_id: string }>;
+  }> {
+    const workspaceId = (opts.workspaceId || '').trim();
+    const userId = (opts.userId || '').trim();
+    if (!workspaceId || !userId) throw new Error('workspaceId and userId are required');
+    if (!Array.isArray(opts.actions) || opts.actions.length === 0) throw new Error('actions is required');
+    if (opts.actions.length > 50) throw new Error('Too many actions (max 50)');
+
+    const allowedSet = new Set(opts.allowedContexts.map((c) => `${c.contextType}:${c.contextId}`));
+    const applied: Array<{ thread_id: string; action: string; status: string }> = [];
+    const notes: Array<{ thread_id: string; note_id: string }> = [];
+    const isAdmin = await hasWorkspaceRole(userId, workspaceId, 'admin');
+
+    const actionsByThread = new Map<string, typeof opts.actions>();
+    for (const action of opts.actions) {
+      const threadId = String(action.thread_id || '').trim();
+      if (!threadId) continue;
+      const list = actionsByThread.get(threadId) ?? [];
+      list.push(action);
+      actionsByThread.set(threadId, list);
+    }
+
+    for (const [threadId, actions] of actionsByThread.entries()) {
+      const [row] = await db
+        .select({
+          id: comments.id,
+          threadId: comments.threadId,
+          contextType: comments.contextType,
+          contextId: comments.contextId,
+          sectionKey: comments.sectionKey,
+          createdBy: comments.createdBy,
+          assignedTo: comments.assignedTo,
+          status: comments.status
+        })
+        .from(comments)
+        .where(and(eq(comments.workspaceId, workspaceId), eq(comments.threadId, threadId)))
+        .orderBy(asc(comments.createdAt))
+        .limit(1);
+
+      if (!row) throw new Error(`Thread not found: ${threadId}`);
+      if (!allowedSet.has(`${row.contextType}:${row.contextId}`)) {
+        throw new Error('Security: thread context is not allowed');
+      }
+
+      const canComment = await hasWorkspaceRole(userId, workspaceId, 'commenter');
+      if (!canComment) {
+        throw new Error('Workspace commenter role required');
+      }
+      const isCreator = row.createdBy === userId;
+
+      const now = new Date();
+      let latestAssigned = row.assignedTo ?? null;
+      let latestStatus: 'open' | 'closed' = row.status === 'closed' ? 'closed' : 'open';
+      let resolutionMessage: string | null = null;
+      let explicitNote: string | null = null;
+
+      for (const action of actions) {
+        if (action.action === 'close') {
+          if (!isAdmin && !isCreator) {
+            throw new Error('Only the thread creator or admin can resolve this thread');
+          }
+          await db
+            .update(comments)
+            .set({ status: 'closed', updatedAt: now })
+            .where(and(eq(comments.workspaceId, workspaceId), eq(comments.threadId, threadId)));
+          await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'closed', thread_id: threadId });
+          applied.push({ thread_id: threadId, action: 'close', status: 'closed' });
+          resolutionMessage = 'Clôture automatique.';
+          latestStatus = 'closed';
+        } else if (action.action === 'reassign') {
+          if (!isAdmin && !isCreator) {
+            throw new Error('Only the thread creator or admin can resolve this thread');
+          }
+          const target = (action.reassign_to ?? '').trim();
+          if (!target) throw new Error('reassign_to is required');
+          if (!(await this.ensureWorkspaceMember(target, workspaceId))) {
+            throw new Error('Assigned user not in workspace');
+          }
+          await db
+            .update(comments)
+            .set({ assignedTo: target, updatedAt: now })
+            .where(and(eq(comments.workspaceId, workspaceId), eq(comments.threadId, threadId)));
+          await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'reassigned', thread_id: threadId });
+          applied.push({ thread_id: threadId, action: 'reassign', status: 'updated' });
+          latestAssigned = target;
+          resolutionMessage = `Réassignation automatique à @${target}.`;
+        } else if (action.action === 'note') {
+          const note = (action.note ?? '').trim();
+          if (!note) throw new Error('note is required');
+          explicitNote = note;
+        }
+      }
+
+      const traceNote = explicitNote || resolutionMessage;
+
+      if (traceNote) {
+        const noteId = createId();
+        await db.insert(comments).values({
+          id: noteId,
+          workspaceId,
+          contextType: row.contextType,
+          contextId: row.contextId,
+          sectionKey: row.sectionKey,
+          createdBy: userId,
+          assignedTo: latestAssigned ?? userId,
+          status: latestStatus,
+          threadId: threadId,
+          content: traceNote,
+          toolCallId: opts.toolCallId ?? null,
+          createdAt: now,
+          updatedAt: now
+        });
+        await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'created', comment_id: noteId });
+        notes.push({ thread_id: threadId, note_id: noteId });
+      }
+    }
+
+    return { applied, notes };
+  }
+
   /**
    * Émet un événement usecase_update via NOTIFY PostgreSQL pour rafraîchir l'UI en temps réel
    */
@@ -1008,6 +1258,21 @@ export class ToolService {
     const client = await pool.connect();
     try {
       await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private async notifyCommentEvent(
+    workspaceId: string,
+    contextType: string,
+    contextId: string,
+    data: Record<string, unknown> = {}
+  ): Promise<void> {
+    const payload = JSON.stringify({ workspace_id: workspaceId, context_type: contextType, context_id: contextId, data });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }

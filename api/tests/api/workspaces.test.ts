@@ -1,12 +1,65 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import JSZip from 'jszip';
+import { createHash } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { createTestId } from '../utils/test-helpers';
 
 async function importApp() {
   const mod = await import('../../src/app');
   return mod.app as any;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableStringify(v)).join(',')}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+}
+
+function sha256Bytes(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function buildImportZip(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  const workspaceId = `ws_${createTestId()}`;
+  const workspacesPayload = [{ id: workspaceId, name: 'Imported workspace' }];
+  const files: Array<{ path: string; bytes: Uint8Array }> = [
+    { path: 'workspaces.json', bytes: new TextEncoder().encode(stableStringify(workspacesPayload)) },
+  ];
+  const manifestFiles = files.map((f) => ({
+    path: f.path,
+    bytes: f.bytes.byteLength,
+    sha256: sha256Bytes(f.bytes),
+  }));
+  for (const f of files) {
+    zip.file(f.path, f.bytes);
+  }
+  const manifestCore = {
+    export_version: '1.0',
+    schema_version: 'test',
+    created_at: new Date().toISOString(),
+    scope: 'workspace',
+    scope_id: null,
+    include_comments: false,
+    include_documents: false,
+    files: manifestFiles,
+  };
+  const manifestHash = sha256Bytes(new TextEncoder().encode(stableStringify(manifestCore)));
+  zip.file('manifest.json', new TextEncoder().encode(stableStringify({ ...manifestCore, manifest_hash: manifestHash })));
+  zip.file(
+    'meta.json',
+    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'top-ai-ideas' }))
+  );
+  return zip.generateAsync({ type: 'uint8array' });
 }
 
 describe('Workspaces API', () => {
@@ -28,7 +81,7 @@ describe('Workspaces API', () => {
   beforeEach(async () => {
     app = await importApp();
     editor = await createAuthenticatedUser('editor', `editor-${Date.now()}@example.com`);
-    viewer = await createAuthenticatedUser('viewer', `viewer-${Date.now()}@example.com`);
+    viewer = await createAuthenticatedUser('guest', `viewer-${Date.now()}@example.com`);
     if (editor.workspaceId) createdWorkspaceIds.push(editor.workspaceId);
     if (viewer.workspaceId) createdWorkspaceIds.push(viewer.workspaceId);
   });
@@ -177,5 +230,62 @@ describe('Workspaces API', () => {
       editor.sessionToken
     );
     expect(remove.status).toBe(204);
+  });
+
+  it('requires admin to export workspace', async () => {
+    await db.insert(workspaceMemberships).values({
+      workspaceId: editor.workspaceId!,
+      userId: viewer.id,
+      role: 'viewer',
+      createdAt: new Date(),
+    });
+
+    const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', editor.sessionToken, {
+      scope: 'workspace',
+      include_comments: false,
+      include_documents: false,
+    });
+    expect(resEditor.status).toBe(403);
+
+    const resViewer = await authenticatedRequest(
+      app,
+      'POST',
+      `/api/v1/exports?workspace_id=${editor.workspaceId}`,
+      viewer.sessionToken,
+      {
+      scope: 'workspace',
+      include_comments: false,
+      include_documents: false,
+      }
+    );
+    expect(resViewer.status).toBe(403);
+  });
+
+  it('requires admin to import into existing workspace', async () => {
+    await db.insert(workspaceMemberships).values({
+      workspaceId: editor.workspaceId!,
+      userId: viewer.id,
+      role: 'viewer',
+      createdAt: new Date(),
+    });
+
+    const zipBytes = await buildImportZip();
+    const form = new FormData();
+    form.set('file', new File([zipBytes], 'import.zip', { type: 'application/zip' }));
+    form.set('target_workspace_id', editor.workspaceId!);
+
+    const resEditor = await app.request('/api/v1/imports', {
+      method: 'POST',
+      headers: { Cookie: `session=${editor.sessionToken}` },
+      body: form as any,
+    });
+    expect(resEditor.status).toBe(403);
+
+    const resViewer = await app.request('/api/v1/imports', {
+      method: 'POST',
+      headers: { Cookie: `session=${viewer.sessionToken}` },
+      body: form as any,
+    });
+    expect(resViewer.status).toBe(403);
   });
 });

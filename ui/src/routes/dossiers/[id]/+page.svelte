@@ -5,14 +5,21 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
 
-  import { foldersStore, currentFolderId, type Folder } from '$lib/stores/folders';
+  import {
+    foldersStore,
+    currentFolderId,
+    type Folder,
+    openFolderExport,
+    closeFolderExport,
+    folderExportState,
+  } from '$lib/stores/folders';
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet } from '$lib/utils/api';
+  import { apiDelete, apiGet } from '$lib/utils/api';
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, workspaceScope } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
 
@@ -22,7 +29,11 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import CommentBadge from '$lib/components/CommentBadge.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
+  import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { Trash2, Star, X, Minus, Loader2, Lock } from '@lucide/svelte';
+  import { listComments } from '$lib/utils/comments';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -30,6 +41,8 @@
   let editedFolderName = '';
   let editedContext = '';
   let lastFolderId: string | null = null;
+  let lastFolderIdForCounts: string | null = null;
+  let hasMounted = false;
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
@@ -39,8 +52,18 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
+  let showImportDialog = false;
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
+  let commentCounts: Record<string, number> = {};
+  let hasDocuments = false;
+  let workspaceId: string | null = null;
+  let commentUserId: string | null = null;
+  let lastCommentCountsKey = '';
+  let commentCountsLoading = false;
+  let commentCountsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let commentCountsRetryAttempts = 0;
+  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
@@ -53,6 +76,11 @@
   const LOCK_REFRESH_MS = 10 * 1000;
 
   $: folderId = $page.params.id;
+  $: workspaceId = $workspaceScope.selectedId ?? null;
+  $: commentUserId = $session.user?.id ?? null;
+  $: workspaceName =
+    ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId)?.name ?? '';
+  $: commentsTotal = Object.values(commentCounts).reduce((sum, v) => sum + v, 0);
 
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
@@ -80,6 +108,89 @@
     } finally {
       isLoading = false;
     }
+  };
+
+  const handleImportComplete = async (event: CustomEvent<{ folderId?: string }>) => {
+    const folderId = event.detail?.folderId;
+    if (folderId && folderId !== currentFolder?.id) {
+      currentFolderId.set(folderId);
+      await goto(`/dossiers/${folderId}`);
+      return;
+    }
+    await loadUseCases();
+    await loadCommentCounts();
+  };
+
+  const canLoadCommentCounts = () =>
+    Boolean(folderId && workspaceId && commentUserId && !$session.loading);
+
+  const scheduleCommentCountsRetry = () => {
+    if (commentCountsRetryTimer) return;
+    commentCountsRetryTimer = setTimeout(() => {
+      commentCountsRetryTimer = null;
+      if (canLoadCommentCounts() && commentCountsRetryAttempts < 3) {
+        void loadCommentCounts();
+      }
+    }, 600);
+  };
+
+  const loadCommentCounts = async () => {
+    if (!canLoadCommentCounts()) return;
+    if (commentCountsLoading) return;
+    commentCountsLoading = true;
+    try {
+      const res = await listComments({ contextType: 'folder', contextId: folderId });
+      const counts: Record<string, number> = {};
+      const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
+      for (const item of res.items || []) {
+        const threadId = item.thread_id;
+        if (!threadId) continue;
+        const existing = threads.get(threadId);
+        if (!existing) {
+          threads.set(threadId, {
+            status: item.status,
+            count: 1,
+            sectionKey: item.section_key || null,
+          });
+        } else {
+          threads.set(threadId, { ...existing, count: existing.count + 1 });
+        }
+      }
+      for (const thread of threads.values()) {
+        if (thread.status === 'closed') continue;
+        const key = thread.sectionKey || 'root';
+        counts[key] = (counts[key] || 0) + thread.count;
+      }
+      commentCounts = counts;
+      commentCountsRetryAttempts = 0;
+    } catch {
+      // ignore
+      commentCountsRetryAttempts += 1;
+      scheduleCommentCountsRetry();
+    } finally {
+      commentCountsLoading = false;
+    }
+  };
+
+  $: if (folderId && workspaceId && commentUserId && !$session.loading) {
+    const key = `${folderId}:${workspaceId}:${commentUserId}`;
+    if (key !== lastCommentCountsKey) {
+      lastCommentCountsKey = key;
+      void loadCommentCounts();
+    }
+  }
+
+  const scheduleCommentReload = () => {
+    if (commentReloadTimer) return;
+    commentReloadTimer = setTimeout(() => {
+      commentReloadTimer = null;
+      void loadCommentCounts();
+    }, 150);
+  };
+
+  const openCommentsFor = (sectionKey: string) => {
+    const detail = { contextType: 'folder', contextId: folderId, sectionKey };
+    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
   };
 
   const handleFolderNameSaved = async () => {
@@ -111,6 +222,26 @@
         addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
       } else {
       addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      }
+    }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!currentFolder) return;
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
+    try {
+      await apiDelete(`/folders/${currentFolder.id}`);
+      foldersStore.update((items) => items.filter((f) => f.id !== currentFolder?.id));
+      currentFolderId.set(null);
+      addToast({ type: 'success', message: 'Dossier supprimé avec succès !' });
+      goto('/dossiers');
+    } catch (error) {
+      console.error('Failed to delete folder:', error);
+      const anyErr = error as any;
+      if (anyErr?.status === 403) {
+        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      } else {
+        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
       }
     }
   };
@@ -153,11 +284,19 @@
         if (data?.folder) {
           currentFolder = { ...(currentFolder as any), ...(data.folder as any) };
         }
+        return;
+      }
+      if (evt?.type === 'comment_update') {
+        if (evt.contextType !== 'folder' || evt.contextId !== folderId) return;
+        scheduleCommentReload();
       }
     });
+    lastFolderIdForCounts = folderId;
+    hasMounted = true;
   });
 
   onDestroy(() => {
+    if (commentCountsRetryTimer) clearTimeout(commentCountsRetryTimer);
     streamHub.delete(HUB_KEY);
     if (lockHubKey) streamHub.delete(lockHubKey);
     if (lockRefreshTimer) clearInterval(lockRefreshTimer);
@@ -167,6 +306,13 @@
     window.removeEventListener('pagehide', handleLeave);
     window.removeEventListener('beforeunload', handleLeave);
   });
+
+  $: if (hasMounted && folderId && folderId !== lastFolderIdForCounts) {
+    lastFolderIdForCounts = folderId;
+    currentFolderId.set(folderId);
+    void loadUseCases();
+    void loadCommentCounts();
+  }
 
   const subscribeLock = (targetId: string) => {
     if (lockHubKey) streamHub.delete(lockHubKey);
@@ -369,7 +515,7 @@
           </h1>
         {/if}
       </div>
-      <div class="col-span-4 flex items-start justify-end gap-2 flex-wrap pt-1">
+      <div class="col-span-4 flex items-center justify-end gap-2 flex-wrap pt-1">
         {#if currentFolder.organizationId}
           {@const orgId = currentFolder.organizationId}
           <button
@@ -403,6 +549,20 @@
           on:forceUnlock={handleForceUnlock}
           on:releaseLock={handleReleaseLock}
         />
+        <FileMenu
+          showNew={false}
+          showImport={true}
+          showExport={true}
+          showPrint={false}
+          showDelete={!isReadOnly}
+          disabledImport={isReadOnly}
+          disabledExport={isReadOnly}
+          onImport={() => (showImportDialog = true)}
+          onExport={() => openFolderExport(folderId)}
+          onDelete={handleDeleteFolder}
+          triggerTitle="Actions"
+          triggerAriaLabel="Actions"
+        />
         {#if showReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed"
@@ -418,8 +578,15 @@
     </div>
 
     <!-- Contexte (entre le titre et le bloc documents) -->
-    <div class="rounded border border-slate-200 bg-white p-4">
-      <div class="text-sm font-medium text-slate-700 mb-2">Contexte</div>
+    <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="description">
+      <div class="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2 group">
+        Contexte
+        <CommentBadge
+          count={commentCounts?.description ?? 0}
+          disabled={!openCommentsFor}
+          on:click={() => openCommentsFor('description')}
+        />
+      </div>
       <EditableInput
         label=""
         value={editedContext}
@@ -434,7 +601,13 @@
       />
     </div>
 
-    <DocumentsBlock contextType="folder" contextId={currentFolder.id} />
+    <DocumentsBlock
+      contextType="folder"
+      contextId={currentFolder.id}
+      on:state={(event) => {
+        hasDocuments = (event.detail?.items || []).length > 0;
+      }}
+    />
   {:else}
     <h1 class="text-3xl font-semibold">Dossier</h1>
   {/if}
@@ -581,5 +754,50 @@
     {/each}
   </div>
 </section>
+
+{#if currentFolder}
+  <!-- Commentaires gérés par ChatWidget -->
+{/if}
+
+{#if currentFolder}
+  <ImportExportDialog
+    bind:open={$folderExportState.open}
+    mode="export"
+    title="Exporter le dossier"
+    scope="folder"
+    scopeId={$folderExportState.folderId ?? currentFolder.id}
+    allowScopeSelect={false}
+    allowScopeIdEdit={false}
+    workspaceName={workspaceName}
+    objectName={currentFolder?.name || ''}
+    commentsAvailable={commentsTotal > 0}
+    documentsAvailable={hasDocuments}
+    includeOptions={
+      [
+        ...(currentFolder?.organizationId
+          ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+          : []),
+        { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
+        { id: 'matrix', label: 'Inclure la matrice', defaultChecked: true },
+      ]
+    }
+    includeAffectsComments={['organization', 'usecases', 'matrix']}
+    includeAffectsDocuments={['organization', 'usecases', 'matrix']}
+    on:close={closeFolderExport}
+  />
+  <ImportExportDialog
+    bind:open={showImportDialog}
+    mode="import"
+    title="Importer un cas d'usage"
+    scope="folder"
+    defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
+    importObjectTypes={['usecases']}
+    importTargetType="folder"
+    importTargetLabel="Dossier cible"
+    importTargetOptions={[{ id: currentFolder.id, label: currentFolder.name }]}
+    defaultImportTargetId={currentFolder.id}
+    on:imported={handleImportComplete}
+  />
+{/if}
 
 
