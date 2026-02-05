@@ -381,8 +381,13 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	      echo "▶ Running scoped Playwright: $$E2E_SPEC (workers=$$workers retries=$$retries $${extra:-})"; \
 	      npx playwright test "$$E2E_SPEC" --workers="$$workers" --retries="$$retries" $$extra; \
 	    else \
-	      echo "▶ Running Playwright (workers=$$workers retries=$$retries $${extra:-})"; \
-	      npx playwright test --workers="$$workers" --retries="$$retries" $$extra; \
+	      echo "▶ Running Playwright by groups: 00 01 02 03 04 05 06 07(workers=$$workers retries=$$retries $${extra:-})"; \
+	      for g in 00 01 02 03 04 05 06 07; do \
+	        for pattern in "tests/$${g}-.*.spec.ts"; do \
+	          echo "▶ Running group $$g: $$pattern"; \
+	          npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra; \
+	        done; \
+	      done; \
 	    fi'
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
