@@ -12,6 +12,16 @@
 ## Questions / Notes
 - <Open questions that affect scope or sequencing.>
 
+## Orchestration Mode (AI-selected)
+- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: <Why this mode is selected>
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
   - [ ] Read the relevant `.mdc` files and `README.md`.
