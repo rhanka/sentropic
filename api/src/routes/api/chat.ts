@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
+import { db } from '../../db/client';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 
 export const chatRouter = new Hono();
@@ -119,6 +121,46 @@ chatRouter.get('/messages/:id/stream-events', async (c) => {
 
   const events = await readStreamEvents(messageId, Number.isFinite(sinceSequence as number) ? sinceSequence : undefined, Number.isFinite(limit) ? limit : 2000);
   return c.json({ messageId, streamId: messageId, events });
+});
+
+/**
+ * POST /api/v1/chat/messages/:id/stop
+ * Interrompt la génération en cours (chat_message) et finalise avec le contenu partiel.
+ */
+chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  const msg = await chatService.getMessageForUser(messageId, user.userId);
+  if (!msg) return c.json({ error: 'Message not found' }, 404);
+  if (msg.role !== 'assistant') return c.json({ error: 'Only assistant messages can be stopped' }, 400);
+
+  const rows = (await db.all(sql`
+    SELECT id, status
+    FROM job_queue
+    WHERE type = 'chat_message'
+      AND (data::jsonb->>'assistantMessageId') = ${messageId}
+      AND (data::jsonb->>'userId') = ${user.userId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `)) as Array<{ id: string; status: string }>;
+
+  const job = rows?.[0];
+  const jobId = job?.id;
+  if (jobId) {
+    await queueManager.cancelJob(jobId, 'user_stop');
+  }
+
+  const shouldFinalize = !job || job.status !== 'processing';
+  if (shouldFinalize) {
+    await chatService.finalizeAssistantMessageFromStream({
+      assistantMessageId: messageId,
+      reason: 'user_stop',
+      fallbackContent: 'Réponse interrompue.'
+    });
+  }
+
+  return c.json({ ok: true, jobId: jobId ?? null });
 });
 
 /**
