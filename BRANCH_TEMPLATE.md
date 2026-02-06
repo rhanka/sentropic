@@ -62,5 +62,5 @@
     - [ ] <Evolve or add E2E tests (e.g., update `e2e/tests/05-organizations.spec.ts` or add `e2e/tests/10-new-feature.spec.ts`)>
     - [ ] <Scoped runs while evolving tests: `make test-e2e E2E_SPEC=tests/your-file.spec.ts`>
     - [ ] Sub-lot gate: `make clean test-e2e`
-  - [ ] Final gate: Verify CI for the branch
+  - [ ] Final gate: Créate PR with BRANCH.md content as initial message & Verify CI for the branch
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
