@@ -7,7 +7,7 @@ tags: [database, migrations, drizzle]
 # DATABASE MANAGEMENT
 
 ## Architecture Overview
-- **Database**: PostgreSQL 16 (Docker volume: `pg_data`)
+- **Database**: PostgreSQL 17 (Docker volume: `pg_data`)
 - **ORM**: Drizzle ORM with TypeScript (`drizzle-orm/node-postgres`)
 - **Migration Tool**: Drizzle Kit
 - **Backup**: PostgreSQL native backup tools (pg_dump)

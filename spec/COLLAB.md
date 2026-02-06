@@ -36,7 +36,7 @@ Replace dropdown selector with a table showing (column order):
 - Hover message on row: "Click to select workspace" (hover disabled on action buttons).
 - Icons: icons only, no text/border (same style as existing icons).
 - Workspace admins can rename the **selected** workspace in `/parametres` using an inline `EditableInput` (writes to `PUT /workspaces/:id`).
-- **Same UI for all roles**: admin, editor, viewer share the same table layout and columns; admin-only actions are rendered but disabled for non-admins (tooltip "Réservé aux admins").
+- **Same UI for all roles**: admin, editor, viewer share the same table layout and columns; admin-only actions are rendered but disabled for non-admins (tooltip "Reserved for admins").
 
 ### Workspace Members UI
 
@@ -52,7 +52,7 @@ Replace dropdown selector with a table showing (column order):
 ### Hidden Workspace Navigation Lock (UI)
 
 When an `admin` selects a **hidden** workspace:
-- The user must be **restricted to the Settings/Paramètres page** until the workspace is made visible again.
+- The user must be **restricted to the Settings (/parametres) page** until the workspace is made visible again.
 - If the user tries to navigate elsewhere (via URL or navigation), they are redirected to `/parametres`.
 - A persistent banner must be shown to explain: "workspace hidden — unhide to access other views".
 
@@ -96,20 +96,20 @@ When an `admin` selects a **hidden** workspace:
 
 - When an object is locked by another user, show a **compact lock badge** near the header actions:
   - A **lock icon** plus **avatar(s)** (rounded overlap). The top avatar is the lock owner.
-  - Hover tooltip: “`n utilisateurs connectés, {Nom} verrouille le document, cliquer pour demander le déverrouillage`”.
+  - Hover tooltip: “`n users connected, {Name} is locking the document, click to request unlock`”.
   - Click on the badge triggers **request unlock** (no message prompt).
   - Admin-only **Force unlock** is available as a **secondary action inside the tooltip** (no visible button).
-- When the current user owns the lock, show “**Vous éditez**” in the same compact badge.
-- The avatar list **excludes the current user** but still counts them in `n utilisateurs connectés`.
+- When the current user owns the lock, show “**You are editing**” in the same compact badge.
+- The avatar list **excludes the current user** but still counts them in `n users connected`.
 - No auto-transfer/timeout/accept/refuse workflow yet (planned in next phase of Lot 2).
 
 ### Presence Badge (all roles)
 
 - The compact badge is shown for **viewer/editor/admin** to display presence even in read-only mode.
-- In read-only mode, **request unlock is disabled** and the tooltip omits the “cliquer pour demander le déverrouillage” wording.
+- In read-only mode, **request unlock is disabled** and the tooltip omits the “click to request unlock” wording.
 - The read-only lock icon is hidden when the presence badge is visible (avoid duplicate indicators).
 - When a user requests unlock, their avatar shows a **small key overlay** in the badge.
-- The lock owner sees **"Déverrouiller pour {user}"** in the tooltip menu, and the unlock action is shown **only when a request exists**.
+- The lock owner sees **"Unlock for {user}"** in the tooltip menu, and the unlock action is shown **only when a request exists**.
 
 ### SSE Events
 

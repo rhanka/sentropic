@@ -13,7 +13,7 @@
 - [x] Compléter les tests unitaires (121 tests API)
 - [x] Compléter les tests E2E (91/101 tests Playwright)
 - [x] CI GitHub Actions (build/test/deploy)
-- [x] Migration SQLite → PostgreSQL 16
+- [x] Migration SQLite → PostgreSQL 17
 - [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [x] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
