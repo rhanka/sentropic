@@ -3,7 +3,7 @@ import { db, pool } from '../db/client';
 import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
-import { getNextSequence, writeStreamEvent } from './stream-service';
+import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
 import { defaultPrompts } from '../config/default-prompts';
@@ -2055,6 +2055,89 @@ Règles :
       .update(chatSessions)
       .set({ updatedAt: new Date() })
       .where(eq(chatSessions.id, options.sessionId));
+  }
+
+  /**
+   * Finalise un message assistant à partir des events stream (ex: arrêt utilisateur).
+   * - Recompose content/reasoning depuis les deltas.
+   * - Émet un event terminal si manquant.
+   */
+  async finalizeAssistantMessageFromStream(options: {
+    assistantMessageId: string;
+    reason?: string;
+    fallbackContent?: string;
+  }): Promise<{
+    content: string;
+    reasoning: string | null;
+    wroteDone: boolean;
+  } | null> {
+    const { assistantMessageId, reason, fallbackContent } = options;
+    const [msg] = await db
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        reasoning: chatMessages.reasoning
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, assistantMessageId))
+      .limit(1);
+
+    if (!msg || msg.role !== 'assistant') return null;
+
+    const events = await readStreamEvents(assistantMessageId);
+    const hasTerminal = events.some((ev) => ev.eventType === 'done' || ev.eventType === 'error');
+
+    const contentParts: string[] = [];
+    const reasoningParts: string[] = [];
+    for (const ev of events) {
+      if (ev.eventType === 'content_delta') {
+        const delta = typeof (ev.data as any)?.delta === 'string' ? ((ev.data as any).delta as string) : '';
+        if (delta) contentParts.push(delta);
+      } else if (ev.eventType === 'reasoning_delta') {
+        const delta = typeof (ev.data as any)?.delta === 'string' ? ((ev.data as any).delta as string) : '';
+        if (delta) reasoningParts.push(delta);
+      }
+    }
+
+    let content = contentParts.join('');
+    if (!content.trim() && fallbackContent) content = fallbackContent;
+
+    const shouldUpdateContent = !msg.content || msg.content.trim().length === 0;
+    if (shouldUpdateContent && content) {
+      await db
+        .update(chatMessages)
+        .set({
+          content,
+          reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null
+        })
+        .where(eq(chatMessages.id, assistantMessageId));
+    }
+
+    let wroteDone = false;
+    if (!hasTerminal) {
+      const seq = await getNextSequence(assistantMessageId);
+      await writeStreamEvent(
+        assistantMessageId,
+        'done',
+        { reason: reason ?? 'cancelled' },
+        seq,
+        assistantMessageId
+      );
+      wroteDone = true;
+    }
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+
+    return {
+      content,
+      reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
+      wroteDone
+    };
   }
 }
 
