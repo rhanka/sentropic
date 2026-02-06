@@ -23,6 +23,12 @@
 5. Post a 3–6 step plan as the first PR comment.
 6. Keep `spec/*.md` in sync with behavior changes (or note gaps in `BRANCH.md`).
 
+### PR Creation (MANDATORY)
+- **Timing**: Just before triggering CI (first push or final push), prepare the PR.
+- **Source**: Use the **exact text** of `BRANCH.md` to build the PR title/body (objective + scope + lots + tests).
+- **Format**: Keep PR content in English and include the current test plan from `BRANCH.md`.
+- **Action**: Create the PR only after the branch is in a consistent state (no pending lots except final validation).
+
 ### Orchestration (Conductor-style)
 - Use the main agent as **orchestrator** and sub-agents only for **orthogonal tasks** (e.g., spec review, test plan review, API/UI diffs).
 - Each sub-agent must work on an **isolated branch or isolated repo copy** (distinct `ENV` + ports).
