@@ -41,8 +41,8 @@ Refactor `.cursor/rules/*.mdc` and core docs to align on the simplified workflow
   - [x] Add architecture design-pattern directives to relevant specs (API/UI).
   - [x] Document lifecycle guidance for key components (API/UI) and internal tech-debt/refactor planning.
 
-- [ ] **Lot 7 — Design system directive**
-  - [ ] Create a new `.mdc` file for the design system and document usage rules.
+- [x] **Lot 7 — Design system directive**
+  - [x] Create a new `.mdc` file for the design system and document usage rules.
 
 - [ ] **Lot N — Final validation**
   - [ ] Verify CI is checked at the end of the branch.
