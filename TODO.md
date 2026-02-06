@@ -169,14 +169,14 @@
     - [ ] Gestion des conflits (édition sur le gdrive du doc en confit sur une section)
   - [ ] Gestion de bibliothèque de style
     - [ ] Template de slides
-- [ ] Streamline des directives mdc
-  - [ ] analyse des meilleurs pratique (conductor model, model testing Bmad)
-  - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
-  - [ ] création d'un template de branche, incluant les UAT partiels à chaque lot
-  - [ ] tout-make: clarifier les obligation d'usage de make
-  - [ ] spécifie make commit dans l workflo pour éviter le coauthoring cursor
-  - [ ] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
-  - [ ] Créer un mdc pour le design system
+- [x] Streamline des directives mdc
+  - [x] analyse des meilleurs pratique (conductor model, model testing Bmad)
+  - [x] inclusion make lint typecheck avant passage de main à l'utilisateur
+  - [x] création d'un template de branche, incluant les UAT partiels à chaque lot
+  - [x] tout-make: clarifier les obligation d'usage de make
+  - [x] spécifie make commit dans l workflo pour éviter le coauthoring cursor
+  - [x] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+  - [x] Créer un mdc pour le design system
 - Design system
     - [ ] Normaliser les couleurs primary des boutons
 - [ ] Storybook (spec)
