@@ -121,10 +121,10 @@
     - [x] Each comment can be "closed" by the last attributed user
     - [x] Comments are visible on the header on the card of the data part
     - [x] Options d'export : avec ou sans commentaire
+- [x] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
+- [x] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
 
 **⏳ À faire :**
-- [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
-- [ ] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
 - remplacer le modèle de print par un modèle de template
 - [ ] basculer en i18n bilingue anglais / français
   - [ ] identifier tous les messages
