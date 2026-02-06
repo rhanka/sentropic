@@ -5,27 +5,32 @@
 - **FIRST**: Read `.cursor/rules/MASTER.mdc` for consolidated rules overview
 - **SECOND**: Read `README.md` for project overview and setup
 - **THIRD**: Read `TODO.md` for current priorities and items
-- **FOURTH**: Read `RELEASE.md` for target version and scope
+- **FOURTH**: Read `BRANCH.md` if it exists (current branch plan)
+- **FIFTH**: Read relevant `spec/*.md` files for the current scope
 - Propose a short action plan before coding. Request human approval when "⚠ approval".
-- apply `workflow.mdc` for coding practice and `testing.mdc` for testing practice and `security.mdc`for security
+- apply `workflow.mdc` for coding practice, `testing.mdc` for testing practice, and `security.mdc` for security
 - be conform to `architecture.mdc` architecture directives
 
 
-## FEATURE
+## FEATURE (lean)
 1. Read the target `TODO.md` item (**Next** or **Now**).
-2. **Create feature branch** with `BRANCH.md` documenting plan and tasks, asking relevant question before to start
-3. Post a 3–6 step plan as the first PR comment.
-4. Implement with guardrails (preview, dry-run, logs).
-5. **Test before commit** - ensure all changes work as expected.
-6. Update `TODO.md` (check item, reference PR) and `RELEASE.md` (scope).
+2. Create `BRANCH.md` from `BRANCH_TEMPLATE.md` and keep questions there.
+3. Follow the lot-based flow in `BRANCH.md` (UAT lots → docs consolidation → final tests).
+4. Constraints to enforce:
+   - One migration file max in `api/drizzle/*.sql`.
+   - Tests are listed exhaustively in Lot N by scope and file.
+   - For complex branches, use `spec/BRANCH_SPEC_EVOL.md` (add in Lot 0, consolidate before tests, then delete).
+5. Post a 3–6 step plan as the first PR comment.
+6. Keep `spec/*.md` in sync with behavior changes (or note gaps in `BRANCH.md`).
 
 As a very first thing, you acknowledge the next TODO and the way you will work on it following above workflow feature. If a BRANCH is in progress you also acknowledge where you are and check the state of the code to go on.
 
 ## Guardrails
 - Never perform destructive DB/system actions without "⚠ approval".
 - For Playwright/Cursor, always **simulate** before executing a critical action.
-- **Always test before commit** - no exceptions to this rule.
-- **Use Make for testing** - always run `make test.unit` before commit (see `testing.mdc`)
+- Before each UAT lot, run `make typecheck-<ui/api>` and `make lint-<ui/api>` for impacted components.
+- Before handing back to the user, run `make logs-ui` or `make logs-api` to ensure no syntax/runtime errors.
+- Before handing back to the user, update the UAT checklist and test plan in `BRANCH.md` and tick completed items.
 
 ## Development Conventions
 - **Commits**: Conventional Commits (feat:, fix:, chore:, refactor:, docs:, test:)
@@ -34,7 +39,9 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 - **Never proceed more than one item of `TODO.md`**
 - **Be minimalist in changes** (don't refacto the whole to avoid regressions)
 - **Commit messages and PR descriptions MUST be in English**
-- **Use make targets** : `make up` for dev mode (and `make down`), `make logs` for logs. Don't reinvent 
+- **Use make targets only** (no Docker commands): `make dev` for dev, `make logs` / `make logs-<service>`, `make ps`, `make db-query`, `make exec-api` / `make exec-ui`, `make sh-<ui/api>`.
+- **Do not modify `Makefile`** unless explicitly requested.
+- **Compose isolation**: set `ENV=<branch-slug>` (short alias) and ensure `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT` do not conflict with other Compose projects.
 
 ## Commit Guidelines
 - **Atomic commits** : One logical change per commit
@@ -46,10 +53,11 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 ### Commit Workflow (MANDATORY)
 1. **Check status first** : Always run `git status` before committing
 2. **Selective staging** : Use `git add <specific-files>` for files you know you modified or deleted, Never use `git add .` or `git add -A` (run `git status` before and after)
-4. **Commit with context** : Include clear description of what changed and why
-5. **ONE task per commit** : Complete ONE logical task, then commit. Do NOT chain multiple tasks without committing.
-6. **Update current work**: update BRANCH.md and commit it to be sure of remaining work at every step
-7. **Consolidate CI debug commits (MANDATORY)**: When experimenting with CI workflows (e.g., tweaking `.github/workflows/*.yml`), avoid piling multiple commit and use `git commit --amend --no-edit` (or edit message as needed). After amending or soft reset (history rewrite), you MUST push with `git push origin <branchname> --force` to update the remote safely.
+3. **Commit with context** : Include clear description of what changed and why
+4. **ONE task per commit** : Complete ONE logical task, then commit. Do NOT chain multiple tasks without committing.
+5. **Update current work**: update BRANCH.md and commit it to be sure of remaining work at every step
+6. **Commit command (mandatory)**: `make commit MSG="type: concise description"` (single line only, no multiline)
+7. **Consolidate CI debug commits (MANDATORY)**: Prefer `git reset --soft HEAD~N` followed by a single `make commit MSG="..."`. Avoid `git commit --amend` unless explicitly requested.
 
 ### Next Step Proposal (MANDATORY)
 After completing any task, **ALWAYS propose the next step** by following the workflow:
@@ -58,20 +66,9 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 3. **Propose specific action** : Clear, actionable next step
 4. **Wait for approval** : Do not proceed without user confirmation
 
-### Feature Completion Workflow (MANDATORY)
-After implementing all commits for a feature:
-1. **Push to GitHub** : `git push origin <branch-name>`
-2. **Tech Debt**: if any component was updated, please ensure `components.mdc` was applied and update tech debt files.
-2. **Final security validation** : Execute comprehensive security validation (see `security.mdc` for detailed workflow)
-3. **Verify CI** : Push and Monitor GitHub Actions(using `curl` or `gh` for detailed logs) 
-4. **Plan remaining actions** : If commits need additional substantial work, document in BRANCH.md - else commit --amend and git push --force <branch> until CI success
-5. **Final cleanup** : When everything works:
-   - Remove BRANCH.md
-   - Check off feature in TODO.md
-   - Update RELEASE.md
-   - Create final commit with BRANCH.md content in commit message
-   - Push final state
-   - Create a PR if not existing and update PR message with last BRANCH.md content
+### Feature Completion (aligned to BRANCH.md)
+- Follow the final lots in `BRANCH.md` (tests, CI check, final cleanup).
+- Final cleanup: remove `BRANCH.md`, check `TODO.md`, commit, push.
 
 ### CI Monitoring (MANDATORY)
 - After any push to a feature branch or PR update, automatically verify GitHub Actions runs.
@@ -91,8 +88,9 @@ After implementing all commits for a feature:
 - **Push command**: Always use `git push origin <branch-name>` explicitly, never `git push --set-upstream`.
 
 ## Quality Gates
-- **Before commit**: Run `make test-api` and/or `make test-ui` given you're changing api ou ui (enforced by testing.mdc)
-- **Before PR**: Run `make build-api build-ui-image test-e2e` to validate consistency
+- **Before UAT lot**: `make typecheck-<ui/api>` and `make lint-<ui/api>` for changed components
+- **Before final tests**: `make build-api build-ui-image`
+- **Final tests**: `make test-api`, `make test-ui`, and `make clean test-e2e`
 - **CI/CD**: All tests must pass, guides must be consistent
 - **Architecture**: Verify `make` commands work before any changes
 
@@ -173,31 +171,6 @@ After implementing all commits for a feature:
 - **Documentation**: Link vulnerability fixes to component upgrade commits
 
 ## Feature Branch Management
-
-### Branch Documentation
-- **REQUIRED**: Create `BRANCH.md` and a branch for each feature branch, defining scope (api, ui, ci) and limit work to avoid border effect (dont change Makefile or ci or tests if not required, or specify what should be minimally changed). The final two steps should be always test strategy completion from `testing.mdc` and Github CI execution check
-- **LOCATION**: Root of feature branch (not committed to main)
-- **PURPOSE**: Track progress, plan, and commit mapping
-
-### BRANCH.md Structure
-```markdown
-# Feature: [Name]
-
-## Objective
-Brief description of what this feature accomplishes
-
-## Plan / Todo
-- [ ] Task 1: Description
-- [ ] Task 2: Description  
-- [ ] Task 3: Description
-
-## Commits & Progress
-- [x] **Commit 1** (hash): Task 1 completed
-- [x] **Commit 2** (hash): Task 2 completed
-- [ ] **Commit 3**: Task 3 in progress
-
-## Status
-- **Progress**: X/Y tasks completed
-- **Current**: Working on Task 3
-- **Next**: Complete Task 3, then Task 4
-```
+- **REQUIRED**: Create `BRANCH.md` from `BRANCH_TEMPLATE.md` for each branch.
+- **LOCATION**: Repository root (not committed to main).
+- **PURPOSE**: Single source of truth for plan, lots, UAT, and final gates.

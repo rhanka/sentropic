@@ -1,6 +1,6 @@
 # Top AI Ideas
 
-MANDATORY: va lire .cursor/rules/MASTER.mdc et suis les instructions avant tout
+MANDATORY: read `.cursor/rules/MASTER.mdc` and follow the rules first.
 
 **Un assistant à génération et évaluation de cas d'usage d'intelligence artificielle**
 
@@ -118,27 +118,19 @@ CORS_ALLOWED_ORIGINS=https://*.sent-tech.ca,https://top-ai-ideas.sent-tech.ca
 
 ### Local Development
 
-1. **Start with Docker Compose** (recommended):
+1. **Start with Docker Compose** (mandatory):
    ```bash
    make dev
    ```
    The `VITE_API_BASE_URL` is automatically configured in `docker-compose.yml`.
 
-2. **Native development** (without Docker):
-   ```bash
-   # Terminal 1 - Start API
-   cd api && npm run dev
-   
-   # Terminal 2 - Start UI  
-   cd ui && npm run dev
-   ```
-   The UI will use the default fallback: `http://localhost:8787/api/v1`.
-
-3. **Custom API URL**:
+2. **Custom API URL**:
    Create `ui/.env.local` (gitignored):
    ```bash
    VITE_API_BASE_URL=http://custom-api:8787/api/v1
    ```
+
+Native (non-Docker) development is not supported in this repo.
 
 ## Spécification technique
 
