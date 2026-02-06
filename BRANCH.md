@@ -37,9 +37,9 @@ Refactor `.cursor/rules/*.mdc` and core docs to align on the simplified workflow
 - [x] **Lot 5 — Best-practice analysis (prerequisite)**
   - [x] Analyze conductor model + model testing (Bmad) and capture conclusions in directives.
 
-- [ ] **Lot 6 — Architecture design patterns in specs**
-  - [ ] Add architecture design-pattern directives to relevant specs (API/UI).
-  - [ ] Document lifecycle guidance for key components (API/UI) and internal tech-debt/refactor planning.
+- [x] **Lot 6 — Architecture design patterns in specs**
+  - [x] Add architecture design-pattern directives to relevant specs (API/UI).
+  - [x] Document lifecycle guidance for key components (API/UI) and internal tech-debt/refactor planning.
 
 - [ ] **Lot 7 — Design system directive**
   - [ ] Create a new `.mdc` file for the design system and document usage rules.
