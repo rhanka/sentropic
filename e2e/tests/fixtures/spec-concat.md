@@ -1,4 +1,4 @@
-# Modèle de données (PostgreSQL 16 / Drizzle)
+# Modèle de données (PostgreSQL 17 / Drizzle)
 
 Source de vérité : `api/src/db/schema.ts` (Drizzle).  
 Conventions : tables en `snake_case`, clés primaires `text` (UUID string), multi-tenant via `workspace_id` (private-by-default).
@@ -2164,9 +2164,9 @@ Variables sous-jacentes clés côté backend/API:
 - Contexte de génération: `currentOrganizationId`, association dossier→organisation, prompts/configs.
 - Agrégations: comptages par niveaux, scoring, normalisation pour graphiques.
 
-## 2) Modèle de données (PostgreSQL 16 + Drizzle + workspaces)
+## 2) Modèle de données (PostgreSQL 17 + Drizzle + workspaces)
 
-Base: **PostgreSQL 16** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
+Base: **PostgreSQL 17** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
 
 Principe: **tenancy par workspace** (private-by-default) :
 - Table `workspaces` (avec `share_with_admin`)
@@ -2223,7 +2223,7 @@ Remarques d'implémentation API:
 
 ## 3) API backend (TypeScript) – Contrats
 
-Base: `/api/v1` (Node + TypeScript; framework: **Hono**; ORM: **Drizzle**; DB: **PostgreSQL 16**; migrations Drizzle Kit)
+Base: `/api/v1` (Node + TypeScript; framework: **Hono**; ORM: **Drizzle**; DB: **PostgreSQL 17**; migrations Drizzle Kit)
 
 Auth (passwordless) :
 - **Connexion exposée dans l’UI** : **WebAuthn** (passkeys) via `POST /api/v1/auth/login/options` puis `POST /api/v1/auth/login/verify`.
