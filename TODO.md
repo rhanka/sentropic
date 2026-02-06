@@ -125,15 +125,17 @@
 - [x] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
 
 **⏳ À faire :**
-- remplacer le modèle de print par un modèle de template
+- [ ] remplacer le modèle de print par un modèle de template
 - [ ] basculer en i18n bilingue anglais / français
   - [ ] identifier tous les messages
   - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
   - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
-- [ ] ajouter les contraintes (constraints) au cas d'usage
-  - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
-  - [ ] modif de la présentation et du print (mettre benefices / contraintes / mesure succès / risques)
+- [ ] amélioration gestion idéation cas d'usage
+  - [ ] ajouter les contraintes (constraints) au cas d'usage
+    - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
+    - [ ] modif de la présentation et du print (mettre benefices / contraintes / mesure succès / risques)
+  - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] Workflow / Authoring
   - [ ] Gérer le statut de validation de chaque objet
   - [ ] Gérer les modèles d'autorisation / partie d'objet
@@ -215,7 +217,6 @@
   - [ ] Etude d'impact incluant la continuité dans la gestion du streaming, les prompts d'évaluation de raisonnement, et l'exhaustivité des agents existant
   - [ ] Plan de transition éventuellement allotti en plusieurs branche et sous lots, chaque branche devant aboutir à une MEP
 - [ ] Citations objets et liens iconifiés dans le chat
-- [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] Remplacer Tavily par DataForSeo + Jina
 - Design system
   - [ ] Créer un mdc pour le design system
