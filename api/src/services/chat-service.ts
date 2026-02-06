@@ -2093,10 +2093,12 @@ Règles :
     const reasoningParts: string[] = [];
     for (const ev of events) {
       if (ev.eventType === 'content_delta') {
-        const delta = typeof (ev.data as any)?.delta === 'string' ? ((ev.data as any).delta as string) : '';
+        const data = ev.data as { delta?: unknown } | null;
+        const delta = typeof data?.delta === 'string' ? data.delta : '';
         if (delta) contentParts.push(delta);
       } else if (ev.eventType === 'reasoning_delta') {
-        const delta = typeof (ev.data as any)?.delta === 'string' ? ((ev.data as any).delta as string) : '';
+        const data = ev.data as { delta?: unknown } | null;
+        const delta = typeof data?.delta === 'string' ? data.delta : '';
         if (delta) reasoningParts.push(delta);
       }
     }
