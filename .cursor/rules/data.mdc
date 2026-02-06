@@ -82,6 +82,7 @@ tags: [database, migrations, drizzle]
 - **Data Migration**: Include data transformation in migration scripts
 - **Validation**: Add checks to ensure data integrity
 - **Documentation**: Document breaking changes in migration files
+- **Single migration per branch**: Only one `api/drizzle/*.sql` file per branch; if multiple evolutions happen, patch down to a single final migration before completion.
 
 ## Backup and Recovery
 
