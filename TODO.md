@@ -108,15 +108,38 @@
   - [x] En profiter pour migrer vers data les données de l'entreprise
   - [x] Ajouter les références à la génération
   - [x] Ajoutr une section d'indicateurs de performance (sectoriel et spécifiques à l'entreprise)
+- [x] Collaboration part 2
+    - [x] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension zip)
+    - [x] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension zip)
+    - [x] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extension zip)
+  - [x] Comments
+    - [x] Each object and data part of object can have on or many comments
+    - [x] There is a table of comments
+    - [x] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
+    - [x] A comment can be attributed to a user using @ (auto complete with users of the workspace).
+    - [x] If no attribution, the user is the initial comment creator
+    - [x] Each comment can be "closed" by the last attributed user
+    - [x] Comments are visible on the header on the card of the data part
+    - [x] Options d'export : avec ou sans commentaire
 
 **⏳ À faire :**
+- [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
+- [ ] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
+- remplacer le modèle de print par un modèle de template
+- [ ] basculer en i18n bilingue anglais / français
+  - [ ] identifier tous les messages
+  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
+  - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
+  - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
+- [ ] ajouter les contraintes (constraints) au cas d'usage
+  - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
+  - [ ] modif de la présentation et du print (mettre benefices / contraintes / mesure succès / risques)
 - [ ] Workflow / Authoring
   - [ ] Gérer le statut de validation de chaque objet
   - [ ] Gérer les modèles d'autorisation / partie d'objet
   - [ ] UI Badges de validation
   - [ ] UI Outil de révision
   - [ ] UI Outil de modélisation de worflow
-- [ ] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
 - [ ] Ajouter un tool de planning
   - [ ] api endpoints et structure 100% alignée avec les autres tools
   - [ ] IA Gère un plan détaillé avec des étapes de haut niveau incluant l'appel aux autres tools
@@ -153,15 +176,15 @@
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
   - [ ] proposer un plan d'implémentation en une branche
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
-  - l'autodiscovery d'un utilisateur sur ce template (design phase)
+  - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
     - [ ] aide locale : en mode "discovery", l'agent intervient lorsqu'une vue n'a pas encore été activée
     - [ ] aide étendue : l'agent supervise les actions de l'utilisateur, et détecte des amlériorations possible dans sont interaction avec l'UI et les agents
-  - l'auto documentation
-    - génération de doc from scratch
-    - génération d'incrément de doc
-    - screeshots
-    - automatisation ci
+  - [ ] l'auto documentation
+    - [ ] génération de doc from scratch
+    - [ ] génération d'incrément de doc
+    - [ ] screeshots
+    - [ ] automatisation ci
   - l'auto test
     - [ ] pendant la phase de dév, à partir des tests UAT proposé dans le contexte d'un branche.md, faire les screenshots et documenter
     - [ ] être activable via une target make pour livrer constats et screenshot (pour utilisation par cursor)
@@ -175,7 +198,6 @@
     - [ ] un modele de données
     - [ ] un modèle d'opération (ci etc quand je livre les artefacts et les commit, ce peut être un make update-doc etc)
     - [ ] un plan d'implémentation (potntiellement multibranche/mulit-sous-lots, chaque branche visant une mise en production)
-- [ ] Agent auto-doc: pour une version, gérer un agent favorisant permettant de créer la documentation utilisateur et les documents de support, incluant les screenshots via playwright
   - [ ] Créer une cible / environnemnt spécifique (peut être basé sur le mode dev, mais avec playwright activé, pas en mode test e2e mais sur la même flavor)
   - [ ] Un agent passif gère les déroulés dans l'écran
 - [ ] Renforcement de la structure agentique (phase design)
@@ -195,26 +217,12 @@
 - [ ] Citations objets et liens iconifiés dans le chat
 - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] Remplacer Tavily par DataForSeo + Jina
-- [ ] Enable to stop AI response in chat
 - Design system
   - [ ] Créer un mdc pour le design system
   - [ ] Normaliser les couleurs primary des boutons
 - API & UI Refacto
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
-- [x] Collaboration part 2
-    - [x] Fonction d'import / export de workspace (zip json + doc le cas échéant, extension zip)
-    - [x] Fonction d'import / export de dossier (zip jsons + docs le cas échéant, extension zip)
-    - [x] Fonction d'import / export de usecase(s) et organisation(s) (zip json + docs le cas échéant, extension zip)
-  - [x] Comments
-    - [x] Each object and data part of object can have on or many comments
-    - [x] There is a table of comments
-    - [x] A comment can have many consecutive answers (themselves are in the comments table), but there is only one level of answer (no sub answers)
-    - [x] A comment can be attributed to a user using @ (auto complete with users of the workspace).
-    - [x] If no attribution, the user is the initial comment creator
-    - [x] Each comment can be "closed" by the last attributed user
-    - [x] Comments are visible on the header on the card of the data part
-    - [x] Options d'export : avec ou sans commentaire
 - [ ] Introduire la notion de workflow (lister les opportunités/évaluer/prioriser) / objet (usecase etc) / agentic (prompts aujourd'hui) templates (Design session)
   Dans l'esprit, l'ensemble des activités top ai ideas serait un workflow basé sur des objets (use case, folder, organisation, synthèse exec) associé à de l'agentique (agent d'idéation pour créer un ensemble d'opportunités, agent d'approfondissement d'idée/usecase et évaluation, objet d'évaluation d'un autre objet (matrice), objet de priorisation (synthèse exec)).
   Les objets d'évaluation sont un peu spécifiques, et il y a aussi des objets de restitution qui manquent. On pourrait les appeler des outils, mais ce ne sont pas des outils pour l'IA, donc il faut déterminer un concept. Il pourrait dans la même game y avoir les évaluation de plan (déf de workpackages / jalons / charge x profils ).
