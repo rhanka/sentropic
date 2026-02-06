@@ -5,7 +5,7 @@ services:
       - ADMIN_EMAIL=e2e-admin@example.com
       - LOCK_TTL_MS=15000  # 15s for E2E tests (default: 60s)
       - WEBAUTHN_RP_ID=localhost
-      - WEBAUTHN_ORIGIN=http://localhost:5173
+      - WEBAUTHN_ORIGIN=http://localhost:${UI_PORT:-5173}
       # Document storage (CI/E2E): MinIO
       - DOC_STORAGE_ENDPOINT=${DOC_STORAGE_ENDPOINT:-http://minio:9000}
       - DOC_STORAGE_REGION=${DOC_STORAGE_REGION:-fr-par-1}

@@ -1,280 +1,279 @@
-# Workflow d'Authentification (WebAuthn + Magic Link utilitaire)
+# Authentication Workflow (WebAuthn + utility Magic Link)
 
-## Principes de sécurité
+## Security principles
 
-1. **Email vérifié requis pour une session** : `validateSession()` bloque si `users.emailVerified=false`.
-2. **Connexion exposée dans l’UI** : **WebAuthn** (passkeys / discoverable credentials) — bouton unique sur `/auth/login`.
-3. **Vérification email par code (6 chiffres)** : utilisée sur `/auth/register` pour obtenir un `verificationToken` nécessaire à l’enrôlement WebAuthn (anti-abus).
-4. **Magic link (utilitaire, non exposé sur l’écran de login)** : endpoints API présents + page UI `/auth/magic-link/verify`, principalement utile pour tests/E2E/ops (pas un mode de connexion “produit” dans l’écran de login).
-5. **Sessions** : cookie `session` HttpOnly, `Secure` en prod, `SameSite=Lax`, persistées en DB (`user_sessions`).
-6. **Règles d’accès** : statut de compte (`accountStatus` + `approvalDueAt`) et `emailVerified` influencent l’accès (voir `session-manager.ts`).
+1. **Verified email required for a session**: `validateSession()` blocks if `users.emailVerified=false`.
+2. **Login exposed in UI**: **WebAuthn** (passkeys / discoverable credentials) — single button on `/auth/login`.
+3. **Email verification via 6-digit code**: used on `/auth/register` to obtain a `verificationToken` required for WebAuthn enrollment (anti‑abuse).
+4. **Magic link (utility, not exposed on login screen)**: API endpoints exist + UI page `/auth/magic-link/verify`, mainly for tests/E2E/ops (not a “product” login method).
+5. **Sessions**: `session` cookie `HttpOnly`, `Secure` in prod, `SameSite=Lax`, persisted in DB (`user_sessions`).
+6. **Access rules**: account status (`accountStatus` + `approvalDueAt`) and `emailVerified` impact access (see `session-manager.ts`).
 
-## Workflows détaillés
+## Detailed workflows
 
-### 1. Magic link (utilitaire, non exposé dans l’UI de login)
+### 1. Magic link (utility, not exposed in UI login)
 
-Ce flux existe côté API et via la page `/auth/magic-link/verify`, mais **n’est pas proposé comme méthode de connexion dans l’UI de login** (pas de champ email / pas de bouton “recevoir un lien”).
+This flow exists in API and via `/auth/magic-link/verify`, but **is not proposed as a login method in the login UI** (no email field / no “receive link” button).
 
 ```mermaid
 sequenceDiagram
-    participant U as Utilisateur
-    participant UI as Interface UI
+    participant U as User
+    participant UI as UI
     participant API as API Backend
-    participant SMTP as Serveur SMTP
+    participant SMTP as SMTP Server
     participant DB as PostgreSQL
 
-    Note over UI,API: En pratique (tests/ops), on déclenche l’envoi du lien via l’API
+    Note over UI,API: In practice (tests/ops), link sending is triggered via the API
     UI->>API: POST /auth/magic-link/request { email }
-    API->>SMTP: Envoie un lien (token, TTL 10 min)
-    SMTP->>U: Email avec lien
-    U->>UI: Clique le lien (/auth/magic-link/verify?token=xxx)
+    API->>SMTP: Send link (token, TTL 10 min)
+    SMTP->>U: Email with link
+    U->>UI: Click link (/auth/magic-link/verify?token=xxx)
     UI->>API: POST /auth/magic-link/verify { token }
-    API->>DB: Crée le user si nécessaire + marque le lien "used"
-    API->>DB: Marque users.emailVerified=true (email prouvé)
-    API->>DB: Crée une session (user_sessions) + Set-Cookie(session=...)
-    API->>UI: success + infos user
-    UI->>UI: Redirige vers /dashboard (/home selon UX)
+    API->>DB: Create user if needed + mark link "used"
+    API->>DB: Mark users.emailVerified=true (email proven)
+    API->>DB: Create session (user_sessions) + Set-Cookie(session=...)
+    API->>UI: success + user info
+    UI->>UI: Redirect to /dashboard (/home depending on UX)
 ```
 
-**Détails :**
-1. UI demande un lien via `POST /api/v1/auth/magic-link/request`.
-2. L’utilisateur clique le lien ; l’UI appelle `POST /api/v1/auth/magic-link/verify`.
-3. Le backend crée l’utilisateur si besoin, **met `emailVerified=true`**, et crée une session (cookie).
+**Details:**
+1. UI requests a link via `POST /api/v1/auth/magic-link/request`.
+2. User clicks the link; UI calls `POST /api/v1/auth/magic-link/verify`.
+3. Backend creates user if needed, **sets `emailVerified=true`**, and creates a session (cookie).
 
-### 2. Enrôlement WebAuthn via code email (UI `/auth/register`)
+### 2. WebAuthn enrollment via email code (UI `/auth/register`)
 
-Ce flux permet d’ajouter une passkey pour les connexions futures.
+This flow adds a passkey for future logins.
 
 ```mermaid
 sequenceDiagram
-    participant U as Utilisateur
-    participant UI as Interface UI
+    participant U as User
+    participant UI as UI
     participant API as API Backend
-    participant SMTP as Serveur SMTP
-    participant Device as Device WebAuthn
+    participant SMTP as SMTP Server
+    participant Device as WebAuthn Device
 
-    U->>UI: Va sur /auth/register (ajout device)
-    U->>UI: Entre son email
+    U->>UI: Go to /auth/register (add device)
+    U->>UI: Enter email
     UI->>API: POST /auth/email/verify-request { email }
-    API->>SMTP: Envoie code à 6 chiffres
-    SMTP->>U: Email avec code
-    U->>UI: Saisit le code
+    API->>SMTP: Send 6-digit code
+    SMTP->>U: Email with code
+    U->>UI: Enter code
     UI->>API: POST /auth/email/verify-code { email, code }
-    API->>UI: Retourne verificationToken
+    API->>UI: Return verificationToken
     UI->>API: POST /auth/register/options { email, verificationToken }
-    API->>UI: Retourne options WebAuthn
+    API->>UI: Return WebAuthn options
     UI->>Device: startRegistration(options)
-    Device->>UI: Retourne credential
+    Device->>UI: Return credential
     UI->>API: POST /auth/register/verify { email, verificationToken, userId, credential }
-    API->>API: Crée/associe le device à l'utilisateur + emailVerified=true
-    API->>API: Crée une session (cookie)
+    API->>API: Create/attach device + emailVerified=true
+    API->>API: Create session (cookie)
 ```
 
-**Détails :**
-1. Le code email donne un `verificationToken` (TTL, usage unique).
-2. Ce token est requis pour `POST /auth/register/options` et `POST /auth/register/verify`.
-3. `register/verify` crée le credential et ouvre une session.
+**Details:**
+1. Email code yields a `verificationToken` (TTL, single‑use).
+2. Token is required for `POST /auth/register/options` and `POST /auth/register/verify`.
+3. `register/verify` creates the credential and opens a session.
 
-### 3. Connexion WebAuthn (passkeys)
+### 3. WebAuthn login (passkeys)
 
 ```mermaid
 sequenceDiagram
-    participant U as Utilisateur
-    participant UI as Interface UI
+    participant U as User
+    participant UI as UI
     participant API as API Backend
-    participant Device as Device WebAuthn
+    participant Device as WebAuthn Device
 
-    U->>UI: Va sur /auth/login
-    UI->>API: POST /auth/login/options (email optionnel)
-    API->>UI: options WebAuthn
+    U->>UI: Go to /auth/login
+    UI->>API: POST /auth/login/options (email optional)
+    API->>UI: WebAuthn options
     UI->>Device: startAuthentication(options)
     Device->>UI: credential
     UI->>API: POST /auth/login/verify { credential }
-    API->>API: Vérifie credential + emailVerified + accountStatus
-    API->>API: Crée session (cookie)
+    API->>API: Verify credential + emailVerified + accountStatus
+    API->>API: Create session (cookie)
 ```
 
-### 4. Perte d’appareil / récupération (UI “J’ai perdu mon appareil”)
+### 4. Device loss / recovery (UI “I lost my device”)
 
 ```mermaid
 sequenceDiagram
-    participant U as Utilisateur
-    participant UI as Interface UI
+    participant U as User
+    participant UI as UI
     participant API as API Backend
-    participant Device as Nouveau Device WebAuthn
+    participant Device as New WebAuthn Device
 
-    U->>UI: Va sur /auth/login
-    U->>UI: Clique "J'ai perdu mon appareil"
-    UI->>UI: Redirige vers /auth/register
-    Note over U,UI: Le workflow /auth/register (code email + enrôlement WebAuthn) crée la session
+    U->>UI: Go to /auth/login
+    U->>UI: Click "I lost my device"
+    UI->>UI: Redirect to /auth/register
+    Note over U,UI: /auth/register flow (email code + WebAuthn enrollment) creates the session
 ```
 
-**Détails :**
-1. Utilisateur va sur /auth/login
-2. Clique sur "J'ai perdu mon appareil"
-3. Suit le workflow `/auth/register` : code email + enrôlement WebAuthn (même principe que l’inscription)
-   → POST /auth/register/options (avec email)
-     - Le navigateur demande à l'utilisateur d'utiliser son device (biométrie, PIN, etc.)
-     - L'utilisateur valide sur son device (empreinte digitale, Face ID, etc.)
-   → POST /auth/register/verify (avec credential retourné par le device)
-   → Vérifie que le device n'est pas déjà enregistré pour cet utilisateur
-     * Si le device existe déjà : retourne erreur "Ce device est déjà enregistré, utilisez-le pour vous connecter"
-     * Propose de rediriger vers /auth/login
-   → Marque `emailVerified=true` pendant `/auth/register/verify` (preuve par code email)
-   → Crée une session (cookie)
-4. L’utilisateur peut maintenant se connecter avec son nouveau device WebAuthn.
+**Details:**
+1. User goes to /auth/login.
+2. Clicks "I lost my device".
+3. Follows `/auth/register` flow: email code + WebAuthn enrollment (same as registration).
+   → POST /auth/register/options (with email)  
+   → Browser prompts user to use their device (biometrics, PIN, etc.)  
+   → POST /auth/register/verify (with device credential)  
+   → Backend ensures device is not already registered for this user:  
+     * If device exists: return error "This device is already registered, use it to log in"  
+     * Suggest redirect to /auth/login  
+   → Mark `emailVerified=true` during `/auth/register/verify` (email proof)  
+   → Create session (cookie)
+4. User can now log in with the new WebAuthn device.
 
-### 5. Enregistrement d'un device supplémentaire (utilisateur déjà connecté)
+### 5. Register an additional device (already authenticated user)
 
 ```mermaid
 sequenceDiagram
-    participant U as Utilisateur Connecté
-    participant UI as Interface UI
+    participant U as Authenticated User
+    participant UI as UI
     participant API as API Backend
-    participant Device as Nouveau Device WebAuthn
+    participant Device as New WebAuthn Device
 
-    U->>UI: Va sur /auth/devices
-    U->>UI: Clique "Ajouter un device"
+    U->>UI: Go to /auth/devices
+    U->>UI: Click "Add device"
     UI->>API: POST /auth/register/options { email, verificationToken }
-    Note over API: Vérifie session authentifiée
-    API->>UI: Retourne options WebAuthn
+    Note over API: Verify authenticated session
+    API->>UI: Return WebAuthn options
     UI->>Device: startRegistration(options)
-    Device->>U: Demande authentification
-    U->>Device: Valide
-    Device->>UI: Retourne credential
+    Device->>U: Prompt authentication
+    U->>Device: Confirm
+    Device->>UI: Return credential
     UI->>API: POST /auth/register/verify { email, verificationToken, credential }
-    API->>API: Vérifie session et emailVerified: true
-    API->>API: Crée device (activé immédiatement)
-    API->>UI: Retourne succès
-    UI->>UI: Affiche device ajouté
-    Note over U,API: Utilisateur reste connecté, nouveau device actif
+    API->>API: Verify session and emailVerified: true
+    API->>API: Create device (activated immediately)
+    API->>UI: Return success
+    UI->>UI: Show device added
+    Note over U,API: User remains logged in, new device is active
 ```
 
-**Détails :**
-1. Utilisateur connecté va sur /auth/devices
-2. Clique sur "Ajouter un device"
-3. Enregistre le nouveau device → POST /auth/register/options puis /verify
-   → Vérifie que l'utilisateur est authentifié
-   → Vérifie que emailVerified: true
-   → Crée le device (activé car email déjà vérifié)
-   → Pas de nouvelle session (utilisateur déjà connecté)
+**Details:**
+1. Authenticated user goes to /auth/devices.
+2. Clicks "Add device".
+3. Registers new device → POST /auth/register/options then /verify  
+   → Verify user is authenticated  
+   → Verify emailVerified: true  
+   → Create device (activated because email already verified)  
+   → No new session (user already authenticated)
 
-## Règles de sécurité API
+## API security rules
 
 ### POST /auth/email/verify-request
-- ✅ Accepte l'email
-- ✅ Génère un code à 6 chiffres (aléatoire)
-- ✅ Hash le code (SHA-256) avant stockage
-- ✅ Stocke le code en base avec email, expiration (10 min), utilisé: false
-- ✅ Envoie le code par email (non hashé)
-- ✅ Rate limiting : max 3 codes par email toutes les 10 minutes
+- ✅ Accepts email
+- ✅ Generates 6‑digit code (random)
+- ✅ Hashes code (SHA‑256) before storage
+- ✅ Stores code with email, expiration (10 min), used: false
+- ✅ Sends the code by email (not hashed)
+- ✅ Rate limiting: max 3 codes per email every 10 minutes
 
 ### POST /auth/email/verify-code
-- ✅ Accepte email + code (6 chiffres)
-- ✅ Vérifie le code (hash comparé, non expiré, non utilisé)
-- ✅ Marque le code comme utilisé
-- ✅ Génère un token de validation temporaire (JWT, valide 15 minutes)
-- ✅ Retourne le token de validation
-- ✅ Ce token sera utilisé pour valider l'email lors de l'enrôlement WebAuthn
+- ✅ Accepts email + code (6 digits)
+- ✅ Verifies code (hash match, not expired, not used)
+- ✅ Marks code as used
+- ✅ Generates a temporary validation token (JWT, valid 15 minutes)
+- ✅ Returns the validation token
+- ✅ Token is used to validate email during WebAuthn enrollment
 
 ### POST /auth/register/options
-- ✅ Accepte l'email + verificationToken (token retourné par verify-code)
-- ✅ Vérifie que le verificationToken est valide et correspond à l'email
-- ✅ Retourne les options WebAuthn
+- ✅ Accepts email + verificationToken (token returned by verify-code)
+- ✅ Verifies the verificationToken is valid and matches email
+- ✅ Returns WebAuthn options
 
 ### POST /auth/register/verify
-- ✅ Accepte email + verificationToken + credential
-- ✅ Vérifie que le verificationToken est valide et correspond à l'email
-- ✅ Vérifie que le device n'est pas déjà enregistré pour cet utilisateur
-  - Si le device existe déjà : retourne erreur avec message "Ce device est déjà enregistré, utilisez-le pour vous connecter"
-- ✅ Crée l'utilisateur (emailVerified: true directement)
-- ✅ Crée le device WebAuthn (activé et utilisable)
-- ✅ Crée une session complète (cookie)
-- ✅ Retourne success avec session
+- ✅ Accepts email + verificationToken + credential
+- ✅ Verifies verificationToken is valid and matches email
+- ✅ Verifies device is not already registered for this user
+  - If device exists: return error "This device is already registered, use it to log in"
+- ✅ Creates user (emailVerified: true directly)
+- ✅ Creates WebAuthn device (activated and usable)
+- ✅ Creates a full session (cookie)
+- ✅ Returns success with session
 
 ### POST /auth/login/options
-- ✅ Génère les options WebAuthn pour discoverable credentials (pas besoin d'email)
-- ✅ Permet la sélection de passkeys directement par le navigateur
+- ✅ Generates WebAuthn options for discoverable credentials (no email required)
+- ✅ Enables passkey selection directly by the browser
 
 ### POST /auth/login/verify
-- ✅ Vérifie que le device existe et est valide
-- ✅ Vérifie que emailVerified: true (device activé)
-- ✅ Bloque la connexion si email non vérifié (device inactif)
-- ✅ Crée une session uniquement si tout est vérifié
+- ✅ Verifies device exists and is valid
+- ✅ Verifies emailVerified: true (device activated)
+- ✅ Blocks login if email not verified (device inactive)
+- ✅ Creates a session only if all checks pass
 
 ### POST /auth/magic-link/request
-- ✅ Génère et envoie le magic link
-- ✅ Peut être utilisé pour login (utilisateur existant) ou première inscription (crée l’utilisateur si besoin)
+- ✅ Generates and sends magic link
+- ✅ Can be used for login (existing user) or first registration (creates user if needed)
 
 ### POST /auth/magic-link/verify
-- ✅ Marque `users.emailVerified = true` (email prouvé) après vérification
-- ✅ Crée une session (cookie `session`) si le compte n’est pas désactivé
-  - Les anciens devices déjà activés restent actifs (sauf si explicitement révoqués)
-- ✅ Vérifie si l'utilisateur a un nouveau device en attente d'activation
-- ✅ Si c'est la validation après enrôlement (nouveau device en attente) :
-  - Crée une session complète
-  - Redirige vers /home
-  - Le nouveau device est maintenant activé et utilisable
-- ✅ Si l'utilisateur n'a pas de device en attente (cas edge) :
-  - Crée une session temporaire
-  - Redirige vers /auth/register pour enrôlement
+- ✅ Marks `users.emailVerified = true` (email proven) after verification
+- ✅ Creates a session (cookie `session`) if account is not disabled
+  - Existing devices remain active (unless explicitly revoked)
+- ✅ Checks if user has a new device pending activation
+- ✅ If validation after enrollment (new device pending):
+  - Creates a full session
+  - Redirects to /home
+  - New device is now active and usable
+- ✅ If no pending device (edge case):
+  - Creates a temporary session
+  - Redirects to /auth/register for enrollment
 
-### GET /auth/magic-link/verify (page UI)
-- ✅ Même logique que POST /verify
-- ✅ Redirige vers /home si session créée (validation après enrôlement)
-- ✅ Redirige vers /auth/register si pas de device en attente (cas edge)
+### GET /auth/magic-link/verify (UI page)
+- ✅ Same logic as POST /verify
+- ✅ Redirects to /home if session created (post-enrollment validation)
+- ✅ Redirects to /auth/register if no pending device (edge case)
 
 ### GET /auth/login
-- ✅ N'affiche PAS de champ email (pas nécessaire avec passkeys)
-- ✅ Affiche uniquement le bouton WebAuthn (passkeys discoverables)
-- ✅ N'affiche PAS l'option magic link comme méthode de connexion principale
-- ✅ Affiche "J'ai perdu mon appareil" → renvoie vers `/auth/register` (code email + enrôlement WebAuthn)
+- ✅ Does NOT show an email field (not needed with passkeys)
+- ✅ Shows only the WebAuthn button (discoverable passkeys)
+- ✅ Does NOT show magic link as a primary login method
+- ✅ Shows "I lost my device" → redirects to `/auth/register` (email code + WebAuthn enrollment)
 
-## Validation de session
+## Session validation
 
 ### validateSession()
-- ✅ Vérifie que l'utilisateur a `emailVerified: true`
-- ✅ Bloque les sessions si email non vérifié (sécurité renforcée)
+- ✅ Verifies user has `emailVerified: true`
+- ✅ Blocks sessions if email not verified (security reinforcement)
 
-## Gestion des devices WebAuthn
+## WebAuthn device management
 
-### État des devices
-- **Enregistré mais inactif** : Device créé mais emailVerified: false → PAS utilisable pour login
-- **Actif** : Device créé et emailVerified: true → Utilisable pour login
+### Device states
+- **Registered but inactive**: device exists but emailVerified: false → NOT usable for login
+- **Active**: device exists and emailVerified: true → usable for login
 
-### Activation des devices
-- Les devices deviennent utilisables lorsque `users.emailVerified=true` (ex: preuve d’email par code sur `/auth/register`, ou via magic link utilitaire).
-- Un utilisateur peut avoir plusieurs devices, tous utilisables tant que l’email est vérifié.
+### Device activation
+- Devices become usable when `users.emailVerified=true` (e.g., email code on `/auth/register`, or utility magic link).
+- A user can have multiple devices, all usable once the email is verified.
 
-## États possibles d'un utilisateur
+## User states
 
-1. **Email non vérifié, device enregistré (inactif)** : 
-   - Device existe mais ne peut pas être utilisé pour login
-   - Doit vérifier l’email (ex: par code sur `/auth/register`, ou magic link utilitaire)
-   - Pas de session active
+1. **Email not verified, device registered (inactive)**:
+   - Device exists but cannot be used for login
+   - Must verify email (via code on `/auth/register`, or utility magic link)
+   - No active session
 
-2. **Email vérifié, device enregistré (actif)** : 
-   - Device utilisable pour login
-   - Peut se connecter via WebAuthn
+2. **Email verified, device registered (active)**:
+   - Device usable for login
+   - User can log in via WebAuthn
 
-3. **Email vérifié, devices enregistrés (perte)** : 
-   - Enrôle un nouveau device via `/auth/register` (preuve d’email par code)
-   - Les anciens devices restent actifs (peuvent être révoqués plus tard)
+3. **Email verified, registered devices (lost)**:
+   - Enroll a new device via `/auth/register` (email code proof)
+   - Old devices remain active (can be revoked later)
 
-4. **Email vérifié, pas de device (cas edge)** : 
-   - Peut enregistrer un device, activé immédiatement
-   - Magic link aurait créé une session, redirection vers register si besoin
+4. **Email verified, no device (edge case)**:
+   - Can register a device, activated immediately
+   - Magic link would create a session, redirect to register if needed
 
-## Flux d'activation après validation email
+## Activation flow after email validation
 
-Lorsqu’un mécanisme valide l’email (code `/auth/register` ou magic link utilitaire) :
-1. Marque `emailVerified: true` sur l'utilisateur
-2. Les credentials WebAuthn deviennent utilisables pour se connecter
-3. Les flows d’enrôlement créent typiquement une session (cookie) à la fin du workflow
+When a mechanism validates the email (code `/auth/register` or utility magic link):
+1. Mark `emailVerified: true` on the user
+2. WebAuthn credentials become usable for login
+3. Enrollment flows typically create a session (cookie) at the end
 
 ## Migration
 
-Pour les utilisateurs existants sans `emailVerified` :
-- Par défaut `emailVerified: false`
-- Ils doivent refaire la vérification email si nécessaire
-- Ou migration one-time pour marquer comme vérifié (à décider selon le cas)
+For existing users without `emailVerified`:
+- Default `emailVerified: false`
+- They must redo email verification if needed
+- Or one‑time migration to mark as verified (to decide)

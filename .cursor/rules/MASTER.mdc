@@ -1,20 +1,20 @@
 # MASTER RULES - Consolidated AI Development Rules
 
-## Discuss with developper
-When starting a discussion the focus should be to start a TODO if no specific instruction, after having read all instruction. Create a branch and create BRANCH.md for the plan of work (cf instruction below).
+## Discuss with developer
+When starting a discussion, the focus should be to pick the next `TODO.md` item (unless instructed otherwise) after reading all instructions. Create a branch and a `BRANCH.md` plan for the work (see workflow below).
 
 ## Overview
 This file consolidates all development rules into a single source of truth for AI assistants. All other `.mdc` files provide detailed specifications for specific domains.
 
 ## Core Architecture Principles
-As a very first thing, when you work on features, you must aknowledge you have understood you will only work through `make` and that all excecution is contenrized
+As a very first thing, when you work on features, you must acknowledge that you will only work through `make` and that all execution is containerized.
 
 ## Make Responsibilities (MANDATORY commands)
 - **Install Libs**: `make install-<ui/api> ${NPM_LIB}` to install a lib (`make install-<ui/api>-dev ${NPM_LIB}` for dev mode)
 - **Build & Quality**: `make build`, `make typecheck`, `make lint`, `make format`
 - **Testing**: `make test`, `make test-e2e`, `make test-smoke`, `make test-vitest-*`
 - **Database Management**: `make db-init`, `make db-migrate`, `make db-backup`, `make db-restore`, `make db-seed`
-- **Development**: `make dev`, `make up`, `make down`, `make logs`
+- **Development**: `make dev`, `make down`, `make logs`
 - **Documentation**: `make openapi-json`, `make openapi-html`
 - **Deployment**: `make docker-build`, `make deploy-ui`, `make deploy-api`
 
@@ -26,6 +26,45 @@ As a very first thing, when you work on features, you must aknowledge you have u
 - **Clean workspace** - no node_modules, no .venv, no global packages
 - **Same commands work locally and in CI** - no drift allowed
 - **NO git add .** - commits are atomic and controlled
+- **NO direct Docker commands** - use Make targets only
+
+### Compose Isolation (MANDATORY)
+- Use `ENV=<branch-slug>` as the short alias; `COMPOSE_PROJECT_NAME` is derived from `ENV` in `Makefile`.
+- Before starting services, verify required host ports are free or already owned by the same Compose project.
+- If a port is taken by another Compose project, pick a new port and set:
+  - `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`
+- Keep `VITE_API_BASE_URL` aligned with `API_PORT`.
+- Default ports are defined in `Makefile` and can be overridden via environment variables.
+- Example usage (apply to all Make commands):
+  - `ENV=feat-refactor-mdc API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1081 make dev`
+  - `ENV=feat-refactor-mdc make ps`
+  - `ENV=feat-refactor-mdc make exec-api CMD="node -v"`
+
+### Orchestrator Framework (MANDATORY)
+- The main agent acts as orchestrator; sub-agents handle **orthogonal** tasks only.
+- Sub-agents must use isolated branches or isolated repo copies with distinct `ENV`/ports.
+- Orchestrator consolidates decisions and applies changes to the main branch.
+
+### Orchestration Modes (choose one)
+- **Mono-branch + cherry-pick**: sub-agents work in isolated branches/tmp; orchestrator cherry-picks into main branch; run full tests once at the end.
+- **Multi-branch**: sub-agents push their branches; CI runs per branch; orchestrator merges/cherry-picks; expect multiple test cycles.
+
+### Multi-need Items (MANDATORY)
+- If a single TODO groups **multiple needs**, use **multi-branch** and handle one need per branch.
+
+### Sub-agent isolation via tmp (optional)
+- You may create isolated copies under `tmp/<branch-slug>/` for sub-agents.
+- Copy `.env` into the tmp workspace before running Make commands.
+- Use a distinct `ENV`/ports in each tmp workspace.
+- Example (preferred, clean clone):
+  - `git clone . tmp/feat-refactor-mdc && cp .env tmp/feat-refactor-mdc/.env`
+  - `cd tmp/feat-refactor-mdc && ENV=feat-refactor-mdc API_PORT=8788 UI_PORT=5174 make dev`
+
+## Debug & Inspection Commands (MANDATORY)
+- **State**: `make ps`, `make ps-all`
+- **Logs**: `make logs`, `make logs-<service>` (e.g., `make logs-ui`, `make logs-api`)
+- **Database**: `make db-query QUERY="SELECT ..."` and `make db-status`
+- **Shell/Exec**: `make sh-ui`, `make sh-api`, `make exec-ui CMD="..."`, `make exec-api CMD="..."`
 
 ## Development Workflow (MANDATORY)
 
@@ -40,6 +79,10 @@ As a very first thing, when you work on features, you must aknowledge you have u
 1. **Rules change** → Update `.mdc` file FIRST (source of truth)
 2. **Documentation** → Update `.md` file SECOND
 3. **Verify consistency** → Run `make check`
+
+### Branch Docs for Complex Work
+- Use `BRANCH_TEMPLATE.md` when creating `BRANCH.md`.
+- For complex branches, create `spec/BRANCH_SPEC_EVOL.md` early, then consolidate into existing specs and delete it before final validation.
 
 ## Security & Compliance
 
