@@ -13,7 +13,7 @@
 - [x] Compléter les tests unitaires (121 tests API)
 - [x] Compléter les tests E2E (91/101 tests Playwright)
 - [x] CI GitHub Actions (build/test/deploy)
-- [x] Migration SQLite → PostgreSQL 16
+- [x] Migration SQLite → PostgreSQL 17
 - [x] Déploiements: UI (GitHub Pages), API (Scaleway Container)
 - [x] Fix UI deployment (api url harcoding > VITE_API_BASE_URL)
 - [x] Fix CORS - enable front from *.sent-tech.ca and localhost
@@ -125,7 +125,9 @@
 - [x] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
 
 **⏳ À faire :**
-- [ ] remplacer le modèle de print par un modèle de template
+- [ ] remplacer le modèle de print par un modèle de template (docx-templates)
+  - [ ] define a model for usecase fitting in one page
+  - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
 - [ ] basculer en i18n bilingue anglais / français
   - [ ] identifier tous les messages
   - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
@@ -167,12 +169,16 @@
     - [ ] Gestion des conflits (édition sur le gdrive du doc en confit sur une section)
   - [ ] Gestion de bibliothèque de style
     - [ ] Template de slides
-- [ ] Streamline des directives mdc
-  - [ ] analyse des meilleurs pratique (conductor model, model testing Bmad)
-  - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
-  - [ ] création d'un template de branche, incluant les UAT partiels à chaque lot
-  - [ ] tout-make: clarifier les obligation d'usage de make
-  - [ ] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+- [x] Streamline des directives mdc
+  - [x] analyse des meilleurs pratique (conductor model, model testing Bmad)
+  - [x] inclusion make lint typecheck avant passage de main à l'utilisateur
+  - [x] création d'un template de branche, incluant les UAT partiels à chaque lot
+  - [x] tout-make: clarifier les obligation d'usage de make
+  - [x] spécifie make commit dans l workflo pour éviter le coauthoring cursor
+  - [x] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+  - [x] Créer un mdc pour le design system
+- Design system
+    - [ ] Normaliser les couleurs primary des boutons
 - [ ] Storybook (spec)
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
@@ -218,9 +224,6 @@
   - [ ] Plan de transition éventuellement allotti en plusieurs branche et sous lots, chaque branche devant aboutir à une MEP
 - [ ] Citations objets et liens iconifiés dans le chat
 - [ ] Remplacer Tavily par DataForSeo + Jina
-- Design system
-  - [ ] Créer un mdc pour le design system
-  - [ ] Normaliser les couleurs primary des boutons
 - API & UI Refacto
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor

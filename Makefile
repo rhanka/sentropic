@@ -2,9 +2,16 @@ SHELL := /bin/bash
 
 -include .env
 
+ENV ?= dev
+export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
+
+export API_PORT ?= 8787
+export UI_PORT ?= 5173
+export MAILDEV_UI_PORT ?= 1080
+export VITE_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
 
 export API_VERSION    ?= $(shell echo "api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')

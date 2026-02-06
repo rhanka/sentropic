@@ -21,17 +21,37 @@ This document defines the testing strategy for the assistant project, ensuring a
 ## Testing commands for Development workflow (MANDATORY, following workflow)
 
 ### Main Test Commands
-On TARGET=developement:
+On TARGET=development:
 - `make test-ui [SCOPE=tests/test.ts]` - UI unit tests (Vitest)
-- `make test-api` - API unit and minimal integration tests tests (Vitest) - optionnal scope : `make test-api- SCOPE=tests/test.ts`
-On TARGET=production (requires first `make build-api build-ui-image`) :
-- `make test-e2e [E2E_test=tests/test.ts]` - E2E tests (Playwright)
+- `make test-api [SCOPE=tests/test.ts]` - API unit + integration tests (Vitest)
+On TARGET=production (requires first `make build-api build-ui-image`):
+- `make test-e2e [E2E_SPEC=tests/test.ts]` - E2E tests (Playwright)
+
+### Branch Workflow Alignment
+- Defer full test runs until the end of the branch to preserve user test data.
+- Before each UAT lot: run `make typecheck-<ui/api>` and `make lint-<ui/api>` for impacted components.
+- While developing a test, run only the test under evolution:
+  - API: `make test-api-<suite> SCOPE=tests/your-file.spec.ts` (e.g., `make test-api-endpoints SCOPE=tests/organizations.spec.ts`)
+  - UI: `make test-ui SCOPE=tests/your-file.spec.ts`
+  - E2E: `make test-e2e E2E_SPEC=tests/your-file.spec.ts`
+- Use full gates at the end: `make test-api`, `make test-ui`, and `make clean test-e2e`.
+- E2E runs must be preceded by `make build-api build-ui-image`.
+- Between E2E passes: run `make clean test-e2e` (clean first, then run tests).
+- Update the test plan in `BRANCH.md` after each lot (what changed and what must be re-tested).
+- UI testing scope: only TypeScript tests (`ui/tests/**/*.ts`), no Svelte component tests yet.
+- Respect existing test structure when adding tests (`api/tests/**`, `e2e/tests/**`).
+
+### BMad Alignment (process note)
+- **Analysis** is performed only when explicitly requested in `TODO.md`.
+- **Planning** is the lot-based `BRANCH.md` plan (already required).
+- **Implementation** happens per lot.
+- **QA** is covered by the final gates and UAT checkboxes.
 
 ### API Test detailed Commands (with filters)
 - `make test-api-smoke [SCOPE=tests/test.ts]` - API smoke tests
 - `make test-api-endpoints [SCOPE=tests/test.ts]` - API CRUD tests
 - `make test-api-ai [SCOPE=tests/test.ts]` - AI generation tests
-- `make test-api-queue [[SCOPE=tests/test.ts]` - Queue job tests
+- `make test-api-queue [SCOPE=tests/test.ts]` - Queue job tests
 - `make test-api [SCOPE=tests/test.ts]` - All API tests (without e2e)
 
 ### UI Test Commands (pending)

@@ -1,76 +1,76 @@
-# Rapport d'analyse : Rendu JSON en streaming
+# Analysis report: JSON rendering during streaming
 
-## Contexte
+## Context
 
-L'objectif est d'afficher les JSONs (arguments de tool calls et réponses structurées) de manière formatée et lisible pendant le streaming, tout en gérant les JSONs incomplets/invalides qui apparaissent naturellement pendant le streaming.
+The goal is to display JSON (tool call arguments and structured responses) in a formatted, readable way **while streaming**, and handle incomplete/invalid JSON that naturally appears during streaming.
 
-## État actuel
+## Current state
 
-### Rendu actuel
-- **Fichier** : `ui/src/lib/components/StreamMessage.svelte`
-- **Méthode** : Texte brut avec `whitespace-pre-wrap`
-- **Zones concernées** :
-  - `st.toolArgsById[toolId]` : Arguments JSON des tool calls (streaming via `tool_call_delta`)
-  - `st.contentText` : Réponses structurées (potentiellement JSON)
-  - `step.body` : Corps des étapes (peut contenir des JSONs)
+### Current rendering
+- **File**: `ui/src/lib/components/StreamMessage.svelte`
+- **Method**: raw text with `whitespace-pre-wrap`
+- **Areas**:
+  - `st.toolArgsById[toolId]`: JSON arguments for tool calls (streamed via `tool_call_delta`)
+  - `st.contentText`: structured responses (potentially JSON)
+  - `step.body`: step bodies (may contain JSON)
 
-### Problématique principale
+### Main problem
 
-**JSON incomplet/invalide pendant le streaming** :
-- Pendant le streaming, le JSON est construit progressivement
-- Exemple : `{"useCaseId": "123", "updates": [` → JSON invalide
-- `JSON.parse()` échoue sur des JSONs incomplets
-- Affichage brut = illisible pour des JSONs complexes
+**Incomplete/invalid JSON during streaming**:
+- JSON is built progressively
+- Example: `{"useCaseId": "123", "updates": [` → invalid JSON
+- `JSON.parse()` fails on incomplete JSON
+- Raw display becomes unreadable for complex JSON
 
-**Exemples de JSONs partiels** :
+**Examples of partial JSON**:
 ```json
-// Étape 1 : {"useCaseId"
-// Étape 2 : {"useCaseId": "123"
-// Étape 3 : {"useCaseId": "123", "updates": [
-// Étape 4 : {"useCaseId": "123", "updates": [{"path": "description"
-// Étape 5 : {"useCaseId": "123", "updates": [{"path": "description", "value": "..."}]}
+// Step 1: {"useCaseId"
+// Step 2: {"useCaseId": "123"
+// Step 3: {"useCaseId": "123", "updates": [
+// Step 4: {"useCaseId": "123", "updates": [{"path": "description"
+// Step 5: {"useCaseId": "123", "updates": [{"path": "description", "value": "..."}]}
 ```
 
-## Analyse technique
+## Technical analysis
 
-### 1. Problème du JSON incomplet
+### 1. The incomplete JSON problem
 
-**Fonctionnement de `JSON.parse()`** :
-- Parse uniquement des JSONs **valides et complets**
-- Lance une exception `SyntaxError` sur JSON incomplet
-- Ne peut pas parser progressivement
+**How `JSON.parse()` works**:
+- Parses **valid and complete** JSON only
+- Throws `SyntaxError` on incomplete JSON
+- Cannot parse progressively
 
-**Impact sur le streaming** :
-- Impossible d'utiliser `JSON.parse()` pendant le streaming
-- Affichage brut = illisible pour JSONs complexes
-- Besoin d'une stratégie de "best-effort" parsing
+**Impact on streaming**:
+- Impossible to use `JSON.parse()` during streaming
+- Raw display is unreadable for complex JSON
+- A best‑effort parsing strategy is needed
 
-### 2. Fréquence des updates
+### 2. Update frequency
 
-**Estimation** :
-- Deltas tool_call : ~10-50ms entre chaque delta
-- Taille typique d'un delta : 1-20 caractères
-- Taille finale typique d'un JSON tool call : 100-2000 caractères
-- Nombre de deltas pour un JSON complet : 10-100
+**Estimates**:
+- `tool_call` deltas: ~10–50ms between deltas
+- Typical delta size: 1–20 characters
+- Typical final tool‑call JSON size: 100–2000 characters
+- Number of deltas per full JSON: 10–100
 
-**Impact** :
-- **10-100 tentatives de parsing** pour un JSON complet
-- Chaque tentative = validation + formatage (si valide)
+**Impact**:
+- **10–100 parsing attempts** for a full JSON
+- Each attempt = validation + formatting (if valid)
 
-### 3. Types de JSONs à gérer
+### 3. JSON types to handle
 
-**1. Arguments de tool calls** (`tool_call_delta`) :
+**1. Tool call arguments** (`tool_call_delta`):
 ```json
 {
   "useCaseId": "abc123",
   "updates": [
-    {"path": "description", "value": "Nouvelle description"},
-    {"path": "problem", "value": "Nouveau problème"}
+    {"path": "description", "value": "New description"},
+    {"path": "problem", "value": "New problem"}
   ]
 }
 ```
 
-**2. Réponses structurées** (`content_delta`) :
+**2. Structured responses** (`content_delta`):
 ```json
 {
   "status": "completed",
@@ -80,7 +80,7 @@ L'objectif est d'afficher les JSONs (arguments de tool calls et réponses struct
 }
 ```
 
-**3. Erreurs JSON** :
+**3. JSON errors**:
 ```json
 {
   "status": "error",
@@ -88,18 +88,18 @@ L'objectif est d'afficher les JSONs (arguments de tool calls et réponses struct
 }
 ```
 
-## Options proposées
+## Proposed options
 
-### Option 1 : Formatage JSON simple avec try/catch
+### Option 1: Simple JSON formatting with try/catch
 
-**Implémentation** :
+**Implementation**:
 ```svelte
 function formatJsonSafely(text: string): string {
   try {
     const parsed = JSON.parse(text);
     return JSON.stringify(parsed, null, 2);
   } catch {
-    // JSON incomplet : retourner tel quel ou avec indication
+    // Incomplete JSON: return as‑is or with a hint
     return text + ' ⏳';
   }
 }
@@ -110,543 +110,113 @@ $: formattedToolArgs = Object.entries(st.toolArgsById).map(([id, args]) => ({
 }));
 ```
 
-**Avantages** :
-- ✅ Simple à implémenter (5-10 lignes)
-- ✅ Formatage automatique quand JSON valide
-- ✅ Pas de crash sur JSON incomplet
+**Pros**:
+- ✅ Simple to implement (5–10 lines)
+- ✅ Auto‑format when JSON is valid
+- ✅ No crash on incomplete JSON
 
-**Inconvénients** :
-- ❌ Pas de formatage pendant le streaming (JSON invalide)
-- ❌ Affichage brut jusqu'à ce que JSON soit complet
-- ❌ Indicateur visuel minimal (⏳)
+**Cons**:
+- ❌ No formatting while streaming (invalid JSON)
+- ❌ Raw display until JSON is complete
 
-**Performance estimée** :
-- CPU : Faible (1 parse par delta, échoue rapidement si invalide)
-- DOM : Updates fréquents (chaque delta)
-- UX : Formatage seulement à la fin
+### Option 2: Partial parsing / incremental formatting
 
-**Recommandation** : ⚠️ **Acceptable mais UX limitée**
+**Approach**:
+- Attempt to parse a **partial JSON** by trimming trailing invalid tokens
+- Example:
+  - Input: `{"useCaseId": "123", "updates": [{"path": "desc"`  
+  - Try to close braces: `{"useCaseId": "123", "updates": [{"path": "desc"}]}`
+- Heuristic: add missing quotes/brackets/braces
 
----
+**Pros**:
+- ✅ Can display partially formatted JSON while streaming
+- ✅ Better readability during stream
 
-### Option 2 : Parser JSON partiel (best-effort)
+**Cons**:
+- ❌ Complex and error‑prone
+- ❌ Might show incorrect structure
+- ❌ Needs careful performance and edge‑case handling
 
-**Implémentation** :
-```svelte
-function formatJsonPartial(text: string): string {
-  // Essayer de parser le JSON complet
+### Option 3: Streaming JSON renderer (token‑based)
+
+**Approach**:
+- Parse the JSON stream as **tokens** (braces, strings, numbers, etc.)
+- Render tokens with indentation based on bracket stack
+- Does not require valid JSON to start formatting
+
+**Pros**:
+- ✅ Good real‑time formatting
+- ✅ Can handle invalid JSON
+- ✅ Best readability during streaming
+
+**Cons**:
+- ❌ More complex to implement (custom parser)
+- ❌ Needs maintenance and tests
+
+### Option 4: Use a tolerant JSON parser
+
+**Approach**:
+- Use a parser library that supports **partial/incomplete** JSON
+- Example: `jsonc-parser` (VSCode) can parse incomplete JSON and return AST + errors
+- Then pretty‑print from AST
+
+**Pros**:
+- ✅ Robust handling of invalid JSON
+- ✅ No need to reinvent parser
+
+**Cons**:
+- ❌ Adds dependency
+- ❌ Might be heavy for UI runtime
+
+## Recommendation (short‑term)
+
+Implement **Option 1** immediately:
+- Simple, stable
+- No risk
+- Improves readability once JSON is complete
+
+Add a small UI hint to show “streaming / incomplete” (e.g., `⏳`) to set expectations.
+
+## Recommendation (mid‑term)
+
+If the UX impact of raw JSON is too painful during streaming:
+- Evaluate **Option 4** (`jsonc-parser`) to provide tolerant parsing
+- Or implement **Option 3** if we want full control
+
+## Implementation notes
+
+### Suggested helpers
+
+```ts
+export function formatJsonSafely(text: string): { formatted: string; isValid: boolean } {
   try {
     const parsed = JSON.parse(text);
-    return JSON.stringify(parsed, null, 2);
+    return { formatted: JSON.stringify(parsed, null, 2), isValid: true };
   } catch {
-    // JSON incomplet : essayer de formater ce qui est valide
-    // Exemple : {"key": "val → {"key": "val
-    // On peut au moins indenter les parties valides
-    return formatPartialJson(text);
+    return { formatted: text, isValid: false };
   }
 }
-
-function formatPartialJson(text: string): string {
-  // Algorithme simple : indent selon niveau de nesting
-  let indent = 0;
-  let result = '';
-  let inString = false;
-  
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const prev = text[i - 1];
-    
-    if (char === '"' && prev !== '\\') inString = !inString;
-    if (inString) {
-      result += char;
-      continue;
-    }
-    
-    if (char === '{' || char === '[') {
-      result += char + '\n' + '  '.repeat(++indent);
-    } else if (char === '}' || char === ']') {
-      indent = Math.max(0, indent - 1);
-      result += '\n' + '  '.repeat(indent) + char;
-    } else if (char === ',') {
-      result += ',\n' + '  '.repeat(indent);
-    } else if (char === ':') {
-      result += ': ';
-    } else {
-      result += char;
-    }
-  }
-  
-  return result;
-}
 ```
 
-**Avantages** :
-- ✅ Formatage progressif même sur JSON incomplet
-- ✅ Meilleure lisibilité pendant le streaming
-- ✅ Indentation basique même si JSON invalide
+### UI rendering (example)
 
-**Inconvénients** :
-- ❌ Complexité modérée (algorithme de parsing partiel)
-- ❌ Peut produire des indentations incorrectes
-- ❌ Nécessite gestion des cas edge (strings, échappements)
-
-**Performance estimée** :
-- CPU : Modéré (parsing caractère par caractère)
-- DOM : Updates fréquents mais formatage visible
-- UX : Formatage visible pendant streaming
-
-**Recommandation** : ✅ **Bon compromis complexité/UX**
-
----
-
-### Option 3 : Buffer avec formatage différé (debounce)
-
-**Implémentation** :
 ```svelte
-let bufferedToolArgs: Record<string, string> = {};
-let formattedToolArgs: Record<string, string> = {};
-let formatTimeout: ReturnType<typeof setTimeout> | null = null;
-
-$: {
-  bufferedToolArgs = st.toolArgsById;
-  // Debounce : attendre 300ms sans update avant de formater
-  if (formatTimeout) clearTimeout(formatTimeout);
-  formatTimeout = setTimeout(() => {
-    formattedToolArgs = {};
-    for (const [id, args] of Object.entries(bufferedToolArgs)) {
-      try {
-        const parsed = JSON.parse(args);
-        formattedToolArgs[id] = JSON.stringify(parsed, null, 2);
-      } catch {
-        // JSON incomplet : essayer formatage partiel
-        formattedToolArgs[id] = formatPartialJson(args) + ' ⏳';
-      }
-    }
-    formatTimeout = null;
-  }, 300);
-}
-```
-
-**Avantages** :
-- ✅ Réduit les re-renders (10-100 → ~5-10)
-- ✅ Formatage visible pendant streaming (avec délai)
-- ✅ Combine Option 1 + Option 2
-- ✅ Moins de blink
-
-**Inconvénients** :
-- ❌ Délai de 300ms avant formatage
-- ❌ Complexité modérée (debounce + parsing)
-- ❌ Nécessite gestion des timeouts
-
-**Performance estimée** :
-- CPU : Faible (10x moins de formatages)
-- DOM : Blink minimal (updates <1Hz)
-- UX : Formatage visible avec délai acceptable
-
-**Recommandation** : ✅ **Meilleur compromis pour production**
-
----
-
-### Option 4 : Bibliothèque de JSON streaming
-
-**Bibliothèques candidates** :
-- `json-stream-stringify` : Streaming JSON stringify
-- `stream-json` : Parse JSON en streaming
-- `oboe` : JSON streaming parser
-
-**Implémentation** :
-```svelte
-import { StreamParser } from 'stream-json';
-
-let parser = new StreamParser();
-
-$: {
-  parser.write(st.toolArgsById[toolId]);
-  const formatted = parser.getFormatted();
-  // ...
-}
-```
-
-**Avantages** :
-- ✅ Conçu pour le streaming JSON
-- ✅ Gestion native des JSONs incomplets
-- ✅ Performance optimale
-
-**Inconvénients** :
-- ❌ Nouvelle dépendance (maintenance, taille bundle)
-- ❌ Peut nécessiter adaptation à notre architecture
-- ❌ Complexité d'intégration
-
-**Performance estimée** :
-- CPU : Optimal (parsing streaming natif)
-- DOM : Selon implémentation
-- Maintenance : Risque (dépendance externe)
-
-**Recommandation** : ⚠️ **À évaluer si Option 2/3 ne suffisent pas**
-
----
-
-### Option 5 : Rendu hybride (texte brut → JSON formaté final)
-
-**Implémentation** :
-```svelte
-$: isTerminal = isTerminalStatus(status);
-$: formattedToolArgs = isTerminal
-  ? Object.entries(st.toolArgsById).reduce((acc, [id, args]) => {
-      try {
-        const parsed = JSON.parse(args);
-        acc[id] = JSON.stringify(parsed, null, 2);
-      } catch {
-        acc[id] = args; // Fallback brut si invalide
-      }
-      return acc;
-    }, {} as Record<string, string>)
-  : {};
-
-{#each Object.entries(st.toolArgsById) as [id, args]}
-  {#if isTerminal && formattedToolArgs[id]}
-    <pre class="json-formatted">{formattedToolArgs[id]}</pre>
-  {:else}
-    <pre class="json-raw">{args}</pre>
-  {/if}
+{#each formattedToolArgs as { id, formatted, isValid }}
+  <pre class="json-block {isValid ? 'json-valid' : 'json-pending'}">
+    {formatted}{isValid ? '' : ' ⏳'}
+  </pre>
 {/each}
 ```
 
-**Avantages** :
-- ✅ Pas de parsing pendant streaming (performance optimale)
-- ✅ JSON formaté à la fin (meilleure lisibilité)
-- ✅ Simple à implémenter
-- ✅ Pas de blink (pas de remplacement pendant streaming)
+## Edge cases
 
-**Inconvénients** :
-- ❌ Pas de formatage pendant le streaming (texte brut)
-- ❌ Transition visuelle à la fin (brut → formaté)
-- ❌ Moins "fluide" visuellement
+- **Large JSONs**: use `max-height` + scroll for readability
+- **Mixed content**: if `st.contentText` includes non‑JSON text, only format when full JSON is detected
+- **Double formatting**: ensure we do not re‑stringify already‑formatted JSON (detect leading `{`/`[` + trim)
+- **Performance**: throttle formatting to avoid heavy parsing on every 10ms delta (e.g., debounce at 50–100ms)
 
-**Performance estimée** :
-- CPU : Optimal (0 parsing pendant streaming)
-- DOM : Pas de blink (pas de remplacement)
-- UX : Formatage seulement à la fin
+## Decision log
 
-**Recommandation** : ✅ **Excellent pour performance, UX acceptable**
-
----
-
-### Option 6 : Syntax highlighting avec highlight.js ou Prism
-
-**Implémentation** :
-```svelte
-import hljs from 'highlight.js/lib/core';
-import json from 'highlight.js/lib/languages/json';
-
-hljs.registerLanguage('json', json);
-
-function formatJsonWithHighlight(text: string, isComplete: boolean): string {
-  if (isComplete) {
-    try {
-      const parsed = JSON.parse(text);
-      const formatted = JSON.stringify(parsed, null, 2);
-      return hljs.highlight(formatted, { language: 'json' }).value;
-    } catch {
-      return hljs.highlight(text, { language: 'json' }).value;
-    }
-  } else {
-    // JSON incomplet : highlight basique
-    return hljs.highlight(text, { language: 'json' }).value;
-  }
-}
-```
-
-**Avantages** :
-- ✅ Coloration syntaxique professionnelle
-- ✅ Meilleure lisibilité (couleurs pour clés, valeurs, strings)
-- ✅ Support des JSONs incomplets (highlight basique)
-
-**Inconvénients** :
-- ❌ Nouvelle dépendance (`highlight.js` ~50KB minifié)
-- ❌ Coût CPU pour highlight (modéré)
-- ❌ Nécessite styles CSS additionnels
-
-**Performance estimée** :
-- CPU : Modéré (highlight à chaque update)
-- DOM : Blink possible selon fréquence
-- UX : Excellente lisibilité
-
-**Recommandation** : ⚠️ **Optionnel, à combiner avec Option 2 ou 3**
-
----
-
-## Recommandation finale
-
-### Pour les arguments de tool calls (`st.toolArgsById`)
-
-**Option recommandée** : **Option 3 (Buffer avec debounce) + Option 6 (Syntax highlighting optionnel)**
-
-**Justification** :
-- Les tool calls sont souvent des JSONs complexes (arrays, objets imbriqués)
-- Le formatage améliore drastiquement la lisibilité
-- Le debounce de 300ms réduit les re-renders (10-100 → ~5-10)
-- Le syntax highlighting améliore encore la lisibilité (optionnel)
-
-**Implémentation** :
-```svelte
-let formattedToolArgs: Record<string, string> = {};
-let formatTimeout: ReturnType<typeof setTimeout> | null = null;
-
-function formatJsonSafely(text: string): string {
-  try {
-    const parsed = JSON.parse(text);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    // JSON incomplet : formatage partiel basique
-    return formatPartialJson(text) + ' ⏳';
-  }
-}
-
-function formatPartialJson(text: string): string {
-  // Algorithme simple d'indentation
-  let indent = 0;
-  let result = '';
-  let inString = false;
-  
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const prev = text[i - 1];
-    
-    if (char === '"' && prev !== '\\') inString = !inString;
-    if (inString) {
-      result += char;
-      continue;
-    }
-    
-    if (char === '{' || char === '[') {
-      result += char + '\n' + '  '.repeat(++indent);
-    } else if (char === '}' || char === ']') {
-      indent = Math.max(0, indent - 1);
-      result += '\n' + '  '.repeat(indent) + char;
-    } else if (char === ',') {
-      result += ',\n' + '  '.repeat(indent);
-    } else if (char === ':') {
-      result += ': ';
-    } else {
-      result += char;
-    }
-  }
-  
-  return result;
-}
-
-$: {
-  if (formatTimeout) clearTimeout(formatTimeout);
-  formatTimeout = setTimeout(() => {
-    formattedToolArgs = {};
-    for (const [id, args] of Object.entries(st.toolArgsById)) {
-      formattedToolArgs[id] = formatJsonSafely(args);
-    }
-    formatTimeout = null;
-  }, 300);
-}
-
-onDestroy(() => {
-  if (formatTimeout) clearTimeout(formatTimeout);
-});
-```
-
-**Affichage** :
-```svelte
-{#each Object.entries(st.toolArgsById) as [id, args]}
-  <div class="tool-args">
-    <pre class="json-content language-json">
-      {formattedToolArgs[id] || args}
-    </pre>
-  </div>
-{/each}
-```
-
-### Pour les réponses structurées (`st.contentText`)
-
-**Option recommandée** : **Option 5 (Hybride) - Détection automatique JSON**
-
-**Justification** :
-- Les réponses peuvent être JSON ou texte/markdown
-- Détection automatique : si JSON valide → formater, sinon → markdown/texte
-- Formatage seulement à la fin (performance optimale)
-- Pas de parsing pendant streaming
-
-**Implémentation** :
-```svelte
-function isJsonContent(text: string): boolean {
-  const trimmed = text.trim();
-  return (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  );
-}
-
-function formatJsonIfValid(text: string): string | null {
-  if (!isJsonContent(text)) return null;
-  try {
-    const parsed = JSON.parse(text);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return null; // JSON invalide ou incomplet
-  }
-}
-
-$: isTerminal = isTerminalStatus(status);
-$: contentJson = isTerminal && st.contentText
-  ? formatJsonIfValid(st.contentText)
-  : null;
-```
-
-**Affichage** :
-```svelte
-{#if contentJson}
-  <pre class="json-formatted">{contentJson}</pre>
-{:else if st.contentText}
-  <!-- Rendu markdown/texte normal -->
-  <div class="content-text">{st.contentText}</div>
-{/if}
-```
-
----
-
-## Impact estimé
-
-### Option 3 (Buffer debounce) - Recommandée pour tool calls
-- **CPU** : Réduction de ~90% des formatages (100 → 10)
-- **DOM** : Blink minimal (updates <1Hz)
-- **UX** : Formatage visible avec délai de 300ms
-- **Complexité** : Modérée (+30-40 lignes de code)
-
-### Option 5 (Hybride) - Recommandée pour réponses
-- **CPU** : Optimal (0 parsing pendant streaming)
-- **DOM** : Pas de blink (pas de remplacement)
-- **UX** : Formatage seulement à la fin (acceptable)
-- **Complexité** : Faible (+15 lignes de code)
-
-### Option 6 (Syntax highlighting) - Optionnel
-- **CPU** : Modéré (highlight à chaque formatage)
-- **Bundle** : +50KB (highlight.js)
-- **UX** : Excellente lisibilité
-- **Complexité** : Faible (+10 lignes de code)
-
----
-
-## Plan d'implémentation
-
-1. **Phase 1** : Implémenter Option 5 (Hybride) pour réponses structurées
-   - Détection automatique JSON
-   - Formatage à la fin seulement
-   - Test rapide, impact minimal
-
-2. **Phase 2** : Implémenter Option 3 (Buffer) pour tool calls
-   - Parser JSON partiel (`formatPartialJson`)
-   - Debounce 300ms
-   - Validation UX
-
-3. **Phase 3** : Optionnel - Ajouter syntax highlighting
-   - Intégrer `highlight.js` ou `Prism`
-   - Styles CSS pour JSON
-   - Amélioration visuelle
-
----
-
-## Détection JSON vs Markdown/Text
-
-**Stratégie de détection** :
-
-```typescript
-function detectContentType(text: string): 'json' | 'markdown' | 'text' {
-  const trimmed = text.trim();
-  
-  // Détection JSON
-  if (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  ) {
-    try {
-      JSON.parse(trimmed);
-      return 'json';
-    } catch {
-      // JSON invalide : peut être JSON incomplet ou autre
-      // On considère comme JSON si structure ressemble à JSON
-      if (trimmed.match(/^[{\[]/)) return 'json';
-    }
-  }
-  
-  // Détection Markdown (patterns basiques)
-  if (
-    trimmed.includes('##') || // Titres
-    trimmed.includes('- ') || // Listes
-    trimmed.includes('*') || // Emphasis
-    trimmed.includes('`') // Code
-  ) {
-    return 'markdown';
-  }
-  
-  return 'text';
-}
-```
-
-**Alternative** : Flag depuis l'API (ex: `contentFormat: 'json' | 'markdown' | 'text'`)
-
----
-
-## Gestion des erreurs JSON
-
-**Cas d'erreur** :
-1. **JSON incomplet** (streaming) : Formatage partiel + indicateur ⏳
-2. **JSON invalide** (syntax error) : Affichage brut + message d'erreur
-3. **JSON malformé** (structure incorrecte) : Affichage brut + warning
-
-**Implémentation** :
-```typescript
-type JsonFormatResult = {
-  formatted: string;
-  isValid: boolean;
-  isComplete: boolean;
-  error?: string;
-};
-
-function formatJsonWithStatus(text: string): JsonFormatResult {
-  try {
-    const parsed = JSON.parse(text);
-    return {
-      formatted: JSON.stringify(parsed, null, 2),
-      isValid: true,
-      isComplete: true
-    };
-  } catch (error) {
-    // JSON invalide ou incomplet
-    const isIncomplete = text.match(/[{\[].*[^}\]\s]*$/); // Se termine par { ou [
-    return {
-      formatted: formatPartialJson(text) + (isIncomplete ? ' ⏳' : ' ❌'),
-      isValid: false,
-      isComplete: !isIncomplete,
-      error: error instanceof Error ? error.message : 'Invalid JSON'
-    };
-  }
-}
-```
-
----
-
-## Conclusion
-
-**Recommandation principale** :
-- **Tool calls** : Option 3 (Buffer debounce 300ms) + formatage partiel
-- **Réponses structurées** : Option 5 (Hybride) - Formatage à la fin seulement
-- **Syntax highlighting** : Optionnel (Option 6) pour amélioration visuelle
-
-**Bénéfices attendus** :
-- Réduction de 90%+ des formatages
-- Formatage visible pendant streaming (avec délai)
-- Gestion robuste des JSONs incomplets
-- Complexité modérée
-
-**Risques** :
-- Délai de 300ms avant formatage (acceptable)
-- Formatage partiel peut être imparfait (acceptable)
-- Syntax highlighting ajoute ~50KB au bundle (optionnel)
-
+- JSON streaming in Svelte UI is currently raw.
+- There is a clear UX win to show JSON prettified once complete.
+- A tolerant JSON parser could further improve streaming display, but is not required for a first improvement.
