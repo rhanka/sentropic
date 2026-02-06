@@ -23,6 +23,23 @@
 5. Post a 3–6 step plan as the first PR comment.
 6. Keep `spec/*.md` in sync with behavior changes (or note gaps in `BRANCH.md`).
 
+### Orchestration (Conductor-style)
+- Use the main agent as **orchestrator** and sub-agents only for **orthogonal tasks** (e.g., spec review, test plan review, API/UI diffs).
+- Each sub-agent must work on an **isolated branch or isolated repo copy** (distinct `ENV` + ports).
+- The orchestrator collects a short **decision brief** from each sub-agent (findings, risks, concrete change list).
+- The orchestrator is the only one who integrates changes into the main branch.
+- The orchestrator **selects the mode automatically** and records it in `BRANCH.md`:
+  - **Mono-branch + cherry-pick** (single final test cycle)
+  - **Multi-branch** (CI per branch, multiple test cycles)
+
+### Multi-need, multi-branch (MANDATORY)
+- When a TODO item bundles **multiple needs** (e.g., i18n + data model + print template), split into **multiple branches**, one need per branch.
+- Each branch must have its own `BRANCH.md` and final tests.
+
+### Tmp workspace option
+- Sub-agents may work in `tmp/<branch-slug>/` (isolated repo copy).
+- Copy `.env` into the tmp workspace before running Make commands.
+
 As a very first thing, you acknowledge the next TODO and the way you will work on it following above workflow feature. If a BRANCH is in progress you also acknowledge where you are and check the state of the code to go on.
 
 ## Guardrails
