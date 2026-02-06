@@ -41,6 +41,12 @@ On TARGET=production (requires first `make build-api build-ui-image`):
 - UI testing scope: only TypeScript tests (`ui/tests/**/*.ts`), no Svelte component tests yet.
 - Respect existing test structure when adding tests (`api/tests/**`, `e2e/tests/**`).
 
+### BMad Alignment (process note)
+- **Analysis** is performed only when explicitly requested in `TODO.md`.
+- **Planning** is the lot-based `BRANCH.md` plan (already required).
+- **Implementation** happens per lot.
+- **QA** is covered by the final gates and UAT checkboxes.
+
 ### API Test detailed Commands (with filters)
 - `make test-api-smoke [SCOPE=tests/test.ts]` - API smoke tests
 - `make test-api-endpoints [SCOPE=tests/test.ts]` - API CRUD tests
