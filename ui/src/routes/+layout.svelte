@@ -316,11 +316,9 @@
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
   <div
-    class={lockBodyScrollForDock
-      ? 'box-border transition-[width] duration-200 h-[100dvh] overflow-y-auto slim-scroll'
-      : 'box-border transition-[padding-right] duration-200'}
+    class="box-border transition-[padding-right,width] duration-200 h-[100dvh] overflow-y-auto slim-scroll"
     style:padding-right={lockBodyScrollForDock ? '0px' : chatDockPaddingRight}
-    style:width={lockBodyScrollForDock ? chatDockLeftWidth : undefined}
+    style:width={lockBodyScrollForDock ? chatDockLeftWidth : '100%'}
   >
     {#if !hideHeader && canShowContent && !showSpinner}
       <Header />
