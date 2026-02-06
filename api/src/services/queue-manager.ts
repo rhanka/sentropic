@@ -353,6 +353,42 @@ export class QueueManager {
     }
   }
 
+  /**
+   * Annule un job spécifique (pending ou processing).
+   * - chat_message => status "completed" (arrêt utilisateur).
+   * - autres => status "failed".
+   */
+  async cancelJob(jobId: string, reason: string = 'cancelled'): Promise<{ status: string } | null> {
+    const [row] = await db
+      .select({ id: jobQueue.id, type: jobQueue.type, status: jobQueue.status })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    if (!row) return null;
+
+    const isChat = row.type === 'chat_message';
+    const nextStatus = isChat ? 'completed' : 'failed';
+    await db.run(sql`
+      UPDATE job_queue
+      SET status = ${nextStatus},
+          completed_at = ${new Date()},
+          error = ${`Job cancelled: ${reason}`}
+      WHERE id = ${jobId}
+    `);
+    await this.notifyJobEvent(jobId);
+
+    const controller = this.jobControllers.get(jobId);
+    if (controller) {
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore
+      }
+    }
+
+    return { status: nextStatus };
+  }
+
   async drain(timeoutMs: number = 10000): Promise<void> {
     const start = Date.now();
     while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
@@ -646,6 +682,33 @@ export class QueueManager {
         `);
         await this.notifyJobEvent(jobId);
         console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
+        return;
+      }
+
+      // Annulation utilisateur: pour le chat, on finalise avec le contenu partiel.
+      if (jobType === 'chat_message' && isAbort(error)) {
+        const assistantMessageId =
+          typeof (jobData as { assistantMessageId?: unknown })?.assistantMessageId === 'string'
+            ? ((jobData as { assistantMessageId: string }).assistantMessageId as string)
+            : null;
+        if (assistantMessageId) {
+          try {
+            await chatService.finalizeAssistantMessageFromStream({
+              assistantMessageId,
+              reason: error instanceof Error ? error.message : 'cancelled',
+              fallbackContent: 'Réponse interrompue.'
+            });
+          } catch {
+            // ignore
+          }
+        }
+
+        await db.run(sql`
+          UPDATE job_queue 
+          SET status = 'completed', completed_at = ${new Date()}, error = ${error instanceof Error ? error.message : 'cancelled'}
+          WHERE id = ${jobId}
+        `);
+        await this.notifyJobEvent(jobId);
         return;
       }
       
