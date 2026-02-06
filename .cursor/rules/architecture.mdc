@@ -7,7 +7,7 @@ tags: [architecture, boundaries]
 # ARCHITECTURE
 - UI : SvelteKit 5 (`ui/`) — bilingual FR/EN (FR-first, EN To-be) with i18n, static build, Tailwind CSS.
 - API : Hono + TypeScript (`api/`) with REST/OpenAPI, Drizzle ORM.
-- Database : PostgreSQL 16 + Make targets for Drizzle ORM (db management) - Docker volume persistence.
+- Database : PostgreSQL 17 + Make targets for Drizzle ORM (db management) - Docker volume persistence.
 - Queue : Custom PostgreSQL-based job queue with QueueManager (no external libs).
 - AI : OpenAI integration via Node.js (no separate Python service).
 - Tests : Make targets + Vitest (unit/integration) + Playwright (E2E).
@@ -34,7 +34,7 @@ flowchart TB
     end
     
     subgraph "Data Layer"
-        DB[("PostgreSQL Database<br/>Postgres 16")]
+    DB[("PostgreSQL Database<br/>Postgres 17")]
         Queue["Custom PostgreSQL Queue<br/>QueueManager service"]
     end
     

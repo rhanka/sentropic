@@ -301,9 +301,9 @@ Key backend/API variables:
 - Generation context: `currentOrganizationId`, folder→organization association, prompts/configs.
 - Aggregations: counts by level, scoring, normalization for charts.
 
-## 2) Data model (PostgreSQL 16 + Drizzle + workspaces)
+## 2) Data model (PostgreSQL 17 + Drizzle + workspaces)
 
-Base: **PostgreSQL 16** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
+Base: **PostgreSQL 17** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db/schema.ts`). Migrations: `api/drizzle/`.
 
 Principle: **workspace tenancy** (private-by-default):
 - `workspaces` table
@@ -360,7 +360,7 @@ API implementation notes:
 
 ## 3) API backend (TypeScript) – Contracts
 
-Base: `/api/v1` (Node + TypeScript; framework: **Hono**; ORM: **Drizzle**; DB: **PostgreSQL 16**; migrations Drizzle Kit)
+Base: `/api/v1` (Node + TypeScript; framework: **Hono**; ORM: **Drizzle**; DB: **PostgreSQL 17**; migrations Drizzle Kit)
 
 Auth (passwordless):
 - **UI login**: **WebAuthn** (passkeys) via `POST /api/v1/auth/login/options` then `POST /api/v1/auth/login/verify`.

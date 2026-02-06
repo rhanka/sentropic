@@ -1,27 +1,27 @@
-## Vélocité (base commits Git)
+## Velocity (Git commit baseline)
 
-Périmètre : dépôt `/home/antoinefa/src/top-ai-ideas-fullstack`, fenêtre glissante 8 semaines.
+Scope: repository `/home/antoinefa/src/top-ai-ideas-fullstack`, rolling 8‑week window.
 
-### Commandes reproductibles
+### Reproducible commands
 ```bash
-# Total des commits sur 8 semaines
+# Total commits over 8 weeks
 git log --since='8 weeks ago' --pretty=oneline | wc -l
 
-# Répartition journalière (iso date)
+# Daily distribution (ISO date)
 git log --since='8 weeks ago' --pretty='%ad' --date=iso-strict \
   | cut -c1-10 | sort | uniq -c
 ```
 
-### Résultats observés (au 2025-12-09)
-- Total 8 semaines : **262 commits** ⇒ moyenne ~33 commits/sem.
-- Pic ponctuel (14/10) : 43 commits/jour (probablement batch).
-- Répartition hétérogène ; prudence sur la taille moyenne d’un commit (non mesurée ici).
+### Observed results (as of 2025-12-09)
+- Total 8 weeks: **262 commits** ⇒ average ~33 commits/week.
+- One-time peak (10/14): 43 commits/day (likely batch).
+- Heterogeneous distribution; be cautious about average commit size (not measured here).
 
-### Lecture prudente de capacité
-- Base empirique : ~33 commits/sem. Pour planification réaliste, prendre une **capacité planif ~24-26 commits/sem** (marge imprévus/QA).
-- Rythme cible incrémental : 1 incrément e2e (back+front) livrable toutes les 1-2 semaines.
+### Conservative capacity reading
+- Empirical base: ~33 commits/week. For realistic planning, use **~24–26 commits/week** (buffer for unplanned work/QA).
+- Target incremental rhythm: 1 end‑to‑end increment (back+front) delivered every 1–2 weeks.
 
-### Rejouabilité
-- Relancer les commandes ci-dessus après chaque sprint pour ajuster la capacité.
-- Option future : mesurer “changeset size” (lignes ajout/suppression) et durée moyenne des PR pour affiner. 
+### Reproducibility
+- Re-run the commands above after each sprint to adjust capacity.
+- Future option: measure “changeset size” (lines added/removed) and average PR duration to refine.
 

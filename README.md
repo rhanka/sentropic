@@ -34,7 +34,7 @@ flowchart TB
     end
     
     subgraph "Data Layer"
-        DB[("PostgreSQL Database<br/>Postgres 16")]
+        DB[("PostgreSQL Database<br/>Postgres 17")]
         Queue["Custom PostgreSQL Queue<br/>QueueManager service"]
     end
     
@@ -210,7 +210,7 @@ Tous les endpoints d'authentification sont protégés par rate limiting pour pr�
 - Structure créée: `/ui` (SvelteKit 5 + adapter-static + svelte-i18n), `/api` (Hono + Drizzle + Zod), `Makefile`, `docker-compose.yml`, `Dockerfile.ui`, `Dockerfile.api`, `data/` (montage volume).
 
 **✅ Étape 1 – Données & API (TERMINÉE)**
-- Schéma PostgreSQL 16 avec migrations Drizzle.
+- Schéma PostgreSQL 17 avec migrations Drizzle.
 - CRUD: organizations, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
 - Génération OpenAI (list/detail/folder) + `/use-cases/generate` (validation Zod, recalcul des scores).
 - Queue basée sur PostgreSQL avec QueueManager pour jobs asynchrones.
