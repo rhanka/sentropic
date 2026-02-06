@@ -1,9 +1,5 @@
 # Collaboration Feature Specification
 
-**Status**: Initial draft — will be completed during UAT phases.
-
-**Related**: See `BRANCH.md` for implementation plan and constraints.
-
 ## Overview
 
 Collaboration features enable multi-user workspace sharing with role-based access control, concurrent editing locks, comments, and import/export capabilities.
@@ -62,14 +58,14 @@ When an `admin` selects a **hidden** workspace:
 
 ## Object Edition Locks
 
-### Lock Model (implemented - phase 1)
+### Lock Model
 
 - **Scope**: object-level \(workspaceId + objectType + objectId\)
 - **Storage**: single table `object_locks` with TTL (`expires_at`)
 - **TTL**: 1 minute max, UI refresh every 30s
 - **Write enforcement**: mutations (PUT/DELETE) are blocked if a lock exists and is held by another user → `409` with `{ code: 'OBJECT_LOCKED', lock }`
 
-### Lock API (implemented - phase 1)
+### Lock API
 
 - `GET /api/v1/locks?objectType=...&objectId=...` → `{ lock }`
 - `POST /api/v1/locks` → acquire/refresh (editor/admin only)
@@ -83,7 +79,7 @@ When an `admin` selects a **hidden** workspace:
 - `GET /api/v1/locks/presence?objectType=...&objectId=...` → list presence snapshot
 - `POST /api/v1/locks/presence/leave` → remove presence on page leave
 
-### Unlock Request Flow (current behavior)
+### Unlock Request Flow
 
 - Unlock requests are stored directly on the lock row:
   - `unlock_requested_at`, `unlock_requested_by_user_id`, `unlock_request_message`
@@ -96,7 +92,7 @@ When an `admin` selects a **hidden** workspace:
 - Locks are purged if a user has **no active SSE connections**.
 - A periodic sweep removes expired locks and emits `lock_update` so clients can re-acquire.
 
-### Lock UI (editor/admin)
+### Lock UI
 
 - When an object is locked by another user, show a **compact lock badge** near the header actions:
   - A **lock icon** plus **avatar(s)** (rounded overlap). The top avatar is the lock owner.
@@ -115,7 +111,7 @@ When an `admin` selects a **hidden** workspace:
 - When a user requests unlock, their avatar shows a **small key overlay** in the badge.
 - The lock owner sees **"Déverrouiller pour {user}"** in the tooltip menu, and the unlock action is shown **only when a request exists**.
 
-### SSE Events (implemented - phase 1)
+### SSE Events
 
 Reuse existing `/streams/sse` channel:
 - `lock_update` → `{ objectType, objectId, data: { lock } }`
@@ -267,92 +263,43 @@ Notes:
 - **Object import into current workspace**: admin and editor.
 - **Commenter/viewer**: cannot import.
 
-## Lot 4 — Comments (table + UI + @mentions + close)
+### Functional Requirements (must)
+- **Comment creation (thread root):**
+  - A user must be able to create a comment on a specific data section (e.g., "description").
+  - The section header must show a comment count badge for that section.
+  - The comment creator must be the default assignee when no @mention is provided.
+- **One-level replies only:**
+  - Replies must be limited to one level (no nested replies beyond the root thread).
+- **Assignment via @mention:**
+  - Autocomplete suggestions must include only members of the current workspace.
+  - Assigning a comment via @mention must update the thread assignee.
+  - Assignee notifications must be supported when implemented.
+- **Thread resolution permissions:**
+  - Only the last assignee must be able to close a thread.
+  - Only the last assignee must be able to reopen or close the thread afterward.
+- **Section indicators and panel targeting:**
+  - Each section header badge must reflect the number of open threads in that section.
+  - Clicking a badge must open the comment panel filtered to that section.
+- **Export/Import with comments toggles:**
+  - Exports must include comments only when the "Include comments" option is enabled.
+  - Imports must reflect the presence or absence of comments based on the export option.
 
-- DB: comments table + relations (object + section)
-- API: CRUD comments + one-level replies
-- API: @mention assignment with autocomplete (workspace users)
-- API: close comment (only last assigned user; rule to confirm)
-- UI: show comment indicator on header of the relevant "data part" cards
+### Functional Requirements (validation, must)
 
-### Partial UAT (Lot 4) — to automate in E2E
-
-- **User A creates comment:**
-  - User A opens a use case detail page
-  - User A creates a comment on a data section (e.g., "description" field)
-  - Verify comment appears in the section header indicator
-  - Verify comment creator is User A (default assignee if no @mention)
-- **User B replies (one-level):**
-  - User B opens the same use case
-  - User B replies to User A's comment
-  - Verify reply appears nested under User A's comment
-  - Verify User B cannot reply to the reply (one-level only enforced)
-- **User A assigns via @mention:**
-  - User A edits the comment and types "@User B"
-  - Verify autocomplete shows only workspace members (User A, User B)
-  - Verify autocomplete does NOT show users from other workspaces
-  - User A selects User B from autocomplete
-  - Verify comment assignment updates to User B
-  - Verify User B receives notification (if implemented)
-- **User B closes comment:**
-  - User B (last assigned user) closes the comment
-  - Verify comment status changes to "closed"
-  - Verify User A cannot close the comment (not the last assigned)
-  - Verify only User B can reopen/close the comment
-- **Comment indicators:**
-  - User A creates multiple comments on different sections
-  - Verify each section header shows comment count badge
-  - Clicking badge opens comment panel with relevant comments
-- **Export with/without comments:**
-  - User A exports use case with "Include comments" → verify comments in ZIP
-  - User A exports use case with "Exclude comments" → verify comments NOT in ZIP
-  - User B imports both versions and verifies comment presence/absence
-
-## Lot 5 — Finalization: schema/migration, docs, automated tests (run at end)
-
-- Apply the **single planned schema evolution** (one migration file for entire branch - see Migration Strategy).
-- Update `spec/DATA_MODEL.md` to match `api/src/db/schema.ts`.
-- Generate/update OpenAPI artifacts if needed (`make openapi-*`).
-- Create automated tests (only now):
-  - **Regression test (circular imports / Ctrl+R crash):** ensure importing core UI modules in different orders does not throw `Cannot access 'session' before initialization`
-    - Target modules: `ui/src/lib/utils/api.ts`, `ui/src/lib/stores/session.ts`, `ui/src/lib/stores/workspaceScope.ts`
-    - Expected: no top-level import triggers store reads that require `session` initialization (Option B: scope passed explicitly to `apiRequest`)
-  - `make test-api` coverage for roles/locks/comments/import-export
-  - `make test-ui` coverage for core UI flows
-  - `make test-e2e` for critical collaboration journeys
-- **UAT automation**: all UAT scenarios below must be implemented in Playwright E2E.
-- **API security tests**: cover role enforcement, workspace scoping, locks, documents, chat tools.
-- Run full gates: `make typecheck lint test-api test-ui test-e2e`.
-
-### Full UAT (final) — to automate in E2E
-
-- **Complete workspace collaboration flow:**
-  - User A creates "Workspace Delta" and adds User B as `editor`
-  - User A creates an organization and folder in "Workspace Delta"
-  - User B switches to "Workspace Delta" and creates a use case
-  - User A and User B both view the use case simultaneously
-  - User A acquires edit lock; User B sees locked view
-  - User A edits use case; User B receives SSE updates
-  - User B requests unlock; User A accepts; lock transfers to User B
-  - User B creates a comment with @mention to User A
-  - User A replies to comment; User B closes it
-  - User A exports workspace with comments as `.topw`
-  - User A hides "Workspace Delta"
-  - User B tries to access → sees archived workspace
-  - User A unhides "Workspace Delta"; User B can access again
-  - User A performs final suppression; all data cascade-deleted
-  - User B cannot access "Workspace Delta" anymore
+- **End-to-end collaboration flow:**
+  - Workspace creation, sharing, and membership changes must be supported.
+  - Concurrent editing must use locks with visible feedback to other members.
+  - Comments, @mentions, and resolution must work under role constraints.
+  - Workspace export/import must honor permissions and comment inclusion settings.
+  - Hidden workspaces must restrict access until unhidden by an admin.
+  - Final suppression must remove all workspace data and access.
 - **Cross-workspace isolation:**
-  - User A has "Workspace Epsilon" (private, no members)
-  - User B has "Workspace Zeta" (private, no members)
-  - Verify User A cannot see User B's data
-  - Verify User B cannot see User A's data
-  - Verify SSE updates are workspace-scoped (no cross-workspace leaks)
+  - Users must not access data from workspaces where they are not members.
+  - SSE updates must be scoped to the current workspace only.
 - **Role enforcement across all endpoints:**
-  - User B (viewer) attempts all mutation endpoints → all blocked
-  - User B (editor) attempts mutations → all succeed
-  - User B (editor) attempts member management → blocked
-  - User B (admin) attempts all operations → all succeed
+  - Viewers must be blocked from mutations.
+  - Editors must be able to mutate objects but must not manage members.
+  - Admins must be able to perform all operations, including lifecycle actions.
 
 ## Permission Enforcement
 
