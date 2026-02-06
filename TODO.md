@@ -172,7 +172,11 @@
   - [ ] inclusion make lint typecheck avant passage de main à l'utilisateur
   - [ ] création d'un template de branche, incluant les UAT partiels à chaque lot
   - [ ] tout-make: clarifier les obligation d'usage de make
+  - [ ] spécifie make commit dans l workflo pour éviter le coauthoring cursor
   - [ ] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
+  - [ ] Créer un mdc pour le design system
+- Design system
+    - [ ] Normaliser les couleurs primary des boutons
 - [ ] Storybook (spec)
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
@@ -218,9 +222,6 @@
   - [ ] Plan de transition éventuellement allotti en plusieurs branche et sous lots, chaque branche devant aboutir à une MEP
 - [ ] Citations objets et liens iconifiés dans le chat
 - [ ] Remplacer Tavily par DataForSeo + Jina
-- Design system
-  - [ ] Créer un mdc pour le design system
-  - [ ] Normaliser les couleurs primary des boutons
 - API & UI Refacto
   - [ ] Handle all objects (use case, folders and orgs) as type object in one table, relations being and applicative driven relation (still relying on self join) and having easier modeling of generic configuration of prompts related to objects
   - [ ] Mutualize heavily context-generations based on lanchain workflows making wor
