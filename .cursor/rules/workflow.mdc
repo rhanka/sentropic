@@ -80,7 +80,8 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 4. **ONE task per commit** : Complete ONE logical task, then commit. Do NOT chain multiple tasks without committing.
 5. **Update current work**: update BRANCH.md and commit it to be sure of remaining work at every step
 6. **Commit command (mandatory)**: `make commit MSG="type: concise description"` (single line only, no multiline)
-7. **Consolidate CI debug commits (MANDATORY)**: Prefer `git reset --soft HEAD~N` followed by a single `make commit MSG="..."`. Avoid `git commit --amend` unless explicitly requested.
+7. **No git commit / no co-author**: Never use `git commit` directly; only `make commit` to avoid Cursor co-authoring.
+8. **Consolidate CI debug commits (MANDATORY)**: Prefer `git reset --soft HEAD~N` followed by a single `make commit MSG="..."`. Avoid `git commit --amend` unless explicitly requested.
 
 ### Next Step Proposal (MANDATORY)
 After completing any task, **ALWAYS propose the next step** by following the workflow:
