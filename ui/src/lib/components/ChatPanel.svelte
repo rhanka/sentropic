@@ -42,7 +42,8 @@
     Table,
     ScrollText,
     Brain,
-    MessageCircle
+    MessageCircle,
+    Square
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
 
@@ -342,6 +343,7 @@
   let messages: LocalMessage[] = [];
   let loadingMessages = false;
   let sending = false;
+  let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
   let input = '';
   let commentInput = '';
@@ -381,6 +383,13 @@
   let commentPlaceholder = '';
   let commentThreadResolved = false;
   let commentThreadResolvedAt: string | null = null;
+
+  const getMessageStatus = (m: LocalMessage) => m._localStatus ?? (m.content ? 'completed' : 'processing');
+  let activeAssistantMessage: LocalMessage | null = null;
+  $: activeAssistantMessage =
+    mode === 'ai'
+      ? [...messages].reverse().find((m) => m.role === 'assistant' && getMessageStatus(m) === 'processing') ?? null
+      : null;
 
   $: commentPlaceholder = !$workspaceCanComment
     ? 'Commentaires désactivés pour le rôle viewer.'
@@ -1500,6 +1509,20 @@
     }
   };
 
+  const stopAssistantMessage = async () => {
+    if (!activeAssistantMessage) return;
+    if (stoppingMessageId) return;
+    stoppingMessageId = activeAssistantMessage.id;
+    errorMsg = null;
+    try {
+      await apiPost(`/chat/messages/${encodeURIComponent(activeAssistantMessage.id)}/stop`);
+    } catch (e) {
+      errorMsg = formatApiError(e, 'Erreur lors de l’arrêt');
+    } finally {
+      stoppingMessageId = null;
+    }
+  };
+
   const setFeedback = async (messageId: string, next: 'up' | 'down' | 'clear') => {
     errorMsg = null;
     try {
@@ -2147,19 +2170,33 @@
           {/if}
         </div>
       {/if}
-      <button
-        class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
-        on:click={() => (mode === 'comments' ? void sendCommentMessage() : void sendMessage())}
-        disabled={
-          mode === 'comments'
-            ? commentInput.trim().length === 0 || !commentContextType || !commentContextId || !$workspaceCanComment || commentThreadResolved
-            : sending || input.trim().length === 0
-        }
-        type="button"
-        aria-label="Envoyer"
-      >
-        <Send class="w-4 h-4" />
-      </button>
+      <div class="flex items-center gap-2">
+        {#if mode === 'ai' && activeAssistantMessage}
+          <button
+            class="rounded border border-slate-200 text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
+            on:click={stopAssistantMessage}
+            disabled={stoppingMessageId === activeAssistantMessage.id}
+            type="button"
+            aria-label="Stopper"
+            title="Stopper"
+          >
+            <Square class="w-4 h-4 fill-current stroke-none" />
+          </button>
+        {/if}
+        <button
+          class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
+          on:click={() => (mode === 'comments' ? void sendCommentMessage() : void sendMessage())}
+          disabled={
+            mode === 'comments'
+              ? commentInput.trim().length === 0 || !commentContextType || !commentContextId || !$workspaceCanComment || commentThreadResolved
+              : sending || input.trim().length === 0
+          }
+          type="button"
+          aria-label="Envoyer"
+        >
+          <Send class="w-4 h-4" />
+        </button>
+      </div>
     </div>
   </div>
 </div>
