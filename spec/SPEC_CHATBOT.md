@@ -1,193 +1,193 @@
-## Spécification fonctionnelle (cas d'usage CU)
+## Functional specification (use cases CU)
 
-> **Résumé :** 21 cas d'usage identifiés (CU-001 à CU-021) couvrant : modification d'objets, historique, streaming reasoning, rejeu, gestion du contexte, switch de modèle, approfondissement, distinction appels structurés/sessions informelles, création d'objets via chat, consultation/recherche, annulation/rollback, multi-contexte, suggestions, export/partage, gestion de sessions, affichage dans les vues, contexte long, validation/confirmation, intégration queue, notifications/feedback, et gestion des erreurs.
-        
-- [x] **CU-001 : Modification d'objets existants via chat** (use case uniquement)
-          - [x] Modification de `use_cases.data.*` via tool `update_usecase_field`
-          - [x] Tool `read_usecase` pour lire l'état actuel
-          - [ ] Modification de `folders` (à venir)
-          - [ ] Modification de `organizations` (à venir)
-          - [ ] Modification de `executive_summary` (à venir)
-          - [ ] Modification par regénération complète (à venir)
-          - [ ] L'IA peut modifier plusieurs objets dans une même session (à venir)
-- [x] **CU-002 : Historique et traçabilité** (partiel : prompts dans settings, pas de tables prompts/prompt_versions)
-          - [x] Chaque objet est associé à son historique complet (primo génération, regénération, sessions interactives)
-          - [x] Chaque action d'IA est stockée avec le prompt_id utilisé (dans settings.prompts JSON)
-          - [x] `context_modification_history` stocke toutes les modifications
-          - [x] `chat_contexts` stocke les snapshots avant/après
-          - [x] `chat_stream_events` stocke le reasoning complet
-          - [ ] Tables `prompts` et `prompt_versions` (prompts actuellement dans `settings.prompts` JSON)
-- [x] **CU-003 : Affichage du reasoning en streaming**
-          - [x] Les étapes de raisonnement de l'IA sont affichées en temps réel pendant la génération
-          - [x] Le reasoning est streamé via PostgreSQL LISTEN/NOTIFY et affiché dans l'UI
-          - [x] Le reasoning complet est stocké pour relecture ultérieure
-- [x] **CU-004 : Rejeu de session (affichage)**
-          - [x] Possibilité de rejouer une session complète pour voir l'évolution de la conversation
-          - [x] Affichage des messages avec reasoning, tool calls, et modifications
-          - [x] Endpoints `GET /api/v1/chat/sessions/:id/stream-events` (batch) et `GET /api/v1/chat/messages/:id/stream-events`
-- [x] **CU-005 : Contexte et historique dans les sessions** (partiel : use case uniquement)
-          - [x] `primaryContextType` et `primaryContextId` dans `chat_sessions`
-          - [x] Détection automatique du contexte depuis la route (UI)
-          - [x] Tool `read_usecase` pour accéder à l'état actuel
-          - [x] Tool `update_usecase_field` pour modifier
-          - [ ] Accès à l'historique des modifications de l'objet (via tools) (à venir)
-          - [ ] Résumé du contexte si trop long (à venir)
-- [ ] **CU-006 : Switch de modèle de langage dans les sessions**
-          - [x] Le modèle utilisé pour chaque message est stocké dans `chat_messages.model`
-          - [ ] L'utilisateur peut changer de modèle OpenAI en cours de session
-          - [ ] L'utilisateur peut spécifier le modèle à utiliser pour la prochaine réponse
-- [ ] **CU-007 : Approfondissement avec modèle supérieur**
-          - [ ] L'utilisateur peut demander un approfondissement d'un objet avec une version supérieure du modèle
-          - [ ] Le système peut suggérer automatiquement l'utilisation d'un modèle supérieur
-- [x] **CU-008 : Appels IA structurés (prompts managés)** (partiel : streaming fonctionnel, pas de tables structured_generation_runs)
-          - [x] Générations classiques utilisent le streaming (`executeWithToolsStream`)
-          - [x] Événements dans `chat_stream_events` avec `message_id=null`
-          - [x] `streamId` déterministes : `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>`
-          - [x] Affichage dans les vues objets via `StreamMessage` (jobs)
-          - [ ] Table `structured_generation_runs` (non créée)
-          - [ ] Tables `prompts`/`prompt_versions` (prompts dans `settings.prompts` JSON)
-- [ ] **CU-009 : Création d'objets via chat**
-          - L'utilisateur ne peut PAS créer directement de nouveaux objets via le chat (pas de création directe)
-          - L'IA peut suggérer la création d'objets basés sur la conversation (suggestion uniquement)
-          - Les opérations de création/suppression/déplacement de fiches se font via des tools dans le chat
-- [x] **CU-010 : Consultation et recherche (navigation historique chat)** (partiel : consultation via tools)
-          - [x] L'utilisateur peut consulter les détails d'un objet via le chat (tool `read_usecase`)
-          - [x] Tool `web_search` pour rechercher des informations
-          - [x] Tool `web_extract` pour extraire le contenu des références
-          - [ ] Recherche textuelle dans l'historique des sessions
-          - [ ] Recherche dans les modifications d'un objet
-- [ ] **CU-011 : Annulation et rollback**
-          - [x] Snapshots `snapshot_before` et `snapshot_after` dans `chat_contexts` (infrastructure prête)
-          - [ ] L'utilisateur peut annuler une modification en cours avant qu'elle soit appliquée
-          - [ ] Système de rollback pour revenir à un état précédent d'un objet
-          - [ ] Fonctionnalité de comparaison entre deux versions d'un objet (diff visuel)
-- [ ] **CU-012 : Multi-contexte dans une session**
-          - [x] Un seul contexte principal par session (`primaryContextType`, `primaryContextId`)
-          - [x] Contexte actif(s) transmis par message (array `contexts`)
-          - [x] Outils autorisés sur l’union des contextes actifs
-          - [x] Contexte provisoire en UI (visible avant envoi, persistant seulement si utilisé)
-          - [ ] Une session peut modifier plusieurs objets différents
-          - [ ] L'IA peut comprendre les relations hiérarchiques entre objets
-- [ ] **CU-013 : Suggestions et recommandations**
-          - L'IA peut suggérer des améliorations sur demande (pas proactif)
-          - L'IA peut détecter des incohérences et proposer des corrections sur demande
-          - L'IA peut suggérer des cas d'usage similaires ou complémentaires sur demande
-          - Les suggestions sont explicites dans la conversation (pas implicites)
-- [ ] **CU-014 : Export et partage**
-          - Export d'une session de chat (format : JSON, Markdown, PDF) - fonctionnalité secondaire
-          - Partage de sessions entre utilisateurs (collaboration)
-          - Export de l'historique des modifications d'un objet pour audit - fonctionnalité secondaire
-          - Les exports incluent le reasoning complet pour traçabilité
-- [x] **CU-015 : Gestion des sessions** (partiel : création et suppression)
-          - [x] Un utilisateur peut avoir plusieurs sessions actives pour le même objet
-          - [x] Suppression de sessions (`DELETE /api/v1/chat/sessions/:id`)
-          - [x] Titre de session auto-généré (IA, SSE)
-          - [ ] Reprise d'une session interrompue (après déconnexion)
-          - [ ] Renommage de sessions pour organisation
-- [x] **CU-016 : Affichage dans les vues existantes** (partiel : streaming visible dans QueueMonitor)
-          - [x] Streaming temps réel via SSE affiché dans QueueMonitor
-          - [x] `StreamMessage` unifié pour chat et jobs
-          - [ ] Onglet "Historique" dans les vues objets (folder, use case, organization)
-          - [ ] Liste des sessions ayant modifié l'objet
-          - [ ] Lien direct depuis un objet vers la dernière session
-          - [ ] Indicateur visuel (badge, icône) sur les objets modifiés via chat
-- [ ] **CU-017 : Gestion du contexte long**
-          - Limite de tokens pour le contexte envoyé à l'IA (fonction du modèle utilisé)
-          - Résumé automatique du contexte si la session devient trop longue (à terme, fonctionnalité future)
-          - Sélection manuelle des messages à inclure dans le contexte (fonctionnalité secondaire)
-          - Système de "mémoire" persistante pour les objets (résumé des modifications importantes)
-- [ ] **CU-018 : Validation et confirmation**
-          - [x] Modifications appliquées directement (pas de confirmation)
-          - [ ] Confirmation explicite avant d'appliquer une modification (bouton "Appliquer")
-          - [ ] Preview des modifications avant application (diff visuel)
-          - [ ] Mode "auto-apply" pour les modifications mineures et confirmation pour les majeures
-- [x] **CU-019 : Intégration avec la queue existante** (partiel : jobs chat dans queue)
-          - [x] Les générations via chat utilisent la même queue (`job_queue`)
-          - [x] Affichage du statut de la queue dans l'interface chat (QueueMonitor)
-          - [ ] Priorité différente pour les générations chat
-          - [ ] Les générations chat sont annulables via la queue
-- [x] **CU-020 : Notifications et feedback** (partiel : notifications SSE)
-          - [x] Notifications en temps réel via SSE (events `usecase_update`, etc.)
-          - [x] Refresh automatique de l'UI après modification
-          - [x] Notification de titre de session (`chat_session_title_updated`)
-          - [ ] Toast/badge pour notifications visuelles
-          - [ ] Feedback utilisateur sur la qualité des suggestions de l'IA (👍/👎)
-- [x] **CU-021 : Gestion des erreurs** (partiel : erreurs affichées)
-          - [x] Messages d'erreur dans le stream (`error` event)
-          - [x] Affichage des erreurs dans `StreamMessage`
-          - [ ] Retry automatique avec correction pour les erreurs récupérables
-          - [ ] Messages d'erreur clairs avec suggestions de correction
-- [ ] **CU-022 : Contexte documentaire attaché aux objets**
-          - [ ] Attacher un ou plusieurs documents à une organisation, un dossier ou un cas d'usage
-          - [ ] Upload avec résumé automatique (0,1k token/page)
-          - [ ] Consultation des métadonnées et du résumé
+> **Summary:** 21 use cases identified (CU-001 to CU-021) covering: object modifications, history, streaming reasoning, replay, context management, model switching, deepening, structured calls vs informal sessions, object creation via chat, consultation/search, cancellation/rollback, multi‑context, suggestions, export/sharing, session management, view integration, long context, validation/confirmation, queue integration, notifications/feedback, and error handling.
 
-## Admin scoped chat (Chat-1 + read-only)
+- [x] **CU-001: Modify existing objects via chat** (use case only)
+  - [x] Modify `use_cases.data.*` via tool `update_usecase_field`
+  - [x] Tool `read_usecase` to read the current state
+  - [ ] Modify `folders` (coming)
+  - [ ] Modify `organizations` (coming)
+  - [ ] Modify `executive_summary` (coming)
+  - [ ] Modify via full regeneration (coming)
+  - [ ] The AI can modify multiple objects in the same session (coming)
+- [x] **CU-002: History and traceability** (partial: prompts in settings, no prompts/prompt_versions tables)
+  - [x] Each object is associated with its full history (initial generation, regeneration, interactive sessions)
+  - [x] Each AI action is stored with the prompt_id used (from settings.prompts JSON)
+  - [x] `context_modification_history` stores all modifications
+  - [x] `chat_contexts` stores before/after snapshots
+  - [x] `chat_stream_events` stores full reasoning
+  - [ ] Tables `prompts` and `prompt_versions` (prompts currently in `settings.prompts` JSON)
+- [x] **CU-003: Streaming reasoning display**
+  - [x] AI reasoning steps are displayed in real time during generation
+  - [x] Reasoning is streamed via PostgreSQL LISTEN/NOTIFY and displayed in the UI
+  - [x] Full reasoning is stored for later replay
+- [x] **CU-004: Session replay (display)**
+  - [x] Ability to replay a full session to see how the conversation evolved
+  - [x] Messages display reasoning, tool calls, and modifications
+  - [x] Endpoints `GET /api/v1/chat/sessions/:id/stream-events` (batch) and `GET /api/v1/chat/messages/:id/stream-events`
+- [x] **CU-005: Context and history in sessions** (partial: use case only)
+  - [x] `primaryContextType` and `primaryContextId` in `chat_sessions`
+  - [x] Automatic context detection from the route (UI)
+  - [x] Tool `read_usecase` to access the current state
+  - [x] Tool `update_usecase_field` to modify
+  - [ ] Access to object modification history (via tools) (coming)
+  - [ ] Context summary when too long (coming)
+- [ ] **CU-006: Language model switch in sessions**
+  - [x] Model used for each message stored in `chat_messages.model`
+  - [ ] User can change OpenAI model mid‑session
+  - [ ] User can specify the model for the next response
+- [ ] **CU-007: Deepen with a higher‑tier model**
+  - [ ] User can request deeper analysis with a higher‑tier model
+  - [ ] System can suggest using a higher‑tier model
+- [x] **CU-008: Structured AI calls (managed prompts)** (partial: streaming works, no structured_generation_runs table)
+  - [x] Classic generations use streaming (`executeWithToolsStream`)
+  - [x] Events in `chat_stream_events` with `message_id=null`
+  - [x] Deterministic `streamId`: `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>`
+  - [x] Display in object views via `StreamMessage` (jobs)
+  - [ ] Table `structured_generation_runs` (not created)
+  - [ ] Tables `prompts`/`prompt_versions` (prompts in `settings.prompts` JSON)
+- [ ] **CU-009: Object creation via chat**
+  - Users cannot create new objects directly via chat (no direct creation)
+  - AI can suggest object creation based on the conversation (suggestion only)
+  - Create/delete/move operations are done via tools in chat
+- [x] **CU-010: Consultation and search (chat history navigation)** (partial: consultation via tools)
+  - [x] User can consult object details via chat (tool `read_usecase`)
+  - [x] Tool `web_search` for searching information
+  - [x] Tool `web_extract` to extract content from references
+  - [ ] Text search in session history
+  - [ ] Search in object modifications
+- [ ] **CU-011: Cancellation and rollback**
+  - [x] Snapshots `snapshot_before` and `snapshot_after` in `chat_contexts` (infrastructure ready)
+  - [ ] User can cancel an in‑progress modification before it is applied
+  - [ ] Rollback system to return to a previous object state
+  - [ ] Comparison between two object versions (visual diff)
+- [ ] **CU-012: Multi‑context in a session**
+  - [x] One main context per session (`primaryContextType`, `primaryContextId`)
+  - [x] Active context(s) passed per message (`contexts` array)
+  - [x] Tools allowed on the union of active contexts
+  - [x] UI provisional context (visible before send, persisted only if used)
+  - [ ] A session can modify several different objects
+  - [ ] AI can understand hierarchical relations between objects
+- [ ] **CU-013: Suggestions and recommendations**
+  - AI can suggest improvements on request (not proactive)
+  - AI can detect inconsistencies and propose corrections on request
+  - AI can suggest similar or complementary use cases on request
+  - Suggestions are explicit in the conversation (not implicit)
+- [ ] **CU-014: Export and sharing**
+  - Export a chat session (JSON, Markdown, PDF) — secondary feature
+  - Share sessions between users (collaboration)
+  - Export object modification history for audit — secondary feature
+  - Exports include full reasoning for traceability
+- [x] **CU-015: Session management** (partial: create/delete)
+  - [x] A user can have multiple active sessions for the same object
+  - [x] Session deletion (`DELETE /api/v1/chat/sessions/:id`)
+  - [x] Auto‑generated session title (AI, SSE)
+  - [ ] Resume an interrupted session (after disconnect)
+  - [ ] Rename sessions for organization
+- [x] **CU-016: Display in existing views** (partial: streaming visible in QueueMonitor)
+  - [x] Real‑time streaming via SSE shown in QueueMonitor
+  - [x] Unified `StreamMessage` for chat and jobs
+  - [ ] "History" tab in object views (folder, use case, organization)
+  - [ ] List sessions that modified the object
+  - [ ] Direct link from an object to the latest session
+  - [ ] Visual indicator (badge/icon) on objects modified via chat
+- [ ] **CU-017: Long‑context management**
+  - Token limit for context sent to AI (depends on model)
+  - Automatic context summary when session is too long (future feature)
+  - Manual selection of messages to include in context (secondary feature)
+  - Persistent "memory" system for objects (summary of important changes)
+- [ ] **CU-018: Validation and confirmation**
+  - [x] Changes applied directly (no confirmation)
+  - [ ] Explicit confirmation before applying a change ("Apply" button)
+  - [ ] Preview of changes before application (visual diff)
+  - [ ] "Auto‑apply" mode for minor changes and confirmation for major ones
+- [x] **CU-019: Integration with existing queue** (partial: chat jobs in queue)
+  - [x] Chat generations use the same queue (`job_queue`)
+  - [x] Queue status displayed in chat UI (QueueMonitor)
+  - [ ] Different priority for chat generations
+  - [ ] Chat generations cancellable via the queue
+- [x] **CU-020: Notifications and feedback** (partial: SSE notifications)
+  - [x] Real‑time notifications via SSE (events `usecase_update`, etc.)
+  - [x] Automatic UI refresh after modification
+  - [x] Session title notification (`chat_session_title_updated`)
+  - [ ] Toast/badge for visual notifications
+  - [ ] User feedback on AI suggestion quality (👍/👎)
+- [x] **CU-021: Error handling** (partial: errors displayed)
+  - [x] Error messages in stream (`error` event)
+  - [x] Error display in `StreamMessage`
+  - [ ] Automatic retry with correction for recoverable errors
+  - [ ] Clear error messages with fix suggestions
+- [ ] **CU-022: Document context attached to objects**
+  - [ ] Attach one or more documents to an organization, folder, or use case
+  - [ ] Upload with automatic summary (0.1k token/page)
+  - [ ] Consult metadata and summary
 
-Décision (liée au modèle workspaces / partage admin) :
+## Admin scoped chat (Chat‑1 + read‑only)
 
-- L’admin **reste propriétaire** de ses sessions (pas d’accès à l’historique chat de l’utilisateur).
-- Quand l’admin est **scopé** sur un workspace utilisateur **partagé** (`shareWithAdmin=true`) :
-  - le chat peut **lire** les données du workspace (ex: `read_usecase`, lecture des références),
-  - le chat doit être **read-only** pour les écritures (ex: `update_usecase_field` interdit).
+Decision (linked to workspace sharing model):
 
-Implémentation attendue :
+- Admin **remains the owner** of their sessions (no access to user chat history).
+- When admin is **scoped** to a shared user workspace (`shareWithAdmin=true`):
+  - chat can **read** workspace data (e.g., `read_usecase`, reference reading),
+  - chat must be **read‑only** for writes (e.g., `update_usecase_field` forbidden).
 
-- Stocker le scope dans `chat_sessions.workspace_id`.
-- Le serveur calcule un flag `readOnly` selon :
+Expected implementation:
+
+- Store scope in `chat_sessions.workspace_id`.
+- Server computes a `readOnly` flag based on:
   - user role
-  - workspace scope courant
-  - `shareWithAdmin` du workspace cible
+  - current workspace scope
+  - `shareWithAdmin` of the target workspace
 
 ## Streaming OpenAI → DB → NOTIFY → SSE
 
-- [x] Transport : appel OpenAI en streaming côté API/worker (Hono). Chaque chunk est écrit dans `chat_stream_events` puis un `NOTIFY` (payload minimal : `stream_id`, `sequence`, éventuellement `event_type`) signale la nouveauté. L'UI SvelteKit (SPA statique) consomme un endpoint SSE global `GET /api/v1/streams/sse` qui est abonné aux NOTIFY PG ; pas de forward direct OpenAI → SSE. Websocket optionnelle plus tard, SSE par défaut.
-- [x] Identifiants de flux : `stream_id` = `message_id` pour sessions informelles ; pour appels structurés `stream_id` = `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` (déterministes par entité).
-- [x] Événements stockés dans `chat_stream_events` (ordre par `sequence` sur `stream_id`), `message_id` nullable pour appels structurés.
+- [x] Transport: OpenAI streaming call on API/worker (Hono). Each chunk is written to `chat_stream_events` then a `NOTIFY` (minimal payload: `stream_id`, `sequence`, optionally `event_type`) signals new data. SvelteKit UI (static SPA) consumes a global SSE endpoint `GET /api/v1/streams/sse` subscribed to PG NOTIFY; no direct OpenAI → SSE forwarding. WebSocket optional later, SSE by default.
+- [x] Stream identifiers: `stream_id` = `message_id` for informal sessions; for structured calls `stream_id` = `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` (deterministic per entity).
+- [x] Events stored in `chat_stream_events` (ordered by `sequence` on `stream_id`), `message_id` nullable for structured calls.
 
-Types d'événements (payload JSON, clé `type` + `data`) :
-- `reasoning_delta` : `{ delta: string }` (tokens de reasoning)
-- `content_delta` : `{ delta: string }` (tokens assistant)
-- `tool_call_start` : `{ tool_call_id, name, args }`
-- `tool_call_delta` : `{ tool_call_id, delta }`
-- `tool_call_result` : `{ tool_call_id, result }`
-- `status` : `{ state: 'started' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled', job_id? }`
-- `error` : `{ code?, message }`
-- `done` : `{}` (fin de flux)
+Event types (JSON payload, key `type` + `data`):
+- `reasoning_delta`: `{ delta: string }` (reasoning tokens)
+- `content_delta`: `{ delta: string }` (assistant tokens)
+- `tool_call_start`: `{ tool_call_id, name, args }`
+- `tool_call_delta`: `{ tool_call_id, delta }`
+- `tool_call_result`: `{ tool_call_id, result }`
+- `status`: `{ state: 'started' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled', job_id? }`
+- `error`: `{ code?, message }`
+- `done`: `{}` (end of stream)
 
-Persisté :
+Persisted:
 - `chat_stream_events`: `stream_id`, `message_id` (nullable), `event_type`, `data`, `sequence`.
 - `structured_generation_runs`: `stream_id`, `status`, `job_id`, `prompt_version_id`, `context_type/id`, timestamps.
-- PG LISTEN/NOTIFY : sert uniquement de signal temps réel (pas de stockage). Le payload complet reste dans la base (`chat_stream_events`). Si le payload NOTIFY dépasse 8k, on envoie uniquement un pointeur (`stream_id`, `sequence`) et le SSE relit l’event en base.
+- PG LISTEN/NOTIFY: used only as a real‑time signal (no storage). The full payload stays in the DB (`chat_stream_events`). If NOTIFY payload exceeds 8k, send only a pointer (`stream_id`, `sequence`) and the SSE re‑loads the event from the DB.
 
-Règles :
-- Séquence strictement croissante par `stream_id`.
-- `status.started` dès ouverture de flux, `done` ou `error` clôture.
-- Tool calls : `tool_call_start` puis zéro ou plusieurs `tool_call_delta`, puis `tool_call_result`.
-- Les deltas reasoning/content sont alternables, l’UI agrège.
+Rules:
+- Sequence strictly increasing per `stream_id`.
+- `status.started` at stream open, `done` or `error` closes.
+- Tool calls: `tool_call_start`, then zero or more `tool_call_delta`, then `tool_call_result`.
+- Reasoning/content deltas can alternate; UI aggregates.
 
-## Chat tracing (debug) — 7 jours (20–30 lignes)
+## Chat tracing (debug) — 7 days (20–30 lines)
 
-Objectif : debug des problèmes “agents” (boucles d’outils, payloads mal construits, perte de contexte) en stockant **le payload exact envoyé à OpenAI** et les tool calls exécutés.
+Goal: debug “agent” issues (tool loops, malformed payloads, context loss) by storing **the exact payload sent to OpenAI** and the tool calls executed.
 
-Activation (env) :
+Activation (env):
 - `CHAT_TRACE_ENABLED=true|false`
-- `CHAT_TRACE_RETENTION_DAYS=7` (défaut 7)
+- `CHAT_TRACE_RETENTION_DAYS=7` (default 7)
 
-Stockage (DB) :
-- Table `chat_generation_traces` :
-  - identifiants: `session_id`, `assistant_message_id`, `user_id`, `workspace_id`
+Storage (DB):
+- Table `chat_generation_traces`:
+  - identifiers: `session_id`, `assistant_message_id`, `user_id`, `workspace_id`
   - `phase` (`pass1`/`pass2`), `iteration`, `model`, `tool_choice`
-  - `tools` (**définitions complètes**: description + schema)
-  - `openai_messages` / `input` (**payload exact**) + `previous_response_id` quand applicable
+  - `tools` (**full definitions**: description + schema)
+  - `openai_messages` / `input` (**exact payload**) + `previous_response_id` when applicable
   - `tool_calls` (args + results)
-  - `meta` (callSite, flags readOnly, etc.)
+  - `meta` (callSite, readOnly flags, etc.)
 
-Purge :
-- sweep 1x au démarrage puis toutes les 24h
-- suppression des traces plus anciennes que `CHAT_TRACE_RETENTION_DAYS`
+Purge:
+- sweep once at startup then every 24h
+- delete traces older than `CHAT_TRACE_RETENTION_DAYS`
 
-SQL utile :
+Useful SQL:
 
 ```sql
 SELECT phase, iteration, model, tool_choice, created_at
@@ -196,271 +196,270 @@ WHERE assistant_message_id = '<messageId>'
 ORDER BY created_at ASC;
 ```
 
-## Composants UI & Streaming (SvelteKit)
+## UI components & streaming (SvelteKit)
 
-- [x] **Composants clés implémentés** :
-  - [x] `StreamMessage.svelte` : composant unifié pour chat et jobs, affiche reasoning en cours, contenu généré, et sous-sections pour tool calls (start/deltas/result)
-  - [x] `ChatWidget.svelte` : widget flottant global (bulle + panneau) avec switch Chat ↔ QueueMonitor
-  - [x] `ChatPanel.svelte` : liste sessions + messages + composer
-  - [x] `QueueMonitor.svelte` : affichage des jobs avec streaming
-  - [x] Historique streaming : reconstruit depuis `chat_stream_events` pour rejouer (via `historySource="chat"` ou `historySource="stream"`)
-  - [ ] `DiffViewer.svelte` : avant/après sur objets (à venir)
-  - [ ] Barre de contrôle : choix du modèle, arrêt/annulation (à venir)
+- [x] **Key components implemented**:
+  - [x] `StreamMessage.svelte`: unified chat/jobs component, shows ongoing reasoning, generated content, and tool call sub‑sections (start/deltas/result)
+  - [x] `ChatWidget.svelte`: global floating widget (bubble + panel) with Chat ↔ QueueMonitor switch
+  - [x] `ChatPanel.svelte`: sessions + messages + composer
+  - [x] `QueueMonitor.svelte`: job list with streaming
+  - [x] Streaming history: reconstructed from `chat_stream_events` for replay (via `historySource="chat"` or `historySource="stream"`)
+  - [ ] `DiffViewer.svelte`: before/after for objects (coming)
+  - [ ] Control bar: model selection, stop/cancel (coming)
 
-- [x] **Architecture simplifiée** : Composants intégrés dans l'app au lieu d'un module autonome. `StreamMessage` unifie chat et jobs.
+- [x] **Simplified architecture**: components integrated in the app instead of a standalone module. `StreamMessage` unifies chat and jobs.
 
-- [x] **SSE global** : Endpoint unique `GET /api/v1/streams/sse` avec filtrage côté client par `streamId` (au lieu d'endpoints dédiés par stream).
+- [x] **Global SSE**: single endpoint `GET /api/v1/streams/sse` with client‑side filtering by `streamId` (instead of per‑stream endpoints).
 
-## Archi technique (queue + PG LISTEN/Notify)
+## Technical architecture (queue + PG LISTEN/Notify)
 
-- [x] **Chemin happy path (session informelle)** :
-  1. `POST /api/v1/chat/messages` → crée `chat_message` (user), lance stream OpenAI (assistant) via job `chat_message` en queue
-  2. Streaming → push `chat_stream_events` (+ NOTIFY) ; SSE global lit sur `stream_id` (filtrage client)
-  3. Tool call éventuel → exécution, puis `context_modification_history` + snapshots dans `chat_contexts`
-  4. Fin : `done` + update status (message/stream)
+- [x] **Happy path (informal session)**:
+  1. `POST /api/v1/chat/messages` → creates `chat_message` (user), starts OpenAI stream (assistant) via `chat_message` job in queue
+  2. Streaming → push `chat_stream_events` (+ NOTIFY); global SSE reads on `stream_id` (client filtering)
+  3. Optional tool call → execution, then `context_modification_history` + snapshots in `chat_contexts`
+  4. End: `done` + status update (message/stream)
 
-- [x] **Chemin appels structurés (générations classiques)** :
-  1. Générations classiques (use_case_list, use_case_detail, executive_summary, organization_enrich) → job en queue
-  2. Worker exécute OpenAI stream → écrit `chat_stream_events` (message_id null) avec `streamId` déterministe (`folder_<id>`, `usecase_<id>`, etc.)
-  3. Modifications → `context_modification_history` (session_id null pour générations classiques)
-  4. NOTIFY → SSE client abonné au `stream_id` via endpoint global
+- [x] **Structured calls path (classic generations)**:
+  1. Classic generations (use_case_list, use_case_detail, executive_summary, organization_enrich) → queued job
+  2. Worker runs OpenAI stream → writes `chat_stream_events` (message_id null) with deterministic `streamId` (`folder_<id>`, `usecase_<id>`, etc.)
+  3. Modifications → `context_modification_history` (`session_id` null for classic generations)
+  4. NOTIFY → SSE client subscribed to `stream_id` via global endpoint
 
-- [ ] **Annulation / erreurs** :
-  - [x] `error` event envoyé, propagation UI
-  - [ ] Annulation via `job_id` (cancel queue + stop stream)
+- [ ] **Cancellation / errors**:
+  - [x] `error` event sent, UI propagation
+  - [ ] Cancellation via `job_id` (cancel queue + stop stream)
 
-- [x] **Index/contraintes** :
+- [x] **Indexes/constraints**:
   - [x] `chat_stream_events(stream_id, sequence)` unique
-  - [ ] `structured_generation_runs` (table non créée)
+  - [ ] `structured_generation_runs` (table not created)
 
+## Data model
 
-## Modèle de données
+### Database schema
 
-### Schéma de base de données
+The chatbot data model enables:
+- Manage user chat sessions
+- Link sessions to business objects (organizations, folders, usecases, executive_summary)
+- Store full message history with reasoning
+- Track object modifications via sessions
+- Allow session replay
+- Stream responses in real time via PostgreSQL LISTEN/NOTIFY
 
-Le modèle de données pour le chatbot permet de :
-- Gérer les sessions de chat utilisateur
-- Lier les sessions aux objets métier (organizations, folders, usecases, executive_summary)
-- Stocker l'historique complet des messages avec reasoning
-- Tracker les modifications d'objets via les sessions
-- Permettre le rejeu de sessions
-- Streamer les réponses en temps réel via PostgreSQL LISTEN/NOTIFY
+#### Context document tables (to add)
+- `context_documents`: id, context_type (organization|folder|usecase), context_id, filename, mime_type, size_bytes, storage_key (S3/MinIO), status (`uploaded|processing|ready|failed`), summary, summary_lang, prompt_id/prompt_version_id for the summary, created_at/updated_at, version.
+- `context_document_versions` (optional): file/summary history (document_id, version, summary, storage_key, created_at).
+- Traceability: `document_added` / `document_summarized` events in `context_modification_history` (with summary prompt_version_id and summary job_id).
 
-#### Tables documents contextuels (à ajouter)
-- `context_documents` : id, context_type (organization|folder|usecase), context_id, filename, mime_type, size_bytes, storage_key (S3/MinIO), status (`uploaded|processing|ready|failed`), summary, summary_lang, prompt_id/prompt_version_id pour le résumé, created_at/updated_at, version.
-- `context_document_versions` (optionnel) : historique des fichiers/résumés (document_id, version, summary, storage_key, created_at).
-- Traçabilité : events `document_added` / `document_summarized` dans `context_modification_history` (avec prompt_version_id du résumé et job_id du résumé).
+### ERD diagram
 
-### Diagramme ERD
+See `spec/DATA_MODEL.md` (section **Chat / streaming / tracing**): the ERD is centralized there to avoid duplication and stay aligned with `api/src/db/schema.ts`.
 
-Voir `spec/DATA_MODEL.md` (section **Chat / streaming / tracing**) : on centralise l’ERD là-bas pour éviter les duplications et rester aligné avec `api/src/db/schema.ts`.
+### Main tables
 
-### Tables principales
-
-#### Tables créées ✅
+#### Created tables ✅
 - [x] `chat_sessions`
 - [x] `chat_messages`
 - [x] `chat_contexts`
 - [x] `chat_stream_events`
 - [x] `context_modification_history`
 
-#### Tables non créées (prévues)
-- [ ] `structured_generation_runs` (générations classiques trackées via `chat_stream_events` avec `message_id=null`)
-- [ ] `prompts` (prompts actuellement dans `settings.prompts` JSON)
-- [ ] `prompt_versions` (prompts actuellement dans `settings.prompts` JSON)
-- [ ] `context_documents` (prévu Lot B)
+#### Planned tables (not created)
+- [ ] `structured_generation_runs` (classic generations tracked via `chat_stream_events` with `message_id=null`)
+- [ ] `prompts` (prompts currently in `settings.prompts` JSON)
+- [ ] `prompt_versions` (prompts currently in `settings.prompts` JSON)
+- [ ] `context_documents` (planned Lot B)
 
 #### `chat_sessions`
-Table principale pour les sessions de chat utilisateur.
+Main table for user chat sessions.
 
-**Colonnes :**
-- `id` (PK) : Identifiant unique de la session
-- `user_id` (FK → users.id) : Utilisateur propriétaire de la session
-- `primary_context_type` : Type du contexte principal ('organization' | 'folder' | 'usecase' | 'executive_summary')
-- `primary_context_id` : ID de l'objet principal (facilite les requêtes)
-- `title` : Titre de la session (peut être généré automatiquement)
-- `created_at` : Date de création
-- `updated_at` : Date de dernière mise à jour
+**Columns:**
+- `id` (PK): unique session identifier
+- `user_id` (FK → users.id): session owner user
+- `primary_context_type`: primary context type ('organization' | 'folder' | 'usecase' | 'executive_summary')
+- `primary_context_id`: primary object ID (query helper)
+- `title`: session title (can be auto‑generated)
+- `created_at`: creation date
+- `updated_at`: last update
 
-**Index :**
-- `chat_sessions_user_id_idx` : Sur `user_id`
-- `chat_sessions_primary_context_idx` : Sur `primary_context_type, primary_context_id`
+**Indexes:**
+- `chat_sessions_user_id_idx`: on `user_id`
+- `chat_sessions_primary_context_idx`: on `primary_context_type, primary_context_id`
 
 #### `chat_messages`
-Messages de la conversation (utilisateur et assistant).
+Conversation messages (user and assistant).
 
-**Colonnes :**
-- `id` (PK) : Identifiant unique du message
-- `session_id` (FK → chat_sessions.id) : Session à laquelle appartient le message
-- `role` : Rôle du message ('user' | 'assistant' | 'system' | 'tool')
-- `content` : Contenu textuel du message (peut être null pour tool calls)
-- `contexts` (JSONB) : Contextes associés au message (array `{ contextType, contextId }`)
-- `tool_calls` (JSONB) : Appels d'outils effectués (array de tool calls OpenAI)
-- `tool_call_id` : ID du tool call si ce message est un résultat d'outil
-- `reasoning` : Tokens de reasoning (pour modèles avec reasoning comme o1)
-- `model` : Modèle OpenAI utilisé pour cette réponse
-- `prompt_id` : ID du prompt utilisé (référence aux prompts dans settings)
-- `prompt_version_id` (FK → prompt_versions.id) : Version précise du prompt utilisé (nullable pour sessions informelles)
-- `sequence` : Ordre du message dans la conversation
-- `created_at` : Date de création
+**Columns:**
+- `id` (PK): unique message ID
+- `session_id` (FK → chat_sessions.id): session the message belongs to
+- `role`: message role ('user' | 'assistant' | 'system' | 'tool')
+- `content`: text content (nullable for tool calls)
+- `contexts` (JSONB): contexts associated with the message (array `{ contextType, contextId }`)
+- `tool_calls` (JSONB): tools called (array of OpenAI tool calls)
+- `tool_call_id`: tool call ID if this message is a tool result
+- `reasoning`: reasoning tokens (for models with reasoning like o1)
+- `model`: OpenAI model used for this response
+- `prompt_id`: prompt ID used (references prompts in settings)
+- `prompt_version_id` (FK → prompt_versions.id): precise prompt version used (nullable for informal sessions)
+- `sequence`: message order in the conversation
+- `created_at`: creation date
 
-**Index :**
-- `chat_messages_session_id_idx` : Sur `session_id`
-- `chat_messages_sequence_idx` : Sur `session_id, sequence`
-- `chat_messages_prompt_version_idx` : Sur `prompt_version_id`
+**Indexes:**
+- `chat_messages_session_id_idx`: on `session_id`
+- `chat_messages_sequence_idx`: on `session_id, sequence`
+- `chat_messages_prompt_version_idx`: on `prompt_version_id`
 
 #### `chat_contexts`
-Table de liaison entre les sessions de chat et les objets métier modifiés.
+Join table between chat sessions and modified business objects.
 
-**Colonnes :**
-- `id` (PK) : Identifiant unique
-- `session_id` (FK → chat_sessions.id) : Session qui modifie l'objet
-- `context_type` : Type d'objet ('organization' | 'folder' | 'usecase' | 'executive_summary')
-- `context_id` : ID de l'objet modifié
-- `snapshot_before` (JSONB) : État de l'objet avant modification (pour comparaison/revert)
-- `snapshot_after` (JSONB) : État de l'objet après modification
-- `modifications` (JSONB) : Détail des champs modifiés et leurs valeurs
-- `modified_at` : Date de dernière modification
-- `created_at` : Date de création
+**Columns:**
+- `id` (PK): unique identifier
+- `session_id` (FK → chat_sessions.id): session that modifies the object
+- `context_type`: object type ('organization' | 'folder' | 'usecase' | 'executive_summary')
+- `context_id`: modified object ID
+- `snapshot_before` (JSONB): object state before modification (for compare/revert)
+- `snapshot_after` (JSONB): object state after modification
+- `modifications` (JSONB): details of changed fields and values
+- `modified_at`: last modification date
+- `created_at`: creation date
 
-**Index :**
-- `chat_contexts_session_id_idx` : Sur `session_id`
-- `chat_contexts_context_idx` : Sur `context_type, context_id`
-- `chat_contexts_context_type_id_idx` : Sur `context_type, context_id` (composite)
+**Indexes:**
+- `chat_contexts_session_id_idx`: on `session_id`
+- `chat_contexts_context_idx`: on `context_type, context_id`
+- `chat_contexts_context_type_id_idx`: on `context_type, context_id` (composite)
 
-**Relations :**
-- `context_type='organization'` + `context_id` → référence `organizations.id`
-- `context_type='folder'` + `context_id` → référence `folders.id`
-- `context_type='usecase'` + `context_id` → référence `use_cases.id`
-- `context_type='executive_summary'` + `context_id` → référence `folders.id` (executive_summary est dans folders)
+**Relations:**
+- `context_type='organization'` + `context_id` → reference `organizations.id`
+- `context_type='folder'` + `context_id` → reference `folders.id`
+- `context_type='usecase'` + `context_id` → reference `use_cases.id`
+- `context_type='executive_summary'` + `context_id` → reference `folders.id` (executive_summary lives in folders)
 
 #### `chat_stream_events`
-Événements de streaming en temps réel pour chaque message ou appel structuré.
+Real‑time streaming events for each message or structured call.
 
-**Colonnes :**
-- `id` (PK) : Identifiant unique
-- `message_id` (FK → chat_messages.id, nullable) : Message associé (nullable pour appels structurés)
-- `stream_id` : Identifiant du stream (message_id pour sessions, `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` pour appels structurés)
-- `event_type` : Type d'événement ('content_delta' | 'reasoning_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call_result' | 'status' | 'error' | 'done')
-- `data` (JSONB) : Données de l'événement (delta, tool call, etc.)
-- `sequence` : Ordre des événements pour ce stream
-- `created_at` : Date de création
+**Columns:**
+- `id` (PK): unique identifier
+- `message_id` (FK → chat_messages.id, nullable): associated message (nullable for structured calls)
+- `stream_id`: stream identifier (message_id for sessions, `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` for structured calls)
+- `event_type`: event type ('content_delta' | 'reasoning_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call_result' | 'status' | 'error' | 'done')
+- `data` (JSONB): event data (delta, tool call, etc.)
+- `sequence`: event order for this stream
+- `created_at`: creation date
 
-**Index :**
-- `chat_stream_events_message_id_idx` : Sur `message_id`
-- `chat_stream_events_stream_id_idx` : Sur `stream_id`
-- `chat_stream_events_sequence_idx` : Sur `stream_id, sequence`
+**Indexes:**
+- `chat_stream_events_message_id_idx`: on `message_id`
+- `chat_stream_events_stream_id_idx`: on `stream_id`
+- `chat_stream_events_sequence_idx`: on `stream_id, sequence`
 
-**Utilisation :**
-- Stockage des événements pour relecture (sessions informelles et appels structurés)
-- Notification via PostgreSQL NOTIFY pour streaming temps réel
-- Permet de reconstruire le flux complet d'une réponse
-- **Note** : Pour les appels structurés, `message_id` est null et `stream_id` est déterministe par entité (`folder_<id>`, `usecase_<id>`, etc.)
+**Usage:**
+- Event storage for replay (informal sessions and structured calls)
+- Notifications via PostgreSQL NOTIFY for real‑time streaming
+- Reconstruct full response stream
+- **Note**: for structured calls, `message_id` is null and `stream_id` is deterministic per entity (`folder_<id>`, `usecase_<id>`, etc.)
 
 #### `context_modification_history`
-Historique détaillé de toutes les modifications d'objets (toutes sessions confondues).
+Detailed history of all object modifications (all sessions combined).
 
-**Colonnes :**
-- `id` (PK) : Identifiant unique
-- `context_type` : Type d'objet modifié ('organization' | 'folder' | 'usecase' | 'executive_summary')
-- `context_id` : ID de l'objet modifié
-- `session_id` (FK → chat_sessions.id) : Session qui a modifié (nullable si modification non liée à une session)
-- `message_id` (FK → chat_messages.id) : Message qui a déclenché la modification (nullable)
-- `field` : Nom du champ modifié (ex: 'name', 'description', 'data.value_scores')
-- `old_value` (JSONB) : Ancienne valeur
-- `new_value` (JSONB) : Nouvelle valeur
-- `tool_call_id` : ID du tool call si modification via tool
-- `prompt_id` : ID du prompt utilisé pour cette modification (obligatoire pour appels structurés)
-- `prompt_type` : Type de prompt pour les appels structurés ('organization_info' | 'folder_name' | 'use_case_list' | 'use_case_detail' | 'executive_summary') - nullable pour sessions informelles
-- `prompt_version_id` (FK → prompt_versions.id) : Version exacte du prompt utilisée (obligatoire pour appels structurés)
-- `job_id` (FK → job_queue.id) : Job de génération (appels structurés)
-- `sequence` : Ordre des modifications pour cet objet
-- `created_at` : Date de création
+**Columns:**
+- `id` (PK): unique identifier
+- `context_type`: modified object type ('organization' | 'folder' | 'usecase' | 'executive_summary')
+- `context_id`: modified object ID
+- `session_id` (FK → chat_sessions.id): session that modified (nullable if not session‑linked)
+- `message_id` (FK → chat_messages.id): message that triggered modification (nullable)
+- `field`: modified field name (e.g., 'name', 'description', 'data.value_scores')
+- `old_value` (JSONB): old value
+- `new_value` (JSONB): new value
+- `tool_call_id`: tool call ID if modification via tool
+- `prompt_id`: prompt ID used for this modification (required for structured calls)
+- `prompt_type`: prompt type for structured calls ('organization_info' | 'folder_name' | 'use_case_list' | 'use_case_detail' | 'executive_summary') — nullable for informal sessions
+- `prompt_version_id` (FK → prompt_versions.id): exact prompt version used (required for structured calls)
+- `job_id` (FK → job_queue.id): generation job (structured calls)
+- `sequence`: modification order for this object
+- `created_at`: creation date
 
-**Index :**
-- `context_modification_history_context_idx` : Sur `context_type, context_id`
-- `context_modification_history_session_id_idx` : Sur `session_id`
-- `context_modification_history_sequence_idx` : Sur `context_type, context_id, sequence`
+**Indexes:**
+- `context_modification_history_context_idx`: on `context_type, context_id`
+- `context_modification_history_session_id_idx`: on `session_id`
+- `context_modification_history_sequence_idx`: on `context_type, context_id, sequence`
 
-**Utilisation :**
-- Historique complet des modifications d'un objet
-- Traçabilité des changements par session (si `session_id` non null) ou par appel structuré (si `session_id` null)
-- Permet de voir l'évolution d'un objet au fil du temps
+**Usage:**
+- Full history of object modifications
+- Traceability of changes by session (`session_id` not null) or by structured call (`session_id` null)
+- See object evolution over time
 
-**Distinction appels structurés vs sessions informelles :**
-- **Appels structurés** : `session_id = null`, `prompt_id` obligatoire, `prompt_type` et `prompt_version_id` remplis, `job_id` renseigné si orchestré via la queue
-  - Ce sont les générations classiques existantes (ex: `/api/v1/use-cases/generate`, `/api/v1/organizations/ai-enrich`)
-  - Types de prompts : 'organization_info', 'folder_name', 'use_case_list', 'use_case_detail', 'executive_summary'
-  - Ce sont des appels uniques avec system prompt fixe, trackés directement dans `context_modification_history` et `structured_generation_runs`
-  - Pas de session de chat associée, pas de messages dans `chat_messages` (sauf si déclenché depuis une session : on garde `message_id` nullable)
-  - Le streaming/reasoning est tracké via `chat_stream_events` avec identification spécifique (partage de modèle avec sessions informelles)
-  - Affichage dans les vues objets : outil dépliable avec titre spécifique (ex: "Génération de la liste des cas d'usage")
-  - Intégration dans sessions : via tool si l'IA décide de l'appeler (pas par défaut)
-- **Sessions informelles** : `session_id` non null, `prompt_id` optionnel, `prompt_type` et `prompt_version_id` null
-  - Conversations libres avec l'IA, trackées dans `chat_sessions` et `chat_messages`
-  - Modifications via tools dans le contexte de la conversation
+**Structured calls vs informal sessions:**
+- **Structured calls**: `session_id = null`, `prompt_id` required, `prompt_type` and `prompt_version_id` set, `job_id` set if orchestrated via queue
+  - These are existing classic generations (e.g., `/api/v1/use-cases/generate`, `/api/v1/organizations/ai-enrich`)
+  - Prompt types: 'organization_info', 'folder_name', 'use_case_list', 'use_case_detail', 'executive_summary'
+  - Single calls with a fixed system prompt, tracked directly in `context_modification_history` and `structured_generation_runs`
+  - No chat session associated, no messages in `chat_messages` (unless triggered from a session: `message_id` remains nullable)
+  - Streaming/reasoning tracked via `chat_stream_events` with specific identification (shared model with informal sessions)
+  - Display in object views: expandable tool with specific title (e.g., "Use case list generation")
+  - Integration in sessions: via tool if the AI chooses it (not by default)
+- **Informal sessions**: `session_id` not null, `prompt_id` optional, `prompt_type` and `prompt_version_id` null
+  - Freeform conversations with AI, tracked in `chat_sessions` and `chat_messages`
+  - Modifications via tools in the conversation context
 
-#### `prompts` (non créée, prompts dans `settings.prompts` JSON)
-Table prévue pour les prompts managés des appels IA structurés (générations classiques).
+#### `prompts` (not created, prompts in `settings.prompts` JSON)
+Planned table for managed prompts used by structured AI calls (classic generations).
 
-**État actuel** : Les prompts sont stockés dans `settings.prompts` (JSON). La table `prompts` permettra de normaliser et de tracker l'historique des versions.
+**Current state**: prompts are stored in `settings.prompts` (JSON). The `prompts` table will normalize and track version history.
 
-**Mapping prompts → objets générés :**
-- `organization_info` → modifie `organizations` (`name` + `data.*`: industry, size, products, processes, kpis, challenges, objectives, technologies, references)
-- `folder_name` → modifie `folders` (name, description)
-- `use_case_list` → crée plusieurs `use_cases` (name, description dans data JSONB)
-- `use_case_detail` → modifie `use_cases` (tous les champs dans data JSONB + scoring)
-- `executive_summary` → modifie `folders.executive_summary`
+**Prompt → object mapping:**
+- `organization_info` → modifies `organizations` (`name` + `data.*`: industry, size, products, processes, kpis, challenges, objectives, technologies, references)
+- `folder_name` → modifies `folders` (name, description)
+- `use_case_list` → creates multiple `use_cases` (name, description in JSONB data)
+- `use_case_detail` → modifies `use_cases` (all fields in JSONB data + scoring)
+- `executive_summary` → modifies `folders.executive_summary`
 
-#### `prompt_versions` (non créée)
-Table prévue pour l'historique des versions de chaque prompt pour traçabilité complète.
+#### `prompt_versions` (not created)
+Planned table for version history of each prompt for full traceability.
 
-#### `structured_generation_runs` (non créée)
-Table prévue pour la traçabilité opérationnelle d'un appel structuré (génération classique) et de son exécution.
+#### `structured_generation_runs` (not created)
+Planned table for operational traceability of a structured call (classic generation) and its execution.
 
-**État actuel** : Les générations classiques sont trackées via `chat_stream_events` avec `message_id=null` et `streamId` déterministe. Le statut est géré via `job_queue`.
+**Current state**: classic generations are tracked via `chat_stream_events` with `message_id=null` and deterministic `streamId`. Status is managed via `job_queue`.
 
-### Relations avec les objets métier existants
+### Relations with existing business objects
 
 #### Organizations
-- **Relation** : `chat_contexts.context_type='organization'` + `context_id=organizations.id`
-- **Modifications possibles** : `organizations.name` + champs de profil dans `organizations.data` (industry, size, products, processes, kpis, challenges, objectives, technologies, references)
-- **Historique** : Stocké dans `context_modification_history` avec `context_type='organization'`
+- **Relation**: `chat_contexts.context_type='organization'` + `context_id=organizations.id`
+- **Possible modifications**: `organizations.name` + profile fields in `organizations.data` (industry, size, products, processes, kpis, challenges, objectives, technologies, references)
+- **History**: stored in `context_modification_history` with `context_type='organization'`
 
 #### Folders
-- **Relation** : `chat_contexts.context_type='folder'` + `context_id=folders.id`
-- **Modifications possibles** : name, description, matrix_config, executive_summary
-- **Historique** : Stocké dans `context_modification_history` avec `context_type='folder'`
-- **Note** : `executive_summary` est stocké dans `folders.executive_summary` mais peut être traité comme un contexte séparé (`context_type='executive_summary'`)
+- **Relation**: `chat_contexts.context_type='folder'` + `context_id=folders.id`
+- **Possible modifications**: name, description, matrix_config, executive_summary
+- **History**: stored in `context_modification_history` with `context_type='folder'`
+- **Note**: `executive_summary` is stored in `folders.executive_summary` but can be treated as a separate context (`context_type='executive_summary'`)
 
 #### Use Cases
-- **Relation** : `chat_contexts.context_type='usecase'` + `context_id=use_cases.id`
-- **Modifications possibles** : Tous les champs dans `use_cases.data` (JSONB) : name, description, problem, solution, domain, technologies, valueScores, complexityScores, etc.
-- **Historique** : Stocké dans `context_modification_history` avec `context_type='usecase'`
-- **Note** : Les modifications de champs dans `data` JSONB sont trackées avec `field` comme 'data.name', 'data.valueScores', etc.
+- **Relation**: `chat_contexts.context_type='usecase'` + `context_id=use_cases.id`
+- **Possible modifications**: all fields in `use_cases.data` (JSONB): name, description, problem, solution, domain, technologies, valueScores, complexityScores, etc.
+- **History**: stored in `context_modification_history` with `context_type='usecase'`
+- **Note**: modifications to JSONB `data` fields are tracked with `field` like 'data.name', 'data.valueScores', etc.
 
-### Exemples d'utilisation
+### Usage examples
 
-#### Créer une session pour modifier un folder
+#### Create a session to modify a folder
 ```typescript
 const sessionId = await createChatSession({
   userId: 'user-123',
   contextType: 'folder',
   contextId: 'folder-456',
-  title: 'Modification du dossier IA Manufacturing'
+  title: 'Modify AI Manufacturing folder'
 });
 ```
 
-#### Envoyer un message et streamer la réponse
+#### Send a message and stream the response
 ```typescript
 const { messageId, streamPromise } = await sendChatMessage({
   sessionId: 'session-789',
-  content: 'Peux-tu améliorer la description du cas d\'usage X ?',
+  content: 'Can you improve the description of use case X?',
   model: 'o1-preview',
   promptId: 'use_case_detail'
 });
 
-// Écouter les événements de streaming
+// Listen to streaming events
 const eventSource = new EventSource(`/api/v1/chat/stream/${messageId}`);
 eventSource.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -472,7 +471,7 @@ eventSource.onmessage = (event) => {
 };
 ```
 
-#### Récupérer l'historique des modifications d'un use case
+#### Retrieve use case modification history
 ```typescript
 const history = await db
   .select()
@@ -486,183 +485,183 @@ const history = await db
   .orderBy(contextModificationHistory.sequence);
 ```
 
-#### Rejouer une session complète
+#### Replay a full session
 ```typescript
 const replay = await replayChatSession('session-789');
-// Retourne tous les messages avec leur contenu, reasoning, tool calls, etc.
+// Returns all messages with content, reasoning, tool calls, etc.
 ```
 
-### Intégration avec les prompts
+### Prompt integration
 
-**État actuel** : Les prompts sont stockés dans `settings.prompts` (JSON). Les tables `prompts` et `prompt_versions` ne sont pas encore créées.
+**Current state**: prompts are stored in `settings.prompts` (JSON). Tables `prompts` and `prompt_versions` are not created yet.
 
-**Types de prompts disponibles (appels structurés) :**
+**Available prompt types (structured calls):**
 
-| `prompt_id` | `prompt_type` | Objet généré | Description |
-|-------------|---------------|--------------|-------------|
-| `organization_info` | `organization_info` | `organizations` | Enrichissement d'organisation (`name` + `data.*`: industry, size, products, processes, kpis, challenges, objectives, technologies, references) |
-| `folder_name` | `folder_name` | `folders` | Génération de nom et description de dossier |
-| `use_case_list` | `use_case_list` | `use_cases` (multiple) | Génération de liste de cas d'usage (titre + description) |
-| `use_case_detail` | `use_case_detail` | `use_cases` (détail) | Génération détaillée d'un cas d'usage avec scoring (data JSONB) |
-| `executive_summary` | `executive_summary` | `folders.executive_summary` | Génération de synthèse exécutive complète d'un dossier |
+| `prompt_id` | `prompt_type` | Generated object | Description |
+|-------------|---------------|------------------|-------------|
+| `organization_info` | `organization_info` | `organizations` | Organization enrichment (`name` + `data.*`: industry, size, products, processes, kpis, challenges, objectives, technologies, references) |
+| `folder_name` | `folder_name` | `folders` | Folder name and description generation |
+| `use_case_list` | `use_case_list` | `use_cases` (multiple) | Use case list generation (title + description) |
+| `use_case_detail` | `use_case_detail` | `use_cases` (detail) | Detailed use case generation with scoring (JSONB data) |
+| `executive_summary` | `executive_summary` | `folders.executive_summary` | Full executive summary generation for a folder |
 
-### Flux de données
+### Data flows
 
-#### Sessions informelles (chat)
-1. **Création de session** → `chat_sessions` + `chat_contexts`
-2. **Envoi de message** → `chat_messages` (user) + streaming → `chat_messages` (assistant) + `chat_stream_events`
-3. **Modification d'objet via tool** → `context_modification_history` (avec `session_id`) + mise à jour de l'objet (organizations/folders/use_cases)
-4. **Notification temps réel** → PostgreSQL NOTIFY → Client via SSE
-5. **Relecture** → `chat_stream_events` pour reconstruire le flux
-6. **Historique** → `context_modification_history` pour voir toutes les modifications d'un objet
+#### Informal sessions (chat)
+1. **Session creation** → `chat_sessions` + `chat_contexts`
+2. **Message send** → `chat_messages` (user) + streaming → `chat_messages` (assistant) + `chat_stream_events`
+3. **Object modification via tool** → `context_modification_history` (with `session_id`) + object update (organizations/folders/use_cases)
+4. **Real‑time notification** → PostgreSQL NOTIFY → client via SSE
+5. **Replay** → `chat_stream_events` to rebuild the stream
+6. **History** → `context_modification_history` to see all object modifications
 
-#### Appels structurés (générations classiques)
-1. **Appel IA structuré** → Appel OpenAI avec system prompt fixe (ex: `use_case_detail`, `organization_info`, `folder_name`, `use_case_list`, `executive_summary`)
-2. **Prompt utilisé** → Référence dans `settings.prompts` JSON (tables `prompts`/`prompt_versions` non créées)
-3. **Streaming** → `chat_stream_events` (avec `message_id=null`, `stream_id` = `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` - déterministe par entité)
-4. **Traçabilité run** → Via `job_queue` et `chat_stream_events` (table `structured_generation_runs` non créée)
-5. **Modification d'objet** → `context_modification_history` (avec `session_id=null` pour générations classiques) + mise à jour de l'objet
-6. **Notification temps réel** → PostgreSQL NOTIFY → Client via SSE global (même mécanisme)
-7. **Historique** → `context_modification_history` pour voir toutes les modifications (appels structurés + sessions)
+#### Structured calls (classic generations)
+1. **Structured AI call** → OpenAI call with fixed system prompt (e.g., `use_case_detail`, `organization_info`, `folder_name`, `use_case_list`, `executive_summary`)
+2. **Prompt used** → reference in `settings.prompts` JSON (tables `prompts`/`prompt_versions` not created)
+3. **Streaming** → `chat_stream_events` (with `message_id=null`, `stream_id` = `folder_<folderId>`, `usecase_<useCaseId>`, `organization_<organizationId>` — deterministic per entity)
+4. **Run traceability** → via `job_queue` and `chat_stream_events` (table `structured_generation_runs` not created)
+5. **Object modification** → `context_modification_history` (with `session_id=null` for classic generations) + object update
+6. **Real‑time notification** → PostgreSQL NOTIFY → client via global SSE (same mechanism)
+7. **History** → `context_modification_history` for all modifications (structured calls + sessions)
 
-#### Documents contextuels
-1. **Upload** → POST `/api/documents` (context_type/id, fichier) → stockage S3/MinIO, enregistrement `context_documents` (status=uploaded)
-2. **Résumé auto** → Job queue “document_summary” lancé immédiatement (prompt résumé versionné, 0,1k token/page, langue configurable, défaut FR) → update `context_documents` (status=processing→ready/failed, summary, prompt_version_id, job_id) + event `document_summarized`
-3. **Consultation** → GET `/api/documents?context_type=&context_id=` + GET `/api/documents/:id` (métadonnées + résumé) ; pas de viewer riche (download simple via GET `/api/documents/:id/content` si nécessaire)
-4. **Notifications** → l’IA est notifiée à l’upload pour accusé de réception ; le traitement cas d’usage qui dépend du doc attend le statut ready (résumé disponible)
-5. **Traçabilité** → `context_modification_history` events `document_added` / `document_summarized` avec `prompt_version_id` et `job_id`
+#### Context documents
+1. **Upload** → POST `/api/documents` (context_type/id, file) → S3/MinIO storage, `context_documents` record (status=uploaded)
+2. **Auto summary** → “document_summary” queue job launched immediately (versioned summary prompt, 0.1k token/page, configurable language, default FR) → update `context_documents` (status=processing→ready/failed, summary, prompt_version_id, job_id) + event `document_summarized`
+3. **Consultation** → GET `/api/documents?context_type=&context_id=` + GET `/api/documents/:id` (metadata + summary); no rich viewer (simple download via GET `/api/documents/:id/content` if needed)
+4. **Notifications** → AI is notified on upload for acknowledgement; any use‑case processing depending on the doc waits for status ready (summary available)
+5. **Traceability** → `context_modification_history` events `document_added` / `document_summarized` with `prompt_version_id` and `job_id`
 
-## Étude d'impact technique (ancrage API/UI/DB/queue)
+## Technical impact study (API/UI/DB/queue anchor)
 
-- [x] **Base de données** :
-  - [x] Schéma principal : `api/src/db/schema.ts` avec tables `chat_sessions`, `chat_messages`, `chat_contexts`, `chat_stream_events`, `context_modification_history`
-  - [x] Index/contrainte : `chat_stream_events(stream_id, sequence)` unique ; snapshots `chat_contexts`
-  - [ ] Tables `prompts`, `prompt_versions`, `structured_generation_runs` (non créées, prompts dans `settings.prompts` JSON)
+- [x] **Database**:
+  - [x] Main schema: `api/src/db/schema.ts` with tables `chat_sessions`, `chat_messages`, `chat_contexts`, `chat_stream_events`, `context_modification_history`
+  - [x] Index/constraint: `chat_stream_events(stream_id, sequence)` unique; `chat_contexts` snapshots
+  - [ ] Tables `prompts`, `prompt_versions`, `structured_generation_runs` (not created, prompts in `settings.prompts` JSON)
 
-- [x] **Queue** :
-  - [x] Jobs `chat_message` dans la queue
-  - [x] Générations classiques via queue avec streaming
-  - [ ] Annulation via queue (à finaliser)
+- [x] **Queue**:
+  - [x] `chat_message` jobs in queue
+  - [x] Classic generations via queue with streaming
+  - [ ] Cancellation via queue (to finalize)
 
-- [x] **API (Hono)** :
-  - [x] Router `api/src/routes/api/chat.ts` monté dans `api/src/routes/api/index.ts`
-  - [x] Endpoints : `POST /api/v1/chat/messages`, `GET /api/v1/chat/sessions`, `GET /api/v1/chat/sessions/:id/messages`, `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, `DELETE /api/v1/chat/sessions/:id`
-  - [x] Endpoint SSE global : `GET /api/v1/streams/sse`
-  - [x] Endpoint historique : `GET /api/v1/streams/events/:streamId`
-  - [x] Services : `chat-service.ts`, `stream-service.ts`, `tool-service.ts`
-  - [ ] Routes documents (prévu Lot B)
+- [x] **API (Hono)**:
+  - [x] Router `api/src/routes/api/chat.ts` mounted in `api/src/routes/api/index.ts`
+  - [x] Endpoints: `POST /api/v1/chat/messages`, `GET /api/v1/chat/sessions`, `GET /api/v1/chat/sessions/:id/messages`, `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, `DELETE /api/v1/chat/sessions/:id`
+  - [x] Global SSE endpoint: `GET /api/v1/streams/sse`
+  - [x] History endpoint: `GET /api/v1/streams/events/:streamId`
+  - [x] Services: `chat-service.ts`, `stream-service.ts`, `tool-service.ts`
+  - [ ] Document routes (planned Lot B)
 
-- [x] **Backend streaming** :
-  - [x] SSE handler global (`GET /api/v1/streams/sse`), abonnements PG LISTEN/NOTIFY
-  - [x] Écriture `chat_stream_events` au fil du stream + NOTIFY avec payload minimal
+- [x] **Backend streaming**:
+  - [x] Global SSE handler (`GET /api/v1/streams/sse`), PG LISTEN/NOTIFY subscriptions
+  - [x] `chat_stream_events` writes during stream + NOTIFY with minimal payload
 
-- [x] **UI (SvelteKit)** :
-  - [x] Composants intégrés : `ChatWidget.svelte`, `ChatPanel.svelte`, `StreamMessage.svelte`, `QueueMonitor.svelte`
-  - [x] Chat global disponible partout via `+layout.svelte`
-  - [x] Détection automatique du contexte depuis la route
-  - [ ] Bloc "Documents" sur les pages objets (prévu Lot B)
+- [x] **UI (SvelteKit)**:
+  - [x] Integrated components: `ChatWidget.svelte`, `ChatPanel.svelte`, `StreamMessage.svelte`, `QueueMonitor.svelte`
+  - [x] Global chat available everywhere via `+layout.svelte`
+  - [x] Automatic context detection from the route
+  - [ ] "Documents" block on object pages (planned Lot B)
 
-- [x] **Tests** :
-  - [x] Tests unitaires API (agrégation SSE, tool calls)
-  - [x] Tests d'intégration API (endpoints chat, streams, tool calls)
-  - [x] Tests unitaires UI (`streamHub` store)
-  - [x] Tests E2E Playwright (chat/stream/tool-calls)
+- [x] **Tests**:
+  - [x] API unit tests (SSE aggregation, tool calls)
+  - [x] API integration tests (chat endpoints, streams, tool calls)
+  - [x] UI unit tests (`streamHub` store)
+  - [x] Playwright E2E tests (chat/stream/tool‑calls)
 
-## Lots orientés valeur (workplan livrable)
+## Value‑oriented lots (deliverable workplan)
 
-### Lot A — "Mise à jour ciblée d'un objet" ✅ Terminé (fonctionnel + tests)
+### Lot A — "Targeted update of an object" ✅ Done (functional + tests)
 
-**Valeur** : Démonstration client dès le premier incrément. L'IA propose et applique une amélioration ciblée sur un objet métier existant avec reasoning temps réel et traçabilité.
+**Value**: client demo from the first increment. The AI proposes and applies a targeted improvement on an existing business object with real‑time reasoning and traceability.
 
-**Portée fonctionnelle** : Mise à jour de `use_cases.data.*` via tool `update_usecase_field` (use case uniquement).
+**Functional scope**: update `use_cases.data.*` via tool `update_usecase_field` (use case only).
 
-**Implémenté** :
-- [x] API : POST `/api/v1/chat/messages` (chat informel) + SSE global `/api/v1/streams/sse`
-- [x] Tools : `read_usecase`, `update_usecase_field`, `web_search`, `web_extract`
-- [x] Rehydratation : GET `/api/v1/chat/sessions/:id/stream-events` (batch) et GET `/api/v1/chat/messages/:id/stream-events`
-- [x] UI : `ChatWidget` (bulle + panneau), `ChatPanel` (sessions + messages), `StreamMessage` (reasoning + content + tools)
-- [x] Détection automatique du contexte depuis la route
-- [x] Données : `chat_stream_events` rempli (reasoning/content/tools), `context_modification_history` écrit pour l'update, snapshots dans `chat_contexts`
-- [x] Refresh automatique de l'UI après modification (SSE events)
-- [x] Tests unitaires API (`stream-service`, `tool-service`, `tools`)
-- [x] Tests d'intégration API (endpoints chat, streams, tool calls)
-- [x] Tests unitaires UI (`streamHub` store)
-- [x] Tests E2E Playwright (chat, tool calls, génération IA)
+**Implemented**:
+- [x] API: POST `/api/v1/chat/messages` (informal chat) + global SSE `/api/v1/streams/sse`
+- [x] Tools: `read_usecase`, `update_usecase_field`, `web_search`, `web_extract`
+- [x] Rehydration: GET `/api/v1/chat/sessions/:id/stream-events` (batch) and GET `/api/v1/chat/messages/:id/stream-events`
+- [x] UI: `ChatWidget` (bubble + panel), `ChatPanel` (sessions + messages), `StreamMessage` (reasoning + content + tools)
+- [x] Automatic context detection from the route
+- [x] Data: `chat_stream_events` filled (reasoning/content/tools), `context_modification_history` written for update, snapshots in `chat_contexts`
+- [x] Automatic UI refresh after modification (SSE events)
+- [x] API unit tests (`stream-service`, `tool-service`, `tools`)
+- [x] API integration tests (chat endpoints, streams, tool calls)
+- [x] UI unit tests (`streamHub` store)
+- [x] Playwright E2E tests (chat, tool calls, AI generation)
 
-**À venir** :
-- [ ] Extension aux autres objets (folder, organization, executive_summary)
+**Coming**:
+- [ ] Extend to other objects (folder, organization, executive_summary)
 
-**Couverture CU** : CU-001 (use case), CU-002 (partiel), CU-003, CU-004, CU-005 (use case), CU-010 (partiel), CU-015 (partiel), CU-016 (partiel), CU-019 (partiel), CU-020 (partiel), CU-021 (partiel)
+**CU coverage**: CU-001 (use case), CU-002 (partial), CU-003, CU-004, CU-005 (use case), CU-010 (partial), CU-015 (partial), CU-016 (partial), CU-019 (partial), CU-020 (partial), CU-021 (partial)
 
-### Lot B — "Contexte documentaire (ingestion + résumé + consultation)"
+### Lot B — "Document context (ingestion + summary + consultation)"
 
-**Valeur** : Attacher des documents aux objets (organization/folder/usecase), lancer automatiquement un résumé (0,1k token/page, langue configurable, défaut FR), consulter le résumé et le statut.
+**Value**: attach documents to objects (organization/folder/usecase), automatically summarize (0.1k token/page, configurable language, default FR), consult summary and status.
 
-**Couverture CU** : CU-022
+**CU coverage**: CU-022
 
-**Implémenté (partiel)** :
-- [x] Documents de session chat (upload/list/delete, résumé auto, tool `documents`).
+**Implemented (partial)**:
+- [x] Chat session documents (upload/list/delete, auto summary, tool `documents`).
 
-**À implémenter** :
-- [ ] API : POST `/api/documents` (upload + context_type/id) ; GET `/api/documents?context_type=&context_id=` (liste) ; GET `/api/documents/:id` (meta+résumé) ; GET `/api/documents/:id/content` (download)
-- [ ] Job queue "document_summary" déclenché à l'upload ; statut dans `context_documents` ; events `document_added` / `document_summarized`
-- [ ] Tables `context_documents` (+ option `context_document_versions`) ; stockage S3/MinIO
-- [ ] UI : Bloc "Documents" dans les pages objets (dossiers, cas d'usage, organisations) : upload, liste, statut, résumé
-- [ ] Tests : Unit/int/E2E pour upload → job résumé → statut ready/failed
+**To implement**:
+- [ ] API: POST `/api/documents` (upload + context_type/id); GET `/api/documents?context_type=&context_id=` (list); GET `/api/documents/:id` (meta+summary); GET `/api/documents/:id/content` (download)
+- [ ] "document_summary" queue job triggered on upload; status in `context_documents`; events `document_added` / `document_summarized`
+- [ ] Tables `context_documents` (+ optional `context_document_versions`); S3/MinIO storage
+- [ ] UI: "Documents" block on object pages (folders, use cases, organizations): upload, list, status, summary
+- [ ] Tests: Unit/int/E2E for upload → summary job → ready/failed status
 
-### Lot C — "Tool-calls parallèles et appels structurés"
+### Lot C — "Parallel tool‑calls and structured calls"
 
-**Valeur** : Lancer plusieurs actions en parallèle, voir statut/annuler, appliquer. Finaliser la traçabilité des appels structurés.
+**Value**: run multiple actions in parallel, see status/cancel/apply. Finalize structured call traceability.
 
-**Couverture CU** : CU-008 (finalisation), CU-011 (annulation), CU-012 (multi-contexte), CU-019 (annulation queue)
+**CU coverage**: CU-008 (finalization), CU-011 (cancellation), CU-012 (multi‑context), CU-019 (queue cancellation)
 
-**Partiellement implémenté** :
-- [x] Tool calls parallèles fonctionnels (boucle itérative dans `runAssistantGeneration`)
-- [x] Affichage des tool calls dans `StreamMessage` (accordéon par tool_call_id)
-- [x] Générations classiques streamées via `chat_stream_events` (message_id null)
+**Partially implemented**:
+- [x] Parallel tool calls functional (iterative loop in `runAssistantGeneration`)
+- [x] Tool call display in `StreamMessage` (accordion per tool_call_id)
+- [x] Classic generations streamed via `chat_stream_events` (message_id null)
 
-**À implémenter** :
-- [ ] Table `structured_generation_runs` pour traçabilité complète
-- [ ] Tables `prompts`/`prompt_versions` pour versioning des prompts
-- [ ] Endpoint POST `/api/structured/:prompt_id` pour appels structurés dédiés
-- [ ] Annulation via queue (PATCH `/api/structured/:run_id/cancel`)
-- [ ] Multi-contexte dans une session (plusieurs objets)
-- [ ] **UndoBar** : Bouton "Annuler" + preview de la dernière modification (via `context_modification_history` + `chat_contexts`), option confirmation humaine pour actions ⚠️
-- [ ] Tests : Unit/int/E2E pour appels structurés parallèles, annulation
+**To implement**:
+- [ ] Table `structured_generation_runs` for full traceability
+- [ ] Tables `prompts`/`prompt_versions` for prompt versioning
+- [ ] Endpoint POST `/api/structured/:prompt_id` for dedicated structured calls
+- [ ] Cancellation via queue (PATCH `/api/structured/:run_id/cancel`)
+- [ ] Multi‑context in a session (multiple objects)
+- [ ] **UndoBar**: "Undo" button + preview of last modification (via `context_modification_history` + `chat_contexts`), human confirmation option for ⚠️ actions
+- [ ] Tests: Unit/int/E2E for parallel structured calls, cancellation
 
-### Lot D — "Audit, diff et résilience"
+### Lot D — "Audit, diff and resilience"
 
-**Valeur** : L'utilisateur visualise les diffs, peut rollback, UI intégrée au thème, résilience accrue.
+**Value**: user can visualize diffs, rollback, UI integrated with theme, increased resilience.
 
-**Couverture CU** : CU-011 (rollback), CU-016 (onglet Historique), CU-017 (contexte long), CU-018 (validation/confirmation)
+**CU coverage**: CU-011 (rollback), CU-016 (History tab), CU-017 (long context), CU-018 (validation/confirmation)
 
-**Infrastructure prête** :
-- [x] Snapshots `snapshot_before` et `snapshot_after` dans `chat_contexts`
-- [x] Resync SSE fonctionnel (via `historySource` et endpoints batch)
+**Infrastructure ready**:
+- [x] Snapshots `snapshot_before` and `snapshot_after` in `chat_contexts`
+- [x] SSE resync functional (via `historySource` and batch endpoints)
 
-**À implémenter** :
-- [ ] Composant `DiffViewer` pour afficher les différences avant/après
+**To implement**:
+- [ ] `DiffViewer` component to display before/after differences
 - [ ] Rollback via snapshots (API + UI)
-- [ ] Onglet "Historique" dans les vues objets (folder, use case, organization)
-- [ ] Liste des sessions ayant modifié l'objet
-- [ ] Preview des modifications avant application (diff visuel)
-- [ ] Confirmation explicite avant d'appliquer une modification (bouton "Appliquer")
-- [ ] Gestion du contexte long (limite tokens, résumé automatique)
-- [ ] Tests : Unit/int/E2E pour diff/rollback, reprise SSE
+- [ ] "History" tab in object views (folder, use case, organization)
+- [ ] List of sessions that modified the object
+- [ ] Preview of changes before applying (visual diff)
+- [ ] Explicit confirmation before applying a change ("Apply" button)
+- [ ] Long context management (token limit, auto summary)
+- [ ] Tests: Unit/int/E2E for diff/rollback, SSE resume
 
-### Lot E — "Robustesse + fonctionnalités avancées"
+### Lot E — "Robustness + advanced features"
 
-**Valeur** : Parcours complet testé E2E, fonctionnalités avancées (switch modèle, suggestions, export, voix).
+**Value**: full flow tested E2E, advanced features (model switch, suggestions, export, voice).
 
-**Couverture CU** : CU-006 (switch modèle), CU-007 (approfondissement), CU-009 (création objets), CU-013 (suggestions), CU-014 (export/partage), CU-017 (contexte long), CU-020 (feedback), CU-021 (gestion erreurs améliorée)
+**CU coverage**: CU-006 (model switch), CU-007 (deepening), CU-009 (object creation), CU-013 (suggestions), CU-014 (export/sharing), CU-017 (long context), CU-020 (feedback), CU-021 (improved error handling)
 
-**À implémenter** :
-- [ ] Switch de modèle dans les sessions (UI + API)
-- [ ] Approfondissement avec modèle supérieur
-- [ ] Création d'objets via chat (tools)
-- [ ] Suggestions et recommandations (IA proactive)
-- [ ] Export et partage (JSON, Markdown, PDF)
-- [ ] Feedback utilisateur (👍/👎) sur les suggestions
-- [ ] Retry automatique avec correction pour erreurs récupérables
-- [ ] Extension voix : stub `audio_chunk` (type d'événement) côté SSE
-- [ ] Tests : Unit/int/E2E couvrant un flux complet (chat + structured + tool-calls + rollback)
+**To implement**:
+- [ ] Model switch in sessions (UI + API)
+- [ ] Deepen with higher‑tier model
+- [ ] Object creation via chat (tools)
+- [ ] Suggestions and recommendations (proactive AI)
+- [ ] Export and sharing (JSON, Markdown, PDF)
+- [ ] User feedback (👍/👎) on suggestions
+- [ ] Automatic retry with correction for recoverable errors
+- [ ] Voice extension: stub `audio_chunk` (event type) in SSE
+- [ ] Tests: Unit/int/E2E covering a full flow (chat + structured + tool‑calls + rollback)

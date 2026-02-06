@@ -1,27 +1,27 @@
 # Recipe – Use Case Markdown Editing
 
-## Objectif
-Garantir que les cartes « cas d’usage » exploitent `EditableInput` exactement comme le dashboard, sans casser les données historiques (puces `•`, sauts simples, totaux calculés côté API) et sans perturber les colonnes dérivées (`total_value_score`, `total_complexity_score`). Cette recette décrit le pipeline à répliquer pour les phases suivantes (listes, justifications, etc.).
+## Objective
+Ensure that “use case” cards use `EditableInput` exactly like the dashboard, without breaking historical data (bullets `•`, single line breaks, API‑computed totals) and without disturbing derived columns (`total_value_score`, `total_complexity_score`). This recipe describes the pipeline to replicate for subsequent phases (lists, justifications, etc.).
 
 ---
 
-## Chaîne de données
+## Data flow
 
-1. **Génération / stockage**
-   - Les prompts (`use_case_detail`) imposent du Markdown, mais l’historique contient souvent des puces Unicode (`•`, `▪`) et des sauts simples.
-   - L’API (`POST /use-cases`, `POST /:id/detail`) stocke la valeur telle quelle, sans normalisation.
+1. **Generation / storage**
+   - Prompts (`use_case_detail`) enforce Markdown, but historical data often contains Unicode bullets (`•`, `▪`) and single line breaks.
+   - The API (`POST /use-cases`, `POST /:id/detail`) stores the value as‑is, without normalization.
 
-2. **Lecture côté UI**
-   - Toujours récupérer le use case via `apiGet('/use-cases/:id')` et pousser la version brute dans `useCasesStore`.
-   - Avant d’initialiser `EditableInput`, normaliser localement la chaîne (cf. helper ci-dessous) pour assurer un rendu identique au dashboard.
+2. **UI read**
+   - Always fetch the use case via `apiGet('/use-cases/:id')` and push the raw version into `useCasesStore`.
+   - Before initializing `EditableInput`, normalize the string locally (see helper below) to ensure the same rendering as the dashboard.
 
-3. **Écriture**
-   - `EditableInput` n’envoie que les champs réellement modifiés. Pour la description : `fullData = { description: normalizeUseCaseMarkdown(value) }`.
-   - L’API `PUT /use-cases/:id` recalcule les scores **uniquement si le payload fournit `valueScores` ou `complexityScores`** ; sinon les colonnes dérivées ne bougent pas.
+3. **Write**
+   - `EditableInput` only sends fields that are actually modified. For description: `fullData = { description: normalizeUseCaseMarkdown(value) }`.
+   - The API `PUT /use-cases/:id` recalculates scores **only if the payload provides `valueScores` or `complexityScores`**; otherwise derived columns do not change.
 
 ---
 
-## Helper de normalisation
+## Normalization helper
 
 Fichier : `ui/src/lib/utils/markdown.ts`
 
@@ -39,14 +39,14 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
 }
 ```
 
-- **Idempotent** : une fois les puces converties et les doubles sauts ajoutés, relancer la fonction ne modifie plus la chaîne.
-- **Performance** : deux passages linéaires (pas de lookbehind), donc négligeable même pour des textes longs.
+- **Idempotent**: once bullets are converted and double line breaks added, re‑running the function does not change the string.
+- **Performance**: two linear passes (no lookbehind), negligible even for long texts.
 
 ---
 
-## Pattern côté composant (`UseCaseDetail.svelte`)
+## Component pattern (`UseCaseDetail.svelte`)
 
-1. **Imports clés**
+1. **Key imports**
    ```ts
    import EditableInput from '$lib/components/EditableInput.svelte';
    import { apiGet } from '$lib/utils/api';
@@ -54,7 +54,7 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
    import { normalizeUseCaseMarkdown } from '$lib/utils/markdown';
    ```
 
-2. **État local**
+2. **Local state**
    ```ts
    let editedDescription = '';
    let descriptionOriginalValue = '';
@@ -74,7 +74,7 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
      : null;
    ```
 
-3. **Wrapper HTML identique au dashboard**
+3. **HTML wrapper identical to the dashboard**
    ```svelte
    {#if mode === 'print-only'}
      <div class="prose ..." class:description-compact-print={isDescriptionLong}>
@@ -99,7 +99,7 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
    {/if}
    ```
 
-4. **Reload après sauvegarde**
+4. **Reload after save**
    ```ts
    const reloadUseCase = async (id: string) => {
      const updated = await apiGet(`/use-cases/${id}`);
@@ -110,10 +110,10 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
 
 ---
 
-## Backend : route `PUT /use-cases/:id`
+## Backend: `PUT /use-cases/:id` route
 
-- **Avant** : recalcul systématique des totaux (donnant parfois des décimales) → tentative d’écriture `"111.5"` dans une colonne `integer` → erreur `22P02`.
-- **Maintenant** :
+- **Before**: systematic total recomputation (sometimes decimals) → attempted write `"111.5"` into an `integer` column → `22P02` error.
+- **Now**:
   ```ts
   const shouldRecompute = payload.valueScores !== undefined || payload.complexityScores !== undefined;
   if (matrix && shouldRecompute) {
@@ -122,24 +122,24 @@ export function normalizeUseCaseMarkdown(text?: string | null) {
     roundedComplexityScore = Math.round(computed.totalComplexityScore);
   }
   ```
-- Résultat : une simple mise à jour (`description`, `contact`, etc.) ne touche plus aux totaux, et les recalculs sont arrondis comme lors de la génération initiale.
+- Result: a simple update (`description`, `contact`, etc.) no longer touches totals, and recomputations are rounded like the initial generation.
 
 ---
 
-## Tests recommandés
+## Recommended tests
 
-1. **Edition description**
-   - Modifier la description d’un use case contenant des puces `•` / références `[1]`.
-   - Attendre la sauvegarde (5 s) et vérifier dans les logs API l’absence d’erreurs `22P02`.
-   - Confirmer que la valeur rechargée dans la page reflète le markdown normalisé.
+1. **Edit description**
+   - Modify a use case description containing bullets `•` / references `[1]`.
+   - Wait for save (5s) and verify API logs contain no `22P02` errors.
+   - Confirm the reloaded value reflects normalized markdown.
 
 2. **Print**
-   - Passer en preview impression et vérifier que `description-compact-print` continue de réduire la taille si besoin.
+   - Switch to print preview and verify `description-compact-print` still reduces size if needed.
 
-3. **Regression API**
-   - Appeler `PUT /use-cases/:id` sans `valueScores`/`complexityScores` (ex via curl) → les colonnes `total_*` ne changent pas.
-   - Appeler la même route avec un payload incluant des scores → arrondi appliqué, pas d’erreur Postgres.
+3. **API regression**
+   - Call `PUT /use-cases/:id` without `valueScores`/`complexityScores` (e.g., via curl) → `total_*` columns do not change.
+   - Call the same route with a payload including scores → rounding applied, no Postgres error.
 
-Ce document doit servir de référence pour les phases suivantes (listes, justifications, etc.) afin de reproduire fidèlement le workflow dashboard côté cas d’usage.
+This document should serve as a reference for subsequent phases (lists, justifications, etc.) to faithfully reproduce the dashboard workflow for use cases.
 
 

@@ -1,6 +1,6 @@
 # Top AI Ideas
 
-MANDATORY: va lire .cursor/rules/MASTER.mdc et suis les instructions avant tout
+MANDATORY: read `.cursor/rules/MASTER.mdc` and follow the rules first.
 
 **Un assistant à génération et évaluation de cas d'usage d'intelligence artificielle**
 
@@ -34,7 +34,7 @@ flowchart TB
     end
     
     subgraph "Data Layer"
-        DB[("PostgreSQL Database<br/>Postgres 16")]
+        DB[("PostgreSQL Database<br/>Postgres 17")]
         Queue["Custom PostgreSQL Queue<br/>QueueManager service"]
     end
     
@@ -118,27 +118,19 @@ CORS_ALLOWED_ORIGINS=https://*.sent-tech.ca,https://top-ai-ideas.sent-tech.ca
 
 ### Local Development
 
-1. **Start with Docker Compose** (recommended):
+1. **Start with Docker Compose** (mandatory):
    ```bash
    make dev
    ```
    The `VITE_API_BASE_URL` is automatically configured in `docker-compose.yml`.
 
-2. **Native development** (without Docker):
-   ```bash
-   # Terminal 1 - Start API
-   cd api && npm run dev
-   
-   # Terminal 2 - Start UI  
-   cd ui && npm run dev
-   ```
-   The UI will use the default fallback: `http://localhost:8787/api/v1`.
-
-3. **Custom API URL**:
+2. **Custom API URL**:
    Create `ui/.env.local` (gitignored):
    ```bash
    VITE_API_BASE_URL=http://custom-api:8787/api/v1
    ```
+
+Native (non-Docker) development is not supported in this repo.
 
 ## Spécification technique
 
@@ -218,7 +210,7 @@ Tous les endpoints d'authentification sont protégés par rate limiting pour pr�
 - Structure créée: `/ui` (SvelteKit 5 + adapter-static + svelte-i18n), `/api` (Hono + Drizzle + Zod), `Makefile`, `docker-compose.yml`, `Dockerfile.ui`, `Dockerfile.api`, `data/` (montage volume).
 
 **✅ Étape 1 – Données & API (TERMINÉE)**
-- Schéma PostgreSQL 16 avec migrations Drizzle.
+- Schéma PostgreSQL 17 avec migrations Drizzle.
 - CRUD: organizations, folders (+ matrix_config), use_cases, settings, business_config, sessions, job_queue.
 - Génération OpenAI (list/detail/folder) + `/use-cases/generate` (validation Zod, recalcul des scores).
 - Queue basée sur PostgreSQL avec QueueManager pour jobs asynchrones.
