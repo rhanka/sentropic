@@ -1,5 +1,35 @@
 # SPÉCIFICATION TECHNIQUE - Top AI Ideas
 
+## 0) Design Patterns & Component Lifecycle (directives)
+
+### Core Patterns (API)
+- **Routes -> Services -> Data access**: keep routing thin, business logic in services, and database access centralized.
+- **Schema-first validation**: validate all inputs with Zod and keep API contracts in sync with OpenAPI.
+- **Single source of truth**: server-side calculations remain authoritative (UI mirrors, never redefines).
+- **Error contracts**: return structured errors with stable codes for UI handling.
+- **Tenancy-first access**: all data access must be workspace-scoped and role-checked at the API boundary.
+- **Idempotent mutations**: prefer idempotent updates for retriable actions (especially queue and async flows).
+
+### Core Patterns (UI)
+- **State in stores**: Svelte stores are the source of truth; components stay presentational.
+- **Container vs presentational**: route pages orchestrate data; components render.
+- **Deterministic UI**: avoid hidden side effects in components; keep side effects in stores/services.
+- **I18n-first UI**: user-facing strings must be localized; keep technical identifiers in English.
+- **Progressive disclosure**: advanced actions live behind menus, not in primary flows.
+
+### Component Lifecycle (API/UI)
+- When adding or changing a key component (API service, UI store, major component):
+  - Update the relevant spec sections to reflect new behavior.
+  - Update tests in the existing structure (`api/tests/**`, `ui/tests/**/*.ts`, `e2e/tests/**`).
+  - Document tech debt and refactor needs in `.components/tech-debt-<service>.md`.
+  - If a refactor plan is required, add a short "Refactor Plan" subsection in the most relevant spec.
+
+### Upcoming Patterns (TODO-driven)
+- **Print templates (docx)**: treat print/export as a template pipeline (data -> template -> render) with strict separation between data mapping and template layout.
+- **Bilingual content**: design objects with a master language plus optional translations; avoid cross-language field drift.
+- **Use case ideation constraints**: extend use case data with structured constraints; keep rendering and print layouts aligned.
+- **Matrix generation per organization**: matrix templates are organization-owned with optional per-folder overrides.
+
 ## 1) Cartographie fonctionnelle et écrans
 
 Les écrans et leurs responsabilités sont implémentés en Svelte avec SvelteKit (routing fichiers) et des Svelte stores pour l'état partagé. L'API REST TypeScript est la source de vérité (pas de persistance critique en localStorage).
