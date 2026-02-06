@@ -1,0 +1,79 @@
+# DESIGN SYSTEM
+
+## Purpose
+- Keep UI consistent and predictable across the SvelteKit app.
+- Use **design tokens** (Tailwind config) as the single source of truth.
+- Prefer shared UI primitives over ad-hoc Tailwind class strings.
+
+## Tokens (single source of truth)
+- **Colors** live in `ui/tailwind.config.cjs` under `theme.extend.colors`.
+- **Never** introduce ad-hoc hex/OKLCH values inside components.
+- If a new semantic color is needed, add it to Tailwind and use the token everywhere.
+- Current tokens: `primary`, `accent`, `warning` (extend as needed).
+
+## Typography
+- Prefer consistent heading and text scales.
+- Reuse existing heading classes where possible (see `ui/src/lib/extensions/tailwind-classes.ts`).
+- Body text defaults: `text-slate-700` for normal, `text-slate-900` for emphasis.
+
+## Buttons (normalized)
+- **Primary button**: `bg-primary text-white hover:opacity-90`.
+- **Secondary button**: `bg-slate-100 text-slate-800 hover:bg-slate-200`.
+- **Icon-only button**: `text-primary hover:bg-slate-100` (preferred for icon-only actions).
+- **Danger**: `bg-red-600 text-white hover:bg-red-700`.
+- **Disabled**: `disabled:opacity-50 disabled:cursor-not-allowed`.
+- **Focus**: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30`.
+- **Menu triggers**: reuse `MenuTriggerButton` (see `ui/src/lib/components/MenuTriggerButton.svelte`).
+
+## Inputs & Forms
+- **Reference input**: use `EditableInput` (`ui/src/lib/components/EditableInput.svelte`) as the baseline for text inputs and inline edits.
+- Base input (if `EditableInput` not applicable): `rounded border border-slate-300 bg-white px-3 py-2 text-slate-800`.
+- Focus: `focus:outline-none focus:ring-2 focus:ring-primary/30`.
+- Error: add `border-red-400` and helper text `text-red-600`.
+- Keep labels in `text-sm text-slate-600` and align to inputs.
+
+## Menus & Popovers
+- Use `MenuPopover` + `MenuTriggerButton` + `FileMenu` patterns.
+- Menu container style lives in `ui/src/lib/components/MenuPopover.svelte` (rounded, border, shadow, padding).
+- Menu items follow the `FileMenu` item styles (compact, icon + label, hover background).
+
+## Layout & Spacing
+- Use Tailwind spacing scale consistently: `p-2`, `p-4`, `gap-2`, `gap-4`.
+- Prefer `rounded-lg` for cards, `rounded` for controls.
+- Cards: `rounded-lg border border-slate-200 bg-white shadow-sm`.
+- Use the layout grid rules already defined in `ui/src/app.css` for cards alignment (especially in dashboard/use case views).
+
+## Cards (normalized)
+- Base card: `rounded-lg border border-slate-200 bg-white shadow-sm`.
+- Card headers: prefer `rounded-t-lg` + `border-b border-slate-200` with consistent padding.
+- Score cards follow `ui/src/lib/components/ScoreCard.svelte` as the reference.
+
+## Iconography
+- Use `@lucide/svelte` icons only.
+- Sizes: `w-4 h-4` for inline, `w-5 h-5` for buttons/headers.
+- Keep icon color aligned with text color (no custom colors per icon).
+
+## Scrollbars
+- Use the global `slim-scroll` class from `ui/src/app.css` for any scrollable panel that needs a discreet scrollbar.
+- Do not create component-specific scrollbar rules.
+
+## Print (MANDATORY)
+- Print overrides are centralized in `ui/src/app.print.css`.
+- Use `print-hidden` / `print-only` classes to control visibility.
+- For use case print layouts, rely on existing `usecase-print` and annex rules in `app.print.css`.
+
+## Status & Feedback
+- Success: `bg-green-50 text-green-800 border-green-200`.
+- Warning: `bg-yellow-50 text-yellow-800 border-yellow-200`.
+- Error: `bg-red-50 text-red-800 border-red-200`.
+- Info: `bg-blue-50 text-blue-800 border-blue-200`.
+
+## Accessibility (MANDATORY)
+- All interactive elements must have a visible focus state.
+- Button hit target >= 36px height (use padding, not font size).
+- Ensure contrast for text on `primary` and `warning` backgrounds.
+
+## When creating new UI elements
+- Prefer shared primitives (e.g., `Button`, `Input`, `Badge`) if they exist.
+- If a shared primitive is missing, add it under `ui/src/lib/components/ui/`.
+- Do **not** duplicate styling across multiple pages without a shared primitive.
