@@ -63,6 +63,7 @@ const useCaseInput = z.object({
   benefits: z.array(z.string()).optional(),
   metrics: z.array(z.string()).optional(),
   risks: z.array(z.string()).optional(),
+  constraints: z.array(z.string()).optional(),
   nextSteps: z.array(z.string()).optional(),
   dataSources: z.array(z.string()).optional(),
   dataObjects: z.array(z.string()).optional(),
@@ -321,6 +322,7 @@ const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial
   if (payload.benefits !== undefined) data.benefits = payload.benefits;
   if (payload.metrics !== undefined) data.metrics = payload.metrics;
   if (payload.risks !== undefined) data.risks = payload.risks;
+  if (payload.constraints !== undefined) data.constraints = payload.constraints;
   if (payload.nextSteps !== undefined) data.nextSteps = payload.nextSteps;
   if (payload.dataSources !== undefined) data.dataSources = payload.dataSources;
   if (payload.dataObjects !== undefined) data.dataObjects = payload.dataObjects;
