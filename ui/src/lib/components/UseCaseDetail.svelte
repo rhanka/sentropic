@@ -73,7 +73,7 @@
   };
 
 const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'deadline'] as const;
-const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
+const LIST_FIELDS = ['benefits', 'risks', 'constraints', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
@@ -104,6 +104,7 @@ let textOriginals: Record<TextField, string> = {
 let listBuffers: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
+  constraints: [],
   metrics: [],
   nextSteps: [],
   technologies: [],
@@ -113,6 +114,7 @@ let listBuffers: Record<ListField, string[]> = {
 let listOriginals: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
+  constraints: [],
   metrics: [],
   nextSteps: [],
   technologies: [],
@@ -122,6 +124,7 @@ let listOriginals: Record<ListField, string[]> = {
 let listMarkdowns: Record<ListField, string> = {
   benefits: '',
   risks: '',
+  constraints: '',
   metrics: '',
   nextSteps: '',
   technologies: '',
@@ -379,6 +382,10 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   
   $: parsedRisks = (useCase?.data?.risks || useCase?.risks)
     ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, references, { addListStyles: true, listPadding: 1.5 }))
+    : [];
+
+  $: parsedConstraints = (useCase?.data?.constraints)
+    ? (useCase.data.constraints || []).map((c: string) => renderMarkdownWithRefs(c, references, { addListStyles: true, listPadding: 1.5 }))
     : [];
   
   $: parsedTechnologies = (useCase?.data?.technologies || useCase?.technologies)
@@ -766,10 +773,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
         </div>
 
-        <!-- Autes (COL A, chacun 1/3 de page) -->
-        <!-- Groupe Bénéfices + (Risques + Mesures du succès) (span 2 colonnes, lui-même en 2 colonnes) -->
-        <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2">
-          <!-- Bénéfices -->
+        <!-- 2x2 grid: Benefits | Constraints / Metrics | Risks -->
+        <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2 layout-quad">
+          <!-- Row 1, Col 1: Bénéfices -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="benefits">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
@@ -812,93 +818,133 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             {/if}
           </div>
 
-          <!-- Colonne 2 : Risques + Mesures du succès (empilés verticalement) -->
-          <div class="space-y-6">
-            <!-- Risques -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="risks">
-              <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2 group">
-                  <AlertTriangle class="w-5 h-5" />
-                  Risques
-                  <CommentBadge
-                    count={commentCounts?.risks ?? 0}
-                    disabled={!onOpenComments}
-                    on:click={() => openComments('risks')}
-                  />
-                </h3>
-              </div>
-              {#if isPrinting}
-                <ul class="space-y-2">
-                  {#each parsedRisks as risk}
-                    <li class="flex items-start gap-2 text-sm text-slate-600">
-                      <span class="text-red-500 mt-1">•</span>
-                      <span>{@html risk}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {:else}
-                <div class="text-sm text-slate-600">
-                  <EditableInput
-                    locked={locked}
-                    label=""
-                    value={listMarkdowns.risks || ''}
-                    markdown={true}
-                    forceList={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                    fullData={getListFullData('risks')}
-                    fullDataGetter={(() => getListFullData('risks')) as any}
-                    changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
-                    originalValue={arrayToMarkdown(listOriginals.risks) || ''}
-                    references={references}
-                    on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
-                    on:saved={handleFieldSaved}
-                  />
-                </div>
-              {/if}
+          <!-- Row 1, Col 2: Contraintes -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="constraints">
+            <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <AlertTriangle class="w-5 h-5" />
+                Contraintes
+                <CommentBadge
+                  count={commentCounts?.constraints ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('constraints')}
+                />
+              </h3>
             </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedConstraints as constraint}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-red-500 mt-1">•</span>
+                    <span>{@html constraint}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.constraints || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('constraints')}
+                  fullDataGetter={(() => getListFullData('constraints')) as any}
+                  changeId={useCase?.id ? `usecase-constraints-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.constraints) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('constraints', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
+          </div>
 
-            <!-- Mesures du succès -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="metrics">
-              <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2 group">
-                  <BarChart3 class="w-5 h-5" />
-                  Mesures du succès
-                  <CommentBadge
-                    count={commentCounts?.metrics ?? 0}
-                    disabled={!onOpenComments}
-                    on:click={() => openComments('metrics')}
-                  />
-                </h3>
-              </div>
-              {#if isPrinting}
-                <ul class="space-y-2">
-                  {#each parsedMetrics as metric}
-                    <li class="flex items-start gap-2 text-sm text-slate-600">
-                      <span class="text-blue-500 mt-1">•</span>
-                      <span>{@html metric}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {:else}
-                <div class="text-sm text-slate-600">
-                  <EditableInput
-                    locked={locked}
-                    label=""
-                    value={listMarkdowns.metrics || ''}
-                    markdown={true}
-                    forceList={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                    fullData={getListFullData('metrics')}
-                    fullDataGetter={(() => getListFullData('metrics')) as any}
-                    changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
-                    originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
-                    references={references}
-                    on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
-                    on:saved={handleFieldSaved}
-                  />
-                </div>
-              {/if}
+          <!-- Row 2, Col 1: Mesures du succès -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="metrics">
+            <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <BarChart3 class="w-5 h-5" />
+                Mesures du succès
+                <CommentBadge
+                  count={commentCounts?.metrics ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('metrics')}
+                />
+              </h3>
             </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedMetrics as metric}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-blue-500 mt-1">•</span>
+                    <span>{@html metric}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.metrics || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('metrics')}
+                  fullDataGetter={(() => getListFullData('metrics')) as any}
+                  changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
+          </div>
+
+          <!-- Row 2, Col 2: Risques -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="risks">
+            <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <AlertTriangle class="w-5 h-5" />
+                Risques
+                <CommentBadge
+                  count={commentCounts?.risks ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('risks')}
+                />
+              </h3>
+            </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedRisks as risk}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-red-500 mt-1">•</span>
+                    <span>{@html risk}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.risks || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('risks')}
+                  fullDataGetter={(() => getListFullData('risks')) as any}
+                  changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.risks) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
           </div>
         </div>
       </div>
