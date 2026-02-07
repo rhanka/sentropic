@@ -44,9 +44,14 @@ Replace the print pipeline with docx-templates and deliver the one-page usecase 
   - [x] Wire docx download in use case detail page (`/cas-usage/[id]/+page.svelte`).
   - [ ] Implement Ctrl+P interception: generate docx → convert to PDF → trigger browser print (deferred).
   - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
-  - [ ] UAT: verify one-page export and Ctrl+P flow
+  - [ ] UAT: verify DOCX download from use case detail
+  - [ ] UAT: Ctrl+P flow (deferred, to be validated when implemented)
 
 - [ ] **Lot N — Final validation**
+  - [ ] Tests (by scope, by file)
+  - [ ] API: `api/tests/api/docx.test.ts` (new)
+  - [ ] UI: none (no UI unit tests in scope)
+  - [ ] E2E: `e2e/tests/05-usecase-detail.spec.ts` (DOCX download)
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`
