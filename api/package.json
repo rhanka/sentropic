@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:docx-templates --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -49,6 +49,7 @@
     "drizzle-orm": "^0.36.4",
     "hono-rate-limiter": "^0.4.2",
     "jose": "^6.1.0",
+    "docx-templates": "^4.15.0",
     "jszip": "^3.10.1",
     "knex": "^3.1.0",
     "node-fetch": "^3.3.2",
