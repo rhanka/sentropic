@@ -42,6 +42,10 @@ Reduce CI time by enabling API multiworkers and splitting E2E tests into two par
   - [ ] Lot gate: CI passes with both groups
 
 - [ ] **Lot N — Final validation**
+  - [ ] Tests (by scope, by file)
+  - [ ] API: none (no test updates in scope)
+  - [ ] UI: none (no test updates in scope)
+  - [ ] E2E: none (no test updates in scope)
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`
