@@ -42,9 +42,32 @@
 - When a TODO item bundles **multiple needs** (e.g., i18n + data model + print template), split into **multiple branches**, one need per branch.
 - Each branch must have its own `BRANCH.md` and final tests.
 
-### Tmp workspace option
-- Sub-agents may work in `tmp/<branch-slug>/` (isolated repo copy).
-- Copy `.env` into the tmp workspace before running Make commands.
+### Multi-branch orchestration plan (MANDATORY)
+When multiple branches are planned (multi-need split), the orchestrator **must** create a `PLAN.md` at the repository root **before** any implementation:
+1. **Create `PLAN.md`** with:
+   - Branch list with dependency graph (which branch depends on which).
+   - Waves: group branches into waves of **max 4** (sub-agent limit). All branches in a wave must be orthogonal (no dependency between them).
+   - For each branch: link to its `BRANCH.md` in `tmp/<branch-slug>/BRANCH.md`.
+   - Port allocation convention per branch family (to avoid collisions).
+2. **Scoping phase (Lot 0)**: Launch sub-agents in **read-only** mode to explore the codebase and return a decision brief (findings, risks, planned changes, open questions). The orchestrator consolidates all briefs and presents **all scoping questions to the user at once**.
+3. **Implementation phase**: After user validates scoping, launch sub-agents for implementation (one per branch, in parallel within a wave).
+4. **Integration**: Orchestrator collects results, runs final gates, creates PRs.
+
+### Tmp workspace setup (MANDATORY for multi-branch)
+Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup sequence is **atomic** — never separate clone from branch creation or BRANCH.md writing:
+
+1. **Clone + branch + env + BRANCH.md in one shot** (per branch):
+   ```bash
+   rm -rf tmp/<branch-slug>
+   git clone . tmp/<branch-slug>
+   cd tmp/<branch-slug> && git checkout -b <branch-name>
+   cp ../../.env .env  # if .env exists
+   ```
+2. **Write `BRANCH.md`** into the clone immediately after setup (with scoping decisions already integrated).
+   - Do NOT create `BRANCH.md` before cloning (it will be destroyed by `rm -rf`).
+   - Do NOT create `BRANCH.md` in the main repo's `tmp/` before cloning.
+3. **Port isolation**: Each clone uses distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
+4. **Sub-agent prompt**: Always tell the sub-agent its working directory is `tmp/<branch-slug>/` and pass the full `BRANCH.md` content in the prompt (don't rely on the sub-agent reading it).
 
 As a very first thing, you acknowledge the next TODO and the way you will work on it following above workflow feature. If a BRANCH is in progress you also acknowledge where you are and check the state of the code to go on.
 

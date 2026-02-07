@@ -51,14 +51,22 @@ As a very first thing, when you work on features, you must acknowledge that you 
 
 ### Multi-need Items (MANDATORY)
 - If a single TODO groups **multiple needs**, use **multi-branch** and handle one need per branch.
+- **PLAN.md required**: Create `PLAN.md` at repo root with branch list, dependency graph, waves (max 4 branches per wave), and links to each `BRANCH.md`.
+- See `workflow.mdc` → "Multi-branch orchestration plan" for the full procedure.
 
-### Sub-agent isolation via tmp (optional)
-- You may create isolated copies under `tmp/<branch-slug>/` for sub-agents.
-- Copy `.env` into the tmp workspace before running Make commands.
+### Sub-agent isolation via tmp (MANDATORY for multi-branch)
+- Each branch **must** have its own `tmp/<branch-slug>/` clone.
+- Setup is **atomic**: clone → checkout branch → copy `.env` → write `BRANCH.md` (in that order, never reversed).
+- Do NOT write `BRANCH.md` before cloning (it will be destroyed).
 - Use a distinct `ENV`/ports in each tmp workspace.
-- Example (preferred, clean clone):
-  - `git clone . tmp/feat-refactor-mdc && cp .env tmp/feat-refactor-mdc/.env`
-  - `cd tmp/feat-refactor-mdc && ENV=feat-refactor-mdc API_PORT=8788 UI_PORT=5174 make dev`
+- Example (correct sequence):
+  ```bash
+  rm -rf tmp/feat-xxx
+  git clone . tmp/feat-xxx
+  cd tmp/feat-xxx && git checkout -b feat/xxx
+  cp ../../.env .env
+  # then write BRANCH.md with scoping decisions
+  ```
 
 ## Debug & Inspection Commands (MANDATORY)
 - **State**: `make ps`, `make ps-all`
