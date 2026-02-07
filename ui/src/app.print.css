@@ -60,6 +60,36 @@
     padding: 0 !important;
     margin-top: 0 !important;
     padding-top: 0 !important;
+    overflow: visible !important;
+  }
+
+  html,
+  body,
+  #svelte {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Disable scrollbars in print to avoid visible gutters */
+  * {
+    scrollbar-width: none !important;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+  }
+
+  /* Ensure scroll containers don't clip print content */
+  .slim-scroll,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-scroll,
+  .overflow-y-scroll,
+  .overflow-x-scroll {
+    overflow: visible !important;
   }
 
   /* Supprimer toutes les marges des conteneurs parents */
