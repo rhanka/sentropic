@@ -46,6 +46,8 @@ export async function generateUseCaseDocx(useCase: UseCase): Promise<Buffer> {
     metricsText: (d.metrics ?? []).join('\n'),
     risks: d.risks ?? [],
     risksText: (d.risks ?? []).join('\n'),
+    constraints: d.constraints ?? [],
+    constraintsText: (d.constraints ?? []).join('\n'),
     nextSteps: d.nextSteps ?? [],
     nextStepsText: (d.nextSteps ?? []).join('\n'),
     dataSources: d.dataSources ?? [],
