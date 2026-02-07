@@ -11,6 +11,34 @@
     "settings": "Paramètres",
     "admin": "Admin"
   },
+  "header": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "settings": "Paramètres",
+    "devices": "Mes appareils",
+    "language": "Langue",
+    "refreshInfo": "Actualiser les informations"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "edit": "Modifier",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "search": "Rechercher",
+    "noResults": "Aucun résultat",
+    "error": "Erreur",
+    "success": "Succès",
+    "readOnly": "Mode lecture seule",
+    "draft": "Brouillon",
+    "active": "Active",
+    "open": "Ouvrir",
+    "clickToView": "Cliquez pour voir les détails",
+    "sessionCheck": "Vérification de la session…"
+  },
   "documents": {
     "title": "Documents",
     "subtitle": "Ajoutez des documents au contexte. Un résumé est généré automatiquement.",

@@ -9,6 +9,7 @@
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
+  import { _ } from 'svelte-i18n';
   import { initializeSession, session } from '$lib/stores/session';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
@@ -329,7 +330,7 @@
         <div class="flex items-center justify-center min-h-[60vh]">
           <div class="text-center">
             <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-            <p class="text-sm text-slate-600">Vérification de la session...</p>
+            <p class="text-sm text-slate-600">{$_('common.sessionCheck')}</p>
           </div>
         </div>
       {:else if canShowContent}

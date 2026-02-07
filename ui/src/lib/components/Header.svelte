@@ -65,19 +65,19 @@
     return p === '/settings' || p.startsWith('/settings/') || p === '/auth/devices' || p.startsWith('/auth/devices/');
   });
 
-  // Logique pour déterminer si les menus doivent être grisés (réactif)
+  // Logic to determine if nav items should be disabled (reactive)
   const computeIsMenuDisabled = (href: string, authed: boolean, folderId: string | null, hiddenLock: boolean) => {
-    // Si l'utilisateur n'est pas authentifié, griser tous les menus sauf l'accueil (/)
+    // If user is not authenticated, disable all menus except home (/)
     if (!authed) return href !== '/';
 
-    // Si un workspace caché est sélectionné, restreindre la navigation (Paramètres uniquement).
-    // Le redirect est géré globalement dans +layout, mais on grise aussi la navigation pour le feedback UX.
+    // If a hidden workspace is selected, restrict navigation (Settings only).
+    // Redirect is handled globally in +layout, but we also grey out navigation for UX feedback.
     if (hiddenLock) return true;
 
-    // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
+    // If no folder is selected, disable usecase, matrix and dashboard
     if (!folderId) return href === '/usecase' || href === '/matrix' || href === '/dashboard';
 
-    // Si un dossier est sélectionné, ne pas griser (même s'il n'y a pas encore de cas d'usage)
+    // If a folder is selected, don't disable (even if there are no use cases yet)
     return false;
   };
 
@@ -208,7 +208,7 @@
                   on:click={() => { showUserMenu = false; retrySessionInit(); }}
                   class="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
                 >
-                  🔄 Actualiser les informations
+                  🔄 {$_('header.refreshInfo')}
                 </button>
                 <div class="border-t border-slate-200 my-1"></div>
               {/if}
@@ -218,7 +218,7 @@
                 class:active-link={$currentPath === '/auth/devices'}
                 on:click={() => showUserMenu = false}
               >
-                Mes appareils
+                {$_('header.devices')}
               </a>
               <a
                 href="/settings"
@@ -226,21 +226,21 @@
                 class:active-link={$currentPath === '/settings'}
                 on:click={() => showUserMenu = false}
               >
-                Paramètres
+                {$_('header.settings')}
               </a>
               <div class="border-t border-slate-200 my-1"></div>
               <button
                 on:click={() => { showUserMenu = false; logout(); }}
                 class="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
               >
-                Déconnexion
+                {$_('header.logout')}
               </button>
             </div>
           {/if}
         </div>
       {:else}
         <a href="/auth/login" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700 transition">
-          Connexion
+          {$_('header.login')}
         </a>
       {/if}
     </div>
@@ -302,7 +302,7 @@
           aria-expanded={showLangAccordion}
           type="button"
         >
-          <span>Langue</span>
+          <span>{$_('header.language')}</span>
           <ChevronDown
             class="h-4 w-4 text-slate-400 transition-transform {showLangAccordion ? 'rotate-180' : ''}"
             aria-hidden="true"
@@ -364,7 +364,7 @@
                   on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); retrySessionInit(); }}
                   class="block w-full text-left rounded px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
                 >
-                  🔄 Actualiser les informations
+                  🔄 {$_('header.refreshInfo')}
                 </button>
               {/if}
               <a
@@ -373,7 +373,7 @@
                 class:active-link={$currentPath === '/auth/devices'}
                 on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
               >
-                Mes appareils
+                {$_('header.devices')}
               </a>
               <a
                 href="/settings"
@@ -381,13 +381,13 @@
                 class:active-link={$currentPath === '/settings'}
                 on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
               >
-                Paramètres
+                {$_('header.settings')}
               </a>
               <button
                 on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); logout(); }}
                 class="block w-full text-left rounded px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
               >
-                Déconnexion
+                {$_('header.logout')}
               </button>
             </div>
           {/if}
@@ -397,7 +397,7 @@
             class="block rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 transition"
             on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
           >
-            Connexion
+            {$_('header.login')}
           </a>
         {/if}
       </div>
