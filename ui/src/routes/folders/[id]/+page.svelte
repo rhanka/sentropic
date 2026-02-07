@@ -114,7 +114,7 @@
     const folderId = event.detail?.folderId;
     if (folderId && folderId !== currentFolder?.id) {
       currentFolderId.set(folderId);
-      await goto(`/dossiers/${folderId}`);
+      await goto(`/folders/${folderId}`);
       return;
     }
     await loadUseCases();
@@ -206,7 +206,7 @@
 
   const handleUseCaseClick = (useCaseId: string, status: string) => {
     if (status === 'generating' || status === 'detailing') return;
-    goto(`/cas-usage/${useCaseId}`);
+    goto(`/usecase/${useCaseId}`);
   };
 
   const handleDeleteUseCase = async (id: string) => {
@@ -234,7 +234,7 @@
       foldersStore.update((items) => items.filter((f) => f.id !== currentFolder?.id));
       currentFolderId.set(null);
       addToast({ type: 'success', message: 'Dossier supprimé avec succès !' });
-      goto('/dossiers');
+      goto('/folders');
     } catch (error) {
       console.error('Failed to delete folder:', error);
       const anyErr = error as any;
@@ -521,7 +521,7 @@
           <button
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
-            on:click={() => goto(`/organisations/${orgId}`)}
+            on:click={() => goto(`/organizations/${orgId}`)}
             title="Voir l'organisation"
           >
             {currentFolder.organizationName || 'Organisation'}

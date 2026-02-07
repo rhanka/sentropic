@@ -52,17 +52,17 @@
 
   const navItems = [
     { href: '/', label: 'nav.home' },
-    { href: '/dossiers', label: 'nav.folders' },
-    { href: '/organisations', label: 'nav.organizations' },
-    { href: '/cas-usage', label: 'nav.useCases' },
-    { href: '/matrice', label: 'nav.matrix' },
+    { href: '/folders', label: 'nav.folders' },
+    { href: '/organizations', label: 'nav.organizations' },
+    { href: '/usecase', label: 'nav.useCases' },
+    { href: '/matrix', label: 'nav.matrix' },
     { href: '/dashboard', label: 'nav.dashboard' },
   ];
 
   const currentPath = derived(page, ($page) => $page.url.pathname);
   const isIdentityRoute = derived(page, ($page) => {
     const p = $page.url.pathname;
-    return p === '/parametres' || p.startsWith('/parametres/') || p === '/auth/devices' || p.startsWith('/auth/devices/');
+    return p === '/settings' || p.startsWith('/settings/') || p === '/auth/devices' || p.startsWith('/auth/devices/');
   });
 
   // Logique pour déterminer si les menus doivent être grisés (réactif)
@@ -75,7 +75,7 @@
     if (hiddenLock) return true;
 
     // Si aucun dossier n'est sélectionné, griser cas-usage, matrice et dashboard
-    if (!folderId) return href === '/cas-usage' || href === '/matrice' || href === '/dashboard';
+    if (!folderId) return href === '/usecase' || href === '/matrix' || href === '/dashboard';
 
     // Si un dossier est sélectionné, ne pas griser (même s'il n'y a pas encore de cas d'usage)
     return false;
@@ -108,7 +108,7 @@
   };
   $: currentLocale = ($i18nLocale as string) || 'fr';
 
-  // Le sélecteur de workspace admin est dans /parametres (section Workspace) — pas dans le header.
+  // The workspace admin selector is in /settings (Workspace section) — not in the header.
 
   const onGlobalKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
@@ -221,9 +221,9 @@
                 Mes appareils
               </a>
               <a
-                href="/parametres"
+                href="/settings"
                 class="block px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                class:active-link={$currentPath === '/parametres'}
+                class:active-link={$currentPath === '/settings'}
                 on:click={() => showUserMenu = false}
               >
                 Paramètres
@@ -376,9 +376,9 @@
                 Mes appareils
               </a>
               <a
-                href="/parametres"
+                href="/settings"
                 class="block rounded px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                class:active-link={$currentPath === '/parametres'}
+                class:active-link={$currentPath === '/settings'}
                 on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
               >
                 Paramètres

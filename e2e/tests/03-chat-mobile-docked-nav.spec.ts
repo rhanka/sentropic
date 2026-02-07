@@ -7,7 +7,7 @@ test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
     // Mobile viewport to force docked full-screen
     await page.setViewportSize({ width: 390, height: 844 });
 
-    await page.goto('/dossiers');
+    await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 10_000 });
 
@@ -35,7 +35,7 @@ test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
     await orgLink.click();
 
     // The chat should close, and the destination should be visible
-    await page.waitForURL(/\/organisations(?:[/?#]|$)/, { timeout: 10_000 });
+    await page.waitForURL(/\/organizations(?:[/?#]|$)/, { timeout: 10_000 });
     await expect(composer).not.toBeVisible({ timeout: 10_000 });
     await expect(page.locator('h1')).toContainText('Organisations', { timeout: 10_000 });
   });

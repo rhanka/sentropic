@@ -34,7 +34,7 @@ async function createDisposableUser(email: string) {
 // Admin-only: uses default storageState (admin) from global.setup.ts
 test.describe('Admin · Utilisateurs (Paramètres)', () => {
   test('le panneau admin est visible et le filtre par défaut est "Tous"', async ({ page }) => {
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
 
     await expect(page.locator('h1')).toContainText('Paramètres', { timeout: 15_000 });
@@ -50,7 +50,7 @@ test.describe('Admin · Utilisateurs (Paramètres)', () => {
   });
 
   test('sécurité: l’admin ne peut pas se désactiver / supprimer (UI)', async ({ page }) => {
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
 
     const adminRow = page.locator('tr').filter({ hasText: 'e2e-admin@example.com' }).first();
@@ -63,7 +63,7 @@ test.describe('Admin · Utilisateurs (Paramètres)', () => {
     const tempEmail = `e2e-admin-users-${Date.now()}@example.com`;
     await createDisposableUser(tempEmail);
 
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
 
     // Panneau admin présent

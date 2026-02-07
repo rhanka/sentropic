@@ -9,7 +9,7 @@ test.describe('Access control — UI admin', () => {
   test.use({ storageState: USER_A_STATE });
 
   test('un non-admin ne voit pas le panneau admin dans Paramètres', async ({ page }) => {
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
 
     // Le panneau AdminUsersPanel est injecté seulement pour admin_app
@@ -94,15 +94,15 @@ test.describe.serial('Access control — roles workspace', () => {
     });
     const page = await userBContext.newPage();
 
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('button, a').filter({ hasText: 'Créer' })).toHaveCount(0);
 
-    await page.goto('/organisations/new');
+    await page.goto('/organizations/new');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/\/organisations(\/)?$/);
+    await expect(page).toHaveURL(/\/organizations(\/)?$/);
 
-    await page.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await page.goto(`/organizations/${encodeURIComponent(organizationId)}`);
     await page.waitForLoadState('domcontentloaded');
     const editable = page.locator('.editable-input, .editable-textarea').first();
     await expect(editable).toBeDisabled({ timeout: 10_000 });
@@ -116,12 +116,12 @@ test.describe.serial('Access control — roles workspace', () => {
     });
     const page = await userBContext.newPage();
 
-    await page.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await page.goto(`/organizations/${encodeURIComponent(organizationId)}`);
     await page.waitForLoadState('domcontentloaded');
     const editable = page.locator('.editable-input, .editable-textarea').first();
     await expect(editable).toBeEnabled({ timeout: 10_000 });
 
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h4', { hasText: 'Membres' })).toHaveCount(0);
     await userBContext.close();
@@ -148,7 +148,7 @@ test.describe.serial('Access control — roles workspace', () => {
       storageState: await withWorkspaceStorageState(USER_B_STATE, adminWorkspaceId),
     });
     const page = await userBContext.newPage();
-    await page.goto('/parametres');
+    await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h4', { hasText: 'Membres' })).toBeVisible();
 
@@ -205,7 +205,7 @@ test.describe.serial('Access control — roles workspace', () => {
     await userAApi.dispose();
 
     const openComments = async (page: import('@playwright/test').Page) => {
-      await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+      await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       const section = page.locator('[data-comment-section="description"]');

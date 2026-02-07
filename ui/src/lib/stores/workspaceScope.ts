@@ -57,14 +57,14 @@ export const selectedWorkspaceHidden = derived(selectedWorkspace, ($w) => {
   return Boolean($w?.hiddenAt);
 });
 
-// When the user is no longer a member of any workspace, redirect to /parametres.
+// When the user is no longer a member of any workspace, redirect to /settings.
 export const noWorkspaceLock = derived([session, workspaceScope], ([$session, $scope]) => {
   if (!$session.user) return false;
   if ($scope.loading) return false;
   return ($scope.items || []).length === 0;
 });
 
-// When a hidden workspace is selected, only /parametres should be accessible until the workspace is made visible again.
+// When a hidden workspace is selected, only /settings should be accessible until the workspace is made visible again.
 export const hiddenWorkspaceLock = derived([session, selectedWorkspace], ([$session, ws]) => {
   if (!$session.user) return false;
   if (!ws) return false;
@@ -113,7 +113,7 @@ export async function loadUserWorkspaces(): Promise<void> {
       const fallbackHidden = items[0]?.id || null;
 
       // Keep selection even if the workspace is hidden (admin-only), because a hidden selected workspace
-      // must lock navigation to /parametres via `hiddenWorkspaceLock`.
+      // must lock navigation to /settings via `hiddenWorkspaceLock`.
       const selectedId =
         selectedItem && (!selectedItem.hiddenAt || selectedItem.role === 'admin')
           ? selectedItem.id

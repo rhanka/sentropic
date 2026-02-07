@@ -51,7 +51,7 @@
     void loadOrganizations();
     if ($workspaceReadOnlyScope) {
       addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
-      goto('/dossiers');
+      goto('/folders');
       return;
     }
 
@@ -168,7 +168,7 @@
       addToast({ type: 'success', message: 'Dossier créé avec succès !' });
       // UX: retour à la liste des dossiers (pas de vue détail dossier/[id] pour l’instant)
       currentFolderId.set(id);
-      goto('/dossiers');
+      goto('/folders');
     } catch (err) {
       console.error('Failed to save folder:', err);
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la création du dossier' });
@@ -208,7 +208,7 @@
       addToast({ type: 'info', message: 'Génération démarrée…' });
       // UX: retour à la liste des dossiers, le suivi se fait via SSE sur la carte dossier.
       currentFolderId.set(id);
-      goto('/dossiers');
+      goto('/folders');
     } catch (err) {
       console.error('Failed to start generation:', err);
       addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors du démarrage de la génération' });
@@ -218,8 +218,8 @@
   };
 
   const handleCancel = async () => {
-    // Conserver le brouillon (collaboration): retour à la liste sans suppression.
-    goto('/dossiers');
+    // Keep draft (collaboration): return to list without deletion.
+    goto('/folders');
   };
 
   const handleFieldUpdate = (field: string, value: string) => {
@@ -331,7 +331,7 @@
         {#if $organizationsStore.length === 0}
           <p class="text-sm text-slate-500">
             Aucune organisation disponible.
-            <a href="/organisations" class="text-blue-600 hover:text-blue-800 underline">Créer une organisation</a>
+            <a href="/organizations" class="text-blue-600 hover:text-blue-800 underline">Créer une organisation</a>
           </p>
         {/if}
       {/if}

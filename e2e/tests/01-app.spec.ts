@@ -74,11 +74,11 @@ test.describe('Application principale', () => {
     
     // Tester la navigation vers les dossiers
     await page.getByRole('link', { name: 'Dossiers' }).click();
-    await expect(page).toHaveURL('/dossiers');
+    await expect(page).toHaveURL('/folders');
     
     // Tester la navigation vers les organisations
     await page.getByRole('link', { name: 'Organisations' }).click();
-    await expect(page).toHaveURL('/organisations');
+    await expect(page).toHaveURL('/organizations');
     
     // Essayer la navigation vers le dashboard si le lien n'est pas désactivé
     const dashboardLink = page.locator('a:has-text("Dashboard")');

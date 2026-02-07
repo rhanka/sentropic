@@ -524,7 +524,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <button
               type="button"
               class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
-              on:click={() => goto(`/organisations/${organizationId}`)}
+              on:click={() => goto(`/organizations/${organizationId}`)}
               title="Voir l'organisation"
             >
               {organizationName || 'Organisation'}

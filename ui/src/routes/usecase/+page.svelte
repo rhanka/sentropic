@@ -5,19 +5,19 @@
   import { currentFolderId } from '$lib/stores/folders';
 
   onMount(() => {
-    // Page liste déplacée vers /dossiers/[id]
+    // Use case list moved to /folders/[id]
     const urlParams = new URLSearchParams($page.url.search);
     const folderId = urlParams.get('folder');
     if (folderId) {
       currentFolderId.set(folderId);
-      goto(`/dossiers/${folderId}`, { replaceState: true });
+      goto(`/folders/${folderId}`, { replaceState: true });
       return;
     }
     if ($currentFolderId) {
-      goto(`/dossiers/${$currentFolderId}`, { replaceState: true });
+      goto(`/folders/${$currentFolderId}`, { replaceState: true });
       return;
     }
-    goto('/dossiers', { replaceState: true });
+    goto('/folders', { replaceState: true });
   });
 </script>
 

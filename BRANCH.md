@@ -1,23 +1,25 @@
-# Feature: CI - Reduce time (multiworkers + split E2E)
+# Feature: i18n - Core + tech keys
 
 ## Objective
-Reduce CI time by enabling API multiworkers and splitting E2E tests into two parallel groups.
+Establish the bilingual i18n core (FR/EN) and ensure technical keys remain in English.
 
 ## Scope / Guardrails
-- Scope limited to CI/test configuration (Make targets, CI workflow, test runner config).
+- Scope limited to i18n scaffolding and technical key naming.
+- Prompts localization is deferred to `feat/i18n-prompts-bilingual` (Wave 2).
 - One migration max in `api/drizzle/*.sql` (not expected).
 - Make-only workflow, no direct Docker commands.
 - All new text in English.
 
 ## Scoping Decisions
-- **API workers**: Use a `WORKERS` variable in the Makefile (same pattern as E2E target), default to 4.
-- **E2E split**: Group A (00–03, 14 files) / Group B (04–07, 16 files). Confirmed by reviewing CI times (~8 min bottleneck).
-- **CI strategy**: Use GitHub Actions matrix strategy for E2E groups.
+- **Routes**: Clean break — rename French routes to English (no redirects).
+- **API export prefixes**: Clean break — rename `cas-usage` → `usecase`, `dossier` → `folder`, etc.
+- **Prompts**: Deferred to Wave 2 (`feat/i18n-prompts-bilingual`).
+- **Missing key fallback**: Display the key itself (there should be no missing keys).
 
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick**
 - [x] **Multi-branch**
-- Rationale: Grouped into a single CI-focused branch to keep waves at four branches.
+- Rationale: Grouped core + tech keys to keep waves at four branches.
 
 ## UAT Management (in orchestration context)
 - **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
@@ -29,23 +31,19 @@ Reduce CI time by enabling API multiworkers and splitting E2E tests into two par
   - [x] Confirm scope and guardrails.
   - [x] Scoping decisions confirmed by user.
 
-- [x] **Lot 1 — Enable API multiworkers**
-  - [x] Update `api/vitest.config.ts`: remove `singleFork: true`, enable multiple workers.
-  - [x] Add `API_TEST_WORKERS` variable to Makefile test-api targets (default 4), following the E2E WORKERS pattern.
-  - [x] Pass workers setting to vitest via env or CLI.
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`
+- [ ] **Lot 1 — Core i18n scaffolding**
+  - [ ] Expand `ui/src/locales/fr.json` and `ui/src/locales/en.json` with ~150+ new keys.
+  - [ ] Extract all hardcoded French strings from Svelte components and replace with `$_()` calls.
+  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
 
-- [x] **Lot 2 — Split E2E into 2 parallel groups (matrix strategy)**
-  - [x] Update `.github/workflows/ci.yml`: replace single `test-e2e` job with matrix strategy (group-a: 00-03, group-b: 04-07).
-  - [x] Ensure both matrix jobs run in parallel after dependencies.
-  - [x] Test that each group runs independently.
-  - [ ] Lot gate: CI passes with both groups
+- [ ] **Lot 2 — Technical key conventions (route + API renaming)**
+  - [ ] Rename UI routes: `/cas-usage` → `/usecase`, `/dossiers` → `/folders`, `/organisations` → `/organizations`, `/matrice` → `/matrix`, `/parametres` → `/settings`, `/dossier` → `/folder`.
+  - [ ] Update all internal links, navigation, and PROTECTED_ROUTES references.
+  - [ ] Update API export prefixes in `api/src/routes/api/import-export.ts`.
+  - [ ] Update E2E tests route references.
+  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
 
 - [ ] **Lot N — Final validation**
-  - [ ] Tests (by scope, by file)
-  - [ ] API: none (no test updates in scope)
-  - [ ] UI: none (no test updates in scope)
-  - [ ] E2E: none (no test updates in scope)
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`

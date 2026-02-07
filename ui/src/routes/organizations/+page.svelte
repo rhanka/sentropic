@@ -107,10 +107,10 @@ const handleImportComplete = async () => {
     const isDraft = organization.status === 'draft';
     // UX: un brouillon se reprend via la vue `new` (icônes IA / save / annuler).
     if (isDraft) {
-      goto(`/organisations/new?draft=${encodeURIComponent(organization.id)}`);
+      goto(`/organizations/new?draft=${encodeURIComponent(organization.id)}`);
       return;
     }
-    goto(`/organisations/${organization.id}`);
+    goto(`/organizations/${organization.id}`);
   };
 </script>
 
@@ -124,7 +124,7 @@ const handleImportComplete = async () => {
         showExport={true}
         showPrint={false}
         showDelete={false}
-        onNew={() => goto('/organisations/new')}
+        onNew={() => goto('/organizations/new')}
         onImport={() => (showImportDialog = true)}
         onExport={() => (showExportDialog = true)}
         triggerTitle="Actions organisation"
