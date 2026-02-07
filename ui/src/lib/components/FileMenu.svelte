@@ -2,6 +2,7 @@
   import {
     CirclePlus,
     Download,
+    FileDown,
     Printer,
     Trash2,
     Upload,
@@ -16,24 +17,28 @@
   export let labelNew = 'Nouveau';
   export let labelImport = 'Importer';
   export let labelExport = 'Exporter';
+  export let labelDownloadDocx = 'Download DOCX';
   export let labelPrint = 'Imprimer';
   export let labelDelete = 'Supprimer';
 
   export let onNew: (() => void) | null = null;
   export let onImport: (() => void) | null = null;
   export let onExport: (() => void) | null = null;
+  export let onDownloadDocx: (() => void) | null = null;
   export let onPrint: (() => void) | null = null;
   export let onDelete: (() => void) | null = null;
 
   export let disabledNew = false;
   export let disabledImport = false;
   export let disabledExport = false;
+  export let disabledDownloadDocx = false;
   export let disabledPrint = false;
   export let disabledDelete = false;
 
   export let showNew = true;
   export let showImport = true;
   export let showExport = true;
+  export let showDownloadDocx = false;
   export let showPrint = true;
   export let showDelete = true;
 
@@ -101,6 +106,20 @@
         >
           <Download class="w-4 h-4" />
           <span>{labelExport}</span>
+        </button>
+      {/if}
+      {#if showDownloadDocx}
+        <button
+          class={`${itemClass} ${disabledDownloadDocx ? disabledClass : ''}`}
+          type="button"
+          on:click={() => {
+            close();
+            onDownloadDocx?.();
+          }}
+          disabled={disabledDownloadDocx}
+        >
+          <FileDown class="w-4 h-4" />
+          <span>{labelDownloadDocx}</span>
         </button>
       {/if}
       {#if showPrint}
