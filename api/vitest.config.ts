@@ -1,12 +1,15 @@
 import { defineConfig } from 'vitest/config';
 
+const maxForks = process.env.VITEST_MAX_WORKERS
+  ? Number(process.env.VITEST_MAX_WORKERS)
+  : undefined;
+
 export default defineConfig({
   test: {
-    // Run tests sequentially to avoid database race conditions
     pool: 'forks',
     poolOptions: {
       forks: {
-        singleFork: true
+        ...(maxForks !== undefined && { maxForks }),
       }
     },
     // Increase timeout for database operations and AI API calls
