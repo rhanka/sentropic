@@ -167,6 +167,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: group-a
+            e2e_groups: "00 01 02 03"
+          - group: group-b
+            e2e_groups: "04 05 06 07"
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -202,10 +210,11 @@ jobs:
         run: make load-api
       - name: Pull e2e image artifact
         run: make pull-e2e-image
-      - name: Test e2e API & UI
+      - name: Test e2e API & UI (${{ matrix.group }})
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          E2E_GROUPS: ${{ matrix.e2e_groups }}
         run: make test-e2e
 
   # Security: SAST and SCA scans (code and dependencies)
