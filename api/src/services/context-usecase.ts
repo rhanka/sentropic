@@ -28,6 +28,7 @@ export interface UseCaseDetail {
   benefits: string[];
   metrics: string[];
   risks: string[];
+  constraints: string[];
   nextSteps: string[];
   dataSources: string[];
   dataObjects: string[];
@@ -336,6 +337,7 @@ export const generateUseCaseDetail = async (
           benefits: { type: 'array', items: { type: 'string' } },
           metrics: { type: 'array', items: { type: 'string' } },
           risks: { type: 'array', items: { type: 'string' } },
+          constraints: { type: 'array', items: { type: 'string' } },
           nextSteps: { type: 'array', items: { type: 'string' } },
           dataSources: { type: 'array', items: { type: 'string' } },
           dataObjects: { type: 'array', items: { type: 'string' } },
@@ -392,6 +394,7 @@ export const generateUseCaseDetail = async (
           'benefits',
           'metrics',
           'risks',
+          'constraints',
           'nextSteps',
           'dataSources',
           'dataObjects',
@@ -418,6 +421,7 @@ export const generateUseCaseDetail = async (
       benefits: normalizeStringListField(detail?.benefits),
       metrics: normalizeStringListField(detail?.metrics),
       risks: normalizeStringListField(detail?.risks),
+      constraints: normalizeStringListField(detail?.constraints),
       nextSteps: normalizeStringListField(detail?.nextSteps),
       dataSources: normalizeStringListField(detail?.dataSources),
       dataObjects: normalizeStringListField(detail?.dataObjects),

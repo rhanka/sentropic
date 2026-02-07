@@ -14,6 +14,7 @@ export type UseCaseData = {
   benefits?: string[];
   metrics?: string[];
   risks?: string[];
+  constraints?: string[];
   nextSteps?: string[];
   dataSources?: string[];
   dataObjects?: string[];
