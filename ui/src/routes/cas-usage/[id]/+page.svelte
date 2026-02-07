@@ -594,13 +594,15 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       </svelte:fragment>
     </UseCaseDetail>
 
-    <DocumentsBlock
-      contextType="usecase"
-      contextId={useCase.id}
-      on:state={(event) => {
-        hasDocuments = (event.detail?.items || []).length > 0;
-      }}
-    />
+    <div class="print-hidden">
+      <DocumentsBlock
+        contextType="usecase"
+        contextId={useCase.id}
+        on:state={(event) => {
+          hasDocuments = (event.detail?.items || []).length > 0;
+        }}
+      />
+    </div>
   {/if}
 </section>
 
