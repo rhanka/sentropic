@@ -182,6 +182,44 @@ test.describe('Détail des cas d\'usage', () => {
     }
   });
 
+  test('devrait mettre à jour un champ liste via chat (SSE)', async ({ browser }) => {
+    const userAContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+    });
+    const page = await userAContext.newPage();
+    await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 10_000 });
+    const editable = composer.locator('[contenteditable="true"]');
+
+    const token = `E2E_CONSTRAINT_${Date.now()}`;
+    const prompt = [
+      'Remplace uniquement les contraintes par cette liste:',
+      `- ${token} A`,
+      `- ${token} B`,
+      'Réponds uniquement avec OK.'
+    ].join('\n');
+
+    await editable.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type(prompt);
+    await page.keyboard.press('Enter');
+
+    const assistantBubble = page.locator('div.flex.justify-start div.rounded.bg-white.border.border-slate-200');
+    await expect(assistantBubble.filter({ hasText: 'OK' }).last()).toBeVisible({ timeout: 90_000 });
+
+    const constraintsSection = page.locator('[data-comment-section="constraints"]');
+    await expect(constraintsSection).toContainText(token, { timeout: 120_000 });
+    await userAContext.close();
+  });
+
   test('devrait permettre de supprimer un cas d\'usage depuis la page de détail', async ({ page }) => {
     await page.goto('/usecase');
     await page.waitForLoadState('domcontentloaded');
