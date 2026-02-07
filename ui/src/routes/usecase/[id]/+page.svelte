@@ -402,9 +402,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
       if (useCase.folderId) {
-        goto(`/dossiers/${useCase.folderId}`);
+        goto(`/folders/${useCase.folderId}`);
       } else {
-        goto('/dossiers');
+        goto('/folders');
       }
     } catch (err) {
       console.error('Failed to delete use case:', err);

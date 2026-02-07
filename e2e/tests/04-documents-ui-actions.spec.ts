@@ -124,7 +124,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     expect(docId).toBeTruthy();
 
     // 4) Aller sur la page dossier et cibler la ligne du document
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
 
@@ -248,7 +248,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
       storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageB = await userBContext.newPage();
-    await pageB.goto(`/organisations/${encodeURIComponent(organizationAId)}`);
+    await pageB.goto(`/organizations/${encodeURIComponent(organizationAId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await expect(pageB.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
     const docRow = pageB.locator('tbody tr').filter({

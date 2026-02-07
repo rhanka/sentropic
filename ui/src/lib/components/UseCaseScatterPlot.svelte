@@ -1945,7 +1945,7 @@
         
         // Rediriger vers le cas d'usage
         if (useCase.id) {
-          goto(`/cas-usage/${useCase.id}`);
+          goto(`/usecase/${useCase.id}`);
         }
       }
     }

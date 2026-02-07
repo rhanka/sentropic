@@ -25,7 +25,7 @@ test.describe('Gestion des erreurs', () => {
     });
     const page = await context.newPage();
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Naviguer vers /new et vérifier que le bouton Créer est désactivé sans nom
@@ -35,7 +35,7 @@ test.describe('Gestion des erreurs', () => {
       const newAction = page.locator('button:has-text("Nouveau")');
       await expect(newAction).toBeVisible({ timeout: 10_000 });
       await newAction.click();
-      await expect(page).toHaveURL(/\/organisations\/new$/);
+      await expect(page).toHaveURL(/\/organizations\/new$/);
       const createBtn = page.getByRole('button', { name: 'Créer' });
       await expect(createBtn).toBeDisabled();
     } finally {
@@ -78,7 +78,7 @@ test.describe('Gestion des erreurs', () => {
         }
       });
       
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Essayer de supprimer une entreprise
@@ -125,7 +125,7 @@ test.describe('Gestion des erreurs', () => {
         }
       });
       
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Chercher un bouton de réessai

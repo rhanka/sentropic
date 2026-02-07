@@ -99,7 +99,7 @@ test.describe('Import / Export', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, targetWorkspaceId),
     });
     const page = await userAContext.newPage();
-    await page.goto('/dossiers');
+    await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
 
     const actionsButton = page.locator('button[aria-label="Actions dossier"]');
@@ -166,7 +166,7 @@ test.describe('Import / Export', () => {
       storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, targetWorkspaceId, targetFolderId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/dossiers/${encodeURIComponent(targetFolderId)}`);
+    await page.goto(`/folders/${encodeURIComponent(targetFolderId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const actionsButton = page.locator('button[aria-label="Actions"]');
@@ -202,7 +202,7 @@ test.describe('Import / Export', () => {
     const newFolderId = String(importPayload?.target_folder_id || '');
     expect(newFolderId).toBeTruthy();
 
-    await expect(page).toHaveURL(new RegExp(`/dossiers/${newFolderId}$`));
+    await expect(page).toHaveURL(new RegExp(`/folders/${newFolderId}$`));
     await userAContext.close();
   });
 });

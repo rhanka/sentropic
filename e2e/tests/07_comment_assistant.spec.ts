@@ -76,7 +76,7 @@ test.describe.serial('Comment assistant', () => {
   });
 
   test('tool activé par défaut + payload tools inclut comment_assistant', async ({ page }) => {
-    await page.goto('/dossiers');
+    await page.goto('/folders');
     await page.evaluate((wsId) => {
       try {
         localStorage.setItem('workspaceScopeId', wsId);
@@ -85,7 +85,7 @@ test.describe.serial('Comment assistant', () => {
       }
     }, workspaceId);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     await page.evaluate(() => {
@@ -115,7 +115,7 @@ test.describe.serial('Comment assistant', () => {
   test('IA poste un commentaire + badge Assistant IA', async ({ browser }) => {
     const pageBContext = await browser.newContext({ storageState: USER_B_STATE });
     const pageB = await pageBContext.newPage();
-    await pageB.goto('/dossiers');
+    await pageB.goto('/folders');
     await pageB.evaluate((wsId) => {
       try {
         localStorage.setItem('workspaceScopeId', wsId);
@@ -124,7 +124,7 @@ test.describe.serial('Comment assistant', () => {
       }
     }, workspaceId);
     await pageB.reload({ waitUntil: 'domcontentloaded' });
-    await pageB.goto(`/dossiers/${encodeURIComponent(FOLDER_ID)}`);
+    await pageB.goto(`/folders/${encodeURIComponent(FOLDER_ID)}`);
     await pageB.waitForLoadState('domcontentloaded');
 
     const descriptionSection = pageB.locator('[data-comment-section="description"]');

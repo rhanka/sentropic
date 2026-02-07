@@ -441,7 +441,7 @@
     try {
       await deleteOrganization(organization.id);
       unsavedChangesStore.reset();
-      goto('/organisations');
+      goto('/organizations');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Erreur lors de la suppression';
     }
