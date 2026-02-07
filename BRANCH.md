@@ -50,29 +50,29 @@ Establish the bilingual i18n core (FR/EN) and ensure technical keys remain in En
   - [ ] API: `api/tests/api/import-export.test.ts`
   - [ ] UI: none (no UI unit tests in scope)
   - [ ] E2E:
-  - [ ] - `e2e/tests/00-access-control.spec.ts`
-  - [ ] - `e2e/tests/00-ai-generation.spec.ts`
-  - [ ] - `e2e/tests/01-admin-users.spec.ts`
-  - [ ] - `e2e/tests/01-app.spec.ts`
-  - [ ] - `e2e/tests/01-organizations-detail.spec.ts`
-  - [ ] - `e2e/tests/02-organizations.spec.ts`
-  - [ ] - `e2e/tests/03-chat.spec.ts`
-  - [ ] - `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
-  - [ ] - `e2e/tests/04-dossiers-reload-draft.spec.ts`
-  - [ ] - `e2e/tests/04-documents-summary.spec.ts`
-  - [ ] - `e2e/tests/04-documents-ui-actions.spec.ts`
-  - [ ] - `e2e/tests/04-tenancy-workspaces.spec.ts`
-  - [ ] - `e2e/tests/05-error-handling.spec.ts`
-  - [ ] - `e2e/tests/05-folders.spec.ts`
-  - [ ] - `e2e/tests/05-i18n.spec.ts`
-  - [ ] - `e2e/tests/05-usecase-detail.spec.ts`
-  - [ ] - `e2e/tests/06-settings.spec.ts`
-  - [ ] - `e2e/tests/06-streams.spec.ts`
-  - [ ] - `e2e/tests/06-usecase.spec.ts`
-  - [ ] - `e2e/tests/07-import-export.spec.ts`
-  - [ ] - `e2e/tests/07-matrix.spec.ts`
-  - [ ] - `e2e/tests/07-workflow.spec.ts`
-  - [ ] - `e2e/tests/07_comment_assistant.spec.ts`
+    - [ ] `e2e/tests/00-access-control.spec.ts`
+    - [ ] `e2e/tests/00-ai-generation.spec.ts`
+    - [ ] `e2e/tests/01-admin-users.spec.ts`
+    - [ ] `e2e/tests/01-app.spec.ts`
+    - [ ] `e2e/tests/01-organizations-detail.spec.ts`
+    - [ ] `e2e/tests/02-organizations.spec.ts`
+    - [ ] `e2e/tests/03-chat.spec.ts`
+    - [ ] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+    - [ ] `e2e/tests/04-dossiers-reload-draft.spec.ts`
+    - [ ] `e2e/tests/04-documents-summary.spec.ts`
+    - [ ] `e2e/tests/04-documents-ui-actions.spec.ts`
+    - [ ] `e2e/tests/04-tenancy-workspaces.spec.ts`
+    - [ ] `e2e/tests/05-error-handling.spec.ts`
+    - [ ] `e2e/tests/05-folders.spec.ts`
+    - [ ] `e2e/tests/05-i18n.spec.ts`
+    - [ ] `e2e/tests/05-usecase-detail.spec.ts`
+    - [ ] `e2e/tests/06-settings.spec.ts`
+    - [ ] `e2e/tests/06-streams.spec.ts`
+    - [ ] `e2e/tests/06-usecase.spec.ts`
+    - [ ] `e2e/tests/07-import-export.spec.ts`
+    - [ ] `e2e/tests/07-matrix.spec.ts`
+    - [ ] `e2e/tests/07-workflow.spec.ts`
+    - [ ] `e2e/tests/07_comment_assistant.spec.ts`
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`
