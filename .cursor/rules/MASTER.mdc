@@ -59,6 +59,7 @@ As a very first thing, when you work on features, you must acknowledge that you 
 - Setup is **atomic**: clone → checkout branch → copy `.env` → write `BRANCH.md` (in that order, never reversed).
 - Do NOT write `BRANCH.md` before cloning (it will be destroyed).
 - Use a distinct `ENV`/ports in each tmp workspace.
+- **Sub-agents do not auto-load `.mdc` rules.** The orchestrator **must** include in every implementation sub-agent prompt: (1) instruction to read `MASTER.mdc` and `workflow.mdc` (Commit Workflow), (2) explicit "use only `make commit MSG=\"...\"`; never `git commit`" to avoid Co-authored-by. See `workflow.mdc` → "Sub-agent implementation prompt (MANDATORY)".
 - Example (correct sequence):
   ```bash
   rm -rf tmp/feat-xxx

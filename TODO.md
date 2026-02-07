@@ -125,6 +125,9 @@
 - [x] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
 
 **⏳ À faire :**
+- [ ] Reduce CI time
+  - [ ] Enable mutliple workers in test-api
+  - [ ] Split test-e2e in two // execution groups
 - [ ] remplacer le modèle de print par un modèle de template (docx-templates)
   - [ ] define a model for usecase fitting in one page
   - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
