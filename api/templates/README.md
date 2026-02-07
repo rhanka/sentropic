@@ -27,6 +27,8 @@ for variable interpolation.
 | `metricsText`        | string   | Metrics joined with newlines               |
 | `risks`              | string[] | Risks list (array, for loops)              |
 | `risksText`          | string   | Risks joined with newlines                 |
+| `constraints`        | string[] | Constraints list (array, for loops)        |
+| `constraintsText`    | string   | Constraints joined with newlines           |
 | `nextSteps`          | string[] | Next steps list (array, for loops)         |
 | `nextStepsText`      | string   | Next steps joined with newlines            |
 | `dataSources`        | string[] | Data sources list (array, for loops)       |
