@@ -51,7 +51,11 @@ Add constraints to use cases in the data model and surface them in UI/print.
   - [x] UAT: Chat IA update bullet list fields live in UI (benefits, constraints, ...)
 
 - [ ] **Lot N — Final validation**
-  - [x] E2E: chat met a jour un champ liste (SSE)
+  - [x] E2E: chat updates a list field live (SSE)
+  - [ ] Tests (by scope, by file)
+  - [ ] API: none added for this branch
+  - [ ] UI: none added for this branch
+  - [ ] E2E: `e2e/tests/05-usecase-detail.spec.ts` (list field update via chat/SSE)
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`
