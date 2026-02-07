@@ -18,6 +18,7 @@ import { workspacesRouter } from './workspaces';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
+import { docxRouter } from './docx';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -35,6 +36,9 @@ apiRouter.route('/folders', foldersRouter);
 
 apiRouter.use('/use-cases/*', requireAuth);
 apiRouter.route('/use-cases', useCasesRouter);
+
+// DOCX export routes (nested under /use-cases, shares auth middleware above)
+apiRouter.route('/', docxRouter);
 
 apiRouter.use('/analytics/*', requireAuth);
 apiRouter.route('/analytics', analyticsRouter);
