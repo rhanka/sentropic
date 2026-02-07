@@ -69,6 +69,17 @@ Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup
 3. **Port isolation**: Each clone uses distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
 4. **Sub-agent prompt**: Always tell the sub-agent its working directory is `tmp/<branch-slug>/` and pass the full `BRANCH.md` content in the prompt (don't rely on the sub-agent reading it).
 
+### Sub-agent implementation prompt (MANDATORY)
+When launching a sub-agent for **implementation** (not read-only exploration), the orchestrator **must** include the following in the prompt; sub-agents do not automatically load `.mdc` rules, so the orchestrator enforces them via the prompt:
+
+1. **Mandatory reading**: "Before making any commit, you MUST read:
+   - `.cursor/rules/MASTER.mdc` (overview and Make-only / commit rules)
+   - `.cursor/rules/workflow.mdc` sections: 'Commit Workflow (MANDATORY)' and 'Development Conventions'."
+2. **Commit rule (explicit)**: "For every commit use ONLY: `make commit MSG=\"type: concise description\"` (single line). Never run `git commit` or `git commit -m` — that would add a Co-authored-by trailer and break the project rule. If `make commit` is not available in your environment, report that and never use `git commit."
+3. **Staging**: "Use selective staging: `git add <file1> <file2>...` then `make commit MSG=\"...\"`. Never use `git add .` or `git add -A`."
+
+The orchestrator must copy or adapt this block into every implementation sub-agent prompt so that the rule is applied even when the sub-agent does not load the workspace rules.
+
 As a very first thing, you acknowledge the next TODO and the way you will work on it following above workflow feature. If a BRANCH is in progress you also acknowledge where you are and check the state of the code to go on.
 
 ## Guardrails
