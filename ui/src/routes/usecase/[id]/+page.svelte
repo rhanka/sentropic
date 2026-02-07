@@ -5,6 +5,7 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
   import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
+  import { API_BASE_URL } from '$lib/config';
   import { goto } from '$app/navigation';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -417,6 +418,14 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     }
   };
 
+  const handleDownloadDocx = () => {
+    if (!useCase) return;
+    // Open the DOCX endpoint in a new tab to trigger the browser download.
+    // The API uses cookie-based auth so credentials are sent automatically.
+    const url = `${API_BASE_URL}/use-cases/${useCase.id}/docx`;
+    window.open(url, '_blank');
+  };
+
   const loadMatrixAndCalculateScores = async () => {
     if (!useCase?.folderId) return;
     
@@ -570,11 +579,13 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
               showNew={false}
               showImport={false}
               showExport={true}
+              showDownloadDocx={true}
               showPrint={true}
               showDelete={!isReadOnly}
               disabledImport={isReadOnly}
               disabledExport={isReadOnly}
               onExport={() => openUseCaseExport(useCaseId)}
+              onDownloadDocx={handleDownloadDocx}
               onPrint={() => window.print()}
               onDelete={handleDelete}
               triggerTitle="Actions"
