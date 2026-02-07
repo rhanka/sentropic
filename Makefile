@@ -903,10 +903,12 @@ test-security: test-security-sast test-security-sca test-security-container test
 # -----------------------------------------------------------------------------
 # API Backend Tests (Vitest)
 # -----------------------------------------------------------------------------
+API_TEST_WORKERS ?= 4
+
 .PHONY: test-api-%
 
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" api sh -lc ' \
+	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
 	  if [ -n "$$SCOPE" ]; then \
 	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE"; \
