@@ -31,16 +31,16 @@ Establish the bilingual i18n core (FR/EN) and ensure technical keys remain in En
   - [x] Confirm scope and guardrails.
   - [x] Scoping decisions confirmed by user.
 
-- [ ] **Lot 1 — Core i18n scaffolding**
-  - [ ] Expand `ui/src/locales/fr.json` and `ui/src/locales/en.json` with ~150+ new keys.
-  - [ ] Extract all hardcoded French strings from Svelte components and replace with `$_()` calls.
+- [x] **Lot 1 — Core i18n scaffolding**
+  - [x] Expand `ui/src/locales/fr.json` and `ui/src/locales/en.json` with header + common keys.
+  - [x] Extract hardcoded French strings from Header.svelte and +layout.svelte with `$_()` calls.
   - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
 
-- [ ] **Lot 2 — Technical key conventions (route + API renaming)**
-  - [ ] Rename UI routes: `/cas-usage` → `/usecase`, `/dossiers` → `/folders`, `/organisations` → `/organizations`, `/matrice` → `/matrix`, `/parametres` → `/settings`, `/dossier` → `/folder`.
-  - [ ] Update all internal links, navigation, and PROTECTED_ROUTES references.
-  - [ ] Update API export prefixes in `api/src/routes/api/import-export.ts`.
-  - [ ] Update E2E tests route references.
+- [x] **Lot 2 — Technical key conventions (route + API renaming)**
+  - [x] Rename UI routes: `/cas-usage` → `/usecase`, `/dossiers` → `/folders`, `/organisations` → `/organizations`, `/matrice` → `/matrix`, `/parametres` → `/settings`, `/dossier` → `/folder`.
+  - [x] Update all internal links, navigation, and PROTECTED_ROUTES references.
+  - [x] Update API export prefixes in `api/src/routes/api/import-export.ts`.
+  - [x] Update E2E tests route references.
   - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
 
 - [ ] **Lot N — Final validation**
