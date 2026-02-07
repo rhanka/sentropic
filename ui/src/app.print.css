@@ -739,15 +739,14 @@
     margin-bottom: 0 !important;
   }
 
-  /* Exclure les cartes du bloc Bénéfices/Risques/Mesures des marges génériques */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg,
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+  /* Exclure les cartes du bloc 2x2 (Benefits/Constraints/Metrics/Risks) des marges génériques */
+  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
   }
 
-  /* Exclure le grid dans column-a des marges génériques (double div) */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+  /* Exclure le grid layout-quad dans column-a des marges génériques */
+  .usecase-print .layout-main > .column-a > .layout-quad {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     padding-bottom: 0 !important;
@@ -909,14 +908,9 @@
   }
 
   /* Spacing - COMPACT for use cases */
-  /* EXCLURE les layouts et le bloc Bénéfices/Risques/Mesures de cette règle générale */
-  .usecase-print .space-y-6 > *:not(.layout-head):not(.layout-main):not(.layout-bottom):not(.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6) + *:not(.layout-head):not(.layout-main):not(.layout-bottom):not(.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6) {
+  /* EXCLURE les layouts de cette règle générale */
+  .usecase-print .space-y-6 > *:not(.layout-head):not(.layout-main):not(.layout-bottom) + *:not(.layout-head):not(.layout-main):not(.layout-bottom) {
     margin-top: 2pt !important;
-  }
-
-  /* Exclure spécifiquement le conteneur space-y-6 du bloc Bénéfices/Risques/Mesures */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > * + * {
-    margin-top: 0 !important; /* Le gap gère l'espacement */
   }
   
   
@@ -1147,9 +1141,8 @@
     margin-bottom: 3pt !important;
   }
 
-  /* Exclure les éléments du bloc Bénéfices/Risques/Mesures des règles génériques mb- */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 [class*="mb-"],
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 [class*="mb-"] {
+  /* Exclure les éléments du bloc 2x2 des règles génériques mb- */
+  .usecase-print .layout-main > .column-a > .layout-quad [class*="mb-"] {
     margin-bottom: 0 !important;
   }
 
@@ -1157,9 +1150,8 @@
     margin-top: 3pt !important;
   }
 
-  /* Exclure les éléments du bloc Bénéfices/Risques/Mesures des règles génériques mt- */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 [class*="mt-"],
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 [class*="mt-"] {
+  /* Exclure les éléments du bloc 2x2 des règles génériques mt- */
+  .usecase-print .layout-main > .column-a > .layout-quad [class*="mt-"] {
     margin-top: 0 !important;
   }
 
@@ -1451,8 +1443,8 @@
     visibility: visible !important;
   }
 
-  /* Exclure le grid dans column-a des marges génériques des grids */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+  /* Exclure le grid layout-quad dans column-a des marges génériques des grids */
+  .usecase-print .layout-main > .column-a > .layout-quad {
     margin: 0 !important;
     padding: 0 !important;
   }
@@ -1552,14 +1544,8 @@
     padding-bottom: 0 !important;
   }
 
-  /* Supprimer la marge bottom du wrapper space-y-6 dans column-a (comme en desktop) */
-  .usecase-print .layout-main > .column-a > .grid > .space-y-6 {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-  }
-
-  /* Supprimer la marge bottom du dernier élément dans le wrapper space-y-6 (comme en desktop) */
-  .usecase-print .layout-main > .column-a > .grid > .space-y-6 > *:last-child {
+  /* Supprimer la marge bottom du dernier élément dans layout-quad (comme en desktop) */
+  .usecase-print .layout-main > .column-a > .layout-quad > *:last-child {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
@@ -1687,58 +1673,27 @@
     align-items: stretch !important; /* Les colonnes ont la même hauteur */
   }
 
-  /* Alignement Bénéfices/Risques/Mesures en impression : même hauteur et alignement top/bottom */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 {
-    align-items: stretch !important; /* Les colonnes ont la même hauteur */
+  /* 2x2 grid (Benefits/Constraints/Metrics/Risks) alignment in print */
+  .usecase-print .layout-main > .column-a > .layout-quad {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 !important;
+    align-items: stretch !important;
   }
 
-  /* Le conteneur Risques + Mesures utilise flexbox pour aligner en haut et en bas */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 {
+  /* All 4 cards in layout-quad stretch to fill their cell */
+  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg {
     display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important; /* Aligner en haut, les boites s'étirent */
-    height: 100% !important;
-    gap: 4pt !important; /* Marge minimale entre Risques et Mesures */
-    /* Exclure des règles génériques space-y-6 */
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-  }
-
-  /* Les cartes Risques et Mesures s'étirent pour remplir l'espace disponible */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
-    flex-grow: 1 !important; /* Les boites s'étirent pour remplir l'espace */
-    flex-shrink: 0 !important; /* Ne pas rétrécir en dessous de leur contenu */
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  /* Le contenu interne des cartes Risques et Mesures s'étire */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg > *:last-child {
-    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
-  }
-
-  /* Supprimer la marge bottom du dernier élément (Mesures) pour l'alignement en bas */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > *:last-child {
-    margin-bottom: 0 !important;
-  }
-
-  /* Exclure les cartes Bénéfices/Risques/Mesures des règles génériques de marge */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg,
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg {
+    flex-grow: 1 !important;
+    flex-shrink: 0 !important;
     margin-bottom: 0 !important;
     margin-top: 0 !important;
   }
 
-  /* La carte Bénéfices s'étire pour avoir la même hauteur que le conteneur Risques+Mesures */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child {
-    height: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  /* Le contenu interne de la carte Bénéfices s'étire */
-  .usecase-print .layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .rounded-lg:first-child > *:last-child {
-    flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
+  /* Card content stretches to fill available space */
+  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg > *:last-child {
+    flex-grow: 1 !important;
   }
 
   /* Colonne B (Technologies, Sources, Données, Références) dans la colonne 2 */
