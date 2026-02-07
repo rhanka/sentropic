@@ -72,7 +72,7 @@ test.describe('Gestion des organisations', () => {
   test('devrait afficher la page des organisations', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       
       // Vérifier que la page se charge (domcontentloaded au lieu de networkidle car SSE empêche networkidle)
       await page.waitForLoadState('domcontentloaded');
@@ -90,12 +90,12 @@ test.describe('Gestion des organisations', () => {
   test('devrait permettre de créer une organisation', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Ouvrir le menu d'actions et aller à la page de création
       await openNewOrganization(page);
-      await expect(page).toHaveURL(/\/organisations\/new$/);
+      await expect(page).toHaveURL(/\/organizations\/new$/);
       
       // Renseigner le nom via l'EditableInput dans le H1 (textarea pour multiline)
       const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -142,11 +142,11 @@ test.describe('Gestion des organisations', () => {
 
       // Preuve d'impact: soit navigation, soit POST observé
       await Promise.race([
-        page.waitForURL(/\/organisations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
+        page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
         page.waitForRequest((r) => r.url().includes('/api/v1/organizations') && r.method() === 'POST', { timeout: 2000 })
       ]).catch(() => {});
 
-      await expect(page).toHaveURL(/\/organisations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 3000 });
+      await expect(page).toHaveURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 3000 });
       
       // Vérifier directement sur la page de détail que le nom est bien celui saisi
       const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -159,12 +159,12 @@ test.describe('Gestion des organisations', () => {
   test('devrait afficher le bouton d\'enrichissement IA', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Aller à la page de création
       await openNewOrganization(page);
-      await expect(page).toHaveURL(/\/organisations\/new$/);
+      await expect(page).toHaveURL(/\/organizations\/new$/);
       
       const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]');
       await expect(aiButton).toBeVisible();
@@ -182,12 +182,12 @@ test.describe('Gestion des organisations', () => {
   test('devrait permettre de supprimer une organisation', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
 
     // Créer une organisation d'abord
     await openNewOrganization(page);
-    await expect(page).toHaveURL(/\/organisations\/new$/);
+    await expect(page).toHaveURL(/\/organizations\/new$/);
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Organization to Delete');
     await page.waitForTimeout(75);
@@ -197,10 +197,10 @@ test.describe('Gestion des organisations', () => {
     await createBtn2.scrollIntoViewIfNeeded();
     await createBtn2.hover();
     await Promise.all([
-      page.waitForURL(/\/organisations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 }),
+      page.waitForURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 }),
       createBtn2.click()
     ]);
-    await expect(page).toHaveURL(/\/organisations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
 
     // Ensure we are on the detail page and UI is hydrated before interacting
     const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -215,10 +215,10 @@ test.describe('Gestion des organisations', () => {
     await expect(deleteBtn).toBeVisible({ timeout: 10_000 });
     await deleteBtn.click();
     // Attendre la redirection
-    await page.waitForURL(/\/organisations$/, { timeout: 10_000 });
+    await page.waitForURL(/\/organizations$/, { timeout: 10_000 });
 
     // Vérifier que l'organisation a disparu de la liste UI
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
       await expect(page.locator('text=Organization to Delete')).toHaveCount(0);
     } finally {
@@ -229,7 +229,7 @@ test.describe('Gestion des organisations', () => {
   test('devrait permettre de cliquer sur une organisation pour voir ses détails', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Chercher une organisation cliquable (pas en enrichissement)
@@ -244,13 +244,13 @@ test.describe('Gestion des organisations', () => {
         
         // Preuve d'impact: soit navigation, soit POST observé
         await Promise.race([
-          page.waitForURL(/\/organisations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
+          page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 5000 }),
           page.waitForRequest((r) => r.url().includes('/api/v1/organizations') && r.method() === 'POST', { timeout: 5000 })
         ]).catch(() => {});
         
         // Vérifier qu'on est sur une page de détail
         const currentUrl = page.url();
-        expect(currentUrl).toMatch(/\/organisations\/[a-zA-Z0-9-]+/);
+        expect(currentUrl).toMatch(/\/organizations\/[a-zA-Z0-9-]+/);
       }
     } finally {
       await context.close();
@@ -260,12 +260,12 @@ test.describe('Gestion des organisations', () => {
   test('devrait afficher les informations enrichies par l\'IA', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Créer une organisation et lancer l'enrichissement IA depuis la page New
       await openNewOrganization(page);
-      await expect(page).toHaveURL(/\/organisations\/new$/);
+      await expect(page).toHaveURL(/\/organizations\/new$/);
       const nameInput2 = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
       await nameInput2.fill('MicrosoftAITest');
       const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]');
@@ -281,12 +281,12 @@ test.describe('Gestion des organisations', () => {
   test('devrait gérer les erreurs lors de la création d\'organisation', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
       
       // Naviguer vers la page de création sans renseigner de nom
       await openNewOrganization(page);
-      await expect(page).toHaveURL(/\/organisations\/new$/);
+      await expect(page).toHaveURL(/\/organizations\/new$/);
       
       // Vérifier que le bouton "Créer" est désactivé tant que le nom est vide
       const createBtn2 = createButton(page);
@@ -299,7 +299,7 @@ test.describe('Gestion des organisations', () => {
   test('devrait exporter toutes les organisations avec le toggle dossiers', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
 
       const actionsButton = page.locator('button[aria-label="Actions organisation"]');
@@ -331,14 +331,14 @@ test.describe('Gestion des organisations', () => {
   test('devrait exporter l\'organisation depuis le menu detail', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
     try {
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
 
       const organizationItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
       if (await organizationItems.count() === 0) return;
       await organizationItems.first().click();
 
-      await page.waitForURL(/\/organisations\//, { timeout: 5000 });
+      await page.waitForURL(/\/organizations\//, { timeout: 5000 });
       await page.waitForLoadState('domcontentloaded');
 
       const actionsButton = page.locator('button[aria-label="Actions"]');
@@ -362,7 +362,7 @@ test.describe('Gestion des organisations', () => {
     test('liste: pas de création ni suppression + lock visible', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_B_STATE, workspaceAId);
       try {
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
 
         await expect(actionsMenuButton(page)).toHaveCount(0);
@@ -378,12 +378,12 @@ test.describe('Gestion des organisations', () => {
     test('détail: champs non éditables', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_B_STATE, workspaceAId);
       try {
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
 
         const firstCard = page.locator('article').first();
         await firstCard.click();
-        await page.waitForURL(/\/organisations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+        await page.waitForURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });

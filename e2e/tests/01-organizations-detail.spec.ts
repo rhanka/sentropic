@@ -75,7 +75,7 @@ test.describe('Détail des organisations', () => {
 
   test('devrait afficher la page de détail d\'une organisation', async ({ page }) => {
     // D'abord aller à la liste des organisations
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     
     // Chercher une organisation cliquable (pas en enrichissement)
@@ -91,13 +91,13 @@ test.describe('Détail des organisations', () => {
 
       // Preuve d'impact: soit navigation, soit POST observé
       await Promise.race([
-        page.waitForURL(/\/organisations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
+        page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 2000 }),
         page.waitForRequest((r) => r.url().includes('/api/v1/organizations') && r.method() === 'POST', { timeout: 2000 })
       ]).catch(() => {});
 
       // Vérifier qu'on est sur une page de détail
       const currentUrl = page.url();
-      expect(currentUrl).toMatch(/\/organisations\/[a-zA-Z0-9-]+/);
+      expect(currentUrl).toMatch(/\/organizations\/[a-zA-Z0-9-]+/);
       
       // Vérifier les éléments de base de la page de détail (h1 ou h2)
       const heading = page.locator('h1, h2').first();
@@ -106,7 +106,7 @@ test.describe('Détail des organisations', () => {
   });
 
   test('devrait afficher les informations détaillées de l\'organisation', async ({ page }) => {
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     
     const organizationItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
@@ -128,7 +128,7 @@ test.describe('Détail des organisations', () => {
 
 
   test('devrait afficher les cas d\'usage liés à l\'organisation', async ({ page }) => {
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     
     const organizationItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
@@ -149,7 +149,7 @@ test.describe('Détail des organisations', () => {
   });
 
   test('devrait permettre de générer des cas d\'usage depuis l\'organisation', async ({ page }) => {
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     
     const organizationItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Enrichissement en cours' });
@@ -192,7 +192,7 @@ test.describe('Détail des organisations', () => {
         res.status() === 201,
       { timeout: 15_000 }
     ).catch(() => null);
-    await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     
     // Vérifier que workspaceScopeId est bien défini
@@ -225,7 +225,7 @@ test.describe('Détail des organisations', () => {
     await waitForNoLocker(pageA);
 
     // Now User B arrives (should see locked view)
-    await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+    await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     
     // Vérifier que workspaceScopeId est bien défini
@@ -287,8 +287,8 @@ test.describe('Détail des organisations', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
-      await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
+      await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await pageB.waitForLoadState('domcontentloaded');
 
@@ -334,7 +334,7 @@ test.describe('Détail des organisations', () => {
       await runLockBreaksOnLeaveScenario({
         pageA,
         pageB,
-        url: `/organisations/${encodeURIComponent(organizationId)}`,
+        url: `/organizations/${encodeURIComponent(organizationId)}`,
         getEditableField: getOrgNameField,
         expectBadgeOnArrival: true,
         expectBadgeGoneAfterLeave: true,
@@ -352,7 +352,7 @@ test.describe('Détail des organisations', () => {
         storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
       });
       const pageA = await userAContext.newPage();
-      await pageA.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
       // Wait for organization API response
@@ -368,7 +368,7 @@ test.describe('Détail des organisations', () => {
         storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
       });
       const pageB = await userBContext.newPage();
-      await pageB.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 2_000 }).catch(() => {});
       await pageB.waitForResponse((res) => res.url().includes(`/api/v1/organizations/${organizationId}`), { timeout: 2_000 }).catch(() => {});
@@ -391,7 +391,7 @@ test.describe('Détail des organisations', () => {
         storageState: await withWorkspaceStorageState(USER_C_STATE, workspaceAId),
       });
       const pageC = await userCContext.newPage();
-      await pageC.goto(`/organisations/${encodeURIComponent(organizationId)}`);
+      await pageC.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageC.waitForLoadState('domcontentloaded');
       await expect(pageC.locator('h1')).toBeVisible({ timeout: 2_000 });
       await releaseReady;

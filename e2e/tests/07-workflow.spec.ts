@@ -16,17 +16,17 @@ test.describe.serial('Workflow métier complet', () => {
     const page = await context.newPage();
     try {
     // Étape 1: Créer une organisation
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
     
-    // Ouvrir le menu d'actions et aller à la création (redirige vers /organisations/new)
+    // Ouvrir le menu d'actions et aller à la création (redirige vers /organizations/new)
     const actionsButton = page.locator('button[aria-label="Actions organisation"]');
     await expect(actionsButton).toBeVisible({ timeout: 10_000 });
     await actionsButton.click();
     const newAction = page.locator('button:has-text("Nouveau")');
     await expect(newAction).toBeVisible({ timeout: 10_000 });
     await newAction.click();
-    await expect(page).toHaveURL(/\/organisations\/new$/);
+    await expect(page).toHaveURL(/\/organizations\/new$/);
     
     // Remplir le nom via l'EditableInput dans le H1 (textarea pour multiline)
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -35,7 +35,7 @@ test.describe.serial('Workflow métier complet', () => {
     
     // Créer l'organisation
     await page.getByRole('button', { name: 'Créer' }).click();
-    await expect(page).toHaveURL(/\/organisations\/[a-zA-Z0-9-]+$/);
+    await expect(page).toHaveURL(/\/organizations\/[a-zA-Z0-9-]+$/);
     
     // Vérifier sur la page détail
     const detailNameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
@@ -76,7 +76,7 @@ test.describe.serial('Workflow métier complet', () => {
     expect(useCaseId).toBeTruthy();
     
     // Étape 3: Aller dans les dossiers pour voir l'avancement
-    await page.goto('/dossiers');
+    await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier qu'on est sur la page des dossiers
@@ -85,15 +85,15 @@ test.describe.serial('Workflow métier complet', () => {
     // Vérifier qu'on est sur la page dossiers (assertion h1 suffit)
     await expect(page.locator('h1')).toContainText('Dossiers');
     
-    // Étape 4: Ouvrir le dossier dédié (liste cas d’usage sur /dossiers/[id])
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    // Étape 4: Ouvrir le dossier dédié (liste cas d’usage sur /folders/[id])
+    await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const useCaseCard = page.locator('article.rounded.border.border-slate-200').filter({ hasText: useCaseName }).first();
     await expect(useCaseCard).toBeVisible({ timeout: 10_000 });
 
     await Promise.all([
-      page.waitForURL(new RegExp(`/cas-usage/${useCaseId}$`), { timeout: 10_000 }),
+      page.waitForURL(new RegExp(`/usecase/${useCaseId}$`), { timeout: 10_000 }),
       useCaseCard.click()
     ]);
     await page.waitForLoadState('domcontentloaded');
@@ -129,7 +129,7 @@ test.describe.serial('Workflow métier complet', () => {
     const page = await context.newPage();
     try {
       // Aller directement aux cas d'usage
-      await page.goto('/cas-usage');
+      await page.goto('/usecase');
       await page.waitForLoadState('domcontentloaded');
       
       // Vérifier les différents statuts possibles
@@ -160,7 +160,7 @@ test.describe.serial('Workflow métier complet', () => {
     const page = await context.newPage();
     try {
       // Aller aux cas d'usage
-      await page.goto('/cas-usage');
+      await page.goto('/usecase');
       await page.waitForLoadState('domcontentloaded');
       
       // Chercher un cas d'usage cliquable (pas en génération)
@@ -181,7 +181,7 @@ test.describe.serial('Workflow métier complet', () => {
           
           // Vérifier qu'on est sur une page de détail (URL contient un ID)
           const currentUrl = page.url();
-          expect(currentUrl).toMatch(/\/cas-usage\/[a-zA-Z0-9-]+/);
+          expect(currentUrl).toMatch(/\/usecase\/[a-zA-Z0-9-]+/);
         }
       }
     } finally {

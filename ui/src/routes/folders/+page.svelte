@@ -120,7 +120,7 @@
     // Draft: retourner sur la vue "new" (édition brouillon + icônes IA/Créer/Annuler)
     if (folderStatus === 'draft') {
       currentFolderId.set(folderId);
-      goto(`/dossier/new?draft=${encodeURIComponent(folderId)}`);
+      goto(`/folder/new?draft=${encodeURIComponent(folderId)}`);
       return;
     }
 
@@ -133,7 +133,7 @@
     
     // Naviguer vers la vue dossier (qui contient la liste des cas d'usage)
     currentFolderId.set(folderId);
-    goto(`/dossiers/${folderId}`);
+    goto(`/folders/${folderId}`);
   };
 
   const getUseCaseCount = (folderId: string) => {
@@ -187,7 +187,7 @@
         showExport={true}
         showPrint={false}
         showDelete={false}
-        onNew={() => goto('/dossier/new')}
+        onNew={() => goto('/folder/new')}
         onImport={() => (showImportDialog = true)}
         onExport={() => (showExportDialog = true)}
         triggerTitle="Actions dossier"
@@ -291,7 +291,7 @@
         </div>
       {/if}
 
-  <!-- Création déplacée vers /dossier/new (plus de modal ici) -->
+  <!-- Creation moved to /folder/new (no modal here) -->
 </section>
 
 <ImportExportDialog

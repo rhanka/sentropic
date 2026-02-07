@@ -83,14 +83,14 @@ test.describe('Gestion des cas d\'usage', () => {
     throw new Error(`Use case ${useCaseId} introuvable via API après ${timeoutMs}ms`);
   };
 
-  test('redirige /cas-usage vers la nouvelle liste /dossiers (ou /dossiers/[id])', async ({ page }) => {
-    await page.goto('/cas-usage');
+  test('redirige /usecase vers la nouvelle liste /folders (ou /folders/[id])', async ({ page }) => {
+    await page.goto('/usecase');
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForURL(/\/dossiers(\/[^/]+)?$/, { timeout: 10_000 });
-    expect(page.url()).toMatch(/\/dossiers(\/[^/]+)?$/);
+    await page.waitForURL(/\/folders(\/[^/]+)?$/, { timeout: 10_000 });
+    expect(page.url()).toMatch(/\/folders(\/[^/]+)?$/);
   });
 
-  test('affiche la liste de cas d’usage sur /dossiers/[id] et permet d’ouvrir un détail', async ({ page }) => {
+  test('affiche la liste de cas d’usage sur /folders/[id] et permet d’ouvrir un détail', async ({ page }) => {
     // IMPORTANT: le suite E2E contient des tests destructifs (suppression dossiers).
     // Pour éviter la dépendance au seed global et les flaky, on crée un dossier + un cas d’usage dédiés.
     const folderName = `E2E UseCases ${Date.now()}`;
@@ -114,7 +114,7 @@ test.describe('Gestion des cas d\'usage', () => {
     // Stabiliser: attendre que l’API liste bien le cas d’usage (évite les flakys en charge)
     await waitForUseCaseInApi(page, folderId, useCaseId, 30_000);
 
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     // La liste des cas d’usage est sur la page dossier
@@ -122,10 +122,10 @@ test.describe('Gestion des cas d\'usage', () => {
     await expect(useCaseCard).toBeVisible({ timeout: 30_000 });
 
     await Promise.all([
-      page.waitForURL(new RegExp(`/cas-usage/${useCaseId}$`), { timeout: 10_000 }),
+      page.waitForURL(new RegExp(`/usecase/${useCaseId}$`), { timeout: 10_000 }),
       useCaseCard.click()
     ]);
-    expect(page.url()).toMatch(new RegExp(`/cas-usage/${useCaseId}$`));
+    expect(page.url()).toMatch(new RegExp(`/usecase/${useCaseId}$`));
   });
 
   test.describe('Read-only (viewer)', () => {
@@ -135,7 +135,7 @@ test.describe('Gestion des cas d\'usage', () => {
       });
       const page = await context.newPage();
       try {
-        await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+        await page.goto(`/folders/${encodeURIComponent(folderId)}`);
         await page.waitForLoadState('domcontentloaded');
 
         if (useCaseName) {
@@ -156,7 +156,7 @@ test.describe('Gestion des cas d\'usage', () => {
       });
       const page = await context.newPage();
       try {
-        await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+        await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
         await page.waitForLoadState('domcontentloaded');
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
@@ -181,7 +181,7 @@ test.describe('Gestion des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageB = await userBContext.newPage();
-    await pageB.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await pageB.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 

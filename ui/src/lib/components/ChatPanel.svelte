@@ -438,13 +438,13 @@
     const routeId = $page.route.id;
     const params = $page.params;
 
-    // /cas-usage/[id] → usecase
-    if (routeId === '/cas-usage/[id]' && params.id) {
+    // /usecase/[id] → usecase
+    if (routeId === '/usecase/[id]' && params.id) {
       return { primaryContextType: 'usecase', primaryContextId: params.id };
     }
 
-    // /cas-usage → use case list; when a folder is selected, treat chat context as folder
-    if (routeId === '/cas-usage' && $currentFolderId) {
+    // /usecase → use case list; when a folder is selected, treat chat context as folder
+    if (routeId === '/usecase' && $currentFolderId) {
       return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
     }
 
@@ -453,28 +453,28 @@
       return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
     }
 
-    // /matrice → matrix view is folder-scoped when a folder is selected
-    if (routeId === '/matrice' && $currentFolderId) {
+    // /matrix → matrix view is folder-scoped when a folder is selected
+    if (routeId === '/matrix' && $currentFolderId) {
       return { primaryContextType: 'folder', primaryContextId: $currentFolderId };
     }
 
-    // /dossiers/[id] → folder
-    if (routeId === '/dossiers/[id]' && params.id) {
+    // /folders/[id] → folder
+    if (routeId === '/folders/[id]' && params.id) {
       return { primaryContextType: 'folder', primaryContextId: params.id };
     }
 
-    // /organisations/[id] → organization
-    if (routeId === '/organisations/[id]' && params.id) {
+    // /organizations/[id] → organization
+    if (routeId === '/organizations/[id]' && params.id) {
       return { primaryContextType: 'organization', primaryContextId: params.id };
     }
 
-    // /organisations → organizations list (organization scope without a specific id)
-    if (routeId === '/organisations') {
+    // /organizations → organizations list (organization scope without a specific id)
+    if (routeId === '/organizations') {
       return { primaryContextType: 'organization' };
     }
 
-    // /dossiers → folders list (folder scope without a specific id)
-    if (routeId === '/dossiers') {
+    // /folders → folders list (folder scope without a specific id)
+    if (routeId === '/folders') {
       return { primaryContextType: 'folder' };
     }
 

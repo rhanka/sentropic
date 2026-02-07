@@ -46,7 +46,7 @@
       const existing = await fetchOrganizationById(draftId);
       // Si ce n'est plus un brouillon, on bascule vers la vue [id]
       if (existing?.status && existing.status !== 'draft') {
-        goto(`/organisations/${existing.id}`);
+        goto(`/organizations/${existing.id}`);
         return;
       }
       organization = { ...existing };
@@ -56,7 +56,7 @@
         type: 'error',
         message: err instanceof Error ? err.message : 'Impossible de charger le brouillon'
       });
-      goto('/organisations');
+      goto('/organizations');
     }
   };
 
@@ -68,7 +68,7 @@
     readOnlyChecked = true;
     if ($workspaceReadOnlyScope) {
       addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
-      goto('/organisations');
+      goto('/organizations');
     }
   }
 
@@ -138,7 +138,7 @@
         message: "Organisation créée ! L'enrichissement avec l'IA est en cours..."
       });
 
-      goto('/organisations');
+      goto('/organizations');
     } catch (err) {
       console.error('Failed to create and enrich organization:', err);
       addToast({
@@ -171,7 +171,7 @@
         addToast({ type: 'success', message: 'Organisation créée avec succès !' });
         if (newOrganization?.id) {
         unsavedChangesStore.reset();
-        goto(`/organisations/${newOrganization.id}`);
+        goto(`/organizations/${newOrganization.id}`);
         }
         return;
       }
@@ -179,7 +179,7 @@
       await updateOrganization(id, organization as Partial<Organization>);
       addToast({ type: 'success', message: 'Organisation créée avec succès !' });
       unsavedChangesStore.reset();
-      goto(`/organisations/${id}`);
+      goto(`/organizations/${id}`);
     } catch (err) {
       console.error('Failed to create organization:', err);
       addToast({
@@ -197,7 +197,7 @@
     if (id) {
       void deleteOrganization(id).catch(() => {});
     }
-    goto('/organisations');
+    goto('/organizations');
   };
 </script>
 

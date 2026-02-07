@@ -275,22 +275,22 @@
     params: Record<string, string>,
     folderId: string | null
   ): { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null => {
-    if (routeId === '/cas-usage/[id]' && params.id) {
+    if (routeId === '/usecase/[id]' && params.id) {
       return { type: 'usecase', id: params.id };
     }
-    if (routeId === '/cas-usage' && folderId) {
+    if (routeId === '/usecase' && folderId) {
       return { type: 'folder', id: folderId };
     }
     if (routeId === '/dashboard' && folderId) {
       return { type: 'folder', id: folderId };
     }
-    if (routeId === '/matrice' && folderId) {
+    if (routeId === '/matrix' && folderId) {
       return { type: 'folder', id: folderId };
     }
-    if (routeId === '/dossiers/[id]' && params.id) {
+    if (routeId === '/folders/[id]' && params.id) {
       return { type: 'folder', id: params.id };
     }
-    if (routeId === '/organisations/[id]' && params.id) {
+    if (routeId === '/organizations/[id]' && params.id) {
       return { type: 'organization', id: params.id };
     }
     return null;

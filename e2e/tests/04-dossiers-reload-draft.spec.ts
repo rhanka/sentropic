@@ -76,7 +76,7 @@ test.describe('Dossiers — reload & brouillons', () => {
     await userAApi.dispose();
   });
 
-  test('CTRL+R: reload sur /dossiers/[id] ne casse pas (fallback SPA)', async ({ browser }) => {
+  test('CTRL+R: reload sur /folders/[id] ne casse pas (fallback SPA)', async ({ browser }) => {
     const context = await browser.newContext({
       storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
     });
@@ -91,7 +91,7 @@ test.describe('Dossiers — reload & brouillons', () => {
       const folderId = String(items[0]?.id ?? '');
       expect(folderId).toBeTruthy();
 
-      await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await page.goto(`/folders/${encodeURIComponent(folderId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       // Signal minimal que la page est hydratée
@@ -108,7 +108,7 @@ test.describe('Dossiers — reload & brouillons', () => {
     }
   });
 
-  test('Draft: cliquer la carte “Brouillon” renvoie vers /dossier/new?draft=...', async ({ browser }) => {
+  test('Draft: cliquer la carte “Brouillon” renvoie vers /folder/new?draft=...', async ({ browser }) => {
     const context = await browser.newContext({
       storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
     });
@@ -124,14 +124,14 @@ test.describe('Dossiers — reload & brouillons', () => {
       const draftId = String((draftJson as any)?.id ?? '');
       expect(draftId).toBeTruthy();
 
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 
       const draftCard = page.locator('.grid.gap-4 > article').filter({ hasText: draftName }).first();
       await expect(draftCard).toBeVisible({ timeout: 10_000 });
 
       await draftCard.click();
-      await page.waitForURL(new RegExp(`/dossier/new\\?draft=${draftId}$`), { timeout: 10_000 });
+      await page.waitForURL(new RegExp(`/folder/new\\?draft=${draftId}$`), { timeout: 10_000 });
 
       // Vérifier que le nom est bien celui du draft (EditableInput dans H1)
       const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();

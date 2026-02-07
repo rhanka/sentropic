@@ -56,7 +56,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Naviguer vers une autre page
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que la langue est toujours en anglais
@@ -84,7 +84,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur une page qui peut générer des erreurs
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
         
         // Essayer de créer une entreprise sans nom pour générer une erreur
@@ -116,7 +116,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur la page des entreprises
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
         
         // Ouvrir le formulaire d'ajout
@@ -147,7 +147,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur la page des entreprises
-        await page.goto('/organisations');
+        await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
         
         // Vérifier que les boutons sont en anglais
@@ -175,7 +175,7 @@ test.describe('Internationalisation (i18n)', () => {
         await page.waitForLoadState('networkidle');
         
         // Aller sur la page des cas d'usage
-        await page.goto('/cas-usage');
+        await page.goto('/usecase');
         await page.waitForLoadState('networkidle');
         
         // Vérifier que les statuts sont en anglais

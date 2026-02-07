@@ -57,7 +57,7 @@ test.describe('Documents — résumés (court + long)', () => {
     expect(upLong.ok()).toBeTruthy();
 
     // Aller sur la page dossier et vérifier que les 2 lignes apparaissent
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
 
