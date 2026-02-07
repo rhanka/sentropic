@@ -11,6 +11,34 @@
     "settings": "Settings",
     "admin": "Admin"
   },
+  "header": {
+    "login": "Login",
+    "logout": "Logout",
+    "settings": "Settings",
+    "devices": "My devices",
+    "language": "Language",
+    "refreshInfo": "Refresh information"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "close": "Close",
+    "search": "Search",
+    "noResults": "No results",
+    "error": "Error",
+    "success": "Success",
+    "readOnly": "Read-only mode",
+    "draft": "Draft",
+    "active": "Active",
+    "open": "Open",
+    "clickToView": "Click to view details",
+    "sessionCheck": "Checking session…"
+  },
   "documents": {
     "title": "Documents",
     "subtitle": "Attach documents to the context. A summary is generated automatically.",
