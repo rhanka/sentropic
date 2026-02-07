@@ -264,6 +264,11 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Risque 2",
     "Risque 3"
   ],
+  "constraints": [ // 30-40 mots pour l'ensemble des contraintes — techniques, business, réglementaires, etc.
+    "Contrainte 1",
+    "Contrainte 2",
+    "Contrainte 3"
+  ],
   "nextSteps": [ // 40-80 mots pour l'ensemble des prochaines étapes
     "Étape 1",
     "Étape 2",
