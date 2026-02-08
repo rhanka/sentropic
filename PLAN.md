@@ -11,8 +11,7 @@ Coordinate multi-branch, multi-agent work for the TODO items in `TODO.md` (128�
 - No destructive actions without ⚠ approval.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
+- [x] **Multi-branch** (this one is the merge)
 - Rationale: Multi-need split with orthogonal branches and parallel waves.
 
 ## Plan / Todo (lot-based)
@@ -61,20 +60,23 @@ Coordinate multi-branch, multi-agent work for the TODO items in `TODO.md` (128�
     - [x] Merge `feat/ci-reduce-time`
     - [x] Resolve merge conflicts (`BRANCH.md`) with integration-oriented content
 
-- [ ] **Lot 1.5 — Integration UAT (post-merge)**
-  - [ ] Run UAT on integration environment: `feat/i18n-print-ci`.
-  - [ ] Retest route and navigation consistency:
-    - [ ] Open `/usecase`, `/folders`, `/folder/new`, `/organizations`, `/matrix`, `/settings`.
-  - [ ] Retest use case detail UI (constraints + editing):
-    - [ ] Validate 2x2 grid (Benefits | Constraints / Success Metrics | Risks).
-    - [ ] Validate live updates from chat for list fields (including constraints).
-  - [ ] Retest print/docx flow:
-    - [ ] Download DOCX from Use Case detail File menu.
-    - [ ] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
-    - [ ] Confirm no extra blank line above matrix iteration tables.
-  - [ ] Retest CI configuration impact:
-    - [ ] Validate API tests run with workers configuration.
-    - [ ] Validate E2E split configuration (group A / group B) is still coherent after merge.
+- [x] **Lot 1.5 — Integration UAT (post-merge)**
+  - [x] Applied integration fixes:
+    - [x] Compact reference links in template via `{{$ref.link}}` (title linked to URL).
+    - [x] Bottom background image anchoring fixed (page-fixed, full-width, bottom-aligned).
+  - [x] Run UAT on integration environment: `feat/i18n-print-ci`.
+    - [x] Retest route and navigation consistency:
+      - [x] Open `/usecase`, `/folders`, `/folder/new`, `/organizations`, `/matrix`, `/settings`.
+    - [X] Retest use case detail UI (constraints + editing):
+      - [x] Validate 2x2 grid (Benefits | Constraints / Success Metrics | Risks).
+      - [x] Validate live updates from chat for list fields (including constraints).
+    - [X] Retest print/docx flow:
+      - [X] Download DOCX from Use Case detail File menu.
+      - [X] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
+      - [X] Confirm no extra blank line above matrix iteration tables.
+    - [x] Retest CI configuration impact:
+      - [x] Validate API tests run with workers configuration.
+      - [x] Validate E2E split configuration (group A / group B) is still coherent after merge.
 
 - [ ] **Lot 2 — Wave 2 (dependent branches)**
   - [ ] **Environment**: Run UAT in the corresponding tmp workspace:
