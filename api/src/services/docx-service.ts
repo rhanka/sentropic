@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createReport } from 'docx-templates';
+import JSZip from 'jszip';
 import MarkdownIt from 'markdown-it';
 import type { UseCase } from '../types/usecase';
 import type { MatrixConfig } from '../types/matrix';
@@ -18,16 +19,31 @@ import { fibonacciToStars } from '../utils/fibonacci-mapping';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates');
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const HTML_EXPRESSIONS = [
+  'description',
+  'problem',
+  'solution',
+  'benefit',
+  'metric',
+  'risk',
+  'constraint',
+  'step',
+  'tech',
+  'dataSource',
+  'dataObject',
+  'ref.title',
+  'ref.url',
+  'ref.excerpt',
+  'ax.description',
+];
 
 function markdownToHtml(markdown: string): string {
   const html = md.render(markdown || '');
   return `<meta charset="UTF-8"><body>${html}</body>`;
 }
 
-function markdownListToHtml(items: string[]): string {
-  if (!items || items.length === 0) return markdownToHtml('');
-  const markdown = items.map((item) => `- ${item}`).join('\n');
-  return markdownToHtml(markdown);
+function markdownItemToHtml(item: string): string {
+  return markdownToHtml(item || '');
 }
 
 /**
@@ -50,8 +66,7 @@ function buildAxes(
         title: axis.name,
         score: score.rating,
         stars: fibonacciToStars(Number(score.rating)),
-        description: score.description ?? '',
-        descriptionHtml: markdownToHtml(score.description ?? ''),
+        description: markdownToHtml(score.description ?? ''),
       };
     })
     .filter(Boolean) as Array<{ title: string; score: number; stars: number; description: string }>;
@@ -61,8 +76,24 @@ function normalizeReference(ref: { title?: string; url?: string; excerpt?: strin
   return {
     title: ref.title ?? '',
     url: ref.url ?? '',
-    excerpt: ref.excerpt ?? '',
+    excerpt: markdownToHtml(ref.excerpt ?? ''),
   };
+}
+
+async function injectHtmlCommands(template: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(template);
+  const docXml = await zip.file('word/document.xml')?.async('string');
+  if (!docXml) return template;
+  let updated = docXml;
+  for (const expr of HTML_EXPRESSIONS) {
+    const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const basic = new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'g');
+    const ins = new RegExp(`\\{\\{\\s*INS\\s+${escaped}\\s*\\}\\}`, 'g');
+    updated = updated.replace(basic, `{{HTML ${expr}}}`);
+    updated = updated.replace(ins, `{{HTML ${expr}}}`);
+  }
+  zip.file('word/document.xml', updated);
+  return await zip.generateAsync({ type: 'nodebuffer' });
 }
 
 async function createReportWithFallback(data: Record<string, unknown>, template: Buffer): Promise<Uint8Array> {
@@ -70,8 +101,9 @@ async function createReportWithFallback(data: Record<string, unknown>, template:
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
+      const templateWithHtml = await injectHtmlCommands(template);
       return await createReport({
-        template,
+        template: templateWithHtml,
         data,
         cmdDelimiter: ['{{', '}}'],
       });
@@ -109,47 +141,32 @@ export async function generateUseCaseDocx(
   const data = {
     id: useCase.id,
     name: d.name,
-    description: d.description ?? '',
-    descriptionHtml: markdownToHtml(d.description ?? ''),
-    problem: d.problem ?? '',
-    problemHtml: markdownToHtml(d.problem ?? ''),
-    solution: d.solution ?? '',
-    solutionHtml: markdownToHtml(d.solution ?? ''),
+    description: markdownToHtml(d.description ?? ''),
+    problem: markdownToHtml(d.problem ?? ''),
+    solution: markdownToHtml(d.solution ?? ''),
     process: d.process ?? '',
     domain: d.domain ?? '',
-    technologies: d.technologies ?? [],
+    technologies: (d.technologies ?? []).map((item) => markdownItemToHtml(item)),
     technologiesText: (d.technologies ?? []).join(', '),
-    benefits: d.benefits ?? [],
+    benefits: (d.benefits ?? []).map((item) => markdownItemToHtml(item)),
     benefitsText: (d.benefits ?? []).join('\n'),
-    benefitsHtml: markdownListToHtml(d.benefits ?? []),
-    metrics: d.metrics ?? [],
+    metrics: (d.metrics ?? []).map((item) => markdownItemToHtml(item)),
     metricsText: (d.metrics ?? []).join('\n'),
-    metricsHtml: markdownListToHtml(d.metrics ?? []),
-    risks: d.risks ?? [],
+    risks: (d.risks ?? []).map((item) => markdownItemToHtml(item)),
     risksText: (d.risks ?? []).join('\n'),
-    risksHtml: markdownListToHtml(d.risks ?? []),
-    constraints: d.constraints ?? [],
+    constraints: (d.constraints ?? []).map((item) => markdownItemToHtml(item)),
     constraintsText: (d.constraints ?? []).join('\n'),
-    constraintsHtml: markdownListToHtml(d.constraints ?? []),
-    nextSteps: d.nextSteps ?? [],
+    nextSteps: (d.nextSteps ?? []).map((item) => markdownItemToHtml(item)),
     nextStepsText: (d.nextSteps ?? []).join('\n'),
-    nextStepsHtml: markdownListToHtml(d.nextSteps ?? []),
-    dataSources: d.dataSources ?? [],
+    dataSources: (d.dataSources ?? []).map((item) => markdownItemToHtml(item)),
     dataSourcesText: (d.dataSources ?? []).join(', '),
-    dataSourcesHtml: markdownListToHtml(d.dataSources ?? []),
-    dataObjects: d.dataObjects ?? [],
+    dataObjects: (d.dataObjects ?? []).map((item) => markdownItemToHtml(item)),
     dataObjectsText: (d.dataObjects ?? []).join(', '),
-    dataObjectsHtml: markdownListToHtml(d.dataObjects ?? []),
     references,
     referencesText: references
       .map((ref) => [ref.title, ref.url].filter(Boolean).join(' — '))
       .filter(Boolean)
       .join('\n'),
-    referencesHtml: markdownToHtml(
-      references
-        .map((ref, index) => `${index + 1}. ${[ref.title, ref.url].filter(Boolean).join(' — ')}${ref.excerpt ? `\n${ref.excerpt}` : ''}`)
-        .join('\n')
-    ),
     valueAxes,
     complexityAxes,
     deadline: d.deadline ?? '',
