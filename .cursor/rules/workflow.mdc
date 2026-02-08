@@ -62,6 +62,11 @@ Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup
    git clone . tmp/<branch-slug>
    cd tmp/<branch-slug> && git checkout -b <branch-name>
    cp ../../.env .env  # if .env exists
+   # then append/override in tmp/.env:
+   # ENV=<branch-slug>
+   # API_PORT=<unique>
+   # UI_PORT=<unique>
+   # MAILDEV_UI_PORT=<unique>
    ```
 2. **Write `BRANCH.md`** into the clone immediately after setup (with scoping decisions already integrated).
    - Do NOT create `BRANCH.md` before cloning (it will be destroyed by `rm -rf`).
