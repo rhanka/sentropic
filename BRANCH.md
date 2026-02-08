@@ -1,7 +1,7 @@
 # Feature: Print - docx base + one-page usecase
 
 ## Objective
-Replace the print pipeline with docx-templates and deliver the one-page usecase template.
+Replace the print pipeline with `dolanmiu/docx` patching and deliver the one-page usecase template.
 
 ## Scope / Guardrails
 - Scope limited to print/export generation and the one-page usecase template.
@@ -22,7 +22,9 @@ Replace the print pipeline with docx-templates and deliver the one-page usecase 
 - Rationale: Grouped base + one-page template to keep waves at four branches.
 
 ## UAT Management (in orchestration context)
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- **Multi-branch**: run partial UAT per completed lot on the branch workspace.
+- **UAT environment**: `tmp/feat-print-docx-usecase-onepage` with `ENV=feat-print-docx-usecase-onepage`.
+- Keep end-to-end automation implementation for **Lot N** only.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
@@ -31,8 +33,8 @@ Replace the print pipeline with docx-templates and deliver the one-page usecase 
   - [x] Confirm scope and guardrails.
   - [x] Scoping decisions confirmed by user.
 
-- [x] **Lot 1 — docx-templates base**
-  - [x] Add `docx-templates` dependency to API (`make install-api docx-templates`).
+- [x] **Lot 1 — docx patch base**
+  - [x] Add `docx` dependency to API (`make install-api docx`).
   - [x] Create `api/src/services/docx-service.ts` — docx generation service.
   - [x] Create `api/src/routes/api/docx.ts` — docx export endpoint.
   - [x] Create `api/templates/README.md` — template variables documentation (actual .docx template to be created manually).
@@ -51,7 +53,7 @@ Replace the print pipeline with docx-templates and deliver the one-page usecase 
   - [ ] Tests (by scope, by file)
   - [ ] API: `api/tests/api/docx.test.ts` (new)
   - [ ] UI: none (no UI unit tests in scope)
-  - [ ] E2E: `e2e/tests/05-usecase-detail.spec.ts` (DOCX download)
+  - [ ] E2E to add: `e2e/tests/05-usecase-detail.spec.ts` (DOCX download from use case detail File menu)
   - [ ] Sub-lot gate: `make test-api`
   - [ ] Sub-lot gate: `make test-ui`
   - [ ] Prepare E2E build: `make build-api build-ui-image`

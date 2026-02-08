@@ -128,7 +128,7 @@
 - [ ] Reduce CI time
   - [ ] Enable mutliple workers in test-api
   - [ ] Split test-e2e in two // execution groups
-- [ ] remplacer le modèle de print par un modèle de template (docx-templates)
+- [ ] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
   - [ ] define a model for usecase fitting in one page
   - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
 - [ ] basculer en i18n bilingue anglais / français
@@ -342,4 +342,3 @@
     3. Normaliser sur `name` partout OU documenter la rétrocompatibilité
     4. Supprimer les fallbacks `(useCase as any)?.titre || (useCase as any)?.nom` si plus nécessaires
     5. Mettre à jour l'interface `UseCaseListItem` si nécessaire
-
