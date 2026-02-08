@@ -37,13 +37,63 @@ function markdownToHtml(markdown: string): string {
   return `<meta charset="UTF-8"><body>${html}</body>`;
 }
 
-function markdownItemToHtml(item: string): string {
-  return markdownToHtml(item || '');
-}
-
 function markdownToText(markdown: string): string {
   const html = marked.parseInline(markdown || '');
   return String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function markdownToLiteralXmlRuns(markdown: string): string {
+  const source = (markdown || '').replace(/\|\|/g, '| |');
+  const parts: Array<{ text: string; bold: boolean; italic: boolean }> = [];
+  let i = 0;
+  while (i < source.length) {
+    if (source.startsWith('**', i)) {
+      const end = source.indexOf('**', i + 2);
+      if (end !== -1) {
+        parts.push({ text: source.slice(i + 2, end), bold: true, italic: false });
+        i = end + 2;
+        continue;
+      }
+    }
+    if (source.startsWith('*', i)) {
+      const end = source.indexOf('*', i + 1);
+      if (end !== -1) {
+        parts.push({ text: source.slice(i + 1, end), bold: false, italic: true });
+        i = end + 1;
+        continue;
+      }
+    }
+    const nextBold = source.indexOf('**', i);
+    const nextItalic = source.indexOf('*', i);
+    const candidates = [nextBold, nextItalic].filter((v) => v !== -1);
+    const next = candidates.length > 0 ? Math.min(...candidates) : source.length;
+    parts.push({ text: source.slice(i, next), bold: false, italic: false });
+    i = next;
+  }
+
+  const runs: string[] = [];
+  for (const part of parts) {
+    if (!part.text) continue;
+    const segments = part.text.split('\n');
+    segments.forEach((segment, index) => {
+      const runProps = part.bold || part.italic
+        ? `<w:rPr>${part.bold ? '<w:b/>' : ''}${part.italic ? '<w:i/>' : ''}</w:rPr>`
+        : '';
+      runs.push(`<w:r>${runProps}<w:t xml:space="preserve">${escapeXml(segment)}</w:t></w:r>`);
+      if (index < segments.length - 1) {
+        runs.push('<w:r><w:br/></w:r>');
+      }
+    });
+  }
+  return `||${runs.join('')}||`;
 }
 
 /**
@@ -74,9 +124,9 @@ function buildAxes(
 
 function normalizeReference(ref: { title?: string; url?: string; excerpt?: string }) {
   return {
-    title: markdownToText(ref.title ?? ''),
+    title: markdownToLiteralXmlRuns(ref.title ?? ''),
     url: ref.url ?? '',
-    excerpt: markdownToText(ref.excerpt ?? ''),
+    excerpt: markdownToLiteralXmlRuns(ref.excerpt ?? ''),
   };
 }
 
@@ -200,21 +250,21 @@ export async function generateUseCaseDocx(
     solution: markdownToHtml(d.solution ?? ''),
     process: d.process ?? '',
     domain: d.domain ?? '',
-    technologies: (d.technologies ?? []).map((item) => markdownToText(item)),
+    technologies: (d.technologies ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     technologiesText: (d.technologies ?? []).join(', '),
-    benefits: (d.benefits ?? []).map((item) => markdownToText(item)),
+    benefits: (d.benefits ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     benefitsText: (d.benefits ?? []).join('\n'),
-    metrics: (d.metrics ?? []).map((item) => markdownToText(item)),
+    metrics: (d.metrics ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     metricsText: (d.metrics ?? []).join('\n'),
-    risks: (d.risks ?? []).map((item) => markdownToText(item)),
+    risks: (d.risks ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     risksText: (d.risks ?? []).join('\n'),
-    constraints: (d.constraints ?? []).map((item) => markdownToText(item)),
+    constraints: (d.constraints ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     constraintsText: (d.constraints ?? []).join('\n'),
-    nextSteps: (d.nextSteps ?? []).map((item) => markdownToText(item)),
+    nextSteps: (d.nextSteps ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     nextStepsText: (d.nextSteps ?? []).join('\n'),
-    dataSources: (d.dataSources ?? []).map((item) => markdownToText(item)),
+    dataSources: (d.dataSources ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     dataSourcesText: (d.dataSources ?? []).join(', '),
-    dataObjects: (d.dataObjects ?? []).map((item) => markdownToText(item)),
+    dataObjects: (d.dataObjects ?? []).map((item) => markdownToLiteralXmlRuns(item)),
     dataObjectsText: (d.dataObjects ?? []).join(', '),
     references,
     referencesText: references
