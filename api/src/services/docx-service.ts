@@ -80,6 +80,7 @@ type TemplateData = {
   references: Array<{
     title: string;
     url: string;
+    link: string;
     excerpt: string;
   }>;
   valueAxes: Array<{
@@ -140,6 +141,17 @@ function safeText(value: unknown): string {
 function normalizeList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => safeText(item));
+}
+
+function escapeMarkdownLinkLabel(value: string): string {
+  return value.replace(/[[\]]/g, '\\$&');
+}
+
+function toMarkdownLink(title: string, url: string): string {
+  const text = safeText(title).trim() || safeText(url).trim();
+  const href = safeText(url).trim();
+  if (!href) return text;
+  return `[${escapeMarkdownLinkLabel(text)}](${href})`;
 }
 
 function inlineTokensFromMarkdown(markdown: string): MarkedToken[] {
@@ -730,6 +742,7 @@ function buildTemplateData(useCase: UseCase, matrix: MatrixConfig | null): Templ
       ? d.references.map((ref) => ({
           title: safeText(ref.title),
           url: safeText(ref.url),
+          link: toMarkdownLink(safeText(ref.title), safeText(ref.url)),
           excerpt: safeText(ref.excerpt),
         }))
       : [],
