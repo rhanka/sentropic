@@ -10,6 +10,8 @@ import { useCases } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { hydrateUseCase } from './use-cases';
 import { generateUseCaseDocx } from '../../services/docx-service';
+import { folders } from '../../db/schema';
+import { parseMatrixConfig } from '../../utils/matrix';
 
 /** Minimal slug helper (ASCII, lowercase, hyphens). */
 function slugify(value: string): string {
@@ -38,12 +40,22 @@ docxRouter.get('/use-cases/:id/docx', async (c) => {
   }
 
   const hydrated = await hydrateUseCase(record);
-  const buf = await generateUseCaseDocx(hydrated);
+  const [folder] = await db
+    .select({ matrixConfig: folders.matrixConfig })
+    .from(folders)
+    .where(and(eq(folders.id, hydrated.folderId), eq(folders.workspaceId, user.workspaceId)));
+  const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
+  try {
+    const buf = await generateUseCaseDocx(hydrated, matrix);
 
-  const nameSlug = slugify(hydrated.data.name) || 'usecase';
-  const fileName = `usecase-${id}-${nameSlug}.docx`;
+    const nameSlug = slugify(hydrated.data.name) || 'usecase';
+    const fileName = `usecase-${id}-${nameSlug}.docx`;
 
-  c.header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  c.header('Content-Disposition', `attachment; filename="${fileName}"`);
-  return c.body(buf);
+    c.header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    c.header('Content-Disposition', `attachment; filename="${fileName}"`);
+    return c.body(new Uint8Array(buf));
+  } catch (error: any) {
+    const message = String(error?.message ?? error);
+    return c.json({ message: 'Invalid DOCX template.', error: message }, 422);
+  }
 });

@@ -35,10 +35,14 @@ for variable interpolation.
 | `dataSourcesText`    | string   | Data sources joined with ", "              |
 | `dataObjects`        | string[] | Data objects list (array, for loops)       |
 | `dataObjectsText`    | string   | Data objects joined with ", "              |
+| `references`         | object[] | References list `{ title, url, excerpt }`  |
+| `referencesText`     | string   | References joined with newlines            |
 | `deadline`           | string   | Target deadline                            |
 | `contact`            | string   | Contact person                             |
 | `totalValueScore`    | number   | Calculated value score (0-100)             |
 | `totalComplexityScore`| number  | Calculated complexity score (0-100)        |
+| `valueAxes`          | object[] | Axis list `{ title, score, stars, description }` |
+| `complexityAxes`     | object[] | Axis list `{ title, score, stars, description }` |
 | `createdAt`          | string   | ISO date of creation                       |
 
 ### Example template content
@@ -65,6 +69,18 @@ Risks:
 
 Value Score: {{totalValueScore}} / 100
 Complexity Score: {{totalComplexityScore}} / 100
+
+Value Axes (loop):
+{{FOR ax IN (valueAxes || [])}}
+- {{ax.title}} ({{ax.score}} pts, {{ax.stars}}/5)
+  {{ax.description}}
+{{END-FOR ax}}
+
+Complexity Axes (loop):
+{{FOR ax IN (complexityAxes || [])}}
+- {{ax.title}} ({{ax.score}} pts, {{ax.stars}}/5)
+  {{ax.description}}
+{{END-FOR ax}}
 ```
 
 For list iteration (advanced):
