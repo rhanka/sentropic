@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createReport } from 'docx-templates';
+import MarkdownIt from 'markdown-it';
 import type { UseCase } from '../types/usecase';
 import type { MatrixConfig } from '../types/matrix';
 import { fibonacciToStars } from '../utils/fibonacci-mapping';
@@ -16,6 +17,18 @@ import { fibonacciToStars } from '../utils/fibonacci-mapping';
 // both when running with tsx (src/) and from a bundled dist/.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates');
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+
+function markdownToHtml(markdown: string): string {
+  const html = md.render(markdown || '');
+  return `<meta charset="UTF-8"><body>${html}</body>`;
+}
+
+function markdownListToHtml(items: string[]): string {
+  if (!items || items.length === 0) return markdownToHtml('');
+  const markdown = items.map((item) => `- ${item}`).join('\n');
+  return markdownToHtml(markdown);
+}
 
 /**
  * Generate a one-page use-case DOCX from a template.
@@ -38,6 +51,7 @@ function buildAxes(
         score: score.rating,
         stars: fibonacciToStars(Number(score.rating)),
         description: score.description ?? '',
+        descriptionHtml: markdownToHtml(score.description ?? ''),
       };
     })
     .filter(Boolean) as Array<{ title: string; score: number; stars: number; description: string }>;
@@ -96,31 +110,46 @@ export async function generateUseCaseDocx(
     id: useCase.id,
     name: d.name,
     description: d.description ?? '',
+    descriptionHtml: markdownToHtml(d.description ?? ''),
     problem: d.problem ?? '',
+    problemHtml: markdownToHtml(d.problem ?? ''),
     solution: d.solution ?? '',
+    solutionHtml: markdownToHtml(d.solution ?? ''),
     process: d.process ?? '',
     domain: d.domain ?? '',
     technologies: d.technologies ?? [],
     technologiesText: (d.technologies ?? []).join(', '),
     benefits: d.benefits ?? [],
     benefitsText: (d.benefits ?? []).join('\n'),
+    benefitsHtml: markdownListToHtml(d.benefits ?? []),
     metrics: d.metrics ?? [],
     metricsText: (d.metrics ?? []).join('\n'),
+    metricsHtml: markdownListToHtml(d.metrics ?? []),
     risks: d.risks ?? [],
     risksText: (d.risks ?? []).join('\n'),
+    risksHtml: markdownListToHtml(d.risks ?? []),
     constraints: d.constraints ?? [],
     constraintsText: (d.constraints ?? []).join('\n'),
+    constraintsHtml: markdownListToHtml(d.constraints ?? []),
     nextSteps: d.nextSteps ?? [],
     nextStepsText: (d.nextSteps ?? []).join('\n'),
+    nextStepsHtml: markdownListToHtml(d.nextSteps ?? []),
     dataSources: d.dataSources ?? [],
     dataSourcesText: (d.dataSources ?? []).join(', '),
+    dataSourcesHtml: markdownListToHtml(d.dataSources ?? []),
     dataObjects: d.dataObjects ?? [],
     dataObjectsText: (d.dataObjects ?? []).join(', '),
+    dataObjectsHtml: markdownListToHtml(d.dataObjects ?? []),
     references,
     referencesText: references
       .map((ref) => [ref.title, ref.url].filter(Boolean).join(' — '))
       .filter(Boolean)
       .join('\n'),
+    referencesHtml: markdownToHtml(
+      references
+        .map((ref, index) => `${index + 1}. ${[ref.title, ref.url].filter(Boolean).join(' — ')}${ref.excerpt ? `\n${ref.excerpt}` : ''}`)
+        .join('\n')
+    ),
     valueAxes,
     complexityAxes,
     deadline: d.deadline ?? '',
