@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import {
+  ExternalHyperlink,
   PatchType,
   TextRun,
   patchDetector,
@@ -197,8 +198,20 @@ function inlineTokensToRuns(
         out.push(newTextRun(safeText(token.text), { ...style, code: true }, baseStyle));
         break;
       case 'link': {
+        const href = safeText(token.href);
         const childTokens = token.tokens ?? inlineTokensFromMarkdown(token.text ?? token.href ?? '');
-        out.push(...inlineTokensToRuns(childTokens, style, baseStyle));
+        const linkChildren = inlineTokensToRuns(childTokens, style, baseStyle);
+
+        if (href) {
+          out.push(
+            new ExternalHyperlink({
+              link: href,
+              children: linkChildren.length > 0 ? linkChildren : [newTextRun(href, style, baseStyle)],
+            })
+          );
+        } else {
+          out.push(...linkChildren);
+        }
         break;
       }
       case 'br':
@@ -405,7 +418,12 @@ function isControlOnlyParagraph(paragraphXml: string, controlToken: string): boo
 }
 
 function isVisuallyEmptyParagraph(paragraphXml: string): boolean {
-  const plain = paragraphXml
+  const withoutLoopMarkers = paragraphXml.replace(
+    /{{\s*(FOR\s+[A-Za-z_]\w*\s+IN\s+\([^)]+\)|END-FOR\s+[A-Za-z_]\w*)\s*}}/g,
+    ''
+  );
+
+  const plain = withoutLoopMarkers
     .replace(/<w:tab\/>/g, '')
     .replace(/<w:br\b[^>]*\/>/g, '')
     .replace(/<[^>]+>/g, '')
@@ -519,9 +537,10 @@ function inferLoopPatchMode(loopVar: string, fieldPath: string): PatchMode {
   if (key === 'ax.description') return 'markdown_block';
   if (key === 'ref.excerpt') return 'markdown_block';
 
-  if (fieldPath === 'score' || fieldPath === 'stars' || fieldPath === 'crosses' || fieldPath === 'url') {
+  if (fieldPath === 'score' || fieldPath === 'stars' || fieldPath === 'crosses') {
     return 'plain';
   }
+  if (fieldPath === 'url') return 'markdown_inline';
 
   return 'markdown_inline';
 }
