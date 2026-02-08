@@ -54,8 +54,8 @@ docxRouter.get('/use-cases/:id/docx', async (c) => {
     c.header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     c.header('Content-Disposition', `attachment; filename="${fileName}"`);
     return c.body(new Uint8Array(buf));
-  } catch (error: any) {
-    const message = String(error?.message ?? error);
-    return c.json({ message: 'Invalid DOCX template.', error: message }, 422);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ message: 'Failed to generate DOCX document.', error: message }, 422);
   }
 });
