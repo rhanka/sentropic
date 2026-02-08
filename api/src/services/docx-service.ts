@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createReport } from 'docx-templates';
+import JSZip from 'jszip';
 import { marked } from 'marked';
 import type { UseCase } from '../types/usecase';
 import type { MatrixConfig } from '../types/matrix';
@@ -83,6 +84,40 @@ function markdownToLiteralXmlRuns(markdown: string): string {
   return `||${runs.join('')}||`;
 }
 
+const LOOP_VARS = [
+  'benefit',
+  'metric',
+  'risk',
+  'constraint',
+  'step',
+  'tech',
+  'dataSource',
+  'dataObject',
+];
+
+function normalizeLoopVariableRefs(docXml: string): string {
+  let updated = docXml;
+  for (const name of LOOP_VARS) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    updated = updated.replace(new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`, 'g'), `{{$${name}}}`);
+    updated = updated.replace(new RegExp(`\\{\\{\\s*INS\\s+${escaped}\\s*\\}\\}`, 'g'), `{{INS $${name}}}`);
+  }
+  updated = updated.replace(/\{\{\s*ref\./g, '{{$ref.');
+  updated = updated.replace(/\{\{\s*INS\s+ref\./g, '{{INS $ref.');
+  updated = updated.replace(/\{\{\s*ax\./g, '{{$ax.');
+  updated = updated.replace(/\{\{\s*INS\s+ax\./g, '{{INS $ax.');
+  return updated;
+}
+
+async function normalizeTemplateCommands(template: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(template);
+  const docXml = await zip.file('word/document.xml')?.async('string');
+  if (!docXml) return template;
+  const updated = normalizeLoopVariableRefs(docXml);
+  zip.file('word/document.xml', updated);
+  return await zip.generateAsync({ type: 'nodebuffer' });
+}
+
 /**
  * Generate a one-page use-case DOCX from a template.
  *
@@ -122,10 +157,12 @@ async function createReportWithFallback(data: Record<string, unknown>, template:
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
+      const normalizedTemplate = await normalizeTemplateCommands(template);
       return await createReport({
-        template,
+        template: normalizedTemplate,
         data,
         cmdDelimiter: ['{{', '}}'],
+        literalXmlDelimiter: '||',
       });
     } catch (error: any) {
       const message = String(error?.message ?? error);
