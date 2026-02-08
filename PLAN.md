@@ -61,6 +61,21 @@ Coordinate multi-branch, multi-agent work for the TODO items in `TODO.md` (128�
     - [x] Merge `feat/ci-reduce-time`
     - [x] Resolve merge conflicts (`BRANCH.md`) with integration-oriented content
 
+- [ ] **Lot 1.5 — Integration UAT (post-merge)**
+  - [ ] Run UAT on integration environment: `feat/i18n-print-ci`.
+  - [ ] Retest route and navigation consistency:
+    - [ ] Open `/usecase`, `/folders`, `/folder/new`, `/organizations`, `/matrix`, `/settings`.
+  - [ ] Retest use case detail UI (constraints + editing):
+    - [ ] Validate 2x2 grid (Benefits | Constraints / Success Metrics | Risks).
+    - [ ] Validate live updates from chat for list fields (including constraints).
+  - [ ] Retest print/docx flow:
+    - [ ] Download DOCX from Use Case detail File menu.
+    - [ ] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
+    - [ ] Confirm no extra blank line above matrix iteration tables.
+  - [ ] Retest CI configuration impact:
+    - [ ] Validate API tests run with workers configuration.
+    - [ ] Validate E2E split configuration (group A / group B) is still coherent after merge.
+
 - [ ] **Lot 2 — Wave 2 (dependent branches)**
   - [ ] **Environment**: Run UAT in the corresponding tmp workspace:
     - `tmp/feat-print-exec-synthesis-multipage` → `ENV=feat-print-exec-synthesis-multipage`
