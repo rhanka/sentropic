@@ -28,28 +28,6 @@ const HTML_EXPRESSIONS = [
   'description',
   'problem',
   'solution',
-  'benefit',
-  '$benefit',
-  'metric',
-  '$metric',
-  'risk',
-  '$risk',
-  'constraint',
-  '$constraint',
-  'step',
-  '$step',
-  'tech',
-  '$tech',
-  'dataSource',
-  '$dataSource',
-  'dataObject',
-  '$dataObject',
-  'ref.title',
-  '$ref.title',
-  'ref.url',
-  '$ref.url',
-  'ref.excerpt',
-  '$ref.excerpt',
   'ax.description',
   '$ax.description',
 ];
@@ -61,6 +39,11 @@ function markdownToHtml(markdown: string): string {
 
 function markdownItemToHtml(item: string): string {
   return markdownToHtml(item || '');
+}
+
+function markdownToText(markdown: string): string {
+  const html = marked.parseInline(markdown || '');
+  return String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -91,9 +74,9 @@ function buildAxes(
 
 function normalizeReference(ref: { title?: string; url?: string; excerpt?: string }) {
   return {
-    title: ref.title ?? '',
+    title: markdownToText(ref.title ?? ''),
     url: ref.url ?? '',
-    excerpt: markdownToHtml(ref.excerpt ?? ''),
+    excerpt: markdownToText(ref.excerpt ?? ''),
   };
 }
 
@@ -217,21 +200,21 @@ export async function generateUseCaseDocx(
     solution: markdownToHtml(d.solution ?? ''),
     process: d.process ?? '',
     domain: d.domain ?? '',
-    technologies: (d.technologies ?? []).map((item) => markdownItemToHtml(item)),
+    technologies: (d.technologies ?? []).map((item) => markdownToText(item)),
     technologiesText: (d.technologies ?? []).join(', '),
-    benefits: (d.benefits ?? []).map((item) => markdownItemToHtml(item)),
+    benefits: (d.benefits ?? []).map((item) => markdownToText(item)),
     benefitsText: (d.benefits ?? []).join('\n'),
-    metrics: (d.metrics ?? []).map((item) => markdownItemToHtml(item)),
+    metrics: (d.metrics ?? []).map((item) => markdownToText(item)),
     metricsText: (d.metrics ?? []).join('\n'),
-    risks: (d.risks ?? []).map((item) => markdownItemToHtml(item)),
+    risks: (d.risks ?? []).map((item) => markdownToText(item)),
     risksText: (d.risks ?? []).join('\n'),
-    constraints: (d.constraints ?? []).map((item) => markdownItemToHtml(item)),
+    constraints: (d.constraints ?? []).map((item) => markdownToText(item)),
     constraintsText: (d.constraints ?? []).join('\n'),
-    nextSteps: (d.nextSteps ?? []).map((item) => markdownItemToHtml(item)),
+    nextSteps: (d.nextSteps ?? []).map((item) => markdownToText(item)),
     nextStepsText: (d.nextSteps ?? []).join('\n'),
-    dataSources: (d.dataSources ?? []).map((item) => markdownItemToHtml(item)),
+    dataSources: (d.dataSources ?? []).map((item) => markdownToText(item)),
     dataSourcesText: (d.dataSources ?? []).join(', '),
-    dataObjects: (d.dataObjects ?? []).map((item) => markdownItemToHtml(item)),
+    dataObjects: (d.dataObjects ?? []).map((item) => markdownToText(item)),
     dataObjectsText: (d.dataObjects ?? []).join(', '),
     references,
     referencesText: references
