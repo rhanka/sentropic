@@ -66,6 +66,11 @@ As a very first thing, when you work on features, you must acknowledge that you 
   git clone . tmp/feat-xxx
   cd tmp/feat-xxx && git checkout -b feat/xxx
   cp ../../.env .env
+  # then set branch-specific compose variables in tmp/.env
+  # ENV=feat-xxx
+  # API_PORT=<unique>
+  # UI_PORT=<unique>
+  # MAILDEV_UI_PORT=<unique>
   # then write BRANCH.md with scoping decisions
   ```
 
