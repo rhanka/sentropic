@@ -15,45 +15,45 @@ for variable interpolation.
 | `id`                  | string   | Use case UUID                              |
 | `name`               | string   | Use case name                              |
 | `description`        | string   | Short description (30-60 words)            |
-| `descriptionHtml`    | string   | HTML version of description (use `HTML`)   |
+| `description`        | string   | Markdown converted to HTML (auto `HTML`)   |
 | `problem`            | string   | Problem statement (40-80 words)            |
-| `problemHtml`        | string   | HTML version of problem (use `HTML`)       |
+| `problem`            | string   | Markdown converted to HTML (auto `HTML`)   |
 | `solution`           | string   | Solution statement (40-80 words)           |
-| `solutionHtml`       | string   | HTML version of solution (use `HTML`)      |
+| `solution`           | string   | Markdown converted to HTML (auto `HTML`)   |
 | `process`            | string   | Business process                           |
 | `domain`             | string   | Business domain                            |
 | `technologies`       | string[] | Technology list (array, for loops)         |
 | `technologiesText`   | string   | Technologies joined with ", "              |
 | `benefits`           | string[] | Benefits list (array, for loops)           |
 | `benefitsText`       | string   | Benefits joined with newlines              |
-| `benefitsHtml`       | string   | HTML list of benefits (use `HTML`)         |
+| `benefits`           | string[] | Markdown items converted to HTML           |
 | `metrics`            | string[] | Metrics list (array, for loops)            |
 | `metricsText`        | string   | Metrics joined with newlines               |
-| `metricsHtml`        | string   | HTML list of metrics (use `HTML`)          |
+| `metrics`            | string[] | Markdown items converted to HTML           |
 | `risks`              | string[] | Risks list (array, for loops)              |
 | `risksText`          | string   | Risks joined with newlines                 |
-| `risksHtml`          | string   | HTML list of risks (use `HTML`)            |
+| `risks`              | string[] | Markdown items converted to HTML           |
 | `constraints`        | string[] | Constraints list (array, for loops)        |
 | `constraintsText`    | string   | Constraints joined with newlines           |
-| `constraintsHtml`    | string   | HTML list of constraints (use `HTML`)      |
+| `constraints`        | string[] | Markdown items converted to HTML           |
 | `nextSteps`          | string[] | Next steps list (array, for loops)         |
 | `nextStepsText`      | string   | Next steps joined with newlines            |
-| `nextStepsHtml`      | string   | HTML list of next steps (use `HTML`)       |
+| `nextSteps`          | string[] | Markdown items converted to HTML           |
 | `dataSources`        | string[] | Data sources list (array, for loops)       |
 | `dataSourcesText`    | string   | Data sources joined with ", "              |
-| `dataSourcesHtml`    | string   | HTML list of data sources (use `HTML`)     |
+| `dataSources`        | string[] | Markdown items converted to HTML           |
 | `dataObjects`        | string[] | Data objects list (array, for loops)       |
 | `dataObjectsText`    | string   | Data objects joined with ", "              |
-| `dataObjectsHtml`    | string   | HTML list of data objects (use `HTML`)     |
+| `dataObjects`        | string[] | Markdown items converted to HTML           |
 | `references`         | object[] | References list `{ title, url, excerpt }`  |
 | `referencesText`     | string   | References joined with newlines            |
-| `referencesHtml`     | string   | HTML references list (use `HTML`)          |
+| `references`         | object[] | `excerpt` converted to HTML                |
 | `deadline`           | string   | Target deadline                            |
 | `contact`            | string   | Contact person                             |
 | `totalValueScore`    | number   | Calculated value score (0-100)             |
 | `totalComplexityScore`| number  | Calculated complexity score (0-100)        |
-| `valueAxes`          | object[] | Axis list `{ title, score, stars, description, descriptionHtml }` |
-| `complexityAxes`     | object[] | Axis list `{ title, score, stars, description, descriptionHtml }` |
+| `valueAxes`          | object[] | Axis list `{ title, score, stars, description }` (description is HTML) |
+| `complexityAxes`     | object[] | Axis list `{ title, score, stars, description }` (description is HTML) |
 | `createdAt`          | string   | ISO date of creation                       |
 
 ### Example template content
@@ -63,20 +63,24 @@ Inside the `.docx` template, use placeholders like:
 ```
 {{name}}
 
-Description: {{HTML descriptionHtml}}
+Description: {{description}}
 
-Problem: {{HTML problemHtml}}
-Solution: {{HTML solutionHtml}}
+Problem: {{problem}}
+Solution: {{solution}}
 
 Domain: {{domain}}
 Process: {{process}}
 Technologies: {{technologiesText}}
 
 Benefits:
-{{HTML benefitsHtml}}
+{{FOR benefit IN (benefits || [])}}
+- {{benefit}}
+{{END-FOR benefit}}
 
 Risks:
-{{HTML risksHtml}}
+{{FOR risk IN (risks || [])}}
+- {{risk}}
+{{END-FOR risk}}
 
 Value Score: {{totalValueScore}} / 100
 Complexity Score: {{totalComplexityScore}} / 100
@@ -84,13 +88,13 @@ Complexity Score: {{totalComplexityScore}} / 100
 Value Axes (loop):
 {{FOR ax IN (valueAxes || [])}}
 - {{ax.title}} ({{ax.score}} pts, {{ax.stars}}/5)
-  {{HTML ax.descriptionHtml}}
+  {{ax.description}}
 {{END-FOR ax}}
 
 Complexity Axes (loop):
 {{FOR ax IN (complexityAxes || [])}}
 - {{ax.title}} ({{ax.score}} pts, {{ax.stars}}/5)
-  {{HTML ax.descriptionHtml}}
+  {{ax.description}}
 {{END-FOR ax}}
 ```
 
