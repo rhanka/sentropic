@@ -8,7 +8,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createReport } from 'docx-templates';
-import JSZip from 'jszip';
 import { marked } from 'marked';
 import type { UseCase } from '../types/usecase';
 import type { MatrixConfig } from '../types/matrix';
@@ -24,23 +23,6 @@ marked.setOptions({
   headerIds: false,
   mangle: false,
 });
-const HTML_EXPRESSIONS = [
-  'description',
-  'problem',
-  'solution',
-  'ax.description',
-  '$ax.description',
-];
-
-function markdownToHtml(markdown: string): string {
-  const html = marked.parse(markdown || '');
-  return `<meta charset="UTF-8"><body>${html}</body>`;
-}
-
-function markdownToText(markdown: string): string {
-  const html = marked.parseInline(markdown || '');
-  return String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-}
 
 function escapeXml(text: string): string {
   return text
@@ -51,7 +33,12 @@ function escapeXml(text: string): string {
 }
 
 function markdownToLiteralXmlRuns(markdown: string): string {
-  const source = (markdown || '').replace(/\|\|/g, '| |');
+  const normalized = (markdown || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-*+]\s+/, '• '))
+    .join('\n');
+  const source = normalized.replace(/\|\|/g, '| |');
   const parts: Array<{ text: string; bold: boolean; italic: boolean }> = [];
   let i = 0;
   while (i < source.length) {
@@ -116,7 +103,7 @@ function buildAxes(
         title: axis.name,
         score: score.rating,
         stars: fibonacciToStars(Number(score.rating)),
-        description: markdownToHtml(score.description ?? ''),
+        description: markdownToLiteralXmlRuns(score.description ?? ''),
       };
     })
     .filter(Boolean) as Array<{ title: string; score: number; stars: number; description: string }>;
@@ -130,84 +117,13 @@ function normalizeReference(ref: { title?: string; url?: string; excerpt?: strin
   };
 }
 
-type TextSegment = { start: number; end: number; text: string };
-
-function replaceHtmlCommandsInText(text: string): string {
-  return text.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (raw, inner) => {
-    const command = String(inner || '').trim();
-    const upper = command.toUpperCase();
-    if (upper.startsWith('FOR ') || upper.startsWith('END-FOR') || upper.startsWith('IF ') || upper.startsWith('END-IF')) {
-      return raw;
-    }
-    if (upper.startsWith('HTML ')) return raw;
-    const expr = upper.startsWith('INS ') ? command.slice(4).trim() : command;
-    if (!HTML_EXPRESSIONS.includes(expr)) return raw;
-    return `{{HTML ${expr}}}`;
-  });
-}
-
-function rewriteHtmlCommands(docXml: string): string {
-  const segments: TextSegment[] = [];
-  const regex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(docXml)) !== null) {
-    const full = match[0];
-    const text = match[1] ?? '';
-    const textStart = match.index + full.indexOf(text);
-    const textEnd = textStart + text.length;
-    segments.push({ start: textStart, end: textEnd, text });
-  }
-
-  for (let i = 0; i < segments.length; i += 1) {
-    let combined = segments[i].text;
-    if (!combined.includes('{{')) {
-      continue;
-    }
-    let endIndex = i;
-    while (!combined.includes('}}') && endIndex + 1 < segments.length) {
-      endIndex += 1;
-      combined += segments[endIndex].text;
-    }
-    const replaced = replaceHtmlCommandsInText(combined);
-    if (replaced !== combined) {
-      segments[i].text = replaced;
-      for (let j = i + 1; j <= endIndex; j += 1) {
-        segments[j].text = '';
-      }
-    } else if (segments[i].text.includes('{{') && segments[i].text.includes('}}')) {
-      segments[i].text = replaceHtmlCommandsInText(segments[i].text);
-    }
-    i = endIndex;
-  }
-
-  let result = '';
-  let cursor = 0;
-  for (const seg of segments) {
-    result += docXml.slice(cursor, seg.start);
-    result += seg.text;
-    cursor = seg.end;
-  }
-  result += docXml.slice(cursor);
-  return result;
-}
-
-async function injectHtmlCommands(template: Buffer): Promise<Buffer> {
-  const zip = await JSZip.loadAsync(template);
-  const docXml = await zip.file('word/document.xml')?.async('string');
-  if (!docXml) return template;
-  const updated = rewriteHtmlCommands(docXml);
-  zip.file('word/document.xml', updated);
-  return await zip.generateAsync({ type: 'nodebuffer' });
-}
-
 async function createReportWithFallback(data: Record<string, unknown>, template: Buffer): Promise<Uint8Array> {
   const maxRetries = 5;
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
-      const templateWithHtml = await injectHtmlCommands(template);
       return await createReport({
-        template: templateWithHtml,
+        template,
         data,
         cmdDelimiter: ['{{', '}}'],
       });
@@ -245,9 +161,9 @@ export async function generateUseCaseDocx(
   const data = {
     id: useCase.id,
     name: d.name,
-    description: markdownToHtml(d.description ?? ''),
-    problem: markdownToHtml(d.problem ?? ''),
-    solution: markdownToHtml(d.solution ?? ''),
+    description: markdownToLiteralXmlRuns(d.description ?? ''),
+    problem: markdownToLiteralXmlRuns(d.problem ?? ''),
+    solution: markdownToLiteralXmlRuns(d.solution ?? ''),
     process: d.process ?? '',
     domain: d.domain ?? '',
     technologies: (d.technologies ?? []).map((item) => markdownToLiteralXmlRuns(item)),
