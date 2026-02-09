@@ -6,6 +6,7 @@ import { db } from '../../../src/db/client';
 import { users } from '../../../src/db/schema';
 
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const uniqueEmail = (prefix: string) => `${prefix}-${randomUUID().slice(0, 8)}@example.com`;
 
 describe('Registration API Routes', () => {
   afterEach(async () => {
@@ -14,7 +15,7 @@ describe('Registration API Routes', () => {
 
   describe('POST /api/v1/auth/register/options', () => {
     it('should generate registration options for new user with verification token', async () => {
-      const email = 'newuser@example.com';
+      const email = uniqueEmail('newuser');
       const verificationToken = await generateTestVerificationToken(email);
 
       const res = await app.request('/api/v1/auth/register/options', {
@@ -31,16 +32,17 @@ describe('Registration API Routes', () => {
 
       expect(data.options).toBeDefined();
       expect(uuidRegex.test(data.userId)).toBe(true);
-      expect(data.options.user.name).toBe('newuser@example.com');
-      expect(data.options.user.displayName).toBe('Newuser');
+      expect(data.options.user.name).toBe(email);
+      expect(data.options.user.displayName).toContain('Newuser');
     });
 
     it('should reject registration options for new user without verification token', async () => {
+      const email = uniqueEmail('newuser');
       const res = await app.request('/api/v1/auth/register/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'newuser@example.com',
+          email,
         }),
       });
 
@@ -50,8 +52,9 @@ describe('Registration API Routes', () => {
     });
 
     it('should reuse existing verified user identified by email', async () => {
+      const email = uniqueEmail('existing');
       await createTestUser({
-        email: 'existing@example.com',
+        email,
         displayName: 'Existing User',
         emailVerified: true,
       });
@@ -60,7 +63,7 @@ describe('Registration API Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'existing@example.com',
+          email,
         }),
       });
 
@@ -70,8 +73,9 @@ describe('Registration API Routes', () => {
     });
 
     it('should reject registration for existing unverified user', async () => {
+      const email = uniqueEmail('existing');
       await createTestUser({
-        email: 'existing@example.com',
+        email,
         displayName: 'Existing User',
         emailVerified: false,
       });
@@ -80,7 +84,7 @@ describe('Registration API Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'existing@example.com',
+          email,
         }),
       });
 
@@ -91,10 +95,11 @@ describe('Registration API Routes', () => {
 
     it('should reuse legacy user without email when local part matches displayName', async () => {
       const legacyId = randomUUID();
+      const localPart = `legacy-${randomUUID().slice(0, 8)}`;
       await db.insert(users).values({
         id: legacyId,
         email: null,
-        displayName: 'legacy.user',
+        displayName: localPart,
         role: 'guest',
         emailVerified: true, // Legacy users are considered verified
         createdAt: new Date(),
@@ -105,7 +110,7 @@ describe('Registration API Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'legacy.user@example.com',
+          email: `${localPart}@example.com`,
         }),
       });
 
@@ -155,7 +160,7 @@ describe('Registration API Routes', () => {
 
   describe('POST /api/v1/auth/register/verify', () => {
     it('should reject verification with invalid credential response', async () => {
-      const email = 'test@example.com';
+      const email = uniqueEmail('test');
       const verificationToken = await generateTestVerificationToken(email);
       
       const res = await app.request('/api/v1/auth/register/verify', {
@@ -176,7 +181,7 @@ describe('Registration API Routes', () => {
     });
 
     it('should reject verification without credential', async () => {
-      const email = 'test@example.com';
+      const email = uniqueEmail('test');
       const verificationToken = await generateTestVerificationToken(email);
       
       const res = await app.request('/api/v1/auth/register/verify', {
@@ -193,11 +198,12 @@ describe('Registration API Routes', () => {
     });
 
     it('should reject verification without verification token for new user', async () => {
+      const email = uniqueEmail('newuser');
       const res = await app.request('/api/v1/auth/register/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'newuser@example.com',
+          email,
           userId: randomUUID(),
           credential: { id: 'test' },
         }),
@@ -207,7 +213,7 @@ describe('Registration API Routes', () => {
     });
 
     it('should reject verification with invalid userId format', async () => {
-      const email = 'test@example.com';
+      const email = uniqueEmail('test');
       const verificationToken = await generateTestVerificationToken(email);
       
       const res = await app.request('/api/v1/auth/register/verify', {
