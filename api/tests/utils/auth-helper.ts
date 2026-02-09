@@ -1,9 +1,9 @@
 import { db } from '../../src/db/client';
 import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes, workspaces, workspaceMemberships, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { createSession } from '../../src/services/session-manager';
 import type { UserRole } from '../../src/db/schema';
-import { generateEmailVerificationCode, verifyEmailCode } from '../../src/services/email-verification';
+import { verifyEmailCode } from '../../src/services/email-verification';
 
 /**
  * Test helpers for authentication integration tests
@@ -18,17 +18,50 @@ export interface TestUser {
   workspaceId?: string | null;
 }
 
+const trackedTestUserIds = new Set<string>();
+const trackedTestUserEmails = new Set<string>();
+
+function uniqueTestEmail(role: UserRole): string {
+  const worker = process.env.VITEST_WORKER_ID || 'w0';
+  return `${role}-${worker}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+}
+
 
 /**
  * Clean up all auth-related data after tests
  */
 export async function cleanupAuthData() {
-  await db.delete(userSessions);
-  await db.delete(webauthnCredentials);
-  await db.delete(webauthnChallenges);
-  await db.delete(magicLinks);
-  await db.delete(emailVerificationCodes);
-  await db.delete(users);
+  if (process.env.TEST_CLEANUP_SCOPE !== 'tracked') {
+    await db.delete(userSessions);
+    await db.delete(webauthnCredentials);
+    await db.delete(webauthnChallenges);
+    await db.delete(magicLinks);
+    await db.delete(emailVerificationCodes);
+    await db.delete(users);
+    return;
+  }
+
+  if (trackedTestUserIds.size === 0 && trackedTestUserEmails.size === 0) {
+    return;
+  }
+
+  const userIds = Array.from(trackedTestUserIds);
+  const emails = Array.from(trackedTestUserEmails);
+  trackedTestUserIds.clear();
+  trackedTestUserEmails.clear();
+
+  if (emails.length > 0) {
+    await db.delete(emailVerificationCodes).where(inArray(emailVerificationCodes.email, emails));
+    await db.delete(magicLinks).where(inArray(magicLinks.email, emails));
+  }
+
+  if (userIds.length > 0) {
+    await db.delete(webauthnChallenges).where(inArray(webauthnChallenges.userId, userIds));
+    await db.delete(webauthnCredentials).where(inArray(webauthnCredentials.userId, userIds));
+    await db.delete(userSessions).where(inArray(userSessions.userId, userIds));
+    await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.userId, userIds));
+    await db.delete(users).where(inArray(users.id, userIds));
+  }
 }
 
 /**
@@ -44,7 +77,7 @@ export async function createTestUser(options: {
   withWorkspace?: boolean;
 }): Promise<TestUser> {
   const {
-    email = 'test@example.com',
+    email,
     displayName = 'Test User',
     role = 'guest',
     withSession = false,
@@ -52,19 +85,22 @@ export async function createTestUser(options: {
     emailVerified = true, // Default to verified for tests
     withWorkspace = true,
   } = options;
+  const resolvedEmail = email ?? uniqueTestEmail(role);
 
   const userId = crypto.randomUUID();
   
   // Create user
   await db.insert(users).values({
     id: userId,
-    email,
+    email: resolvedEmail,
     displayName,
     role,
     emailVerified,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  trackedTestUserIds.add(userId);
+  trackedTestUserEmails.add(resolvedEmail);
 
   let sessionToken: string | undefined;
   let workspaceId: string | null = null;
@@ -96,7 +132,7 @@ export async function createTestUser(options: {
 
   return {
     id: userId,
-    email,
+    email: resolvedEmail,
     displayName,
     role,
     sessionToken,
@@ -109,7 +145,7 @@ export async function createTestUser(options: {
  */
 export async function createAuthenticatedUser(role: UserRole = 'guest', email?: string): Promise<TestUser> {
   return createTestUser({
-    email: email || `${role}@example.com`,
+    email: email || uniqueTestEmail(role),
     displayName: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
     role,
     withSession: true,
@@ -125,9 +161,9 @@ export async function createTestUsersWithRoles(): Promise<{
   guest: TestUser;
 }> {
   const [admin, editor, guest] = await Promise.all([
-    createAuthenticatedUser('admin_app', 'admin@example.com'),
-    createAuthenticatedUser('editor', 'editor@example.com'),
-    createAuthenticatedUser('guest', 'guest@example.com'),
+    createAuthenticatedUser('admin_app'),
+    createAuthenticatedUser('editor'),
+    createAuthenticatedUser('guest'),
   ]);
 
   return { admin, editor, guest };
@@ -315,40 +351,19 @@ export function getAuthHeaders(sessionToken: string): Record<string, string> {
  * This creates a valid verification token that can be used in registration tests
  */
 export async function generateTestVerificationToken(email: string): Promise<string> {
-  // Generate a verification code
-  await generateEmailVerificationCode({ email });
-  
-  // Manually retrieve the code from database (bypassing email sending)
-  // We'll use a simple approach: get the latest code for this email
-  const [codeRecord] = await db
-    .select()
-    .from(emailVerificationCodes)
-    .where(eq(emailVerificationCodes.email, email.trim().toLowerCase()))
-    .orderBy(desc(emailVerificationCodes.createdAt))
-    .limit(1);
-  
-  if (!codeRecord) {
-    throw new Error('Failed to generate verification code for test');
-  }
-  
-  // For testing, we'll bypass the code verification and create a token directly
-  // We need to use the service function to get a proper token
-  // Let's use a test code that we know will work - we'll need to read the actual code
-  // from the database or use a workaround
-  
-  // Actually, let's create a code record manually with a known code for testing
+  const normalizedEmail = email.trim().toLowerCase();
   const testCode = '123456';
   const { createHash } = await import('crypto');
   const codeHash = createHash('sha256').update(testCode).digest('hex');
-  
-  // Delete the auto-generated code and create one with known code
-  await db.delete(emailVerificationCodes).where(eq(emailVerificationCodes.id, codeRecord.id));
-  
+
+  // Keep tests deterministic and parallel-safe by bypassing runtime rate-limits.
+  await db.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, normalizedEmail));
+
   const codeId = crypto.randomUUID();
   await db.insert(emailVerificationCodes).values({
     id: codeId,
     codeHash,
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
     used: false,
     createdAt: new Date(),
@@ -363,4 +378,3 @@ export async function generateTestVerificationToken(email: string): Promise<stri
   
   return result.verificationToken;
 }
-

@@ -64,6 +64,26 @@ export interface ExecutiveSummaryResult {
   };
 }
 
+function readStringField(source: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return '';
+}
+
+function normalizeExecutiveSummaryPayload(payload: unknown): ExecutiveSummaryResult['executive_summary'] {
+  const source = (payload && typeof payload === 'object') ? (payload as Record<string, unknown>) : {};
+  return {
+    introduction: readStringField(source, ['introduction', 'intro']),
+    analyse: readStringField(source, ['analyse', 'analysis']),
+    recommandation: readStringField(source, ['recommandation', 'recommendation', 'recommendations']),
+    synthese_executive: readStringField(source, ['synthese_executive', 'executive_summary', 'summary']),
+  };
+}
+
 /**
  * Génère une synthèse exécutive pour un dossier
  */
@@ -274,13 +294,15 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     throw new Error(`Invalid JSON response from AI: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
   }
 
+  const normalizedExecutiveSummary = normalizeExecutiveSummaryPayload(executiveSummary);
+
   // Stocker dans la base de données
   await db.update(folders)
-    .set({ executiveSummary: JSON.stringify(executiveSummary) })
+    .set({ executiveSummary: JSON.stringify(normalizedExecutiveSummary) })
     .where(eq(folders.id, folderId));
 
   return {
-    executive_summary: executiveSummary,
+    executive_summary: normalizedExecutiveSummary,
     top_cases: topCases,
     thresholds: {
       value: effectiveValueThreshold,
@@ -290,4 +312,3 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     }
   };
 }
-
