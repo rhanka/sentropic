@@ -1,6 +1,6 @@
 import { db } from '../../src/db/client';
 import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes, workspaces, workspaceMemberships, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { createSession } from '../../src/services/session-manager';
 import type { UserRole } from '../../src/db/schema';
 import { generateEmailVerificationCode, verifyEmailCode } from '../../src/services/email-verification';
@@ -18,17 +18,50 @@ export interface TestUser {
   workspaceId?: string | null;
 }
 
+const trackedTestUserIds = new Set<string>();
+const trackedTestUserEmails = new Set<string>();
+
+function uniqueTestEmail(role: UserRole): string {
+  const worker = process.env.VITEST_WORKER_ID || 'w0';
+  return `${role}-${worker}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+}
+
 
 /**
  * Clean up all auth-related data after tests
  */
 export async function cleanupAuthData() {
-  await db.delete(userSessions);
-  await db.delete(webauthnCredentials);
-  await db.delete(webauthnChallenges);
-  await db.delete(magicLinks);
-  await db.delete(emailVerificationCodes);
-  await db.delete(users);
+  if (process.env.TEST_CLEANUP_SCOPE !== 'tracked') {
+    await db.delete(userSessions);
+    await db.delete(webauthnCredentials);
+    await db.delete(webauthnChallenges);
+    await db.delete(magicLinks);
+    await db.delete(emailVerificationCodes);
+    await db.delete(users);
+    return;
+  }
+
+  if (trackedTestUserIds.size === 0 && trackedTestUserEmails.size === 0) {
+    return;
+  }
+
+  const userIds = Array.from(trackedTestUserIds);
+  const emails = Array.from(trackedTestUserEmails);
+  trackedTestUserIds.clear();
+  trackedTestUserEmails.clear();
+
+  if (emails.length > 0) {
+    await db.delete(emailVerificationCodes).where(inArray(emailVerificationCodes.email, emails));
+    await db.delete(magicLinks).where(inArray(magicLinks.email, emails));
+  }
+
+  if (userIds.length > 0) {
+    await db.delete(webauthnChallenges).where(inArray(webauthnChallenges.userId, userIds));
+    await db.delete(webauthnCredentials).where(inArray(webauthnCredentials.userId, userIds));
+    await db.delete(userSessions).where(inArray(userSessions.userId, userIds));
+    await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.userId, userIds));
+    await db.delete(users).where(inArray(users.id, userIds));
+  }
 }
 
 /**
@@ -44,7 +77,7 @@ export async function createTestUser(options: {
   withWorkspace?: boolean;
 }): Promise<TestUser> {
   const {
-    email = 'test@example.com',
+    email,
     displayName = 'Test User',
     role = 'guest',
     withSession = false,
@@ -52,19 +85,22 @@ export async function createTestUser(options: {
     emailVerified = true, // Default to verified for tests
     withWorkspace = true,
   } = options;
+  const resolvedEmail = email ?? uniqueTestEmail(role);
 
   const userId = crypto.randomUUID();
   
   // Create user
   await db.insert(users).values({
     id: userId,
-    email,
+    email: resolvedEmail,
     displayName,
     role,
     emailVerified,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  trackedTestUserIds.add(userId);
+  trackedTestUserEmails.add(resolvedEmail);
 
   let sessionToken: string | undefined;
   let workspaceId: string | null = null;
@@ -96,7 +132,7 @@ export async function createTestUser(options: {
 
   return {
     id: userId,
-    email,
+    email: resolvedEmail,
     displayName,
     role,
     sessionToken,
@@ -109,7 +145,7 @@ export async function createTestUser(options: {
  */
 export async function createAuthenticatedUser(role: UserRole = 'guest', email?: string): Promise<TestUser> {
   return createTestUser({
-    email: email || `${role}@example.com`,
+    email: email || uniqueTestEmail(role),
     displayName: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
     role,
     withSession: true,
@@ -125,9 +161,9 @@ export async function createTestUsersWithRoles(): Promise<{
   guest: TestUser;
 }> {
   const [admin, editor, guest] = await Promise.all([
-    createAuthenticatedUser('admin_app', 'admin@example.com'),
-    createAuthenticatedUser('editor', 'editor@example.com'),
-    createAuthenticatedUser('guest', 'guest@example.com'),
+    createAuthenticatedUser('admin_app'),
+    createAuthenticatedUser('editor'),
+    createAuthenticatedUser('guest'),
   ]);
 
   return { admin, editor, guest };
@@ -363,4 +399,3 @@ export async function generateTestVerificationToken(email: string): Promise<stri
   
   return result.verificationToken;
 }
-
