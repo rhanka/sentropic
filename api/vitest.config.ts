@@ -9,7 +9,8 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
-        ...(maxForks !== undefined && { maxForks }),
+        // Keep minForks bounded when maxForks is forced via env to avoid Tinypool conflicts.
+        ...(maxForks !== undefined ? { minForks: 1, maxForks } : {}),
       }
     },
     // Increase timeout for database operations and AI API calls

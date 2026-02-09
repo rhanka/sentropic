@@ -912,11 +912,20 @@ API_TEST_WORKERS ?= 4
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
 	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
+	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
+	  workers=1; \
+	  cleanup_scope=global; \
+	  if [ "$$TEST_TYPE" = "smoke" ]; then \
+	    workers="$$requested_workers"; \
+	    cleanup_scope=tracked; \
+	  fi; \
+	  export VITEST_MAX_WORKERS="$$workers"; \
+	  export TEST_CLEANUP_SCOPE="$$cleanup_scope"; \
 	  if [ -n "$$SCOPE" ]; then \
-	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE"; \
+	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE (workers=$$workers, cleanup=$$cleanup_scope)"; \
 	    npx vitest run "$$SCOPE"; \
 	  else \
-	    echo "▶ Running all $$TEST_TYPE tests"; \
+	    echo "▶ Running all $$TEST_TYPE tests (workers=$$workers, cleanup=$$cleanup_scope)"; \
 	    npm run test:$$TEST_TYPE; \
 	  fi'
 
