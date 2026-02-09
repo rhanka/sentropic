@@ -33,7 +33,6 @@ export type UseCaseData = {
   constraints?: string[];
   metrics?: string[];
   risks?: string[];
-  constraints?: string[];
   nextSteps?: string[];
   dataSources?: string[];
   dataObjects?: string[];
