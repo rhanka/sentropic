@@ -915,8 +915,10 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
 	  workers=1; \
 	  cleanup_scope=global; \
-	  if [ "$$TEST_TYPE" = "smoke" ]; then \
+	  if [ "$$TEST_TYPE" = "smoke" ] || [ "$$TEST_TYPE" = "endpoints" ]; then \
 	    workers="$$requested_workers"; \
+	  fi; \
+	  if [ "$$workers" != "1" ]; then \
 	    cleanup_scope=tracked; \
 	  fi; \
 	  export VITEST_MAX_WORKERS="$$workers"; \
