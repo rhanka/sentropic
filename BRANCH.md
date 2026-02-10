@@ -1,62 +1,78 @@
-# Feature: Print - docx base + one-page usecase
+# Feature: Wave 2 - Mono-branch integration (i18n + matrix + executive synthesis print)
 
 ## Objective
-Replace the print pipeline with `dolanmiu/docx` patching and deliver the one-page usecase template.
+Deliver Wave 2 features sequentially on a single integration branch (`feat/i18-print`) with partial UAT after each coherent lot, and defer full automated tests to Lot N.
 
 ## Scope / Guardrails
-- Scope limited to print/export generation and the one-page usecase template.
-- One migration max in `api/drizzle/*.sql` (not expected).
-- Make-only workflow, no direct Docker commands.
-- All new text in English.
-
-## Scoping Decisions
-- **Coexistence**: docx export coexists with CSS print initially. If successful, CSS print will be removed later.
-- **Architecture**: API-based docx generation (server-side).
-- **Ctrl+P flow**: Ctrl+P should trigger docx generation → PDF → print (à la Google Docs).
-- **Labels**: English by default (from object field names), content in original language.
-- **File naming**: `usecase-{id}-{name-slug}.docx`
+- Make-only workflow (no direct Docker or npm).
+- All new text in English (docs/commits/errors).
+- Partial UAT lots are mandatory; full test suites are deferred to Lot N.
+- Avoid unrelated refactors; keep changes minimal per lot.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- Rationale: Grouped base + one-page template to keep waves at four branches.
+- [x] **Mono-branch + sequential lots**
+- Rationale: Reduce coordination overhead and run UAT on a single integrated environment.
 
-## UAT Management (in orchestration context)
-- **Multi-branch**: run partial UAT per completed lot on the branch workspace.
-- **UAT environment**: `tmp/feat-print-docx-usecase-onepage` with `ENV=feat-print-docx-usecase-onepage`.
-- Keep end-to-end automation implementation for **Lot N** only.
+## UAT Management
+- Before each UAT lot: run the relevant gates (`make typecheck-*`, `make lint-*`).
+- Keep UAT checklists inside each lot as `[ ]` items. Do not tick UAT items before the user executes them.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read the relevant `.mdc` files and `README.md`.
-  - [x] Capture Makefile targets needed for debug/testing.
-  - [x] Confirm scope and guardrails.
-  - [x] Scoping decisions confirmed by user.
 
-- [x] **Lot 1 — docx patch base**
-  - [x] Add `docx` dependency to API (`make install-api docx`).
-  - [x] Create `api/src/services/docx-service.ts` — docx generation service.
-  - [x] Create `api/src/routes/api/docx.ts` — docx export endpoint.
-  - [x] Create `api/templates/README.md` — template variables documentation (actual .docx template to be created manually).
-  - [x] Register docx router in `api/src/routes/api/index.ts`.
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`
+- [ ] **Lot 0 — Baseline and rules**
+  - [ ] Read `.cursor/rules/MASTER.mdc` and `.cursor/rules/workflow.mdc`.
+  - [ ] Read relevant scope rules (`architecture.mdc`, `testing.mdc`, `data.mdc`, `security.mdc`).
+  - [ ] Confirm current branch is `feat/i18-print` and aligned with `origin/main`.
 
-- [x] **Lot 2 — One-page usecase template + UI integration**
-  - [x] Add "Download DOCX" option in `FileMenu.svelte` (new `onDownloadDocx` prop + `FileDown` icon).
-  - [x] Wire docx download in use case detail page (`/cas-usage/[id]/+page.svelte`).
-  - [ ] Implement Ctrl+P interception: generate docx → convert to PDF → trigger browser print (deferred).
-  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`
-  - [ ] UAT: verify DOCX download from use case detail
-  - [ ] UAT: Ctrl+P flow (deferred, to be validated when implemented)
+- [ ] **Lot 1 — Bilingual foundation (model + prompts)**
+  - [ ] Implement bilingual modeling (API schema/types + UI typing + normalization; legacy compatibility).
+  - [ ] Implement bilingual prompt selection (FR/EN) with explicit fallback behavior.
+  - [ ] Gates:
+    - [ ] `make typecheck-api` + `make lint-api`
+    - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
+  - [ ] Partial UAT (user-driven):
+    - [ ] Edit a use case in FR and EN and confirm both variants persist after refresh.
+    - [ ] In FR UI, generate a use case and confirm generated narrative is in French.
+    - [ ] In EN UI, generate a use case and confirm generated narrative is in English.
+    - [ ] Switch locale without reload and confirm new generations follow current locale.
+    - [ ] Validate fallback when the requested locale prompt variant is missing.
+
+- [ ] **Lot 2 — Matrix generation per organization/folder**
+  - [ ] Implement matrix generation flow for organization-level default template.
+  - [ ] Implement folder generation option for matrix reuse vs folder-specific generation.
+  - [ ] Persist and expose matrix selection in API/UI.
+  - [ ] Gates:
+    - [ ] `make typecheck-api` + `make lint-api`
+    - [ ] `make typecheck-ui` + `make lint-ui`
+  - [ ] Partial UAT (user-driven):
+    - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
+    - [ ] Generate a second folder with default option and verify stored org matrix is reused.
+    - [ ] Generate folder with "specific matrix" option and verify it differs from org default.
+    - [ ] Verify matrix selection/options are visible and persisted in folder generation UI.
+
+- [ ] **Lot 3 — Executive synthesis multipage DOCX (template-driven)**
+  - [ ] User intake (single bundle):
+    - [ ] Provide `executive-synthesis.docx` master template.
+    - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
+    - [ ] Provide dashboard intent (include dashboard image: yes/no).
+    - [ ] Provide one reference dataset for UAT (folder id with executive summary + multiple use cases).
+  - [ ] Implement unified DOCX generation endpoint strategy for synthesis (no hardcoded document structure).
+  - [ ] Implement master-template-driven synthesis composition (marker-driven ordering).
+  - [ ] Implement annex insertion at template-defined marker.
+  - [ ] Implement dashboard bitmap injection at template-defined marker (deterministic sizing + fallback).
+  - [ ] Gates:
+    - [ ] `make typecheck-api` + `make lint-api`
+  - [ ] Partial UAT (user-driven):
+    - [ ] Download synthesis DOCX and verify master template controls section order.
+    - [ ] Verify annex starts at template-defined separator/location.
+    - [ ] Verify dashboard bitmap is inserted at expected marker and rendering is readable.
+    - [ ] Regression: use-case one-page DOCX export still works from use case detail.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Tests (by scope, by file)
-  - [ ] API: `api/tests/api/docx.test.ts` (new)
-  - [ ] UI: none (no UI unit tests in scope)
-  - [ ] E2E to add: `e2e/tests/05-usecase-detail.spec.ts` (DOCX download from use case detail File menu)
-  - [ ] Sub-lot gate: `make test-api`
-  - [ ] Sub-lot gate: `make test-ui`
-  - [ ] Prepare E2E build: `make build-api build-ui-image`
-  - [ ] Sub-lot gate: `make clean test-e2e`
-  - [ ] Final gate: Create PR with BRANCH.md content & verify CI
-  - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
+  - [ ] Consolidate deferred test backlog (API/UI/E2E) based on lots 1-3.
+  - [ ] `make test-api`
+  - [ ] `make test-ui`
+  - [ ] `make build-api build-ui-image`
+  - [ ] `make clean test-e2e`
+  - [ ] Final gate: PR ready and CI green for `feat/i18-print`.
+
