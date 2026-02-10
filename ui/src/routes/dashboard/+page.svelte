@@ -576,8 +576,8 @@
       {#if showReadOnlyLock}
         <button
           class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
-          title="Mode lecture seule : édition / génération désactivées."
-          aria-label="Mode lecture seule : édition / génération désactivées."
+          title={$_('dashboard.readOnlyGenerationDisabled')}
+          aria-label={$_('dashboard.readOnlyGenerationDisabled')}
           type="button"
           disabled
         >
@@ -615,7 +615,7 @@
             on:click={generateExecutiveSummary}
             disabled={isGeneratingSummary}
               class="p-2 text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
-              title="Régénérer la synthèse exécutive"
+              title={$_('dashboard.regenerateTooltip')}
           >
               <RotateCcw class="w-5 h-5 {isGeneratingSummary ? 'animate-spin' : ''}" />
           </button>
@@ -650,7 +650,7 @@
             disabled={isGeneratingSummary}
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isGeneratingSummary ? 'Génération...' : 'Générer la synthèse'}
+            {isGeneratingSummary ? $_('dashboard.execSummaryGenerating') : $_('dashboard.execSummaryGenerate')}
           </button>
         </div>
       </div>
@@ -681,7 +681,7 @@
                 <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
                 {#if roiStats.count > 0}
                   <p class="text-xs text-green-600 mt-1">
-                    Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
+                    {$_('dashboard.roiStats.medianValue')}: {roiStats.avgValue.toFixed(1)} {$_('common.pointsAbbr')} | {$_('dashboard.roiStats.medianComplexity')}: {roiStats.avgComplexity.toFixed(1)} {$_('common.pointsAbbr')}
                   </p>
                 {/if}
               </div>
@@ -711,7 +711,7 @@
               <button
                 on:click={() => configOpen = !configOpen}
                 class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
-                title="Configuration du quadrant ROI"
+                title={$_('dashboard.roiConfig.buttonTitle')}
               >
                 <Settings class="w-5 h-5 text-slate-500" />
                 {#if valueThreshold !== null || complexityThreshold !== null}
@@ -726,7 +726,7 @@
                     <button
                       on:click={() => configOpen = false}
                       class="text-slate-400 hover:text-slate-600"
-                      aria-label="Fermer la configuration"
+                      aria-label={$_('dashboard.roiConfig.close')}
                     >
                       <X class="w-5 h-5" />
                     </button>
@@ -734,7 +734,7 @@
                   <div class="grid gap-4 md:grid-cols-2">
                     <div>
                       <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        Seuil de valeur (pts)
+                        {$_('dashboard.roiConfig.valueThreshold')}
                       </label>
                       <div class="flex items-center gap-2">
                         <input
@@ -754,19 +754,21 @@
                         <button
                           on:click={() => valueThreshold = null}
                           class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title="Utiliser la médiane"
+                          title={$_('common.useMedian')}
                         >
-                          Médiane ({medianValue.toFixed(1)})
+                          {$_('common.median')} ({medianValue.toFixed(1)})
                         </button>
                       </div>
                       <p class="text-xs text-slate-500 mt-1">
-                        {valueThreshold !== null ? `Seuil personnalisé: ${valueThreshold.toFixed(1)}` : `Médiane actuelle: ${medianValue.toFixed(1)}`}
+                        {valueThreshold !== null
+                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${valueThreshold.toFixed(1)}`
+                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianValue.toFixed(1)}`}
                       </p>
                     </div>
                     
                     <div>
                       <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        Seuil de complexité (pts)
+                        {$_('dashboard.roiConfig.complexityThreshold')}
                       </label>
                       <div class="flex items-center gap-2">
                         <input
@@ -786,13 +788,15 @@
                         <button
                           on:click={() => complexityThreshold = null}
                           class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title="Utiliser la médiane"
+                          title={$_('common.useMedian')}
                         >
-                          Médiane ({medianComplexity.toFixed(1)})
+                          {$_('common.median')} ({medianComplexity.toFixed(1)})
                         </button>
                       </div>
                       <p class="text-xs text-slate-500 mt-1">
-                        {complexityThreshold !== null ? `Seuil personnalisé: ${complexityThreshold.toFixed(1)}` : `Médiane actuelle: ${medianComplexity.toFixed(1)}`}
+                        {complexityThreshold !== null
+                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${complexityThreshold.toFixed(1)}`
+                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianComplexity.toFixed(1)}`}
                       </p>
                     </div>
                   </div>
@@ -802,7 +806,7 @@
                       on:click={resetToMedians}
                       class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors"
                     >
-                      Réinitialiser aux médianes
+                      {$_('dashboard.roiConfig.resetToMedians')}
                     </button>
                   </div>
                 </div>
@@ -984,7 +988,7 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase?.data?.name || useCase?.name || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || $_('usecase.useCase')}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
@@ -1009,13 +1013,13 @@
     <div class="prose prose-slate max-w-none">
       <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
         <p>
-          Top AI Ideas s’inscrit dans la vision de SENT-tech : plus de vingt ans d’expertise en innovation, données, digital et intelligence artificielle. Ici, l’IA n’est jamais une finalité, mais un levier devenu indispensable à la compétitivité.
+          {$_('dashboard.backCover.p1')}
         </p>
         <p>
-          La valeur naît d’une approche holistique, où les opportunités d’affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.
+          {$_('dashboard.backCover.p2')}
         </p>
         <p>
-          Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel.
+          {$_('dashboard.backCover.p3')}
         </p>
       </div>
     </div>

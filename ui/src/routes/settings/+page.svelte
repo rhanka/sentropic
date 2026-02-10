@@ -532,7 +532,7 @@
 
   {#if isAdminApp()}
     <!-- Interface admin (utilisateurs) - intégrée dans Paramètres -->
-    <AdminUsersPanel embeddedTitle="Admin · Utilisateurs (approbations)" />
+    <AdminUsersPanel embeddedTitle={$_('adminUsers.embeddedTitle.approvals')} />
   {/if}
 
   <!-- Section Administration -->
@@ -555,10 +555,10 @@
   <div class="rounded border border-blue-200 bg-blue-50 p-6">
     <h2 class="text-lg font-semibold text-blue-800 mb-4">{$_('settings.systemInfo')}</h2>
     <div class="space-y-2 text-sm text-blue-700">
-      <p><strong>Version:</strong> 1.0.0</p>
-      <p><strong>Base de données:</strong> SQLite</p>
-      <p><strong>API:</strong> Hono + Drizzle ORM</p>
-      <p><strong>Frontend:</strong> SvelteKit + Tailwind CSS</p>
+      <p><strong>{$_('settings.systemInfoLabels.version')}:</strong> 1.0.0</p>
+      <p><strong>{$_('settings.systemInfoLabels.database')}:</strong> SQLite</p>
+      <p><strong>{$_('settings.systemInfoLabels.api')}:</strong> Hono + Drizzle ORM</p>
+      <p><strong>{$_('settings.systemInfoLabels.frontend')}:</strong> SvelteKit + Tailwind CSS</p>
     </div>
   </div>
 

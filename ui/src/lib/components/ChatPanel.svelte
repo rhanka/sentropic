@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/stores';
+  import { _, locale } from 'svelte-i18n';
   import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import {
@@ -118,7 +119,7 @@
     }
     if (type === 'executive_summary') {
       const folder = $foldersStore.find((f) => f.id === contextId);
-      return folder?.name ? `Synthèse: ${folder.name}` : '';
+      return folder?.name ? $_('chat.context.executiveSummaryPrefix', { values: { name: folder.name } }) : '';
     }
     return '';
   };
@@ -134,7 +135,12 @@
       } else if (type === 'folder' || type === 'executive_summary') {
         const folder = await apiGet<{ name?: string }>(`/folders/${contextId}`);
         if (folder?.name) {
-          contextNameByKey.set(key, type === 'executive_summary' ? `Synthèse: ${folder.name}` : folder.name);
+          contextNameByKey.set(
+            key,
+            type === 'executive_summary'
+              ? $_('chat.context.executiveSummaryPrefix', { values: { name: folder.name } })
+              : folder.name
+          );
         }
       } else if (type === 'usecase') {
         const useCase = await apiGet<{ data?: { name?: string }; name?: string }>(`/use-cases/${contextId}`);
@@ -227,16 +233,13 @@
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-  const timeFormatter = new Intl.DateTimeFormat('fr-FR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  let timeFormatter = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' });
+  let dateFormatter = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  $: {
+    const intlLocale = $locale === 'fr' ? 'fr-FR' : 'en-US';
+    timeFormatter = new Intl.DateTimeFormat(intlLocale, { hour: '2-digit', minute: '2-digit' });
+    dateFormatter = new Intl.DateTimeFormat(intlLocale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
 
   const formatCommentTimestamp = (value: string | null | undefined) => {
     if (!value) return '';
@@ -246,7 +249,7 @@
     if (isSameDay(date, now)) return timeFormatter.format(date);
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
-    if (isSameDay(date, yesterday)) return `Hier ${timeFormatter.format(date)}`;
+    if (isSameDay(date, yesterday)) return `${$_('common.yesterday')} ${timeFormatter.format(date)}`;
     return `${dateFormatter.format(date)} ${timeFormatter.format(date)}`;
   };
 
@@ -392,10 +395,10 @@
       : null;
 
   $: commentPlaceholder = !$workspaceCanComment
-    ? 'Commentaires désactivés pour le rôle viewer.'
+    ? $_('chat.comments.placeholder.disabledViewer')
     : commentThreadResolved
-      ? 'Commentaire résolu. Réouvrez pour répondre.'
-      : 'Écrire un commentaire…';
+      ? $_('chat.comments.placeholder.resolved')
+      : $_('chat.comments.placeholder.write');
   let scrollForcePending = false;
   const BOTTOM_THRESHOLD_PX = 96;
   let editingMessageId: string | null = null;
@@ -485,77 +488,77 @@
   const TOOL_TOGGLES: ToolToggle[] = [
     {
       id: 'documents',
-      label: 'Documents',
-      description: 'Lister / analyser les documents',
+      label: $_('chat.tools.documents.label'),
+      description: $_('chat.tools.documents.description'),
       toolIds: ['documents'],
       icon: FileText
     },
     {
       id: 'comment_assistant',
-      label: 'Commentaires (résolution)',
-      description: 'Analyser et proposer des résolutions',
+      label: $_('chat.tools.commentAssistant.label'),
+      description: $_('chat.tools.commentAssistant.description'),
       toolIds: ['comment_assistant'],
       icon: MessageCircle
     },
     {
       id: 'web_search',
-      label: 'Web search',
-      description: 'Rechercher des infos sur le web',
+      label: $_('chat.tools.webSearch.label'),
+      description: $_('chat.tools.webSearch.description'),
       toolIds: ['web_search'],
       icon: Globe
     },
     {
       id: 'web_extract',
-      label: 'Web extract',
-      description: 'Extraire le contenu des URLs',
+      label: $_('chat.tools.webExtract.label'),
+      description: $_('chat.tools.webExtract.description'),
       toolIds: ['web_extract'],
       icon: Link2
     },
     {
       id: 'organization_read',
-      label: 'Organisation (lecture)',
+      label: $_('chat.tools.organizationRead.label'),
       toolIds: ['organizations_list', 'organization_get'],
       icon: Building2
     },
     {
       id: 'organization_update',
-      label: 'Organisation (édition)',
+      label: $_('chat.tools.organizationUpdate.label'),
       toolIds: ['organization_update'],
       icon: Building2
     },
     {
       id: 'folder_read',
-      label: 'Dossier (lecture)',
+      label: $_('chat.tools.folderRead.label'),
       toolIds: ['folders_list', 'folder_get'],
       icon: Folder
     },
     {
       id: 'folder_update',
-      label: 'Dossier (édition)',
+      label: $_('chat.tools.folderUpdate.label'),
       toolIds: ['folder_update'],
       icon: Folder
     },
     {
       id: 'usecase_read',
-      label: "Cas d'usage (lecture)",
+      label: $_('chat.tools.usecaseRead.label'),
       toolIds: ['usecases_list', 'usecase_get', 'read_usecase'],
       icon: Lightbulb
     },
     {
       id: 'usecase_update',
-      label: "Cas d'usage (édition)",
+      label: $_('chat.tools.usecaseUpdate.label'),
       toolIds: ['usecase_update', 'update_usecase_field'],
       icon: Lightbulb
     },
     {
       id: 'matrix',
-      label: 'Matrice (lecture/édition)',
+      label: $_('chat.tools.matrix.label'),
       toolIds: ['matrix_get', 'matrix_update'],
       icon: Table
     },
     {
       id: 'executive_summary',
-      label: 'Synthèse exécutive',
+      label: $_('chat.tools.executiveSummary.label'),
       toolIds: ['executive_summary_get', 'executive_summary_update'],
       icon: ScrollText
     }
@@ -1076,11 +1079,11 @@
   }
 
   const sessionDocStatusLabel = (s: string) => {
-    if (s === 'uploaded') return 'En attente';
-    if (s === 'processing') return 'Résumé en cours';
-    if (s === 'ready') return 'Résumé prêt';
-    if (s === 'failed') return 'Échec';
-    return 'Inconnu';
+    if (s === 'uploaded') return $_('chat.documents.status.uploaded');
+    if (s === 'processing') return $_('chat.documents.status.processing');
+    if (s === 'ready') return $_('chat.documents.status.ready');
+    if (s === 'failed') return $_('chat.documents.status.failed');
+    return $_('chat.documents.status.unknown');
   };
 
   const loadSessionDocs = async () => {
@@ -1159,7 +1162,7 @@
       cancelEditMessage();
       await retryMessage(messageId);
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors de la modification du message');
+      errorMsg = formatApiError(e, $_('chat.errors.editMessage'));
     }
   };
 
@@ -1170,7 +1173,7 @@
       await apiPost(`/chat/messages/${encodeURIComponent(messageId)}/retry`);
       await loadMessages(sessionId, { scrollToBottom: true });
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors du retry');
+      errorMsg = formatApiError(e, $_('chat.errors.retry'));
     }
   };
 
@@ -1216,7 +1219,7 @@
       document.body.removeChild(el);
       return true;
     } catch {
-      errorMsg = 'Impossible de copier le message';
+      errorMsg = $_('chat.errors.copy');
     }
     return false;
   };
@@ -1278,7 +1281,7 @@
         await selectSession(sessions[0].id);
       }
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors du chargement des sessions');
+      errorMsg = formatApiError(e, $_('chat.errors.loadSessions'));
     } finally {
       loadingSessions = false;
     }
@@ -1323,7 +1326,7 @@
 
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors du chargement des messages');
+      errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
     } finally {
       if (shouldShowLoader) loadingMessages = false;
     }
@@ -1351,7 +1354,7 @@
 
   export const deleteCurrentSession = async () => {
     if (!sessionId) return;
-    if (!confirm('Supprimer cette conversation ?')) return;
+    if (!confirm($_('chat.sessions.confirmDelete'))) return;
     errorMsg = null;
     try {
       await apiDelete(`/chat/sessions/${sessionId}`);
@@ -1360,7 +1363,7 @@
       initialEventsByMessageId = new Map();
       await loadSessions();
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors de la suppression de la session');
+      errorMsg = formatApiError(e, $_('chat.errors.deleteSession'));
     }
   };
 
@@ -1503,7 +1506,7 @@
       // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
       void pollJobUntilTerminal(res.jobId, assistantMsg._streamId ?? assistantMsg.id, { timeoutMs: 90_000 });
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors de l’envoi');
+      errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
       sending = false;
     }
@@ -1517,7 +1520,7 @@
     try {
       await apiPost(`/chat/messages/${encodeURIComponent(activeAssistantMessage.id)}/stop`);
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors de l’arrêt');
+      errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
       stoppingMessageId = null;
     }
@@ -1530,7 +1533,7 @@
       const voteValue = next === 'clear' ? null : (next === 'up' ? 1 : -1);
       messages = messages.map((m) => (m.id === messageId ? { ...m, feedbackVote: voteValue } : m));
     } catch (e) {
-      errorMsg = formatApiError(e, 'Erreur lors de la mise à jour du feedback');
+      errorMsg = formatApiError(e, $_('chat.errors.feedback'));
     }
   };
 
@@ -1664,14 +1667,16 @@
         <span>{commentSectionLabel}</span>
         {#if rootComment?.status === 'closed' && commentThreadResolvedAt}
           <span class="text-slate-400">•</span>
-          <span>Résolu {formatCommentTimestamp(commentThreadResolvedAt)}</span>
+          <span>
+            {$_('chat.comments.resolvedAt', { values: { at: formatCommentTimestamp(commentThreadResolvedAt) } })}
+          </span>
         {:else if assignedUser}
           <span class="text-slate-400">•</span>
           <span>
             {#if isAssignedToMe}
-              Vous est assigné
+              {$_('chat.comments.assignedToMe')}
             {:else}
-              Assigné à @{assignedUser.displayName || assignedUser.email || assignedUser.id}
+              {$_('chat.comments.assignedTo', { values: { label: assignedUser.displayName || assignedUser.email || assignedUser.id } })}
             {/if}
           </span>
         {/if}
@@ -1698,11 +1703,11 @@
         </div>
       {/if}
       {#if commentLoading && commentMessages.length === 0}
-        <div class="text-xs text-slate-500">Chargement…</div>
+        <div class="text-xs text-slate-500">{$_('common.loading')}</div>
       {:else if !commentThreadId}
-        <div class="text-xs text-slate-500">Sélectionne une conversation pour commencer ou écris un commentaire.</div>
+        <div class="text-xs text-slate-500">{$_('chat.comments.selectThreadHint')}</div>
       {:else if commentMessages.length === 0}
-        <div class="text-xs text-slate-500">Aucun message dans cette conversation.</div>
+        <div class="text-xs text-slate-500">{$_('chat.comments.noMessagesThread')}</div>
       {:else}
         {#each commentMessages as c (c.id)}
           {@const isMine = isCommentByCurrentUser(c)}
@@ -1725,7 +1730,7 @@
                     <EditableInput
                       markdown={true}
                       bind:value={editingCommentContent}
-                      placeholder="Modifier le message…"
+                      placeholder={$_('chat.edit.placeholder')}
                       disabled={!$workspaceCanComment}
                     />
                     <div class="flex items-center justify-end gap-2 text-[11px]">
@@ -1734,14 +1739,14 @@
                         type="button"
                         on:click={cancelEditComment}
                       >
-                        Annuler
+                        {$_('common.cancel')}
                       </button>
                       <button
                         class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                         type="button"
                         on:click={() => void commitEditComment()}
                       >
-                        Envoyer
+                        {$_('common.send')}
                       </button>
                     </div>
                   </div>
@@ -1758,8 +1763,8 @@
                     if (ok) markCopied(c.id);
                   }}
                   type="button"
-                  aria-label="Copier"
-                  title="Copier"
+                  aria-label={$_('common.copy')}
+                  title={$_('common.copy')}
                 >
                   {#if isCopied(c.id)}
                     <Check class="w-3.5 h-3.5 text-slate-900" />
@@ -1809,8 +1814,8 @@
                       if (ok) markCopied(c.id);
                     }}
                     type="button"
-                    aria-label="Copier"
-                    title="Copier"
+                    aria-label={$_('common.copy')}
+                    title={$_('common.copy')}
                   >
                     {#if isCopied(c.id)}
                       <Check class="w-3.5 h-3.5 text-slate-900" />
@@ -1825,7 +1830,7 @@
         {/each}
       {/if}
       {#if commentLoading && commentMessages.length > 0}
-        <div class="text-[11px] text-slate-400 mt-2">Mise à jour…</div>
+        <div class="text-[11px] text-slate-400 mt-2">{$_('chat.comments.updating')}</div>
       {/if}
     {:else}
       {#if errorMsg}
@@ -1834,9 +1839,9 @@
         </div>
       {/if}
       {#if loadingMessages}
-        <div class="text-xs text-slate-500">Chargement…</div>
+        <div class="text-xs text-slate-500">{$_('common.loading')}</div>
       {:else if messages.length === 0}
-        <div class="text-xs text-slate-500">Aucun message. Écris un message pour démarrer.</div>
+        <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
       {:else}
         {#each messages as m (m.id)}
           {#if m.role === 'user'}
@@ -1847,7 +1852,7 @@
                     <EditableInput
                       markdown={true}
                       bind:value={editingContent}
-                      placeholder="Modifier le message…"
+                      placeholder={$_('chat.edit.placeholder')}
                     />
                     <div class="flex items-center justify-end gap-2 text-[11px]">
                       <button
@@ -1855,14 +1860,14 @@
                         type="button"
                         on:click={cancelEditMessage}
                       >
-                        Annuler
+                        {$_('common.cancel')}
                       </button>
                       <button
                         class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                         type="button"
                         on:click={() => void saveEditMessage(m.id)}
                       >
-                        Envoyer
+                        {$_('common.send')}
                       </button>
                     </div>
                   </div>
@@ -1879,8 +1884,8 @@
                   if (ok) markCopied(m.id);
                 }}
                 type="button"
-                aria-label="Copier"
-                title="Copier"
+                aria-label={$_('common.copy')}
+                title={$_('common.copy')}
               >
                 {#if isCopied(m.id)}
                   <Check class="w-3.5 h-3.5 text-slate-900" />
@@ -1929,8 +1934,8 @@
                         if (ok) markCopied(m.id);
                       }}
                       type="button"
-                      aria-label="Copier"
-                      title="Copier"
+                      aria-label={$_('common.copy')}
+                      title={$_('common.copy')}
                     >
                       {#if isCopied(m.id)}
                         <Check class="w-3.5 h-3.5 text-slate-900" />
@@ -1942,8 +1947,8 @@
                       class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                       on:click={() => void retryFromAssistant(m.id)}
                       type="button"
-                      aria-label="Réessayer"
-                      title="Réessayer"
+                      aria-label={$_('common.retry')}
+                      title={$_('common.retry')}
                     >
                       <RotateCcw class="w-3.5 h-3.5" />
                     </button>
@@ -1953,8 +1958,8 @@
                       class:bg-slate-100={isUp}
                       on:click={() => void setFeedback(m.id, isUp ? 'clear' : 'up')}
                       type="button"
-                      aria-label="Utile"
-                      title="Utile"
+                      aria-label={$_('chat.feedback.useful')}
+                      title={$_('chat.feedback.useful')}
                     >
                       <ThumbsUp class="w-3.5 h-3.5" fill={isUp ? 'currentColor' : 'none'} />
                     </button>
@@ -1964,8 +1969,8 @@
                       class:bg-slate-100={isDown}
                       on:click={() => void setFeedback(m.id, isDown ? 'clear' : 'down')}
                       type="button"
-                      aria-label="Pas utile"
-                      title="Pas utile"
+                      aria-label={$_('chat.feedback.notUseful')}
+                      title={$_('chat.feedback.notUseful')}
                     >
                       <ThumbsDown class="w-3.5 h-3.5" fill={isDown ? 'currentColor' : 'none'} />
                     </button>
@@ -1994,8 +1999,8 @@
           <svelte:fragment slot="trigger" let:toggle>
             <button
               class="rounded border border-slate-300 bg-white text-slate-600 w-10 h-10 flex items-center justify-center hover:bg-slate-50"
-              aria-label="Ouvrir le menu"
-              title="Ouvrir le menu"
+              aria-label={$_('common.openMenu')}
+              title={$_('common.openMenu')}
               type="button"
               bind:this={composerMenuButtonRef}
               on:click={toggle}
@@ -2007,8 +2012,8 @@
             <label
               class={"flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 " +
                 (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
-              aria-label="Ajouter un fichier"
-              title="Ajouter un fichier"
+              aria-label={$_('chat.documents.addFile')}
+              title={$_('chat.documents.addFile')}
             >
               <input
                 class="hidden"
@@ -2018,12 +2023,12 @@
                 accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
               />
               <Paperclip class="w-4 h-4" />
-              <span>Ajouter un fichier</span>
+              <span>{$_('chat.documents.addFile')}</span>
             </label>
             <div class="border-t border-slate-100 pt-2"></div>
-            <div class="text-xs font-semibold text-slate-600">Contexte(s)</div>
+            <div class="text-xs font-semibold text-slate-600">{$_('chat.contexts.title')}</div>
             {#if contextEntries.length === 0}
-              <div class="text-[11px] text-slate-500">Aucun contexte actif.</div>
+              <div class="text-[11px] text-slate-500">{$_('chat.contexts.none')}</div>
             {:else}
               <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
                 {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
@@ -2045,7 +2050,7 @@
             {/if}
 
             <div class="border-t border-slate-100 pt-2">
-              <div class="text-xs font-semibold text-slate-600 mb-1">Outils</div>
+              <div class="text-xs font-semibold text-slate-600 mb-1">{$_('chat.tools.title')}</div>
               <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
                 {#each TOOL_TOGGLES as t (t.id)}
                   <button
@@ -2073,7 +2078,7 @@
         style={`max-height: ${composerMaxHeight}px; min-height: ${COMPOSER_BASE_HEIGHT}px;`}
         bind:this={composerEl}
         role="textbox"
-        aria-label="Composer"
+        aria-label={$_('chat.composer.ariaLabel')}
         aria-disabled={mode === 'comments' && (!$workspaceCanComment || commentThreadResolved)}
         tabindex={mode === 'comments' && (!$workspaceCanComment || commentThreadResolved) ? -1 : 0}
         on:keydown={handleKeyDown}
@@ -2093,8 +2098,8 @@
                   <button
                     class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
                     type="button"
-                    aria-label="Supprimer le document"
-                    title="Supprimer"
+                    aria-label={$_('chat.documents.delete.ariaLabel')}
+                    title={$_('common.delete')}
                     on:click={() => void removeSessionDoc(doc)}
                   >
                     <X class="w-3 h-3" />
@@ -2106,7 +2111,7 @@
           <EditableInput
             markdown={true}
             bind:value={input}
-            placeholder="Écrire un message…"
+            placeholder={$_('chat.composer.placeholder.chat')}
             on:change={handleComposerChange}
           />
         {:else}
@@ -2117,7 +2122,7 @@
           {/if}
           {#if assignedToLabel}
             <div class="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-              <span>Assigner à @{assignedToLabel}</span>
+              <span>{$_('chat.comments.assignedTo', { values: { label: assignedToLabel } })}</span>
               <button
                 type="button"
                 class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200"
@@ -2125,8 +2130,8 @@
                   assignedToUserId = null;
                   assignedToLabel = null;
                 }}
-                aria-label="Retirer l'assignation"
-                title="Retirer l'assignation"
+                aria-label={$_('chat.comments.unassign')}
+                title={$_('chat.comments.unassign')}
               >
                 <X class="w-3 h-3" />
               </button>
@@ -2147,11 +2152,11 @@
           bind:this={mentionMenuRef}
         >
           {#if mentionLoading && mentionDelayElapsed}
-            <div class="px-2 py-1 text-[11px] text-slate-500">Chargement…</div>
+            <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
           {:else if mentionError}
-            <div class="px-2 py-1 text-[11px] text-red-600">Erreur de chargement</div>
+            <div class="px-2 py-1 text-[11px] text-red-600">{$_('chat.comments.mention.loadError')}</div>
           {:else if !mentionLoading && mentionMatches.length === 0}
-            <div class="px-2 py-1 text-[11px] text-slate-500">Aucun membre</div>
+            <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.mention.none')}</div>
           {:else}
             <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
               {#each mentionMatches as member (member.userId)}

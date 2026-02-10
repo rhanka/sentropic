@@ -246,7 +246,7 @@ const handleImportComplete = async () => {
 <ImportExportDialog
   bind:open={showImportDialog}
   mode="import"
-  title="Importer une organisation"
+  title={$_('organizations.import.title')}
   scope="organization"
   defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
   importObjectTypes={['organizations']}
@@ -256,15 +256,15 @@ const handleImportComplete = async () => {
 <ImportExportDialog
   bind:open={showExportDialog}
   mode="export"
-  title="Exporter les organisations"
+  title={$_('organizations.export.title')}
   scope="workspace"
   allowScopeSelect={false}
   allowScopeIdEdit={false}
   workspaceName={workspaceName}
-  objectName="Toutes les organisations"
-  objectLabel="Organisation"
+  objectName={$_('organizations.export.objectName')}
+  objectLabel={$_('organizations.organization')}
   fixedInclude={['organizations']}
-  includeOptions={[{ id: 'folders', label: 'Inclure les dossiers rattachés', defaultChecked: false }]}
+  includeOptions={[{ id: 'folders', label: $_('organizations.export.include.folders'), defaultChecked: false }]}
   includeDependencies={{ folders: ['usecases', 'matrix'] }}
   includeAffectsComments={['folders']}
   includeAffectsDocuments={['folders']}

@@ -197,9 +197,9 @@
       const input =
         context ||
         (hasAnyDoc
-          ? 'Utiliser les documents du dossier comme contexte principal.'
-          : ($currentOrganizationId ? "Utiliser les informations de l'organisation sélectionnée comme contexte principal." : ''));
-      if (!input) throw new Error('Renseigner un contexte, un nom, ou ajouter un document');
+          ? get(_)('folders.new.defaultInput.documentsContext')
+          : ($currentOrganizationId ? get(_)('folders.new.defaultInput.organizationContext') : ''));
+      if (!input) throw new Error(get(_)('folders.new.errors.missingInput'));
 
       await apiPost('/use-cases/generate', {
         input,

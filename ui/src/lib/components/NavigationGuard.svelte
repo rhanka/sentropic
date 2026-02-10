@@ -2,11 +2,15 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { goto } from '$app/navigation';
   import { AlertTriangle } from '@lucide/svelte';
   
   let showWarning = false;
   let pendingNavigation = null;
+
+  const t = (key) => get(_)(key);
   
   onMount(() => {
     // Intercepter les clics sur les liens
@@ -61,7 +65,7 @@
         // mais on peut utiliser sendBeacon ou navigator.sendBeacon pour une sauvegarde synchrone
         // Pour l'instant, on garde l'avertissement mais on pourrait améliorer avec sendBeacon
         event.preventDefault();
-        event.returnValue = 'Sauvegarde des modifications en cours...';
+        event.returnValue = t('unsavedChanges.beforeUnload');
         
         // Essayer de sauvegarder de manière synchrone si possible
         // (limitation: beforeunload ne supporte pas async/await)
@@ -86,7 +90,7 @@
     if (success) {
       addToast({
         type: 'success',
-        message: 'Toutes les modifications ont été sauvegardées'
+        message: t('unsavedChanges.toast.saved')
       });
       showWarning = false;
       if (pendingNavigation) {
@@ -96,7 +100,7 @@
     } else {
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde des modifications'
+        message: t('unsavedChanges.toast.saveError')
       });
     }
   };
@@ -105,7 +109,7 @@
     unsavedChangesStore.reset();
     addToast({
       type: 'warning',
-      message: 'Modifications non sauvegardées supprimées'
+      message: t('unsavedChanges.toast.discarded')
     });
     showWarning = false;
     if (pendingNavigation) {
@@ -126,12 +130,12 @@
       <div class="flex items-center mb-4">
         <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />
         <h3 class="text-lg font-semibold text-gray-900">
-          Modifications non sauvegardées
+          {$_('unsavedChanges.dialog.title')}
         </h3>
       </div>
       
       <p class="text-gray-600 mb-6">
-        Vous avez des modifications non sauvegardées. Que souhaitez-vous faire ?
+        {$_('unsavedChanges.dialog.body')}
       </p>
       
       <div class="flex justify-end gap-3">
@@ -139,19 +143,19 @@
           on:click={handleCancel}
           class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
         >
-          Annuler
+          {$_('unsavedChanges.actions.cancel')}
         </button>
         <button 
           on:click={handleDiscardAndContinue}
           class="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded"
         >
-          Ignorer et continuer
+          {$_('unsavedChanges.actions.discardAndContinue')}
         </button>
         <button 
           on:click={handleSaveAndContinue}
           class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Sauvegarder et continuer
+          {$_('unsavedChanges.actions.saveAndContinue')}
         </button>
       </div>
     </div>
