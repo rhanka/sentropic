@@ -94,9 +94,9 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
           - [ ] API: `api/src/**`
           - [ ] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
         - [ ] Commands (run from repo root):
-          - [ ] `rg --files ui/src api/src e2e/tests > /tmp/wave2-i18n-filelist.txt`
+          - [x] `rg --files ui/src api/src e2e/tests > /tmp/wave2-i18n-filelist.txt`
           - [ ] Optional: focus only on likely user-visible strings:
-            - [ ] `rg -n \"\\b(t\\(|\\$t\\b|i18n|locale|lang)\\b\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt`
+            - [x] `rg -n \"\\b(t\\(|\\$t\\b|i18n|locale|lang)\\b\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt`
             - [ ] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head` (spot-check: hardcoded strings)
             - [ ] `rg -n \"[A-Za-zÀ-ÿ]{3,}\" ui/src | head` (spot-check: raw text nodes)
         - [ ] Walk the list and identify every user-visible string that must be translated or moved to i18n keys:
@@ -106,8 +106,8 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
           - [ ] Emails/templates (if present)
         - [ ] Record findings in this section (date + short bullet list of missing keys + the files where they occur).
       - [ ] Inventory log (append-only):
-        - [ ] 2026-__-__: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt`. Findings:
-          - [ ] TODO: add missing keys for <area>. Files: <file1>, <file2>
+        - [ ] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Hotspots: `/tmp/wave2-i18n-hotspots.txt` (0 lines with current pattern). Findings:
+          - [ ] TODO: run spot-check regexes to identify hardcoded strings and missing keys.
       - [ ] Implementation:
         - [ ] Add missing i18n keys (FR/EN) for all identified strings.
         - [ ] Replace hardcoded strings with i18n lookups consistently.
