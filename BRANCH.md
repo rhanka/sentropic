@@ -99,7 +99,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
             - [x] `rg -n \"(\\$_\\(|\\bt\\(|\\$t\\b|i18n|locale|lang)\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt` (includes Svelte `{$_('...')}` usage)
             - [x] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head -n 50 > /tmp/wave2-i18n-strings-sample.txt` (spot-check: hardcoded strings sample)
             - [x] `rg -n \">[^<{\\\\n][^<]{2,}<\" ui/src/routes ui/src/lib/components | head -n 200 > /tmp/wave2-i18n-textnodes-sample.txt` (spot-check: raw text nodes sample)
-        - [ ] Walk the list and identify every user-visible string that must be translated or moved to i18n keys:
+        - [x] Walk the list and identify every user-visible string that must be translated or moved to i18n keys:
           - [ ] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
           - [ ] UI components/shared text
           - [ ] API user-facing error messages (only if surfaced directly to users)
@@ -117,8 +117,8 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
           - [ ] i18n applied to key routes/components: auth pages, dashboard, matrix, folders list/detail, folder new, organizations list, settings (main headings/labels), and shared header/menu labels.
           - [ ] Remaining to sweep before the next Partial UAT: `/organizations/new`, `/organizations/:id`, `/usecase/:id` (and nested components), plus any remaining shared components and E2E selectors that assume FR strings.
       - [ ] Implementation:
-        - [ ] Add missing i18n keys (FR/EN) for all identified strings.
-        - [ ] Replace hardcoded strings with i18n lookups consistently.
+        - [x] Add missing i18n keys (FR/EN) for all identified strings (up to the next Partial UAT checkpoint).
+        - [x] Replace hardcoded strings with i18n lookups consistently (up to the next Partial UAT checkpoint).
         - [ ] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
       - [ ] Gates:
         - [x] `make typecheck-ui` + `make lint-ui`
