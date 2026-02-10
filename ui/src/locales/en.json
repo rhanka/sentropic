@@ -44,6 +44,11 @@
     "user": "User",
     "na": "N/A",
     "readOnlyDisabled": "Read-only mode: creation/deletion disabled."
+    ,
+    "ai": "AI",
+    "references": "References"
+    ,
+    "pointsAbbr": "pts"
   },
   "home": {
     "welcomeTitle": "Welcome to Top AI Ideas",
@@ -219,7 +224,11 @@
     "deleteError": "Error while deleting",
     "industry": "Industry: {value}",
     "sizeLabel": "Size",
-    "clickForDetails": "Click to view details"
+    "clickForDetails": "Click to view details",
+    "form": {
+      "nameLabel": "Organization name",
+      "docsHint": "Enter an organization name to enable adding documents."
+    }
   },
   "dashboard": {
     "reportTitle": "Top AI Ideas report",
@@ -274,6 +283,13 @@
     "detectedVariables": "Detected variables",
     "noVariablesDetected": "No variables detected",
     "promptContent": "Prompt content"
+  },
+  "usecase": {
+    "info": {
+      "title": "Information",
+      "contact": "Contact:",
+      "technologies": "Technologies"
+    }
   },
   "documents": {
     "title": "Documents",
