@@ -18,6 +18,7 @@
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
   import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
 
   let isLoading = false;
@@ -192,7 +193,7 @@
       console.error('Failed to load dashboard data:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des données du dashboard'
+        message: get(_)('dashboard.errors.load')
       });
     } finally {
       isLoading = false;
@@ -223,7 +224,7 @@
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : génération désactivée.' });
+      addToast({ type: 'warning', message: get(_)('dashboard.readOnlyGenerationDisabled') });
       return;
     }
     
@@ -237,7 +238,7 @@
       
       addToast({
         type: 'success',
-        message: result.message || 'Génération de la synthèse exécutive démarrée'
+        message: result.message || get(_)('dashboard.toast.generationStarted')
       });
       
       // Recharger le folder pour mettre à jour le statut
@@ -250,7 +251,7 @@
       console.error('Failed to generate executive summary:', error);
       addToast({
         type: 'error',
-        message: error?.data?.message || 'Erreur lors de la génération de la synthèse exécutive'
+        message: error?.data?.message || get(_)('dashboard.errors.generate')
       });
     } finally {
       isGeneratingSummary = false;

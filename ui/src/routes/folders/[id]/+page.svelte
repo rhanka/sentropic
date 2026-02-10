@@ -17,6 +17,7 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
@@ -104,7 +105,7 @@
       foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
     } catch (error) {
       console.error('Failed to load folder/use cases:', error);
-      addToast({ type: 'error', message: 'Erreur lors du chargement du dossier' });
+      addToast({ type: 'error', message: get(_)('folders.detail.errors.load') });
       currentFolder = null;
     } finally {
       isLoading = false;
@@ -211,38 +212,38 @@
   };
 
   const handleDeleteUseCase = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
+    if (!confirm(get(_)('usecase.confirmDelete'))) return;
     try {
       await deleteUseCase(id);
       useCasesStore.update((items) => items.filter((uc) => uc.id !== id));
-      addToast({ type: 'success', message: "Cas d'usage supprimé avec succès !" });
+      addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
     } catch (error) {
       console.error('Failed to delete use case:', error);
       const anyErr = error as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       } else {
-      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: get(_)('usecase.errors.delete') });
       }
     }
   };
 
   const handleDeleteFolder = async () => {
     if (!currentFolder) return;
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
+    if (!confirm(get(_)('folders.detail.confirmDelete'))) return;
     try {
       await apiDelete(`/folders/${currentFolder.id}`);
       foldersStore.update((items) => items.filter((f) => f.id !== currentFolder?.id));
       currentFolderId.set(null);
-      addToast({ type: 'success', message: 'Dossier supprimé avec succès !' });
+      addToast({ type: 'success', message: get(_)('folders.deleteSuccess') });
       goto('/folders');
     } catch (error) {
       console.error('Failed to delete folder:', error);
       const anyErr = error as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('folders.detail.errors.readOnlyAction') });
       } else {
-        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+        addToast({ type: 'error', message: get(_)('folders.deleteError') });
       }
     }
   };
@@ -360,7 +361,7 @@
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('locks.lockError');
     } finally {
       lockLoading = false;
     }
@@ -403,9 +404,9 @@
     try {
       const res = await requestUnlock('folder', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
     }
   };
 
@@ -413,9 +414,9 @@
     if (!lockTargetId) return;
     try {
       await forceUnlock('folder', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
     }
   };
 

@@ -49,6 +49,8 @@
     "references": "Références"
     ,
     "pointsAbbr": "pts"
+    ,
+    "add": "Ajouter"
   },
   "home": {
     "welcomeTitle": "Bienvenue sur Top AI Ideas",
@@ -132,7 +134,8 @@
       "registering": "Enregistrement…",
       "successTitle": "Inscription réussie !",
       "success": {
-        "codeSent": "Code envoyé par email"
+        "codeSent": "Code envoyé par email",
+        "redirecting": "Inscription réussie ! Redirection…"
       },
       "errors": {
         "invalidEmail": "Veuillez saisir une adresse email valide",
@@ -181,6 +184,25 @@
     "folderLoaded": "Évaluation du dossier \"{name}\" chargée",
     "folderNoMatrix": "Le dossier \"{name}\" n'a pas de matrice configurée",
     "loadError": "Erreur lors du chargement de la matrice"
+    ,
+    "autoSaveError": "Erreur lors de la sauvegarde automatique de la configuration",
+    "saveSuccess": "Configuration de la matrice mise à jour",
+    "saveError": "Erreur lors de la sauvegarde de la matrice",
+    "saveErrorGeneric": "Erreur lors de la sauvegarde",
+    "newValueAxisName": "Nouvel axe de valeur",
+    "newComplexityAxisName": "Nouvel axe de complexité",
+    "valueAxisAdded": "Nouvel axe de valeur ajouté",
+    "complexityAxisAdded": "Nouvel axe de complexité ajouté",
+    "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.",
+    "valueAxisDeleted": "Axe de valeur supprimé",
+    "complexityAxisDeleted": "Axe de complexité supprimé",
+    "levelN": "Niveau {level}",
+    "selectedFolder": "Dossier sélectionné",
+    "createNew": "Créer une nouvelle matrice",
+    "help": {
+      "intro": "Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.",
+      "details": "La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun. Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux."
+    }
   },
   "folders": {
     "title": "Dossiers",
@@ -189,12 +211,23 @@
     "useCaseCount": "{count} cas d'usage",
     "deleteSuccess": "Dossier supprimé avec succès !",
     "deleteError": "Erreur lors de la suppression du dossier",
+    "toast": {
+      "selected": "Dossier \"{name}\" sélectionné"
+    },
+    "errors": {
+      "load": "Erreur lors du chargement des dossiers"
+    },
     "detail": {
       "defaultTitle": "Dossier",
       "title": "Dossier",
       "loadingUseCases": "Chargement des cas d'usage…",
       "valueLabel": "Valeur:",
-      "complexityLabel": "Complexité:"
+      "complexityLabel": "Complexité:",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce dossier ?",
+      "errors": {
+        "load": "Erreur lors du chargement du dossier",
+        "readOnlyAction": "Action non autorisée (mode lecture seule)."
+      }
     },
     "new": {
       "orgOptional": "Organisation (optionnel)",
@@ -211,7 +244,17 @@
       "addDocument": "Ajouter un document",
       "noDocumentsYet": "Aucun document pour le moment.",
       "errors": {
-        "draftCreateFailed": "Impossible de créer un brouillon de dossier"
+        "draftCreateFailed": "Impossible de créer un brouillon de dossier",
+        "loadOrganizations": "Erreur lors du chargement des organisations",
+        "readOnlyCreateDisabled": "Mode lecture seule : création désactivée.",
+        "readOnlyActionNotAllowed": "Mode lecture seule : action non autorisée.",
+        "draftLoadFailed": "Impossible de charger le brouillon",
+        "create": "Erreur lors de la création du dossier",
+        "generationStart": "Erreur lors du démarrage de la génération"
+      },
+      "toast": {
+        "created": "Dossier créé avec succès !",
+        "generationStarted": "Génération démarrée…"
       }
     }
   },
@@ -228,7 +271,29 @@
     "form": {
       "nameLabel": "Nom de l'organisation",
       "docsHint": "Renseigner un nom d’organisation pour activer l’ajout de documents."
+    },
+    "toast": {
+      "created": "Organisation créée avec succès !",
+      "createdEnriching": "Organisation créée ! L'enrichissement avec l'IA est en cours..."
+    },
+    "errors": {
+      "readOnlyCreateDisabled": "Mode lecture seule : création désactivée.",
+      "readOnlyActionNotAllowed": "Mode lecture seule : action non autorisée.",
+      "draftCreate": "Erreur lors de la création du brouillon",
+      "draftMissing": "Impossible de créer l'organisation brouillon",
+      "create": "Erreur lors de la création de l'organisation",
+      "load": "Erreur lors du chargement de l'organisation",
+      "loadList": "Erreur lors du chargement des organisations"
     }
+    ,
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette organisation ?"
+  },
+  "locks": {
+    "lockError": "Erreur de verrouillage",
+    "unlockRequestSent": "Demande de déverrouillage envoyée",
+    "unlockRequestError": "Erreur demande de déverrouillage",
+    "lockForced": "Verrou forcé",
+    "lockForceError": "Erreur forçage verrou"
   },
   "dashboard": {
     "reportTitle": "Rapport Top AI Ideas",
@@ -249,6 +314,15 @@
     "annexUseCases": "Fiches des cas d'usage",
     "subtitle": "Priorisez vos innovations par l'apport de valeur",
     "about": "À Propos"
+    ,
+    "readOnlyGenerationDisabled": "Mode lecture seule : génération désactivée.",
+    "toast": {
+      "generationStarted": "Génération de la synthèse exécutive démarrée"
+    },
+    "errors": {
+      "load": "Erreur lors du chargement des données du dashboard",
+      "generate": "Erreur lors de la génération de la synthèse exécutive"
+    }
   },
   "settings": {
     "title": "Paramètres",
@@ -283,13 +357,91 @@
     "detectedVariables": "Variables détectées",
     "noVariablesDetected": "Aucune variable détectée",
     "promptContent": "Contenu du prompt"
+    ,
+    "confirmDeactivate": "Désactiver votre compte ? Vous pourrez demander une réactivation.",
+    "confirmDeleteAccount": "SUPPRESSION DÉFINITIVE: supprimer votre compte et toutes vos données immédiatement ?",
+    "deactivateAccount": "Désactiver mon compte",
+    "deleteAccount": "Supprimer mon compte",
+    "accountStatus": {
+      "pendingAdminApproval": "Compte en attente de validation admin (48h). Après expiration: accès lecture seule.",
+      "approvalExpiredReadonly": "Validation expirée: accès lecture seule (guest). Un admin peut réactiver."
+    },
+    "toast": {
+      "deactivatedLogout": "Compte désactivé. Veuillez vous reconnecter.",
+      "deleted": "Compte supprimé."
+    },
+    "errors": {
+      "deactivate": "Erreur désactivation",
+      "delete": "Erreur suppression"
+    },
+    "prompts": {
+      "description": "Configurez les prompts utilisés par l'IA pour générer du contenu. Cliquez sur un prompt pour le modifier.",
+      "toast": {
+        "updated": "Prompt mis à jour avec succès !"
+      },
+      "errors": {
+        "save": "Erreur lors de la sauvegarde du prompt"
+      },
+      "closeEditor": "Fermer l'éditeur de prompt",
+      "editorPlaceholder": "Entrez le contenu du prompt..."
+    },
+    "ai": {
+      "description": "Configurez les paramètres de l'intelligence artificielle et de la queue de traitement.",
+      "save": "Sauvegarder les paramètres",
+      "saving": "Sauvegarde…",
+      "toast": {
+        "updated": "Paramètres IA mis à jour avec succès !"
+      },
+      "errors": {
+        "load": "Erreur lors du chargement des paramètres IA",
+        "save": "Erreur lors de la sauvegarde des paramètres IA"
+      }
+    },
+    "queue": {
+      "description": "Surveillez et gérez la queue de traitement des jobs IA.",
+      "refresh": "Actualiser",
+      "purging": "Purge…",
+      "purgePending": "Purger en attente ({count})",
+      "purgeProcessing": "Purger en cours ({count})",
+      "purgeAll": "Tout purger ({count})",
+      "confirmPurgePending": "Êtes-vous sûr de vouloir purger tous les jobs en attente ? Cette action est irréversible.",
+      "confirmPurgeProcessing": "Êtes-vous sûr de vouloir purger tous les jobs en cours (probablement bloqués) ? Cette action est irréversible.",
+      "confirmPurgeAll": "Êtes-vous sûr de vouloir purger TOUS les jobs de la queue ? Cette action est irréversible.",
+      "errors": {
+        "purge": "Erreur lors de la purge de la queue"
+      }
+    },
+    "admin": {
+      "resetDescription": "Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.",
+      "confirmResetAll": "Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.",
+      "reset": "Supprimer toutes les données",
+      "resetting": "Suppression en cours…",
+      "toast": {
+        "resetDone": "Toutes les données ont été supprimées avec succès !"
+      },
+      "errors": {
+        "reset": "Erreur lors de la suppression des données"
+      }
+    }
   },
   "usecase": {
     "info": {
       "title": "Informations",
       "contact": "Contact:",
       "technologies": "Technologies"
+    },
+    "errors": {
+      "load": "Erreur lors du chargement du cas d'usage",
+      "readOnlyAction": "Action non autorisée (mode lecture seule).",
+      "delete": "Erreur lors de la suppression"
+    },
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce cas d'usage ?",
+    "toast": {
+      "deleted": "Cas d'usage supprimé avec succès !"
     }
+  },
+  "workspace": {
+    "hiddenAutosaveWarning": "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications."
   },
   "documents": {
     "title": "Documents",

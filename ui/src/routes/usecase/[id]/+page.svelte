@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
 import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
   import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
@@ -225,7 +227,7 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('locks.lockError');
     } finally {
       lockLoading = false;
     }
@@ -268,9 +270,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     try {
       const res = await requestUnlock('usecase', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
     }
   };
 
@@ -278,9 +280,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     if (!lockTargetId) return;
     try {
       await forceUnlock('usecase', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
     }
   };
 
@@ -378,8 +380,8 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       useCase = useCases.find(uc => uc.id === useCaseId);
       
       if (!useCase) {
-        addToast({ type: 'error', message: 'Erreur lors du chargement du cas d\'usage' });
-        error = 'Erreur lors du chargement du cas d\'usage';
+        addToast({ type: 'error', message: get(_)('usecase.errors.load') });
+        error = get(_)('usecase.errors.load');
         return;
       }
       
@@ -393,15 +395,15 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
   const handleDelete = async () => {
     if (!useCase) return;
     if (isReadOnly) {
-      addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       return;
     }
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
+    if (!confirm(get(_)('usecase.confirmDelete'))) return;
 
     try {
       await deleteUseCase(useCase.id);
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
-      addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
+      addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
       if (useCase.folderId) {
         goto(`/folders/${useCase.folderId}`);
       } else {
@@ -411,9 +413,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       console.error('Failed to delete use case:', err);
       const anyErr = err as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       } else {
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: err instanceof Error ? err.message : get(_)('usecase.errors.delete') });
       }
     }
   };
