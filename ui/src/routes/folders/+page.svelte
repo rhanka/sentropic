@@ -143,7 +143,7 @@
   };
 
   const handleDeleteFolder = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
+    if (!confirm(get(_)('folders.detail.confirmDelete'))) return;
     
     try {
       await apiDelete(`/folders/${id}`);
@@ -275,9 +275,9 @@
               <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
                 <span class="text-xs text-slate-400 whitespace-nowrap">
                   {#if isDraft}
-                    Brouillon
+                    {$_('common.draft')}
                   {:else}
-                    Ouvrir
+                    {$_('common.open')}
                   {/if}
                 </span>
                 <div class="flex items-center gap-2 flex-wrap">
@@ -299,7 +299,7 @@
 <ImportExportDialog
   bind:open={showImportDialog}
   mode="import"
-  title="Importer un dossier"
+  title={$_('folders.import.title')}
   scope="folder"
   defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
   importObjectTypes={['folders', 'usecases', 'organizations', 'matrix']}
@@ -309,15 +309,15 @@
 <ImportExportDialog
   bind:open={showExportDialog}
   mode="export"
-  title="Exporter les dossiers"
+  title={$_('folders.export.title')}
   scope="workspace"
   allowScopeSelect={false}
   allowScopeIdEdit={false}
   workspaceName={workspaceName}
-  objectName="Tous les dossiers"
-  objectLabel="Dossier"
+  objectName={$_('folders.export.objectName')}
+  objectLabel={$_('folders.folder')}
   fixedInclude={['folders', 'usecases', 'matrix']}
-  includeOptions={[{ id: 'organizations', label: 'Inclure les organisations', defaultChecked: false }]}
+  includeOptions={[{ id: 'organizations', label: $_('folders.export.include.organizations'), defaultChecked: false }]}
   includeAffectsComments={['organizations']}
   includeAffectsDocuments={['organizations']}
   exportKind="folders"

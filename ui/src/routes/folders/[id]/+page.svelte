@@ -524,9 +524,9 @@
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
             on:click={() => goto(`/organizations/${orgId}`)}
-            title="Voir l'organisation"
+            title={$_('organizations.view')}
           >
-            {currentFolder.organizationName || 'Organisation'}
+            {currentFolder.organizationName || $_('organizations.organization')}
           </button>
         {/if}
         {#if currentFolder.model}
@@ -562,14 +562,14 @@
           onImport={() => (showImportDialog = true)}
           onExport={() => openFolderExport(folderId)}
           onDelete={handleDeleteFolder}
-          triggerTitle="Actions"
-          triggerAriaLabel="Actions"
+          triggerTitle={$_('common.actions')}
+          triggerAriaLabel={$_('common.actions')}
         />
         {#if showReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-            title="Mode lecture seule : création / suppression désactivées."
-            aria-label="Mode lecture seule : création / suppression désactivées."
+            title={$_('common.readOnlyDisabled')}
+            aria-label={$_('common.readOnlyDisabled')}
             type="button"
             disabled
           >
@@ -582,7 +582,7 @@
     <!-- Contexte (entre le titre et le bloc documents) -->
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="description">
       <div class="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2 group">
-        Contexte
+        {$_('folders.detail.context')}
         <CommentBadge
           count={commentCounts?.description ?? 0}
           disabled={!openCommentsFor}
@@ -593,7 +593,7 @@
         label=""
         value={editedContext}
         markdown={true}
-        placeholder="Décrire le contexte métier et les objectifs…"
+        placeholder={$_('folders.new.contextPlaceholder')}
         apiEndpoint={`/folders/${currentFolder.id}`}
         fullData={{ description: editedContext }}
         originalValue={currentFolder.description || ''}
@@ -643,14 +643,14 @@
             <h2
               class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}"
             >
-              {useCase?.data?.name || useCase?.name || "Cas d'usage sans nom"}
+              {useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
             </h2>
           </div>
           {#if !isReadOnly}
             <button
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
-              title="Supprimer"
+              title={$_('common.delete')}
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -724,13 +724,13 @@
         <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
           <span class="text-xs text-slate-400 whitespace-nowrap">
             {#if isDetailing}
-              Détail en cours...
+              {$_('usecase.status.detailing')}
             {:else if isGenerating}
-              Génération en cours...
+              {$_('usecase.status.generating')}
             {:else if isDraft}
-              Brouillon
+              {$_('common.draft')}
             {:else}
-              Cliquez pour voir les détails
+              {$_('common.clickToView')}
             {/if}
           </span>
 
@@ -743,11 +743,11 @@
             {#if isDetailing}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
                 <Loader2 class="w-3 h-3 mr-1 animate-spin flex-shrink-0" />
-                Détail en cours
+                {$_('usecase.status.detailingShort')}
               </span>
             {:else if isDraft}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
-                Brouillon
+                {$_('common.draft')}
               </span>
             {/if}
           </div>
@@ -765,7 +765,7 @@
   <ImportExportDialog
     bind:open={$folderExportState.open}
     mode="export"
-    title="Exporter le dossier"
+    title={$_('folders.export.singleTitle')}
     scope="folder"
     scopeId={$folderExportState.folderId ?? currentFolder.id}
     allowScopeSelect={false}
@@ -777,10 +777,10 @@
     includeOptions={
       [
         ...(currentFolder?.organizationId
-          ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+          ? [{ id: 'organization', label: $_('folders.export.include.organization'), defaultChecked: true }]
           : []),
-        { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
-        { id: 'matrix', label: 'Inclure la matrice', defaultChecked: true },
+        { id: 'usecases', label: $_('folders.export.include.usecases'), defaultChecked: true },
+        { id: 'matrix', label: $_('folders.export.include.matrix'), defaultChecked: true },
       ]
     }
     includeAffectsComments={['organization', 'usecases', 'matrix']}
@@ -790,12 +790,12 @@
   <ImportExportDialog
     bind:open={showImportDialog}
     mode="import"
-    title="Importer un cas d'usage"
+    title={$_('usecase.import.title')}
     scope="folder"
     defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
     importObjectTypes={['usecases']}
     importTargetType="folder"
-    importTargetLabel="Dossier cible"
+    importTargetLabel={$_('folders.import.targetFolder')}
     importTargetOptions={[{ id: currentFolder.id, label: currentFolder.name }]}
     defaultImportTargetId={currentFolder.id}
     on:imported={handleImportComplete}

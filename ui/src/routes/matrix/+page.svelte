@@ -769,7 +769,7 @@
 
   const createNewMatrix = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: $_('common.readOnlyEditDisabled') });
       return;
     }
     console.log('createNewMatrix called, currentFolderId:', $currentFolderId);
@@ -810,14 +810,14 @@
         await updateCaseCounts();
         addToast({
           type: 'success',
-          message: 'Nouvelle matrice créée avec succès'
+          message: $_('matrix.toasts.created')
         });
       }
     } catch (error) {
       console.error('Failed to create matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la création de la matrice'
+        message: $_('matrix.errors.create')
       });
     }
   };
@@ -841,8 +841,8 @@
         showDelete={false}
         disabledExport={isReadOnly}
         onExport={() => (showExportDialog = true)}
-        triggerTitle="Actions matrice"
-        triggerAriaLabel="Actions matrice"
+        triggerTitle={$_('common.actions')}
+        triggerAriaLabel={$_('common.actions')}
       />
     {/if}
     <LockPresenceBadge
@@ -984,16 +984,16 @@
                     <button 
                       class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
                       on:click={() => openAxisDescriptions(axis, true)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
+                      title={$_('matrix.viewLevels')}
+                      aria-label={`${$_('matrix.viewLevels')}: ${axis.name}`}
                     >
                       <Eye class="w-4 h-4" />
         </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
                         on:click={() => removeAxis(true, index)}
-                        title="Supprimer cet axe"
-                        aria-label="Supprimer {axis.name}"
+                        title={$_('matrix.deleteAxis')}
+                        aria-label={`${$_('matrix.deleteAxis')}: ${axis.name}`}
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -1075,19 +1075,19 @@
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
-                    <button 
-                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
-                      on:click={() => openAxisDescriptions(axis, false)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
-                    >
-                      <Eye class="w-4 h-4" />
-        </button>
+                      <button 
+                        class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                        on:click={() => openAxisDescriptions(axis, false)}
+                        title={$_('matrix.viewLevels')}
+                        aria-label={`${$_('matrix.viewLevels')}: ${axis.name}`}
+                      >
+                        <Eye class="w-4 h-4" />
+                      </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
                         on:click={() => removeAxis(false, index)}
-                        title="Supprimer cet axe"
-                        aria-label="Supprimer {axis.name}"
+                        title={$_('matrix.deleteAxis')}
+                        aria-label={`${$_('matrix.deleteAxis')}: ${axis.name}`}
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -1221,7 +1221,7 @@
         class="bg-navy hover:bg-navy/90 text-white px-4 py-2 rounded flex items-center"
       >
         <Upload class="mr-2 h-4 w-4" />
-        Enregistrer la configuration
+        {$_('common.save')}
       </button>
     </div>
   {/if}
@@ -1233,10 +1233,10 @@
     <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-2">
-          {selectedAxis?.name} - Description des niveaux
+          {selectedAxis?.name} - {$_('matrix.levelDescriptionsTitle')}
         </h3>
         <p class="text-gray-600 mb-4">
-          Vous pouvez modifier les descriptions des 5 niveaux pour ce critère en cliquant sur le texte:
+          {$_('matrix.help.details')}
         </p>
         
         <table class="w-full">
@@ -1295,7 +1295,7 @@
             on:click={handleCloseDescriptionsDialog}
             class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
           >
-            Fermer
+            {$_('common.close')}
         </button>
         </div>
       </div>
@@ -1306,13 +1306,13 @@
 <ImportExportDialog
   bind:open={showExportDialog}
   mode="export"
-  title="Exporter la matrice"
+  title={$_('matrix.export')}
   scope="matrix"
   scopeId={$currentFolderId || ''}
   allowScopeSelect={false}
   allowScopeIdEdit={false}
   workspaceName={workspaceName}
-  objectName={currentFolderName || 'Matrice'}
+  objectName={currentFolderName || $_('matrix.details.title')}
   commentsAvailable={false}
   documentsAvailable={false}
 />
@@ -1326,7 +1326,7 @@
           {$_('matrix.createNew')}
         </h3>
         <p class="text-gray-600 mb-6">
-          Choisissez le type de matrice à créer :
+          {$_('matrix.createDialogBody')}
         </p>
         
         <div class="space-y-4">
@@ -1389,14 +1389,14 @@
             on:click={() => showCreateMatrixDialog = false}
             class="px-4 py-2 text-gray-600 hover:text-gray-800"
           >
-            Annuler
+            {$_('common.cancel')}
           </button>
           <button 
             on:click={createNewMatrix}
             disabled={createMatrixType === 'copy' && !selectedFolderToCopy}
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Créer
+            {$_('common.create')}
           </button>
         </div>
       </div>
@@ -1411,12 +1411,12 @@
       <div class="flex items-center mb-4">
         <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />
         <h3 class="text-lg font-semibold text-gray-900">
-          Modifications non sauvegardées
+          {$_('unsavedChanges.dialog.title')}
         </h3>
       </div>
       
       <p class="text-gray-600 mb-6">
-        Vous avez des modifications non sauvegardées. Que souhaitez-vous faire ?
+        {$_('unsavedChanges.dialog.body')}
       </p>
       
       <div class="flex justify-end gap-3">
@@ -1424,19 +1424,19 @@
           on:click={handleCloseWarningCancel}
           class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
         >
-          Annuler
+          {$_('unsavedChanges.actions.cancel')}
         </button>
         <button 
           on:click={handleCloseWarningDiscard}
           class="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded"
         >
-          Ignorer et fermer
+          {$_('unsavedChanges.actions.discardAndClose')}
         </button>
         <button 
           on:click={handleCloseWarningSave}
           class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Sauvegarder et fermer
+          {$_('unsavedChanges.actions.saveAndClose')}
         </button>
       </div>
     </div>

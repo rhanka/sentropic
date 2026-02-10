@@ -3,6 +3,7 @@
   import { fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { Chart, registerables } from 'chart.js';
+  import { _ } from 'svelte-i18n';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
@@ -1790,7 +1791,7 @@
       },
       title: {
         display: true,
-        text: 'Matrice de priorisation',
+        text: $_('usecase.scatterPlot.title'),
         font: {
           size: 16,
           weight: 'bold' as const
@@ -1867,7 +1868,10 @@
             };
 
             // Découper la description (max 100 chars total, mais wrappé tous les 50 chars)
-            const fullDescription = raw.description ? `Description: ${raw.description.substring(0, 120)}${raw.description.length > 120 ? '...' : ''}` : '';
+            const prefix = $_('usecase.scatterPlot.tooltip.descriptionPrefix');
+            const fullDescription = raw.description
+              ? `${prefix} ${raw.description.substring(0, 120)}${raw.description.length > 120 ? '...' : ''}`
+              : '';
             const descriptionLines = wrapText(fullDescription, 50); // Largeur réduite (~50 chars)
 
             // Générer les étoiles pour la valeur (pleines + vides)
@@ -1883,8 +1887,8 @@
 
             const lines = [
               ...descriptionLines,
-              `Valeur: ${raw.y} pts (${valueStarsDisplay})`,
-              `Complexité: ${raw.x} pts (${complexityXDisplay})`
+              $_('usecase.scatterPlot.tooltip.valueLine', { values: { pts: raw.y, stars: valueStarsDisplay } }),
+              $_('usecase.scatterPlot.tooltip.complexityLine', { values: { pts: raw.x, crosses: complexityXDisplay } }),
             ];
             return lines.filter(line => line !== '');
           },
@@ -1897,7 +1901,7 @@
         type: 'linear',
         title: {
           display: true,
-          text: 'Complexité (0-100 pts)',
+          text: $_('usecase.scatterPlot.axis.complexity'),
           font: {
             size: 14,
             weight: 'bold'
@@ -1919,7 +1923,7 @@
         type: 'linear',
         title: {
           display: true,
-          text: 'Valeur (0-100 pts)',
+          text: $_('usecase.scatterPlot.axis.value'),
           font: {
             size: 14,
             weight: 'bold'
@@ -1981,10 +1985,12 @@
       const dpr = window.devicePixelRatio || 1;
       const resolutionFactor = isPrint ? 3 : dpr;
       
-      // Mettre à jour les options du chart pour la résolution
-      if (chartInstance.options) {
-        (chartInstance.options as any).devicePixelRatio = resolutionFactor;
-      }
+      // Ensure i18n labels (and other reactive options) are applied.
+      (chartInstance.options as any) = {
+        ...chartOptions,
+        devicePixelRatio: resolutionFactor,
+        maintainAspectRatio: false
+      };
       
       chartInstance.data = chartData;
       chartInstance.update('none'); // 'none' pour éviter les animations
@@ -2123,6 +2129,9 @@
 
   // Mettre à jour le graphique quand les données ou les options changent
   $: if (chartInstance) {
+    // Ensure the reactive block reruns when data/options change (including locale).
+    void chartData;
+    void chartOptions;
     updateChart();
     // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils et au scale
     if (chartInstance.options.plugins) {
@@ -2144,14 +2153,14 @@
       <div class="absolute inset-0 flex items-center justify-center text-slate-500">
         <div class="text-center">
           <BarChart3 class="w-12 h-12 mx-auto mb-2 text-slate-300" />
-          <p class="text-sm">Aucun cas d'usage à afficher</p>
+          <p class="text-sm">{$_('usecase.scatterPlot.empty')}</p>
         </div>
       </div>
     {:else if !matrix}
       <div class="absolute inset-0 flex items-center justify-center text-slate-500">
         <div class="text-center">
           <BarChart3 class="w-12 h-12 mx-auto mb-2 text-slate-300" />
-          <p class="text-sm">Chargement de la matrice...</p>
+          <p class="text-sm">{$_('usecase.scatterPlot.loading')}</p>
         </div>
       </div>
     {:else}
@@ -2164,13 +2173,13 @@
     <div class="flex items-center gap-2 text-slate-500 text-sm">
       {#if isComputingLabels}
         <span class="inline-flex items-center gap-1 ml-2" transition:fade={{ duration: 200 }}>
-          Placement des labels en cours
+          {$_('usecase.scatterPlot.placingLabels')}
           <Loader2 class="h-4 w-4 animate-spin" />
         </span>
       {:else}
         <MousePointerClick class="w-4 h-4" />
         <span>
-          Cliquez sur un point pour voir le détail.
+          {$_('usecase.scatterPlot.clickHint')}
         </span>
       {/if}
     </div>

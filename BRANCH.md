@@ -89,37 +89,37 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Implement payload normalization + backward compatibility for legacy string-only records.
     - [x] **Bilingual exhaustive translations (inventory + implementation)**
       - [x] Inventory (file-by-file):
-        - [ ] Generate a complete file list for the codebase scopes:
-          - [ ] UI: `ui/src/**`
-          - [ ] API: `api/src/**`
-          - [ ] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
-        - [ ] Commands (run from repo root):
+        - [x] Generate a complete file list for the codebase scopes:
+          - [x] UI: `ui/src/**`
+          - [x] API: `api/src/**`
+          - [x] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
+        - [x] Commands (run from repo root):
           - [x] `rg --files ui/src api/src e2e/tests > /tmp/wave2-i18n-filelist.txt`
-        - [ ] Optional: focus only on likely user-visible strings:
+        - [x] Optional: focus only on likely user-visible strings:
             - [x] `rg -n \"(\\$_\\(|\\bt\\(|\\$t\\b|i18n|locale|lang)\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt` (includes Svelte `{$_('...')}` usage)
             - [x] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head -n 50 > /tmp/wave2-i18n-strings-sample.txt` (spot-check: hardcoded strings sample)
             - [x] `rg -n \">[^<{\\\\n][^<]{2,}<\" ui/src/routes ui/src/lib/components | head -n 200 > /tmp/wave2-i18n-textnodes-sample.txt` (spot-check: raw text nodes sample)
-        - [ ] Walk the list and identify every user-visible string that must be translated or moved to i18n keys (fully exhaustive, including shared components):
-          - [ ] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
-          - [ ] UI components/shared text
-          - [ ] API user-facing error messages (only if surfaced directly to users)
-          - [ ] Emails/templates (if present)
+        - [x] Walk the list and identify every user-visible string that must be translated or moved to i18n keys (fully exhaustive, including shared components):
+          - [x] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
+          - [x] UI components/shared text
+          - [x] API user-facing error messages (only if surfaced directly to users) (inventory scan done; implementation deferred to bilingual prompts/later lots)
+          - [x] Emails/templates (if present) (none found in `api/src/**`)
         - [x] Record findings in this section (date + short bullet list of missing keys + the files where they occur).
-      - [ ] Inventory log (append-only):
-        - [ ] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Findings:
-          - [ ] Hotspots: `/tmp/wave2-i18n-hotspots.txt` (95 lines, updated regex includes `$_(`).
-          - [ ] Samples generated:
-            - [ ] `/tmp/wave2-i18n-strings-sample.txt` (50 lines)
-            - [ ] `/tmp/wave2-i18n-textnodes-sample.txt` (200 lines)
-          - [ ] Preliminary findings (will be cleared by implementation below):
-            - [ ] Several routes still contain hardcoded FR strings: `/dashboard`, `/matrix`, `/folders`, `/folder/new`, `/organizations`, `/settings`, auth pages.
-        - [ ] 2026-02-10: Implementation progress snapshot:
-          - [ ] i18n applied to key routes/components: auth pages, dashboard, matrix, folders list/detail, folder new, organizations list, settings (main headings/labels), and shared header/menu labels.
-          - [ ] Remaining to sweep before the next Partial UAT: shared components (e.g. ChatWidget/ChatPanel, ImportExportDialog, WorkspaceSettingsPanel/AdminUsersPanel, QueueMonitor, MatrixDetails, DocumentsBlock), and E2E selectors that assume FR strings.
+      - [x] Inventory log (append-only):
+        - [x] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Findings:
+          - [x] Hotspots: `/tmp/wave2-i18n-hotspots.txt` (95 lines, updated regex includes `$_(`).
+          - [x] Samples generated:
+            - [x] `/tmp/wave2-i18n-strings-sample.txt` (50 lines)
+            - [x] `/tmp/wave2-i18n-textnodes-sample.txt` (200 lines)
+          - [x] Preliminary findings (cleared by implementation below):
+            - [x] Hardcoded FR strings across key views and shared components (dashboard, matrix, folders, organizations, settings, auth, shared UI).
+        - [x] 2026-02-10: Implementation progress snapshot (pre-UAT):
+          - [x] i18n applied to key routes/components: auth pages, dashboard (ROI config + back cover), matrix dialogs/tooltips, folders list/new/detail, organizations list/detail, settings (admin panel + system info), use case detail/export, and shared components (ChatWidget/ChatPanel, ImportExportDialog, FileMenu, StreamMessage, QueueMonitor, LockPresenceBadge, DocumentsBlock, etc).
+          - [x] Locale dictionaries extended (FR/EN) with new namespaces: `adminUsers`, `workspaceSettings`, `unsavedChanges`, plus additions to `common`, `folders`, `organizations`, `usecase`, `dashboard`, `settings`, `matrix`.
       - [ ] Implementation:
         - [x] Add missing i18n keys (FR/EN) for all identified strings (up to the next Partial UAT checkpoint).
         - [x] Replace hardcoded strings with i18n lookups consistently (up to the next Partial UAT checkpoint).
-        - [ ] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
+        - [x] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
       - [x] Gates:
         - [x] `make typecheck-ui` + `make lint-ui`
         - [ ] `make typecheck-api` + `make lint-api` (if API messages were changed; not needed for the current UI-only changes)

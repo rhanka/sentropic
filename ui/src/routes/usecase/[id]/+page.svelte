@@ -590,14 +590,14 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
               onDownloadDocx={handleDownloadDocx}
               onPrint={() => window.print()}
               onDelete={handleDelete}
-              triggerTitle="Actions"
-              triggerAriaLabel="Actions"
+              triggerTitle={$_('common.actions')}
+              triggerAriaLabel={$_('common.actions')}
             />
             {#if isReadOnly && showReadOnlyLock && !showPresenceBadge}
               <button
                 class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
-                title="Mode lecture seule : création / suppression désactivées."
-                aria-label="Mode lecture seule : création / suppression désactivées."
+                title={$_('common.readOnlyDisabled')}
+                aria-label={$_('common.readOnlyDisabled')}
                 type="button"
                 disabled
               >
@@ -627,7 +627,7 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
   <ImportExportDialog
     bind:open={$useCaseExportState.open}
     mode="export"
-    title="Exporter le cas d'usage"
+    title={$_('usecase.export.title')}
     scope="usecase"
     scopeId={$useCaseExportState.useCaseId ?? useCase.id}
     allowScopeSelect={false}
@@ -637,10 +637,10 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     commentsAvailable={commentsTotal > 0}
     documentsAvailable={hasDocuments}
     includeOptions={[
-      { id: 'folders', label: 'Inclure le dossier', defaultChecked: true },
-      { id: 'matrix', label: 'Inclure la matrice du dossier', defaultChecked: true },
+      { id: 'folders', label: $_('usecase.export.include.folder'), defaultChecked: true },
+      { id: 'matrix', label: $_('usecase.export.include.folderMatrix'), defaultChecked: true },
       ...(organizationId
-        ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+        ? [{ id: 'organization', label: $_('usecase.export.include.organization'), defaultChecked: true }]
         : []),
     ]}
     includeDependencies={{ matrix: ['folders'] }}
