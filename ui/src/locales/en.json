@@ -448,13 +448,19 @@
     "execSummaryEmpty": "No executive summary available for this folder",
     "execSummaryGenerate": "Generate executive summary",
     "loadingData": "Loading data…",
-    "useCaseCount": "Use case count",
+  "useCaseCount": "Use case count",
+  "quickWins": "Quick wins",
+  "roiQuadrants": {
     "quickWins": "Quick wins",
-    "roiQuadrantConfig": "ROI quadrant configuration",
-    "roiStats": {
-      "medianValue": "Median value",
-      "medianComplexity": "Median complexity"
-    },
+    "majorProjects": "Major projects",
+    "wait": "Wait",
+    "dontDo": "Don't do"
+  },
+  "roiQuadrantConfig": "ROI quadrant configuration",
+  "roiStats": {
+    "medianValue": "Median value",
+    "medianComplexity": "Median complexity"
+  },
     "roiConfig": {
       "buttonTitle": "ROI quadrant configuration",
       "close": "Close configuration",
