@@ -122,7 +122,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
       - [x] Gates:
         - [x] `make typecheck-ui` + `make lint-ui`
-        - [ ] `make typecheck-api` + `make lint-api` (if API messages were changed; not needed for the current UI-only changes)
+        - [x] `make typecheck-api` + `make lint-api`
       - [ ] Partial UAT (user-driven):
         - [ ] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
           - [ ] Home
