@@ -2,6 +2,8 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete } from '$lib/utils/api';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
@@ -164,13 +166,13 @@
       
       addToast({
         type: 'success',
-        message: 'Dossier supprimé avec succès !'
+        message: get(_)('folders.deleteSuccess')
       });
     } catch (error) {
       console.error('Failed to delete folder:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la suppression du dossier'
+        message: get(_)('folders.deleteError')
       });
     }
   };
@@ -179,7 +181,7 @@
 
 <section class="space-y-6">
   <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold">Dossiers</h1>
+    <h1 class="text-3xl font-semibold">{$_('folders.title')}</h1>
     {#if !isReadOnly}
       <FileMenu
         showNew={true}
@@ -190,14 +192,14 @@
         onNew={() => goto('/folder/new')}
         onImport={() => (showImportDialog = true)}
         onExport={() => (showExportDialog = true)}
-        triggerTitle="Actions dossier"
-        triggerAriaLabel="Actions dossier"
+        triggerTitle={$_('folders.actions')}
+        triggerAriaLabel={$_('folders.actions')}
       />
     {:else if showReadOnlyLock}
       <button
         class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-        title="Mode lecture seule : création / suppression désactivées."
-        aria-label="Mode lecture seule : création / suppression désactivées."
+        title={$_('common.readOnlyDisabled')}
+        aria-label={$_('common.readOnlyDisabled')}
         type="button"
         disabled
       >
@@ -205,10 +207,10 @@
       </button>
     {/if}
   </div>
-      {#if isLoading}
-        <div class="rounded border border-blue-200 bg-blue-50 p-4">
-          <p class="text-sm text-blue-700">Chargement des dossiers...</p>
-        </div>
+	      {#if isLoading}
+	        <div class="rounded border border-blue-200 bg-blue-50 p-4">
+	          <p class="text-sm text-blue-700">{$_('folders.loading')}</p>
+	        </div>
       {:else}
         <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {#each $foldersStore as folder}
@@ -233,15 +235,15 @@
                   <h2 class="text-lg sm:text-xl font-medium truncate {canClick ? 'text-green-800 group-hover:text-green-900 transition-colors' : 'text-slate-400'}">{folder.name}</h2>
                 </div>
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  {#if !isReadOnly}
-                    <button 
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                      on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
-                      title="Supprimer"
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  {/if}
+	                  {#if !isReadOnly}
+	                    <button 
+	                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+	                      on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
+	                      title={$_('common.delete')}
+	                    >
+	                      <Trash2 class="w-4 h-4" />
+	                    </button>
+	                  {/if}
                 </div>
               </div>
               
@@ -252,10 +254,10 @@
                 {/if}
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
                   {#if !(isGenerating && useCaseCount === 0)}
-                  <span class="flex items-center gap-1 whitespace-nowrap">
-                    <FileText class="w-4 h-4 flex-shrink-0" />
-                    {useCaseCount} cas d'usage
-                  </span>
+	                  <span class="flex items-center gap-1 whitespace-nowrap">
+	                    <FileText class="w-4 h-4 flex-shrink-0" />
+	                    {$_('folders.useCaseCount', { values: { count: useCaseCount } })}
+	                  </span>
                   {/if}
                   <div class="flex items-center gap-2 flex-wrap">
                     <!-- badge "Sélectionné" supprimé (affiché dans le footer) -->

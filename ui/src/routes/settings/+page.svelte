@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { session } from '$lib/stores/session';
   import { deactivateAccount, deleteAccount, loadMe, me } from '$lib/stores/me';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
@@ -295,25 +296,25 @@
 </script>
 
 <section class="space-y-6">
-  <h1 class="text-3xl font-semibold">Paramètres</h1>
+  <h1 class="text-3xl font-semibold">{$_('settings.title')}</h1>
 
   <!-- Section Compte & Workspace (tous les utilisateurs) -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
-    <h2 class="text-lg font-semibold text-slate-800">Compte & Workspace</h2>
+    <h2 class="text-lg font-semibold text-slate-800">{$_('settings.accountWorkspace')}</h2>
 
     {#if $me.loading}
-      <p class="text-sm text-slate-600">Chargement…</p>
+      <p class="text-sm text-slate-600">{$_('common.loading')}</p>
     {:else if $me.error}
       <p class="text-sm text-rose-700">{$me.error}</p>
     {:else if $me.data}
       <div class="grid gap-4 md:grid-cols-2">
         <div class="rounded border border-slate-200 p-4">
-          <h3 class="font-medium">Compte</h3>
+          <h3 class="font-medium">{$_('settings.account')}</h3>
           <div class="mt-2 text-sm text-slate-700 space-y-1">
-            <div><span class="text-slate-500">Email:</span> {$me.data.user?.email ?? '—'}</div>
-            <div><span class="text-slate-500">Nom:</span> {$me.data.user?.displayName ?? '—'}</div>
-            <div><span class="text-slate-500">Role effectif:</span> {$me.data.effectiveRole}</div>
-            <div><span class="text-slate-500">Statut:</span> {$me.data.user?.accountStatus}</div>
+            <div><span class="text-slate-500">{$_('settings.emailLabel')}:</span> {$me.data.user?.email ?? '—'}</div>
+            <div><span class="text-slate-500">{$_('settings.nameLabel')}:</span> {$me.data.user?.displayName ?? '—'}</div>
+            <div><span class="text-slate-500">{$_('settings.effectiveRoleLabel')}:</span> {$me.data.effectiveRole}</div>
+            <div><span class="text-slate-500">{$_('settings.statusLabel')}:</span> {$me.data.user?.accountStatus}</div>
           </div>
           {#if $me.data.user?.accountStatus === 'pending_admin_approval'}
             <p class="mt-2 text-sm text-amber-700">
@@ -327,7 +328,7 @@
         </div>
 
         <div class="rounded border border-slate-200 p-4">
-          <h3 class="font-medium">Workspace</h3>
+          <h3 class="font-medium">{$_('settings.workspace')}</h3>
           <div class="mt-3 space-y-3">
             <WorkspaceSettingsPanel />
           </div>
@@ -335,7 +336,7 @@
       </div>
 
       <div class="rounded border border-rose-200 bg-rose-50 p-4">
-        <h3 class="font-medium text-rose-800">Zone dangereuse</h3>
+        <h3 class="font-medium text-rose-800">{$_('settings.dangerZone')}</h3>
         <div class="mt-3 flex flex-wrap gap-2">
           <button class="rounded bg-amber-700 px-3 py-2 text-sm text-white" on:click={handleDeactivate} disabled={deactivating}>
             Désactiver mon compte
@@ -350,13 +351,13 @@
 
   {#if !isAdmin()}
     <div class="rounded border border-slate-200 bg-white p-6">
-      <p class="text-sm text-slate-600">Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.</p>
+      <p class="text-sm text-slate-600">{$_('settings.adminOnlyHint')}</p>
     </div>
   {:else}
   
   <!-- Section Gestion des Prompts -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Gestion des Prompts IA</h2>
+    <h2 class="text-lg font-semibold text-slate-800 mb-4">{$_('settings.promptManagement')}</h2>
     <p class="text-sm text-slate-600 mb-4">
       Configurez les prompts utilisés par l'IA pour générer du contenu. Cliquez sur un prompt pour le modifier.
     </p>
@@ -395,7 +396,7 @@
 
   <!-- Section Configuration IA -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Configuration IA</h2>
+    <h2 class="text-lg font-semibold text-slate-800 mb-4">{$_('settings.aiConfig')}</h2>
     <p class="text-sm text-slate-600 mb-4">
       Configurez les paramètres de l'intelligence artificielle et de la queue de traitement.
     </p>
@@ -403,13 +404,13 @@
     {#if isLoadingAISettings}
       <div class="flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-        <p class="text-sm text-blue-700">Chargement des paramètres...</p>
+        <p class="text-sm text-blue-700">{$_('settings.aiLoading')}</p>
       </div>
     {:else}
       <div class="grid gap-6 md:grid-cols-2">
         <!-- Modèle par défaut -->
         <div>
-          <label for="ai-default-model" class="block text-sm font-medium text-slate-700 mb-2">Modèle OpenAI par défaut</label>
+          <label for="ai-default-model" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.aiDefaultModel')}</label>
                   <select 
                     id="ai-default-model"
                     bind:value={aiSettings.defaultModel}
@@ -420,12 +421,12 @@
                     <option value="gpt-5-mini">GPT-5 Mini</option>
                     <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
                   </select>
-          <p class="text-xs text-slate-500 mt-1">Modèle utilisé par défaut pour toutes les opérations IA</p>
+          <p class="text-xs text-slate-500 mt-1">{$_('settings.aiDefaultModelHint')}</p>
         </div>
 
         <!-- Concurrence -->
         <div>
-          <label for="ai-concurrency" class="block text-sm font-medium text-slate-700 mb-2">Jobs simultanés</label>
+          <label for="ai-concurrency" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.aiConcurrency')}</label>
           <input 
             id="ai-concurrency"
             type="number" 
@@ -434,12 +435,12 @@
             max="50"
             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p class="text-xs text-slate-500 mt-1">Nombre de jobs IA traités en parallèle (1-50)</p>
+          <p class="text-xs text-slate-500 mt-1">{$_('settings.aiConcurrencyHint')}</p>
         </div>
 
         <!-- Intervalle de traitement -->
         <div>
-          <label for="ai-processing-interval" class="block text-sm font-medium text-slate-700 mb-2">Intervalle de traitement (ms)</label>
+          <label for="ai-processing-interval" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.aiInterval')}</label>
           <input 
             id="ai-processing-interval"
             type="number" 
@@ -449,7 +450,7 @@
             step="1000"
             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p class="text-xs text-slate-500 mt-1">Délai entre les cycles de traitement de la queue (1000-60000ms)</p>
+          <p class="text-xs text-slate-500 mt-1">{$_('settings.aiIntervalHint')}</p>
         </div>
 
         <!-- Bouton de sauvegarde -->
@@ -468,7 +469,7 @@
 
   <!-- Section Gestion de la Queue -->
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Gestion de la Queue IA</h2>
+    <h2 class="text-lg font-semibold text-slate-800 mb-4">{$_('settings.queueManagement')}</h2>
     <p class="text-sm text-slate-600 mb-4">
       Surveillez et gérez la queue de traitement des jobs IA.
     </p>
@@ -477,23 +478,23 @@
     <div class="grid gap-4 md:grid-cols-5">
       <div class="bg-slate-50 rounded-lg p-4 text-center">
         <div class="text-2xl font-bold text-slate-900">{queueStats.total}</div>
-        <div class="text-sm text-slate-600">Total</div>
+        <div class="text-sm text-slate-600">{$_('settings.queueTotal')}</div>
       </div>
       <div class="bg-orange-50 rounded-lg p-4 text-center">
         <div class="text-2xl font-bold text-orange-600">{queueStats.pending}</div>
-        <div class="text-sm text-orange-600">En attente</div>
+        <div class="text-sm text-orange-600">{$_('settings.queuePending')}</div>
       </div>
       <div class="bg-blue-50 rounded-lg p-4 text-center">
         <div class="text-2xl font-bold text-blue-600">{queueStats.processing}</div>
-        <div class="text-sm text-blue-600">En cours</div>
+        <div class="text-sm text-blue-600">{$_('settings.queueRunning')}</div>
       </div>
       <div class="bg-green-50 rounded-lg p-4 text-center">
         <div class="text-2xl font-bold text-green-600">{queueStats.completed}</div>
-        <div class="text-sm text-green-600">Terminés</div>
+        <div class="text-sm text-green-600">{$_('settings.queueDone')}</div>
       </div>
       <div class="bg-red-50 rounded-lg p-4 text-center">
         <div class="text-2xl font-bold text-red-600">{queueStats.failed}</div>
-        <div class="text-sm text-red-600">Échoués</div>
+        <div class="text-sm text-red-600">{$_('settings.queueFailed')}</div>
       </div>
     </div>
 
@@ -536,7 +537,7 @@
 
   <!-- Section Administration -->
   <div class="rounded border border-red-200 bg-red-50 p-6">
-    <h2 class="text-lg font-semibold text-red-800 mb-4">Zone de danger</h2>
+    <h2 class="text-lg font-semibold text-red-800 mb-4">{$_('settings.dangerZone')}</h2>
     <p class="text-red-700 mb-4">
       Cette section permet de réinitialiser complètement l'application. 
       Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.
@@ -553,7 +554,7 @@
 
   <!-- Section Informations système -->
   <div class="rounded border border-blue-200 bg-blue-50 p-6">
-    <h2 class="text-lg font-semibold text-blue-800 mb-4">Informations système</h2>
+    <h2 class="text-lg font-semibold text-blue-800 mb-4">{$_('settings.systemInfo')}</h2>
     <div class="space-y-2 text-sm text-blue-700">
       <p><strong>Version:</strong> 1.0.0</p>
       <p><strong>Base de données:</strong> SQLite</p>
@@ -571,7 +572,7 @@
     <div class="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <div class="flex justify-between items-center mb-6">
-          <h3 class="text-lg font-semibold">Éditer le prompt</h3>
+          <h3 class="text-lg font-semibold">{$_('settings.editPrompt')}</h3>
           <button 
             on:click={closePromptEditor}
             aria-label="Fermer l'éditeur de prompt"
@@ -583,21 +584,21 @@
 
         <div class="space-y-4">
           <div>
-            <span class="block text-sm font-medium text-slate-700 mb-2">Nom du prompt</span>
+            <span class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.promptName')}</span>
             <div class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-600">
               {promptName}
             </div>
           </div>
 
           <div>
-            <span class="block text-sm font-medium text-slate-700 mb-2">Description</span>
+            <span class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.promptDescription')}</span>
             <div class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-600">
               {promptDescription}
             </div>
           </div>
 
           <div>
-            <span class="block text-sm font-medium text-slate-700 mb-2">Variables détectées</span>
+            <span class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.detectedVariables')}</span>
             <div class="flex flex-wrap gap-2">
               {#each promptVariables as variable}
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -605,13 +606,13 @@
                 </span>
               {/each}
               {#if promptVariables.length === 0}
-                <span class="text-sm text-slate-500 italic">Aucune variable détectée</span>
+                <span class="text-sm text-slate-500 italic">{$_('settings.noVariablesDetected')}</span>
               {/if}
             </div>
           </div>
 
           <div>
-            <label for="prompt-content" class="block text-sm font-medium text-slate-700 mb-2">Contenu du prompt</label>
+            <label for="prompt-content" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.promptContent')}</label>
             <textarea 
               id="prompt-content"
               bind:value={promptContent}

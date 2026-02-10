@@ -16,6 +16,7 @@
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
+  import { _ } from 'svelte-i18n';
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
@@ -497,7 +498,7 @@
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
         {#if isReadOnly || isLockedByOther}
-          <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || 'Dossier'}</h1>
+          <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || $_('folders.detail.defaultTitle')}</h1>
         {:else}
           <h1 class="text-3xl font-semibold mb-0 break-words">
             <EditableInput
@@ -609,12 +610,12 @@
       }}
     />
   {:else}
-    <h1 class="text-3xl font-semibold">Dossier</h1>
+    <h1 class="text-3xl font-semibold">{$_('folders.detail.title')}</h1>
   {/if}
 
   {#if isLoading}
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
-      <p class="text-sm text-blue-700">Chargement des cas d'usage...</p>
+      <p class="text-sm text-blue-700">{$_('folders.detail.loadingUseCases')}</p>
     </div>
   {/if}
 
@@ -667,7 +668,7 @@
           {:else}
             <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
               <div class="flex items-center gap-1 flex-wrap">
-                <span class="whitespace-nowrap">Valeur:</span>
+                <span class="whitespace-nowrap">{$_('folders.detail.valueLabel')}</span>
                 {#if matrix}
                   {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
                   {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
@@ -684,15 +685,15 @@
                       {/each}
                     </div>
                   {:else}
-                    <span class="text-gray-400">N/A</span>
+                    <span class="text-gray-400">{$_('common.na')}</span>
                   {/if}
                 {:else}
-                  <span class="text-gray-400">N/A</span>
+                  <span class="text-gray-400">{$_('common.na')}</span>
                 {/if}
               </div>
 
               <div class="flex items-center gap-1 flex-wrap">
-                <span class="whitespace-nowrap">Complexité:</span>
+                <span class="whitespace-nowrap">{$_('folders.detail.complexityLabel')}</span>
                 {#if matrix}
                   {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
                   {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
@@ -709,10 +710,10 @@
                       {/each}
                     </div>
                   {:else}
-                    <span class="text-gray-400">N/A</span>
+                    <span class="text-gray-400">{$_('common.na')}</span>
                   {/if}
                 {:else}
-                  <span class="text-gray-400">N/A</span>
+                  <span class="text-gray-400">{$_('common.na')}</span>
                 {/if}
               </div>
             </div>
@@ -799,5 +800,3 @@
     on:imported={handleImportComplete}
   />
 {/if}
-
-

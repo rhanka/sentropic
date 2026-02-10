@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { matrixStore, type MatrixAxis } from '$lib/stores/matrix';
   import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
@@ -46,14 +48,14 @@
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   
-  // Variables pour l'auto-save de la matrice (seuils, poids, axes)
+  // Auto-save state for the matrix (thresholds, weights, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let isSavingMatrix = false;
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
-  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || get(_)('common.user');
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
@@ -69,7 +71,7 @@
   });
 
   onDestroy(() => {
-    // Nettoyer le timeout d'auto-save si la page est quittée
+    // Clean up the auto-save timeout when leaving the page
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
@@ -127,7 +129,7 @@
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('matrix.lockError');
     } finally {
       lockLoading = false;
     }
@@ -170,9 +172,9 @@
     try {
       const res = await requestUnlock('folder', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('matrix.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('matrix.unlockRequestError') });
     }
   };
 
@@ -180,9 +182,9 @@
     if (!lockTargetId) return;
     try {
       await forceUnlock('folder', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('matrix.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('matrix.lockForceError') });
     }
   };
 
@@ -259,11 +261,11 @@
     }
   }
 
-  const loadMatrix = async () => {
+ const loadMatrix = async () => {
     if (!$currentFolderId) {
       addToast({
         type: 'info',
-        message: 'Veuillez sélectionner un dossier pour voir sa matrice'
+        message: get(_)('matrix.pleaseSelectFolder')
       });
       return;
     }
@@ -282,19 +284,19 @@
         originalConfig = { ...matrix };
         addToast({
           type: 'success',
-          message: `Évaluation du dossier "${folder.name}" chargée`
+          message: get(_)('matrix.folderLoaded', { values: { name: folder.name } })
         });
       } else {
         addToast({
           type: 'warning',
-          message: `Le dossier "${folder.name}" n'a pas de matrice configurée`
+          message: get(_)('matrix.folderNoMatrix', { values: { name: folder.name } })
         });
       }
     } catch (error) {
       console.error('Failed to load matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement de la matrice'
+        message: get(_)('matrix.loadError')
       });
     } finally {
       isLoading = false;
@@ -302,18 +304,18 @@
   };
 
   /**
-   * Détermine le niveau (1-5) d'un score en comparant avec les thresholds
-   * Le niveau est le plus grand level tel que score >= threshold.points
+   * Determine the level (1-5) for a score by comparing against thresholds.
+   * The level is the highest level such that score >= threshold.points.
    */
   const getLevelFromScore = (score: number, thresholds: Array<{ level: number; points: number }>): number => {
-    // Trier les thresholds par level décroissant pour trouver le plus grand level qui correspond
+    // Sort thresholds by descending level to find the highest matching level.
     const sortedThresholds = [...thresholds].sort((a, b) => b.level - a.level);
     for (const threshold of sortedThresholds) {
       if (score >= threshold.points) {
         return threshold.level;
       }
     }
-    return 1; // Par défaut, niveau 1 si aucun threshold ne correspond
+    return 1; // Default to level 1 if no threshold matches.
   };
 
   /**
@@ -828,7 +830,7 @@
 
 <div class="container mx-auto px-4 py-8">
 <div class="mb-6 flex items-start justify-between gap-4">
-  <h1 class="text-3xl font-bold text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
+  <h1 class="text-3xl font-bold text-navy">{$_('matrix.title')}</h1>
   <div class="flex items-center gap-2 flex-wrap justify-end">
     {#if $currentFolderId}
       <FileMenu
@@ -897,11 +899,11 @@
   
   {#if isLoading}
     <div class="text-center py-8">
-      <p class="text-gray-600">Chargement de la matrice...</p>
+      <p class="text-gray-600">{$_('matrix.loading')}</p>
     </div>
   {:else if !$matrixStore.valueAxes || $matrixStore.valueAxes.length === 0}
     <div class="text-center py-8">
-      <p class="text-gray-600 mb-4">Aucune matrice configurée pour ce dossier</p>
+      <p class="text-gray-600 mb-4">{$_('matrix.empty')}</p>
       <button 
         on:click={openCreateMatrixDialog}
         class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
@@ -915,7 +917,7 @@
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
-            <span class="mr-2">Axes de Valeur</span>
+            <span class="mr-2">{$_('matrix.valueAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
             {#each range(3) as i (i)}
                 <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -938,9 +940,9 @@
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">{$_('matrix.criterion')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.weight')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1009,7 +1011,7 @@
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
-            <span class="mr-2">Axes de Complexité</span>
+            <span class="mr-2">{$_('matrix.complexityAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
             {#each range(3) as i (i)}
                 <X class="w-5 h-5 text-white" />
@@ -1032,9 +1034,9 @@
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">{$_('matrix.criterion')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.weight')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1104,15 +1106,15 @@
       <!-- Value Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
-          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Valeur</h2>
+          <h2 class="text-white text-lg font-semibold">{$_('matrix.valueThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-purple-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Valeur</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Points Fibonacci</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Nombre de cas</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.value')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.fibonacciPoints')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.useCaseCount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1152,15 +1154,15 @@
       <!-- Complexity Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
-          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Complexité</h2>
+          <h2 class="text-white text-lg font-semibold">{$_('matrix.complexityThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Complexité</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points Fibonacci</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.complexity')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.fibonacciPoints')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.useCaseCount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1241,8 +1243,8 @@
         <table class="w-full">
           <thead>
             <tr class="border-b">
-              <th class="text-left py-2">Niveau</th>
-              <th class="text-left py-2">Description</th>
+              <th class="text-left py-2">{$_('matrix.level')}</th>
+              <th class="text-left py-2">{$_('matrix.description')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1338,8 +1340,8 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Évaluation de base</div>
-              <div class="text-sm text-gray-600">Utiliser la matrice par défaut avec toutes les descriptions complètes</div>
+              <div class="font-medium">{$_('matrix.baseEvaluation')}</div>
+              <div class="text-sm text-gray-600">{$_('matrix.baseEvaluationDesc')}</div>
             </div>
           </label>
           
@@ -1352,14 +1354,14 @@
               class="mr-3"
             />
             <div class="flex-1">
-              <div class="font-medium">Copier une matrice existante</div>
-              <div class="text-sm text-gray-600 mb-2">Copier la matrice d'un autre dossier</div>
+              <div class="font-medium">{$_('matrix.copyExisting')}</div>
+              <div class="text-sm text-gray-600 mb-2">{$_('matrix.copyExistingDesc')}</div>
               {#if createMatrixType === 'copy'}
                 <select 
                   bind:value={selectedFolderToCopy}
                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm"
                 >
-                  <option value="">Sélectionner un dossier...</option>
+                  <option value="">{$_('matrix.selectFolder')}</option>
                   {#each availableFolders as folder}
                     <option value={folder.id}>{folder.name}</option>
         {/each}
@@ -1377,8 +1379,8 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Évaluation vierge</div>
-              <div class="text-sm text-gray-600">Commencer avec une matrice vide</div>
+              <div class="font-medium">{$_('matrix.blankEvaluation')}</div>
+              <div class="text-sm text-gray-600">{$_('matrix.blankEvaluationDesc')}</div>
             </div>
           </label>
         </div>

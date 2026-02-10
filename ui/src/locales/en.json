@@ -40,7 +40,10 @@
     "open": "Open",
     "clickToView": "Click to view details",
     "sessionCheck": "Checking session…",
-    "redirecting": "Redirecting…"
+    "redirecting": "Redirecting…",
+    "user": "User",
+    "na": "N/A",
+    "readOnlyDisabled": "Read-only mode: creation/deletion disabled."
   },
   "home": {
     "welcomeTitle": "Welcome to Top AI Ideas",
@@ -63,7 +66,74 @@
     "lastUsed": "Last used: {date}",
     "verifyInProgress": "Verifying…",
     "redirectingDashboard": "Redirecting to the dashboard…",
-    "registerDeviceNow": "You are now going to register your WebAuthn device"
+    "registerDeviceNow": "You are now going to register your WebAuthn device",
+    "devices": {
+      "title": "My devices",
+      "subtitle": "Manage the devices registered for WebAuthn authentication",
+      "empty": "No registered devices",
+      "register": "Register a device",
+      "addNew": "Add a new device",
+      "rename": "Rename",
+      "revoke": "Revoke",
+      "uvEnabled": "UV enabled",
+      "addedOn": "Added on {date}",
+      "lastUsed": "Last used: {date}",
+      "confirmRevoke": "Are you sure you want to revoke the device \"{deviceName}\"? You will no longer be able to sign in with this device.",
+      "errors": {
+        "load": "Error while loading devices",
+        "update": "Error while updating device",
+        "revoke": "Error while revoking device"
+      }
+    },
+    "magicLink": {
+      "title": "Magic link verification",
+      "successTitle": "Signed in successfully!",
+      "errorTitle": "Verification error",
+      "backToLogin": "Back to login",
+      "errors": {
+        "missingToken": "Missing token in URL",
+        "verifyFailed": "Error while verifying magic link"
+      }
+    },
+    "login": {
+      "title": "Sign in",
+      "supportedHint": "Use your passkey or biometrics",
+      "notAvailable": "WebAuthn is not available in this browser",
+      "unsupportedBrowser": "Your browser does not support WebAuthn. Use a modern browser (Chrome, Firefox, Safari, Edge).",
+      "button": "Sign in with WebAuthn",
+      "buttonLoading": "Signing in…",
+      "lostDevice": "I lost my device",
+      "noAccount": "No account yet? Sign up",
+      "lostDeviceTitle": "Lost device",
+      "registerNewDevice": "Register a new device (full workflow)",
+      "backToLogin": "Back to normal login"
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "Secure authentication with WebAuthn",
+      "unsupportedBrowserTitle": "Unsupported browser",
+      "unsupportedBrowser": "Your browser does not support WebAuthn. Use a modern browser (Chrome, Firefox, Safari, Edge).",
+      "emailLabel": "Email",
+      "getCode": "Get a code",
+      "sendingCode": "Sending…",
+      "alreadyHaveAccount": "Already have an account? Sign in",
+      "codeLabel": "6-digit code",
+      "codeHelp": "Enter the code received by email",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Verifying…",
+      "changeEmail": "Change email",
+      "codeVerifiedTitle": "Code verified!",
+      "registerDevice": "Register my WebAuthn device",
+      "registering": "Registering…",
+      "successTitle": "Registration successful!",
+      "success": {
+        "codeSent": "Code sent by email"
+      },
+      "errors": {
+        "invalidEmail": "Please enter a valid email address",
+        "sendCode": "Error while sending the code"
+      }
+    }
   },
   "matrix": {
     "title": "Value/Complexity evaluation configuration",
@@ -85,6 +155,7 @@
     "valueThresholdsTitle": "Value thresholds configuration",
     "complexityThresholdsTitle": "Complexity thresholds configuration",
     "value": "Value",
+    "complexity": "Complexity",
     "fibonacciPoints": "Fibonacci points",
     "useCaseCount": "Use case count",
     "level": "Level",
@@ -95,7 +166,60 @@
     "copyExistingDesc": "Copy the matrix from another folder",
     "selectFolder": "Select a folder…",
     "blankEvaluation": "Blank evaluation",
-    "blankEvaluationDesc": "Start with an empty matrix"
+    "blankEvaluationDesc": "Start with an empty matrix",
+    "lockError": "Lock error",
+    "unlockRequestSent": "Unlock request sent",
+    "unlockRequestError": "Unlock request error",
+    "lockForced": "Lock forced",
+    "lockForceError": "Force lock error",
+    "pleaseSelectFolder": "Please select a folder to view its matrix",
+    "folderLoaded": "Folder \"{name}\" evaluation loaded",
+    "folderNoMatrix": "Folder \"{name}\" has no matrix configured",
+    "loadError": "Error while loading matrix"
+  },
+  "folders": {
+    "title": "Folders",
+    "actions": "Folder actions",
+    "loading": "Loading folders…",
+    "useCaseCount": "{count} use cases",
+    "deleteSuccess": "Folder deleted successfully!",
+    "deleteError": "Error while deleting folder",
+    "detail": {
+      "defaultTitle": "Folder",
+      "title": "Folder",
+      "loadingUseCases": "Loading use cases…",
+      "valueLabel": "Value:",
+      "complexityLabel": "Complexity:"
+    },
+    "new": {
+      "orgOptional": "Organization (optional)",
+      "unspecified": "Unspecified",
+      "createOrg": "Create an organization",
+      "context": "Context",
+      "contextPlaceholder": "Describe the business context and objectives…",
+      "useCaseCount": "Number of use cases",
+      "default": "Default: {count}",
+      "loadingOrganizations": "Loading organizations…",
+      "noOrganizations": "No organizations available.",
+      "documentsTitle": "Documents",
+      "documentsHelp": "Add documents to the context. A summary is generated automatically.",
+      "addDocument": "Add a document",
+      "noDocumentsYet": "No documents yet.",
+      "errors": {
+        "draftCreateFailed": "Unable to create a draft folder"
+      }
+    }
+  },
+  "organizations": {
+    "title": "Organizations",
+    "actions": "Organization actions",
+    "enriching": "Enriching…",
+    "delete": "Delete organization",
+    "deleteSuccess": "Organization deleted successfully!",
+    "deleteError": "Error while deleting",
+    "industry": "Industry: {value}",
+    "sizeLabel": "Size",
+    "clickForDetails": "Click to view details"
   },
   "dashboard": {
     "reportTitle": "Top AI Ideas report",
@@ -117,19 +241,39 @@
     "subtitle": "Prioritize your innovations by value contribution",
     "about": "About"
   },
-  "folders": {
-    "new": {
-      "orgOptional": "Organization (optional)",
-      "unspecified": "Unspecified",
-      "createOrg": "Create an organization",
-      "context": "Context",
-      "useCaseCount": "Use case count",
-      "default": "Default: 10"
-    }
-  },
   "settings": {
     "title": "Settings",
-    "accountWorkspace": "Account & Workspace"
+    "accountWorkspace": "Account & Workspace",
+    "account": "Account",
+    "workspace": "Workspace",
+    "dangerZone": "Danger zone",
+    "adminOnlyHint": "Advanced settings (prompts / AI / queue) are reserved for admins.",
+    "emailLabel": "Email",
+    "nameLabel": "Name",
+    "effectiveRoleLabel": "Effective role",
+    "statusLabel": "Status",
+    "promptManagement": "AI prompts management",
+    "aiConfig": "AI configuration",
+    "aiLoading": "Loading settings…",
+    "aiDefaultModel": "Default OpenAI model",
+    "aiDefaultModelHint": "Model used by default for all AI operations",
+    "aiConcurrency": "Concurrent jobs",
+    "aiConcurrencyHint": "Number of AI jobs processed in parallel (1-50)",
+    "aiInterval": "Processing interval (ms)",
+    "aiIntervalHint": "Delay between queue processing cycles (1000-60000ms)",
+    "queueManagement": "AI queue management",
+    "queueTotal": "Total",
+    "queuePending": "Pending",
+    "queueRunning": "Running",
+    "queueDone": "Done",
+    "queueFailed": "Failed",
+    "systemInfo": "System information",
+    "editPrompt": "Edit prompt",
+    "promptName": "Prompt name",
+    "promptDescription": "Description",
+    "detectedVariables": "Detected variables",
+    "noVariablesDetected": "No variables detected",
+    "promptContent": "Prompt content"
   },
   "documents": {
     "title": "Documents",
