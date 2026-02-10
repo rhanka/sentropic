@@ -30,7 +30,8 @@
   let isGenerating = false;
   let originalName: string | null = null;
   let originalContext: string | null = null;
-  const AUTO_DRAFT_NAME = 'Brouillon';
+  let AUTO_DRAFT_NAME = $_('common.draft');
+  $: AUTO_DRAFT_NAME = $_('common.draft');
   let isAutoName = false;
   let isLoadingOrganizations = false;
   let lastOrgIdApplied: string | null = null;
@@ -43,7 +44,7 @@
       organizationsStore.set(items);
     } catch (err) {
       console.error('Failed to fetch organizations:', err);
-      addToast({ type: 'error', message: 'Erreur lors du chargement des organisations' });
+      addToast({ type: 'error', message: get(_)('folders.new.errors.loadOrganizations') });
     } finally {
       isLoadingOrganizations = false;
     }
@@ -52,7 +53,7 @@
   onMount(() => {
     void loadOrganizations();
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
+      addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyCreateDisabled') });
       goto('/folders');
       return;
     }
@@ -75,7 +76,7 @@
         originalContext = loaded.description ?? '';
       } catch (err) {
         console.error('Failed to load draft folder:', err);
-        addToast({ type: 'error', message: 'Impossible de charger le brouillon' });
+        addToast({ type: 'error', message: get(_)('folders.new.errors.draftLoadFailed') });
       }
     })();
   });
@@ -115,7 +116,7 @@
       originalContext = created.description ?? (folder.description || '');
       return created.id;
     } catch (err) {
-      draftError = err instanceof Error ? err.message : 'Erreur lors de la création du brouillon';
+      draftError = err instanceof Error ? err.message : get(_)('folders.new.errors.draftCreateFailed');
       return null;
     } finally {
       isCreatingDraft = false;
@@ -149,7 +150,7 @@
 
   const handleSave = async () => {
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (isAutoName) return;
@@ -158,7 +159,7 @@
     isSaving = true;
     try {
       const id = await ensureDraftFolder();
-      if (!id) throw new Error('Impossible de créer le brouillon');
+      if (!id) throw new Error(get(_)('folders.new.errors.draftCreateFailed'));
 
       await updateFolder(id, {
         name: folder.name,
@@ -167,13 +168,13 @@
         status: 'completed',
       } as any);
 
-      addToast({ type: 'success', message: 'Dossier créé avec succès !' });
+      addToast({ type: 'success', message: get(_)('folders.new.toast.created') });
       // UX: retour à la liste des dossiers (pas de vue détail dossier/[id] pour l’instant)
       currentFolderId.set(id);
       goto('/folders');
     } catch (err) {
       console.error('Failed to save folder:', err);
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la création du dossier' });
+      addToast({ type: 'error', message: err instanceof Error ? err.message : get(_)('folders.new.errors.create') });
     } finally {
       isSaving = false;
     }
@@ -181,7 +182,7 @@
 
   const handleGenerate = async () => {
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (!canUseAI()) return;
@@ -190,7 +191,7 @@
     isGenerating = true;
     try {
       const id = await ensureDraftFolder();
-      if (!id) throw new Error('Impossible de créer le brouillon');
+      if (!id) throw new Error(get(_)('folders.new.errors.draftCreateFailed'));
 
       const context = (folder.description || '').trim();
       const input =
@@ -207,13 +208,13 @@
         organization_id: $currentOrganizationId || undefined
       });
 
-      addToast({ type: 'info', message: 'Génération démarrée…' });
+      addToast({ type: 'info', message: get(_)('folders.new.toast.generationStarted') });
       // UX: retour à la liste des dossiers, le suivi se fait via SSE sur la carte dossier.
       currentFolderId.set(id);
       goto('/folders');
     } catch (err) {
       console.error('Failed to start generation:', err);
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors du démarrage de la génération' });
+      addToast({ type: 'error', message: err instanceof Error ? err.message : get(_)('folders.new.errors.generationStart') });
     } finally {
       isGenerating = false;
     }
@@ -406,4 +407,3 @@
 	    {/if}
 	  </div>
 </section>
-

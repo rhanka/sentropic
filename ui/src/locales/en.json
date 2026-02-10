@@ -49,6 +49,8 @@
     "references": "References"
     ,
     "pointsAbbr": "pts"
+    ,
+    "add": "Add"
   },
   "home": {
     "welcomeTitle": "Welcome to Top AI Ideas",
@@ -132,7 +134,8 @@
       "registering": "Registering…",
       "successTitle": "Registration successful!",
       "success": {
-        "codeSent": "Code sent by email"
+        "codeSent": "Code sent by email",
+        "redirecting": "Registration successful! Redirecting…"
       },
       "errors": {
         "invalidEmail": "Please enter a valid email address",
@@ -181,6 +184,25 @@
     "folderLoaded": "Folder \"{name}\" evaluation loaded",
     "folderNoMatrix": "Folder \"{name}\" has no matrix configured",
     "loadError": "Error while loading matrix"
+    ,
+    "autoSaveError": "Error while auto-saving configuration",
+    "saveSuccess": "Matrix configuration updated",
+    "saveError": "Error while saving matrix",
+    "saveErrorGeneric": "Error while saving",
+    "newValueAxisName": "New value axis",
+    "newComplexityAxisName": "New complexity axis",
+    "valueAxisAdded": "New value axis added",
+    "complexityAxisAdded": "New complexity axis added",
+    "confirmDeleteAxis": "Are you sure you want to delete this axis? This will impact use case score calculations.",
+    "valueAxisDeleted": "Value axis deleted",
+    "complexityAxisDeleted": "Complexity axis deleted",
+    "levelN": "Level {level}",
+    "selectedFolder": "Selected folder",
+    "createNew": "Create a new matrix",
+    "help": {
+      "intro": "Adjust value and complexity axis weights to customize use case evaluation.",
+      "details": "The matrix uses 5 levels for each criterion, with specific descriptions for each. Click a criterion to view and edit detailed descriptions for the 5 levels."
+    }
   },
   "folders": {
     "title": "Folders",
@@ -189,12 +211,23 @@
     "useCaseCount": "{count} use cases",
     "deleteSuccess": "Folder deleted successfully!",
     "deleteError": "Error while deleting folder",
+    "toast": {
+      "selected": "Folder \"{name}\" selected"
+    },
+    "errors": {
+      "load": "Error while loading folders"
+    },
     "detail": {
       "defaultTitle": "Folder",
       "title": "Folder",
       "loadingUseCases": "Loading use cases…",
       "valueLabel": "Value:",
-      "complexityLabel": "Complexity:"
+      "complexityLabel": "Complexity:",
+      "confirmDelete": "Are you sure you want to delete this folder?",
+      "errors": {
+        "load": "Error while loading folder",
+        "readOnlyAction": "Action not allowed (read-only mode)."
+      }
     },
     "new": {
       "orgOptional": "Organization (optional)",
@@ -211,7 +244,17 @@
       "addDocument": "Add a document",
       "noDocumentsYet": "No documents yet.",
       "errors": {
-        "draftCreateFailed": "Unable to create a draft folder"
+        "draftCreateFailed": "Unable to create a draft folder",
+        "loadOrganizations": "Error while loading organizations",
+        "readOnlyCreateDisabled": "Read-only mode: creation disabled.",
+        "readOnlyActionNotAllowed": "Read-only mode: action not allowed.",
+        "draftLoadFailed": "Unable to load draft",
+        "create": "Error while creating folder",
+        "generationStart": "Error while starting generation"
+      },
+      "toast": {
+        "created": "Folder created successfully!",
+        "generationStarted": "Generation started…"
       }
     }
   },
@@ -228,7 +271,29 @@
     "form": {
       "nameLabel": "Organization name",
       "docsHint": "Enter an organization name to enable adding documents."
+    },
+    "toast": {
+      "created": "Organization created successfully!",
+      "createdEnriching": "Organization created! Enrichment with AI is in progress..."
+    },
+    "errors": {
+      "readOnlyCreateDisabled": "Read-only mode: creation disabled.",
+      "readOnlyActionNotAllowed": "Read-only mode: action not allowed.",
+      "draftCreate": "Error while creating draft",
+      "draftMissing": "Unable to create draft organization",
+      "create": "Error while creating organization",
+      "load": "Error while loading organization",
+      "loadList": "Error while loading organizations"
     }
+    ,
+    "confirmDelete": "Are you sure you want to delete this organization?"
+  },
+  "locks": {
+    "lockError": "Lock error",
+    "unlockRequestSent": "Unlock request sent",
+    "unlockRequestError": "Unlock request error",
+    "lockForced": "Lock forced",
+    "lockForceError": "Force lock error"
   },
   "dashboard": {
     "reportTitle": "Top AI Ideas report",
@@ -249,6 +314,15 @@
     "annexUseCases": "Use case sheets",
     "subtitle": "Prioritize your innovations by value contribution",
     "about": "About"
+    ,
+    "readOnlyGenerationDisabled": "Read-only mode: generation disabled.",
+    "toast": {
+      "generationStarted": "Executive summary generation started"
+    },
+    "errors": {
+      "load": "Error while loading dashboard data",
+      "generate": "Error while generating executive summary"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -283,13 +357,91 @@
     "detectedVariables": "Detected variables",
     "noVariablesDetected": "No variables detected",
     "promptContent": "Prompt content"
+    ,
+    "confirmDeactivate": "Deactivate your account? You can request a reactivation.",
+    "confirmDeleteAccount": "PERMANENT DELETION: delete your account and all your data immediately?",
+    "deactivateAccount": "Deactivate my account",
+    "deleteAccount": "Delete my account",
+    "accountStatus": {
+      "pendingAdminApproval": "Account pending admin validation (48h). After expiry: read-only access.",
+      "approvalExpiredReadonly": "Validation expired: read-only access (guest). An admin can reactivate."
+    },
+    "toast": {
+      "deactivatedLogout": "Account deactivated. Please sign in again.",
+      "deleted": "Account deleted."
+    },
+    "errors": {
+      "deactivate": "Deactivation error",
+      "delete": "Deletion error"
+    },
+    "prompts": {
+      "description": "Configure the prompts used by the AI to generate content. Click a prompt to edit it.",
+      "toast": {
+        "updated": "Prompt updated successfully!"
+      },
+      "errors": {
+        "save": "Error while saving prompt"
+      },
+      "closeEditor": "Close prompt editor",
+      "editorPlaceholder": "Enter the prompt content..."
+    },
+    "ai": {
+      "description": "Configure AI settings and the processing queue.",
+      "save": "Save settings",
+      "saving": "Saving…",
+      "toast": {
+        "updated": "AI settings updated successfully!"
+      },
+      "errors": {
+        "load": "Error while loading AI settings",
+        "save": "Error while saving AI settings"
+      }
+    },
+    "queue": {
+      "description": "Monitor and manage the AI jobs processing queue.",
+      "refresh": "Refresh",
+      "purging": "Purging…",
+      "purgePending": "Purge pending ({count})",
+      "purgeProcessing": "Purge processing ({count})",
+      "purgeAll": "Purge all ({count})",
+      "confirmPurgePending": "Are you sure you want to purge all pending jobs? This action is irreversible.",
+      "confirmPurgeProcessing": "Are you sure you want to purge all processing jobs (likely stuck)? This action is irreversible.",
+      "confirmPurgeAll": "Are you sure you want to purge ALL jobs in the queue? This action is irreversible.",
+      "errors": {
+        "purge": "Error while purging queue"
+      }
+    },
+    "admin": {
+      "resetDescription": "This section resets the application completely. All data (organizations, folders, use cases) will be permanently deleted.",
+      "confirmResetAll": "Are you sure you want to delete ALL data? This action is irreversible.",
+      "reset": "Delete all data",
+      "resetting": "Deleting…",
+      "toast": {
+        "resetDone": "All data has been deleted successfully!"
+      },
+      "errors": {
+        "reset": "Error while deleting data"
+      }
+    }
   },
   "usecase": {
     "info": {
       "title": "Information",
       "contact": "Contact:",
       "technologies": "Technologies"
+    },
+    "errors": {
+      "load": "Error while loading use case",
+      "readOnlyAction": "Action not allowed (read-only mode).",
+      "delete": "Error while deleting"
+    },
+    "confirmDelete": "Are you sure you want to delete this use case?",
+    "toast": {
+      "deleted": "Use case deleted successfully!"
     }
+  },
+  "workspace": {
+    "hiddenAutosaveWarning": "Hidden workspace selected: restricted access to Settings. Auto-save is not possible for some changes."
   },
   "documents": {
     "title": "Documents",

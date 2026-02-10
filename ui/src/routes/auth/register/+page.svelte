@@ -209,7 +209,7 @@
       }
 
       step = 'success';
-      success = 'Inscription réussie ! Redirection...';
+      success = get(_)('auth.register.success.redirecting');
 
       setTimeout(() => {
         goto('/home');

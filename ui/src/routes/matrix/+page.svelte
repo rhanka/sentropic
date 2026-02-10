@@ -535,7 +535,7 @@
       console.error('Failed to save matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde automatique de la configuration'
+        message: get(_)('matrix.autoSaveError')
       });
     } finally {
       isSavingMatrix = false;
@@ -544,7 +544,7 @@
 
   const saveChanges = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: get(_)('matrix.readOnlyTooltip') });
       return;
     }
     if (!$currentFolderId) return;
@@ -557,13 +557,13 @@
       await updateCaseCounts();
       addToast({
         type: 'success',
-        message: 'Configuration de la matrice mise à jour'
+        message: get(_)('matrix.saveSuccess')
       });
     } catch (error) {
       console.error('Failed to save matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde de la matrice'
+        message: get(_)('matrix.saveError')
       });
     }
   };
@@ -574,7 +574,7 @@
   const addAxis = (isValue: boolean) => {
     const newAxis: MatrixAxis = {
       id: `axis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: isValue ? 'Nouvel axe de valeur' : 'Nouvel axe de complexité',
+      name: isValue ? get(_)('matrix.newValueAxisName') : get(_)('matrix.newComplexityAxisName'),
       weight: 1.0,
       description: '',
       levelDescriptions: []
@@ -603,7 +603,7 @@
     
     addToast({
       type: 'success',
-      message: `Nouvel axe ${isValue ? 'de valeur' : 'de complexité'} ajouté`
+      message: isValue ? get(_)('matrix.valueAxisAdded') : get(_)('matrix.complexityAxisAdded')
     });
   };
 
@@ -611,7 +611,7 @@
    * Supprime un axe de valeur ou de complexité
    */
   const removeAxis = (isValue: boolean, index: number) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.`)) {
+    if (!confirm(get(_)('matrix.confirmDeleteAxis'))) {
       return;
     }
     
@@ -638,7 +638,7 @@
     
     addToast({
       type: 'success',
-      message: `Axe ${isValue ? 'de valeur' : 'de complexité'} supprimé`
+      message: isValue ? get(_)('matrix.valueAxisDeleted') : get(_)('matrix.complexityAxisDeleted')
     });
   };
 
@@ -683,7 +683,7 @@
 
   const handleCloseWarningSave = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: get(_)('matrix.readOnlyTooltip') });
       showCloseWarning = false;
       showDescriptionsDialog = false;
       return;
@@ -696,7 +696,7 @@
       console.error('Erreur lors de la sauvegarde:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde'
+        message: get(_)('matrix.saveErrorGeneric')
       });
     }
   };
@@ -704,10 +704,10 @@
   // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
 
   const getLevelDescription = (axis: any, level: number): string => {
-    if (!axis.levelDescriptions) return `Niveau ${level}`;
+    if (!axis.levelDescriptions) return get(_)('matrix.levelN', { values: { level } });
     
     const levelDesc = axis.levelDescriptions.find((ld: any) => ld.level === level);
-    return levelDesc?.description || `Niveau ${level}`;
+    return levelDesc?.description || get(_)('matrix.levelN', { values: { level } });
   };
 
   const updateLevelDescription = (levelNum: number, description: string) => {
@@ -862,37 +862,36 @@
       on:forceUnlock={handleForceUnlock}
       on:releaseLock={handleReleaseLock}
     />
-    {#if showReadOnlyLock && !showPresenceBadge}
-      <button
-        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-        title="Mode lecture seule : modification désactivée."
-        aria-label="Mode lecture seule : modification désactivée."
-        type="button"
-        disabled
-      >
+	    {#if showReadOnlyLock && !showPresenceBadge}
+	      <button
+	        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+	        title={$_('matrix.readOnlyTooltip')}
+	        aria-label={$_('matrix.readOnlyTooltip')}
+	        type="button"
+	        disabled
+	      >
         <Lock class="w-5 h-5" />
       </button>
   {/if}
   </div>
 </div>
   
-  {#if $currentFolderId}
-    <p class="text-gray-600 -mt-4 mb-6">
-      Dossier sélectionné
-    </p>
-  {/if}
+	  {#if $currentFolderId}
+	    <p class="text-gray-600 -mt-4 mb-6">
+	      {$_('matrix.selectedFolder')}
+	    </p>
+	  {/if}
   
   <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8">
     <div class="flex">
       <Info class="h-6 w-6 text-blue-500 mr-2" />
       <div>
-        <p class="mb-2">
-          Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.
-        </p>
-        <p class="text-sm">
-          La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun.
-          Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux.
-        </p>
+	        <p class="mb-2">
+	          {$_('matrix.help.intro')}
+	        </p>
+	        <p class="text-sm">
+	          {$_('matrix.help.details')}
+	        </p>
       </div>
     </div>
   </div>
@@ -904,12 +903,12 @@
   {:else if !$matrixStore.valueAxes || $matrixStore.valueAxes.length === 0}
     <div class="text-center py-8">
       <p class="text-gray-600 mb-4">{$_('matrix.empty')}</p>
-      <button 
-        on:click={openCreateMatrixDialog}
-        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
-      >
-        Créer une nouvelle matrice
-      </button>
+	      <button 
+	        on:click={openCreateMatrixDialog}
+	        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+	      >
+	        {$_('matrix.createNew')}
+	      </button>
     </div>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -927,14 +926,14 @@
         {/each}
             </div>
           </h2>
-          <button
-            on:click={() => addAxis(true)}
-            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
-            title="Ajouter un axe de valeur"
-          >
-            <Plus class="w-4 h-4 mr-1" />
-            Ajouter
-          </button>
+	          <button
+	            on:click={() => addAxis(true)}
+	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            title={$_('matrix.addValueAxis')}
+	          >
+	            <Plus class="w-4 h-4 mr-1" />
+	            {$_('common.add')}
+	          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
@@ -1021,14 +1020,14 @@
         {/each}
             </div>
           </h2>
-          <button
-            on:click={() => addAxis(false)}
-            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
-            title="Ajouter un axe de complexité"
-          >
-            <Plus class="w-4 h-4 mr-1" />
-            Ajouter
-          </button>
+	          <button
+	            on:click={() => addAxis(false)}
+	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            title={$_('matrix.addComplexityAxis')}
+	          >
+	            <Plus class="w-4 h-4 mr-1" />
+	            {$_('common.add')}
+	          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
@@ -1215,7 +1214,7 @@
         class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
       >
         <Plus class="mr-2 h-4 w-4" />
-        Créer une nouvelle matrice
+        {$_('matrix.createNew')}
       </button>
       <button 
         on:click={saveChanges}
@@ -1324,7 +1323,7 @@
     <div class="bg-white rounded-lg max-w-md w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-4">
-          Créer une nouvelle matrice
+          {$_('matrix.createNew')}
         </h3>
         <p class="text-gray-600 mb-6">
           Choisissez le type de matrice à créer :
