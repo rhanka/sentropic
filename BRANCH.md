@@ -1,7 +1,7 @@
-# Feature: Wave 2 - Mono-branch integration (i18n + matrix + executive synthesis print)
+# Feature: Wave 2 - Mono-branch integration on `feat/i18-print` (i18n bilingual + matrix + executive synthesis DOCX)
 
 ## Objective
-Deliver Wave 2 features sequentially on a single integration branch (`feat/i18-print`) with partial UAT after each coherent lot, and defer full automated tests to Lot N.
+Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) with partial UAT after coherent lots, while keeping Wave 1 as historical context and deferring full automated tests to Lot N.
 
 ## Scope / Guardrails
 - Make-only workflow (no direct Docker or npm).
@@ -13,9 +13,16 @@ Deliver Wave 2 features sequentially on a single integration branch (`feat/i18-p
 - [x] **Mono-branch + sequential lots**
 - Rationale: Reduce coordination overhead and run UAT on a single integrated environment.
 
+## References (former Wave 2 branch plans)
+- `tmp/feat-i18n-prompts-bilingual/BRANCH.md`
+- `tmp/feat-i18n-bilingual-modeling/BRANCH.md`
+- `tmp/feat-usecase-matrix-generation/BRANCH.md`
+- `tmp/feat-print-exec-synthesis-multipage/BRANCH.md`
+
 ## UAT Management
 - Before each UAT lot: run the relevant gates (`make typecheck-*`, `make lint-*`).
 - Keep UAT checklists inside each lot as `[ ]` items. Do not tick UAT items before the user executes them.
+- Wave 2 items are intentionally **all unchecked** (execution restarts from Wave 2 baseline).
 
 ## Plan / Todo (lot-based)
 
@@ -23,56 +30,139 @@ Deliver Wave 2 features sequentially on a single integration branch (`feat/i18-p
   - [ ] Read `.cursor/rules/MASTER.mdc` and `.cursor/rules/workflow.mdc`.
   - [ ] Read relevant scope rules (`architecture.mdc`, `testing.mdc`, `data.mdc`, `security.mdc`).
   - [ ] Confirm current branch is `feat/i18-print` and aligned with `origin/main`.
+  - [ ] Confirm commit workflow is enforced: selective staging + `make commit MSG="..."` only.
 
-- [ ] **Lot 1 — Bilingual foundation (model + prompts)**
-  - [ ] Implement bilingual modeling (API schema/types + UI typing + normalization; legacy compatibility).
-  - [ ] Implement bilingual prompt selection (FR/EN) with explicit fallback behavior.
-  - [ ] Gates:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
-  - [ ] Partial UAT (user-driven):
-    - [ ] Edit a use case in FR and EN and confirm both variants persist after refresh.
-    - [ ] In FR UI, generate a use case and confirm generated narrative is in French.
-    - [ ] In EN UI, generate a use case and confirm generated narrative is in English.
-    - [ ] Switch locale without reload and confirm new generations follow current locale.
-    - [ ] Validate fallback when the requested locale prompt variant is missing.
+- [x] **Lot 1 — Wave 1 (historical, already completed)**
+  - [x] **Environment** (Wave 1 UAT performed in tmp workspaces):
+    - `tmp/feat-print-docx-usecase-onepage` → `ENV=feat-print-docx-usecase-onepage`
+    - `tmp/feat-i18n-core-and-tech-keys` → `ENV=feat-i18n-core-and-tech-keys`
+    - `tmp/feat-usecase-constraints` → `ENV=feat-usecase-constraints`
+  - [x] **feat/print-docx-usecase-onepage**
+    - [x] Implement DOCX export endpoint/service based on `dolanmiu/docx`.
+    - [x] Integrate one-page DOCX template and UI download action from use case detail.
+    - [x] Stabilize markdown rendering, loop expansion, style preservation, spacing, links, stars/crosses.
+    - [x] UAT: Download DOCX from use case detail (File menu).
+    - [!] UAT: Ctrl+P flow (deferred; validate when implemented).
+  - [x] **feat/i18n-core-and-tech-keys**
+    - [x] Add FR/EN locale keys and wire header/layout labels to i18n.
+    - [x] Rename routes and technical keys to English conventions.
+    - [x] Update API import/export prefixes and E2E route references.
+    - [x] UAT: Header labels show FR/EN and language switch works.
+    - [x] UAT: Navigate to renamed routes (usecase, folders, folder, organizations, matrix, settings).
+  - [x] **feat/usecase-constraints**
+    - [x] Add `constraints` in API validation/types and AI schema/prompt.
+    - [x] Add constraints in UI store/detail and print layout (2x2 grid).
+    - [x] UAT: Use case detail shows 2x2 grid with Constraints (edit + print preview).
+    - [x] UAT: Chat IA update bullet list fields live in UI (benefits, constraints, ...).
+  - [x] **Wave 1 integration merge on `feat/i18-print`**
+    - [x] Merge `feat/i18n-core-and-tech-keys`.
+    - [x] Merge `feat/usecase-constraints`.
+    - [x] Merge `feat/print-docx-usecase-onepage`.
 
-- [ ] **Lot 2 — Matrix generation per organization/folder**
-  - [ ] Implement matrix generation flow for organization-level default template.
-  - [ ] Implement folder generation option for matrix reuse vs folder-specific generation.
-  - [ ] Persist and expose matrix selection in API/UI.
-  - [ ] Gates:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] `make typecheck-ui` + `make lint-ui`
-  - [ ] Partial UAT (user-driven):
-    - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
-    - [ ] Generate a second folder with default option and verify stored org matrix is reused.
-    - [ ] Generate folder with "specific matrix" option and verify it differs from org default.
-    - [ ] Verify matrix selection/options are visible and persisted in folder generation UI.
+- [x] **Lot 1.5 — Integration UAT (post-merge, Wave 1, completed)**
+  - [x] Applied integration fixes:
+    - [x] Compact reference links in template via `{{$ref.link}}` (title linked to URL).
+    - [x] Bottom background image anchoring fixed (page-fixed, full-width, bottom-aligned).
+  - [x] UAT on integration environment: `feat/i18-print`.
+    - [x] Retest route and navigation consistency:
+      - [x] Open `/usecase`, `/folders`, `/folder/new`, `/organizations`, `/matrix`, `/settings`.
+    - [x] Retest use case detail UI (constraints + editing):
+      - [x] Validate 2x2 grid (Benefits | Constraints / Success Metrics | Risks).
+      - [x] Validate live updates from chat for list fields (including constraints).
+    - [x] Retest print/docx flow:
+      - [x] Download DOCX from Use Case detail File menu.
+      - [x] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
+      - [x] Confirm no extra blank line above matrix iteration tables.
 
-- [ ] **Lot 3 — Executive synthesis multipage DOCX (template-driven)**
-  - [ ] User intake (single bundle):
-    - [ ] Provide `executive-synthesis.docx` master template.
-    - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
-    - [ ] Provide dashboard intent (include dashboard image: yes/no).
-    - [ ] Provide one reference dataset for UAT (folder id with executive summary + multiple use cases).
-  - [ ] Implement unified DOCX generation endpoint strategy for synthesis (no hardcoded document structure).
-  - [ ] Implement master-template-driven synthesis composition (marker-driven ordering).
-  - [ ] Implement annex insertion at template-defined marker.
-  - [ ] Implement dashboard bitmap injection at template-defined marker (deterministic sizing + fallback).
-  - [ ] Gates:
-    - [ ] `make typecheck-api` + `make lint-api`
-  - [ ] Partial UAT (user-driven):
-    - [ ] Download synthesis DOCX and verify master template controls section order.
-    - [ ] Verify annex starts at template-defined separator/location.
-    - [ ] Verify dashboard bitmap is inserted at expected marker and rendering is readable.
-    - [ ] Regression: use-case one-page DOCX export still works from use case detail.
+- [ ] **Lot 2 — Wave 2 (mono-branch execution on `feat/i18-print`)**
+
+  - [ ] **Lot 2.0 — Wave 2 baseline and gating**
+    - [ ] Confirm `feat/i18-print` is aligned with `origin/main`.
+    - [ ] Confirm Make-only workflow and commit workflow are enforced.
+
+  - [ ] **Lot 2.1 — Bilingual foundation (model + prompts)**
+    - [ ] **Bilingual modeling**
+      - [ ] Confirm object families in scope (use case, organization, folder, prompts).
+      - [ ] Define bilingual field structure and master-language rules.
+      - [ ] Implement API validation/types updates for bilingual fields.
+      - [ ] Implement UI typing/store updates for bilingual payloads.
+      - [ ] Implement payload normalization + backward compatibility for legacy string-only records.
+    - [ ] **Bilingual prompts**
+      - [ ] Inventory prompts and extract locale-specific variants.
+      - [ ] Implement FR/EN prompt selection path with explicit fallback behavior.
+      - [ ] Ensure technical/system keys remain in English.
+    - [ ] Gates:
+      - [ ] `make typecheck-api` + `make lint-api`
+      - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
+    - [ ] Partial UAT (user-driven):
+      - [ ] Edit use case content in FR and EN and confirm both variants persist after refresh.
+      - [ ] Validate legacy string-only records are still readable/editable (backward compatibility).
+      - [ ] In FR UI, generate a use case and confirm generated narrative is in French.
+      - [ ] In EN UI, generate a use case and confirm generated narrative is in English.
+      - [ ] Switch locale without reload and verify new generations follow current locale.
+      - [ ] Validate fallback behavior when locale prompt variant is missing.
+
+  - [ ] **Lot 2.2 — Matrix generation per organization/folder**
+    - [ ] Implement generation flow for organization-level matrix template.
+    - [ ] Implement folder generation option for matrix reuse vs folder-specific generation.
+    - [ ] Persist and expose template selection in API/UI.
+    - [ ] Gates:
+      - [ ] `make typecheck-api` + `make lint-api`
+      - [ ] `make typecheck-ui` + `make lint-ui`
+    - [ ] Partial UAT (user-driven):
+      - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
+      - [ ] Generate a second folder with default option and verify stored org matrix is reused.
+      - [ ] Generate folder with "specific matrix" option and verify it differs from org default.
+      - [ ] Verify matrix selection/options are visible and persisted in folder generation UI.
+
+  - [ ] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
+    - [ ] **Lot 2.3.0 — Intake lock and contract freeze**
+      - [ ] User input bundle (single intake):
+        - [ ] Provide `executive-synthesis.docx` master template.
+        - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
+        - [ ] Provide dashboard intent (include dashboard image: yes/no).
+        - [ ] Provide one reference UAT dataset (folder id with executive summary + multiple use cases).
+      - [ ] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
+      - [ ] Freeze endpoint I/O contract (request/response schema) based on the template markers.
+      - [ ] Freeze annex/dashboard composition intents.
+    - [ ] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
+      - [ ] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `options`).
+      - [ ] Implement template registry strategy (`templateId -> validator/provider/renderer`).
+      - [ ] Keep backward compatibility for existing one-page route if currently used by UI.
+      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [ ] Partial UAT:
+        - [ ] Call unified endpoint for one-page use case and verify output parity with current behavior.
+        - [ ] Validate error messages for invalid `templateId` / invalid payload.
+    - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
+      - [ ] Wire `executive-synthesis.docx` master template.
+      - [ ] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
+      - [ ] Implement template-controlled annex insertion at the template marker (e.g. `{{ANNEX_USECASES}}`).
+      - [ ] Ensure references rendering uses the marker contract.
+      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [ ] Partial UAT:
+        - [ ] Download synthesis DOCX and verify section order follows template marker placement.
+        - [ ] Verify annex starts exactly at template-defined separator/location.
+        - [ ] Verify links/references rendering is preserved.
+    - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
+      - [ ] Accept dashboard bitmap in endpoint `options` (according to the frozen contract).
+      - [ ] Insert image at template marker (e.g. `{{DASHBOARD_IMAGE}}`) with deterministic sizing.
+      - [ ] Implement fallback behavior when image is missing/invalid.
+      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [ ] Partial UAT:
+        - [ ] Verify dashboard image is present at expected location and remains readable.
+        - [ ] Verify fallback rendering when bitmap is omitted.
+    - [ ] **Lot 2.3.4 — Integration hardening (API only)**
+      - [ ] Finalize provider/normalization for executive summary + annex data.
+      - [ ] Ensure use-case one-page DOCX export remains stable and unaffected.
+      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [ ] Partial UAT:
+        - [ ] One-page export regression check from use case detail.
+        - [ ] Synthesis generation with/without references and with/without dashboard image.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Consolidate deferred test backlog (API/UI/E2E) based on lots 1-3.
+  - [ ] Consolidate deferred test backlog from Wave 1 and Wave 2 scopes.
   - [ ] `make test-api`
   - [ ] `make test-ui`
   - [ ] `make build-api build-ui-image`
   - [ ] `make clean test-e2e`
-  - [ ] Final gate: PR ready and CI green for `feat/i18-print`.
-
+  - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.
