@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { beforeNavigate, goto } from '$app/navigation';
+  import { get } from 'svelte/store';
   import '../app.css';
   import '../app.print.css';
   import Header from '$lib/components/Header.svelte';
@@ -25,7 +26,7 @@
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
 
-  // Routes publiques (accessibles sans authentification)
+  // Public routes (accessible without authentication)
   const PUBLIC_ROUTES = [
     '/',
     '/auth/login',
@@ -263,11 +264,10 @@
         if (unsavedChangesStore.hasUnsavedChanges()) {
           void unsavedChangesStore.saveAll().then((ok) => {
             if (!ok) {
-              addToast({
-                type: 'warning',
-                message:
-                  "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
-              });
+                  addToast({
+                    type: 'warning',
+                    message: get(_)('workspace.hiddenAutosaveWarning'),
+                  });
             }
           });
         }

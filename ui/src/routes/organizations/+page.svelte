@@ -75,7 +75,7 @@ $: workspaceName = $selectedWorkspace?.name || '';
       console.error('Failed to fetch organizations:', err);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des organisations'
+        message: get(_)('organizations.errors.loadList')
       });
     }
   };
@@ -85,7 +85,7 @@ const handleImportComplete = async () => {
 };
 
   const handleDeleteOrganization = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
+    if (!confirm(get(_)('organizations.confirmDelete'))) return;
 
     try {
       await deleteOrganization(id);

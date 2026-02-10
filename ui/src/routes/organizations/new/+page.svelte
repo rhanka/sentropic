@@ -12,6 +12,7 @@
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
@@ -68,7 +69,7 @@
   $: if ($workspaceScopeHydrated && !readOnlyChecked) {
     readOnlyChecked = true;
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyCreateDisabled') });
       goto('/organizations');
     }
   }
@@ -101,7 +102,7 @@
       organization = { ...organization, id: draftOrganization.id };
       return draftOrganization.id;
     } catch (err) {
-      draftError = err instanceof Error ? err.message : 'Erreur lors de la création du brouillon';
+      draftError = err instanceof Error ? err.message : get(_)('organizations.errors.draftCreate');
       return null;
     } finally {
       draftCreating = false;
@@ -121,7 +122,7 @@
 
   const handleEnrichOrganization = async () => {
     if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (!organization.name?.trim()) return;
@@ -131,12 +132,12 @@
 
     try {
       const id = (await ensureDraftOrganization()) || '';
-      if (!id) throw new Error("Impossible de créer l'organisation brouillon");
+      if (!id) throw new Error(get(_)('organizations.errors.draftMissing'));
       await startOrganizationEnrichment(id);
 
       addToast({
         type: 'success',
-        message: "Organisation créée ! L'enrichissement avec l'IA est en cours..."
+        message: get(_)('organizations.toast.createdEnriching')
       });
 
       goto('/organizations');
@@ -144,7 +145,7 @@
       console.error('Failed to create and enrich organization:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : "Erreur lors de la création de l'organisation"
+        message: err instanceof Error ? err.message : get(_)('organizations.errors.create')
       });
     } finally {
       isEnriching = false;
@@ -158,7 +159,7 @@
 
   const handleCreateOrganization = async () => {
     if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (!organization.name?.trim()) return;
@@ -169,7 +170,7 @@
       if (!id) {
         // fallback: create directly if draft couldn't be created
       const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
-        addToast({ type: 'success', message: 'Organisation créée avec succès !' });
+        addToast({ type: 'success', message: get(_)('organizations.toast.created') });
         if (newOrganization?.id) {
         unsavedChangesStore.reset();
         goto(`/organizations/${newOrganization.id}`);
@@ -178,14 +179,14 @@
       }
 
       await updateOrganization(id, organization as Partial<Organization>);
-      addToast({ type: 'success', message: 'Organisation créée avec succès !' });
+      addToast({ type: 'success', message: get(_)('organizations.toast.created') });
       unsavedChangesStore.reset();
       goto(`/organizations/${id}`);
     } catch (err) {
       console.error('Failed to create organization:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de la création'
+        message: err instanceof Error ? err.message : get(_)('organizations.errors.create')
       });
     } finally {
       isCreating = false;

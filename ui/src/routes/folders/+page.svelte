@@ -89,14 +89,14 @@
         currentFolderId.set(folders[0].id);
         addToast({
           type: 'info',
-          message: `Dossier "${folders[0].name}" sélectionné`
+          message: get(_)('folders.toast.selected', { values: { name: folders[0].name } })
         });
       }
     } catch (error) {
       console.error('Failed to load folders:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des dossiers'
+        message: get(_)('folders.errors.load')
       });
     } finally {
       isLoading = false;
