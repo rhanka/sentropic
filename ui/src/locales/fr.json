@@ -448,13 +448,19 @@
     "execSummaryEmpty": "Aucune synthèse exécutive disponible pour ce dossier",
     "execSummaryGenerate": "Générer la synthèse exécutive",
     "loadingData": "Chargement des données…",
-    "useCaseCount": "Nombre de cas d'usage",
+  "useCaseCount": "Nombre de cas d'usage",
+  "quickWins": "Gains rapides",
+  "roiQuadrants": {
     "quickWins": "Gains rapides",
-    "roiQuadrantConfig": "Configuration du quadrant ROI",
-    "roiStats": {
-      "medianValue": "Valeur médiane",
-      "medianComplexity": "Complexité médiane"
-    },
+    "majorProjects": "Projets majeurs",
+    "wait": "Attendre",
+    "dontDo": "Ne pas faire"
+  },
+  "roiQuadrantConfig": "Configuration du quadrant ROI",
+  "roiStats": {
+    "medianValue": "Valeur médiane",
+    "medianComplexity": "Complexité médiane"
+  },
     "roiConfig": {
       "buttonTitle": "Configuration du quadrant ROI",
       "close": "Fermer la configuration",

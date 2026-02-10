@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { Chart, registerables } from 'chart.js';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
@@ -21,6 +22,8 @@
   let chartInstance: Chart | null = null;
   let isComputingLabels = false;
   let computeTimeout: ReturnType<typeof setTimeout>;
+
+  const t = (key: string) => get(_)(key);
   
   // Utiliser les seuils passés en props ou les médianes
   $: effectiveValueThreshold = valueThreshold !== null ? valueThreshold : computedMedianValue;
@@ -500,48 +503,50 @@
     
     const boxes = [];
     
-    // "Gains rapide" (haut gauche)
-    const gainsRapideText = 'Gains rapide';
-    const gainsRapideWidth = ctx.measureText(gainsRapideText).width + labelPadding * 2;
+    // Quadrant labels (localized)
+    const quickWinsText = t('dashboard.roiQuadrants.quickWins');
+    const majorProjectsText = t('dashboard.roiQuadrants.majorProjects');
+    const waitText = t('dashboard.roiQuadrants.wait');
+    const dontDoText = t('dashboard.roiQuadrants.dontDo');
+
+    // Quick wins (top-left)
+    const quickWinsWidth = ctx.measureText(quickWinsText).width + labelPadding * 2;
     boxes.push({
       left: chartArea.left + labelOffset,
       top: chartArea.top + labelOffset,
-      width: gainsRapideWidth,
+      width: quickWinsWidth,
       height: labelHeight,
-      label: 'Gains rapide'
+      label: quickWinsText
     });
     
-    // "Projets majeurs" (haut droite)
-    const projetsMajeursText = 'Projets majeurs';
-    const projetsMajeursWidth = ctx.measureText(projetsMajeursText).width + labelPadding * 2;
+    // Major projects (top-right)
+    const majorProjectsWidth = ctx.measureText(majorProjectsText).width + labelPadding * 2;
     boxes.push({
-      left: chartArea.right - labelOffset - projetsMajeursWidth,
+      left: chartArea.right - labelOffset - majorProjectsWidth,
       top: chartArea.top + labelOffset,
-      width: projetsMajeursWidth,
+      width: majorProjectsWidth,
       height: labelHeight,
-      label: 'Projets majeurs'
+      label: majorProjectsText
     });
     
-    // "Attendre" (bas gauche)
-    const attendreText = 'Attendre';
-    const attendreWidth = ctx.measureText(attendreText).width + labelPadding * 2;
+    // Wait (bottom-left)
+    const waitWidth = ctx.measureText(waitText).width + labelPadding * 2;
     boxes.push({
       left: chartArea.left + labelOffset,
       top: chartArea.bottom - labelOffset - labelHeight,
-      width: attendreWidth,
+      width: waitWidth,
       height: labelHeight,
-      label: 'Attendre'
+      label: waitText
     });
     
-    // "Ne pas faire" (bas droite)
-    const nePasFaireText = 'Ne pas faire';
-    const nePasFaireWidth = ctx.measureText(nePasFaireText).width + labelPadding * 2;
+    // Don't do (bottom-right)
+    const dontDoWidth = ctx.measureText(dontDoText).width + labelPadding * 2;
     boxes.push({
-      left: chartArea.right - labelOffset - nePasFaireWidth,
+      left: chartArea.right - labelOffset - dontDoWidth,
       top: chartArea.bottom - labelOffset - labelHeight,
-      width: nePasFaireWidth,
+      width: dontDoWidth,
       height: labelHeight,
-      label: 'Ne pas faire'
+      label: dontDoText
     });
     
     return boxes;
@@ -1418,61 +1423,62 @@
         const labelHeight = 24;
         const labelOffset = 8; // Distance depuis les bords
         
-        // "Gains rapide" (haut gauche du quadrant top-left)
+        const quickWinsText = t('dashboard.roiQuadrants.quickWins');
+        const majorProjectsText = t('dashboard.roiQuadrants.majorProjects');
+        const waitText = t('dashboard.roiQuadrants.wait');
+        const dontDoText = t('dashboard.roiQuadrants.dontDo');
+
+        // Quick wins (top-left)
         ctx.textAlign = 'left';
-        const gainsRapideText = 'Gains rapide';
-        const gainsRapideWidth = ctx.measureText(gainsRapideText).width + labelPadding * 2;
+        const quickWinsWidth = ctx.measureText(quickWinsText).width + labelPadding * 2;
         const gainsRapideX = chartArea.left + labelOffset;
         const gainsRapideY = chartArea.top + labelOffset;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.fillRect(gainsRapideX, gainsRapideY, gainsRapideWidth, labelHeight);
+        ctx.fillRect(gainsRapideX, gainsRapideY, quickWinsWidth, labelHeight);
         ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
-        ctx.strokeRect(gainsRapideX, gainsRapideY, gainsRapideWidth, labelHeight);
+        ctx.strokeRect(gainsRapideX, gainsRapideY, quickWinsWidth, labelHeight);
         ctx.fillStyle = THEME_BLUE;
-        ctx.fillText(gainsRapideText, gainsRapideX + labelPadding, gainsRapideY + (labelHeight - 11) / 2);
+        ctx.fillText(quickWinsText, gainsRapideX + labelPadding, gainsRapideY + (labelHeight - 11) / 2);
         
-        // "Projets majeurs" (haut droite du quadrant top-right)
+        // Major projects (top-right)
         ctx.textAlign = 'right';
-        const projetsMajeursText = 'Projets majeurs';
-        const projetsMajeursWidth = ctx.measureText(projetsMajeursText).width + labelPadding * 2;
-        const projetsMajeursX = chartArea.right - labelOffset - projetsMajeursWidth;
+        const majorProjectsWidth = ctx.measureText(majorProjectsText).width + labelPadding * 2;
+        const projetsMajeursX = chartArea.right - labelOffset - majorProjectsWidth;
         const projetsMajeursY = chartArea.top + labelOffset;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.fillRect(projetsMajeursX, projetsMajeursY, projetsMajeursWidth, labelHeight);
+        ctx.fillRect(projetsMajeursX, projetsMajeursY, majorProjectsWidth, labelHeight);
         ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
-        ctx.strokeRect(projetsMajeursX, projetsMajeursY, projetsMajeursWidth, labelHeight);
+        ctx.strokeRect(projetsMajeursX, projetsMajeursY, majorProjectsWidth, labelHeight);
         ctx.fillStyle = THEME_BLUE;
-        ctx.fillText(projetsMajeursText, projetsMajeursX + projetsMajeursWidth - labelPadding, projetsMajeursY + (labelHeight - 11) / 2);
+        ctx.fillText(majorProjectsText, projetsMajeursX + majorProjectsWidth - labelPadding, projetsMajeursY + (labelHeight - 11) / 2);
         
-        // "Attendre" (bas gauche du quadrant bottom-left)
+        // Wait (bottom-left)
         ctx.textAlign = 'left';
-        const attendreText = 'Attendre';
-        const attendreWidth = ctx.measureText(attendreText).width + labelPadding * 2;
+        const waitWidth = ctx.measureText(waitText).width + labelPadding * 2;
         const attendreX = chartArea.left + labelOffset;
         const attendreY = chartArea.bottom - labelOffset - labelHeight;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.fillRect(attendreX, attendreY, attendreWidth, labelHeight);
+        ctx.fillRect(attendreX, attendreY, waitWidth, labelHeight);
         ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
-        ctx.strokeRect(attendreX, attendreY, attendreWidth, labelHeight);
+        ctx.strokeRect(attendreX, attendreY, waitWidth, labelHeight);
         ctx.fillStyle = THEME_BLUE;
-        ctx.fillText(attendreText, attendreX + labelPadding, attendreY + (labelHeight - 11) / 2);
+        ctx.fillText(waitText, attendreX + labelPadding, attendreY + (labelHeight - 11) / 2);
         
-        // "Ne pas faire" (bas droite du quadrant bottom-right)
+        // Don't do (bottom-right)
         ctx.textAlign = 'right';
-        const nePasFaireText = 'Ne pas faire';
-        const nePasFaireWidth = ctx.measureText(nePasFaireText).width + labelPadding * 2;
-        const nePasFaireX = chartArea.right - labelOffset - nePasFaireWidth;
+        const dontDoWidth = ctx.measureText(dontDoText).width + labelPadding * 2;
+        const nePasFaireX = chartArea.right - labelOffset - dontDoWidth;
         const nePasFaireY = chartArea.bottom - labelOffset - labelHeight;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.fillRect(nePasFaireX, nePasFaireY, nePasFaireWidth, labelHeight);
+        ctx.fillRect(nePasFaireX, nePasFaireY, dontDoWidth, labelHeight);
         ctx.strokeStyle = THEME_BLUE;
         ctx.lineWidth = 1;
-        ctx.strokeRect(nePasFaireX, nePasFaireY, nePasFaireWidth, labelHeight);
+        ctx.strokeRect(nePasFaireX, nePasFaireY, dontDoWidth, labelHeight);
         ctx.fillStyle = THEME_BLUE;
-        ctx.fillText(nePasFaireText, nePasFaireX + nePasFaireWidth - labelPadding, nePasFaireY + (labelHeight - 11) / 2);
+        ctx.fillText(dontDoText, nePasFaireX + dontDoWidth - labelPadding, nePasFaireY + (labelHeight - 11) / 2);
         
         // Réinitialiser pour les autres layers
         ctx.textAlign = 'left';
