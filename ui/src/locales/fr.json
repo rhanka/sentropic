@@ -44,6 +44,11 @@
     "user": "Utilisateur",
     "na": "N/A",
     "readOnlyDisabled": "Mode lecture seule : création / suppression désactivées."
+    ,
+    "ai": "IA",
+    "references": "Références"
+    ,
+    "pointsAbbr": "pts"
   },
   "home": {
     "welcomeTitle": "Bienvenue sur Top AI Ideas",
@@ -219,7 +224,11 @@
     "deleteError": "Erreur lors de la suppression",
     "industry": "Secteur: {value}",
     "sizeLabel": "Taille",
-    "clickForDetails": "Cliquez pour voir les détails"
+    "clickForDetails": "Cliquez pour voir les détails",
+    "form": {
+      "nameLabel": "Nom de l'organisation",
+      "docsHint": "Renseigner un nom d’organisation pour activer l’ajout de documents."
+    }
   },
   "dashboard": {
     "reportTitle": "Rapport Top AI Ideas",
@@ -274,6 +283,13 @@
     "detectedVariables": "Variables détectées",
     "noVariablesDetected": "Aucune variable détectée",
     "promptContent": "Contenu du prompt"
+  },
+  "usecase": {
+    "info": {
+      "title": "Informations",
+      "contact": "Contact:",
+      "technologies": "Technologies"
+    }
   },
   "documents": {
     "title": "Documents",

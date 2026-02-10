@@ -121,8 +121,26 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [ ] Replace hardcoded strings with i18n lookups consistently.
         - [ ] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
       - [ ] Gates:
-        - [ ] `make typecheck-ui` + `make lint-ui`
+        - [x] `make typecheck-ui` + `make lint-ui`
         - [ ] `make typecheck-api` + `make lint-api` (if API messages were changed)
+      - [ ] Partial UAT (user-driven):
+        - [ ] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
+          - [ ] Home
+          - [ ] Dashboard
+          - [ ] Use cases list (`/usecase`)
+          - [ ] Use case detail (`/usecase/:id`)
+          - [ ] Folders list (`/folders`)
+          - [ ] Folder new (`/folder/new`)
+          - [ ] Folder detail (`/folders/:id`)
+          - [ ] Organizations list (`/organizations`)
+          - [ ] Organization new (`/organizations/new`)
+          - [ ] Organization detail (`/organizations/:id`)
+          - [ ] Matrix (`/matrix`)
+          - [ ] Settings (`/settings`)
+          - [ ] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
+        - [ ] Locale switching sweep:
+          - [ ] Switch FR→EN without reload and confirm all visible labels update.
+          - [ ] Switch EN→FR without reload and confirm all visible labels update.
     - [ ] **Bilingual prompts**
       - [ ] Inventory prompts and extract locale-specific variants.
       - [ ] Implement FR/EN prompt selection path with explicit fallback behavior.
@@ -131,23 +149,6 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] `make typecheck-api` + `make lint-api`
       - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
     - [ ] Partial UAT (user-driven):
-      - [ ] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
-        - [ ] Home
-        - [ ] Dashboard
-        - [ ] Use cases list (`/usecase`)
-        - [ ] Use case detail (`/usecase/:id`)
-        - [ ] Folders list (`/folders`)
-        - [ ] Folder new (`/folder/new`)
-        - [ ] Folder detail (`/folders/:id`)
-        - [ ] Organizations list (`/organizations`)
-        - [ ] Organization new (`/organizations/new`)
-        - [ ] Organization detail (`/organizations/:id`)
-        - [ ] Matrix (`/matrix`)
-        - [ ] Settings (`/settings`)
-        - [ ] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
-      - [ ] Locale switching sweep:
-        - [ ] Switch FR→EN without reload and confirm all visible labels update.
-        - [ ] Switch EN→FR without reload and confirm all visible labels update.
       - [ ] Edit use case content in FR and EN and confirm both variants persist after refresh.
       - [ ] Validate legacy string-only records are still readable/editable (backward compatibility).
       - [ ] In FR UI, generate a use case and confirm generated narrative is in French.

@@ -15,6 +15,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
   import { addToast } from '$lib/stores/toast';
+  import { _ } from 'svelte-i18n';
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
@@ -542,7 +543,7 @@
   <!-- Commentaires gérés par ChatWidget -->
 {:else if !error}
   <div class="text-center py-12">
-    <p class="text-slate-500">Chargement...</p>
+    <p class="text-slate-500">{$_('common.loading')}</p>
   </div>
 {/if}
 
@@ -569,5 +570,3 @@
     on:close={closeOrganizationExport}
   />
 {/if}
-
-
