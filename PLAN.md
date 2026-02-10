@@ -68,24 +68,60 @@ Coordinate multi-branch, multi-agent work for the TODO items in `TODO.md` (128�
       - [x] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
       - [x] Confirm no extra blank line above matrix iteration tables.
 
-- [ ] **Lot 2 — Wave 2 (dependent branches)**
-  - [ ] **Environment**: Run UAT in the corresponding tmp workspace:
-    - `tmp/feat-print-exec-synthesis-multipage` → `ENV=feat-print-exec-synthesis-multipage`
-    - `tmp/feat-i18n-prompts-bilingual` → `ENV=feat-i18n-prompts-bilingual`
-    - `tmp/feat-i18n-bilingual-modeling` → `ENV=feat-i18n-bilingual-modeling`
-    - `tmp/feat-usecase-matrix-generation` → `ENV=feat-usecase-matrix-generation`
+- [ ] **Lot 2 — Wave 2 (mono-branch integration on `feat/i18-print`)**
+  - Wave 2 is executed sequentially on `feat/i18-print` (mono-branch). The former Wave 2 branch plans remain as references:
+    - `tmp/feat-i18n-bilingual-modeling/BRANCH.md`
+    - `tmp/feat-i18n-prompts-bilingual/BRANCH.md`
+    - `tmp/feat-usecase-matrix-generation/BRANCH.md`
+    - `tmp/feat-print-exec-synthesis-multipage/BRANCH.md`
 
-  - [ ] **feat/print-exec-synthesis-multipage** (BRANCH.md: `tmp/feat-print-exec-synthesis-multipage/BRANCH.md`)
-    - [ ] UAT: TBD (define once implementation starts)
+  - [ ] **Lot 2.0 — Wave 2 baseline and gating**
+    - [ ] Confirm `feat/i18-print` is aligned with `origin/main` and `origin/feat/i18-print`.
+    - [ ] Confirm Make-only workflow and commit workflow (`make commit MSG="..."`) are enforced.
 
-  - [ ] **feat/i18n-prompts-bilingual** (BRANCH.md: `tmp/feat-i18n-prompts-bilingual/BRANCH.md`)
-    - [ ] UAT: TBD (define once implementation starts)
+  - [ ] **Lot 2.1 — Bilingual foundation (model + prompts)**
+    - [ ] Implement bilingual modeling (API schema/types + UI typing + normalization, legacy compatibility).
+    - [ ] Implement bilingual prompt selection (FR/EN) with explicit fallback behavior.
+    - [ ] Gates:
+      - [ ] `make typecheck-api` + `make lint-api`
+      - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
+    - [ ] Partial UAT:
+      - [ ] Edit a use case in FR and EN and confirm both variants persist after refresh.
+      - [ ] In FR UI, generate a use case and confirm generated narrative is in French.
+      - [ ] In EN UI, generate a use case and confirm generated narrative is in English.
+      - [ ] Switch locale without reload and confirm new generations follow current locale.
+      - [ ] Validate fallback when the requested locale prompt variant is missing.
 
-  - [ ] **feat/i18n-bilingual-modeling** (BRANCH.md: `tmp/feat-i18n-bilingual-modeling/BRANCH.md`)
-    - [ ] UAT: TBD (define once implementation starts)
+  - [ ] **Lot 2.2 — Matrix generation per organization/folder**
+    - [ ] Implement matrix generation flow for organization-level default template.
+    - [ ] Implement folder generation option for matrix reuse vs folder-specific generation.
+    - [ ] Persist and expose matrix selection in API/UI.
+    - [ ] Gates:
+      - [ ] `make typecheck-api` + `make lint-api`
+      - [ ] `make typecheck-ui` + `make lint-ui`
+    - [ ] Partial UAT:
+      - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
+      - [ ] Generate a second folder with default option and verify stored org matrix is reused.
+      - [ ] Generate folder with "specific matrix" option and verify it differs from org default.
+      - [ ] Verify matrix selection/options are visible and persisted in folder generation UI.
 
-  - [ ] **feat/usecase-matrix-generation** (BRANCH.md: `tmp/feat-usecase-matrix-generation/BRANCH.md`)
-    - [ ] UAT: TBD (define once implementation starts)
+  - [ ] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
+    - [ ] User intake (single bundle):
+      - [ ] Provide `executive-synthesis.docx` master template.
+      - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
+      - [ ] Provide dashboard intent (include dashboard image: yes/no).
+      - [ ] Provide one reference dataset for UAT (folder id with executive summary + multiple use cases).
+    - [ ] Implement unified DOCX generation endpoint strategy for synthesis (no hardcoded document structure).
+    - [ ] Implement master-template-driven synthesis composition (marker-driven ordering).
+    - [ ] Implement annex insertion at template-defined marker.
+    - [ ] Implement dashboard bitmap injection at template-defined marker (with deterministic sizing + fallback).
+    - [ ] Gates:
+      - [ ] `make typecheck-api` + `make lint-api`
+    - [ ] Partial UAT:
+      - [ ] Download synthesis DOCX and verify master template controls section order.
+      - [ ] Verify annex starts at template-defined separator/location.
+      - [ ] Verify dashboard bitmap is inserted at expected marker and rendering is readable.
+      - [ ] Regression: use-case one-page DOCX export still works from use case detail.
 
 - [ ] **Lot N — Final validation (after integration)**
   - [ ] Consolidated test backlog from Wave 1 BRANCH files:
