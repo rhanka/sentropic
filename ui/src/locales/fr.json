@@ -28,6 +28,8 @@
     "edit": "Modifier",
     "confirm": "Confirmer",
     "close": "Fermer",
+    "menu": "Menu",
+    "closeMenu": "Fermer le menu",
     "search": "Rechercher",
     "noResults": "Aucun résultat",
     "error": "Erreur",
@@ -37,7 +39,98 @@
     "active": "Active",
     "open": "Ouvrir",
     "clickToView": "Cliquez pour voir les détails",
-    "sessionCheck": "Vérification de la session…"
+    "sessionCheck": "Vérification de la session…",
+    "redirecting": "Redirection…",
+    "user": "Utilisateur"
+  },
+  "home": {
+    "welcomeTitle": "Bienvenue sur Top AI Ideas",
+    "tagline": "Décrivez votre contexte métier et découvrez des cas d'usage d'intelligence artificielle priorisés par valeur et complexité.",
+    "getStarted": "Commencer",
+    "redirectingTo": "Redirection vers {path}…"
+  },
+  "errors": {
+    "notFoundTitle": "Page non trouvée",
+    "notFoundMessage": "La page demandée n'existe pas.",
+    "backHome": "Retour à l'accueil"
+  },
+  "auth": {
+    "emailPlaceholder": "vous@example.com",
+    "webauthnRegisterNotice": "Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.",
+    "devicesTitle": "Mes appareils",
+    "loading": "Chargement…",
+    "noDevices": "Aucun appareil enregistré",
+    "addedOn": "Ajouté le {date}",
+    "lastUsed": "Dernière utilisation : {date}",
+    "verifyInProgress": "Vérification en cours…",
+    "redirectingDashboard": "Redirection vers le tableau de bord…",
+    "registerDeviceNow": "Vous allez maintenant enregistrer votre appareil WebAuthn"
+  },
+  "matrix": {
+    "title": "Configuration de l'évaluation Valeur/Complexité",
+    "loading": "Chargement de la matrice…",
+    "empty": "Aucune matrice configurée pour ce dossier",
+    "readOnlyTooltip": "Mode lecture seule : modification désactivée.",
+    "valueAxes": "Axes de Valeur",
+    "complexityAxes": "Axes de Complexité",
+    "criterion": "Critère",
+    "weight": "Poids",
+    "action": "Action",
+    "addValueAxis": "Ajouter un axe de valeur",
+    "addComplexityAxis": "Ajouter un axe de complexité",
+    "viewLevels": "Voir les niveaux",
+    "viewLevelsFor": "Voir les niveaux de {name}",
+    "deleteAxis": "Supprimer cet axe",
+    "deleteAxisFor": "Supprimer {name}",
+    "export": "Exporter la matrice",
+    "valueThresholdsTitle": "Configuration des seuils de Valeur",
+    "complexityThresholdsTitle": "Configuration des seuils de Complexité",
+    "value": "Valeur",
+    "fibonacciPoints": "Points Fibonacci",
+    "useCaseCount": "Nombre de cas",
+    "level": "Niveau",
+    "description": "Description",
+    "baseEvaluation": "Évaluation de base",
+    "baseEvaluationDesc": "Utiliser la matrice par défaut avec toutes les descriptions complètes",
+    "copyExisting": "Copier une matrice existante",
+    "copyExistingDesc": "Copier la matrice d'un autre dossier",
+    "selectFolder": "Sélectionner un dossier…",
+    "blankEvaluation": "Évaluation vierge",
+    "blankEvaluationDesc": "Commencer avec une matrice vide"
+  },
+  "dashboard": {
+    "reportTitle": "Rapport Top AI Ideas",
+    "execSummary": "Synthèse exécutive",
+    "execSummaryGenerating": "Génération de la synthèse exécutive en cours…",
+    "execSummaryGeneratingHint": "Cela peut prendre quelques instants",
+    "execSummaryEmpty": "Aucune synthèse exécutive disponible pour ce dossier",
+    "loadingData": "Chargement des données…",
+    "useCaseCount": "Nombre de cas d'usage",
+    "quickWins": "Gains rapides",
+    "roiQuadrantConfig": "Configuration du quadrant ROI",
+    "introduction": "Introduction",
+    "toc": "Sommaire",
+    "analysis": "Analyse",
+    "recommendations": "Recommandations",
+    "references": "Références",
+    "annex": "Annexe",
+    "annexUseCases": "Fiches des cas d'usage",
+    "subtitle": "Priorisez vos innovations par l'apport de valeur",
+    "about": "À Propos"
+  },
+  "folders": {
+    "new": {
+      "orgOptional": "Organisation (optionnel)",
+      "unspecified": "Non spécifié",
+      "createOrg": "Créer une organisation",
+      "context": "Contexte",
+      "useCaseCount": "Nombre de cas d'usage",
+      "default": "Défaut: 10"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "accountWorkspace": "Compte & Workspace"
   },
   "documents": {
     "title": "Documents",
