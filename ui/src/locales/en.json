@@ -28,6 +28,8 @@
     "edit": "Edit",
     "confirm": "Confirm",
     "close": "Close",
+    "menu": "Menu",
+    "closeMenu": "Close menu",
     "search": "Search",
     "noResults": "No results",
     "error": "Error",
@@ -37,7 +39,97 @@
     "active": "Active",
     "open": "Open",
     "clickToView": "Click to view details",
-    "sessionCheck": "Checking session…"
+    "sessionCheck": "Checking session…",
+    "redirecting": "Redirecting…"
+  },
+  "home": {
+    "welcomeTitle": "Welcome to Top AI Ideas",
+    "tagline": "Describe your business context and discover AI use cases prioritized by value and complexity.",
+    "getStarted": "Get started",
+    "redirectingTo": "Redirecting to {path}…"
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundMessage": "The requested page does not exist.",
+    "backHome": "Back to home"
+  },
+  "auth": {
+    "emailPlaceholder": "you@example.com",
+    "webauthnRegisterNotice": "You are about to register a new WebAuthn device. We will send you a confirmation email.",
+    "devicesTitle": "My devices",
+    "loading": "Loading…",
+    "noDevices": "No registered devices",
+    "addedOn": "Added on {date}",
+    "lastUsed": "Last used: {date}",
+    "verifyInProgress": "Verifying…",
+    "redirectingDashboard": "Redirecting to the dashboard…",
+    "registerDeviceNow": "You are now going to register your WebAuthn device"
+  },
+  "matrix": {
+    "title": "Value/Complexity evaluation configuration",
+    "loading": "Loading matrix…",
+    "empty": "No matrix configured for this folder",
+    "readOnlyTooltip": "Read-only mode: editing disabled.",
+    "valueAxes": "Value axes",
+    "complexityAxes": "Complexity axes",
+    "criterion": "Criterion",
+    "weight": "Weight",
+    "action": "Action",
+    "addValueAxis": "Add value axis",
+    "addComplexityAxis": "Add complexity axis",
+    "viewLevels": "View levels",
+    "viewLevelsFor": "View levels for {name}",
+    "deleteAxis": "Delete this axis",
+    "deleteAxisFor": "Delete {name}",
+    "export": "Export matrix",
+    "valueThresholdsTitle": "Value thresholds configuration",
+    "complexityThresholdsTitle": "Complexity thresholds configuration",
+    "value": "Value",
+    "fibonacciPoints": "Fibonacci points",
+    "useCaseCount": "Use case count",
+    "level": "Level",
+    "description": "Description",
+    "baseEvaluation": "Base evaluation",
+    "baseEvaluationDesc": "Use the default matrix with all full descriptions",
+    "copyExisting": "Copy an existing matrix",
+    "copyExistingDesc": "Copy the matrix from another folder",
+    "selectFolder": "Select a folder…",
+    "blankEvaluation": "Blank evaluation",
+    "blankEvaluationDesc": "Start with an empty matrix"
+  },
+  "dashboard": {
+    "reportTitle": "Top AI Ideas report",
+    "execSummary": "Executive summary",
+    "execSummaryGenerating": "Generating executive summary…",
+    "execSummaryGeneratingHint": "This may take a few moments",
+    "execSummaryEmpty": "No executive summary available for this folder",
+    "loadingData": "Loading data…",
+    "useCaseCount": "Use case count",
+    "quickWins": "Quick wins",
+    "roiQuadrantConfig": "ROI quadrant configuration",
+    "introduction": "Introduction",
+    "toc": "Table of contents",
+    "analysis": "Analysis",
+    "recommendations": "Recommendations",
+    "references": "References",
+    "annex": "Annex",
+    "annexUseCases": "Use case sheets",
+    "subtitle": "Prioritize your innovations by value contribution",
+    "about": "About"
+  },
+  "folders": {
+    "new": {
+      "orgOptional": "Organization (optional)",
+      "unspecified": "Unspecified",
+      "createOrg": "Create an organization",
+      "context": "Context",
+      "useCaseCount": "Use case count",
+      "default": "Default: 10"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "accountWorkspace": "Account & Workspace"
   },
   "documents": {
     "title": "Documents",
