@@ -407,7 +407,7 @@
 
 <!-- Click outside to close user menu (desktop dropdown only) -->
 {#if showUserMenu}
-  <button class="fixed inset-0 z-40" on:click={() => showUserMenu = false} aria-label="Close menu"></button>
+  <button class="fixed inset-0 z-40" on:click={() => showUserMenu = false} aria-label={$_('common.closeMenu')}></button>
 {/if}
 
 <style>

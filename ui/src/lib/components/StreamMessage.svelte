@@ -4,6 +4,7 @@
   import { apiGet } from '$lib/utils/api';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
   import { Streamdown } from 'svelte-streamdown';
+  import { _ } from 'svelte-i18n';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -26,11 +27,12 @@
   // eslint-disable-next-line no-unused-vars
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
 
-  type Step = { title: string; body?: string };
+  type Step = { title: string; body?: string; kind?: 'reasoning' | 'tool' | 'status' | 'content' | 'startup' | 'other' };
   type State = {
     startedAtMs: number;
     endedAtMs?: number | null;
     stepTitle: string;
+    stepKind: Step['kind'];
     auxText: string;
     contentText: string;
     toolArgsById: Record<string, string>;
@@ -47,7 +49,8 @@
   let st: State = {
     startedAtMs: Date.now(),
     endedAtMs: null,
-    stepTitle: 'En cours…',
+    stepTitle: '',
+    stepKind: 'other',
     auxText: '',
     contentText: '',
     toolArgsById: {},
@@ -103,7 +106,7 @@
       st.steps = [...st.steps];
       return;
     }
-    st.steps = [...st.steps, { title, body }].slice(-stepLimit);
+    st.steps = [...st.steps, { title, body, kind: st.stepKind ?? 'other' }].slice(-stepLimit);
   };
 
   const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
@@ -126,51 +129,58 @@
       if (state === 'started') {
         st.sawStarted = true;
         // Option B: libellé explicite pour la phase de démarrage
-        st.stepTitle = 'Préparation…';
+        st.stepKind = 'startup';
+        st.stepTitle = $_('stream.preparing');
         st.startedAtMs = ts;
       } else if (state === 'reasoning_effort_selected') {
         const effort = String(data?.effort ?? '').trim() || 'unknown';
         const by = String(data?.by ?? '').trim();
         const label = by ? `${effort} (via ${by})` : effort;
-        st.stepTitle = 'Effort de raisonnement';
+        st.stepKind = 'reasoning';
+        st.stepTitle = $_('stream.reasoningEffort');
         st.auxText = label;
-        upsertStep('Effort de raisonnement', label);
+        upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort') {
         const effort = String(data?.effort ?? '').trim() || 'unknown';
         const phase = String(data?.phase ?? '').trim();
         const it = data?.iteration != null ? String(data.iteration) : '';
         const label = `${effort}${phase ? ` — ${phase}${it ? ` #${it}` : ''}` : ''}`;
-        st.stepTitle = 'Effort de raisonnement';
+        st.stepKind = 'reasoning';
+        st.stepTitle = $_('stream.reasoningEffort');
         st.auxText = label;
-        upsertStep('Effort de raisonnement', label);
+        upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort_eval_failed') {
-        const msg = String(data?.message ?? '').trim() || 'Erreur inconnue';
-        st.stepTitle = 'Effort de raisonnement (échec)';
+        const msg = String(data?.message ?? '').trim() || $_('stream.unknownError');
+        st.stepKind = 'reasoning';
+        st.stepTitle = $_('stream.reasoningEffortFailed');
         st.auxText = msg;
-        upsertStep('Effort de raisonnement (échec)', msg);
+        upsertStep(st.stepTitle, msg);
       } else {
-        st.stepTitle = `Statut: ${state}`;
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.status', { values: { state } });
       }
     } else if (eventType === 'reasoning_delta') {
       st.sawReasoning = true;
       st.sawStarted = false;
-      st.stepTitle = 'Raisonnement';
+      st.stepKind = 'reasoning';
+      st.stepTitle = $_('stream.reasoning');
       const delta = String(data?.delta ?? '');
       const prev = st.auxText || '';
       const sep = needsReasoningSectionBreak(prev, delta) ? '\n\n' : '';
       st.auxText = prev + sep + delta;
-      upsertStep('Raisonnement', st.auxText);
+      upsertStep(st.stepTitle, st.auxText);
     } else if (eventType === 'tool_call_start') {
       st.sawTools = true;
       st.sawStarted = false;
       const name = String(data?.name ?? 'unknown');
-      st.stepTitle = `Outil: ${name}`;
+      st.stepKind = 'tool';
+      st.stepTitle = $_('stream.tool', { values: { name } });
       const toolId = String(data?.tool_call_id ?? '').trim();
       if (toolId) st.toolCallIds.add(toolId);
       if (toolId && name && name !== 'unknown') st.toolNameById[toolId] = name;
       const args = String(data?.args ?? '').trim();
       if (args) st.auxText = args;
-      upsertStep(`Outil: ${name}`, args || undefined);
+      upsertStep(st.stepTitle, args || undefined);
     } else if (eventType === 'tool_call_delta') {
       st.sawTools = true;
       st.sawStarted = false;
@@ -179,9 +189,12 @@
       if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
       st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
       const toolName = st.toolNameById[toolId];
-      st.stepTitle = toolName ? `Outil: ${toolName} (args)` : 'Outil (args)';
+      st.stepKind = 'tool';
+      st.stepTitle = toolName
+        ? $_('stream.toolArgs', { values: { name: toolName } })
+        : $_('stream.toolArgsFallback');
       st.auxText = st.toolArgsById[toolId];
-      upsertStep(`Outil: ${toolName || toolId} (args)`, st.auxText);
+      upsertStep(st.stepTitle, st.auxText);
     } else if (eventType === 'tool_call_result') {
       st.sawTools = true;
       st.sawStarted = false;
@@ -190,18 +203,21 @@
       const toolId = String(data?.tool_call_id ?? '').trim();
       const toolName = toolId ? st.toolNameById[toolId] : undefined;
       const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
-      st.stepTitle = `Outil: ${label}`;
+      st.stepKind = 'tool';
+      st.stepTitle = $_('stream.tool', { values: { name: label } });
       if (err) st.auxText = String(err);
-      upsertStep(`Outil: ${label}`, err ? String(err) : undefined);
+      upsertStep(st.stepTitle, err ? String(err) : undefined);
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
-      st.stepTitle = 'Réponse';
+      st.stepKind = 'content';
+      st.stepTitle = $_('stream.response');
       const delta = String(data?.delta ?? '');
       st.contentText = (st.contentText || '') + delta;
     } else if (eventType === 'done' || eventType === 'error') {
       st.endedAtMs = ts;
-      st.stepTitle = eventType === 'done' ? 'Terminé' : 'Erreur';
-      if (eventType === 'error') st.auxText = String(data?.message ?? 'unknown');
+      st.stepKind = eventType === 'done' ? 'content' : 'status';
+      st.stepTitle = eventType === 'done' ? $_('stream.done') : $_('stream.error');
+      if (eventType === 'error') st.auxText = String(data?.message ?? $_('stream.unknownError'));
     }
   };
 
@@ -288,7 +304,8 @@
     st = {
       startedAtMs: Date.now(),
       endedAtMs: null,
-      stepTitle: 'En cours…',
+      stepTitle: $_('stream.inProgress'),
+      stepKind: 'other',
       auxText: '',
       contentText: '',
       toolArgsById: {},
@@ -344,7 +361,7 @@
 <div class="w-full max-w-full">
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
-        <div class="text-[11px] text-slate-500">Chargement du détail…</div>
+        <div class="text-[11px] text-slate-500">{$_('stream.detailLoading')}</div>
         <!-- Réserver exactement la même hauteur/largeur que le chevron, sans interaction -->
         <button
           class="text-slate-500 p-1 rounded opacity-0 pointer-events-none shrink-0"
@@ -359,14 +376,14 @@
     {#if hasSteps && (hasContent || !!finalContent || (variant === 'job' && isTerminalStatus(status)))}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">
-          {#if st.sawReasoning}Raisonnement {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
+          {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
           {#if st.sawReasoning && toolsCount > 0}, {/if}
-          {#if toolsCount > 0}{toolsCount} appel{toolsCount > 1 ? 's' : ''} outil{toolsCount > 1 ? 's' : ''}{/if}
+          {#if toolsCount > 0}{$_('stream.toolCalls', { values: { count: toolsCount } })}{/if}
         </div>
         <button
           class="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
           type="button"
-          aria-label={st.expanded ? 'Replier le détail' : 'Déplier le détail'}
+          aria-label={st.expanded ? $_('stream.actions.collapseDetails') : $_('stream.actions.expandDetails')}
           on:click={() => st = { ...st, expanded: !st.expanded }}
         >
           <ChevronDown
@@ -385,7 +402,7 @@
                     class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
                     use:scrollToEnd
                   >
-                    {#if step.title === 'Raisonnement'}
+                    {#if step.kind === 'reasoning'}
                       <Streamdown content={step.body} />
                     {:else}
                       {step.body}
@@ -408,17 +425,17 @@
         {#if showStartup}
           <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
-            <span>Préparation…</span>
+            <span>{$_('stream.preparing')}</span>
           </div>
         {/if}
         {#if hasSteps && !hasContent}
-          <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
+          <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
           {#if st.auxText}
             <div
               class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
               use:scrollToEnd
             >
-              {#if st.stepTitle === 'Raisonnement'}
+              {#if st.stepKind === 'reasoning'}
                 <Streamdown content={st.auxText} />
               {:else}
                 {st.auxText}
@@ -430,7 +447,7 @@
     {:else}
       <!-- job -->
       {#if !showStartup && !hasSteps && !isTerminalStatus(status) && (placeholderTitle || placeholderBody)}
-        <div class="text-[11px] text-slate-500 mt-0.5">{placeholderTitle ?? 'En cours…'}</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">{placeholderTitle ?? $_('stream.inProgress')}</div>
         {#if placeholderBody}
           <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
             {placeholderBody}
@@ -440,11 +457,11 @@
       {#if showStartup}
         <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
           <Loader2 class="w-3.5 h-3.5 animate-spin" />
-          <span>Préparation…</span>
+          <span>{$_('stream.preparing')}</span>
         </div>
       {/if}
       {#if hasSteps && !isTerminalStatus(status)}
-        <div class="text-[11px] text-slate-500">Étape en cours: {st.stepTitle ?? 'En cours…'}</div>
+        <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
         {#if st.auxText}
           <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
             {st.auxText}

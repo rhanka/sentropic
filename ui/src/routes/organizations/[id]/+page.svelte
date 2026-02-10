@@ -438,14 +438,14 @@
     if (!organization) return;
     if (!canDelete) return;
 
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
+    if (!confirm($_('organizations.confirmDelete'))) return;
 
     try {
       await deleteOrganization(organization.id);
       unsavedChangesStore.reset();
       goto('/organizations');
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+      error = err instanceof Error ? err.message : $_('organizations.deleteError');
     }
   };
 </script>
@@ -496,8 +496,8 @@
         disabledExport={isReadOnlyRole}
         onExport={() => organization && openOrganizationExport(organization.id)}
         onDelete={handleDelete}
-        triggerTitle="Actions"
-        triggerAriaLabel="Actions"
+        triggerTitle={$_('common.actions')}
+        triggerAriaLabel={$_('common.actions')}
       />
 	      {#if !canDelete && showReadOnlyLock && !showPresenceBadge}
 	        <button
@@ -552,7 +552,7 @@
   <ImportExportDialog
     bind:open={$organizationExportState.open}
     mode="export"
-    title="Exporter l'organisation"
+    title={$_('organizations.export.singleTitle')}
     scope="organization"
     scopeId={$organizationExportState.organizationId ?? organization.id}
     allowScopeSelect={false}
@@ -563,7 +563,7 @@
     documentsAvailable={hasDocuments}
     includeOptions={
       organizationFolderCount > 0
-        ? [{ id: 'folders', label: 'Inclure les dossiers rattachés', defaultChecked: false }]
+        ? [{ id: 'folders', label: $_('organizations.export.include.folders'), defaultChecked: false }]
         : []
     }
     includeAffectsComments={['folders']}

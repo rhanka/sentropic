@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
@@ -34,6 +36,8 @@
   const HUB_KEY = 'workspace-settings-sse';
   let workspaceReloadTimer: ReturnType<typeof setTimeout> | null = null;
   let membersReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const t = (key: string, vars?: Record<string, any>) => get(_)(key, vars);
 
   function scheduleWorkspaceReload() {
     if (workspaceReloadTimer) return;
@@ -105,13 +109,13 @@
     creatingWorkspace = true;
     try {
       const res = await apiPost<{ id: string }>('/workspaces', { name });
-      addToast({ type: 'success', message: 'Workspace créé' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.created') });
       newWorkspaceName = '';
       await loadUserWorkspaces();
       if (res?.id) setWorkspaceScope(res.id);
       showWorkspaceCreateDialog = false;
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur création workspace' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.create') });
     } finally {
       creatingWorkspace = false;
     }
@@ -120,31 +124,31 @@
   async function hideWorkspace(id: string) {
     try {
       await apiPost(`/workspaces/${id}/hide`, {});
-      addToast({ type: 'success', message: 'Workspace caché' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.hidden') });
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur hide workspace' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.hide') });
     }
   }
 
   async function unhideWorkspace(id: string) {
     try {
       await apiPost(`/workspaces/${id}/unhide`, {});
-      addToast({ type: 'success', message: 'Workspace restauré' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.unhidden') });
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur unhide workspace' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.unhide') });
     }
   }
 
   async function deleteWorkspace(id: string) {
-    if (!confirm('Supprimer définitivement ce workspace (uniquement possible si caché) ?')) return;
+    if (!confirm(t('workspaceSettings.confirm.deletePermanently'))) return;
     try {
       await apiDelete(`/workspaces/${id}`);
-      addToast({ type: 'success', message: 'Workspace supprimé' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.deleted') });
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur suppression workspace' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.delete') });
     }
   }
 
@@ -158,7 +162,7 @@
       }>(`/workspaces/${selectedWorkspace.id}/members`);
       members = data.items || [];
     } catch (e: any) {
-      membersError = e?.message ?? 'Erreur chargement membres';
+      membersError = e?.message ?? t('workspaceSettings.errors.loadMembers');
     }
   }
 
@@ -177,13 +181,13 @@
     if (!email) return;
     try {
       await apiPost(`/workspaces/${selectedWorkspace.id}/members`, { email, role: addMemberRole });
-      addToast({ type: 'success', message: 'Membre ajouté' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.memberAdded') });
       addMemberEmail = '';
       addMemberRole = 'viewer';
       await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur ajout membre' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.addMember') });
     }
   }
 
@@ -191,11 +195,11 @@
     if (!selectedWorkspace?.id) return;
     try {
       await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
-      addToast({ type: 'success', message: 'Rôle mis à jour' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.roleUpdated') });
       await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur update rôle' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.updateRole') });
     }
   }
 
@@ -206,20 +210,20 @@
 
   async function removeMember(userId: string) {
     if (!selectedWorkspace?.id) return;
-    if (!confirm('Retirer ce membre du workspace ?')) return;
+    if (!confirm(t('workspaceSettings.confirm.removeMember'))) return;
     try {
       await apiDelete(`/workspaces/${selectedWorkspace.id}/members/${userId}`);
-      addToast({ type: 'success', message: 'Membre retiré' });
+      addToast({ type: 'success', message: t('workspaceSettings.toasts.memberRemoved') });
       await loadMembers();
       await loadUserWorkspaces();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur suppression membre' });
+      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.removeMember') });
     }
   }
 
   async function handleWorkspaceNameSaved() {
     originalSelectedWorkspaceName = editedSelectedWorkspaceName;
-    addToast({ type: 'success', message: 'Nom du workspace mis à jour' });
+    addToast({ type: 'success', message: t('workspaceSettings.toasts.nameUpdated') });
     await loadUserWorkspaces();
   }
 </script>
@@ -236,26 +240,26 @@
         onNew={() => (showWorkspaceCreateDialog = true)}
         onImport={() => (showWorkspaceImportDialog = true)}
         onExport={() => (showWorkspaceExportDialog = true)}
-        triggerTitle="Actions workspace"
-        triggerAriaLabel="Actions workspace"
+        triggerTitle={$_('workspaceSettings.actionsMenu')}
+        triggerAriaLabel={$_('workspaceSettings.actionsMenu')}
       />
     </div>
 
   {#if $hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-      Espace de travail <strong>caché</strong> sélectionné : accès restreint aux Paramètres. Rendre l’espace visible pour accéder aux autres vues.
+      {$_('workspaceSettings.banners.hiddenWorkspace')}
     </div>
   {/if}
 
   {#if noWorkspaces}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-      Vous n’êtes membre d’aucun workspace. Demander une invitation ou créer un nouveau workspace.
+      {$_('workspaceSettings.banners.noWorkspaces')}
     </div>
   {/if}
 
   {#if allWorkspacesHidden && !$hiddenWorkspaceLock}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-      Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace.
+      {$_('workspaceSettings.banners.allHidden')}
     </div>
   {/if}
 
@@ -265,9 +269,9 @@
         <thead class="border-b border-slate-200 text-left text-slate-600">
           <tr>
             <th class="w-10 px-3 py-2"></th>
-            <th class="px-3 py-2">Nom</th>
-            <th class="px-3 py-2">Rôle</th>
-            <th class="px-3 py-2">Visibilité</th>
+            <th class="px-3 py-2">{$_('common.name')}</th>
+            <th class="px-3 py-2">{$_('common.role')}</th>
+            <th class="px-3 py-2">{$_('common.visibility')}</th>
             <th class="w-10 px-3 py-2"></th>
           </tr>
         </thead>
@@ -275,7 +279,7 @@
         {#each workspaceItems as ws (ws.id)}
             <tr
             class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer {ws.id === workspaceSelectedId ? 'bg-blue-50' : ''}"
-              title="Cliquer pour sélectionner ce workspace"
+              title={$_('workspaceSettings.table.selectWorkspace')}
               on:click={(e) => {
                 if (shouldIgnoreRowClick(e)) return;
               if (ws.id === workspaceSelectedId) return;
@@ -309,17 +313,17 @@
                     <span class={ws.hiddenAt ? 'text-slate-500 line-through' : 'text-slate-900'}>{ws.name}</span>
                   {/if}
                   {#if ws.hiddenAt}
-                    <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">caché</span>
+                    <span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{$_('common.hidden')}</span>
                   {/if}
                 </div>
               </td>
-              <td class="px-3 py-2">{ws.role}</td>
+              <td class="px-3 py-2">{$_(`roles.${ws.role}`)}</td>
               <td class="px-3 py-2">
                 {#if ws.role === 'admin'}
                   {#if ws.hiddenAt}
                   <button
                     class="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                      title="Rendre visible (unhide)"
+                      title={$_('workspaceSettings.actions.unhide')}
                       on:click|stopPropagation={() => unhideWorkspace(ws.id)}
                     >
                       <EyeOff class="h-4 w-4" />
@@ -327,7 +331,7 @@
                   {:else}
                   <button
                     class="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                      title="Rendre invisible (hide)"
+                      title={$_('workspaceSettings.actions.hide')}
                       on:click|stopPropagation={() => hideWorkspace(ws.id)}
                     >
                       <Eye class="h-4 w-4" />
@@ -336,7 +340,7 @@
                 {:else}
                 <button
                   class="rounded p-1 text-slate-300 cursor-not-allowed"
-                    title="Réservé aux admins"
+                    title={$_('common.adminOnly')}
                     disabled
                     data-ignore-row-click
                   >
@@ -348,7 +352,7 @@
                 {#if ws.role === 'admin'}
                 <button
                   class="rounded p-1 {ws.hiddenAt ? 'text-rose-600 hover:bg-rose-200 hover:text-rose-700' : 'text-slate-300 cursor-not-allowed'}"
-                    title={ws.hiddenAt ? 'Supprimer définitivement' : 'Supprimer définitivement (cacher d’abord)'}
+                    title={ws.hiddenAt ? $_('workspaceSettings.actions.deletePermanently') : $_('workspaceSettings.actions.deletePermanentlyDisabled')}
                     disabled={!ws.hiddenAt}
                     on:click|stopPropagation={() => deleteWorkspace(ws.id)}
                   >
@@ -357,7 +361,7 @@
                 {:else}
                 <button
                   class="rounded p-1 text-slate-300 cursor-not-allowed"
-                    title="Réservé aux admins"
+                    title={$_('common.adminOnly')}
                     disabled
                     data-ignore-row-click
                   >
@@ -374,24 +378,24 @@
 
 {#if selectedWorkspace && isWorkspaceAdmin}
     <div class="rounded border border-slate-200 p-4">
-      <h4 class="font-medium">Membres</h4>
+      <h4 class="font-medium">{$_('workspaceSettings.members.title')}</h4>
       <div class="mt-3 space-y-3">
         <div class="flex flex-wrap items-end gap-2">
           <label class="block text-sm">
-            <div class="text-slate-600">Email</div>
+            <div class="text-slate-600">{$_('common.email')}</div>
             <input class="mt-1 w-72 rounded border border-slate-200 px-3 py-2" bind:value={addMemberEmail} />
           </label>
           <label class="block text-sm">
-            <div class="text-slate-600">Rôle</div>
+            <div class="text-slate-600">{$_('common.role')}</div>
             <select class="mt-1 rounded border border-slate-200 px-3 py-2" bind:value={addMemberRole}>
-              <option value="viewer">viewer</option>
-              <option value="commenter">commenter</option>
-              <option value="editor">editor</option>
-              <option value="admin">admin</option>
+              <option value="viewer">{$_('roles.viewer')}</option>
+              <option value="commenter">{$_('roles.commenter')}</option>
+              <option value="editor">{$_('roles.editor')}</option>
+              <option value="admin">{$_('roles.admin')}</option>
             </select>
           </label>
           <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50" on:click={addMember} disabled={!addMemberEmail.trim()}>
-            Ajouter
+            {$_('common.add')}
           </button>
         </div>
 
@@ -402,9 +406,9 @@
           <table class="min-w-full text-sm">
             <thead class="border-b border-slate-200 text-left text-slate-600">
               <tr>
-                <th class="py-2 pr-3">Email</th>
-                <th class="py-2 pr-3">Nom</th>
-                <th class="py-2 pr-3">Rôle</th>
+                <th class="py-2 pr-3">{$_('common.email')}</th>
+                <th class="py-2 pr-3">{$_('common.name')}</th>
+                <th class="py-2 pr-3">{$_('common.role')}</th>
                 <th class="py-2 pr-3 text-right"></th>
               </tr>
             </thead>
@@ -420,17 +424,17 @@
                       on:change={(e) => handleMemberRoleChange(e, m.userId)}
                       disabled={m.userId === $session.user?.id}
                     >
-                      <option value="viewer">viewer</option>
-                      <option value="commenter">commenter</option>
-                      <option value="editor">editor</option>
-                      <option value="admin">admin</option>
+                      <option value="viewer">{$_('roles.viewer')}</option>
+                      <option value="commenter">{$_('roles.commenter')}</option>
+                      <option value="editor">{$_('roles.editor')}</option>
+                      <option value="admin">{$_('roles.admin')}</option>
                     </select>
                   </td>
                   <td class="py-2 pr-3 text-right">
                     {#if m.userId !== $session.user?.id}
                       <button
                         class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
-                        title="Retirer ce membre"
+                        title={$_('workspaceSettings.members.remove')}
                         on:click={() => removeMember(m.userId)}
                       >
                         <Trash2 class="h-4 w-4" />
@@ -449,23 +453,23 @@
   <ImportExportDialog
     bind:open={showWorkspaceExportDialog}
     mode="export"
-    title="Exporter un workspace"
+    title={$_('workspaceSettings.export.title')}
     scope="workspace"
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={selectedWorkspace?.name ?? ''}
     includeOptions={[
-      { id: 'organizations', label: 'Inclure les organisations', defaultChecked: true },
-      { id: 'folders', label: 'Inclure les dossiers', defaultChecked: true },
-      { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
-      { id: 'matrix', label: 'Inclure les matrices', defaultChecked: true },
+      { id: 'organizations', label: $_('workspaceSettings.export.include.organizations'), defaultChecked: true },
+      { id: 'folders', label: $_('workspaceSettings.export.include.folders'), defaultChecked: true },
+      { id: 'usecases', label: $_('workspaceSettings.export.include.usecases'), defaultChecked: true },
+      { id: 'matrix', label: $_('workspaceSettings.export.include.matrix'), defaultChecked: true },
     ]}
   />
 
   <ImportExportDialog
     bind:open={showWorkspaceImportDialog}
     mode="import"
-    title="Importer un workspace"
+    title={$_('workspaceSettings.import.title')}
     scope="workspace"
     allowScopeSelect={true}
     allowScopeIdEdit={true}
@@ -476,10 +480,10 @@
     <div class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg max-w-md w-full mx-4">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 class="text-lg font-semibold">Nouveau workspace</h3>
+          <h3 class="text-lg font-semibold">{$_('workspaceSettings.createDialog.title')}</h3>
           <button
             class="text-slate-400 hover:text-slate-600"
-            aria-label="Fermer"
+            aria-label={$_('common.close')}
             type="button"
             on:click={() => (showWorkspaceCreateDialog = false)}
           >
@@ -488,10 +492,10 @@
         </div>
         <div class="px-5 py-4 space-y-4">
           <label class="block text-sm">
-            <div class="text-slate-600">Nom du workspace</div>
+            <div class="text-slate-600">{$_('workspaceSettings.createDialog.nameLabel')}</div>
             <input
               class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
-              placeholder="Nom du workspace"
+              placeholder={$_('workspaceSettings.createDialog.namePlaceholder')}
               bind:value={newWorkspaceName}
               bind:this={newWorkspaceInputRef}
             />
@@ -503,7 +507,7 @@
             type="button"
             on:click={() => (showWorkspaceCreateDialog = false)}
           >
-            Annuler
+            {$_('common.cancel')}
           </button>
           <button
             class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
@@ -511,7 +515,7 @@
             on:click={createWorkspace}
             disabled={creatingWorkspace || !newWorkspaceName.trim()}
           >
-            Créer
+            {$_('common.create')}
           </button>
         </div>
       </div>

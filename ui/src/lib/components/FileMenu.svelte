@@ -7,6 +7,7 @@
     Trash2,
     Upload,
   } from '@lucide/svelte';
+  import { _ } from 'svelte-i18n';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
   import MenuTriggerButton from '$lib/components/MenuTriggerButton.svelte';
 
@@ -14,12 +15,12 @@
   export let align: 'left' | 'right' = 'right';
   export let widthClass = 'w-56';
 
-  export let labelNew = 'Nouveau';
-  export let labelImport = 'Importer';
-  export let labelExport = 'Exporter';
-  export let labelDownloadDocx = 'Download DOCX';
-  export let labelPrint = 'Imprimer';
-  export let labelDelete = 'Supprimer';
+  export let labelNew: string | null = null;
+  export let labelImport: string | null = null;
+  export let labelExport: string | null = null;
+  export let labelDownloadDocx: string | null = null;
+  export let labelPrint: string | null = null;
+  export let labelDelete: string | null = null;
 
   export let onNew: (() => void) | null = null;
   export let onImport: (() => void) | null = null;
@@ -42,8 +43,8 @@
   export let showPrint = true;
   export let showDelete = true;
 
-  export let triggerTitle = 'Actions';
-  export let triggerAriaLabel = 'Actions';
+  export let triggerTitle: string | null = null;
+  export let triggerAriaLabel: string | null = null;
   export let triggerClassName = '';
 
   const itemClass =
@@ -58,8 +59,8 @@
     <MenuTriggerButton
       bind:buttonRef={triggerButtonRef}
       className={triggerClassName}
-      title={triggerTitle}
-      ariaLabel={triggerAriaLabel}
+      title={triggerTitle ?? $_('common.actions')}
+      ariaLabel={triggerAriaLabel ?? $_('common.actions')}
       on:click={toggle}
       disabled={disabled}
     />
@@ -77,7 +78,7 @@
           disabled={disabledNew}
         >
           <CirclePlus class="w-4 h-4" />
-          <span>{labelNew}</span>
+          <span>{labelNew ?? $_('common.new')}</span>
         </button>
       {/if}
       {#if showImport}
@@ -91,7 +92,7 @@
           disabled={disabledImport}
         >
           <Upload class="w-4 h-4" />
-          <span>{labelImport}</span>
+          <span>{labelImport ?? $_('common.import')}</span>
         </button>
       {/if}
       {#if showExport}
@@ -105,7 +106,7 @@
           disabled={disabledExport}
         >
           <Download class="w-4 h-4" />
-          <span>{labelExport}</span>
+          <span>{labelExport ?? $_('common.export')}</span>
         </button>
       {/if}
       {#if showDownloadDocx}
@@ -119,7 +120,7 @@
           disabled={disabledDownloadDocx}
         >
           <FileDown class="w-4 h-4" />
-          <span>{labelDownloadDocx}</span>
+          <span>{labelDownloadDocx ?? $_('common.downloadDocx')}</span>
         </button>
       {/if}
       {#if showPrint}
@@ -133,7 +134,7 @@
           disabled={disabledPrint}
         >
           <Printer class="w-4 h-4" />
-          <span>{labelPrint}</span>
+          <span>{labelPrint ?? $_('common.print')}</span>
         </button>
       {/if}
       {#if showDelete}
@@ -147,7 +148,7 @@
           disabled={disabledDelete}
         >
           <Trash2 class="w-4 h-4" />
-          <span>{labelDelete}</span>
+          <span>{labelDelete ?? $_('common.delete')}</span>
         </button>
       {/if}
     </div>

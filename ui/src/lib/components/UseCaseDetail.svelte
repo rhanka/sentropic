@@ -484,11 +484,11 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
           <p class="text-sm text-blue-700 font-medium">
             {#if useCase.status === 'detailing'}
-              Détail en cours de génération...
+              {$_('usecase.status.detailing')}
             {:else if useCase.status === 'generating'}
-              Cas d'usage en cours de génération...
+              {$_('usecase.status.generating')}
             {:else if useCase.status === 'pending'}
-              Génération en attente...
+              {$_('usecase.status.pending')}
             {/if}
           </p>
         </div>
@@ -501,14 +501,14 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="col-span-8 print:col-span-1 min-w-0">
         {#if isPrinting}
           <h1 class="text-3xl font-semibold break-words">
-            {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+            {nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
           </h1>
         {:else}
           <h1 class="text-3xl font-semibold break-words mb-0">
             <EditableInput
               locked={locked}
               label=""
-              value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+              value={nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
               markdown={false}
               multiline={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
@@ -533,9 +533,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               type="button"
               class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
               on:click={() => goto(`/organizations/${organizationId}`)}
-              title="Voir l'organisation"
+              title={$_('organizations.view')}
             >
-              {organizationName || 'Organisation'}
+              {organizationName || $_('organizations.organization')}
             </button>
           {/if}
           {#if useCase.model}
@@ -552,7 +552,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="col-span-4 print:col-span-1 flex items-center justify-end">
           {#if organizationId}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700">
-              {organizationName || 'Organisation'}
+              {organizationName || $_('organizations.organization')}
             </span>
           {/if}
           {#if useCase.model}
@@ -571,7 +571,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
               <CheckCircle2 class="w-5 h-5" />
-              Valeur calculée
+              {$_('usecase.scores.totalValue')}
             </h3>
           </div>
           <div class="flex items-center gap-3">
@@ -581,7 +581,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {/each}
             </div>
             <span class="font-bold text-green-600">
-              ({totalValueScore.toFixed(0)} points)
+              ({totalValueScore.toFixed(0)} {$_('common.pointsAbbr')})
             </span>
           </div>
         </div>
@@ -592,7 +592,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
               <AlertTriangle class="w-5 h-5" />
-              Complexité calculée
+              {$_('usecase.scores.totalComplexity')}
             </h3>
           </div>
           <div class="flex items-center gap-3">
@@ -606,7 +606,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {/each}
             </div>
             <span class="font-bold text-red-600">
-              ({totalComplexityScore.toFixed(0)} points)
+              ({totalComplexityScore.toFixed(0)} {$_('common.pointsAbbr')})
             </span>
           </div>
         </div>
@@ -616,7 +616,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
             <Clock class="w-5 h-5 text-slate-500" />
-            Délai
+            {$_('usecase.fields.deadline')}
             <CommentBadge
               count={commentCounts?.deadline ?? 0}
               disabled={!onOpenComments}
@@ -659,7 +659,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
             <h3 class="font-semibold flex items-center gap-2 group">
               <FileText class="w-5 h-5 text-slate-500" />
-              Description
+              {$_('usecase.fields.description')}
               <CommentBadge
                 count={commentCounts?.description ?? 0}
                 disabled={!onOpenComments}
@@ -700,7 +700,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-orange-100 text-orange-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <AlertTriangle class="w-5 h-5" />
-                Problème
+                {$_('usecase.fields.problem')}
                 <CommentBadge
                   count={commentCounts?.problem ?? 0}
                   disabled={!onOpenComments}
@@ -739,7 +739,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <Lightbulb class="w-5 h-5" />
-                Solution
+                {$_('usecase.fields.solution')}
                 <CommentBadge
                   count={commentCounts?.solution ?? 0}
                   disabled={!onOpenComments}
@@ -781,7 +781,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <TrendingUp class="w-5 h-5" />
-                Bénéfices recherchés
+                {$_('usecase.fields.benefits')}
                 <CommentBadge
                   count={commentCounts?.benefits ?? 0}
                   disabled={!onOpenComments}
@@ -824,7 +824,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <AlertTriangle class="w-5 h-5" />
-                Contraintes
+                {$_('usecase.fields.constraints')}
                 <CommentBadge
                   count={commentCounts?.constraints ?? 0}
                   disabled={!onOpenComments}
@@ -867,7 +867,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <BarChart3 class="w-5 h-5" />
-                Mesures du succès
+                {$_('usecase.fields.metrics')}
                 <CommentBadge
                   count={commentCounts?.metrics ?? 0}
                   disabled={!onOpenComments}
@@ -910,7 +910,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <AlertTriangle class="w-5 h-5" />
-                Risques
+                {$_('usecase.fields.risks')}
                 <CommentBadge
                   count={commentCounts?.risks ?? 0}
                   disabled={!onOpenComments}
@@ -1048,7 +1048,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
             <Database class="w-5 h-5 text-slate-500" />
-            Sources des données
+            {$_('usecase.info.dataSources')}
             <CommentBadge
               count={commentCounts?.dataSources ?? 0}
               disabled={!onOpenComments}
@@ -1097,7 +1097,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">
             <Database class="w-5 h-5 text-slate-500" />
-            Données
+            {$_('usecase.info.dataObjects')}
             <CommentBadge
               count={commentCounts?.dataObjects ?? 0}
               disabled={!onOpenComments}
@@ -1150,7 +1150,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
         <h3 class="font-semibold flex items-center gap-2 group">
           <ClipboardList class="w-5 h-5" />
-          Prochaines étapes
+          {$_('usecase.fields.nextSteps')}
           <CommentBadge
             count={commentCounts?.nextSteps ?? 0}
             disabled={!onOpenComments}
@@ -1193,7 +1193,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="references">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
-            Références
+            {$_('common.references')}
             <CommentBadge
               count={commentCounts?.references ?? 0}
               disabled={!onOpenComments}
@@ -1211,7 +1211,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
           <h3 class="font-semibold flex items-center gap-2">
             <CheckCircle2 class="w-5 h-5" />
-            Axes de Valeur
+            {$_('matrix.valueAxes')}
           </h3>
         </div>
         <div class="space-y-4">
@@ -1266,7 +1266,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
           <h3 class="font-semibold flex items-center gap-2">
             <AlertTriangle class="w-5 h-5" />
-            Axes de Complexité
+            {$_('matrix.complexityAxes')}
           </h3>
         </div>
         <div class="space-y-4">

@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { CheckCircle2, XCircle, AlertTriangle, Info, X } from '@lucide/svelte';
+  import { _ } from 'svelte-i18n';
 
   const getToastClasses = (type: string) => {
     const baseClasses = 'rounded-lg p-4 shadow-lg border max-w-sm w-full';
@@ -57,7 +58,7 @@
             class="text-gray-400 hover:text-gray-600 focus:outline-none"
             on:click={() => removeToast(toast.id)}
           >
-            <span class="sr-only">Fermer</span>
+            <span class="sr-only">{$_('common.close')}</span>
             <X class="h-4 w-4" />
           </button>
         </div>
@@ -65,5 +66,4 @@
     </div>
   {/each}
 </div>
-
 
