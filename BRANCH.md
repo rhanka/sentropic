@@ -87,6 +87,25 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Implement API validation/types updates for bilingual fields.
       - [ ] Implement UI typing/store updates for bilingual payloads.
       - [ ] Implement payload normalization + backward compatibility for legacy string-only records.
+    - [ ] **Bilingual exhaustive translations (inventory + implementation)**
+      - [ ] Inventory (file-by-file):
+        - [ ] Generate a complete file list for the codebase scopes:
+          - [ ] UI: `ui/src/**`
+          - [ ] API: `api/src/**`
+          - [ ] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
+        - [ ] Walk the list and identify every user-visible string that must be translated or moved to i18n keys:
+          - [ ] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
+          - [ ] UI components/shared text
+          - [ ] API user-facing error messages (only if surfaced directly to users)
+          - [ ] Emails/templates (if present)
+        - [ ] Record findings in this section (date + short bullet list of missing keys + the files where they occur).
+      - [ ] Implementation:
+        - [ ] Add missing i18n keys (FR/EN) for all identified strings.
+        - [ ] Replace hardcoded strings with i18n lookups consistently.
+        - [ ] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
+      - [ ] Gates:
+        - [ ] `make typecheck-ui` + `make lint-ui`
+        - [ ] `make typecheck-api` + `make lint-api` (if API messages were changed)
     - [ ] **Bilingual prompts**
       - [ ] Inventory prompts and extract locale-specific variants.
       - [ ] Implement FR/EN prompt selection path with explicit fallback behavior.
@@ -95,6 +114,23 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] `make typecheck-api` + `make lint-api`
       - [ ] `make typecheck-ui` + `make lint-ui` (if UI touched)
     - [ ] Partial UAT (user-driven):
+      - [ ] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
+        - [ ] Home
+        - [ ] Dashboard
+        - [ ] Use cases list (`/usecase`)
+        - [ ] Use case detail (`/usecase/:id`)
+        - [ ] Folders list (`/folders`)
+        - [ ] Folder new (`/folder/new`)
+        - [ ] Folder detail (`/folders/:id`)
+        - [ ] Organizations list (`/organizations`)
+        - [ ] Organization new (`/organizations/new`)
+        - [ ] Organization detail (`/organizations/:id`)
+        - [ ] Matrix (`/matrix`)
+        - [ ] Settings (`/settings`)
+        - [ ] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
+      - [ ] Locale switching sweep:
+        - [ ] Switch FR→EN without reload and confirm all visible labels update.
+        - [ ] Switch EN→FR without reload and confirm all visible labels update.
       - [ ] Edit use case content in FR and EN and confirm both variants persist after refresh.
       - [ ] Validate legacy string-only records are still readable/editable (backward compatibility).
       - [ ] In FR UI, generate a use case and confirm generated narrative is in French.
