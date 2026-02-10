@@ -3,6 +3,8 @@
   // {@html} is only used with sanitized HTML produced by renderInlineMarkdown().
   import { organizationsStore, fetchOrganizations, deleteOrganization } from '$lib/stores/organizations';
   import { addToast } from '$lib/stores/toast';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
@@ -91,13 +93,13 @@ const handleImportComplete = async () => {
 
       addToast({
         type: 'success',
-        message: 'Organisation supprimée avec succès !'
+        message: get(_)('organizations.deleteSuccess')
       });
     } catch (err) {
       console.error('Failed to delete organization:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de la suppression'
+        message: err instanceof Error ? err.message : get(_)('organizations.deleteError')
       });
     }
   };
@@ -116,7 +118,7 @@ const handleImportComplete = async () => {
 
 <section class="space-y-6">
   <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold">Organisations</h1>
+    <h1 class="text-3xl font-semibold">{$_('organizations.title')}</h1>
     {#if !isReadOnly}
       <FileMenu
         showNew={true}
@@ -127,14 +129,14 @@ const handleImportComplete = async () => {
         onNew={() => goto('/organizations/new')}
         onImport={() => (showImportDialog = true)}
         onExport={() => (showExportDialog = true)}
-        triggerTitle="Actions organisation"
-        triggerAriaLabel="Actions organisation"
+        triggerTitle={$_('organizations.actions')}
+        triggerAriaLabel={$_('organizations.actions')}
       />
     {:else if showReadOnlyLock}
       <button
         class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-        title="Mode lecture seule : création / suppression désactivées."
-        aria-label="Mode lecture seule : création / suppression désactivées."
+        title={$_('common.readOnlyDisabled')}
+        aria-label={$_('common.readOnlyDisabled')}
         type="button"
         disabled
       >
@@ -163,7 +165,7 @@ const handleImportComplete = async () => {
               <button
                 class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
                 on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
-                title="Supprimer l'organisation"
+	                title={$_('organizations.delete')}
               >
                 <Trash2 class="w-4 h-4" />
               </button>
@@ -174,7 +176,7 @@ const handleImportComplete = async () => {
                       streamId={`organization_${organization.id}`}
                       status={organization.status}
               maxHistory={6}
-              placeholderTitle="Enrichissement en cours…"
+	              placeholderTitle={$_('organizations.enriching')}
             />
           </div>
         {:else}
@@ -187,7 +189,7 @@ const handleImportComplete = async () => {
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                   on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
-                  title="Supprimer"
+	                  title={$_('common.delete')}
                 >
                   <Trash2 class="w-4 h-4" />
                 </button>
@@ -199,11 +201,11 @@ const handleImportComplete = async () => {
                     {#if organization.industry || organization.size}
               <div class="flex flex-col gap-1 mb-3">
                         {#if organization.industry}
-                          <p class="text-sm text-slate-600">Secteur: {organization.industry}</p>
+	                          <p class="text-sm text-slate-600">{$_('organizations.industry', { values: { value: organization.industry } })}</p>
                 {/if}
                         {#if organization.size}
                   <p class="text-sm text-slate-500 line-clamp-2 break-words">
-                            Taille: <span>{@html renderInlineMarkdown(organization.size)}</span>
+	                            {$_('organizations.sizeLabel')}: <span>{@html renderInlineMarkdown(organization.size)}</span>
                   </p>
                 {/if}
               </div>
@@ -216,24 +218,24 @@ const handleImportComplete = async () => {
           </div>
 
           <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
-            <span class="text-xs text-slate-400 whitespace-nowrap">
-              {#if isDraft}
-                Brouillon
-              {:else}
-                Cliquez pour voir les détails
-              {/if}
-            </span>
-            <div class="flex items-center gap-2 flex-wrap">
-              {#if isDraft}
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
-                  Brouillon
-                </span>
-              {:else}
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
-                  Active
-                </span>
-              {/if}
-            </div>
+	            <span class="text-xs text-slate-400 whitespace-nowrap">
+	              {#if isDraft}
+	                {$_('common.draft')}
+	              {:else}
+	                {$_('organizations.clickForDetails')}
+	              {/if}
+	            </span>
+	            <div class="flex items-center gap-2 flex-wrap">
+	              {#if isDraft}
+	                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
+	                  {$_('common.draft')}
+	                </span>
+	              {:else}
+	                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+	                  {$_('common.active')}
+	                </span>
+	              {/if}
+	            </div>
           </div>
         {/if}
       </article>
@@ -268,5 +270,3 @@ const handleImportComplete = async () => {
   includeAffectsDocuments={['folders']}
   exportKind="organizations"
 />
-
-

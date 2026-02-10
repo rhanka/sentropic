@@ -1,7 +1,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
-  // L'usage de {@html} dans ce fichier passe par renderMarkdownWithRefs()
-  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  // {@html} usage in this file is routed through renderMarkdownWithRefs(),
+  // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
@@ -18,6 +18,7 @@
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
   import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import { _ } from 'svelte-i18n';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -30,13 +31,13 @@
   const HUB_KEY = 'dashboardPage';
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
-  // Variables locales pour l'édition markdown (non persistantes)
+  // Local state for markdown editing (not persisted)
   let editedIntroduction = '';
   let editedAnalyse = '';
   let editedRecommandation = '';
   let editedSyntheseExecutive = '';
   
-  // Fonction pour initialiser les valeurs éditées depuis executiveSummary
+  // Initialize edited values from executiveSummary
   function initializeEditedValues() {
     if (!executiveSummary) {
       editedIntroduction = '';
@@ -523,13 +524,13 @@
 {#if selectedFolderId && executiveSummary}
   <div class="report-cover-page">
     <div class="report-cover-header">
-      <h1 class="report-cover-title">Rapport Top AI Ideas</h1>
+      <h1 class="report-cover-title">{$_('dashboard.reportTitle')}</h1>
       <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
     </div>
     
     {#if editedSyntheseExecutive}
       <div class="report-cover-summary" bind:this={summaryBox}>
-        <h3>Synthèse exécutive</h3>
+        <h3>{$_('dashboard.execSummary')}</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
             {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
@@ -592,15 +593,15 @@
         <div class="flex items-center gap-3">
           <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
           <div>
-            <p class="text-sm font-medium text-blue-700">Génération de la synthèse exécutive en cours...</p>
-            <p class="text-xs text-blue-600 mt-1">Cela peut prendre quelques instants</p>
+            <p class="text-sm font-medium text-blue-700">{$_('dashboard.execSummaryGenerating')}</p>
+            <p class="text-xs text-blue-600 mt-1">{$_('dashboard.execSummaryGeneratingHint')}</p>
           </div>
         </div>
       </div>
     {:else if executiveSummary}
       <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
         <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
-          <h2 class="text-2xl font-semibold text-slate-900">Synthèse exécutive</h2>
+          <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
           <div class="flex items-center gap-2">
             <button
               on:click={() => window.print()}
@@ -640,8 +641,8 @@
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-slate-900 mb-1">Synthèse exécutive</h2>
-            <p class="text-sm text-slate-600">Aucune synthèse exécutive disponible pour ce dossier</p>
+            <h2 class="text-lg font-semibold text-slate-900 mb-1">{$_('dashboard.execSummary')}</h2>
+            <p class="text-sm text-slate-600">{$_('dashboard.execSummaryEmpty')}</p>
           </div>
           <button
             on:click={generateExecutiveSummary}
@@ -659,7 +660,7 @@
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
       <div class="flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-        <p class="text-sm text-blue-700 font-medium">Chargement des données...</p>
+        <p class="text-sm text-blue-700 font-medium">{$_('dashboard.loadingData')}</p>
       </div>
     </div>
   {:else}
@@ -675,7 +676,7 @@
                 <FileText class="w-8 h-8 text-blue-500" />
               </div>
               <div class="ml-4">
-                <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
+                <p class="text-sm font-medium text-slate-500">{$_('dashboard.useCaseCount')}</p>
                 <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
                 {#if roiStats.count > 0}
                   <p class="text-xs text-green-600 mt-1">
@@ -693,7 +694,7 @@
                   <TrendingUp class="w-8 h-8 text-green-600" />
                 </div>
                 <div class="ml-4 flex-1">
-                  <p class="text-sm font-medium text-green-700">Gains rapides</p>
+                  <p class="text-sm font-medium text-green-700">{$_('dashboard.quickWins')}</p>
                   <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
                 </div>
               </div>
@@ -720,7 +721,7 @@
               {#if configOpen}
                 <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
                   <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-slate-700">Configuration du quadrant ROI</span>
+                    <span class="text-sm font-medium text-slate-700">{$_('dashboard.roiQuadrantConfig')}</span>
                     <button
                       on:click={() => configOpen = false}
                       class="text-slate-400 hover:text-slate-600"
@@ -826,7 +827,7 @@
         {#if editedIntroduction}
           <div id="section-introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Introduction</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.introduction')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -853,35 +854,35 @@
     <!-- Sommaire (page 3) -->
     {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
       <div class="report-table-of-contents">
-        <h2 class="text-2xl font-semibold text-slate-900 mb-6">Sommaire</h2>
+        <h2 class="text-2xl font-semibold text-slate-900 mb-6">{$_('dashboard.toc')}</h2>
         <ul class="space-y-2 text-slate-700">
           <li class="toc-item">
-            <a href="#section-introduction" class="toc-title toc-link">Introduction</a>
+            <a href="#section-introduction" class="toc-title toc-link">{$_('dashboard.introduction')}</a>
             <span class="toc-dots"></span>
             <span class="toc-page">{pageNumbers.introduction || '-'}</span>
           </li>
           <li class="toc-item">
-            <a href="#section-analyse" class="toc-title toc-link">Analyse</a>
+            <a href="#section-analyse" class="toc-title toc-link">{$_('dashboard.analysis')}</a>
             <span class="toc-dots"></span>
             <span class="toc-page">{pageNumbers.analyse || '-'}</span>
           </li>
           {#if executiveSummary.recommandation}
             <li class="toc-item">
-              <a href="#section-recommandations" class="toc-title toc-link">Recommandations</a>
+              <a href="#section-recommandations" class="toc-title toc-link">{$_('dashboard.recommendations')}</a>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.recommandations || '-'}</span>
             </li>
           {/if}
           {#if executiveSummary.references && executiveSummary.references.length > 0}
             <li class="toc-item">
-              <a href="#section-references" class="toc-title toc-link">Références</a>
+              <a href="#section-references" class="toc-title toc-link">{$_('dashboard.references')}</a>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.references || '-'}</span>
             </li>
           {/if}
           {#if filteredUseCases.length > 0}
             <li class="toc-item">
-              <span class="toc-title">Annexes</span>
+              <span class="toc-title">{$_('dashboard.annex')}</span>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.annexes || '-'}</span>
             </li>
@@ -904,7 +905,7 @@
         {#if editedAnalyse}
           <div id="section-analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Analyse</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.analysis')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -929,7 +930,7 @@
         {#if editedRecommandation}
           <div id="section-recommandations" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Recommandations</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.recommendations')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -954,7 +955,7 @@
         {#if executiveSummary.references && executiveSummary.references.length > 0}
           <div id="section-references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Références</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.references')}</h2>
             </div>
             <References references={executiveSummary.references} />
           </div>
@@ -968,8 +969,8 @@
 {#if selectedFolderId && filteredUseCases.length > 0}
   <div class="report-cover-page">
     <div class="report-cover-header">
-      <h1 class="report-cover-title">Annexe</h1>
-      <h2 class="report-cover-subtitle">Fiches des cas d'usage</h2>
+      <h1 class="report-cover-title">{$_('dashboard.annex')}</h1>
+      <h2 class="report-cover-subtitle">{$_('dashboard.annexUseCases')}</h2>
     </div>
   </div>
 {/if}
@@ -1000,10 +1001,10 @@
 <div class="report-cover-page">
   <div class="report-cover-header">
     <h1 class="report-cover-title">Top AI Ideas</h1>
-    <h2 class="report-cover-subtitle">Priorisez vos innovations par l'apport de valeur</h2>
+    <h2 class="report-cover-subtitle">{$_('dashboard.subtitle')}</h2>
   </div>
   <div class="report-cover-summary">
-    <h3>À Propos</h3>
+    <h3>{$_('dashboard.about')}</h3>
     <div class="prose prose-slate max-w-none">
       <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
         <p>

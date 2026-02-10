@@ -1,25 +1,27 @@
 <script lang="ts">
-import { goto } from '$app/navigation';
-import { apiPost } from '$lib/utils/api';
-import { setUser } from '$lib/stores/session';
-  import {
-    isWebAuthnSupported,
-    startWebAuthnAuthentication,
-    getWebAuthnErrorMessage,
-  } from '$lib/services/webauthn-client';
-  import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { apiPost } from '$lib/utils/api';
+	import { setUser } from '$lib/stores/session';
+	import { get } from 'svelte/store';
+	import { _ } from 'svelte-i18n';
+	  import {
+	    isWebAuthnSupported,
+	    startWebAuthnAuthentication,
+	    getWebAuthnErrorMessage,
+	  } from '$lib/services/webauthn-client';
+	  import { onMount } from 'svelte';
 
 let loading = false;
 let error = '';
 let webauthnSupported = false;
 let showLostDevice = false;
 
-  onMount(() => {
-    webauthnSupported = isWebAuthnSupported();
-    if (!webauthnSupported) {
-      error = 'Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).';
-    }
-  });
+	  onMount(() => {
+	    webauthnSupported = isWebAuthnSupported();
+	    if (!webauthnSupported) {
+	      error = get(_)('auth.login.unsupportedBrowser');
+	    }
+	  });
 
   async function handleLogin() {
     loading = true;
@@ -67,16 +69,16 @@ let showLostDevice = false;
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
   <div class="max-w-md w-full space-y-8">
-    <div>
-      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-        Connexion
-      </h2>
-      <p class="mt-2 text-center text-sm text-gray-600">
-        {webauthnSupported 
-          ? 'Utilisez votre passkey ou biométrie' 
-          : 'WebAuthn non disponible sur ce navigateur'}
-      </p>
-    </div>
+	    <div>
+	      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+	        {$_('auth.login.title')}
+	      </h2>
+	      <p class="mt-2 text-center text-sm text-gray-600">
+	        {webauthnSupported 
+	          ? $_('auth.login.supportedHint')
+	          : $_('auth.login.notAvailable')}
+	      </p>
+	    </div>
 
     {#if !webauthnSupported}
       <div class="rounded-md bg-red-50 p-4">
@@ -95,58 +97,58 @@ let showLostDevice = false;
             on:click={handleLogin}
             disabled={loading}
             class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Connexion...' : 'Se connecter avec WebAuthn'}
-          </button>
-        </div>
+	          >
+	            {loading ? $_('auth.login.buttonLoading') : $_('auth.login.button')}
+	          </button>
+	        </div>
 
         <div class="text-center">
           <button
             type="button"
             class="font-medium text-indigo-600 hover:text-indigo-500 bg-transparent border-none cursor-pointer"
             on:click={handleLostDevice}
-          >
-            J'ai perdu mon appareil
-          </button>
-        </div>
+	          >
+	            {$_('auth.login.lostDevice')}
+	          </button>
+	        </div>
 
-        <div class="text-center">
-          <a href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
-            Pas encore de compte ? S'inscrire
-          </a>
-        </div>
-      </div>
-    {:else}
+	        <div class="text-center">
+	          <a href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+	            {$_('auth.login.noAccount')}
+	          </a>
+	        </div>
+	      </div>
+	    {:else}
       <div class="mt-8 space-y-6">
           <div class="rounded-md bg-blue-50 p-4">
             <div class="flex">
               <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">
-                Perte d'appareil
-                </h3>
-                <div class="mt-2 text-sm text-blue-700">
-                <p>Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.</p>
-              </div>
-            </div>
-          </div>
-        </div>
+	                <h3 class="text-sm font-medium text-blue-800">
+	                {$_('auth.login.lostDeviceTitle')}
+	                </h3>
+	                <div class="mt-2 text-sm text-blue-700">
+	                <p>{$_('auth.webauthnRegisterNotice')}</p>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
 
-        <div class="text-center">
-          <a href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
-            Enregistrer un nouvel appareil (workflow complet)
-          </a>
-        </div>
+	        <div class="text-center">
+	          <a href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+	            {$_('auth.login.registerNewDevice')}
+	          </a>
+	        </div>
 
         <div class="text-center">
           <button
             type="button"
             class="font-medium text-gray-600 hover:text-gray-500 bg-transparent border-none cursor-pointer"
             on:click={() => showLostDevice = false}
-          >
-            Retour à la connexion normale
-          </button>
-        </div>
-      </div>
-    {/if}
+	          >
+	            {$_('auth.login.backToLogin')}
+	          </button>
+	        </div>
+	      </div>
+	    {/if}
   </div>
 </div>

@@ -95,10 +95,10 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
           - [ ] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
         - [ ] Commands (run from repo root):
           - [x] `rg --files ui/src api/src e2e/tests > /tmp/wave2-i18n-filelist.txt`
-          - [ ] Optional: focus only on likely user-visible strings:
-            - [x] `rg -n \"\\b(t\\(|\\$t\\b|i18n|locale|lang)\\b\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt`
-            - [ ] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head` (spot-check: hardcoded strings)
-            - [ ] `rg -n \"[A-Za-zÀ-ÿ]{3,}\" ui/src | head` (spot-check: raw text nodes)
+        - [ ] Optional: focus only on likely user-visible strings:
+            - [x] `rg -n \"(\\$_\\(|\\bt\\(|\\$t\\b|i18n|locale|lang)\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt` (includes Svelte `{$_('...')}` usage)
+            - [x] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head -n 50 > /tmp/wave2-i18n-strings-sample.txt` (spot-check: hardcoded strings sample)
+            - [x] `rg -n \">[^<{\\\\n][^<]{2,}<\" ui/src/routes ui/src/lib/components | head -n 200 > /tmp/wave2-i18n-textnodes-sample.txt` (spot-check: raw text nodes sample)
         - [ ] Walk the list and identify every user-visible string that must be translated or moved to i18n keys:
           - [ ] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
           - [ ] UI components/shared text
@@ -106,8 +106,16 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
           - [ ] Emails/templates (if present)
         - [ ] Record findings in this section (date + short bullet list of missing keys + the files where they occur).
       - [ ] Inventory log (append-only):
-        - [ ] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Hotspots: `/tmp/wave2-i18n-hotspots.txt` (0 lines with current pattern). Findings:
-          - [ ] TODO: run spot-check regexes to identify hardcoded strings and missing keys.
+        - [ ] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Findings:
+          - [ ] Hotspots: `/tmp/wave2-i18n-hotspots.txt` (95 lines, updated regex includes `$_(`).
+          - [ ] Samples generated:
+            - [ ] `/tmp/wave2-i18n-strings-sample.txt` (50 lines)
+            - [ ] `/tmp/wave2-i18n-textnodes-sample.txt` (200 lines)
+          - [ ] Preliminary findings (will be cleared by implementation below):
+            - [ ] Several routes still contain hardcoded FR strings: `/dashboard`, `/matrix`, `/folders`, `/folder/new`, `/organizations`, `/settings`, auth pages.
+        - [ ] 2026-02-10: Implementation progress snapshot:
+          - [ ] i18n applied to key routes/components: auth pages, dashboard, matrix, folders list/detail, folder new, organizations list, settings (main headings/labels), and shared header/menu labels.
+          - [ ] Remaining to sweep before the next Partial UAT: `/organizations/new`, `/organizations/:id`, `/usecase/:id` (and nested components), plus any remaining shared components and E2E selectors that assume FR strings.
       - [ ] Implementation:
         - [ ] Add missing i18n keys (FR/EN) for all identified strings.
         - [ ] Replace hardcoded strings with i18n lookups consistently.
