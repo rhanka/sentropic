@@ -41,7 +41,9 @@
     "clickToView": "Cliquez pour voir les détails",
     "sessionCheck": "Vérification de la session…",
     "redirecting": "Redirection…",
-    "user": "Utilisateur"
+    "user": "Utilisateur",
+    "na": "N/A",
+    "readOnlyDisabled": "Mode lecture seule : création / suppression désactivées."
   },
   "home": {
     "welcomeTitle": "Bienvenue sur Top AI Ideas",
@@ -64,7 +66,74 @@
     "lastUsed": "Dernière utilisation : {date}",
     "verifyInProgress": "Vérification en cours…",
     "redirectingDashboard": "Redirection vers le tableau de bord…",
-    "registerDeviceNow": "Vous allez maintenant enregistrer votre appareil WebAuthn"
+    "registerDeviceNow": "Vous allez maintenant enregistrer votre appareil WebAuthn",
+    "devices": {
+      "title": "Mes appareils",
+      "subtitle": "Gérez les appareils enregistrés pour l'authentification WebAuthn",
+      "empty": "Aucun appareil enregistré",
+      "register": "Enregistrer un appareil",
+      "addNew": "Ajouter un nouvel appareil",
+      "rename": "Renommer",
+      "revoke": "Révoquer",
+      "uvEnabled": "UV activée",
+      "addedOn": "Ajouté le {date}",
+      "lastUsed": "Dernière utilisation : {date}",
+      "confirmRevoke": "Êtes-vous sûr de vouloir révoquer l'appareil \"{deviceName}\" ? Vous ne pourrez plus vous connecter avec cet appareil.",
+      "errors": {
+        "load": "Erreur lors du chargement des appareils",
+        "update": "Erreur lors de la mise à jour",
+        "revoke": "Erreur lors de la révocation"
+      }
+    },
+    "magicLink": {
+      "title": "Vérification du lien magique",
+      "successTitle": "Connexion réussie !",
+      "errorTitle": "Erreur de vérification",
+      "backToLogin": "Retour à la connexion",
+      "errors": {
+        "missingToken": "Token manquant dans l'URL",
+        "verifyFailed": "Erreur lors de la vérification du lien magique"
+      }
+    },
+    "login": {
+      "title": "Connexion",
+      "supportedHint": "Utilisez votre passkey ou biométrie",
+      "notAvailable": "WebAuthn non disponible sur ce navigateur",
+      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
+      "button": "Se connecter avec WebAuthn",
+      "buttonLoading": "Connexion…",
+      "lostDevice": "J'ai perdu mon appareil",
+      "noAccount": "Pas encore de compte ? S'inscrire",
+      "lostDeviceTitle": "Perte d'appareil",
+      "registerNewDevice": "Enregistrer un nouvel appareil (workflow complet)",
+      "backToLogin": "Retour à la connexion normale"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Authentification sécurisée avec WebAuthn",
+      "unsupportedBrowserTitle": "Navigateur non compatible",
+      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
+      "emailLabel": "Email",
+      "getCode": "Obtenir un code",
+      "sendingCode": "Envoi…",
+      "alreadyHaveAccount": "Déjà un compte ? Se connecter",
+      "codeLabel": "Code à 6 chiffres",
+      "codeHelp": "Saisissez le code reçu par email",
+      "verifyCode": "Vérifier le code",
+      "verifyingCode": "Vérification…",
+      "changeEmail": "Modifier l'email",
+      "codeVerifiedTitle": "Code vérifié !",
+      "registerDevice": "Enregistrer mon appareil WebAuthn",
+      "registering": "Enregistrement…",
+      "successTitle": "Inscription réussie !",
+      "success": {
+        "codeSent": "Code envoyé par email"
+      },
+      "errors": {
+        "invalidEmail": "Veuillez saisir une adresse email valide",
+        "sendCode": "Erreur lors de l'envoi du code"
+      }
+    }
   },
   "matrix": {
     "title": "Configuration de l'évaluation Valeur/Complexité",
@@ -86,6 +155,7 @@
     "valueThresholdsTitle": "Configuration des seuils de Valeur",
     "complexityThresholdsTitle": "Configuration des seuils de Complexité",
     "value": "Valeur",
+    "complexity": "Complexité",
     "fibonacciPoints": "Points Fibonacci",
     "useCaseCount": "Nombre de cas",
     "level": "Niveau",
@@ -96,7 +166,60 @@
     "copyExistingDesc": "Copier la matrice d'un autre dossier",
     "selectFolder": "Sélectionner un dossier…",
     "blankEvaluation": "Évaluation vierge",
-    "blankEvaluationDesc": "Commencer avec une matrice vide"
+    "blankEvaluationDesc": "Commencer avec une matrice vide",
+    "lockError": "Erreur de verrouillage",
+    "unlockRequestSent": "Demande de déverrouillage envoyée",
+    "unlockRequestError": "Erreur demande de déverrouillage",
+    "lockForced": "Verrou forcé",
+    "lockForceError": "Erreur forçage verrou",
+    "pleaseSelectFolder": "Veuillez sélectionner un dossier pour voir sa matrice",
+    "folderLoaded": "Évaluation du dossier \"{name}\" chargée",
+    "folderNoMatrix": "Le dossier \"{name}\" n'a pas de matrice configurée",
+    "loadError": "Erreur lors du chargement de la matrice"
+  },
+  "folders": {
+    "title": "Dossiers",
+    "actions": "Actions dossier",
+    "loading": "Chargement des dossiers…",
+    "useCaseCount": "{count} cas d'usage",
+    "deleteSuccess": "Dossier supprimé avec succès !",
+    "deleteError": "Erreur lors de la suppression du dossier",
+    "detail": {
+      "defaultTitle": "Dossier",
+      "title": "Dossier",
+      "loadingUseCases": "Chargement des cas d'usage…",
+      "valueLabel": "Valeur:",
+      "complexityLabel": "Complexité:"
+    },
+    "new": {
+      "orgOptional": "Organisation (optionnel)",
+      "unspecified": "Non spécifié",
+      "createOrg": "Créer une organisation",
+      "context": "Contexte",
+      "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
+      "useCaseCount": "Nombre de cas d'usage",
+      "default": "Défaut: {count}",
+      "loadingOrganizations": "Chargement des organisations…",
+      "noOrganizations": "Aucune organisation disponible.",
+      "documentsTitle": "Documents",
+      "documentsHelp": "Ajouter des documents au contexte. Un résumé est généré automatiquement.",
+      "addDocument": "Ajouter un document",
+      "noDocumentsYet": "Aucun document pour le moment.",
+      "errors": {
+        "draftCreateFailed": "Impossible de créer un brouillon de dossier"
+      }
+    }
+  },
+  "organizations": {
+    "title": "Organisations",
+    "actions": "Actions organisation",
+    "enriching": "Enrichissement en cours…",
+    "delete": "Supprimer l'organisation",
+    "deleteSuccess": "Organisation supprimée avec succès !",
+    "deleteError": "Erreur lors de la suppression",
+    "industry": "Secteur: {value}",
+    "sizeLabel": "Taille",
+    "clickForDetails": "Cliquez pour voir les détails"
   },
   "dashboard": {
     "reportTitle": "Rapport Top AI Ideas",
@@ -118,19 +241,39 @@
     "subtitle": "Priorisez vos innovations par l'apport de valeur",
     "about": "À Propos"
   },
-  "folders": {
-    "new": {
-      "orgOptional": "Organisation (optionnel)",
-      "unspecified": "Non spécifié",
-      "createOrg": "Créer une organisation",
-      "context": "Contexte",
-      "useCaseCount": "Nombre de cas d'usage",
-      "default": "Défaut: 10"
-    }
-  },
   "settings": {
     "title": "Paramètres",
-    "accountWorkspace": "Compte & Workspace"
+    "accountWorkspace": "Compte & Workspace",
+    "account": "Compte",
+    "workspace": "Workspace",
+    "dangerZone": "Zone dangereuse",
+    "adminOnlyHint": "Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.",
+    "emailLabel": "Email",
+    "nameLabel": "Nom",
+    "effectiveRoleLabel": "Role effectif",
+    "statusLabel": "Statut",
+    "promptManagement": "Gestion des Prompts IA",
+    "aiConfig": "Configuration IA",
+    "aiLoading": "Chargement des paramètres…",
+    "aiDefaultModel": "Modèle OpenAI par défaut",
+    "aiDefaultModelHint": "Modèle utilisé par défaut pour toutes les opérations IA",
+    "aiConcurrency": "Jobs simultanés",
+    "aiConcurrencyHint": "Nombre de jobs IA traités en parallèle (1-50)",
+    "aiInterval": "Intervalle de traitement (ms)",
+    "aiIntervalHint": "Délai entre les cycles de traitement de la queue (1000-60000ms)",
+    "queueManagement": "Gestion de la Queue IA",
+    "queueTotal": "Total",
+    "queuePending": "En attente",
+    "queueRunning": "En cours",
+    "queueDone": "Terminés",
+    "queueFailed": "Échoués",
+    "systemInfo": "Informations système",
+    "editPrompt": "Éditer le prompt",
+    "promptName": "Nom du prompt",
+    "promptDescription": "Description",
+    "detectedVariables": "Variables détectées",
+    "noVariablesDetected": "Aucune variable détectée",
+    "promptContent": "Contenu du prompt"
   },
   "documents": {
     "title": "Documents",

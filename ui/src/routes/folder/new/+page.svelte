@@ -3,6 +3,8 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { addToast } from '$lib/stores/toast';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { currentOrganizationId, organizationsStore, fetchOrganizations } from '$lib/stores/organizations';
   import { createDraftFolder, updateFolder, currentFolderId, type Folder } from '$lib/stores/folders';
   import { apiGet, apiPost } from '$lib/utils/api';
@@ -287,8 +289,8 @@
       <button
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
         on:click={handleSave}
-        title="Créer"
-        aria-label="Créer"
+        title={$_('common.create')}
+        aria-label={$_('common.create')}
         disabled={isSaving || isAutoName || !folder.name?.trim()}
         type="button"
       >
@@ -301,8 +303,8 @@
       <button
         class="rounded p-2 transition text-warning hover:bg-slate-100"
         on:click={handleCancel}
-        title="Annuler"
-        aria-label="Annuler"
+        title={$_('common.cancel')}
+        aria-label={$_('common.cancel')}
         type="button"
       >
         <Trash2 class="w-5 h-5" />
@@ -314,58 +316,58 @@
     <div class="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-700">{draftError}</div>
   {/if}
 
-  <div class="rounded border border-slate-200 bg-white p-6 space-y-4">
-    <div class="space-y-2">
-      <div class="text-sm font-medium text-slate-700">Organisation (optionnel)</div>
-      {#if isLoadingOrganizations}
-        <div class="w-full rounded border border-slate-300 p-2 bg-slate-50 text-slate-500">
-          Chargement des organisations...
-        </div>
-      {:else}
-        <select class="w-full rounded border border-slate-300 p-2" bind:value={$currentOrganizationId}>
-          <option value="">Non spécifié</option>
-          {#each $organizationsStore as organization (organization.id)}
-            <option value={organization.id}>{organization.name}</option>
-          {/each}
-        </select>
-        {#if $organizationsStore.length === 0}
-          <p class="text-sm text-slate-500">
-            Aucune organisation disponible.
-            <a href="/organizations" class="text-blue-600 hover:text-blue-800 underline">Créer une organisation</a>
-          </p>
-        {/if}
-      {/if}
-    </div>
+	  <div class="rounded border border-slate-200 bg-white p-6 space-y-4">
+	    <div class="space-y-2">
+	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.orgOptional')}</div>
+	      {#if isLoadingOrganizations}
+	        <div class="w-full rounded border border-slate-300 p-2 bg-slate-50 text-slate-500">
+	          {$_('folders.new.loadingOrganizations')}
+	        </div>
+	      {:else}
+	        <select class="w-full rounded border border-slate-300 p-2" bind:value={$currentOrganizationId}>
+	          <option value="">{$_('folders.new.unspecified')}</option>
+	          {#each $organizationsStore as organization (organization.id)}
+	            <option value={organization.id}>{organization.name}</option>
+	          {/each}
+	        </select>
+	        {#if $organizationsStore.length === 0}
+	          <p class="text-sm text-slate-500">
+	            {$_('folders.new.noOrganizations')}
+	            <a href="/organizations" class="text-blue-600 hover:text-blue-800 underline">{$_('folders.new.createOrg')}</a>
+	          </p>
+	        {/if}
+	      {/if}
+	    </div>
 
-    <div class="space-y-2">
-      <div class="text-sm font-medium text-slate-700">Contexte</div>
-      <EditableInput
-        label=""
-        value={folder.description || ''}
-        markdown={true}
-        placeholder="Décrire le contexte métier et les objectifs…"
-        locked={$workspaceReadOnlyScope}
-        apiEndpoint={folder.id ? `/folders/${folder.id}` : ''}
-        fullData={{ description: folder.description || '' }}
-        originalValue={folder.id ? (originalContext ?? (folder.description || '')) : (folder.description || '')}
-        changeId={folder.id ? `folder-context-${folder.id}` : ''}
+	    <div class="space-y-2">
+	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.context')}</div>
+	      <EditableInput
+	        label=""
+	        value={folder.description || ''}
+	        markdown={true}
+	        placeholder={$_('folders.new.contextPlaceholder')}
+	        locked={$workspaceReadOnlyScope}
+	        apiEndpoint={folder.id ? `/folders/${folder.id}` : ''}
+	        fullData={{ description: folder.description || '' }}
+	        originalValue={folder.id ? (originalContext ?? (folder.description || '')) : (folder.description || '')}
+	        changeId={folder.id ? `folder-context-${folder.id}` : ''}
         on:change={(e) => handleFieldUpdate('description', e.detail.value)}
       />
     </div>
 
-    <div class="flex items-center gap-3">
-      <label class="text-sm font-medium text-slate-700" for="nb-usecases">Nombre de cas d'usage</label>
-      <input
-        id="nb-usecases"
-        type="number"
+	    <div class="flex items-center gap-3">
+	      <label class="text-sm font-medium text-slate-700" for="nb-usecases">{$_('folders.new.useCaseCount')}</label>
+	      <input
+	        id="nb-usecases"
+	        type="number"
         min="1"
         max="25"
         class="w-20 rounded border border-slate-300 p-2"
-        bind:value={nbUseCases}
-      />
-      <span class="text-xs text-slate-500">Défaut: 10</span>
-    </div>
-  </div>
+	        bind:value={nbUseCases}
+	      />
+	      <span class="text-xs text-slate-500">{$_('folders.new.default', { values: { count: 10 } })}</span>
+	    </div>
+	  </div>
 
   <div class="space-y-2">
     {#if folder.id}
@@ -377,32 +379,31 @@
           hasAnyDoc = Array.isArray(e.detail.items) && e.detail.items.length > 0;
         }}
       />
-    {:else}
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="font-semibold">Documents</div>
-            <div class="text-sm text-slate-600">
-              Ajouter des documents au contexte. Un résumé est généré automatiquement.
-            </div>
-          </div>
-          <button
-            class="rounded p-2 transition text-primary hover:bg-slate-100"
-            on:click={async () => {
-              const id = await ensureDraftFolder();
-              if (!id) addToast({ type: 'error', message: 'Impossible de créer un brouillon de dossier' });
-            }}
-            title="Ajouter un document"
-            aria-label="Ajouter un document"
-            type="button"
-          >
-            <CirclePlus class="w-5 h-5" />
-          </button>
-        </div>
-        <div class="mt-3 text-sm text-slate-500">Aucun document pour le moment.</div>
-      </div>
-    {/if}
-  </div>
+	    {:else}
+	      <div class="rounded border border-slate-200 bg-white p-4">
+	        <div class="flex items-start justify-between gap-3">
+	          <div>
+	            <div class="font-semibold">{$_('folders.new.documentsTitle')}</div>
+	            <div class="text-sm text-slate-600">
+	              {$_('folders.new.documentsHelp')}
+	            </div>
+	          </div>
+	          <button
+	            class="rounded p-2 transition text-primary hover:bg-slate-100"
+	            on:click={async () => {
+	              const id = await ensureDraftFolder();
+	              if (!id) addToast({ type: 'error', message: get(_)('folders.new.errors.draftCreateFailed') });
+	            }}
+	            title={$_('folders.new.addDocument')}
+	            aria-label={$_('folders.new.addDocument')}
+	            type="button"
+	          >
+	            <CirclePlus class="w-5 h-5" />
+	          </button>
+	        </div>
+	        <div class="mt-3 text-sm text-slate-500">{$_('folders.new.noDocumentsYet')}</div>
+	      </div>
+	    {/if}
+	  </div>
 </section>
-
 
