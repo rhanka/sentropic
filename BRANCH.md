@@ -26,11 +26,11 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Baseline and rules**
-  - [ ] Read `.cursor/rules/MASTER.mdc` and `.cursor/rules/workflow.mdc`.
-  - [ ] Read relevant scope rules (`architecture.mdc`, `testing.mdc`, `data.mdc`, `security.mdc`).
-  - [ ] Confirm current branch is `feat/i18-print` and aligned with `origin/main`.
-  - [ ] Confirm commit workflow is enforced: selective staging + `make commit MSG="..."` only.
+- [x] **Lot 0 — Baseline and rules**
+  - [x] Read `.cursor/rules/MASTER.mdc` and `.cursor/rules/workflow.mdc`.
+  - [x] Read relevant scope rules (`architecture.mdc`, `testing.mdc`, `data.mdc`, `security.mdc`).
+  - [x] Confirm current branch is `feat/i18-print` and aligned with `origin/main`.
+  - [x] Confirm commit workflow is enforced: selective staging + `make commit MSG="..."` only.
 
 - [x] **Lot 1 — Wave 1 (historical, already completed)**
   - [x] **Environment** (Wave 1 UAT performed in tmp workspaces):
@@ -161,6 +161,54 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
 
 - [ ] **Lot N — Final validation**
   - [ ] Consolidate deferred test backlog from Wave 1 and Wave 2 scopes.
+  - [ ] Deferred tests (by scope, by file):
+    - [ ] API (Wave 1 carry-over):
+      - [ ] `api/tests/api/import-export.test.ts` (i18n/export prefixes)
+      - [ ] `api/tests/api/docx.test.ts` (one-page DOCX generation and template contract)
+    - [ ] API (Wave 2):
+      - [ ] `api/tests/api/ai-settings.test.ts` (bilingual prompt selection + fallback)
+      - [ ] `api/tests/api/use-cases.test.ts` (bilingual payload normalization + backward compatibility)
+      - [ ] `api/tests/api/organizations.test.ts` (bilingual organization payload consumption, if impacted)
+      - [ ] `api/tests/api/folders.test.ts` (matrix selection persistence + executive summary payload)
+      - [ ] `api/tests/api/matrix.test.ts` (matrix generation per org/folder, if separate suite exists)
+      - [ ] `api/tests/api/docx.test.ts` (extend: executive synthesis generation via unified endpoint)
+    - [ ] UI (Wave 1):
+      - [ ] None explicitly required by Wave 1 scopes
+    - [ ] UI (Wave 2):
+      - [ ] `ui/tests/i18n.spec.ts` (bilingual edit + locale switching behavior, if tests exist)
+      - [ ] `ui/tests/folders.spec.ts` (folder generation matrix option/selection, if tests exist)
+    - [ ] E2E (Wave 1 carry-over):
+      - [ ] i18n/route regression pack:
+        - [ ] `e2e/tests/00-access-control.spec.ts`
+        - [ ] `e2e/tests/00-ai-generation.spec.ts`
+        - [ ] `e2e/tests/01-admin-users.spec.ts`
+        - [ ] `e2e/tests/01-app.spec.ts`
+        - [ ] `e2e/tests/01-organizations-detail.spec.ts`
+        - [ ] `e2e/tests/02-organizations.spec.ts`
+        - [ ] `e2e/tests/03-chat.spec.ts`
+        - [ ] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+        - [ ] `e2e/tests/04-dossiers-reload-draft.spec.ts`
+        - [ ] `e2e/tests/04-documents-summary.spec.ts`
+        - [ ] `e2e/tests/04-documents-ui-actions.spec.ts`
+        - [ ] `e2e/tests/04-tenancy-workspaces.spec.ts`
+        - [ ] `e2e/tests/05-error-handling.spec.ts`
+        - [ ] `e2e/tests/05-folders.spec.ts`
+        - [ ] `e2e/tests/05-i18n.spec.ts`
+        - [ ] `e2e/tests/05-usecase-detail.spec.ts`
+        - [ ] `e2e/tests/06-settings.spec.ts`
+        - [ ] `e2e/tests/06-streams.spec.ts`
+        - [ ] `e2e/tests/06-usecase.spec.ts`
+        - [ ] `e2e/tests/07-import-export.spec.ts`
+        - [ ] `e2e/tests/07-matrix.spec.ts`
+        - [ ] `e2e/tests/07-workflow.spec.ts`
+        - [ ] `e2e/tests/07_comment_assistant.spec.ts`
+      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (DOCX download assertions)
+      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (constraints live update via chat/SSE)
+      - [ ] Ctrl+P docx->pdf->print flow (when implemented)
+    - [ ] E2E (Wave 2):
+      - [ ] `e2e/tests/03-chat.spec.ts` (FR/EN generation parity and fallback)
+      - [ ] `e2e/tests/07-matrix.spec.ts` (folder generation matrix reuse vs specific)
+      - [ ] `e2e/tests/executive-summary.spec.ts` (if exists: synthesis download contract)
   - [ ] `make test-api`
   - [ ] `make test-ui`
   - [ ] `make build-api build-ui-image`
