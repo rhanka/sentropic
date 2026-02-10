@@ -169,7 +169,7 @@
       <button
         class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
         on:click={toggleBurgerMenu}
-        aria-label="Menu"
+        aria-label={$_('common.menu')}
         aria-expanded={showBurgerMenu}
         type="button"
       >
@@ -252,7 +252,7 @@
   <button
     class="fixed inset-0 z-[80] bg-transparent"
     on:click={closeAllMenus}
-    aria-label="Close menu"
+    aria-label={$_('common.closeMenu')}
     transition:fade={{ duration: 120 }}
   ></button>
 

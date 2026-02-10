@@ -1,8 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
 
-  // La création de dossier et la génération sont désormais sur /folder/new.
+  // Folder creation and generation are now on /folder/new.
   onMount(() => {
     goto('/folder/new', { replaceState: true });
   });
@@ -10,6 +11,6 @@
 
 <section class="space-y-6">
   <div class="rounded border border-slate-200 bg-white p-6 shadow-sm">
-    Redirection vers <a class="underline text-blue-600" href="/folder/new">/folder/new</a>…
+    {$_('home.redirectingTo', { values: { path: '/folder/new' } })}
   </div>
 </section>

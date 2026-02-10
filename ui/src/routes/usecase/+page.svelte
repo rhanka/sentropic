@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { currentFolderId } from '$lib/stores/folders';
+  import { _ } from 'svelte-i18n';
 
   onMount(() => {
     // Use case list moved to /folders/[id]
@@ -22,5 +23,5 @@
 </script>
 
 <section class="space-y-6">
-  <h1 class="text-3xl font-semibold">Redirection…</h1>
+  <h1 class="text-3xl font-semibold">{$_('common.redirecting')}</h1>
 </section>
