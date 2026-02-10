@@ -1,7 +1,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
-  // Tous les usages de {@html} dans ce fichier passent par renderMarkdownWithRefs() ou parseReferencesInText()
-  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  // All {@html} usage in this file is routed through renderMarkdownWithRefs() or parseReferencesInText(),
+  // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import References from '$lib/components/References.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -10,6 +10,7 @@
   import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
   import { goto } from '$app/navigation';
@@ -954,9 +955,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- Informations -->
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="contact">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2 group">
-            <Info class="w-5 h-5 text-slate-500" />
-            Informations
+	          <h3 class="font-semibold flex items-center gap-2 group">
+	            <Info class="w-5 h-5 text-slate-500" />
+	            {$_('usecase.info.title')}
             <CommentBadge
               count={commentCounts?.contact ?? 0}
               disabled={!onOpenComments}
@@ -965,8 +966,8 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </h3>
         </div>
         <div class="space-y-3">
-          <div class="flex items-start gap-2">
-            <span class="font-medium text-slate-700 mt-1">Contact:</span>
+	          <div class="flex items-start gap-2">
+	            <span class="font-medium text-slate-700 mt-1">{$_('usecase.info.contact')}</span>
             {#if isPrinting}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
                 {@html (useCase?.data?.contact || useCase?.contact) ? renderMarkdownWithRefs(useCase?.data?.contact || useCase?.contact || '', references) : ''}
@@ -998,9 +999,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       {#if (useCase?.data?.technologies || useCase?.technologies) && (useCase?.data?.technologies || useCase?.technologies || []).length > 0}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="technologies">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2 group">
-              <Monitor class="w-5 h-5 text-slate-500" />
-              Technologies
+	            <h3 class="font-semibold flex items-center gap-2 group">
+	              <Monitor class="w-5 h-5 text-slate-500" />
+	              {$_('usecase.info.technologies')}
               <CommentBadge
                 count={commentCounts?.technologies ?? 0}
                 disabled={!onOpenComments}
@@ -1231,7 +1232,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                         <Star class="w-4 h-4 {i < stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}" />
                       {/each}
                     </div>
-                    <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                    <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
                   </div>
                 </div>
                 {#if isPrinting}
@@ -1290,7 +1291,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                         {/if}
                       {/each}
                     </div>
-                    <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                    <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
                   </div>
                 </div>
                 {#if isPrinting}

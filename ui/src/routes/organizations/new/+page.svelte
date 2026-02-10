@@ -12,6 +12,7 @@
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { _ } from 'svelte-i18n';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -209,7 +210,7 @@
     locked={$workspaceReadOnlyScope}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
-    nameLabel="Nom de l'organisation"
+    nameLabel={$_('organizations.form.nameLabel')}
   >
     <div slot="actions" class="flex items-center gap-2">
         <button
@@ -217,8 +218,8 @@
           data-testid="enrich-organization"
           on:click={handleEnrichOrganization}
         disabled={$workspaceReadOnlyScope || isEnriching || !organization.name?.trim() || docsUploading}
-        title="IA"
-        aria-label="IA"
+        title={$_('common.ai')}
+        aria-label={$_('common.ai')}
         >
         {#if isEnriching}
           <Loader2 class="w-5 h-5 animate-spin" />
@@ -228,8 +229,8 @@
         </button>
         <button
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
-          title="Créer"
-        aria-label="Créer"
+          title={$_('common.create')}
+        aria-label={$_('common.create')}
           on:click={handleCreateOrganization}
           disabled={$workspaceReadOnlyScope || !organization.name?.trim() || isCreating}
         >
@@ -242,8 +243,8 @@
       <button
         class="rounded p-2 transition text-warning hover:bg-slate-100"
         on:click={handleCancel}
-        title="Annuler"
-        aria-label="Annuler"
+        title={$_('common.cancel')}
+        aria-label={$_('common.cancel')}
       >
         <Trash2 class="w-5 h-5" />
         </button>
@@ -263,7 +264,7 @@
         />
       {:else}
         <div class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          Renseigner un nom d’organisation pour activer l’ajout de documents.
+          {$_('organizations.form.docsHint')}
         </div>
       {/if}
     </div>
@@ -272,7 +273,7 @@
       {#if organization.references && organization.references.length > 0}
     <div class="rounded border border-slate-200 bg-white p-4">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold">Références</h3>
+            <h3 class="font-semibold">{$_('common.references')}</h3>
       </div>
           <References references={organization.references} referencesScaleFactor={1} />
     </div>
@@ -280,5 +281,3 @@
     </div>
   </OrganizationForm>
 {/if}
-
-
