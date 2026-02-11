@@ -73,10 +73,10 @@
   - [x] Feedback utilisateur (👍/👎) sur les suggestions
   - [x] icones sous le chat utilisateurs (visibles au hover sur la bulle de chat ou les icones)
     - [x] Modification d'un message utilisateur
-      - [x] Propose l'annulation des modifications effectuées dans le chat (objets édités le cas échéant depuis le point du chat) ou de les garder (rollback) 
+      - [x] Propose l'annulation des modifications effectuées dans le chat (objets édités le cas échéant depuis le point du chat) ou de les garder (rollback)
     - [x] Retry d'un message utilisateur (supprime la suite déjà effectuée) (idem propose annulation ou pas)
     - [x] Copie d'un message utilisateur
-  - [x] icones soue le chat de réponse 
+  - [x] icones soue le chat de réponse
     - [x] Copie d'une réponse (visibles au hover sur la bulle de chat ou les icones)
   - [x] Amélioration de la bulle d'input utlisateur
     - [x] Mode monoligne
@@ -132,10 +132,16 @@
   - [ ] define a model for usecase fitting in one page
   - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
 - [ ] basculer en i18n bilingue anglais / français
+  - [x] Résumé fait (déjà en place) : inventaire exhaustif des chaînes UI, remplacement par i18n, dictionnaires FR/EN étendus, switch de langue validé sur vues clés (see Wave 2 Lot 2.1).
   - [ ] identifier tous les messages
-  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
+  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
+- [ ] **Lot 2.3 Bilingual modeling (storage + projection)**
+  - [ ] multilingual storage model scope (use case, organization, folder, prompts).
+  - [ ] Implement API/UI typing + validation + normalization with backward compatibility.
+  - [ ] multilingual prompt model and fallback contract.
+  - [ ] Implement storage/editor/runtime prompt selection by locale.
 - [ ] amélioration gestion idéation cas d'usage
   - [ ] ajouter les contraintes (constraints) au cas d'usage
     - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
@@ -186,7 +192,7 @@
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
   - [ ] proposer un plan d'implémentation en une branche
-- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
+- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
     - [ ] aide locale : en mode "discovery", l'agent intervient lorsqu'une vue n'a pas encore été activée
@@ -213,7 +219,12 @@
   - [ ] Un agent passif gère les déroulés dans l'écran
 - [ ] Renforcement de la structure agentique (phase design)
   Etudier les finalités/opportunités suivantes afin de définir le meilleur modele cible
-  - [ ] Opportunité du RL / modele adaptatif
+  - [ ] Finalités à supporter (on ne fait que la partie agentique ici)
+    - [ ] La finalité sera de pouvoir faire une application auto-codante. La structure de l'agentique est un élément coeur du redesign, il faut penser aux différent contextes et aux interactions d'outils de l'agentique pour lui fournir la meilleur gestion, y compris en gestion de version de lui même
+    - [ ] use case plugin vs code (gère les cas d'agent sous agents)
+    - [ ] use case d'autodoc et assistant de l'app (expert utilisation et test e2e de l'appli) cf paragraph associé
+    - [ ] use case assistant chrome capable de gérer les situations
+  - [ ] Opportunité du RL / modele adaptatif (agentique autonome / apprenant)
   - [ ] Favoriser le templating d'agent (gestion de librairies d'agents, export/import, versionnement)
   - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration) ou un autre modèle
   - [ ] Permettre à l'utilisateur de configurer le modèle de l'agent en cours d'utilisation (soit change de llm ou de puissance de réflexion)
@@ -241,7 +252,7 @@
     - [ ] Gestion de roadmap d'architecture d'entreprise (applications / infrastructures / plan d'évolution / scénarios / critères de priorisation / vision planifiée / gestion des risques)
     - [ ] High level design dossier (movitation for change / diagramme system as-is / composants du system as-is / évaluation SWOT de ces composants / vision business au sens archimate / architecture drivers (constraints, standard, principles) / buisness requirements / non-functional requirements / business objects / high level design scenario = descriptions & schema avec composants / scenario evaluation selon critères / vue de transition / présentation de l'initiative=scenario privilégié (description intiative, Digital scope for initiative, initial goals, prerequisites, buisness outcomes, estimation budget, initiative timelines/milestones, risks, archi dimension) )
     - [ ] Business case management / Porfolio
-    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences 
+    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences
     - [ ] Définition d'un business plan (à approfondir)
     - [ ] Evaluation d'intelligence économique (des docs seront fournis)
     - [ ] Veille stratégique (à approfondir)
