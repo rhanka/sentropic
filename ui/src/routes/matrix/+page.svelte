@@ -1203,7 +1203,7 @@
       <div class="flex">
         <AlertTriangle class="h-6 w-6 text-yellow-500 mr-2" />
         <p>
-          Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.
+          {$_('matrix.weightsRecalcWarning')}
         </p>
       </div>
     </div>
