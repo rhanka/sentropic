@@ -172,21 +172,24 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Provide annex intent (include annex section: yes/no; pagination controlled by template layout). => include annex = yes, page break before each use case configured in sub-template
         - [x] Provide dashboard intent (include dashboard image: yes/no) => yes (from UI)
         - [x] Provide one reference UAT dataset (folder id with executive summary + multiple use cases) folder 1c871982-9962-468c-8fd9-353c2d27a023
-      - [ ] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
-      - [ ] Freeze endpoint I/O contract (request/response schema) based on the template markers.
-      - [ ] Freeze annex/dashboard composition intents.
+      - [x] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
+      - [x] Freeze endpoint I/O contract (request/response schema) based on the template markers.
+      - [x] Freeze annex/dashboard composition intents.
+      - Notes:
+        - Markers extracted from `executive_synthesis.docx`: `report.title`, `folder.name`, `folder.executiveSummary.synthese_executive`, `folder.executiveSummary.introduction`, `folder.executiveSummary.analyse`, `folder.executiveSummary.recommandation`, `folder.execSummary.references`, `annex.title`, `annex.subtitle`, `provided.dashboardImage`, and annex loop (`FOR uc ... INCLUDE ... END-FOR uc`).
+        - Unified payload contract frozen: `templateId`, `entityType`, `entityId`, `provided`, `controls` (+ legacy alias `options`).
     - [ ] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
-      - [ ] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `provided`, `controls`) with backward-compatible alias for legacy `options`.
-      - [ ] Implement template registry strategy (`templateId -> validator/provider/renderer`).
-      - [ ] Keep backward compatibility for existing one-page route if currently used by UI.
-      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `provided`, `controls`) with backward-compatible alias for legacy `options`.
+      - [x] Implement template registry strategy (`templateId -> validator/provider/renderer`).
+      - [x] Keep backward compatibility for existing one-page route if currently used by UI.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
     - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
-      - [ ] Wire `executive-synthesis.docx` master template.
-      - [ ] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
-      - [ ] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
-      - [ ] Ensure heading styles are preserved for synthesis sections and annexed use case titles (TOC-compatible).
-      - [ ] Ensure references rendering uses the marker contract.
-      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Wire `executive-synthesis.docx` master template.
+      - [x] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
+      - [x] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
+      - [x] Ensure heading styles are preserved for synthesis sections and annexed use case titles (TOC-compatible).
+      - [x] Ensure references rendering uses the marker contract.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
       - [ ] Partial UAT:
         - [ ] Download synthesis DOCX and verify section order follows template marker placement.
         - [ ] Verify annex starts exactly at template-defined separator/location.
