@@ -163,18 +163,20 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
 
   - [ ] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
     - [ ] **Lot 2.3.0 — Intake lock and contract freeze**
-      - [ ] Assess current model and define spec/??.md for target mutualized endpoint target and template requirements (take a lok at use_case templating and existing template/README)
-      - [ ] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
-      - [ ] User input bundle (single intake):
-        - [ ] Provide `executive-synthesis.docx` master template.
-        - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
-        - [ ] Provide dashboard intent (include dashboard image: yes/no).
-        - [ ] Provide one reference UAT dataset (folder id with executive summary + multiple use cases).
+      - [x] Assess current model and define `spec/SPEC_TEMPLATING.md` for target mutualized endpoint and template requirements (based on use-case templating and existing template/README)
+      - [x] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
+      - [x] Update `api/templates/README.md` with template authoring guide (required markers, TOC rules, Word/LibreOffice/Google Docs workflow).
+      - [ ] Freeze TOC strategy (Word native TOC field, heading-level contract, update-fields policy).
+      - [x] User input bundle (single intake):
+        - [x] Provide `executive-synthesis.docx` master template.
+        - [x] Provide annex intent (include annex section: yes/no; page break per use case: yes/no). => include annex = yes, page break per use case = yes
+        - [x] Provide dashboard intent (include dashboard image: yes/no) => yes (from UI)
+        - [x] Provide one reference UAT dataset (folder id with executive summary + multiple use cases) folder 1c871982-9962-468c-8fd9-353c2d27a023
       - [ ] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
       - [ ] Freeze endpoint I/O contract (request/response schema) based on the template markers.
       - [ ] Freeze annex/dashboard composition intents.
     - [ ] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
-      - [ ] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `options`).
+      - [ ] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `provided`, `controls`) with backward-compatible alias for legacy `options`.
       - [ ] Implement template registry strategy (`templateId -> validator/provider/renderer`).
       - [ ] Keep backward compatibility for existing one-page route if currently used by UI.
       - [ ] Gate: `make typecheck-api` + `make lint-api`
@@ -184,16 +186,18 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
     - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
       - [ ] Wire `executive-synthesis.docx` master template.
       - [ ] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
-      - [ ] Implement template-controlled annex insertion at the template marker (e.g. `{{ANNEX_USECASES}}`).
+      - [ ] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
+      - [ ] Ensure heading styles are preserved for synthesis sections and annexed use case titles (TOC-compatible).
       - [ ] Ensure references rendering uses the marker contract.
       - [ ] Gate: `make typecheck-api` + `make lint-api`
       - [ ] Partial UAT:
         - [ ] Download synthesis DOCX and verify section order follows template marker placement.
         - [ ] Verify annex starts exactly at template-defined separator/location.
+        - [ ] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
         - [ ] Verify links/references rendering is preserved.
     - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
-      - [ ] Accept dashboard bitmap in endpoint `options` (according to the frozen contract).
-      - [ ] Insert image at template marker (e.g. `{{DASHBOARD_IMAGE}}`) with deterministic sizing.
+      - [ ] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
+      - [ ] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
       - [ ] Implement fallback behavior when image is missing/invalid.
       - [ ] Gate: `make typecheck-api` + `make lint-api`
       - [ ] Partial UAT:
