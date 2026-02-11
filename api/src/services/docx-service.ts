@@ -53,6 +53,9 @@ type PatchPayload = {
   value: unknown;
 };
 
+export type DocxTemplateId = 'usecase-onepage' | 'executive-synthesis-multipage';
+export type DocxEntityType = 'usecase' | 'folder';
+
 type BaseRunStyle = {
   font?: string;
   size?: number;
@@ -106,9 +109,34 @@ type TemplateData = {
   totalComplexityCrosses: string;
 };
 
+type ExecutiveSummaryReference = {
+  title?: string;
+  url?: string;
+  excerpt?: string;
+};
+
+type ExecutiveSummaryContent = {
+  introduction?: string;
+  analyse?: string;
+  recommandation?: string;
+  synthese_executive?: string;
+  references?: ExecutiveSummaryReference[];
+};
+
+export type ExecutiveSynthesisDocxInput = {
+  folderName: string;
+  executiveSummary: ExecutiveSummaryContent;
+  useCases: UseCase[];
+  matrix: MatrixConfig | null;
+  provided?: Record<string, unknown>;
+  controls?: Record<string, unknown>;
+};
+
 type LoopExpansionState = {
   counter: number;
   loopPatches: Record<string, PatchPayload>;
+  includeCounter: number;
+  includeTemplateXmlCache: Map<string, string>;
 };
 
 type LoopMatch = {
@@ -127,6 +155,18 @@ type XmlRange = {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates');
+
+const MARKDOWN_BLOCK_FIELDS = new Set([
+  'description',
+  'problem',
+  'solution',
+  'introduction',
+  'analyse',
+  'recommandation',
+  'synthese_executive',
+  'references',
+  'excerpt',
+]);
 
 marked.setOptions({
   gfm: true,
@@ -364,8 +404,143 @@ function resolvePath(target: unknown, path: string): unknown {
   }, target);
 }
 
+function normalizeIncludeTemplateRef(ref: string): string {
+  const trimmed = safeText(ref).trim();
+  if (trimmed.startsWith('template.')) {
+    return trimmed.slice('template.'.length);
+  }
+  return trimmed;
+}
+
+function loopExprCandidates(loopExpr: string): string[] {
+  return loopExpr
+    .split('||')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function resolveExpression(target: Record<string, unknown>, expr: string): unknown {
+  const candidates = loopExprCandidates(expr);
+  if (candidates.length === 0) return undefined;
+
+  for (const candidate of candidates) {
+    if (candidate === '[]') return [];
+    if (candidate === '{}') return {};
+    if (candidate === '""' || candidate === "''") return '';
+
+    const resolved = resolvePath(target, candidate);
+    if (resolved !== undefined && resolved !== null) {
+      return resolved;
+    }
+  }
+
+  return undefined;
+}
+
 function loopExprToPath(loopExpr: string): string {
   return loopExpr.split('||')[0]?.trim() ?? loopExpr.trim();
+}
+
+function extractBodyXml(documentXml: string): string {
+  const bodyMatch = documentXml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/);
+  if (!bodyMatch) {
+    throw new Error('Invalid DOCX template: <w:body> not found in word/document.xml');
+  }
+
+  const bodyXml = bodyMatch[1];
+  return bodyXml
+    .replace(/\s*<w:sectPr\b[\s\S]*?<\/w:sectPr>\s*$/u, '')
+    .replace(/\s*<w:sectPr\b[^>]*\/>\s*$/u, '');
+}
+
+async function loadTemplateBodyXml(templateFileName: string): Promise<string> {
+  const templatePath = resolve(TEMPLATES_DIR, templateFileName);
+  const templateBuffer = await readFile(templatePath);
+  const zip = await JSZip.loadAsync(templateBuffer);
+  const docXmlFile = zip.file('word/document.xml');
+
+  if (!docXmlFile) {
+    throw new Error(`Invalid DOCX template: word/document.xml not found in ${templateFileName}`);
+  }
+
+  const xml = await docXmlFile.async('string');
+  return extractBodyXml(xml);
+}
+
+function prefixIncludeExpr(expr: string, includeVar: string): string {
+  const leftPart = expr.split('||')[0]?.trim() ?? expr.trim();
+  if (!leftPart || leftPart.startsWith('$')) {
+    return expr;
+  }
+
+  const pattern = new RegExp(`\\b${escapeRegExp(leftPart)}\\b`);
+  return expr.replace(pattern, `$${includeVar}.${leftPart}`);
+}
+
+function remapIncludedTemplatePlaceholders(xml: string, includeVar: string): string {
+  const withPrefixedLoops = xml.replace(
+    /{{\s*FOR\s+([A-Za-z_]\w*)\s+IN\s+\(([^)]+)\)\s*}}/g,
+    (_match, loopVar: string, loopExpr: string) => {
+      const prefixedExpr = prefixIncludeExpr(loopExpr, includeVar);
+      return `{{FOR ${loopVar} IN (${prefixedExpr})}}`;
+    }
+  );
+
+  return withPrefixedLoops.replace(/{{\s*([^}]+?)\s*}}/g, (match, tokenRaw: string) => {
+    const token = tokenRaw.trim();
+    if (
+      token.startsWith('FOR ') ||
+      token.startsWith('END-FOR ') ||
+      token.startsWith('INCLUDE ') ||
+      token.startsWith('$')
+    ) {
+      return match;
+    }
+    return `{{$${includeVar}.${token}}}`;
+  });
+}
+
+async function expandIncludes(
+  xml: string,
+  scope: Record<string, unknown>,
+  state: LoopExpansionState
+): Promise<string> {
+  const includeRegex = /{{\s*INCLUDE\s+([A-Za-z0-9._/-]+)\s+WITH\s+\(([^)]+)\)\s*}}/g;
+  const matches = [...xml.matchAll(includeRegex)];
+  if (matches.length === 0) return xml;
+
+  let nextXml = xml;
+
+  for (const match of matches) {
+    const full = match[0];
+    const templateRef = normalizeIncludeTemplateRef(match[1] ?? '');
+    const includeExpr = safeText(match[2]).trim();
+    if (!templateRef) continue;
+
+    const includeContext = resolveExpression(scope, includeExpr);
+    if (includeContext === undefined || includeContext === null) {
+      nextXml = nextXml.replace(full, '');
+      continue;
+    }
+
+    let includeBody = state.includeTemplateXmlCache.get(templateRef);
+    if (!includeBody) {
+      includeBody = await loadTemplateBodyXml(templateRef);
+      state.includeTemplateXmlCache.set(templateRef, includeBody);
+    }
+
+    const includeVar = `__include_${state.includeCounter++}`;
+    const includeScope: Record<string, unknown> = {
+      ...scope,
+      [includeVar]: includeContext,
+    };
+
+    const remappedIncludeBody = remapIncludedTemplatePlaceholders(includeBody, includeVar);
+    const expandedIncluded = await expandLoops(remappedIncludeBody, includeScope, state);
+    nextXml = nextXml.replace(full, expandedIncluded);
+  }
+
+  return nextXml;
 }
 
 function findNextLoop(xml: string, fromIndex = 0): LoopMatch | null {
@@ -543,23 +718,30 @@ function extractPlaceholderBaseStyles(documentXml: string): Record<string, BaseR
   return styleMap;
 }
 
-function inferLoopPatchMode(loopVar: string, fieldPath: string): PatchMode {
-  const key = `${loopVar}.${fieldPath}`;
-
-  if (key === 'ax.description') return 'markdown_block';
-  if (key === 'ref.excerpt') return 'markdown_block';
-
-  if (fieldPath === 'score' || fieldPath === 'stars' || fieldPath === 'crosses') {
+function inferPatchModeForPath(path: string, value: unknown): PatchMode {
+  const field = path.split('.').pop()?.trim() ?? '';
+  if (
+    field === 'score' ||
+    field === 'stars' ||
+    field === 'crosses' ||
+    field.endsWith('Score') ||
+    field.endsWith('Stars') ||
+    field.endsWith('Crosses')
+  ) {
     return 'plain';
   }
-  if (fieldPath === 'url') return 'markdown_inline';
 
-  return 'markdown_inline';
+  if (field === 'url') return 'markdown_inline';
+  if (MARKDOWN_BLOCK_FIELDS.has(field)) return 'markdown_block';
+
+  if (typeof value === 'number' || typeof value === 'boolean') return 'plain';
+  if (typeof value === 'string') return 'markdown_inline';
+  return 'plain';
 }
 
-function makeLoopPatchKey(loopVar: string, index: number, fieldPath: string, counter: number): string {
-  const field = fieldPath ? fieldPath.replace(/[^a-zA-Z0-9_]/g, '_') : 'value';
-  return `__loop_${loopVar}_${index}_${field}_${counter}`;
+function makeScopedPatchKey(path: string, counter: number): string {
+  const field = path.replace(/[^a-zA-Z0-9_]/g, '_');
+  return `__loop_${field}_${counter}`;
 }
 
 function clampStarsLevel(stars: number): number {
@@ -580,25 +762,20 @@ function renderCrossGauge(score: number): string {
   return `${'✕'.repeat(filled)}${'—'.repeat(5 - filled)}`;
 }
 
-function replaceLoopValuePlaceholders(
+function replaceScopedValuePlaceholders(
   xml: string,
-  loopVar: string,
-  item: unknown,
-  itemIndex: number,
+  scope: Record<string, unknown>,
   state: LoopExpansionState
 ): string {
-  const regex = new RegExp(
-    `{{\\s*\\$${escapeRegExp(loopVar)}(?:\\.([A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*))?\\s*}}`,
-    'g'
-  );
+  const regex = /{{\s*\$([A-Za-z_]\w*(?:\.[A-Za-z0-9_]+)*)\s*}}/g;
 
-  return xml.replace(regex, (_match, fieldPathRaw: string | undefined) => {
-    const fieldPath = fieldPathRaw ?? '';
-    const resolved = fieldPath ? resolvePath(item, fieldPath) : item;
-    const key = makeLoopPatchKey(loopVar, itemIndex, fieldPath, state.counter++);
+  return xml.replace(regex, (_match, scopedPathRaw: string) => {
+    const scopedPath = scopedPathRaw.trim();
+    const resolved = resolvePath(scope, scopedPath);
+    const key = makeScopedPatchKey(scopedPath, state.counter++);
 
     state.loopPatches[key] = {
-      mode: inferLoopPatchMode(loopVar, fieldPath),
+      mode: inferPatchModeForPath(scopedPath, resolved),
       value: resolved,
     };
 
@@ -606,8 +783,12 @@ function replaceLoopValuePlaceholders(
   });
 }
 
-function expandLoops(xml: string, scope: Record<string, unknown>, state: LoopExpansionState): string {
-  let currentXml = xml;
+async function expandLoops(
+  xml: string,
+  scope: Record<string, unknown>,
+  state: LoopExpansionState
+): Promise<string> {
+  let currentXml = await expandIncludes(xml, scope, state);
   let cursor = 0;
   let hasPendingLoop = true;
 
@@ -653,21 +834,21 @@ function expandLoops(xml: string, scope: Record<string, unknown>, state: LoopExp
         ? currentXml.slice(startParagraph.end, endParagraph.start)
         : currentXml.slice(loopStartTokenEnd, loopEndTokenStart);
     const loopPath = loopExprToPath(loop.loopExpr);
-    const itemsRaw = resolvePath(scope, loopPath);
+    const itemsRaw = resolveExpression(scope, loop.loopExpr) ?? resolvePath(scope, loopPath);
     const items = Array.isArray(itemsRaw) ? itemsRaw : [];
 
     let rendered = '';
 
-    items.forEach((item, index) => {
+    for (const item of items) {
       const nestedScope: Record<string, unknown> = {
         ...scope,
         [loop.loopVar]: item,
       };
 
-      let piece = expandLoops(innerTemplate, nestedScope, state);
-      piece = replaceLoopValuePlaceholders(piece, loop.loopVar, item, index, state);
+      let piece = await expandLoops(innerTemplate, nestedScope, state);
+      piece = replaceScopedValuePlaceholders(piece, nestedScope, state);
       rendered += piece;
-    });
+    }
 
     if (canDropBothControlParagraphs && startParagraph && endParagraph) {
       currentXml =
@@ -693,7 +874,7 @@ function expandLoops(xml: string, scope: Record<string, unknown>, state: LoopExp
     }
   }
 
-  return currentXml;
+  return replaceScopedValuePlaceholders(currentXml, scope, state);
 }
 
 function buildAxes(
@@ -776,42 +957,33 @@ function basePayloads(data: TemplateData): Record<string, PatchPayload> {
 
 function placeholderToPayload(
   placeholder: string,
-  data: TemplateData,
+  context: Record<string, unknown>,
   payloads: Record<string, PatchPayload>
 ): PatchPayload {
   if (payloads[placeholder]) return payloads[placeholder];
 
-  if (placeholder.startsWith('FOR ') || placeholder.startsWith('END-FOR ') || placeholder.startsWith('$')) {
+  if (
+    placeholder.startsWith('FOR ') ||
+    placeholder.startsWith('END-FOR ') ||
+    placeholder.startsWith('INCLUDE ') ||
+    placeholder.startsWith('$')
+  ) {
     return { mode: 'plain', value: '' };
   }
 
-  if (placeholder in data) {
-    const value = (data as unknown as Record<string, unknown>)[placeholder];
-    if (
-      placeholder === 'description' ||
-      placeholder === 'problem' ||
-      placeholder === 'solution'
-    ) {
-      return { mode: 'markdown_block', value };
-    }
-    if (
-      placeholder === 'name' ||
-      placeholder === 'contact' ||
-      placeholder === 'deadline' ||
-      placeholder === 'process' ||
-      placeholder === 'domain'
-    ) {
-      return { mode: 'markdown_inline', value };
-    }
-    return { mode: 'plain', value };
-  }
+  const value = resolvePath(context, placeholder);
+  if (value == null) return { mode: 'plain', value: '' };
+  if (Array.isArray(value) || typeof value === 'object') return { mode: 'plain', value: '' };
 
-  return { mode: 'plain', value: '' };
+  return {
+    mode: inferPatchModeForPath(placeholder, value),
+    value,
+  };
 }
 
 async function expandTemplateLoops(
   template: Buffer,
-  data: TemplateData
+  data: Record<string, unknown>
 ): Promise<{ template: Buffer; loopPatches: Record<string, PatchPayload>; documentXml: string }> {
   const zip = await JSZip.loadAsync(template);
   const docXmlFile = zip.file('word/document.xml');
@@ -824,10 +996,12 @@ async function expandTemplateLoops(
   const state: LoopExpansionState = {
     counter: 0,
     loopPatches: {},
+    includeCounter: 0,
+    includeTemplateXmlCache: new Map<string, string>(),
   };
 
   const expandedXml = stripEmptyParagraphsBeforeTables(
-    expandLoops(docXml, data as unknown as Record<string, unknown>, state)
+    await expandLoops(docXml, data, state)
   );
 
   zip.file('word/document.xml', expandedXml);
@@ -840,19 +1014,22 @@ async function expandTemplateLoops(
   };
 }
 
-export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig | null): Promise<Buffer> {
-  const templatePath = resolve(TEMPLATES_DIR, 'usecase-onepage.docx');
+async function renderDocxTemplate(
+  templateFileName: string,
+  context: Record<string, unknown>,
+  basePatchPayloads: Record<string, PatchPayload> = {}
+): Promise<Buffer> {
+  const templatePath = resolve(TEMPLATES_DIR, templateFileName);
   const templateBuffer = await readFile(templatePath);
 
-  const data = buildTemplateData(useCase, matrix);
   const {
     template: expandedTemplate,
     loopPatches,
     documentXml,
-  } = await expandTemplateLoops(templateBuffer, data);
+  } = await expandTemplateLoops(templateBuffer, context);
 
   const payloads: Record<string, PatchPayload> = {
-    ...basePayloads(data),
+    ...basePatchPayloads,
     ...loopPatches,
   };
 
@@ -861,7 +1038,7 @@ export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig
 
   const patches: Record<string, IPatch> = {};
   placeholders.forEach((placeholder) => {
-    const payload = placeholderToPayload(placeholder, data, payloads);
+    const payload = placeholderToPayload(placeholder, context, payloads);
     patches[placeholder] = toPatch(payload, placeholderStyles[placeholder]);
   });
 
@@ -877,4 +1054,123 @@ export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig
   });
 
   return Buffer.from(result);
+}
+
+function toNumberList(values: Array<number | null | undefined>): number[] {
+  return values
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .sort((a, b) => a - b);
+}
+
+function median(values: Array<number | null | undefined>): number {
+  const sorted = toNumberList(values);
+  if (sorted.length === 0) return 0;
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+function normalizeExecutiveSummaryReferences(
+  references: ExecutiveSummaryContent['references']
+): Array<{ title: string; url: string; excerpt: string; link: string }> {
+  if (!Array.isArray(references)) return [];
+
+  return references
+    .map((reference) => {
+      const title = safeText(reference?.title);
+      const url = safeText(reference?.url);
+      const excerpt = safeText(reference?.excerpt);
+      return {
+        title,
+        url,
+        excerpt,
+        link: toMarkdownLink(title, url),
+      };
+    })
+    .filter((reference) => reference.title || reference.url);
+}
+
+function referencesToMarkdownBlock(
+  references: Array<{ title: string; url: string; excerpt: string; link: string }>
+): string {
+  if (references.length === 0) return '';
+  return references.map((reference, index) => `${index + 1}. ${reference.link}`).join('\n');
+}
+
+function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Record<string, unknown> {
+  const executiveSummary = input.executiveSummary ?? {};
+  const normalizedReferences = normalizeExecutiveSummaryReferences(executiveSummary.references);
+
+  const usecasesForAnnex = input.useCases.map((useCase) => ({
+    ...useCase,
+    data: buildTemplateData(useCase, input.matrix),
+  }));
+
+  const medianValue = median(usecasesForAnnex.map((useCase) => useCase.totalValueScore));
+  const medianComplexity = median(usecasesForAnnex.map((useCase) => useCase.totalComplexityScore));
+  const quickWinsCount = usecasesForAnnex.filter((useCase) => {
+    const value = useCase.totalValueScore ?? 0;
+    const complexity = useCase.totalComplexityScore ?? 0;
+    return value >= medianValue && complexity <= medianComplexity;
+  }).length;
+
+  const provided = { ...(input.provided ?? {}) };
+
+  return {
+    report: {
+      title: 'Executive Synthesis',
+    },
+    folder: {
+      name: safeText(input.folderName),
+      executiveSummary: {
+        introduction: safeText(executiveSummary.introduction),
+        analyse: safeText(executiveSummary.analyse),
+        recommandation: safeText(executiveSummary.recommandation),
+        synthese_executive: safeText(executiveSummary.synthese_executive),
+        references: normalizedReferences,
+      },
+      execSummary: {
+        references: referencesToMarkdownBlock(normalizedReferences),
+      },
+    },
+    stats: {
+      totalUsecases: usecasesForAnnex.length,
+      medianValue,
+      medianComplexity,
+      quickWinsCount,
+    },
+    annex: {
+      title: 'Annex',
+      subtitle: 'Detailed use cases',
+    },
+    backCover: {
+      title: '',
+      subtitle: '',
+      p1: '',
+      p2: '',
+      p3: '',
+    },
+    provided: {
+      ...provided,
+      // Lot 2.3.3: bitmap injection is implemented later.
+      dashboardImage: '',
+    },
+    controls: input.controls ?? {},
+    usecases: usecasesForAnnex,
+  };
+}
+
+export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig | null): Promise<Buffer> {
+  const data = buildTemplateData(useCase, matrix);
+  return renderDocxTemplate('usecase-onepage.docx', data, basePayloads(data));
+}
+
+export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDocxInput): Promise<Buffer> {
+  const context = buildExecutiveSynthesisContext(input);
+  return renderDocxTemplate('executive_synthesis.docx', context, {
+    'folder.execSummary.references': {
+      mode: 'markdown_block',
+      value: resolvePath(context, 'folder.execSummary.references'),
+    },
+  });
 }
