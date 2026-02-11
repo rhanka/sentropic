@@ -155,63 +155,16 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
     - [x] Gates:
       - [x] `make typecheck-api` + `make lint-api`
       - [x] `make typecheck-ui` + `make lint-ui`
-    - [ ] Partial UAT (user-driven):
-      - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
-      - [ ] Generate a second folder with default option and verify stored org matrix is reused.
-      - [ ] Generate folder with "specific matrix" option and verify it differs from org default.
-      - [ ] Verify matrix selection/options are visible and persisted in folder generation UI.
+    - [x] Partial UAT (user-driven):
+      - [x] Org without template: generate folder -> `matrix_generate` exists, and `organizations.data.matrixTemplate` is created.
+      - [x] Same org, default checked (`Use organization matrix`): generate folder -> no `matrix_generate`, and `folders.matrixConfig` = org template.
+      - [x] Same org, uncheck `Use organization matrix`: generate folder -> `folders.matrixConfig` = generic default matrix (`defaultMatrixConfig`), different from org template.
+      - [x] UI options: exactly one matrix option is visible and checked by default (`Use organization matrix` if template exists, otherwise `Generate organization matrix`).
 
-  - [ ] **Lot 2.3 — Bilingual modeling (storage + projection)**
-    - [ ] Confirm object families in scope (use case, organization, folder, prompts).
-    - [ ] Define bilingual field structure and master-language rules.
-    - [ ] Implement API validation/types updates for bilingual fields.
-    - [ ] Implement UI typing/store updates for bilingual payloads.
-    - [ ] Implement payload normalization + backward compatibility for legacy string-only records.
-    - [ ] Gates:
-      - [ ] `make typecheck-api` + `make lint-api`
-      - [ ] `make typecheck-ui` + `make lint-ui`
-    - [ ] Partial UAT (user-driven):
-      - [ ] Use case bilingual persistence:
-        - [ ] In FR UI, edit `name/description/problem/solution` and at least one list field (benefits/constraints).
-        - [ ] Switch to EN, edit the same fields, refresh, confirm both variants persist.
-      - [ ] Organization and folder bilingual persistence:
-        - [ ] In FR UI, edit organization/folder `name` (+ folder `description`).
-        - [ ] Switch to EN, edit the same fields, refresh, confirm both variants persist.
-      - [ ] Backward compatibility:
-        - [ ] Open and edit at least one legacy record (string-only) and confirm it still renders and saves.
-      - [ ] DOCX projection sanity-check (optional but recommended):
-        - [ ] In EN UI, export one-page DOCX and confirm projected fields use EN values when present.
-
-  - [ ] **Lot 2.4 — Bilingual prompts (FR/EN variants + selection + fallback)**
-    - [ ] Inventory all prompts in scope (admin-managed + hardcoded defaults) and decide which require bilingual variants.
-    - [ ] Define prompt bilingual structure and fallback contract (per prompt):
-      - [ ] If `en` missing, fallback to `fr`.
-      - [ ] If `fr` missing, fallback to `en`.
-      - [ ] If both missing, error with a user-actionable message (admin-only).
-    - [ ] Update API prompt storage/IO:
-      - [ ] Ensure prompts are persisted in DB (`settings` key `prompts`) and returned projected by locale.
-      - [ ] Ensure prompt updates are non-destructive across locales (editing EN does not wipe FR).
-    - [ ] Update UI prompt editor:
-      - [ ] Allow editing FR and EN content explicitly (tabs or side-by-side).
-      - [ ] Keep variables extraction working for both locales.
-    - [ ] Wire prompt selection for generation flows (use-case list/detail, executive summary, org enrich, etc):
-      - [ ] Choose prompt variant based on current UI locale (Accept-Language).
-      - [ ] Ensure the generated output language follows the selected prompt.
-    - [ ] Gates:
-      - [ ] `make typecheck-api` + `make lint-api`
-      - [ ] `make typecheck-ui` + `make lint-ui`
-    - [ ] Partial UAT (user-driven):
-      - [ ] Prompt admin workflow:
-        - [ ] In FR, edit a prompt, save, refresh, confirm FR variant persisted.
-        - [ ] In EN, edit the same prompt, save, refresh, confirm EN variant persisted (FR still present).
-      - [ ] Generation language:
-        - [ ] In FR UI, generate use cases and confirm narrative is French.
-        - [ ] In EN UI, generate use cases and confirm narrative is English.
-      - [ ] Fallback behavior:
-        - [ ] Remove one locale variant for a prompt and confirm fallback works without breaking generation.
-
-  - [ ] **Lot 2.5 — Executive synthesis multipage DOCX (template-driven)**
-    - [ ] **Lot 2.5.0 — Intake lock and contract freeze**
+  - [ ] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
+    - [ ] **Lot 2.3.0 — Intake lock and contract freeze**
+      - [ ] Assess current model and define spec/??.md for target mutualized endpoint target and template requirements (take a lok at use_case templating and existing template/README)
+      - [ ] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
       - [ ] User input bundle (single intake):
         - [ ] Provide `executive-synthesis.docx` master template.
         - [ ] Provide annex intent (append use cases: yes/no; new page per use case: yes/no).
@@ -220,7 +173,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
       - [ ] Freeze endpoint I/O contract (request/response schema) based on the template markers.
       - [ ] Freeze annex/dashboard composition intents.
-    - [ ] **Lot 2.5.1 — Unified endpoint + template registry skeleton**
+    - [ ] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
       - [ ] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `options`).
       - [ ] Implement template registry strategy (`templateId -> validator/provider/renderer`).
       - [ ] Keep backward compatibility for existing one-page route if currently used by UI.
@@ -228,7 +181,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Partial UAT:
         - [ ] Call unified endpoint for one-page use case and verify output parity with current behavior.
         - [ ] Validate error messages for invalid `templateId` / invalid payload.
-    - [ ] **Lot 2.5.2 — Master synthesis template composition (no hardcoding)**
+    - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
       - [ ] Wire `executive-synthesis.docx` master template.
       - [ ] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
       - [ ] Implement template-controlled annex insertion at the template marker (e.g. `{{ANNEX_USECASES}}`).
@@ -238,7 +191,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [ ] Download synthesis DOCX and verify section order follows template marker placement.
         - [ ] Verify annex starts exactly at template-defined separator/location.
         - [ ] Verify links/references rendering is preserved.
-    - [ ] **Lot 2.5.3 — Dashboard bitmap injection**
+    - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
       - [ ] Accept dashboard bitmap in endpoint `options` (according to the frozen contract).
       - [ ] Insert image at template marker (e.g. `{{DASHBOARD_IMAGE}}`) with deterministic sizing.
       - [ ] Implement fallback behavior when image is missing/invalid.
@@ -246,7 +199,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Partial UAT:
         - [ ] Verify dashboard image is present at expected location and remains readable.
         - [ ] Verify fallback rendering when bitmap is omitted.
-    - [ ] **Lot 2.5.4 — Integration hardening (API only)**
+    - [ ] **Lot 2.3.4 — Integration hardening (API only)**
       - [ ] Finalize provider/normalization for executive summary + annex data.
       - [ ] Ensure use-case one-page DOCX export remains stable and unaffected.
       - [ ] Gate: `make typecheck-api` + `make lint-api`
