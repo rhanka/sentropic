@@ -125,7 +125,7 @@ USERS_JSON:
     id: 'organization_info',
     name: 'Enrichissement d\'organisation',
     description: 'Prompt pour enrichir les informations d\'une organisation',
-    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}. 
+    content: `Recherchez et fournissez des informations complètes sur l'organisation {{organization_name}}.
 Informations déjà renseignées (peuvent être partielles / vides): {{existing_data}}
 ID d'organisation (si connu): {{organization_id}}
 
@@ -149,7 +149,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant:
   ]
 }
 
-IMPORTANT: 
+IMPORTANT:
 - Réponds UNIQUEMENT avec le JSON, sans texte avant ou après
 - Assure-toi que le JSON est valide et complet
 - Ne jamais mettre de titre/header/section dans les markdown, et éviter les listes à un seul item
@@ -190,7 +190,7 @@ Réponds UNIQUEMENT avec un JSON valide:
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
 
-IMPORTANT: 
+IMPORTANT:
 - Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
 - Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
 - Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
@@ -248,7 +248,7 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   "prerequisites": "Prérequis pour la mise en œuvre du cas d'usage (ex: Datalake, Historien IoT, Senseurs, etc.)",
   "contact": "Nom du responsable suggéré (rôle ex responsable opérations)",
   "benefits": [ // 60-90 mots pour l'ensemble des bénéfices
-    "Bénéfice 1", 
+    "Bénéfice 1",
     "Bénéfice 2",
     "Bénéfice 3",
     "Bénéfice 4",
@@ -264,7 +264,7 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Risque 2",
     "Risque 3"
   ],
-  "constraints": [ // 30-40 mots pour l'ensemble des contraintes — techniques, business, réglementaires, etc.
+  "constraints": [ // 60-90 mots pour l'ensemble des contraintes (techniques, business, réglementaires, etc.). IMPORTANT: chaque item doit etre une phrase non vide, sans puce/marker ("-", "—", "•") et sans texte placeholder.
     "Contrainte 1",
     "Contrainte 2",
     "Contrainte 3"
@@ -392,7 +392,7 @@ Spécification générale des sections
 Spécification de chaque section:
 - introduction: Présente le contexte, l'objectif du rapport, de l'analyse et le périmètre couvert. 2 3 paragraphes, sans titre, avec mises en exerge en gras des éléments importants. Si tu listes les cas d'usage, utilise un mode liste à puces ou numérotées.
 - analyse: Section d'analyse en markdown (3-5 paragraphes avec chapitres en ##). Analyse les tendances, opportunités, défis et patterns identifiés dans l'ensemble des cas d'usage. Inclut des insights stratégiques. Paragraphe mettant l'accent sur les cas d'usage prioritaires fournis.
-- recommandation: Section de recommandations en markdown (4-6 paragraphes avec chapitres en ##). Fournit des recommandations actionnables pour la direction, incluant: 
+- recommandation: Section de recommandations en markdown (4-6 paragraphes avec chapitres en ##). Fournit des recommandations actionnables pour la direction, incluant:
     - les prochaines étapes immédiates (en priorisant les cas d'usage prioritaires)
     - Une feuille de route suggérée
     - Les investissements nécessaires
@@ -510,7 +510,7 @@ Métadonnées:
 - Document: {{filename}}
 - Pages (si dispo): {{pages}}
 - Titre (si dispo): {{title}}
-- Taille (estimée): ~{{full_words}} mots ; 
+- Taille (estimée): ~{{full_words}} mots ;
 - Portée du texte fourni: {{scope}}
 
 TEXTE:
