@@ -95,8 +95,9 @@ Rules:
 - Required:
   - `executive-synthesis.docx` master template.
   - annex intent:
-    - append use cases: yes/no;
-    - new page per use case: yes/no.
+    - include annex section: yes/no.
+  - annex pagination strategy:
+    - defined in the DOCX template layout (not API flags), typically via `Page break before` on the first paragraph/title of `usecase-onepage.docx`.
   - dashboard intent:
     - include dashboard image: yes/no.
   - one reference UAT dataset:
@@ -122,7 +123,7 @@ Rules:
   - `folder` (full folder object)
   - `usecases` (annex collection, full objects)
   - `provided` (runtime external payload, e.g. dashboard image)
-  - `controls` (annex/toc/page-break behavior)
+  - `controls` (annex/toc behavior, sub-template selection)
   - `_derived` (computed helpers only: scores visuals, aliases, compatibility)
 - Preferred path examples in templates:
   - `{{folder.name}}`
@@ -186,7 +187,7 @@ Current limitations:
 ```
 - Request semantics:
   - `provided`: UI/user-provided payload (example: dashboard bitmap);
-  - `controls`: render choices (annex mode, toc mode, page breaks, sub-template ref);
+  - `controls`: render choices (annex mode, toc mode, sub-template ref);
   - `options`: deprecated alias accepted temporarily for backward compatibility.
 - Response contract:
   - success: DOCX binary stream;
@@ -283,7 +284,7 @@ Current limitations:
 - Renderer contract:
   - synthesis section titles must keep heading styles;
   - each annexed use case title must be inserted as heading style so it appears in TOC;
-  - page breaks for annex entries follow selected annex intent.
+  - page breaks for annex entries follow template layout/style rules.
 - Field update policy:
   - generated DOCX enables "update fields on open" behavior;
   - UAT validates that opening the document updates TOC entries and page numbers.
