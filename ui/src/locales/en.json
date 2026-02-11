@@ -345,6 +345,13 @@
         "documentsContext": "Use folder documents as the main context.",
         "organizationContext": "Use the selected organization information as the main context."
       },
+      "matrix": {
+        "title": "Evaluation matrix",
+        "useOrganization": "Use the organization matrix",
+        "useOrganizationHint": "Checked by default when the selected organization already has a saved matrix.",
+        "generateOrganization": "Generate a matrix for this organization",
+        "generateOrganizationHint": "Checked by default because no matrix is currently associated with this organization."
+      },
       "errors": {
         "draftCreateFailed": "Unable to create a draft folder",
         "loadOrganizations": "Error while loading organizations",
@@ -898,6 +905,7 @@
     },
     "type": {
       "organizationEnrich": "Organization enrichment",
+      "matrixGenerate": "Matrix generation",
       "usecaseList": "Use case generation",
       "usecaseDetail": "Use case detail generation",
       "executiveSummary": "Executive summary",

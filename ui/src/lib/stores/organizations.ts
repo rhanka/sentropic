@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
 export type Organization = {
   id: string;
   name: string;
+  hasMatrixTemplate?: boolean;
   industry?: string;
   size?: string;
   products?: string;
@@ -84,5 +85,4 @@ export const createDraftOrganization = async (name: string): Promise<Organizatio
 export const startOrganizationEnrichment = async (organizationId: string): Promise<void> => {
   await apiPost(`/organizations/${organizationId}/enrich`);
 };
-
 
