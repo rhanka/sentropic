@@ -137,6 +137,7 @@
   - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
   - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
+  - [ ] Normalize executive summary technical keys to English (`analysis`, `recommendation`, `executive_summary`) with backward-compatible aliases for legacy keys (`analyse`, `recommandation`, `synthese_executive`).
 - [ ] **Lot 2.3 Bilingual modeling (storage + projection)**
   - [ ] multilingual storage model scope (use case, organization, folder, prompts).
   - [ ] Implement API/UI typing + validation + normalization with backward compatibility.
@@ -192,6 +193,10 @@
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
   - [ ] proposer un plan d'implémentation en une branche
+- [ ] Modularisation de l'UI permettre de supporter différents déploiements du module chatwidegt - design phase
+  - [ ] Plugin VS code (+tools "locaux")
+  - [ ] Plugin chrome (+ tools "locaux")
+  - [ ] App standalone desktop (+ tools "locaux")
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
@@ -222,6 +227,7 @@
   - [ ] Finalités à supporter (on ne fait que la partie agentique ici)
     - [ ] La finalité sera de pouvoir faire une application auto-codante. La structure de l'agentique est un élément coeur du redesign, il faut penser aux différent contextes et aux interactions d'outils de l'agentique pour lui fournir la meilleur gestion, y compris en gestion de version de lui même
     - [ ] use case plugin vs code (gère les cas d'agent sous agents)
+    - [ ] use case plugin gmail/googleworkspace (remplacer gemini dans ces contextes)
     - [ ] use case d'autodoc et assistant de l'app (expert utilisation et test e2e de l'appli) cf paragraph associé
     - [ ] use case assistant chrome capable de gérer les situations
   - [ ] Opportunité du RL / modele adaptatif (agentique autonome / apprenant)
