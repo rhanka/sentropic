@@ -38,6 +38,7 @@ apiRouter.use('/use-cases/*', requireAuth);
 apiRouter.route('/use-cases', useCasesRouter);
 
 // DOCX export routes (nested under /use-cases, shares auth middleware above)
+apiRouter.use('/docx/*', requireAuth);
 apiRouter.route('/', docxRouter);
 
 apiRouter.use('/analytics/*', requireAuth);
