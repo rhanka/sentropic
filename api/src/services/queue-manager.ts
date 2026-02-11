@@ -1427,6 +1427,7 @@ export class QueueManager {
       deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
       contact: useCaseDetail.contact,
       benefits: useCaseDetail.benefits,
+      constraints: useCaseDetail.constraints,
       metrics: useCaseDetail.metrics,
       risks: useCaseDetail.risks,
       nextSteps: useCaseDetail.nextSteps,
