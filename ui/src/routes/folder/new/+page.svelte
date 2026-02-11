@@ -259,11 +259,11 @@
   <div class="flex items-center justify-between">
     <h1 class="text-3xl font-semibold break-words min-w-0">
       <EditableInput
-        label="Nom du dossier"
+        label={$_('folders.new.nameLabel')}
         value={isAutoName ? '' : (folder.name || '')}
         markdown={false}
         multiline={true}
-        placeholder="Saisir le nom du dossier (optionnel)"
+        placeholder={$_('folders.new.namePlaceholder')}
         locked={$workspaceReadOnlyScope}
         apiEndpoint={folder.id ? `/folders/${folder.id}` : ''}
         fullData={{ name: isAutoName ? AUTO_DRAFT_NAME : (folder.name || '') }}

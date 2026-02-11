@@ -324,12 +324,14 @@
         "readOnlyAction": "Action non autorisée (mode lecture seule)."
       }
     },
-    "new": {
-      "orgOptional": "Organisation (optionnel)",
-      "unspecified": "Non spécifié",
-      "createOrg": "Créer une organisation",
-      "context": "Contexte",
-      "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
+  "new": {
+    "nameLabel": "Nom du dossier",
+    "namePlaceholder": "Saisir le nom du dossier (optionnel)",
+    "orgOptional": "Organisation (optionnel)",
+    "unspecified": "Non spécifié",
+    "createOrg": "Créer une organisation",
+    "context": "Contexte",
+    "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
       "useCaseCount": "Nombre de cas d'usage",
       "default": "Défaut: {count}",
       "loadingOrganizations": "Chargement des organisations…",

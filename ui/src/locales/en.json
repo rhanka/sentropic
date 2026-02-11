@@ -324,12 +324,14 @@
         "readOnlyAction": "Action not allowed (read-only mode)."
       }
     },
-    "new": {
-      "orgOptional": "Organization (optional)",
-      "unspecified": "Unspecified",
-      "createOrg": "Create an organization",
-      "context": "Context",
-      "contextPlaceholder": "Describe the business context and objectives…",
+  "new": {
+    "nameLabel": "Folder name",
+    "namePlaceholder": "Enter the folder name (optional)",
+    "orgOptional": "Organization (optional)",
+    "unspecified": "Unspecified",
+    "createOrg": "Create an organization",
+    "context": "Context",
+    "contextPlaceholder": "Describe the business context and objectives…",
       "useCaseCount": "Number of use cases",
       "default": "Default: {count}",
       "loadingOrganizations": "Loading organizations…",
