@@ -337,7 +337,11 @@ export const generateUseCaseDetail = async (
           benefits: { type: 'array', items: { type: 'string' } },
           metrics: { type: 'array', items: { type: 'string' } },
           risks: { type: 'array', items: { type: 'string' } },
-          constraints: { type: 'array', items: { type: 'string' } },
+          constraints: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string', minLength: 3 }
+          },
           nextSteps: { type: 'array', items: { type: 'string' } },
           dataSources: { type: 'array', items: { type: 'string' } },
           dataObjects: { type: 'array', items: { type: 'string' } },
@@ -415,7 +419,7 @@ export const generateUseCaseDetail = async (
   try {
     const detail = parseJsonLenient<UseCaseDetail>(content);
     // Normalize list fields to avoid marker-only entries and nested bullet formatting.
-    return {
+    const normalized = {
       ...detail,
       technologies: normalizeStringListField(detail?.technologies),
       benefits: normalizeStringListField(detail?.benefits),
@@ -426,6 +430,18 @@ export const generateUseCaseDetail = async (
       dataSources: normalizeStringListField(detail?.dataSources),
       dataObjects: normalizeStringListField(detail?.dataObjects),
     };
+
+    // Safety net: constraints are mandatory for the product workflow.
+    // Some models occasionally return marker-only values ("-", "—") which are stripped by normalization.
+    if (!normalized.constraints || normalized.constraints.length === 0) {
+      normalized.constraints = [
+        'Contraintes de qualite/disponibilite des donnees et de gouvernance (acces, RGPD, anonymisation).',
+        "Contraintes d'integration et de securite (SI existant, IAM, conformite, performance).",
+        "Contraintes de conduite du changement (process, formation, adoption par les equipes).",
+      ];
+    }
+
+    return normalized;
   } catch (e) {
     console.error('Erreur de parsing JSON pour le détail:', e);
     console.error('Contenu reçu (premiers 500 chars):', content.substring(0, 500));
