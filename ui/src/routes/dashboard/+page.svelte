@@ -8,6 +8,7 @@
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
+  import { API_BASE_URL } from '$lib/config';
   import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
@@ -15,9 +16,10 @@
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
-  import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
 
@@ -334,6 +336,56 @@
     }
   };
 
+  const handleDownloadExecutiveSynthesisDocx = async () => {
+    if (!selectedFolderId || !executiveSummary) return;
+
+    try {
+      const scopedWorkspaceId = getScopedWorkspaceIdForUser();
+      const url = new URL(`${API_BASE_URL}/docx/generate`, window.location.origin);
+      if (scopedWorkspaceId) url.searchParams.set('workspace_id', scopedWorkspaceId);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateId: 'executive-synthesis-multipage',
+          entityType: 'folder',
+          entityId: selectedFolderId,
+          provided: {},
+          controls: {},
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        const message = (errorBody as { message?: string } | null)?.message ?? `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const fileNameFallback = `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
+      const disposition = response.headers.get('content-disposition') || '';
+      const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      link.href = objectUrl;
+      link.download = fileNameMatch?.[1] || fileNameFallback;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Failed to download executive synthesis DOCX:', error);
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('dashboard.errors.load'),
+      });
+    }
+  };
+
 
 
   // Filtrer les cas d'usage par dossier sélectionné
@@ -548,8 +600,8 @@
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="w-full print-hidden">
-    <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0 flex-1">
+    <div class="grid grid-cols-12 items-start gap-4">
+      <div class="col-span-8 min-w-0">
         {#if selectedFolderId}
           {#if $workspaceReadOnlyScope}
             <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
@@ -573,17 +625,32 @@
           <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
         {/if}
       </div>
-      {#if showReadOnlyLock}
-        <button
-          class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
-          title={$_('dashboard.readOnlyGenerationDisabled')}
-          aria-label={$_('dashboard.readOnlyGenerationDisabled')}
-          type="button"
-          disabled
-        >
-          <Lock class="w-5 h-5" />
-        </button>
-      {/if}
+      <div class="col-span-4 flex items-center justify-end gap-2 pt-1">
+        <FileMenu
+          showNew={false}
+          showImport={false}
+          showExport={false}
+          showDelete={false}
+          showDownloadDocx={true}
+          showPrint={true}
+          disabledDownloadDocx={!selectedFolderId || !executiveSummary}
+          onDownloadDocx={handleDownloadExecutiveSynthesisDocx}
+          onPrint={() => window.print()}
+          triggerTitle={$_('common.actions')}
+          triggerAriaLabel={$_('common.actions')}
+        />
+        {#if showReadOnlyLock}
+          <button
+            class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
+            title={$_('dashboard.readOnlyGenerationDisabled')}
+            aria-label={$_('dashboard.readOnlyGenerationDisabled')}
+            type="button"
+            disabled
+          >
+            <Lock class="w-5 h-5" />
+          </button>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -603,24 +670,7 @@
       <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
         <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
           <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
-          <div class="flex items-center gap-2">
-            <button
-              on:click={() => window.print()}
-              class="p-2 text-blue-600 hover:text-blue-700 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
-              title="Imprimer ou exporter le rapport en PDF"
-            >
-              <Printer class="w-5 h-5" />
-            </button>
-          <button
-            on:click={generateExecutiveSummary}
-            disabled={isGeneratingSummary}
-              class="p-2 text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
-              title={$_('dashboard.regenerateTooltip')}
-          >
-              <RotateCcw class="w-5 h-5 {isGeneratingSummary ? 'animate-spin' : ''}" />
-          </button>
         </div>
-            </div>
         
         {#if editedSyntheseExecutive}
           <EditableInput
