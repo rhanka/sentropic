@@ -119,31 +119,33 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] 2026-02-10: Implementation progress snapshot (pre-UAT):
           - [x] i18n applied to key routes/components: auth pages, dashboard (ROI config + back cover), matrix dialogs/tooltips, folders list/new/detail, organizations list/detail, settings (admin panel + system info), use case detail/export, and shared components (ChatWidget/ChatPanel, ImportExportDialog, FileMenu, StreamMessage, QueueMonitor, LockPresenceBadge, DocumentsBlock, etc).
           - [x] Locale dictionaries extended (FR/EN) with new namespaces: `adminUsers`, `workspaceSettings`, `unsavedChanges`, plus additions to `common`, `folders`, `organizations`, `usecase`, `dashboard`, `settings`, `matrix`.
-      - [ ] Implementation:
+      - [x] Implementation:
         - [x] Add missing i18n keys (FR/EN) for all identified strings (up to the next Partial UAT checkpoint).
         - [x] Replace hardcoded strings with i18n lookups consistently (up to the next Partial UAT checkpoint).
         - [x] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
       - [x] Gates:
         - [x] `make typecheck-ui` + `make lint-ui`
         - [x] `make typecheck-api` + `make lint-api`
-      - [ ] Partial UAT (user-driven):
-        - [ ] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
-          - [ ] Home
-          - [ ] Dashboard
-          - [ ] Use cases list (`/usecase`)
-          - [ ] Use case detail (`/usecase/:id`)
-          - [ ] Folders list (`/folders`)
-          - [ ] Folder new (`/folder/new`)
-          - [ ] Folder detail (`/folders/:id`)
-          - [ ] Organizations list (`/organizations`)
-          - [ ] Organization new (`/organizations/new`)
-          - [ ] Organization detail (`/organizations/:id`)
-          - [ ] Matrix (`/matrix`)
-          - [ ] Settings (`/settings`)
-          - [ ] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
-        - [ ] Locale switching sweep:
-          - [ ] Switch FR→EN without reload and confirm all visible labels update.
-          - [ ] Switch EN→FR without reload and confirm all visible labels update.
+      - [x] Partial UAT (user-driven):
+        - [x] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
+          - [x] Home
+          - [x] Dashboard
+          - [x] Use cases list (`/usecase`)
+          - [x] Use case detail (`/usecase/:id`)
+          - [x] Folders list (`/folders`)
+          - [x] Folder new (`/folder/new`)
+          - [x] Folder detail (`/folders/:id`)
+          - [x] Organizations list (`/organizations`)
+          - [x] Organization new (`/organizations/new`)
+          - [x] Organization detail (`/organizations/:id`)
+          - [x] Matrix (`/matrix`)
+          - [x] Settings (`/settings`)
+          - [x] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
+        - [x] Locale switching sweep:
+          - [x] Switch FR→EN without reload and confirm all visible labels update.
+          - [x] Switch EN→FR without reload and confirm all visible labels update.
+      - [x] Use case AI generation (constraints must not be empty):
+        - [x] Generate a new use case via AI and confirm `Constraints` is populated (non-empty, no marker-only placeholders).
 
   - [ ] **Lot 2.2 — Bilingual prompts (FR/EN variants + selection + fallback)**
     - [ ] Inventory all prompts in scope (admin-managed + hardcoded defaults) and decide which require bilingual variants.
