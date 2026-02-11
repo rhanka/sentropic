@@ -80,6 +80,9 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
     - [ ] Confirm `feat/i18-print` is aligned with `origin/main`.
     - [ ] Confirm Make-only workflow and commit workflow are enforced.
 
+  - [ ] Cross-cutting UAT complements:
+    - [ ] Use case AI generation must populate `Constraints` (non-empty, no marker-only placeholders).
+
   - [ ] **Lot 2.1 — Bilingual foundation (model + prompts)**
     - [ ] **Bilingual modeling**
       - [ ] Confirm object families in scope (use case, organization, folder, prompts).
