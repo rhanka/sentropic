@@ -46,6 +46,7 @@
   const getTypeLabel = (type: JobType): string => {
     switch (type) {
       case 'organization_enrich': return $_('queueMonitor.type.organizationEnrich');
+      case 'matrix_generate': return $_('queueMonitor.type.matrixGenerate');
       case 'usecase_list': return $_('queueMonitor.type.usecaseList');
       case 'usecase_detail': return $_('queueMonitor.type.usecaseDetail');
       case 'executive_summary': return $_('queueMonitor.type.executiveSummary');
@@ -74,6 +75,11 @@
     if (job?.type === 'usecase_list' && (job?.data?.folderId || job?.data?.folder_id)) {
       const folderId = job.data.folderId ?? job.data.folder_id;
       return `folder_${folderId}`;
+    }
+    // Pour matrix_generate: streamId déterministe basé sur le dossier (matrix_<folderId>)
+    if (job?.type === 'matrix_generate' && (job?.data?.folderId || job?.data?.folder_id)) {
+      const folderId = job.data.folderId ?? job.data.folder_id;
+      return `matrix_${folderId}`;
     }
     // Pour usecase_detail: streamId déterministe basé sur le cas (usecase_<useCaseId>)
     if (job?.type === 'usecase_detail' && (job?.data?.useCaseId || job?.data?.use_case_id)) {

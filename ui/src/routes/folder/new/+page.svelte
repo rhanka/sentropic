@@ -12,6 +12,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Brain, Save, Trash2, Loader2, CirclePlus } from '@lucide/svelte';
   import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import type { Organization } from '$lib/stores/organizations';
 
   let folder: Partial<Folder> = {
     name: '',
@@ -36,6 +37,13 @@
   let isLoadingOrganizations = false;
   let lastOrgIdApplied: string | null = null;
   let orgSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  let selectedOrganization: Organization | null = null;
+  let selectedOrgHasMatrixTemplate = false;
+  let useOrganizationMatrix = true;
+  let generateOrganizationMatrix = true;
+  let lastMatrixOptionsOrgId: string | null = null;
+
+  type MatrixModeRequest = 'organization' | 'generate' | 'default';
 
   const loadOrganizations = async () => {
     isLoadingOrganizations = true;
@@ -201,11 +209,20 @@
           : ($currentOrganizationId ? get(_)('folders.new.defaultInput.organizationContext') : ''));
       if (!input) throw new Error(get(_)('folders.new.errors.missingInput'));
 
+      const matrixMode = (() => {
+        if (!$currentOrganizationId) return undefined;
+        if (selectedOrgHasMatrixTemplate) {
+          return useOrganizationMatrix ? ('organization' as MatrixModeRequest) : ('default' as MatrixModeRequest);
+        }
+        return generateOrganizationMatrix ? ('generate' as MatrixModeRequest) : ('default' as MatrixModeRequest);
+      })();
+
       await apiPost('/use-cases/generate', {
         input,
         folder_id: id,
         use_case_count: nbUseCases,
-        organization_id: $currentOrganizationId || undefined
+        organization_id: $currentOrganizationId || undefined,
+        matrix_mode: matrixMode
       });
 
       addToast({ type: 'info', message: get(_)('folders.new.toast.generationStarted') });
@@ -237,6 +254,16 @@
   $: if (folder.id && originalName === null) originalName = folder.name || '';
   $: if (folder.id && originalContext === null) originalContext = folder.description || '';
   $: if (folder.id) syncSelectedOrganizationToDraft();
+  $: selectedOrganization = $organizationsStore.find((org) => org.id === ($currentOrganizationId || '')) ?? null;
+  $: selectedOrgHasMatrixTemplate = !!selectedOrganization?.hasMatrixTemplate;
+  $: {
+    const orgId = $currentOrganizationId || null;
+    if (orgId !== lastMatrixOptionsOrgId) {
+      lastMatrixOptionsOrgId = orgId;
+      useOrganizationMatrix = true;
+      generateOrganizationMatrix = true;
+    }
+  }
 
   $: {
     const n = Number(nbUseCases);
@@ -339,6 +366,25 @@
 	        {/if}
 	      {/if}
 	    </div>
+
+      {#if $currentOrganizationId}
+        <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
+          <div class="text-sm font-medium text-slate-700">{$_('folders.new.matrix.title')}</div>
+          {#if selectedOrgHasMatrixTemplate}
+            <label class="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="mt-0.5" bind:checked={useOrganizationMatrix} />
+              <span>{$_('folders.new.matrix.useOrganization')}</span>
+            </label>
+            <p class="text-xs text-slate-500">{$_('folders.new.matrix.useOrganizationHint')}</p>
+          {:else}
+            <label class="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" class="mt-0.5" bind:checked={generateOrganizationMatrix} />
+              <span>{$_('folders.new.matrix.generateOrganization')}</span>
+            </label>
+            <p class="text-xs text-slate-500">{$_('folders.new.matrix.generateOrganizationHint')}</p>
+          {/if}
+        </div>
+      {/if}
 
 	    <div class="space-y-2">
 	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.context')}</div>

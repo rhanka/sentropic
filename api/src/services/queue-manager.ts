@@ -3,7 +3,10 @@ import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
+import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
+import { defaultMatrixConfig } from '../config/default-matrix';
+import type { MatrixConfig } from '../types/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
 import {
@@ -41,11 +44,14 @@ function parseOrgData(value: unknown): Record<string, unknown> {
 
 export type JobType =
   | 'organization_enrich'
+  | 'matrix_generate'
   | 'usecase_list'
   | 'usecase_detail'
   | 'executive_summary'
   | 'chat_message'
   | 'document_summary';
+
+export type MatrixMode = 'organization' | 'generate' | 'default';
 
 export interface OrganizationEnrichJobData {
   organizationId: string;
@@ -53,10 +59,17 @@ export interface OrganizationEnrichJobData {
   model?: string;
 }
 
+export interface MatrixGenerateJobData {
+  folderId: string;
+  organizationId: string;
+  model?: string;
+}
+
 export interface UseCaseListJobData {
   folderId: string;
   input: string;
   organizationId?: string;
+  matrixMode?: MatrixMode;
   model?: string;
   useCaseCount?: number;
 }
@@ -65,6 +78,7 @@ export interface UseCaseDetailJobData {
   useCaseId: string;
   useCaseName: string;
   folderId: string;
+  matrixMode?: MatrixMode;
   model?: string;
 }
 
@@ -92,6 +106,7 @@ export interface DocumentSummaryJobData {
 
 export type JobData =
   | OrganizationEnrichJobData
+  | MatrixGenerateJobData
   | UseCaseListJobData
   | UseCaseDetailJobData
   | ExecutiveSummaryJobData
@@ -499,6 +514,7 @@ export class QueueManager {
           ORDER BY
             CASE type
               WHEN 'chat_message' THEN 0
+              WHEN 'matrix_generate' THEN 1
               WHEN 'usecase_list' THEN 1
               ELSE 2
             END,
@@ -626,6 +642,9 @@ export class QueueManager {
       switch (jobType) {
         case 'organization_enrich':
           await this.processOrganizationEnrich(jobData as unknown as OrganizationEnrichJobData, jobId, controller.signal);
+          break;
+        case 'matrix_generate':
+          await this.processMatrixGenerate(jobData as unknown as MatrixGenerateJobData, controller.signal);
           break;
         case 'usecase_list':
           await this.processUseCaseList(jobData as unknown as UseCaseListJobData, controller.signal);
@@ -884,6 +903,79 @@ export class QueueManager {
     await this.notifyOrganizationEvent(organizationId);
   }
 
+  private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<void> {
+    const { folderId, organizationId, model } = data;
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (!folder) throw new Error('Folder not found for matrix generation');
+
+    const [organization] = await db
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)))
+      .limit(1);
+    if (!organization) throw new Error('Organization not found for matrix generation');
+
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel = model || aiSettings.defaultModel;
+
+    const orgData = parseOrgData(organization.data);
+    const organizationInfo = JSON.stringify(
+      {
+        name: organization.name,
+        industry: orgData.industry,
+        size: orgData.size,
+        products: orgData.products,
+        processes: orgData.processes,
+        kpis: orgData.kpis,
+        challenges: orgData.challenges,
+        objectives: orgData.objectives,
+        technologies: orgData.technologies,
+      },
+      null,
+      2
+    );
+
+    const streamId = `matrix_${folderId}`;
+    const template = await generateOrganizationMatrixTemplate(
+      organization.name,
+      organizationInfo,
+      defaultMatrixConfig,
+      selectedModel,
+      signal,
+      streamId
+    );
+    const generatedMatrix = mergeOrganizationMatrixTemplate(defaultMatrixConfig, template);
+
+    const nextOrgData = {
+      ...orgData,
+      matrixTemplate: generatedMatrix,
+      matrixTemplateMeta: {
+        generatedAt: new Date().toISOString(),
+        model: selectedModel,
+        promptId: 'organization_matrix_template',
+        version: 1,
+      },
+    };
+
+    await db
+      .update(organizations)
+      .set({ data: nextOrgData, updatedAt: new Date() })
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)));
+
+    await db
+      .update(folders)
+      .set({ matrixConfig: JSON.stringify(generatedMatrix), organizationId })
+      .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
+
+    await this.notifyOrganizationEvent(organizationId);
+    await this.notifyFolderEvent(folderId);
+  }
+
   private sanitizePgText(input: string): string {
     let out = '';
     for (let i = 0; i < input.length; i += 1) {
@@ -1120,7 +1212,7 @@ export class QueueManager {
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, model, useCaseCount } = data;
+    const { folderId, input, organizationId, matrixMode, model, useCaseCount } = data;
 
     const [folder] = await db
       .select({
@@ -1282,6 +1374,7 @@ export class QueueManager {
             useCaseId: useCase.id,
             useCaseName: useCaseName,
             folderId: folderId,
+            matrixMode,
             model: selectedModel
           }, { workspaceId, maxRetries: 1 });
         } catch (e) {
@@ -1293,11 +1386,49 @@ export class QueueManager {
     console.log(`📋 Generated ${draftUseCases.length} use cases and queued for detailing`);
   }
 
+  private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
+    const rows = (await db.all(sql`
+      SELECT status, error
+      FROM job_queue
+      WHERE type = 'matrix_generate'
+        AND (data::jsonb ->> 'folderId') = ${folderId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `)) as Array<{ status: string; error: string | null }>;
+    return rows[0] ?? null;
+  }
+
+  private async waitForGeneratedMatrix(folderId: string, signal?: AbortSignal, timeoutMs = 180000, pollMs = 1500): Promise<MatrixConfig> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      if (signal?.aborted) throw new Error('Matrix wait aborted');
+
+      const [folder] = await db
+        .select({ matrixConfig: folders.matrixConfig })
+        .from(folders)
+        .where(eq(folders.id, folderId))
+        .limit(1);
+
+      const parsed = parseMatrixConfig(folder?.matrixConfig ?? null);
+      if (parsed) return parsed;
+
+      const matrixJob = await this.getLatestMatrixJobState(folderId);
+      if (matrixJob?.status === 'failed') {
+        throw new Error(matrixJob.error || 'Matrix generation failed');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+
+    throw new Error('Matrix generation timed out');
+  }
+
   /**
    * Worker pour le détail d'un cas d'usage
    */
   private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
-    const { useCaseId, useCaseName, folderId, model } = data;
+    const { useCaseId, useCaseName, folderId, matrixMode, model } = data;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -1309,10 +1440,11 @@ export class QueueManager {
       throw new Error('Dossier non trouvé');
     }
     
-    const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
-    if (!matrixConfig) {
-      throw new Error('Configuration de matrice non trouvée');
+    let matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
+    if (!matrixConfig && matrixMode === 'generate') {
+      matrixConfig = await this.waitForGeneratedMatrix(folderId, signal);
     }
+    if (!matrixConfig) throw new Error('Configuration de matrice non trouvée');
     
     // Organization info (prompt uses organization_info)
     let organizationInfo = '';

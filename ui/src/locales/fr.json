@@ -345,6 +345,13 @@
         "documentsContext": "Utiliser les documents du dossier comme contexte principal.",
         "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal."
       },
+      "matrix": {
+        "title": "Matrice d'évaluation",
+        "useOrganization": "Utiliser la matrice de l'organisation",
+        "useOrganizationHint": "Option cochée par défaut quand l'organisation possède déjà une matrice sauvegardée.",
+        "generateOrganization": "Générer une matrice pour l'organisation",
+        "generateOrganizationHint": "Option cochée par défaut car aucune matrice n'est encore associée à cette organisation."
+      },
       "errors": {
         "draftCreateFailed": "Impossible de créer un brouillon de dossier",
         "loadOrganizations": "Erreur lors du chargement des organisations",
@@ -898,6 +905,7 @@
     },
     "type": {
       "organizationEnrich": "Enrichissement organisation",
+      "matrixGenerate": "Génération matrice",
       "usecaseList": "Génération cas d'usage",
       "usecaseDetail": "Détail cas d'usage",
       "executiveSummary": "Synthèse exécutive",

@@ -82,6 +82,7 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
   id: string;
   name: string;
   status: 'draft' | 'enriching' | 'completed' | null;
+  hasMatrixTemplate: boolean;
 } & OrganizationData {
   const data = parseOrganizationData(row.data);
   const raw = data as unknown as Record<string, unknown>;
@@ -102,6 +103,7 @@ function hydrateOrganization(row: typeof organizations.$inferSelect): {
     id: row.id,
     name: row.name,
     status,
+    hasMatrixTemplate: !!(raw.matrixTemplate && typeof raw.matrixTemplate === 'object'),
     industry: data.industry,
     size: data.size,
     // Tolère les anciennes écritures en arrays (ex: via chat) et normalise vers markdown string
@@ -381,5 +383,4 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
   await notifyOrganizationEvent(id);
   return c.body(null, 204);
 });
-
 

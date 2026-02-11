@@ -179,6 +179,73 @@ Réponds UNIQUEMENT avec un JSON valide:
     variables: ['user_input', 'organization_info']
   },
   {
+    id: 'organization_matrix_template',
+    name: 'Matrice organisationnelle (template)',
+    description: 'Prompt pour adapter les descriptions de niveaux de la matrice à une organisation, sans modifier les axes/poids/seuils',
+    content: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation IA pour l'organisation suivante:
+- Nom: {{organization_name}}
+- Contexte organisation: {{organization_info}}
+
+Matrice de base (axes, poids, seuils - NE PAS MODIFIER):
+{{base_matrix}}
+
+Objectif:
+- Conserver STRICTEMENT la structure de la matrice de base (ids d'axes, poids, seuils).
+- Adapter UNIQUEMENT les textes des levelDescriptions pour refléter le contexte métier de l'organisation.
+
+Contraintes obligatoires:
+- Ne jamais changer les axisId.
+- Ne jamais changer les poids.
+- Ne jamais changer les seuils.
+- Fournir exactement 5 niveaux (1..5) pour chaque axe demandé.
+- Descriptions concrètes, orientées métier, 1 phrase par niveau.
+- Pas de markdown, pas de liste, pas d'entête.
+
+Axes de valeur à adapter:
+- business_value
+- time_criticality
+- risk_reduction_opportunity
+
+Axes de complexité à adapter:
+- implementation_effort
+- data_compliance
+- data_availability
+- change_management
+
+IMPORTANT:
+- Ne PAS inclure ai_maturity dans la réponse.
+- Répondre UNIQUEMENT avec un JSON valide, sans texte avant/après.
+
+Format JSON attendu:
+{
+  "valueAxes": [
+    {
+      "axisId": "business_value",
+      "levelDescriptions": [
+        { "level": 1, "description": "..." },
+        { "level": 2, "description": "..." },
+        { "level": 3, "description": "..." },
+        { "level": 4, "description": "..." },
+        { "level": 5, "description": "..." }
+      ]
+    }
+  ],
+  "complexityAxes": [
+    {
+      "axisId": "implementation_effort",
+      "levelDescriptions": [
+        { "level": 1, "description": "..." },
+        { "level": 2, "description": "..." },
+        { "level": 3, "description": "..." },
+        { "level": 4, "description": "..." },
+        { "level": 5, "description": "..." }
+      ]
+    }
+  ]
+}`,
+    variables: ['organization_name', 'organization_info', 'base_matrix']
+  },
+  {
     id: 'use_case_list',
     name: 'Liste de cas d\'usage',
     description: 'Prompt pour générer une liste de cas d\'usage',
