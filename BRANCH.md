@@ -135,12 +135,26 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Generate a new use case via AI and confirm `Constraints` is populated (non-empty, no marker-only placeholders).
 
   - [ ] **Lot 2.2 — Matrix generation per organization/folder**
-    - [ ] Implement generation flow for organization-level matrix template.
-    - [ ] Implement folder generation option for matrix reuse vs folder-specific generation.
-    - [ ] Persist and expose template selection in API/UI.
-    - [ ] Gates:
-      - [ ] `make typecheck-api` + `make lint-api`
-      - [ ] `make typecheck-ui` + `make lint-ui`
+    - [x] Spec reference: `spec/SPEC_MATRIX_GENERATION_ORG.md`
+    - [x] Confirm parity with existing generation architecture (API trigger -> queue job -> context service -> `defaultPrompts` -> `executeWithToolsStream` -> persistence/events).
+    - [x] Folder generation option behavior:
+      - [x] With selected organization + existing organization matrix: show only `Use organization matrix` option (checked by default, user can uncheck).
+      - [x] With selected organization + no organization matrix: show only `Generate organization matrix` option (checked by default).
+    - [x] Implement generation flow for organization-level matrix template.
+    - [x] Enforce matrix adaptation rules:
+      - [x] Keep axes/weights/thresholds unchanged.
+      - [x] Adapt only level descriptions for targeted axes based on organization specifics.
+    - [x] Implement folder generation option for matrix reuse vs folder-specific generation.
+    - [x] Persist and expose template selection in API/UI.
+    - [x] Queue orchestration:
+      - [x] Run `matrix_generate` in parallel with `usecase_list` for generation mode.
+      - [x] Ensure generated/reused matrix is available before `usecase_detail` uses it.
+    - [x] Failure policy:
+      - [x] Strict mode: if `matrix_generate` fails, block generation (no fallback to default matrix).
+      - [x] Retry/restart via existing failed jobs flow.
+    - [x] Gates:
+      - [x] `make typecheck-api` + `make lint-api`
+      - [x] `make typecheck-ui` + `make lint-ui`
     - [ ] Partial UAT (user-driven):
       - [ ] Generate a first folder for an organization and verify matrix template is created/stored at org level.
       - [ ] Generate a second folder with default option and verify stored org matrix is reused.
