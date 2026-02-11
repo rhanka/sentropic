@@ -89,8 +89,10 @@ Mirror parity checklist (dashboard print -> DOCX template):
 Input bundle to provide before implementation:
 1. `executive-synthesis.docx` with all required markers and sections above.
 2. TOC mode decision: `word_field` (recommended) or `static`.
-3. Annex decision: page break per use case (`true`/`false`).
-4. Dashboard image transport mode and key:
+3. Annex decision: include annex section (`true`/`false`).
+4. Annex pagination rule in template:
+  - Use template layout/styling to control page breaks (recommended: set `Page break before` on the first paragraph/title in `usecase-onepage.docx`).
+5. Dashboard image transport mode and key:
   - inline (`provided.dashboardImage.dataBase64`) or
   - managed asset (`provided.dashboardImage.assetId`),
   - rendered in template via `{{provided.dashboardImage}}`.

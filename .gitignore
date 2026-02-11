@@ -8,6 +8,7 @@ ui/.svelte-kit/
 ui/dist/
 api/dist/
 api/.tsbuildinfo
+api/templates/.~lock*
 *.tar
 
 #e2e tests results

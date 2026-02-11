@@ -166,10 +166,10 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Assess current model and define `spec/SPEC_TEMPLATING.md` for target mutualized endpoint and template requirements (based on use-case templating and existing template/README)
       - [x] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
       - [x] Update `api/templates/README.md` with template authoring guide (required markers, TOC rules, Word/LibreOffice/Google Docs workflow).
-      - [ ] Freeze TOC strategy (Word native TOC field, heading-level contract, update-fields policy).
+      - [x] Freeze TOC strategy (Word native TOC field, heading-level contract, update-fields policy).
       - [x] User input bundle (single intake):
         - [x] Provide `executive-synthesis.docx` master template.
-        - [x] Provide annex intent (include annex section: yes/no; page break per use case: yes/no). => include annex = yes, page break per use case = yes
+        - [x] Provide annex intent (include annex section: yes/no; pagination controlled by template layout). => include annex = yes, page break before each use case configured in sub-template
         - [x] Provide dashboard intent (include dashboard image: yes/no) => yes (from UI)
         - [x] Provide one reference UAT dataset (folder id with executive summary + multiple use cases) folder 1c871982-9962-468c-8fd9-353c2d27a023
       - [ ] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
@@ -180,9 +180,6 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Implement template registry strategy (`templateId -> validator/provider/renderer`).
       - [ ] Keep backward compatibility for existing one-page route if currently used by UI.
       - [ ] Gate: `make typecheck-api` + `make lint-api`
-      - [ ] Partial UAT:
-        - [ ] Call unified endpoint for one-page use case and verify output parity with current behavior.
-        - [ ] Validate error messages for invalid `templateId` / invalid payload.
     - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
       - [ ] Wire `executive-synthesis.docx` master template.
       - [ ] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
