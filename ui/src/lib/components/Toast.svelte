@@ -2,7 +2,7 @@
   import { toasts, removeToast } from '$lib/stores/toast';
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { CheckCircle2, XCircle, AlertTriangle, Info, X } from '@lucide/svelte';
+  import { CheckCircle2, XCircle, AlertTriangle, Info, Download, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
 
   const getToastClasses = (type: string) => {
@@ -35,6 +35,7 @@
         return Info;
     }
   };
+
 </script>
 
 <div class="fixed top-4 right-4 z-50 space-y-2">
@@ -52,6 +53,19 @@
         </div>
         <div class="ml-3 flex-1">
           <p class="text-sm font-medium">{toast.message}</p>
+          {#if toast.actionLabel && toast.onAction}
+            <div class="mt-2 flex justify-center">
+              <button
+                class="inline-flex items-center gap-1 rounded border border-current/25 px-2 py-1 text-xs font-medium hover:bg-white/40"
+                on:click={() => toast.onAction?.()}
+              >
+                {#if toast.actionIcon === 'download'}
+                  <Download class="h-3.5 w-3.5" />
+                {/if}
+                <span>{toast.actionLabel}</span>
+              </button>
+            </div>
+          {/if}
         </div>
         <div class="ml-4 flex-shrink-0">
           <button
@@ -66,4 +80,3 @@
     </div>
   {/each}
 </div>
-

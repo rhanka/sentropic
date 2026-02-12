@@ -6,7 +6,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
-  import { addToast } from '$lib/stores/toast';
+  import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
@@ -18,7 +18,11 @@
   import FileMenu from '$lib/components/FileMenu.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
-  import { generateDocxAndDownload } from '$lib/utils/docx';
+  import {
+    downloadCompletedDocxJob,
+    startDocxGeneration,
+    waitForDocxJobCompletion,
+  } from '$lib/utils/docx';
   import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
@@ -31,6 +35,13 @@
   let currentFolder: any = null;
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
+  let dashboardDocxState: 'idle' | 'preparing' | 'ready' = 'idle';
+  let dashboardDocxJobId: string | null = null;
+  let dashboardDocxWatchToken = 0;
+  let lastDocxStateFolderId: string | null = null;
+  let dashboardDocxMenuLabel = '';
+  let dashboardDocxActionDisabled = true;
+  let dashboardDocxReadyToastId: string | null = null;
   const HUB_KEY = 'dashboardPage';
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
@@ -170,6 +181,7 @@
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    clearDashboardDocxReadyToast();
   });
 
   const loadData = async () => {
@@ -307,6 +319,10 @@
           // Les variables edited* seront mises à jour via la réactivité de initializeEditedValues
         }
       }
+
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
     } catch (error) {
       console.error('Failed to reload folder after save:', error);
     }
@@ -331,34 +347,216 @@
       // Mettre à jour le store des dossiers
       const folders = await fetchFolders();
       foldersStore.set(folders);
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
     } catch (error) {
       console.error('Failed to reload folder after name save:', error);
     }
   };
 
-  const handleDownloadExecutiveSynthesisDocx = async () => {
-    if (!selectedFolderId) return;
+  const clearDashboardDocxReadyToast = () => {
+    if (dashboardDocxReadyToastId) {
+      removeToast(dashboardDocxReadyToastId);
+      dashboardDocxReadyToastId = null;
+    }
+  };
 
+  const showDashboardDocxReadyToast = (jobId: string) => {
+    clearDashboardDocxReadyToast();
+    dashboardDocxReadyToastId = addToast({
+      type: 'success',
+      message: get(_)('dashboard.toast.docxReady'),
+      duration: 0,
+      actionLabel: get(_)('dashboard.docx.menu.download'),
+      actionIcon: 'download',
+      onAction: async () => {
+        try {
+          await downloadCompletedDocxJob(jobId, getExecutiveSynthesisFallbackName());
+          clearDashboardDocxReadyToast();
+          dashboardDocxState = 'idle';
+          dashboardDocxJobId = null;
+        } catch (error) {
+          addToast({
+            type: 'error',
+            message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+          });
+        }
+      },
+    });
+  };
+
+  const getExecutiveSynthesisFallbackName = () =>
+    `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
+
+  const findLatestExecutiveSynthesisDocxJob = async (folderId: string) => {
+    const jobs = await apiGet<any[]>('/queue/jobs');
+    const matches = (jobs || [])
+      .filter(
+        (job) =>
+          job?.type === 'docx_generate' &&
+          job?.data?.templateId === 'executive-synthesis-multipage' &&
+          job?.data?.entityType === 'folder' &&
+          job?.data?.entityId === folderId
+      )
+      .sort((a, b) => {
+        const aTs = new Date(a?.createdAt || 0).getTime();
+        const bTs = new Date(b?.createdAt || 0).getTime();
+        return bTs - aTs;
+      });
+    return matches[0] || null;
+  };
+
+  const watchExecutiveSynthesisDocxJob = async (jobId: string, notifyOnReady: boolean) => {
+    const watchToken = ++dashboardDocxWatchToken;
     try {
-      const fileNameFallback = `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
-      await generateDocxAndDownload(
-        {
-          templateId: 'executive-synthesis-multipage',
-          entityType: 'folder',
-          entityId: selectedFolderId,
-          provided: {},
-          controls: {},
-        },
-        fileNameFallback
-      );
-    } catch (error) {
-      console.error('Failed to download executive synthesis DOCX:', error);
+      const finalJob = await waitForDocxJobCompletion(jobId);
+      if (watchToken !== dashboardDocxWatchToken) return;
+
+      if (finalJob.status === 'completed') {
+        dashboardDocxState = 'ready';
+        dashboardDocxJobId = jobId;
+        if (notifyOnReady) {
+          showDashboardDocxReadyToast(jobId);
+        }
+        return;
+      }
+
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
       addToast({
         type: 'error',
-        message: error instanceof Error ? error.message : get(_)('dashboard.errors.load'),
+        message: finalJob.error || get(_)('dashboard.errors.docxPrepare'),
+      });
+    } catch (error) {
+      if (watchToken !== dashboardDocxWatchToken) return;
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
       });
     }
   };
+
+  const refreshExecutiveSynthesisDocxState = async (folderId: string) => {
+    try {
+      const latestJob = await findLatestExecutiveSynthesisDocxJob(folderId);
+      if (!latestJob) {
+        dashboardDocxWatchToken += 1;
+        clearDashboardDocxReadyToast();
+        dashboardDocxState = 'idle';
+        dashboardDocxJobId = null;
+        return;
+      }
+
+      if (latestJob.status === 'completed') {
+        dashboardDocxWatchToken += 1;
+        dashboardDocxState = 'ready';
+        dashboardDocxJobId = latestJob.id;
+        return;
+      }
+
+      if (latestJob.status === 'pending' || latestJob.status === 'processing') {
+        clearDashboardDocxReadyToast();
+        dashboardDocxState = 'preparing';
+        dashboardDocxJobId = latestJob.id;
+        void watchExecutiveSynthesisDocxJob(latestJob.id, false);
+        return;
+      }
+
+      dashboardDocxWatchToken += 1;
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
+    } catch {
+      dashboardDocxWatchToken += 1;
+      clearDashboardDocxReadyToast();
+      dashboardDocxState = 'idle';
+      dashboardDocxJobId = null;
+    }
+  };
+
+  const startExecutiveSynthesisDocxPreparation = async () => {
+    if (!selectedFolderId) return;
+
+    try {
+      const result = await startDocxGeneration({
+        templateId: 'executive-synthesis-multipage',
+        entityType: 'folder',
+        entityId: selectedFolderId,
+        provided: {},
+        controls: {},
+      });
+      if (result.status === 'completed') {
+        dashboardDocxState = 'ready';
+        dashboardDocxJobId = result.jobId;
+        showDashboardDocxReadyToast(result.jobId);
+      } else {
+        clearDashboardDocxReadyToast();
+        dashboardDocxState = 'preparing';
+        dashboardDocxJobId = result.jobId;
+        addToast({
+          type: 'info',
+          message: get(_)('dashboard.toast.docxPreparationStarted'),
+        });
+        void watchExecutiveSynthesisDocxJob(result.jobId, true);
+      }
+    } catch (error) {
+      console.error('Failed to start executive synthesis DOCX preparation:', error);
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+      });
+    }
+  };
+
+  const handleDashboardDocxMenuAction = async () => {
+    if (!selectedFolderId || dashboardDocxState === 'preparing') return;
+
+    if (dashboardDocxState === 'ready' && dashboardDocxJobId) {
+      try {
+        await downloadCompletedDocxJob(dashboardDocxJobId, getExecutiveSynthesisFallbackName());
+      } catch (error) {
+        console.error('Failed to download executive synthesis DOCX:', error);
+        addToast({
+          type: 'error',
+          message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+        });
+      } finally {
+        clearDashboardDocxReadyToast();
+        dashboardDocxState = 'idle';
+        dashboardDocxJobId = null;
+      }
+      return;
+    }
+
+    await startExecutiveSynthesisDocxPreparation();
+  };
+
+  $: dashboardDocxMenuLabel =
+    dashboardDocxState === 'preparing'
+      ? get(_)('dashboard.docx.menu.preparing')
+      : dashboardDocxState === 'ready'
+        ? get(_)('dashboard.docx.menu.download')
+        : get(_)('dashboard.docx.menu.prepare');
+
+  $: dashboardDocxActionDisabled = !selectedFolderId || dashboardDocxState === 'preparing';
+
+  $: if (selectedFolderId && selectedFolderId !== lastDocxStateFolderId) {
+    lastDocxStateFolderId = selectedFolderId;
+    void refreshExecutiveSynthesisDocxState(selectedFolderId);
+  }
+
+  $: if (!selectedFolderId) {
+    lastDocxStateFolderId = null;
+    dashboardDocxWatchToken += 1;
+    clearDashboardDocxReadyToast();
+    dashboardDocxState = 'idle';
+    dashboardDocxJobId = null;
+  }
 
 
 
@@ -607,8 +805,9 @@
           showDelete={false}
           showDownloadDocx={true}
           showPrint={true}
-          disabledDownloadDocx={!selectedFolderId}
-          onDownloadDocx={handleDownloadExecutiveSynthesisDocx}
+          labelDownloadDocx={dashboardDocxMenuLabel}
+          disabledDownloadDocx={dashboardDocxActionDisabled}
+          onDownloadDocx={handleDashboardDocxMenuAction}
           onPrint={() => window.print()}
           triggerTitle={$_('common.actions')}
           triggerAriaLabel={$_('common.actions')}

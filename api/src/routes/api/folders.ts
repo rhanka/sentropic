@@ -9,6 +9,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
+import { queueManager } from '../../services/queue-manager';
 
 const matrixSchema = z.object({
   valueAxes: z.array(
@@ -399,6 +400,18 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
     return c.json({ message: 'Not found' }, 404);
   }
   const folder = updated[0];
+  const shouldInvalidateExecutiveDocx =
+    payload.executiveSummary !== undefined ||
+    payload.name !== undefined ||
+    payload.matrixConfig !== undefined;
+  if (shouldInvalidateExecutiveDocx) {
+    await queueManager.invalidateDocxCacheForEntity({
+      workspaceId,
+      templateId: 'executive-synthesis-multipage',
+      entityType: 'folder',
+      entityId: id,
+    });
+  }
   await notifyFolderEvent(id);
   
   // Parser executiveSummary si présent
