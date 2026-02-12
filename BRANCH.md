@@ -218,6 +218,9 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Verify annex starts exactly at template-defined separator/location.
         - [x] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
         - [x] Verify links/references rendering is preserved.
+        - [x] Pop up when preparing doc
+        - [x] Pop up keeps open, with button when prepared
+        - [x] App is still alive when preparing doc (worker)
     - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
       - [ ] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
       - [ ] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
