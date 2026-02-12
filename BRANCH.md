@@ -208,15 +208,16 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] Partial UAT:
         - [x] Download use case DOCX and verify there is no regression
         - [x] Download synthesis DOCX
-        - [ ] Trigger DOCX generation and verify async behavior (API remains responsive; job visible under Jobs tab).
-        - [ ] Verify interruptibility: cancel running DOCX job and confirm `failed/cancelled` state.
-        - [ ] Verify live progress stream updates during annex rendering (`current/total` increments).
+        - [x] Trigger DOCX generation and verify async behavior (API remains responsive; job visible under Jobs tab).
+        - [x] Verify interruptibility: cancel running DOCX job and confirm `failed/cancelled` state.
+        - [x] Verify live progress stream updates during annex rendering (`current/total` increments).
         - [x] DOCX and verify section order follows template marker placement.
         - [x] PDF css print still renders correctly (with same limitations)
-        - [!] DOCX titles are properly localized i18n
-        - [!] Verify annex starts exactly at template-defined separator/location.
-        - [!] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
-        - [!] Verify links/references rendering is preserved.
+        - [x] DOCX contains rendered usecase
+        - [x] DOCX titles map PDF ones
+        - [x] Verify annex starts exactly at template-defined separator/location.
+        - [x] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
+        - [x] Verify links/references rendering is preserved.
     - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
       - [ ] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
       - [ ] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
