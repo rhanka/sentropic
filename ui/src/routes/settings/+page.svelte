@@ -31,6 +31,7 @@
   // Configuration IA
   let aiSettings = {
     concurrency: 10,
+    publishingConcurrency: 5,
     defaultModel: 'gpt-5',
     processingInterval: 1000
   };
@@ -436,6 +437,20 @@
             class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p class="text-xs text-slate-500 mt-1">{$_('settings.aiConcurrencyHint')}</p>
+        </div>
+
+        <!-- Concurrence publishing -->
+        <div>
+          <label for="publishing-concurrency" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.publishingConcurrency')}</label>
+          <input
+            id="publishing-concurrency"
+            type="number"
+            bind:value={aiSettings.publishingConcurrency}
+            min="1"
+            max="50"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p class="text-xs text-slate-500 mt-1">{$_('settings.publishingConcurrencyHint')}</p>
         </div>
 
         <!-- Intervalle de traitement -->

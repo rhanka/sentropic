@@ -130,6 +130,15 @@ export type ExecutiveSynthesisDocxInput = {
   matrix: MatrixConfig | null;
   provided?: Record<string, unknown>;
   controls?: Record<string, unknown>;
+  locale?: string;
+  requestId?: string;
+  onProgress?: (event: {
+    state: string;
+    progress?: number;
+    current?: number;
+    total?: number;
+    message?: string;
+  }) => void | Promise<void>;
 };
 
 type LoopExpansionState = {
@@ -137,6 +146,8 @@ type LoopExpansionState = {
   loopPatches: Record<string, PatchPayload>;
   includeCounter: number;
   includeTemplateXmlCache: Map<string, string>;
+  requestId?: string;
+  onAnnexProgress?: (current: number, total: number) => void | Promise<void>;
 };
 
 type LoopMatch = {
@@ -151,6 +162,11 @@ type LoopMatch = {
 type XmlRange = {
   start: number;
   end: number;
+};
+
+type RenderCallbacks = {
+  onAnnexProgress?: (current: number, total: number) => void | Promise<void>;
+  onPatchStart?: () => void | Promise<void>;
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -176,6 +192,11 @@ marked.setOptions({
 function safeText(value: unknown): string {
   if (value == null) return '';
   return String(value).replace(/\r\n/g, '\n');
+}
+
+function logDocx(message: string, requestId?: string): void {
+  const prefix = requestId ? `[DOCX:${requestId}]` : '[DOCX]';
+  console.log(`${prefix} ${message}`);
 }
 
 function normalizeList(value: unknown): string[] {
@@ -523,6 +544,15 @@ async function expandIncludes(
       continue;
     }
 
+    if (templateRef === 'usecase-onepage.docx') {
+      const renderedIncludedBody = await renderIncludedUseCaseBodyXml(
+        includeContext,
+        state.requestId
+      );
+      nextXml = nextXml.replace(full, renderedIncludedBody);
+      continue;
+    }
+
     let includeBody = state.includeTemplateXmlCache.get(templateRef);
     if (!includeBody) {
       includeBody = await loadTemplateBodyXml(templateRef);
@@ -541,6 +571,32 @@ async function expandIncludes(
   }
 
   return nextXml;
+}
+
+async function renderIncludedUseCaseBodyXml(
+  includeContext: unknown,
+  requestId?: string
+): Promise<string> {
+  if (!includeContext || typeof includeContext !== 'object') return '';
+
+  const startedAt = Date.now();
+  const context = includeContext as Record<string, unknown>;
+  const templateData = includeContext as TemplateData;
+  const renderedDocx = await renderDocxTemplate(
+    'usecase-onepage.docx',
+    context,
+    basePayloads(templateData),
+    requestId
+  );
+  const zip = await JSZip.loadAsync(renderedDocx);
+  const docXmlFile = zip.file('word/document.xml');
+  if (!docXmlFile) return '';
+  const xml = await docXmlFile.async('string');
+  logDocx(
+    `include rendered template="usecase-onepage.docx" in ${Date.now() - startedAt}ms`,
+    requestId
+  );
+  return extractBodyXml(xml);
 }
 
 function findNextLoop(xml: string, fromIndex = 0): LoopMatch | null {
@@ -788,7 +844,7 @@ async function expandLoops(
   scope: Record<string, unknown>,
   state: LoopExpansionState
 ): Promise<string> {
-  let currentXml = await expandIncludes(xml, scope, state);
+  let currentXml = xml;
   let cursor = 0;
   let hasPendingLoop = true;
 
@@ -837,9 +893,16 @@ async function expandLoops(
     const itemsRaw = resolveExpression(scope, loop.loopExpr) ?? resolvePath(scope, loopPath);
     const items = Array.isArray(itemsRaw) ? itemsRaw : [];
 
-    let rendered = '';
+    const renderedPieces: string[] = [];
 
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (loop.loopVar === 'uc') {
+        if (state.onAnnexProgress) {
+          await state.onAnnexProgress(index + 1, items.length);
+        }
+        logDocx(`annex usecase ${index + 1}/${items.length}`, state.requestId);
+      }
       const nestedScope: Record<string, unknown> = {
         ...scope,
         [loop.loopVar]: item,
@@ -847,8 +910,9 @@ async function expandLoops(
 
       let piece = await expandLoops(innerTemplate, nestedScope, state);
       piece = replaceScopedValuePlaceholders(piece, nestedScope, state);
-      rendered += piece;
+      renderedPieces.push(piece);
     }
+    const rendered = renderedPieces.join('');
 
     if (canDropBothControlParagraphs && startParagraph && endParagraph) {
       currentXml =
@@ -874,6 +938,7 @@ async function expandLoops(
     }
   }
 
+  currentXml = await expandIncludes(currentXml, scope, state);
   return replaceScopedValuePlaceholders(currentXml, scope, state);
 }
 
@@ -983,7 +1048,9 @@ function placeholderToPayload(
 
 async function expandTemplateLoops(
   template: Buffer,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  requestId?: string,
+  callbacks?: RenderCallbacks
 ): Promise<{ template: Buffer; loopPatches: Record<string, PatchPayload>; documentXml: string }> {
   const zip = await JSZip.loadAsync(template);
   const docXmlFile = zip.file('word/document.xml');
@@ -998,6 +1065,8 @@ async function expandTemplateLoops(
     loopPatches: {},
     includeCounter: 0,
     includeTemplateXmlCache: new Map<string, string>(),
+    requestId,
+    onAnnexProgress: callbacks?.onAnnexProgress,
   };
 
   const expandedXml = stripEmptyParagraphsBeforeTables(
@@ -1017,16 +1086,27 @@ async function expandTemplateLoops(
 async function renderDocxTemplate(
   templateFileName: string,
   context: Record<string, unknown>,
-  basePatchPayloads: Record<string, PatchPayload> = {}
+  basePatchPayloads: Record<string, PatchPayload> = {},
+  requestId?: string,
+  callbacks?: RenderCallbacks
 ): Promise<Buffer> {
+  const renderStartedAt = Date.now();
+  const verboseRenderLog = templateFileName === 'executive_synthesis.docx';
   const templatePath = resolve(TEMPLATES_DIR, templateFileName);
   const templateBuffer = await readFile(templatePath);
 
+  const expandStartedAt = Date.now();
   const {
     template: expandedTemplate,
     loopPatches,
     documentXml,
-  } = await expandTemplateLoops(templateBuffer, context);
+  } = await expandTemplateLoops(templateBuffer, context, requestId, callbacks);
+  if (verboseRenderLog) {
+    logDocx(
+      `render template="${templateFileName}" expand=${Date.now() - expandStartedAt}ms`,
+      requestId
+    );
+  }
 
   const payloads: Record<string, PatchPayload> = {
     ...basePatchPayloads,
@@ -1035,6 +1115,12 @@ async function renderDocxTemplate(
 
   const placeholders = await patchDetector({ data: expandedTemplate });
   const placeholderStyles = extractPlaceholderBaseStyles(documentXml);
+  if (verboseRenderLog) {
+    logDocx(
+      `render template="${templateFileName}" placeholders=${placeholders.length} loopPatches=${Object.keys(loopPatches).length}`,
+      requestId
+    );
+  }
 
   const patches: Record<string, IPatch> = {};
   placeholders.forEach((placeholder) => {
@@ -1042,6 +1128,10 @@ async function renderDocxTemplate(
     patches[placeholder] = toPatch(payload, placeholderStyles[placeholder]);
   });
 
+  const patchStartedAt = Date.now();
+  if (callbacks?.onPatchStart) {
+    await callbacks.onPatchStart();
+  }
   const result = await patchDocument({
     outputType: 'nodebuffer',
     data: expandedTemplate,
@@ -1052,6 +1142,12 @@ async function renderDocxTemplate(
       end: '}}',
     },
   });
+  if (verboseRenderLog) {
+    logDocx(
+      `render template="${templateFileName}" patch=${Date.now() - patchStartedAt}ms total=${Date.now() - renderStartedAt}ms`,
+      requestId
+    );
+  }
 
   return Buffer.from(result);
 }
@@ -1100,6 +1196,7 @@ function referencesToMarkdownBlock(
 function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Record<string, unknown> {
   const executiveSummary = input.executiveSummary ?? {};
   const normalizedReferences = normalizeExecutiveSummaryReferences(executiveSummary.references);
+  const locale = safeText(input.locale).toLowerCase().startsWith('en') ? 'en' : 'fr';
 
   const usecasesForAnnex = input.useCases.map((useCase) => ({
     ...useCase,
@@ -1115,10 +1212,18 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
   }).length;
 
   const provided = { ...(input.provided ?? {}) };
+  const providedReportTitle = resolvePath(provided, 'report.title');
+  const providedAnnexTitle = resolvePath(provided, 'annex.title');
+  const providedAnnexSubtitle = resolvePath(provided, 'annex.subtitle');
 
   return {
     report: {
-      title: 'Executive Synthesis',
+      title:
+        typeof providedReportTitle === 'string' && providedReportTitle.trim()
+          ? providedReportTitle
+          : locale === 'en'
+            ? 'Top AI Ideas Report'
+            : 'Rapport Top AI Ideas',
     },
     folder: {
       name: safeText(input.folderName),
@@ -1140,8 +1245,18 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
       quickWinsCount,
     },
     annex: {
-      title: 'Annex',
-      subtitle: 'Detailed use cases',
+      title:
+        typeof providedAnnexTitle === 'string' && providedAnnexTitle.trim()
+          ? providedAnnexTitle
+          : locale === 'en'
+            ? 'Annex'
+            : 'Annexes',
+      subtitle:
+        typeof providedAnnexSubtitle === 'string' && providedAnnexSubtitle.trim()
+          ? providedAnnexSubtitle
+          : locale === 'en'
+            ? 'Use cases'
+            : "Cas d'usage",
     },
     backCover: {
       title: '',
@@ -1166,11 +1281,53 @@ export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig
 }
 
 export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDocxInput): Promise<Buffer> {
+  const startedAt = Date.now();
+  await input.onProgress?.({
+    state: 'rendering',
+    progress: 25,
+    message: 'Starting executive synthesis rendering',
+  });
+  logDocx(
+    `executive synthesis start folder="${safeText(input.folderName)}" usecases=${input.useCases.length}`,
+    input.requestId
+  );
   const context = buildExecutiveSynthesisContext(input);
-  return renderDocxTemplate('executive_synthesis.docx', context, {
+  const result = await renderDocxTemplate('executive_synthesis.docx', context, {
     'folder.execSummary.references': {
       mode: 'markdown_block',
       value: resolvePath(context, 'folder.execSummary.references'),
     },
+  }, input.requestId, {
+    onAnnexProgress: async (current: number, total: number) => {
+      const ratio = total > 0 ? current / total : 1;
+      const progress = Math.max(30, Math.min(85, Math.round(30 + ratio * 55)));
+      await input.onProgress?.({
+        state: 'rendering_annex',
+        progress,
+        current,
+        total,
+      });
+    },
+    onPatchStart: async () => {
+      await input.onProgress?.({
+        state: 'patching',
+        progress: 90,
+        message: 'Applying DOCX patches',
+      });
+    },
   });
+  await input.onProgress?.({
+    state: 'packaging',
+    progress: 97,
+    message: 'Finalizing DOCX package',
+  });
+  logDocx(
+    `executive synthesis done in ${Date.now() - startedAt}ms bytes=${result.byteLength}`,
+    input.requestId
+  );
+  await input.onProgress?.({
+    state: 'done',
+    progress: 100,
+  });
+  return result;
 }

@@ -27,6 +27,8 @@ import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
+import { generateDocxForEntity } from './docx-generation';
+import type { DocxEntityType, DocxTemplateId } from './docx-service';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -42,6 +44,27 @@ function parseOrgData(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function parseJsonField<T = unknown>(value: unknown): T | null {
+  if (value == null) return null;
+  if (typeof value === 'object') return value as T;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeJobResultForPublic(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const copy = { ...(result as Record<string, unknown>) };
+  if (typeof copy.contentBase64 === 'string') {
+    delete copy.contentBase64;
+    copy.hasContent = true;
+  }
+  return copy;
+}
+
 export type JobType =
   | 'organization_enrich'
   | 'matrix_generate'
@@ -49,7 +72,8 @@ export type JobType =
   | 'usecase_detail'
   | 'executive_summary'
   | 'chat_message'
-  | 'document_summary';
+  | 'document_summary'
+  | 'docx_generate';
 
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
@@ -104,6 +128,16 @@ export interface DocumentSummaryJobData {
   model?: string;
 }
 
+export interface DocxGenerateJobData {
+  templateId: DocxTemplateId;
+  entityType: DocxEntityType;
+  entityId: string;
+  provided?: Record<string, unknown>;
+  controls?: Record<string, unknown>;
+  locale?: string;
+  requestId?: string;
+}
+
 export type JobData =
   | OrganizationEnrichJobData
   | MatrixGenerateJobData
@@ -111,12 +145,14 @@ export type JobData =
   | UseCaseDetailJobData
   | ExecutiveSummaryJobData
   | ChatMessageJobData
-  | DocumentSummaryJobData;
+  | DocumentSummaryJobData
+  | DocxGenerateJobData;
 
 export interface Job {
   id: string;
   type: JobType;
   data: JobData;
+  result?: unknown;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   workspaceId?: string;
   createdAt: string;
@@ -127,7 +163,8 @@ export interface Job {
 
 export class QueueManager {
   private isProcessing = false;
-  private maxConcurrentJobs = 10; // Limite de concurrence par défaut
+  private maxConcurrentJobs = 10; // AI queue class
+  private maxPublishingJobs = 5; // Publishing queue class (docx, authoring, ...)
   private processingInterval = 1000; // Intervalle par défaut
   private paused = false;
   private cancelAllInProgress = false;
@@ -285,8 +322,11 @@ export class QueueManager {
     try {
       const settings = await settingsService.getAISettings();
       this.maxConcurrentJobs = settings.concurrency;
+      this.maxPublishingJobs = settings.publishingConcurrency;
       this.processingInterval = settings.processingInterval;
-      console.log(`🔧 Queue settings loaded: concurrency=${this.maxConcurrentJobs}, interval=${this.processingInterval}ms`);
+      console.log(
+        `🔧 Queue settings loaded: aiConcurrency=${this.maxConcurrentJobs}, publishingConcurrency=${this.maxPublishingJobs}, interval=${this.processingInterval}ms`
+      );
     } catch (error) {
       console.warn('⚠️ Failed to load queue settings, using defaults:', error);
     }
@@ -411,6 +451,15 @@ export class QueueManager {
     }
   }
 
+  private queueClassSqlExpr(): string {
+    return `
+      CASE type
+        WHEN 'docx_generate' THEN 'publishing'
+        ELSE 'ai'
+      END
+    `;
+  }
+
   /**
    * Ajouter un job à la queue
    */
@@ -476,15 +525,20 @@ export class QueueManager {
 
     try {
       const inFlight = new Set<Promise<void>>();
+      const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+      const queueClasses: Array<'ai' | 'publishing'> = ['publishing', 'ai'];
 
       const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      const getGlobalProcessingCount = async (): Promise<number> => {
+      const getProcessingCountByClass = async (
+        queueClass: 'ai' | 'publishing'
+      ): Promise<number> => {
         try {
           const rows = (await db.all(sql`
             SELECT COUNT(*)::int AS count
             FROM job_queue
             WHERE status = 'processing'
+              AND ${queueClassExpr} = ${queueClass}
           `)) as Array<{ count: number }>;
           return rows?.[0]?.count ?? 0;
         } catch {
@@ -501,25 +555,26 @@ export class QueueManager {
         return rows.length > 0;
       };
 
-      const claimPendingJobs = async (limit: number): Promise<JobQueueRow[]> => {
+      const claimPendingJobsByClass = async (
+        queueClass: 'ai' | 'publishing',
+        limit: number
+      ): Promise<JobQueueRow[]> => {
         if (limit <= 0) return [];
-        // GLOBAL concurrency: we claim jobs in DB atomically. This prevents over-parallelization across workers
-        // and ensures the configured limit applies to the sum of all job types.
+        const orderByExpr =
+          queueClass === 'ai'
+            ? sql.raw(
+                "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'usecase_list' THEN 1 ELSE 2 END, created_at ASC"
+              )
+            : sql.raw('created_at ASC');
         const now = new Date();
         const rows = (await db.all(sql`
           WITH picked AS (
             SELECT id
             FROM job_queue
-          WHERE status = 'pending'
-          ORDER BY
-            CASE type
-              WHEN 'chat_message' THEN 0
-              WHEN 'matrix_generate' THEN 1
-              WHEN 'usecase_list' THEN 1
-              ELSE 2
-            END,
-            created_at ASC
-          LIMIT ${limit}
+            WHERE status = 'pending'
+              AND ${queueClassExpr} = ${queueClass}
+            ORDER BY ${orderByExpr}
+            LIMIT ${limit}
             FOR UPDATE SKIP LOCKED
           )
           UPDATE job_queue q
@@ -534,13 +589,13 @@ export class QueueManager {
       while (!this.paused) {
         if (this.cancelAllInProgress) break;
 
-        // Fill available slots continuously (don't wait for a whole batch to finish).
-        // IMPORTANT: slots are computed from the GLOBAL processing count in DB,
-        // so the configured limit applies to the sum of all queues (all types) and across workers.
-        const globalProcessing = await getGlobalProcessingCount();
-        const slots = Math.max(0, this.maxConcurrentJobs - globalProcessing);
-        if (slots > 0) {
-          const claimedJobs = await claimPendingJobs(slots);
+        for (const queueClass of queueClasses) {
+          const classLimit = queueClass === 'ai' ? this.maxConcurrentJobs : this.maxPublishingJobs;
+          const classProcessing = await getProcessingCountByClass(queueClass);
+          const slots = Math.max(0, classLimit - classProcessing);
+          if (slots <= 0) continue;
+
+          const claimedJobs = await claimPendingJobsByClass(queueClass, slots);
           for (const job of claimedJobs) {
             await this.notifyJobEvent(job.id);
             const p = this.processJob(job).finally(() => {
@@ -661,6 +716,13 @@ export class QueueManager {
         case 'document_summary':
           await this.processDocumentSummary(
             jobData as unknown as DocumentSummaryJobData,
+            jobId,
+            controller.signal
+          );
+          break;
+        case 'docx_generate':
+          await this.processDocxGenerate(
+            jobData as unknown as DocxGenerateJobData,
             jobId,
             controller.signal
           );
@@ -1209,6 +1271,131 @@ export class QueueManager {
   }
 
   /**
+   * Worker: generate DOCX asynchronously in publishing queue.
+   * Result binary is stored in job_queue.result as base64 for direct download endpoint.
+   */
+  private async processDocxGenerate(
+    data: DocxGenerateJobData,
+    jobId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const streamId = `job_${jobId}`;
+
+    const emitStatus = async (
+      state: string,
+      progress: number,
+      extra: Record<string, unknown> = {}
+    ) => {
+      const payload = {
+        state,
+        progress,
+        ...extra,
+        updatedAt: new Date().toISOString(),
+      };
+      await db.run(sql`
+        UPDATE job_queue
+        SET result = ${JSON.stringify(payload)}
+        WHERE id = ${jobId}
+      `);
+      await this.notifyJobEvent(jobId);
+      const seq = await getNextSequence(streamId);
+      await writeStreamEvent(streamId, 'status', payload, seq);
+    };
+
+    const isAbort = (error: unknown): boolean => {
+      if (!error) return false;
+      if (error instanceof DOMException && error.name === 'AbortError') return true;
+      if (error instanceof Error && error.name === 'AbortError') return true;
+      const message = error instanceof Error ? error.message : String(error);
+      return message.includes('AbortError') || message.includes('aborted');
+    };
+
+    const [jobRow] = await db
+      .select({ workspaceId: jobQueue.workspaceId })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    if (!jobRow?.workspaceId) {
+      throw new Error('Docx job workspace not found');
+    }
+
+    await emitStatus('queued', 0, {
+      templateId: data.templateId,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      queueClass: 'publishing',
+    });
+
+    try {
+      if (signal?.aborted) {
+        throw new DOMException('Docx generation cancelled', 'AbortError');
+      }
+
+      await emitStatus('loading_data', 10);
+
+      const result = await generateDocxForEntity({
+        templateId: data.templateId,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        workspaceId: jobRow.workspaceId,
+        provided: data.provided ?? {},
+        controls: data.controls ?? {},
+        locale: data.locale,
+        requestId: data.requestId ?? jobId,
+        onProgress: async (event) => {
+          const progress = typeof event.progress === 'number' ? event.progress : 50;
+          await emitStatus(event.state || 'rendering', progress, {
+            current: event.current,
+            total: event.total,
+            message: event.message,
+          });
+        },
+      });
+
+      if (signal?.aborted) {
+        throw new DOMException('Docx generation cancelled', 'AbortError');
+      }
+
+      await emitStatus('packaging', 98, {
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+      });
+
+      const finalPayload = {
+        state: 'done',
+        progress: 100,
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+        byteLength: result.buffer.byteLength,
+        contentBase64: result.buffer.toString('base64'),
+        queueClass: 'publishing',
+        completedAt: new Date().toISOString(),
+      };
+
+      await db.run(sql`
+        UPDATE job_queue
+        SET result = ${JSON.stringify(finalPayload)}
+        WHERE id = ${jobId}
+      `);
+      await this.notifyJobEvent(jobId);
+
+      const seq = await getNextSequence(streamId);
+      await writeStreamEvent(streamId, 'done', finalPayload, seq);
+    } catch (error) {
+      if (isAbort(error)) {
+        await emitStatus('cancelled', 0, {
+          message: error instanceof Error ? error.message : 'Docx generation cancelled',
+        });
+      } else {
+        await emitStatus('failed', 0, {
+          message: error instanceof Error ? error.message : 'Docx generation failed',
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
@@ -1670,7 +1857,7 @@ export class QueueManager {
   /**
    * Obtenir le statut d'un job
    */
-  async getJobStatus(jobId: string): Promise<Job | null> {
+  async getJobStatus(jobId: string, opts?: { includeBinaryResult?: boolean }): Promise<Job | null> {
     const result = await db
       .select()
       .from(jobQueue)
@@ -1683,7 +1870,11 @@ export class QueueManager {
     return {
       id: row.id,
       type: row.type as JobType,
-      data: JSON.parse(row.data) as JobData,
+      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      result:
+        opts?.includeBinaryResult === true
+          ? parseJsonField(row.result)
+          : sanitizeJobResultForPublic(parseJsonField(row.result)),
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
@@ -1707,7 +1898,8 @@ export class QueueManager {
     return results.map((row) => ({
       id: row.id,
       type: row.type as JobType,
-      data: JSON.parse(row.data) as JobData,
+      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      result: sanitizeJobResultForPublic(parseJsonField(row.result)),
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       // Drizzle retourne createdAt, startedAt, completedAt en camelCase
