@@ -32,7 +32,7 @@ function withWorkspaceScope(path: string): string {
   return `${path}${hasQuery ? '&' : '?'}workspace_id=${encodeURIComponent(scopedWorkspaceId)}`;
 }
 
-async function waitForDocxJobCompletion(
+export async function waitForDocxJobCompletion(
   jobId: string,
   opts?: { timeoutMs?: number; intervalMs?: number }
 ): Promise<QueueJobStatus> {
@@ -51,7 +51,10 @@ async function waitForDocxJobCompletion(
   throw new Error('DOCX generation timed out');
 }
 
-async function downloadCompletedDocxJob(jobId: string, fallbackFileName: string): Promise<void> {
+export async function downloadCompletedDocxJob(
+  jobId: string,
+  fallbackFileName: string
+): Promise<void> {
   const scopedPath = withWorkspaceScope(`/docx/jobs/${jobId}/download`);
   const url = new URL(`${API_BASE_URL}${scopedPath}`, window.location.origin);
 
@@ -79,14 +82,15 @@ async function downloadCompletedDocxJob(jobId: string, fallbackFileName: string)
   URL.revokeObjectURL(objectUrl);
 }
 
+export async function startDocxGeneration(payload: DocxGeneratePayload): Promise<GenerateDocxResponse> {
+  return apiPost<GenerateDocxResponse>(withWorkspaceScope('/docx/generate'), payload);
+}
+
 export async function generateDocxAndDownload(
   payload: DocxGeneratePayload,
   fallbackFileName: string
 ): Promise<string> {
-  const result = await apiPost<GenerateDocxResponse>(
-    withWorkspaceScope('/docx/generate'),
-    payload
-  );
+  const result = await startDocxGeneration(payload);
 
   if (!result?.jobId) {
     throw new Error('DOCX generation job was not created');
