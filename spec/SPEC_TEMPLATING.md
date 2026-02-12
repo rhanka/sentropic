@@ -290,10 +290,11 @@ Current limitations:
 - Master template can iterate annex entries with existing loop syntax and inject use case blocks from `usecases`.
 - References section uses as-is loop on folder data:
 ```txt
-{{FOR ref IN (folder.executiveSummary.references || [])}}
-{{$ref.title}} {{$ref.url}}
+{{FOR ref IN (folder.execSummary.references || folder.executiveSummary.references || [])}}
+{{$ref.link}}
 {{END-FOR ref}}
 ```
+- No hardcoded markdown list serialization in API for references; formatting is template-driven (list style/numbering in DOCX).
 
 ### 6.5 Mirror parity inventory (Dashboard print -> DOCX template)
 - Cover:
