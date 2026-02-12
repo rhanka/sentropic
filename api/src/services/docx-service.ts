@@ -7,6 +7,7 @@
  * 3) patch placeholders with docx.patchDocument while preserving template styles
  */
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, posix as pathPosix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -203,7 +204,11 @@ type RelationshipState = {
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TEMPLATES_DIR = resolve(__dirname, '../../templates');
+const MODULE_TEMPLATES_DIR = resolve(__dirname, '../../templates');
+const CWD_TEMPLATES_DIR = resolve(process.cwd(), 'templates');
+const TEMPLATES_DIR = existsSync(CWD_TEMPLATES_DIR)
+  ? CWD_TEMPLATES_DIR
+  : MODULE_TEMPLATES_DIR;
 
 const MARKDOWN_BLOCK_FIELDS = new Set([
   'description',

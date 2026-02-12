@@ -128,6 +128,9 @@
 - [ ] Reduce CI time
   - [ ] Enable mutliple workers in test-api
   - [ ] Split test-e2e in two // execution groups
+- [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
+  - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
+  - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
 - [ ] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
   - [ ] define a model for usecase fitting in one page
   - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
