@@ -52,6 +52,7 @@
       case 'executive_summary': return $_('queueMonitor.type.executiveSummary');
       case 'document_summary': return $_('queueMonitor.type.documentSummary');
       case 'chat_message': return $_('queueMonitor.type.chatMessage');
+      case 'docx_generate': return $_('queueMonitor.type.docxGenerate');
       default: return type;
     }
   };

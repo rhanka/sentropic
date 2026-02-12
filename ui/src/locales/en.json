@@ -523,9 +523,11 @@
     "aiDefaultModelHint": "Model used by default for all AI operations",
     "aiConcurrency": "Concurrent jobs",
     "aiConcurrencyHint": "Number of AI jobs processed in parallel (1-50)",
+    "publishingConcurrency": "Concurrent publishing jobs",
+    "publishingConcurrencyHint": "Number of publishing jobs processed in parallel (1-50)",
     "aiInterval": "Processing interval (ms)",
     "aiIntervalHint": "Delay between queue processing cycles (1000-60000ms)",
-    "queueManagement": "AI queue management",
+    "queueManagement": "Job queue management",
     "queueTotal": "Total",
     "queuePending": "Pending",
     "queueRunning": "Running",
@@ -585,7 +587,7 @@
       }
     },
     "queue": {
-      "description": "Monitor and manage the AI jobs processing queue.",
+      "description": "Monitor and manage the jobs processing queue.",
       "refresh": "Refresh",
       "purging": "Purging…",
       "purgePending": "Purge pending ({count})",
@@ -683,7 +685,7 @@
     "tabs": {
       "comments": "Comments",
       "chat": "AI chat",
-      "jobs": "AI jobs"
+      "jobs": "Jobs"
     },
     "sections": {
       "usecase": {
@@ -723,7 +725,7 @@
       }
     },
     "widget": {
-      "bubbleLabel": "Chat / AI jobs",
+      "bubbleLabel": "Chat / Jobs",
       "switchToWidget": "Switch to widget",
       "switchToPanel": "Switch to panel"
     },
@@ -732,7 +734,7 @@
         "active": "{count} active job(s)",
         "failed": "{count} failed job(s)"
       },
-      "confirmPurgeMine": "Are you sure you want to delete ALL your AI jobs? This action is irreversible.",
+      "confirmPurgeMine": "Are you sure you want to delete ALL your jobs? This action is irreversible.",
       "confirmPurgeAllGlobal": "Are you sure you want to delete ALL jobs (global)? This action is irreversible.",
       "purgeMine": "Delete all my jobs",
       "purgeAllGlobal": "Delete all jobs (global)",
@@ -910,7 +912,8 @@
       "usecaseDetail": "Use case detail generation",
       "executiveSummary": "Executive summary",
       "documentSummary": "Document summary",
-      "chatMessage": "Chat"
+      "chatMessage": "Chat",
+      "docxGenerate": "DOCX generation"
     },
     "confirmDelete": "Are you sure you want to delete this job? This action is irreversible.",
     "toast": {

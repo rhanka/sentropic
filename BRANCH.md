@@ -178,10 +178,20 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - Notes:
         - Markers extracted from `executive_synthesis.docx`: `report.title`, `folder.name`, `folder.executiveSummary.synthese_executive`, `folder.executiveSummary.introduction`, `folder.executiveSummary.analyse`, `folder.executiveSummary.recommandation`, `folder.execSummary.references`, `annex.title`, `annex.subtitle`, `provided.dashboardImage`, and annex loop (`FOR uc ... INCLUDE ... END-FOR uc`).
         - Unified payload contract frozen: `templateId`, `entityType`, `entityId`, `provided`, `controls` (+ legacy alias `options`).
-    - [ ] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
+    - [x] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
       - [x] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `provided`, `controls`) with backward-compatible alias for legacy `options`.
       - [x] Implement template registry strategy (`templateId -> validator/provider/renderer`).
-      - [x] Keep backward compatibility for existing one-page route if currently used by UI.
+      - [x] Remove synchronous binary DOCX API flow (DoS risk): no direct inline rendering in request thread.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
+    - [x] **Lot 2.3.1.b — Queue split (`ai` vs `publishing`) + async DOCX jobs**
+      - [x] Introduce `docx_generate` job type and route all DOCX generation through queue manager.
+      - [x] Implement queue-class scheduling (`ai` vs `publishing`) on shared `job_queue`.
+      - [x] Add configurable `publishing_concurrency` (default 5) and keep `ai_concurrency` isolated.
+      - [x] Expose async generation contract:
+        - [x] `POST /api/v1/docx/generate` returns `jobId` (enqueue only, no binary payload).
+        - [x] `GET /api/v1/docx/jobs/:jobId/download` returns binary when job is completed.
+      - [x] Remove/retire legacy sync route `GET /api/v1/use-cases/:id/docx`.
+      - [x] Implement real queue cancel endpoint for interruptible jobs (`/queue/jobs/:id/cancel`).
       - [x] Gate: `make typecheck-api` + `make lint-api`
     - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
       - [x] Wire `executive-synthesis.docx` master template.
@@ -189,12 +199,24 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
       - [x] Ensure heading styles are preserved for synthesis sections and annexed use case titles (TOC-compatible).
       - [x] Ensure references rendering uses the marker contract.
+      - [x] Stream DOCX progress events on `job_<jobId>` (`status` with `state/progress/current/total`).
+      - [x] Surface DOCX progress in queue snapshots/UI job card.
+      - [x] Replace UI label `Jobs IA` / `AI jobs` with `Jobs`.
       - [x] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Gate: `make typecheck-ui` + `make lint-ui`
+      - [ ] Cleanup temporary DOCX diagnostic logs after async/UAT retests (keep only durable operational logs).
       - [ ] Partial UAT:
-        - [ ] Download synthesis DOCX and verify section order follows template marker placement.
-        - [ ] Verify annex starts exactly at template-defined separator/location.
-        - [ ] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
-        - [ ] Verify links/references rendering is preserved.
+        - [x] Download use case DOCX and verify there is no regression
+        - [x] Download synthesis DOCX
+        - [ ] Trigger DOCX generation and verify async behavior (API remains responsive; job visible under Jobs tab).
+        - [ ] Verify interruptibility: cancel running DOCX job and confirm `failed/cancelled` state.
+        - [ ] Verify live progress stream updates during annex rendering (`current/total` increments).
+        - [x] DOCX and verify section order follows template marker placement.
+        - [x] PDF css print still renders correctly (with same limitations)
+        - [!] DOCX titles are properly localized i18n
+        - [!] Verify annex starts exactly at template-defined separator/location.
+        - [!] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
+        - [!] Verify links/references rendering is preserved.
     - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
       - [ ] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
       - [ ] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.

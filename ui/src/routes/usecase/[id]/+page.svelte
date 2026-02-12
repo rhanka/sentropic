@@ -3,11 +3,11 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
+  import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
   import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
-  import { API_BASE_URL } from '$lib/config';
+  import { generateDocxAndDownload } from '$lib/utils/docx';
   import { goto } from '$app/navigation';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -420,12 +420,28 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     }
   };
 
-  const handleDownloadDocx = () => {
+  const handleDownloadDocx = async () => {
     if (!useCase) return;
-    // Open the DOCX endpoint in a new tab to trigger the browser download.
-    // The API uses cookie-based auth so credentials are sent automatically.
-    const url = `${API_BASE_URL}/use-cases/${useCase.id}/docx`;
-    window.open(url, '_blank');
+    const name = (useCase?.data?.name || useCase?.name || 'usecase').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const fallback = `usecase-${name || useCase.id}.docx`;
+    try {
+      await generateDocxAndDownload(
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: useCase.id,
+          provided: {},
+          controls: {},
+        },
+        fallback
+      );
+    } catch (error) {
+      console.error('Failed to download use case DOCX:', error);
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('usecase.errors.load'),
+      });
+    }
   };
 
   const loadMatrixAndCalculateScores = async () => {
