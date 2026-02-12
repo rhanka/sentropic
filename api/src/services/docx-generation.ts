@@ -2,9 +2,8 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { folders, useCases } from '../db/schema';
-import { hydrateUseCase, hydrateUseCases } from '../routes/api/use-cases';
 import type { MatrixConfig } from '../types/matrix';
-import type { UseCase } from '../types/usecase';
+import type { ScoreEntry, UseCase, UseCaseData } from '../types/usecase';
 import {
   type DocxEntityType,
   type DocxTemplateId,
@@ -12,6 +11,7 @@ import {
   generateUseCaseDocx,
 } from './docx-service';
 import { parseMatrixConfig } from '../utils/matrix';
+import { calculateUseCaseScores } from '../utils/scoring';
 
 export type DocxGenerateRequest = {
   templateId: DocxTemplateId;
@@ -60,12 +60,161 @@ type RegistryEntry = {
   generate: (input: DocxGenerateRequest) => Promise<DocxGenerateResult>;
 };
 
+type SerializedUseCase = typeof useCases.$inferSelect;
+
+type LegacyUseCaseRow = SerializedUseCase & {
+  name?: string | null;
+  description?: string | null;
+  process?: string | null;
+  domain?: string | null;
+  technologies?: string | null;
+  prerequisites?: string | null;
+  deadline?: string | null;
+  contact?: string | null;
+  benefits?: string | null;
+  constraints?: string | null;
+  metrics?: string | null;
+  risks?: string | null;
+  nextSteps?: string | null;
+  dataSources?: string | null;
+  dataObjects?: string | null;
+  references?: string | null;
+  valueScores?: string | null;
+  complexityScores?: string | null;
+};
+
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 function safeText(value: unknown): string {
   if (value == null) return '';
   return String(value);
+}
+
+const parseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+function extractUseCaseData(row: SerializedUseCase): Partial<UseCaseData> {
+  let data: Partial<UseCaseData> = {};
+  try {
+    if (row.data && typeof row.data === 'object') {
+      data = row.data as Partial<UseCaseData>;
+    } else if (typeof row.data === 'string') {
+      data = JSON.parse(row.data) as Partial<UseCaseData>;
+    }
+  } catch {
+    data = {};
+  }
+
+  const legacyRow = row as LegacyUseCaseRow;
+  if (!data.name && legacyRow.name) data.name = legacyRow.name;
+  if (!data.description && legacyRow.description) data.description = legacyRow.description;
+  if (!data.process && legacyRow.process) data.process = legacyRow.process;
+  if (!data.domain && legacyRow.domain) data.domain = legacyRow.domain;
+  if (!data.technologies && legacyRow.technologies) {
+    data.technologies = parseJson<string[]>(legacyRow.technologies) ?? [];
+  }
+  if (!data.prerequisites && legacyRow.prerequisites) data.prerequisites = legacyRow.prerequisites;
+  if (!data.deadline && legacyRow.deadline) data.deadline = legacyRow.deadline;
+  if (!data.contact && legacyRow.contact) data.contact = legacyRow.contact;
+  if (!data.benefits && legacyRow.benefits) {
+    data.benefits = parseJson<string[]>(legacyRow.benefits) ?? [];
+  }
+  if (!data.constraints && legacyRow.constraints) {
+    data.constraints = parseJson<string[]>(legacyRow.constraints) ?? [];
+  }
+  if (!data.metrics && legacyRow.metrics) {
+    data.metrics = parseJson<string[]>(legacyRow.metrics) ?? [];
+  }
+  if (!data.risks && legacyRow.risks) {
+    data.risks = parseJson<string[]>(legacyRow.risks) ?? [];
+  }
+  if (!data.nextSteps && legacyRow.nextSteps) {
+    data.nextSteps = parseJson<string[]>(legacyRow.nextSteps) ?? [];
+  }
+  if (!data.dataSources && legacyRow.dataSources) {
+    data.dataSources = parseJson<string[]>(legacyRow.dataSources) ?? [];
+  }
+  if (!data.dataObjects && legacyRow.dataObjects) {
+    data.dataObjects = parseJson<string[]>(legacyRow.dataObjects) ?? [];
+  }
+  if (!data.references && legacyRow.references) {
+    data.references =
+      parseJson<Array<{ title: string; url: string; excerpt?: string }>>(legacyRow.references) ??
+      [];
+  }
+  if (!data.valueScores && legacyRow.valueScores) {
+    data.valueScores = parseJson<ScoreEntry[]>(legacyRow.valueScores) ?? [];
+  }
+  if (!data.complexityScores && legacyRow.complexityScores) {
+    data.complexityScores = parseJson<ScoreEntry[]>(legacyRow.complexityScores) ?? [];
+  }
+  if (!data.name) data.name = "Cas d'usage sans nom";
+
+  return data;
+}
+
+async function hydrateUseCase(row: SerializedUseCase): Promise<UseCase> {
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.id, row.folderId), eq(folders.workspaceId, row.workspaceId)));
+  const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
+  const data = extractUseCaseData(row);
+  const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+
+  return {
+    id: row.id,
+    folderId: row.folderId,
+    organizationId: row.organizationId,
+    status: row.status ?? 'completed',
+    model: row.model,
+    createdAt: row.createdAt,
+    data: data as UseCaseData,
+    totalValueScore: computedScores?.totalValueScore ?? null,
+    totalComplexityScore: computedScores?.totalComplexityScore ?? null,
+  };
+}
+
+async function hydrateUseCases(rows: SerializedUseCase[]): Promise<UseCase[]> {
+  if (!rows.length) return [];
+
+  const folderIds = [...new Set(rows.map((row) => row.folderId))];
+  const foldersMap = new Map<string, typeof folders.$inferSelect>();
+  const workspaceId = rows[0].workspaceId;
+
+  for (const folderId of folderIds) {
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)));
+    if (folder) foldersMap.set(folderId, folder);
+  }
+
+  return rows.map((row) => {
+    const folder = foldersMap.get(row.folderId);
+    const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
+    const data = extractUseCaseData(row);
+    const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+
+    return {
+      id: row.id,
+      folderId: row.folderId,
+      organizationId: row.organizationId,
+      status: row.status ?? 'completed',
+      model: row.model,
+      createdAt: row.createdAt,
+      data: data as UseCaseData,
+      totalValueScore: computedScores?.totalValueScore ?? null,
+      totalComplexityScore: computedScores?.totalComplexityScore ?? null,
+    } satisfies UseCase;
+  });
 }
 
 function normalizeForHash(value: unknown): unknown {

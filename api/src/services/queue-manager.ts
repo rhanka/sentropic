@@ -33,8 +33,8 @@ import {
 import { extractDocumentInfoFromDocument } from './document-text';
 import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
-import { generateDocxForEntity } from './docx-generation';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
+import { runDocxGenerationInWorker } from './docx-render-worker';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -1287,26 +1287,35 @@ export class QueueManager {
     signal?: AbortSignal
   ): Promise<void> {
     const streamId = `job_${jobId}`;
+    let emitStatusChain: Promise<void> = Promise.resolve();
 
     const emitStatus = async (
       state: string,
       progress: number,
       extra: Record<string, unknown> = {}
     ) => {
-      const payload = {
-        state,
-        progress,
-        ...extra,
-        updatedAt: new Date().toISOString(),
-      };
-      await db.run(sql`
-        UPDATE job_queue
-        SET result = ${JSON.stringify(payload)}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
-      const seq = await getNextSequence(streamId);
-      await writeStreamEvent(streamId, 'status', payload, seq);
+      emitStatusChain = emitStatusChain
+        .catch(() => {
+          // Keep the chain alive even if a previous status emission failed.
+        })
+        .then(async () => {
+          const payload = {
+            state,
+            progress,
+            ...extra,
+            updatedAt: new Date().toISOString(),
+          };
+          await db.run(sql`
+            UPDATE job_queue
+            SET result = ${JSON.stringify(payload)}
+            WHERE id = ${jobId}
+          `);
+          await this.notifyJobEvent(jobId);
+          const seq = await getNextSequence(streamId);
+          await writeStreamEvent(streamId, 'status', payload, seq);
+        });
+
+      await emitStatusChain;
     };
 
     const isAbort = (error: unknown): boolean => {
@@ -1340,7 +1349,8 @@ export class QueueManager {
 
       await emitStatus('loading_data', 10);
 
-      const result = await generateDocxForEntity({
+      const result = await runDocxGenerationInWorker({
+        input: {
         templateId: data.templateId,
         entityType: data.entityType,
         entityId: data.entityId,
@@ -1349,6 +1359,8 @@ export class QueueManager {
         controls: data.controls ?? {},
         locale: data.locale,
         requestId: data.requestId ?? jobId,
+        },
+        signal,
         onProgress: async (event) => {
           const progress = typeof event.progress === 'number' ? event.progress : 50;
           await emitStatus(event.state || 'rendering', progress, {
