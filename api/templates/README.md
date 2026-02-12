@@ -53,10 +53,13 @@ Marker sequence (exact as-is print order):
    - `{{folder.executiveSummary.recommandation}}`
 6. References page:
 ```txt
-{{FOR ref IN (folder.executiveSummary.references || [])}}
-{{$ref.title}} {{$ref.url}}
+{{FOR ref IN (folder.execSummary.references || folder.executiveSummary.references || [])}}
+{{$ref.link}}
 {{END-FOR ref}}
 ```
+Notes:
+- `ref.link` is the Markdown hyperlink form (`[title](url)`) rendered as a clickable DOCX hyperlink.
+- Numbering/bullets must come from paragraph/list style in the template (recommended), not hardcoded API formatting.
 7. Annex separator page:
    - `{{annex.title}}`
    - `{{annex.subtitle}}`
