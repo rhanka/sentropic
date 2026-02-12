@@ -8,7 +8,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, posix as pathPosix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import {
@@ -57,6 +57,7 @@ export type DocxTemplateId = 'usecase-onepage' | 'executive-synthesis-multipage'
 export type DocxEntityType = 'usecase' | 'folder';
 
 type BaseRunStyle = {
+  style?: string;
   font?: string;
   size?: number;
   color?: string;
@@ -146,6 +147,14 @@ type LoopExpansionState = {
   loopPatches: Record<string, PatchPayload>;
   includeCounter: number;
   includeTemplateXmlCache: Map<string, string>;
+  masterZip: JSZip;
+  masterRelationships: RelationshipState;
+  masterNamespaces: Map<string, string>;
+  masterIgnorablePrefixes: Set<string>;
+  additionalNamespaces: Map<string, string>;
+  additionalIgnorablePrefixes: Set<string>;
+  nextDocPrId: number;
+  nextBookmarkId: number;
   requestId?: string;
   onAnnexProgress?: (current: number, total: number) => void | Promise<void>;
 };
@@ -167,6 +176,30 @@ type XmlRange = {
 type RenderCallbacks = {
   onAnnexProgress?: (current: number, total: number) => void | Promise<void>;
   onPatchStart?: () => void | Promise<void>;
+};
+
+type RootInfo = {
+  namespaces: Map<string, string>;
+  ignorablePrefixes: Set<string>;
+};
+
+type PlaceholderInstance = {
+  sourcePlaceholder: string;
+  baseStyle: BaseRunStyle;
+};
+
+type RelationshipEntry = {
+  id: string;
+  type: string;
+  target: string;
+  targetMode?: string;
+};
+
+type RelationshipState = {
+  entries: RelationshipEntry[];
+  entryById: Map<string, RelationshipEntry>;
+  usedIds: Set<string>;
+  nextSyntheticId: number;
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -234,6 +267,7 @@ function newTextRun(text: string, style: InlineStyle, base: BaseRunStyle = {}): 
 
   return new TextRun({
     text,
+    style: base.style,
     bold,
     italics,
     strike,
@@ -462,6 +496,311 @@ function loopExprToPath(loopExpr: string): string {
   return loopExpr.split('||')[0]?.trim() ?? loopExpr.trim();
 }
 
+const EMPTY_RELATIONSHIPS_XML =
+  '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function parseRootInfo(documentXml: string): RootInfo {
+  const rootTagMatch = documentXml.match(/<w:document\b[^>]*>/);
+  if (!rootTagMatch) {
+    return { namespaces: new Map<string, string>(), ignorablePrefixes: new Set<string>() };
+  }
+
+  const namespaces = new Map<string, string>();
+  const ignorablePrefixes = new Set<string>();
+  const attrRegex = /([A-Za-z_][\w:.-]*)="([^"]*)"/g;
+  let attrMatch: RegExpExecArray | null;
+
+  while ((attrMatch = attrRegex.exec(rootTagMatch[0])) != null) {
+    const attr = attrMatch[1];
+    const value = attrMatch[2];
+    if (attr.startsWith('xmlns:')) {
+      namespaces.set(attr.slice('xmlns:'.length), value);
+      continue;
+    }
+    if (attr === 'mc:Ignorable') {
+      value
+        .split(/\s+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .forEach((entry) => ignorablePrefixes.add(entry));
+    }
+  }
+
+  return { namespaces, ignorablePrefixes };
+}
+
+function applyRootInfo(
+  documentXml: string,
+  state: Pick<
+    LoopExpansionState,
+    'masterNamespaces' | 'masterIgnorablePrefixes' | 'additionalNamespaces' | 'additionalIgnorablePrefixes'
+  >
+): string {
+  const rootTagMatch = documentXml.match(/<w:document\b[^>]*>/);
+  if (!rootTagMatch) return documentXml;
+
+  let rootTag = rootTagMatch[0];
+
+  for (const [prefix, uri] of state.additionalNamespaces) {
+    if (state.masterNamespaces.has(prefix)) continue;
+    if (new RegExp(`\\sxmlns:${escapeRegExp(prefix)}=`).test(rootTag)) continue;
+    rootTag = rootTag.replace(/>$/, ` xmlns:${prefix}="${escapeXmlAttr(uri)}">`);
+  }
+
+  const ignorable = new Set<string>([
+    ...state.masterIgnorablePrefixes,
+    ...state.additionalIgnorablePrefixes,
+  ]);
+  const ignorableValue = Array.from(ignorable).join(' ').trim();
+  if (ignorableValue) {
+    if (/mc:Ignorable="[^"]*"/.test(rootTag)) {
+      rootTag = rootTag.replace(
+        /mc:Ignorable="[^"]*"/,
+        `mc:Ignorable="${escapeXmlAttr(ignorableValue)}"`
+      );
+    } else {
+      rootTag = rootTag.replace(/>$/, ` mc:Ignorable="${escapeXmlAttr(ignorableValue)}">`);
+    }
+  }
+
+  return documentXml.replace(rootTagMatch[0], rootTag);
+}
+
+function parseRelationships(xml: string): RelationshipState {
+  const entries: RelationshipEntry[] = [];
+  const entryById = new Map<string, RelationshipEntry>();
+  const usedIds = new Set<string>();
+
+  const relRegex = /<Relationship\b([^>]*?)\/>/g;
+  let relMatch: RegExpExecArray | null;
+
+  while ((relMatch = relRegex.exec(xml)) != null) {
+    const attrs = relMatch[1] ?? '';
+    const attrRegex = /([A-Za-z_][\w:.-]*)="([^"]*)"/g;
+    const map = new Map<string, string>();
+    let attrMatch: RegExpExecArray | null;
+    while ((attrMatch = attrRegex.exec(attrs)) != null) {
+      map.set(attrMatch[1], attrMatch[2]);
+    }
+
+    const id = map.get('Id');
+    const type = map.get('Type');
+    const target = map.get('Target');
+    if (!id || !type || !target) continue;
+
+    const entry: RelationshipEntry = {
+      id,
+      type,
+      target,
+      targetMode: map.get('TargetMode'),
+    };
+    entries.push(entry);
+    entryById.set(id, entry);
+    usedIds.add(id);
+  }
+
+  let nextSyntheticId = 1;
+  while (usedIds.has(`rIdinc${nextSyntheticId}`)) {
+    nextSyntheticId += 1;
+  }
+
+  return { entries, entryById, usedIds, nextSyntheticId };
+}
+
+function serializeRelationships(state: RelationshipState): string {
+  const rows = state.entries.map((entry) => {
+    const targetMode = entry.targetMode ? ` TargetMode="${escapeXmlAttr(entry.targetMode)}"` : '';
+    return `<Relationship Id="${escapeXmlAttr(entry.id)}" Type="${escapeXmlAttr(entry.type)}" Target="${escapeXmlAttr(entry.target)}"${targetMode}/>`;
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rows.join('')}</Relationships>`;
+}
+
+function allocateRelationshipId(state: RelationshipState): string {
+  let candidate = `rIdinc${state.nextSyntheticId}`;
+  while (state.usedIds.has(candidate)) {
+    state.nextSyntheticId += 1;
+    candidate = `rIdinc${state.nextSyntheticId}`;
+  }
+  state.nextSyntheticId += 1;
+  state.usedIds.add(candidate);
+  return candidate;
+}
+
+function addRelationship(state: RelationshipState, entry: RelationshipEntry): void {
+  state.entries.push(entry);
+  state.entryById.set(entry.id, entry);
+  state.usedIds.add(entry.id);
+}
+
+function maxNumericAttribute(xml: string, regex: RegExp): number {
+  let max = 0;
+  let match: RegExpExecArray | null;
+  regex.lastIndex = 0;
+  while ((match = regex.exec(xml)) != null) {
+    const value = Number(match[1]);
+    if (Number.isFinite(value) && value > max) {
+      max = value;
+    }
+  }
+  return max;
+}
+
+function collectReferencedRelationshipIds(xml: string): string[] {
+  const ids = new Set<string>();
+  const regex = /\br:(?:id|embed|link)="([^"]+)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(xml)) != null) {
+    if (match[1]) ids.add(match[1]);
+  }
+  return Array.from(ids);
+}
+
+function normalizeWordPartPath(target: string): string | null {
+  const clean = safeText(target).split('#')[0].split('?')[0].trim();
+  if (!clean) return null;
+  const normalized = pathPosix.normalize(pathPosix.join('word', clean));
+  if (!normalized.startsWith('word/')) return null;
+  return normalized;
+}
+
+async function readZipPartBuffer(zip: JSZip, partPath: string): Promise<Buffer | null> {
+  const file = zip.file(partPath);
+  if (!file) return null;
+  const data = await file.async('nodebuffer');
+  return Buffer.from(data);
+}
+
+async function copyTargetPartToMaster(
+  target: string,
+  includeZip: JSZip,
+  state: LoopExpansionState,
+  includeInstanceId: number
+): Promise<string> {
+  const sourcePartPath = normalizeWordPartPath(target);
+  if (!sourcePartPath) return target;
+
+  const sourceBuffer = await readZipPartBuffer(includeZip, sourcePartPath);
+  if (!sourceBuffer) return target;
+
+  const baseRelative = sourcePartPath.slice('word/'.length);
+  let candidateRelative = baseRelative;
+  let attempt = 1;
+
+  while (attempt < 10000) {
+    const candidatePartPath = normalizeWordPartPath(candidateRelative);
+    if (!candidatePartPath) return target;
+
+    const existing = await readZipPartBuffer(state.masterZip, candidatePartPath);
+    if (!existing) {
+      state.masterZip.file(candidatePartPath, sourceBuffer);
+      return candidateRelative;
+    }
+
+    if (Buffer.compare(existing, sourceBuffer) === 0) {
+      return candidateRelative;
+    }
+
+    const dir = pathPosix.dirname(baseRelative);
+    const ext = pathPosix.extname(baseRelative);
+    const stem = pathPosix.basename(baseRelative, ext);
+    candidateRelative = pathPosix.join(
+      dir === '.' ? '' : dir,
+      `${stem}-inc-${includeInstanceId}-${attempt}${ext}`
+    );
+    attempt += 1;
+  }
+
+  return target;
+}
+
+function remapDocPrIds(xml: string, state: LoopExpansionState): string {
+  return xml.replace(/(<wp:docPr\b[^>]*\bid=")(\d+)(")/g, (_match, start: string, _id: string, end: string) => {
+    const next = state.nextDocPrId++;
+    return `${start}${next}${end}`;
+  });
+}
+
+function remapBookmarkIds(xml: string, state: LoopExpansionState): string {
+  const idMap = new Map<string, string>();
+  return xml.replace(
+    /(<w:(?:bookmarkStart|bookmarkEnd)\b[^>]*\bw:id=")(\d+)(")/g,
+    (_match, start: string, oldId: string, end: string) => {
+      let mapped = idMap.get(oldId);
+      if (!mapped) {
+        mapped = String(state.nextBookmarkId++);
+        idMap.set(oldId, mapped);
+      }
+      return `${start}${mapped}${end}`;
+    }
+  );
+}
+
+function registerRootNamespaces(state: LoopExpansionState, includeRootInfo: RootInfo): void {
+  for (const [prefix, uri] of includeRootInfo.namespaces) {
+    if (state.masterNamespaces.has(prefix)) continue;
+    state.additionalNamespaces.set(prefix, uri);
+  }
+
+  for (const prefix of includeRootInfo.ignorablePrefixes) {
+    if (state.masterIgnorablePrefixes.has(prefix)) continue;
+    state.additionalIgnorablePrefixes.add(prefix);
+  }
+}
+
+async function remapIncludeRelationships(
+  bodyXml: string,
+  includeRelationships: RelationshipState,
+  includeZip: JSZip,
+  state: LoopExpansionState,
+  includeInstanceId: number,
+  requestId?: string
+): Promise<string> {
+  const referencedIds = collectReferencedRelationshipIds(bodyXml);
+  if (referencedIds.length === 0) return bodyXml;
+
+  const idMap = new Map<string, string>();
+
+  for (const sourceId of referencedIds) {
+    const sourceRel = includeRelationships.entryById.get(sourceId);
+    if (!sourceRel) {
+      logDocx(`include relation not found: ${sourceId}`, requestId);
+      continue;
+    }
+
+    let target = sourceRel.target;
+    const isExternal = sourceRel.targetMode?.toLowerCase() === 'external';
+    if (!isExternal) {
+      target = await copyTargetPartToMaster(target, includeZip, state, includeInstanceId);
+    }
+
+    const newId = allocateRelationshipId(state.masterRelationships);
+    addRelationship(state.masterRelationships, {
+      id: newId,
+      type: sourceRel.type,
+      target,
+      targetMode: sourceRel.targetMode,
+    });
+    idMap.set(sourceId, newId);
+  }
+
+  if (idMap.size === 0) return bodyXml;
+
+  return bodyXml.replace(/\br:(id|embed|link)="([^"]+)"/g, (match, attr: string, id: string) => {
+    const mapped = idMap.get(id);
+    return mapped ? `r:${attr}="${mapped}"` : match;
+  });
+}
+
 function extractBodyXml(documentXml: string): string {
   const bodyMatch = documentXml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/);
   if (!bodyMatch) {
@@ -536,6 +875,7 @@ async function expandIncludes(
     const full = match[0];
     const templateRef = normalizeIncludeTemplateRef(match[1] ?? '');
     const includeExpr = safeText(match[2]).trim();
+    const includeInstanceId = state.includeCounter++;
     if (!templateRef) continue;
 
     const includeContext = resolveExpression(scope, includeExpr);
@@ -547,6 +887,8 @@ async function expandIncludes(
     if (templateRef === 'usecase-onepage.docx') {
       const renderedIncludedBody = await renderIncludedUseCaseBodyXml(
         includeContext,
+        state,
+        includeInstanceId,
         state.requestId
       );
       nextXml = nextXml.replace(full, renderedIncludedBody);
@@ -559,7 +901,7 @@ async function expandIncludes(
       state.includeTemplateXmlCache.set(templateRef, includeBody);
     }
 
-    const includeVar = `__include_${state.includeCounter++}`;
+    const includeVar = `__include_${includeInstanceId}`;
     const includeScope: Record<string, unknown> = {
       ...scope,
       [includeVar]: includeContext,
@@ -575,6 +917,8 @@ async function expandIncludes(
 
 async function renderIncludedUseCaseBodyXml(
   includeContext: unknown,
+  state: LoopExpansionState,
+  includeInstanceId: number,
   requestId?: string
 ): Promise<string> {
   if (!includeContext || typeof includeContext !== 'object') return '';
@@ -588,15 +932,34 @@ async function renderIncludedUseCaseBodyXml(
     basePayloads(templateData),
     requestId
   );
+
   const zip = await JSZip.loadAsync(renderedDocx);
   const docXmlFile = zip.file('word/document.xml');
   if (!docXmlFile) return '';
+  const relsFile = zip.file('word/_rels/document.xml.rels');
   const xml = await docXmlFile.async('string');
+  const relsXml = relsFile ? await relsFile.async('string') : EMPTY_RELATIONSHIPS_XML;
+  const includeRootInfo = parseRootInfo(xml);
+  registerRootNamespaces(state, includeRootInfo);
+  const includeRelationships = parseRelationships(relsXml);
+
+  let bodyXml = extractBodyXml(xml);
+  bodyXml = await remapIncludeRelationships(
+    bodyXml,
+    includeRelationships,
+    zip,
+    state,
+    includeInstanceId,
+    requestId
+  );
+  bodyXml = remapDocPrIds(bodyXml, state);
+  bodyXml = remapBookmarkIds(bodyXml, state);
+
   logDocx(
     `include rendered template="usecase-onepage.docx" in ${Date.now() - startedAt}ms`,
     requestId
   );
-  return extractBodyXml(xml);
+  return bodyXml;
 }
 
 function findNextLoop(xml: string, fromIndex = 0): LoopMatch | null {
@@ -660,6 +1023,35 @@ function isControlOnlyParagraph(paragraphXml: string, controlToken: string): boo
   return plain.length === 0;
 }
 
+const INCLUDE_TOKEN_REGEX = /{{\s*INCLUDE\s+[A-Za-z0-9._/-]+\s+WITH\s+\([^)]+\)\s*}}/g;
+
+function extractIncludeTokens(xml: string): string[] {
+  return [...xml.matchAll(INCLUDE_TOKEN_REGEX)].map((match) => match[0]);
+}
+
+function isIncludeOnlyLoopParagraph(paragraphXml: string): boolean {
+  const withoutMarkers = paragraphXml
+    .replace(/{{\s*FOR\s+[A-Za-z_]\w*\s+IN\s+\([^)]+\)\s*}}/g, '')
+    .replace(/{{\s*END-FOR\s+[A-Za-z_]\w*\s*}}/g, '')
+    .replace(INCLUDE_TOKEN_REGEX, '');
+
+  const plain = withoutMarkers
+    .replace(/<w:br\b[^>]*\/>/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[\s\u00A0]+/g, '')
+    .trim();
+
+  return plain.length === 0 && extractIncludeTokens(paragraphXml).length > 0;
+}
+
+function paragraphHasPageBreakBefore(paragraphXml: string): boolean {
+  return /<w:pageBreakBefore\b[^>]*(?:\/>|>[\s\S]*?<\/w:pageBreakBefore>)/.test(paragraphXml);
+}
+
+function paragraphHasSectionProperties(paragraphXml: string): boolean {
+  return /<w:sectPr\b/.test(paragraphXml);
+}
+
 function isVisuallyEmptyParagraph(paragraphXml: string): boolean {
   const withoutLoopMarkers = paragraphXml.replace(
     /{{\s*(FOR\s+[A-Za-z_]\w*\s+IN\s+\([^)]+\)|END-FOR\s+[A-Za-z_]\w*)\s*}}/g,
@@ -709,6 +1101,11 @@ function parseBaseRunStyleFromRunXml(runXml: string): BaseRunStyle {
   const rpr = rprMatch[0];
   const style: BaseRunStyle = {};
 
+  const rStyleMatch = rpr.match(/<w:rStyle\b[^>]*\/>/);
+  if (rStyleMatch) {
+    style.style = readAttr(rStyleMatch[0], 'w:val');
+  }
+
   const rFontsMatch = rpr.match(/<w:rFonts\b[^>]*\/>/);
   if (rFontsMatch) {
     style.font =
@@ -746,32 +1143,54 @@ function parseBaseRunStyleFromRunXml(runXml: string): BaseRunStyle {
   return style;
 }
 
-function extractPlaceholderBaseStyles(documentXml: string): Record<string, BaseRunStyle> {
-  const styleMap: Record<string, BaseRunStyle> = {};
+function isControlPlaceholder(placeholder: string): boolean {
+  return (
+    placeholder.startsWith('FOR ') ||
+    placeholder.startsWith('END-FOR ') ||
+    placeholder.startsWith('INCLUDE ') ||
+    placeholder.startsWith('$')
+  );
+}
+
+function rewritePlaceholderInstances(xml: string, keyPrefix = ''): {
+  rewrittenXml: string;
+  instances: Record<string, PlaceholderInstance>;
+} {
+  const instances: Record<string, PlaceholderInstance> = {};
+  let counter = 0;
+
   const runRegex = /<w:r\b[\s\S]*?<\/w:r>/g;
+  let rewritten = '';
+  let lastIndex = 0;
   let runMatch: RegExpExecArray | null;
 
-  while ((runMatch = runRegex.exec(documentXml)) != null) {
+  while ((runMatch = runRegex.exec(xml)) != null) {
+    rewritten += xml.slice(lastIndex, runMatch.index);
+
     const runXml = runMatch[0];
     const baseStyle = parseBaseRunStyleFromRunXml(runXml);
-    const textRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
-    let textMatch: RegExpExecArray | null;
+    const rewrittenRunXml = runXml.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>/g, (textNodeXml) =>
+      textNodeXml.replace(/{{\s*([^}]+?)\s*}}/g, (match, placeholderRaw: string) => {
+        const placeholder = placeholderRaw.trim();
+        if (isControlPlaceholder(placeholder)) return match;
+        const instanceKey = `__phinst_${keyPrefix}${counter++}`;
+        instances[instanceKey] = {
+          sourcePlaceholder: placeholder,
+          baseStyle: { ...baseStyle },
+        };
+        return `{{${instanceKey}}}`;
+      })
+    );
 
-    while ((textMatch = textRegex.exec(runXml)) != null) {
-      const text = textMatch[1];
-      const placeholderRegex = /{{\s*([^}]+?)\s*}}/g;
-      let placeholderMatch: RegExpExecArray | null;
-
-      while ((placeholderMatch = placeholderRegex.exec(text)) != null) {
-        const placeholder = placeholderMatch[1].trim();
-        if (!styleMap[placeholder]) {
-          styleMap[placeholder] = baseStyle;
-        }
-      }
-    }
+    rewritten += rewrittenRunXml;
+    lastIndex = runRegex.lastIndex;
   }
 
-  return styleMap;
+  rewritten += xml.slice(lastIndex);
+  return {
+    rewrittenXml: rewritten,
+    instances,
+  };
 }
 
 function inferPatchModeForPath(path: string, value: unknown): PatchMode {
@@ -862,6 +1281,24 @@ async function expandLoops(
 
     const startParagraph = findEnclosingParagraph(currentXml, loop.startIndex);
     const endParagraph = findEnclosingParagraph(currentXml, loop.endIndex);
+    const isSameControlParagraph =
+      startParagraph != null &&
+      endParagraph != null &&
+      startParagraph.start === endParagraph.start &&
+      startParagraph.end === endParagraph.end;
+    const sameParagraphXml =
+      isSameControlParagraph && startParagraph
+        ? currentXml.slice(startParagraph.start, startParagraph.end)
+        : '';
+    const isIncludeOnlySameParagraphLoop =
+      isSameControlParagraph &&
+      sameParagraphXml.length > 0 &&
+      isIncludeOnlyLoopParagraph(sameParagraphXml);
+    const includeOnlyParagraphHasPageBreakBefore =
+      isIncludeOnlySameParagraphLoop && paragraphHasPageBreakBefore(sameParagraphXml);
+    const includeTokensForSameParagraphLoop = isIncludeOnlySameParagraphLoop
+      ? extractIncludeTokens(sameParagraphXml)
+      : [];
     const hasControlOnlyParagraphs =
       startParagraph != null &&
       endParagraph != null &&
@@ -874,6 +1311,16 @@ async function expandLoops(
         currentXml.slice(endParagraph.start, endParagraph.end),
         loop.endToken
       );
+    const startControlParagraphXml = startParagraph
+      ? currentXml.slice(startParagraph.start, startParagraph.end)
+      : '';
+    const endControlParagraphXml = endParagraph
+      ? currentXml.slice(endParagraph.start, endParagraph.end)
+      : '';
+    const startControlHasSectPr =
+      startControlParagraphXml.length > 0 && paragraphHasSectionProperties(startControlParagraphXml);
+    const endControlHasSectPr =
+      endControlParagraphXml.length > 0 && paragraphHasSectionProperties(endControlParagraphXml);
 
     const bodyBetweenControlParagraphs =
       hasControlOnlyParagraphs && startParagraph && endParagraph
@@ -881,8 +1328,15 @@ async function expandLoops(
         : '';
 
     const hasTableInLoopBody = /<w:tbl[\s>]/.test(bodyBetweenControlParagraphs);
-    const canDropBothControlParagraphs = hasControlOnlyParagraphs && !hasTableInLoopBody;
-    const canDropOnlyStartControlParagraph = hasControlOnlyParagraphs && hasTableInLoopBody;
+    const canDropBothControlParagraphs =
+      hasControlOnlyParagraphs &&
+      !hasTableInLoopBody &&
+      !startControlHasSectPr &&
+      !endControlHasSectPr;
+    const canDropOnlyStartControlParagraph =
+      hasControlOnlyParagraphs &&
+      !startControlHasSectPr &&
+      (hasTableInLoopBody || endControlHasSectPr);
 
     const innerTemplate = canDropBothControlParagraphs
       ? bodyBetweenControlParagraphs
@@ -908,13 +1362,35 @@ async function expandLoops(
         [loop.loopVar]: item,
       };
 
+      if (isIncludeOnlySameParagraphLoop) {
+        const includeChunks: string[] = [];
+        for (const includeToken of includeTokensForSameParagraphLoop) {
+          let expandedInclude = await expandIncludes(includeToken, nestedScope, state);
+          expandedInclude = replaceScopedValuePlaceholders(expandedInclude, nestedScope, state);
+          includeChunks.push(expandedInclude);
+        }
+        let renderedInclude = includeChunks.join('');
+        if (includeOnlyParagraphHasPageBreakBefore) {
+          renderedInclude = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>${renderedInclude}`;
+        }
+        renderedPieces.push(renderedInclude);
+        continue;
+      }
+
       let piece = await expandLoops(innerTemplate, nestedScope, state);
       piece = replaceScopedValuePlaceholders(piece, nestedScope, state);
       renderedPieces.push(piece);
     }
     const rendered = renderedPieces.join('');
 
-    if (canDropBothControlParagraphs && startParagraph && endParagraph) {
+    if (isIncludeOnlySameParagraphLoop && startParagraph) {
+      currentXml =
+        currentXml.slice(0, startParagraph.start) +
+        rendered +
+        currentXml.slice(startParagraph.end);
+
+      cursor = startParagraph.start + rendered.length;
+    } else if (canDropBothControlParagraphs && startParagraph && endParagraph) {
       currentXml =
         currentXml.slice(0, startParagraph.start) +
         rendered +
@@ -1027,12 +1503,7 @@ function placeholderToPayload(
 ): PatchPayload {
   if (payloads[placeholder]) return payloads[placeholder];
 
-  if (
-    placeholder.startsWith('FOR ') ||
-    placeholder.startsWith('END-FOR ') ||
-    placeholder.startsWith('INCLUDE ') ||
-    placeholder.startsWith('$')
-  ) {
+  if (isControlPlaceholder(placeholder)) {
     return { mode: 'plain', value: '' };
   }
 
@@ -1054,26 +1525,44 @@ async function expandTemplateLoops(
 ): Promise<{ template: Buffer; loopPatches: Record<string, PatchPayload>; documentXml: string }> {
   const zip = await JSZip.loadAsync(template);
   const docXmlFile = zip.file('word/document.xml');
+  const relsXmlFile = zip.file('word/_rels/document.xml.rels');
 
   if (!docXmlFile) {
     throw new Error('Invalid DOCX template: word/document.xml not found.');
   }
 
   const docXml = await docXmlFile.async('string');
+  const relsXml = relsXmlFile ? await relsXmlFile.async('string') : EMPTY_RELATIONSHIPS_XML;
+  const rootInfo = parseRootInfo(docXml);
+  const masterRelationships = parseRelationships(relsXml);
+  const nextDocPrId = maxNumericAttribute(docXml, /<wp:docPr\b[^>]*\bid="(\d+)"/g) + 1;
+  const nextBookmarkId =
+    maxNumericAttribute(docXml, /<w:(?:bookmarkStart|bookmarkEnd)\b[^>]*\bw:id="(\d+)"/g) + 1;
+
   const state: LoopExpansionState = {
     counter: 0,
     loopPatches: {},
     includeCounter: 0,
     includeTemplateXmlCache: new Map<string, string>(),
+    masterZip: zip,
+    masterRelationships,
+    masterNamespaces: rootInfo.namespaces,
+    masterIgnorablePrefixes: rootInfo.ignorablePrefixes,
+    additionalNamespaces: new Map<string, string>(),
+    additionalIgnorablePrefixes: new Set<string>(),
+    nextDocPrId,
+    nextBookmarkId,
     requestId,
     onAnnexProgress: callbacks?.onAnnexProgress,
   };
 
-  const expandedXml = stripEmptyParagraphsBeforeTables(
+  let expandedXml = stripEmptyParagraphsBeforeTables(
     await expandLoops(docXml, data, state)
   );
+  expandedXml = applyRootInfo(expandedXml, state);
 
   zip.file('word/document.xml', expandedXml);
+  zip.file('word/_rels/document.xml.rels', serializeRelationships(state.masterRelationships));
   const expandedTemplate = await zip.generateAsync({ type: 'nodebuffer' });
 
   return {
@@ -1091,7 +1580,7 @@ async function renderDocxTemplate(
   callbacks?: RenderCallbacks
 ): Promise<Buffer> {
   const renderStartedAt = Date.now();
-  const verboseRenderLog = templateFileName === 'executive_synthesis.docx';
+  const verboseRenderLog = templateFileName === 'executive-synthesis.docx';
   const templatePath = resolve(TEMPLATES_DIR, templateFileName);
   const templateBuffer = await readFile(templatePath);
 
@@ -1099,7 +1588,6 @@ async function renderDocxTemplate(
   const {
     template: expandedTemplate,
     loopPatches,
-    documentXml,
   } = await expandTemplateLoops(templateBuffer, context, requestId, callbacks);
   if (verboseRenderLog) {
     logDocx(
@@ -1113,19 +1601,40 @@ async function renderDocxTemplate(
     ...loopPatches,
   };
 
-  const placeholders = await patchDetector({ data: expandedTemplate });
-  const placeholderStyles = extractPlaceholderBaseStyles(documentXml);
+  const patchZip = await JSZip.loadAsync(expandedTemplate);
+  const allInstances: Record<string, PlaceholderInstance> = {};
+  const wordXmlParts = Object.keys(patchZip.files)
+    .filter((fileName) => fileName.startsWith('word/') && fileName.endsWith('.xml'))
+    .sort();
+
+  for (const [index, fileName] of wordXmlParts.entries()) {
+    const file = patchZip.file(fileName);
+    if (!file) continue;
+    const xml = await file.async('string');
+    if (!xml.includes('{{')) continue;
+
+    const rewritten = rewritePlaceholderInstances(xml, `${index}_`);
+    if (Object.keys(rewritten.instances).length === 0) continue;
+
+    patchZip.file(fileName, rewritten.rewrittenXml);
+    Object.assign(allInstances, rewritten.instances);
+  }
+
+  const patchableTemplate = Buffer.from(await patchZip.generateAsync({ type: 'nodebuffer' }));
+  const placeholders = await patchDetector({ data: patchableTemplate });
   if (verboseRenderLog) {
     logDocx(
-      `render template="${templateFileName}" placeholders=${placeholders.length} loopPatches=${Object.keys(loopPatches).length}`,
+      `render template="${templateFileName}" placeholders=${placeholders.length} instances=${Object.keys(allInstances).length} loopPatches=${Object.keys(loopPatches).length}`,
       requestId
     );
   }
 
   const patches: Record<string, IPatch> = {};
   placeholders.forEach((placeholder) => {
-    const payload = placeholderToPayload(placeholder, context, payloads);
-    patches[placeholder] = toPatch(payload, placeholderStyles[placeholder]);
+    const instance = allInstances[placeholder];
+    const sourcePlaceholder = instance?.sourcePlaceholder ?? placeholder;
+    const payload = placeholderToPayload(sourcePlaceholder, context, payloads);
+    patches[placeholder] = toPatch(payload, instance?.baseStyle ?? {});
   });
 
   const patchStartedAt = Date.now();
@@ -1134,7 +1643,7 @@ async function renderDocxTemplate(
   }
   const result = await patchDocument({
     outputType: 'nodebuffer',
-    data: expandedTemplate,
+    data: patchableTemplate,
     patches,
     keepOriginalStyles: true,
     placeholderDelimiters: {
@@ -1186,13 +1695,6 @@ function normalizeExecutiveSummaryReferences(
     .filter((reference) => reference.title || reference.url);
 }
 
-function referencesToMarkdownBlock(
-  references: Array<{ title: string; url: string; excerpt: string; link: string }>
-): string {
-  if (references.length === 0) return '';
-  return references.map((reference, index) => `${index + 1}. ${reference.link}`).join('\n');
-}
-
 function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Record<string, unknown> {
   const executiveSummary = input.executiveSummary ?? {};
   const normalizedReferences = normalizeExecutiveSummaryReferences(executiveSummary.references);
@@ -1235,7 +1737,8 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
         references: normalizedReferences,
       },
       execSummary: {
-        references: referencesToMarkdownBlock(normalizedReferences),
+        // Alias kept for template compatibility: same structured array as executiveSummary.references.
+        references: normalizedReferences,
       },
     },
     stats: {
@@ -1292,12 +1795,7 @@ export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDo
     input.requestId
   );
   const context = buildExecutiveSynthesisContext(input);
-  const result = await renderDocxTemplate('executive_synthesis.docx', context, {
-    'folder.execSummary.references': {
-      mode: 'markdown_block',
-      value: resolvePath(context, 'folder.execSummary.references'),
-    },
-  }, input.requestId, {
+  const result = await renderDocxTemplate('executive-synthesis.docx', context, {}, input.requestId, {
     onAnnexProgress: async (current: number, total: number) => {
       const ratio = total > 0 ? current / total : 1;
       const progress = Math.max(30, Math.min(85, Math.round(30 + ratio * 55)));
