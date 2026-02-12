@@ -36,6 +36,7 @@ export class SettingsService {
     if (!value) {
       const defaults: Record<string, string> = {
         'ai_concurrency': '10',
+        'publishing_concurrency': '5',
         'default_model': 'gpt-4.1-nano',
         'queue_processing_interval': '1000'
       };
@@ -104,17 +105,20 @@ export class SettingsService {
    */
   async getAISettings(): Promise<{
     concurrency: number;
+    publishingConcurrency: number;
     defaultModel: string;
     processingInterval: number;
   }> {
-    const [concurrency, defaultModel, processingInterval] = await Promise.all([
+    const [concurrency, publishingConcurrency, defaultModel, processingInterval] = await Promise.all([
       this.getNumber('ai_concurrency', 10),
+      this.getNumber('publishing_concurrency', 5),
       this.get('default_model').then(value => value || 'gpt-4.1-nano'),
       this.getNumber('queue_processing_interval', 1000)
     ]);
 
     return {
       concurrency,
+      publishingConcurrency,
       defaultModel,
       processingInterval
     };
@@ -125,6 +129,7 @@ export class SettingsService {
    */
   async updateAISettings(settings: {
     concurrency?: number;
+    publishingConcurrency?: number;
     defaultModel?: string;
     processingInterval?: number;
   }): Promise<void> {
@@ -132,6 +137,16 @@ export class SettingsService {
     
     if (settings.concurrency !== undefined) {
       updates.push(this.set('ai_concurrency', settings.concurrency.toString(), 'Nombre de jobs IA simultanés'));
+    }
+
+    if (settings.publishingConcurrency !== undefined) {
+      updates.push(
+        this.set(
+          'publishing_concurrency',
+          settings.publishingConcurrency.toString(),
+          'Nombre de jobs publishing simultanés'
+        )
+      );
     }
     
     if (settings.defaultModel !== undefined) {

@@ -14,6 +14,7 @@ The primary concern is functional templating (layout control, marker contract, l
 - Business users can evolve templates without rewriting rendering logic each time.
 - Annex and dashboard placement are explicitly controlled by template markers.
 - Existing use case one-page export remains available during migration.
+- Heavy document rendering is processed asynchronously (job queue), not inline in API request handlers.
 
 ### 1.3 Scope for Wave 2 (Lot 2.3)
 - Define functional contract and lifecycle for templating.
@@ -172,7 +173,7 @@ Current limitations:
 - no shared template registry/validation layer.
 
 ### 5.2 Target support model
-- Unified generation endpoint:
+- Unified generation endpoint (async enqueue only):
   - `POST /api/v1/docx/generate`
 - Request contract:
 ```json
@@ -190,13 +191,47 @@ Current limitations:
   - `controls`: render choices (annex mode, toc mode, sub-template ref);
   - `options`: deprecated alias accepted temporarily for backward compatibility.
 - Response contract:
-  - success: DOCX binary stream;
+  - success: job envelope (`jobId`, `status`, `queueClass`);
   - errors:
     - `400` invalid payload;
     - `404` entity not found (workspace scoped);
     - `422` template/rendering contract error.
 
-### 5.3 Template registry contract
+### 5.3 Job execution model (queue classes)
+- Queue backend remains `job_queue` (single table), with logical classes:
+  - `ai` for AI generation jobs;
+  - `publishing` for rendering/export jobs (DOCX now, authoring/publishing family later).
+- Configurable concurrency by class:
+  - `ai_concurrency` (existing);
+  - `publishing_concurrency` (new; default `5`).
+- Objective:
+  - avoid inline DOCX denial-of-service patterns;
+  - prevent long DOCX jobs from starving AI jobs.
+- Initial publishing job type:
+  - `docx_generate`.
+- Cancellation:
+  - all publishing jobs are interruptible via existing queue cancellation API.
+
+### 5.4 Progress and observability
+- Each `docx_generate` job publishes stream events on `streamId = "job_<jobId>"`.
+- Progress is emitted as `status` events with structured payload:
+  - `state` (`queued`, `loading_data`, `rendering_annex`, `patching`, `packaging`, `done`, `failed`, `cancelled`);
+  - `progress` (`0..100`);
+  - optional detail (`current`, `total`, `message`).
+- Queue snapshots expose current progress for UI job cards.
+
+### 5.5 Download contract (async)
+- New route:
+  - `GET /api/v1/docx/jobs/:jobId/download`
+- Rules:
+  - `404`: job missing or not in workspace scope;
+  - `409`: job not completed yet;
+  - `422`: job failed;
+  - `200`: DOCX binary.
+- Download payload source:
+  - job result metadata + rendered binary (stored by publishing worker policy for Wave 2).
+
+### 5.6 Template registry contract
 - Registry maps `templateId` to:
   - input validator;
   - data provider;
@@ -206,12 +241,11 @@ Current limitations:
   - `usecase-onepage` -> current one-page renderer;
   - `executive-synthesis-multipage` -> master-template renderer.
 
-### 5.4 Backward compatibility
-- Keep `GET /api/v1/use-cases/:id/docx` temporarily.
-- Wrapper delegates internally to unified generation with:
-  - `templateId=usecase-onepage`
-  - `entityType=usecase`
-  - `entityId=:id`
+### 5.7 Security stance (synchronous removal)
+- Synchronous DOCX routes are removed from production flow to prevent API saturation:
+  - no direct binary rendering from request thread;
+  - all document generation goes through publishing queue jobs.
+- Legacy sync route `GET /api/v1/use-cases/:id/docx` is removed in Wave 2 implementation.
 
 ## 6. Master template requirements (executive synthesis)
 
@@ -299,4 +333,4 @@ Current limitations:
 ## 8. Non-goals (this lot)
 - No UI design workflow for templates.
 - No final e2e/UAT execution in this spec.
-- No removal of legacy one-page route in this lot.
+- No full template governance UI/versioning workflow in this lot.

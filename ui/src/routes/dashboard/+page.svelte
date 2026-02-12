@@ -8,7 +8,6 @@
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
-  import { API_BASE_URL } from '$lib/config';
   import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
@@ -18,7 +17,8 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { generateDocxAndDownload } from '$lib/utils/docx';
   import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
@@ -337,46 +337,20 @@
   };
 
   const handleDownloadExecutiveSynthesisDocx = async () => {
-    if (!selectedFolderId || !executiveSummary) return;
+    if (!selectedFolderId) return;
 
     try {
-      const scopedWorkspaceId = getScopedWorkspaceIdForUser();
-      const url = new URL(`${API_BASE_URL}/docx/generate`, window.location.origin);
-      if (scopedWorkspaceId) url.searchParams.set('workspace_id', scopedWorkspaceId);
-
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const fileNameFallback = `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
+      await generateDocxAndDownload(
+        {
           templateId: 'executive-synthesis-multipage',
           entityType: 'folder',
           entityId: selectedFolderId,
           provided: {},
           controls: {},
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        const message = (errorBody as { message?: string } | null)?.message ?? `HTTP ${response.status}`;
-        throw new Error(message);
-      }
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const fileNameFallback = `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
-      const disposition = response.headers.get('content-disposition') || '';
-      const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
-      link.href = objectUrl;
-      link.download = fileNameMatch?.[1] || fileNameFallback;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(objectUrl);
+        },
+        fileNameFallback
+      );
     } catch (error) {
       console.error('Failed to download executive synthesis DOCX:', error);
       addToast({
@@ -633,7 +607,7 @@
           showDelete={false}
           showDownloadDocx={true}
           showPrint={true}
-          disabledDownloadDocx={!selectedFolderId || !executiveSummary}
+          disabledDownloadDocx={!selectedFolderId}
           onDownloadDocx={handleDownloadExecutiveSynthesisDocx}
           onPrint={() => window.print()}
           triggerTitle={$_('common.actions')}

@@ -523,9 +523,11 @@
     "aiDefaultModelHint": "Modèle utilisé par défaut pour toutes les opérations IA",
     "aiConcurrency": "Jobs simultanés",
     "aiConcurrencyHint": "Nombre de jobs IA traités en parallèle (1-50)",
+    "publishingConcurrency": "Jobs publishing simultanés",
+    "publishingConcurrencyHint": "Nombre de jobs publishing traités en parallèle (1-50)",
     "aiInterval": "Intervalle de traitement (ms)",
     "aiIntervalHint": "Délai entre les cycles de traitement de la queue (1000-60000ms)",
-    "queueManagement": "Gestion de la Queue IA",
+    "queueManagement": "Gestion de la queue des jobs",
     "queueTotal": "Total",
     "queuePending": "En attente",
     "queueRunning": "En cours",
@@ -585,7 +587,7 @@
       }
     },
     "queue": {
-      "description": "Surveillez et gérez la queue de traitement des jobs IA.",
+      "description": "Surveillez et gérez la queue de traitement des jobs.",
       "refresh": "Actualiser",
       "purging": "Purge…",
       "purgePending": "Purger en attente ({count})",
@@ -683,7 +685,7 @@
     "tabs": {
       "comments": "Commentaires",
       "chat": "Chat IA",
-      "jobs": "Jobs IA"
+      "jobs": "Jobs"
     },
     "sections": {
       "usecase": {
@@ -723,7 +725,7 @@
       }
     },
     "widget": {
-      "bubbleLabel": "Chat / Jobs IA",
+      "bubbleLabel": "Chat / Jobs",
       "switchToWidget": "Basculer en widget",
       "switchToPanel": "Basculer en panneau"
     },
@@ -732,7 +734,7 @@
         "active": "{count} job(s) en cours",
         "failed": "{count} job(s) en échec"
       },
-      "confirmPurgeMine": "Êtes-vous sûr de vouloir supprimer TOUS vos jobs IA ? Cette action est irréversible.",
+      "confirmPurgeMine": "Êtes-vous sûr de vouloir supprimer TOUS vos jobs ? Cette action est irréversible.",
       "confirmPurgeAllGlobal": "Êtes-vous sûr de vouloir supprimer TOUS les jobs (global) ? Cette action est irréversible.",
       "purgeMine": "Supprimer tous mes jobs",
       "purgeAllGlobal": "Supprimer tous les jobs (global)",
@@ -910,7 +912,8 @@
       "usecaseDetail": "Détail cas d'usage",
       "executiveSummary": "Synthèse exécutive",
       "documentSummary": "Résumé document",
-      "chatMessage": "Chat"
+      "chatMessage": "Chat",
+      "docxGenerate": "Génération DOCX"
     },
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce job ? Cette action est irréversible.",
     "toast": {
