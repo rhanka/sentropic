@@ -496,13 +496,23 @@
       "p3": "This sample is fully generated for demonstration purposes. Top AI Ideas enables collaborative editing to validate its content while delivering a final professional document."
     },
     "readOnlyGenerationDisabled": "Read-only mode: generation disabled.",
+    "docx": {
+      "menu": {
+        "prepare": "Prepare DOCX",
+        "preparing": "Preparation in progress…",
+        "download": "Download DOCX"
+      }
+    },
     "toast": {
-      "generationStarted": "Executive summary generation started"
+      "generationStarted": "Executive summary generation started",
+      "docxPreparationStarted": "Document preparation started.",
+      "docxReady": "Document ready for download."
     },
     "regenerateTooltip": "Regenerate executive summary",
     "errors": {
       "load": "Error while loading dashboard data",
-      "generate": "Error while generating executive summary"
+      "generate": "Error while generating executive summary",
+      "docxPrepare": "Error while preparing DOCX"
     }
   },
   "settings": {

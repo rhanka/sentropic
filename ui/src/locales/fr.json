@@ -496,13 +496,23 @@
       "p3": "Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel."
     },
     "readOnlyGenerationDisabled": "Mode lecture seule : génération désactivée.",
+    "docx": {
+      "menu": {
+        "prepare": "Préparer le DOCX",
+        "preparing": "Préparation en cours…",
+        "download": "Télécharger le DOCX"
+      }
+    },
     "toast": {
-      "generationStarted": "Génération de la synthèse exécutive démarrée"
+      "generationStarted": "Génération de la synthèse exécutive démarrée",
+      "docxPreparationStarted": "Préparation du document lancée.",
+      "docxReady": "Document prêt au téléchargement."
     },
     "regenerateTooltip": "Régénérer la synthèse exécutive",
     "errors": {
       "load": "Erreur lors du chargement des données du dashboard",
-      "generate": "Erreur lors de la génération de la synthèse exécutive"
+      "generate": "Erreur lors de la génération de la synthèse exécutive",
+      "docxPrepare": "Erreur lors de la préparation du DOCX"
     }
   },
   "settings": {

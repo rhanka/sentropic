@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { folders, useCases } from '../db/schema';
 import { hydrateUseCase, hydrateUseCases } from '../routes/api/use-cases';
+import type { MatrixConfig } from '../types/matrix';
+import type { UseCase } from '../types/usecase';
 import {
   type DocxEntityType,
   type DocxTemplateId,
@@ -34,6 +37,24 @@ export type DocxGenerateResult = {
   mimeType: string;
 };
 
+type UseCaseOnePageSource = {
+  useCase: UseCase;
+  matrix: MatrixConfig | null;
+};
+
+type ExecutiveSynthesisSource = {
+  folderName: string;
+  executiveSummary: {
+    introduction?: string;
+    analyse?: string;
+    recommandation?: string;
+    synthese_executive?: string;
+    references?: Array<{ title?: string; url?: string; excerpt?: string }>;
+  };
+  useCases: UseCase[];
+  matrix: MatrixConfig | null;
+};
+
 type RegistryEntry = {
   entityType: DocxEntityType;
   generate: (input: DocxGenerateRequest) => Promise<DocxGenerateResult>;
@@ -45,6 +66,35 @@ const DOCX_MIME =
 function safeText(value: unknown): string {
   if (value == null) return '';
   return String(value);
+}
+
+function normalizeForHash(value: unknown): unknown {
+  if (value == null) return null;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeForHash(item));
+  }
+  if (typeof value === 'object') {
+    const input = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    const keys = Object.keys(input).sort();
+    for (const key of keys) {
+      out[key] = normalizeForHash(input[key]);
+    }
+    return out;
+  }
+  return safeText(value);
+}
+
+function hashDocxSnapshot(snapshot: unknown): string {
+  const normalized = normalizeForHash(snapshot);
+  const serialized = JSON.stringify(normalized);
+  return createHash('sha256').update(serialized).digest('hex');
 }
 
 /** Minimal slug helper (ASCII, lowercase, hyphens). */
@@ -106,6 +156,20 @@ function parseExecutiveSummary(value: string | null): {
 async function generateUseCaseOnePage(
   input: DocxGenerateRequest
 ): Promise<DocxGenerateResult> {
+  const source = await loadUseCaseOnePageSource(input);
+  const buffer = await generateUseCaseDocx(source.useCase, source.matrix);
+  const nameSlug = slugify(source.useCase.data.name) || 'usecase';
+
+  return {
+    buffer,
+    mimeType: DOCX_MIME,
+    fileName: `usecase-${source.useCase.id}-${nameSlug}.docx`,
+  };
+}
+
+async function loadUseCaseOnePageSource(
+  input: DocxGenerateRequest
+): Promise<UseCaseOnePageSource> {
   const [record] = await db
     .select()
     .from(useCases)
@@ -121,20 +185,39 @@ async function generateUseCaseOnePage(
     .from(folders)
     .where(and(eq(folders.id, hydrated.folderId), eq(folders.workspaceId, input.workspaceId)));
 
-  const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
-  const buffer = await generateUseCaseDocx(hydrated, matrix);
-  const nameSlug = slugify(hydrated.data.name) || 'usecase';
-
   return {
-    buffer,
-    mimeType: DOCX_MIME,
-    fileName: `usecase-${hydrated.id}-${nameSlug}.docx`,
+    useCase: hydrated,
+    matrix: parseMatrixConfig(folder?.matrixConfig ?? null),
   };
 }
 
 async function generateExecutiveSynthesis(
   input: DocxGenerateRequest
 ): Promise<DocxGenerateResult> {
+  const source = await loadExecutiveSynthesisSource(input);
+  const buffer = await generateExecutiveSynthesisDocx({
+    folderName: source.folderName,
+    executiveSummary: source.executiveSummary,
+    useCases: source.useCases,
+    matrix: source.matrix,
+    provided: input.provided ?? {},
+    controls: input.controls ?? {},
+    locale: input.locale,
+    requestId: input.requestId,
+    onProgress: input.onProgress,
+  });
+
+  const folderSlug = slugify(source.folderName) || 'folder';
+  return {
+    buffer,
+    mimeType: DOCX_MIME,
+    fileName: `executive-synthesis-${input.entityId}-${folderSlug}.docx`,
+  };
+}
+
+async function loadExecutiveSynthesisSource(
+  input: DocxGenerateRequest
+): Promise<ExecutiveSynthesisSource> {
   const [folder] = await db
     .select({
       id: folders.id,
@@ -158,23 +241,11 @@ async function generateExecutiveSynthesis(
   const hydratedUseCases = await hydrateUseCases(rows);
   const matrix = parseMatrixConfig(folder.matrixConfig ?? null);
 
-  const buffer = await generateExecutiveSynthesisDocx({
+  return {
     folderName: folder.name,
     executiveSummary: parseExecutiveSummary(folder.executiveSummary ?? null),
     useCases: hydratedUseCases,
     matrix,
-    provided: input.provided ?? {},
-    controls: input.controls ?? {},
-    locale: input.locale,
-    requestId: input.requestId,
-    onProgress: input.onProgress,
-  });
-
-  const folderSlug = slugify(folder.name) || 'folder';
-  return {
-    buffer,
-    mimeType: DOCX_MIME,
-    fileName: `executive-synthesis-${folder.id}-${folderSlug}.docx`,
   };
 }
 
@@ -208,4 +279,47 @@ export async function generateDocxForEntity(
   }
 
   return entry.generate(input);
+}
+
+export async function computeDocxSourceHash(
+  input: Omit<DocxGenerateRequest, 'requestId' | 'onProgress'>
+): Promise<string> {
+  const entry = registry[input.templateId];
+  if (!entry) {
+    throw new Error('unknown_template');
+  }
+
+  if (input.entityType !== entry.entityType) {
+    throw new Error(
+      `invalid_entity_type:${safeText(input.templateId)}:${safeText(entry.entityType)}`
+    );
+  }
+
+  if (input.templateId === 'usecase-onepage') {
+    const source = await loadUseCaseOnePageSource(input);
+    return hashDocxSnapshot({
+      templateId: input.templateId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      locale: input.locale ?? 'fr',
+      provided: input.provided ?? {},
+      controls: input.controls ?? {},
+      source,
+    });
+  }
+
+  if (input.templateId === 'executive-synthesis-multipage') {
+    const source = await loadExecutiveSynthesisSource(input);
+    return hashDocxSnapshot({
+      templateId: input.templateId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      locale: input.locale ?? 'fr',
+      provided: input.provided ?? {},
+      controls: input.controls ?? {},
+      source,
+    });
+  }
+
+  throw new Error('unknown_template');
 }

@@ -23,7 +23,13 @@ import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
 import type { StreamEventType } from './openai';
-import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import {
+  deleteObject,
+  getDocumentsBucketName,
+  getObjectBytes,
+  headObject,
+  putObject,
+} from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -136,6 +142,7 @@ export interface DocxGenerateJobData {
   controls?: Record<string, unknown>;
   locale?: string;
   requestId?: string;
+  sourceHash?: string;
 }
 
 export type JobData =
@@ -1361,13 +1368,24 @@ export class QueueManager {
         mimeType: result.mimeType,
       });
 
+      const bucket = getDocumentsBucketName();
+      const objectKey = `docx-cache/${jobRow.workspaceId}/${data.templateId}/${data.entityType}/${data.entityId}/${jobId}.docx`;
+      await putObject({
+        bucket,
+        key: objectKey,
+        body: result.buffer,
+        contentType: result.mimeType,
+      });
+
       const finalPayload = {
         state: 'done',
         progress: 100,
         fileName: result.fileName,
         mimeType: result.mimeType,
         byteLength: result.buffer.byteLength,
-        contentBase64: result.buffer.toString('base64'),
+        storageBucket: bucket,
+        storageKey: objectKey,
+        sourceHash: typeof data.sourceHash === 'string' ? data.sourceHash : null,
         queueClass: 'publishing',
         completedAt: new Date().toISOString(),
       };
@@ -1828,6 +1846,20 @@ export class QueueManager {
       streamId: `folder_${folderId}`
     });
 
+    const [folder] = await db
+      .select({ workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (folder?.workspaceId) {
+      await this.invalidateDocxCacheForEntity({
+        workspaceId: folder.workspaceId,
+        templateId: 'executive-synthesis-multipage',
+        entityType: 'folder',
+        entityId: folderId,
+      });
+    }
+
     // Mettre à jour le statut du dossier à 'completed'
     await db.update(folders)
       .set({ status: 'completed' })
@@ -1907,6 +1939,130 @@ export class QueueManager {
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,
       error: row.error || undefined
+    }));
+  }
+
+  async findLatestDocxJobBySource(params: {
+    workspaceId: string;
+    templateId: DocxTemplateId;
+    entityType: DocxEntityType;
+    entityId: string;
+    sourceHash: string;
+  }): Promise<Job | null> {
+    const jobs = await this.listDocxJobsForEntity(params);
+    for (const job of jobs) {
+      const data = (job.data ?? {}) as unknown as Record<string, unknown>;
+      const result = (job.result ?? {}) as Record<string, unknown>;
+      const sourceHash =
+        typeof result.sourceHash === 'string'
+          ? result.sourceHash
+          : typeof data.sourceHash === 'string'
+            ? data.sourceHash
+            : '';
+      if (sourceHash !== params.sourceHash) continue;
+
+      if (job.status === 'completed') {
+        const storageKey = typeof result.storageKey === 'string' ? result.storageKey : '';
+        const storageBucket =
+          typeof result.storageBucket === 'string' && result.storageBucket.trim().length > 0
+            ? result.storageBucket
+            : getDocumentsBucketName();
+        if (!storageKey) continue;
+        try {
+          await headObject({ bucket: storageBucket, key: storageKey });
+        } catch {
+          continue;
+        }
+      }
+      return job;
+    }
+    return null;
+  }
+
+  async invalidateDocxCacheForEntity(params: {
+    workspaceId: string;
+    templateId: DocxTemplateId;
+    entityType: DocxEntityType;
+    entityId: string;
+    keepSourceHash?: string;
+  }): Promise<number> {
+    const jobs = await this.listDocxJobsForEntity(params);
+    let purged = 0;
+
+    for (const job of jobs) {
+      const data = (job.data ?? {}) as unknown as Record<string, unknown>;
+      const result = (job.result ?? {}) as Record<string, unknown>;
+      const sourceHash =
+        typeof result.sourceHash === 'string'
+          ? result.sourceHash
+          : typeof data.sourceHash === 'string'
+            ? data.sourceHash
+            : null;
+      if (params.keepSourceHash && sourceHash === params.keepSourceHash) {
+        continue;
+      }
+
+      if (job.status === 'processing' || job.status === 'pending') {
+        try {
+          await this.cancelJob(job.id, 'docx-cache-invalidated');
+        } catch {
+          // ignore
+        }
+      }
+
+      const storageKey = typeof result.storageKey === 'string' ? result.storageKey : '';
+      if (storageKey) {
+        const storageBucket =
+          typeof result.storageBucket === 'string' && result.storageBucket.trim().length > 0
+            ? result.storageBucket
+            : getDocumentsBucketName();
+        try {
+          await deleteObject({ bucket: storageBucket, key: storageKey });
+        } catch {
+          // ignore: object may already be missing
+        }
+      }
+
+      await db.delete(jobQueue).where(eq(jobQueue.id, job.id));
+      purged += 1;
+    }
+
+    return purged;
+  }
+
+  private async listDocxJobsForEntity(params: {
+    workspaceId: string;
+    templateId: DocxTemplateId;
+    entityType: DocxEntityType;
+    entityId: string;
+  }): Promise<Job[]> {
+    const rows = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.workspaceId, params.workspaceId), eq(jobQueue.type, 'docx_generate')))
+      .orderBy(desc(jobQueue.createdAt))
+      .limit(200);
+
+    const matches = rows.filter((row) => {
+      const data = (parseJsonField<DocxGenerateJobData>(row.data) ?? {}) as DocxGenerateJobData;
+      return (
+        data.templateId === params.templateId &&
+        data.entityType === params.entityType &&
+        data.entityId === params.entityId
+      );
+    });
+
+    return matches.map((row) => ({
+      id: row.id,
+      type: row.type as JobType,
+      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      result: parseJsonField(row.result),
+      status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
+      createdAt: row.createdAt.toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined,
     }));
   }
 }

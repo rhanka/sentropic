@@ -14,7 +14,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { queueManager } from '../../services/queue-manager';
-import { getExpectedEntityType } from '../../services/docx-generation';
+import {
+  computeDocxSourceHash,
+  getExpectedEntityType,
+} from '../../services/docx-generation';
+import { getDocumentsBucketName, getObjectBytes } from '../../services/storage-s3';
 
 const generateDocxSchema = z.object({
   templateId: z.enum(['usecase-onepage', 'executive-synthesis-multipage']),
@@ -56,6 +60,58 @@ docxRouter.post('/docx/generate', zValidator('json', generateDocxSchema), async 
   }
 
   try {
+    const sourceHash = await computeDocxSourceHash({
+      templateId: payload.templateId,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      workspaceId: user.workspaceId,
+      provided: payload.provided ?? payload.options ?? {},
+      controls: payload.controls ?? {},
+      locale: requestLocale,
+    });
+
+    const reusableJob = await queueManager.findLatestDocxJobBySource({
+      workspaceId: user.workspaceId,
+      templateId: payload.templateId,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      sourceHash,
+    });
+
+    if (reusableJob?.status === 'completed') {
+      return c.json(
+        {
+          success: true,
+          jobId: reusableJob.id,
+          status: 'completed',
+          queueClass: 'publishing',
+          streamId: `job_${reusableJob.id}`,
+        },
+        200
+      );
+    }
+
+    if (reusableJob && (reusableJob.status === 'pending' || reusableJob.status === 'processing')) {
+      return c.json(
+        {
+          success: true,
+          jobId: reusableJob.id,
+          status: reusableJob.status,
+          queueClass: 'publishing',
+          streamId: `job_${reusableJob.id}`,
+        },
+        202
+      );
+    }
+
+    await queueManager.invalidateDocxCacheForEntity({
+      workspaceId: user.workspaceId,
+      templateId: payload.templateId,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      keepSourceHash: sourceHash,
+    });
+
     const jobId = await queueManager.addJob(
       'docx_generate',
       {
@@ -66,6 +122,7 @@ docxRouter.post('/docx/generate', zValidator('json', generateDocxSchema), async 
         controls: payload.controls ?? {},
         locale: requestLocale,
         requestId: docxRequestId,
+        sourceHash,
       },
       { workspaceId: user.workspaceId }
     );
@@ -122,12 +179,24 @@ docxRouter.get('/docx/jobs/:id/download', async (c) => {
     fileName?: string;
     mimeType?: string;
     contentBase64?: string;
+    storageBucket?: string;
+    storageKey?: string;
   };
-  if (!result.contentBase64) {
-    return c.json({ message: 'DOCX content missing in job result' }, 500);
+
+  let buffer: Buffer | null = null;
+
+  if (result.storageKey) {
+    const bucket = result.storageBucket || getDocumentsBucketName();
+    const bytes = await getObjectBytes({ bucket, key: result.storageKey });
+    buffer = Buffer.from(bytes);
+  } else if (result.contentBase64) {
+    // Backward compatibility for already completed jobs generated before S3 storage.
+    buffer = Buffer.from(result.contentBase64, 'base64');
   }
 
-  const buffer = Buffer.from(result.contentBase64, 'base64');
+  if (!buffer) {
+    return c.json({ message: 'DOCX content missing in job result' }, 500);
+  }
   c.header(
     'Content-Type',
     result.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
