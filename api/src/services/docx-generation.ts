@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { folders, useCases } from '../db/schema';
@@ -85,6 +89,30 @@ type LegacyUseCaseRow = SerializedUseCase & {
 
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MODULE_TEMPLATES_DIR = resolve(__dirname, '../../templates');
+const CWD_TEMPLATES_DIR = resolve(process.cwd(), 'templates');
+const TEMPLATES_DIR = existsSync(CWD_TEMPLATES_DIR)
+  ? CWD_TEMPLATES_DIR
+  : MODULE_TEMPLATES_DIR;
+
+function getTemplateFileName(templateId: DocxTemplateId): string {
+  switch (templateId) {
+    case 'usecase-onepage':
+      return 'usecase-onepage.docx';
+    case 'executive-synthesis-multipage':
+      return 'executive-synthesis.docx';
+    default:
+      return `${templateId}.docx`;
+  }
+}
+
+async function computeTemplateFingerprint(templateId: DocxTemplateId): Promise<string> {
+  const templatePath = resolve(TEMPLATES_DIR, getTemplateFileName(templateId));
+  const bytes = await readFile(templatePath);
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 function safeText(value: unknown): string {
   if (value == null) return '';
@@ -444,10 +472,13 @@ export async function computeDocxSourceHash(
     );
   }
 
+  const templateFingerprint = await computeTemplateFingerprint(input.templateId);
+
   if (input.templateId === 'usecase-onepage') {
     const source = await loadUseCaseOnePageSource(input);
     return hashDocxSnapshot({
       templateId: input.templateId,
+      templateFingerprint,
       entityType: input.entityType,
       entityId: input.entityId,
       locale: input.locale ?? 'fr',
@@ -461,6 +492,7 @@ export async function computeDocxSourceHash(
     const source = await loadExecutiveSynthesisSource(input);
     return hashDocxSnapshot({
       templateId: input.templateId,
+      templateFingerprint,
       entityType: input.entityType,
       entityId: input.entityId,
       locale: input.locale ?? 'fr',
