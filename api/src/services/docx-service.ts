@@ -1157,6 +1157,179 @@ function isControlPlaceholder(placeholder: string): boolean {
   );
 }
 
+function unwrapPlaceholderContentControls(xml: string): { xml: string; unwrappedCount: number } {
+  if (!xml.includes('<w:sdt') || !xml.includes('{{')) {
+    return { xml, unwrappedCount: 0 };
+  }
+
+  const sdtRegex = /<w:sdt\b[\s\S]*?<\/w:sdt>/g;
+  let currentXml = xml;
+  let unwrappedCount = 0;
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    currentXml = currentXml.replace(sdtRegex, (sdtBlock) => {
+      if (!sdtBlock.includes('{{')) return sdtBlock;
+
+      const contentMatch = sdtBlock.match(/<w:sdtContent\b[^>]*>([\s\S]*?)<\/w:sdtContent>/);
+      if (!contentMatch) return sdtBlock;
+
+      changed = true;
+      unwrappedCount += 1;
+      return contentMatch[1];
+    });
+  }
+
+  return { xml: currentXml, unwrappedCount };
+}
+
+async function assertNoUnresolvedPatchInstances(renderedDocx: Buffer, requestId?: string): Promise<void> {
+  const zip = await JSZip.loadAsync(renderedDocx);
+  const unresolved: Array<{ fileName: string; count: number; sample: string[] }> = [];
+  const unresolvedRegex = /{{\s*__phinst_[^}]+\s*}}/g;
+
+  const wordXmlParts = Object.keys(zip.files)
+    .filter((fileName) => fileName.startsWith('word/') && fileName.endsWith('.xml'))
+    .sort();
+
+  for (const fileName of wordXmlParts) {
+    const file = zip.file(fileName);
+    if (!file) continue;
+    const xml = await file.async('string');
+    const tokens = [...xml.matchAll(unresolvedRegex)].map((match) => match[0]);
+    const count = tokens.length;
+    if (count > 0) {
+      unresolved.push({ fileName, count, sample: tokens.slice(0, 5) });
+    }
+  }
+
+  if (unresolved.length === 0) return;
+
+  const details = unresolved
+    .map((item) => `${item.fileName}:${item.count}:${item.sample.join('|')}`)
+    .join(', ');
+  logDocx(`unresolved patch placeholders detected (${details})`, requestId);
+  throw new Error(`docx_patch_incomplete:${details}`);
+}
+
+function escapeXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function fallbackTextFromPayload(payload: PatchPayload): string {
+  if (payload.value == null) return '';
+  if (Array.isArray(payload.value) || typeof payload.value === 'object') return '';
+  return safeText(payload.value);
+}
+
+async function replaceUnresolvedPatchInstances(
+  renderedDocx: Buffer,
+  allInstances: Record<string, PlaceholderInstance>,
+  context: Record<string, unknown>,
+  payloads: Record<string, PatchPayload>,
+  requestId?: string
+): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(renderedDocx);
+  const unresolvedRegex = /{{\s*(__phinst_[^}\s]+)\s*}}/g;
+  let replacedCount = 0;
+
+  const wordXmlParts = Object.keys(zip.files)
+    .filter((fileName) => fileName.startsWith('word/') && fileName.endsWith('.xml'))
+    .sort();
+
+  for (const fileName of wordXmlParts) {
+    const file = zip.file(fileName);
+    if (!file) continue;
+    const xml = await file.async('string');
+    if (!xml.includes('__phinst_')) continue;
+
+    let fileReplaced = 0;
+    const replacedXml = xml.replace(unresolvedRegex, (_match, tokenKeyRaw: string) => {
+      const tokenKey = tokenKeyRaw.trim();
+      const instance = allInstances[tokenKey];
+      if (!instance) return '';
+      const payload = placeholderToPayload(instance.sourcePlaceholder, context, payloads);
+      const value = escapeXmlText(fallbackTextFromPayload(payload));
+      fileReplaced += 1;
+      return value;
+    });
+
+    if (fileReplaced > 0) {
+      zip.file(fileName, replacedXml);
+      replacedCount += fileReplaced;
+    }
+  }
+
+  if (replacedCount > 0) {
+    logDocx(`fallback replaced unresolved placeholders count=${replacedCount}`, requestId);
+  }
+
+  const updated = await zip.generateAsync({ type: 'nodebuffer' });
+  return Buffer.from(updated);
+}
+
+async function enableUpdateFieldsOnOpen(renderedDocx: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(renderedDocx);
+  const docFile = zip.file('word/document.xml');
+  const settingsFile = zip.file('word/settings.xml');
+
+  if (docFile) {
+    let docXml = await docFile.async('string');
+    docXml = docXml.replace(
+      /<w:instrText\b[^>]*>\s*TOC[\s\S]*?<\/w:instrText>/g,
+      '<w:instrText xml:space="preserve"> TOC \\o "1-9" \\h \\z \\u </w:instrText>'
+    );
+    docXml = docXml.replace(
+      /<w:fldChar\b([^>]*\bw:fldCharType="begin"[^>]*?)(\/?)>/g,
+      (_match, attrsRaw: string, selfClosing: string) => {
+        let attrs = attrsRaw;
+        if (/\bw:dirty=/.test(attrs)) {
+          attrs = attrs.replace(/\bw:dirty="[^"]*"/g, 'w:dirty="true"');
+        } else {
+          attrs = `${attrs} w:dirty="true"`;
+        }
+        if (/\bw:fldLock=/.test(attrs)) {
+          attrs = attrs.replace(/\bw:fldLock="[^"]*"/g, 'w:fldLock="false"');
+        } else {
+          attrs = `${attrs} w:fldLock="false"`;
+        }
+        return `<w:fldChar${attrs}${selfClosing}>`;
+      }
+    );
+    zip.file('word/document.xml', docXml);
+  }
+
+  if (!settingsFile) {
+    const updated = await zip.generateAsync({ type: 'nodebuffer' });
+    return Buffer.from(updated);
+  }
+
+  let settingsXml = await settingsFile.async('string');
+  const hasUpdateFields = /<w:updateFields\b/.test(settingsXml);
+
+  if (hasUpdateFields) {
+    settingsXml = settingsXml.replace(
+      /<w:updateFields\b[^>]*(?:\/>|>[\s\S]*?<\/w:updateFields>)/,
+      '<w:updateFields w:val="true"/>'
+    );
+  } else {
+    settingsXml = settingsXml.replace(
+      '</w:settings>',
+      '<w:updateFields w:val="true"/></w:settings>'
+    );
+  }
+
+  zip.file('word/settings.xml', settingsXml);
+  const updated = await zip.generateAsync({ type: 'nodebuffer' });
+  return Buffer.from(updated);
+}
+
 function rewritePlaceholderInstances(xml: string, keyPrefix = ''): {
   rewrittenXml: string;
   instances: Record<string, PlaceholderInstance>;
@@ -1617,8 +1790,16 @@ async function renderDocxTemplate(
     if (!file) continue;
     const xml = await file.async('string');
     if (!xml.includes('{{')) continue;
+    const normalized = unwrapPlaceholderContentControls(xml);
 
-    const rewritten = rewritePlaceholderInstances(xml, `${index}_`);
+    if (verboseRenderLog && normalized.unwrappedCount > 0) {
+      logDocx(
+        `render template="${templateFileName}" unwrapped sdt=${normalized.unwrappedCount} file="${fileName}"`,
+        requestId
+      );
+    }
+
+    const rewritten = rewritePlaceholderInstances(normalized.xml, `${index}_`);
     if (Object.keys(rewritten.instances).length === 0) continue;
 
     patchZip.file(fileName, rewritten.rewrittenXml);
@@ -1663,7 +1844,11 @@ async function renderDocxTemplate(
     );
   }
 
-  return Buffer.from(result);
+  let rendered: Buffer = Buffer.from(result);
+  rendered = await replaceUnresolvedPatchInstances(rendered, allInstances, context, payloads, requestId);
+  await assertNoUnresolvedPatchInstances(rendered, requestId);
+  rendered = await enableUpdateFieldsOnOpen(rendered);
+  return Buffer.from(rendered);
 }
 
 function toNumberList(values: Array<number | null | undefined>): number[] {

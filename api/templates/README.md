@@ -111,6 +111,9 @@ Required style contract:
 TOC behavior:
 - TOC must include at least levels `Heading 1..2`
 - Page numbers are updated by field update, not by template editing
+- Runtime note (current): the API marks TOC fields as dirty and sets
+  `updateFields`, but page-number refresh is editor-dependent and not guaranteed
+  automatically. Treat TOC refresh as a user action.
 
 Field update:
 - In Word: `Ctrl+A`, then `F9`, then "Update entire table"
