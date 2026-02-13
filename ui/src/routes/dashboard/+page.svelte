@@ -42,6 +42,13 @@
   let dashboardDocxMenuLabel = '';
   let dashboardDocxActionDisabled = true;
   let dashboardDocxReadyToastId: string | null = null;
+  let scatterPlotRef:
+    | {
+        getDocxBitmapSnapshot?: () =>
+          | { dataUrl: string; widthPx: number; heightPx: number }
+          | null;
+      }
+    | null = null;
   const HUB_KEY = 'dashboardPage';
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
@@ -483,11 +490,28 @@
     if (!selectedFolderId) return;
 
     try {
+      const scatterSnapshot = scatterPlotRef?.getDocxBitmapSnapshot?.() ?? null;
+      const base64Payload =
+        scatterSnapshot?.dataUrl?.startsWith('data:')
+          ? (scatterSnapshot.dataUrl.split(',', 2)[1] ?? '')
+          : '';
+      const provided: Record<string, unknown> =
+        base64Payload && scatterSnapshot
+          ? {
+              dashboardImage: {
+                dataBase64: base64Payload,
+                mimeType: 'image/png',
+                widthPx: scatterSnapshot.widthPx,
+                heightPx: scatterSnapshot.heightPx,
+              },
+            }
+          : {};
+
       const result = await startDocxGeneration({
         templateId: 'executive-synthesis-multipage',
         entityType: 'folder',
         entityId: selectedFolderId,
-        provided: {},
+        provided,
         controls: {},
       });
       if (result.status === 'completed') {
@@ -1039,6 +1063,7 @@
           
           <div class="flex justify-center">
             <UseCaseScatterPlot 
+              bind:this={scatterPlotRef}
               useCases={completedUseCases} 
               {matrix} 
               bind:roiStats 

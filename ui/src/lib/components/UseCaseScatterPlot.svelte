@@ -24,6 +24,26 @@
   let computeTimeout: ReturnType<typeof setTimeout>;
 
   const t = (key: string) => get(_)(key);
+
+  export function getDocxBitmapSnapshot(): { dataUrl: string; widthPx: number; heightPx: number } | null {
+    if (!chartContainer || chartContainer.width <= 0 || chartContainer.height <= 0) return null;
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = chartContainer.width;
+    offscreen.height = chartContainer.height;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+    ctx.drawImage(chartContainer, 0, 0, offscreen.width, offscreen.height);
+
+    return {
+      dataUrl: offscreen.toDataURL('image/png'),
+      widthPx: offscreen.width,
+      heightPx: offscreen.height,
+    };
+  }
   
   // Utiliser les seuils passés en props ou les médianes
   $: effectiveValueThreshold = valueThreshold !== null ? valueThreshold : computedMedianValue;

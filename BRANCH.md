@@ -224,10 +224,10 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] App is still alive when preparing doc (worker)
         - [x] Isolated API check (`ENV=e2e`): magic-link auth + `POST /docx/generate` + `GET /docx/jobs/:id/download` returns a valid DOCX binary.
     - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
-      - [ ] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
-      - [ ] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
-      - [ ] Implement fallback behavior when image is missing/invalid.
-      - [ ] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
+      - [x] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
+      - [x] Implement fallback behavior when image is missing/invalid.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
       - [ ] Partial UAT:
         - [ ] Verify dashboard image is present at expected location and remains readable.
         - [ ] Verify fallback rendering when bitmap is omitted.
