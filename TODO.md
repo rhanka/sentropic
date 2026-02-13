@@ -189,6 +189,11 @@
   - [ ] Gere les objets incluant des listes
   - [ ] Ajoute la gestion d'images illustratives
   - [ ] Ajoute la gestion de graphiques illustratives (chartjs comme la matrice priorisation)
+  - [ ] Add server-side simulated-annealing layout support for dashboard charts
+    - [ ] Define a pure solver contract (`points/labels/dimensions/thresholds` -> `boxes/connectors/collisionScore`)
+    - [ ] Run layout computation in a worker with a publishing-compatible API contract
+    - [ ] Integrate this computation in the DOCX/dashboard image publishing flow with UI fallback on error/timeout
+    - [ ] Measure impact (UI render time, job duration, stability) and decide interactive dashboard rollout
   - [ ] Gestion d'objet dérivé (pptx d'un docx): agents de présentation
   - [ ] Gere le mode print (design complémentaire cf synthèse exec qui est une vue particulière de l'objet folder)
   - [ ] Document managé (avec des tags dans le xml pour permettre le reprage)
