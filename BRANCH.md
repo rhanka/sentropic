@@ -204,7 +204,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Replace UI label `Jobs IA` / `AI jobs` with `Jobs`.
       - [x] Gate: `make typecheck-api` + `make lint-api`
       - [x] Gate: `make typecheck-ui` + `make lint-ui`
-      - [ ] Cleanup temporary DOCX diagnostic logs after async/UAT retests (keep only durable operational logs).
+      - [x] Cleanup temporary DOCX diagnostic logs after async/UAT retests (keep only durable operational logs).
       - [ ] Partial UAT:
         - [x] Download use case DOCX and verify there is no regression
         - [x] Download synthesis DOCX
@@ -216,7 +216,8 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] DOCX contains rendered usecase
         - [x] DOCX titles map PDF ones
         - [x] Verify annex starts exactly at template-defined separator/location.
-        - [x] Verify TOC lists intro + annex entries + each use case title with correct page numbers after field update.
+        - [x] Verify TOC lists all section
+        - [!] Verify TOC lists all annex entries = each use case title with correct page numbers after field update (deferred)
         - [x] Verify links/references rendering is preserved.
         - [x] Pop up when preparing doc
         - [x] Pop up keeps open, with button when prepared
