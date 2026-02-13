@@ -132,8 +132,25 @@
   - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
   - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
 - [ ] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
-  - [ ] define a model for usecase fitting in one page
-  - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
+  - [ ] Lot 1 (courant): DOCX
+    - [ ] define a model for usecase fitting in one page
+    - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
+- [ ] Templating — Lot 2 (post-clôture du lot DOCX multipage)
+  - [ ] TOC/page numbers policy (limitation actuelle):
+    - [ ] Keep current behavior as fail-safe: TOC refresh is user-driven (`manual update required`), not guaranteed server-side.
+    - [ ] Document mandatory user action in template guide (`api/templates/README.md`): Word `Ctrl+A` + `F9` / LibreOffice update index.
+  - [ ] TOC automation options (future):
+    - [ ] Layout engine sidecar to compute final pagination (true server-side TOC refresh).
+    - [ ] Candidate A: LibreOffice UNO worker/sidecar (heavy ops/runtime dependency).
+    - [ ] Candidate B: ONLYOFFICE Document Builder post-processing.
+    - [ ] Candidate C: Aspose.Words service (`.NET`/`Java` microservice).
+    - [ ] Fallback alternatives if no engine: static TOC without page numbers, or DOCX+PDF dual export.
+  - [ ] PowerPoint templating
+    - [ ] Define `pptx` template contract aligned with folder/usecase objects.
+    - [ ] Add generation path for presentation exports (design + API runtime).
+  - [ ] Google Workspace suite
+    - [ ] Define authoring workflow with Google Docs/Slides and export normalization constraints.
+    - [ ] Define managed template lifecycle and sync strategy (Drive objects, versions, fallbacks).
 - [ ] basculer en i18n bilingue anglais / français
   - [x] Résumé fait (déjà en place) : inventaire exhaustif des chaînes UI, remplacement par i18n, dictionnaires FR/EN étendus, switch de langue validé sur vues clés (see Wave 2 Lot 2.1).
   - [ ] identifier tous les messages
