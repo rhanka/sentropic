@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import {
   ExternalHyperlink,
+  ImageRun,
   PatchType,
   TextRun,
   patchDetector,
@@ -25,6 +26,7 @@ import { marked } from 'marked';
 import type { MatrixConfig } from '../types/matrix';
 import type { UseCase } from '../types/usecase';
 import { fibonacciToStars } from '../utils/fibonacci-mapping';
+import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 
 type InlineStyle = {
   bold: boolean;
@@ -47,11 +49,27 @@ type MarkedToken = {
   }>;
 };
 
-type PatchMode = 'plain' | 'markdown_inline' | 'markdown_block';
+type PatchMode = 'plain' | 'markdown_inline' | 'markdown_block' | 'image';
+
+type ImagePatchValue = {
+  type: 'jpg' | 'png' | 'gif' | 'bmp';
+  data: Buffer;
+  widthPx: number;
+  heightPx: number;
+};
 
 type PatchPayload = {
   mode: PatchMode;
   value: unknown;
+};
+
+type DashboardImageInput = {
+  dataBase64?: string;
+  dataUrl?: string;
+  mimeType?: string;
+  assetId?: string;
+  widthPx?: number;
+  heightPx?: number;
 };
 
 export type DocxTemplateId = 'usecase-onepage' | 'executive-synthesis-multipage';
@@ -221,6 +239,10 @@ const MARKDOWN_BLOCK_FIELDS = new Set([
   'references',
   'excerpt',
 ]);
+
+const DASHBOARD_IMAGE_MAX_WIDTH_PX = 1200;
+const DASHBOARD_IMAGE_MAX_HEIGHT_PX = 675;
+const DASHBOARD_IMAGE_MIN_PX = 32;
 
 marked.setOptions({
   gfm: true,
@@ -430,7 +452,21 @@ function markdownToBlockChildren(markdown: string, baseStyle: BaseRunStyle = {})
 function toPatch(payload: PatchPayload, baseStyle: BaseRunStyle = {}): IPatch {
   let children: ParagraphChild[] = [];
 
-  if (payload.mode === 'markdown_inline') {
+  if (payload.mode === 'image') {
+    const image = payload.value as ImagePatchValue | null;
+    if (image?.data && image.widthPx > 0 && image.heightPx > 0) {
+      children = [
+        new ImageRun({
+          type: image.type,
+          data: image.data,
+          transformation: {
+            width: image.widthPx,
+            height: image.heightPx,
+          },
+        }),
+      ];
+    }
+  } else if (payload.mode === 'markdown_inline') {
     children = markdownToInlineChildren(safeText(payload.value), baseStyle);
   } else if (payload.mode === 'markdown_block') {
     children = markdownToBlockChildren(safeText(payload.value), baseStyle);
@@ -1885,6 +1921,250 @@ function normalizeExecutiveSummaryReferences(
     .filter((reference) => reference.title || reference.url);
 }
 
+function parseDashboardImageInput(value: unknown): DashboardImageInput | null {
+  if (!value || typeof value !== 'object') return null;
+  const obj = value as Record<string, unknown>;
+  return {
+    dataBase64: typeof obj.dataBase64 === 'string' ? obj.dataBase64 : undefined,
+    dataUrl: typeof obj.dataUrl === 'string' ? obj.dataUrl : undefined,
+    mimeType: typeof obj.mimeType === 'string' ? obj.mimeType : undefined,
+    assetId: typeof obj.assetId === 'string' ? obj.assetId : undefined,
+    widthPx: typeof obj.widthPx === 'number' ? obj.widthPx : undefined,
+    heightPx: typeof obj.heightPx === 'number' ? obj.heightPx : undefined,
+  };
+}
+
+function parseDataUrl(input: string): { base64: string; mimeType: string | null } | null {
+  const trimmed = input.trim();
+  const match = /^data:([^;,]+);base64,(.*)$/i.exec(trimmed);
+  if (!match) return null;
+  return {
+    mimeType: safeText(match[1]).toLowerCase() || null,
+    base64: match[2] ?? '',
+  };
+}
+
+function decodeBase64ToBuffer(input: string): Buffer | null {
+  const compact = input.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  if (!compact) return null;
+  try {
+    const bytes = Buffer.from(compact, 'base64');
+    return bytes.byteLength > 0 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+function detectImageType(
+  buffer: Buffer,
+  mimeTypeHint?: string | null
+): 'jpg' | 'png' | 'gif' | 'bmp' | null {
+  const hint = safeText(mimeTypeHint).toLowerCase();
+  if (hint === 'image/png') return 'png';
+  if (hint === 'image/jpeg' || hint === 'image/jpg') return 'jpg';
+  if (hint === 'image/gif') return 'gif';
+  if (hint === 'image/bmp') return 'bmp';
+
+  if (buffer.byteLength >= 8) {
+    if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      return 'png';
+    }
+    if (buffer[0] === 0xff && buffer[1] === 0xd8) return 'jpg';
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'gif';
+    if (buffer[0] === 0x42 && buffer[1] === 0x4d) return 'bmp';
+  }
+
+  return null;
+}
+
+function detectImageSize(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.byteLength >= 24) {
+    const pngSig = buffer.subarray(0, 8);
+    const isPng =
+      pngSig[0] === 0x89 &&
+      pngSig[1] === 0x50 &&
+      pngSig[2] === 0x4e &&
+      pngSig[3] === 0x47 &&
+      pngSig[4] === 0x0d &&
+      pngSig[5] === 0x0a &&
+      pngSig[6] === 0x1a &&
+      pngSig[7] === 0x0a;
+    if (isPng) {
+      const width = buffer.readUInt32BE(16);
+      const height = buffer.readUInt32BE(20);
+      if (width > 0 && height > 0) return { width, height };
+    }
+  }
+
+  if (buffer.byteLength >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.byteLength) {
+      if (buffer[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = buffer[offset + 1];
+      const length = buffer.readUInt16BE(offset + 2);
+      if (length < 2) break;
+      const isSof =
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf);
+      if (isSof && offset + 8 < buffer.byteLength) {
+        const height = buffer.readUInt16BE(offset + 5);
+        const width = buffer.readUInt16BE(offset + 7);
+        if (width > 0 && height > 0) return { width, height };
+        break;
+      }
+      offset += 2 + length;
+    }
+  }
+
+  return null;
+}
+
+function toClampedPositiveInt(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  if (rounded < DASHBOARD_IMAGE_MIN_PX) return null;
+  return rounded;
+}
+
+function fitDashboardImageDimensions(params: {
+  sourceSize: { width: number; height: number } | null;
+  requestedWidthPx: number | null;
+  requestedHeightPx: number | null;
+}): { widthPx: number; heightPx: number } {
+  const { sourceSize, requestedWidthPx, requestedHeightPx } = params;
+
+  if (requestedWidthPx && requestedHeightPx) {
+    return {
+      widthPx: requestedWidthPx,
+      heightPx: requestedHeightPx,
+    };
+  }
+
+  if (sourceSize && sourceSize.width > 0 && sourceSize.height > 0) {
+    const width = requestedWidthPx ?? sourceSize.width;
+    const height = requestedHeightPx ?? sourceSize.height;
+    const ratio = Math.min(
+      DASHBOARD_IMAGE_MAX_WIDTH_PX / width,
+      DASHBOARD_IMAGE_MAX_HEIGHT_PX / height
+    );
+    const scaledWidth = Math.max(DASHBOARD_IMAGE_MIN_PX, Math.round(width * ratio));
+    const scaledHeight = Math.max(DASHBOARD_IMAGE_MIN_PX, Math.round(height * ratio));
+    return { widthPx: scaledWidth, heightPx: scaledHeight };
+  }
+
+  return {
+    widthPx: requestedWidthPx ?? DASHBOARD_IMAGE_MAX_WIDTH_PX,
+    heightPx: requestedHeightPx ?? DASHBOARD_IMAGE_MAX_HEIGHT_PX,
+  };
+}
+
+function parseAssetPointer(assetId: string): { bucket: string; key: string } | null {
+  const trimmed = assetId.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('s3://')) {
+    try {
+      const url = new URL(trimmed);
+      const bucket = url.hostname;
+      const key = url.pathname.replace(/^\/+/, '');
+      if (!bucket || !key) return null;
+      return { bucket, key };
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    bucket: getDocumentsBucketName(),
+    key: trimmed,
+  };
+}
+
+async function resolveDashboardImagePatchPayload(
+  provided: Record<string, unknown>,
+  requestId?: string
+): Promise<PatchPayload> {
+  const dashboardImageRaw = resolvePath(provided, 'dashboardImage');
+  const dashboardImage = parseDashboardImageInput(dashboardImageRaw);
+  if (!dashboardImage) {
+    return { mode: 'plain', value: '' };
+  }
+
+  const requestedWidthPx = toClampedPositiveInt(dashboardImage.widthPx);
+  const requestedHeightPx = toClampedPositiveInt(dashboardImage.heightPx);
+
+  let buffer: Buffer | null = null;
+  let mimeTypeHint: string | null = safeText(dashboardImage.mimeType).toLowerCase() || null;
+
+  const inlineBase64 =
+    (typeof dashboardImage.dataBase64 === 'string' && dashboardImage.dataBase64.trim()) ||
+    (typeof dashboardImage.dataUrl === 'string' && dashboardImage.dataUrl.trim()) ||
+    '';
+  if (inlineBase64) {
+    const fromDataUrl = parseDataUrl(inlineBase64);
+    const base64 = fromDataUrl?.base64 ?? inlineBase64;
+    mimeTypeHint = fromDataUrl?.mimeType ?? mimeTypeHint;
+    buffer = decodeBase64ToBuffer(base64);
+  }
+
+  if (!buffer && dashboardImage.assetId) {
+    const pointer = parseAssetPointer(dashboardImage.assetId);
+    if (pointer) {
+      try {
+        const bytes = await getObjectBytes(pointer);
+        buffer = Buffer.from(bytes);
+      } catch (error: unknown) {
+        logDocx(
+          `dashboard image asset fetch failed assetId="${dashboardImage.assetId}" error="${error instanceof Error ? error.message : String(error)}"`,
+          requestId
+        );
+      }
+    }
+  }
+
+  if (!buffer || buffer.byteLength === 0) {
+    return { mode: 'plain', value: '' };
+  }
+
+  const imageType = detectImageType(buffer, mimeTypeHint);
+  if (!imageType) {
+    logDocx('dashboard image fallback: unsupported format', requestId);
+    return { mode: 'plain', value: '' };
+  }
+
+  const sourceSize = detectImageSize(buffer);
+  const fitted = fitDashboardImageDimensions({
+    sourceSize,
+    requestedWidthPx,
+    requestedHeightPx,
+  });
+
+  logDocx(
+    `dashboard image resolved bytes=${buffer.byteLength} width=${fitted.widthPx} height=${fitted.heightPx}`,
+    requestId
+  );
+
+  return {
+    mode: 'image',
+    value: {
+      type: imageType,
+      data: buffer,
+      widthPx: fitted.widthPx,
+      heightPx: fitted.heightPx,
+    } satisfies ImagePatchValue,
+  };
+}
+
 function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Record<string, unknown> {
   const executiveSummary = input.executiveSummary ?? {};
   const normalizedReferences = normalizeExecutiveSummaryReferences(executiveSummary.references);
@@ -1960,8 +2240,6 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
     },
     provided: {
       ...provided,
-      // Lot 2.3.3: bitmap injection is implemented later.
-      dashboardImage: '',
     },
     controls: input.controls ?? {},
     usecases: usecasesForAnnex,
@@ -1985,7 +2263,18 @@ export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDo
     input.requestId
   );
   const context = buildExecutiveSynthesisContext(input);
-  const result = await renderDocxTemplate('executive-synthesis.docx', context, {}, input.requestId, {
+  const imagePatch = await resolveDashboardImagePatchPayload(
+    (input.provided ?? {}) as Record<string, unknown>,
+    input.requestId
+  );
+  const result = await renderDocxTemplate(
+    'executive-synthesis.docx',
+    context,
+    {
+      'provided.dashboardImage': imagePatch,
+    },
+    input.requestId,
+    {
     onAnnexProgress: async (current: number, total: number) => {
       const ratio = total > 0 ? current / total : 1;
       const progress = Math.max(30, Math.min(85, Math.round(30 + ratio * 55)));
@@ -2003,7 +2292,8 @@ export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDo
         message: 'Applying DOCX patches',
       });
     },
-  });
+  }
+  );
   await input.onProgress?.({
     state: 'packaging',
     progress: 97,
