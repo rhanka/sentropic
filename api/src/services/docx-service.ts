@@ -549,6 +549,25 @@ function escapeXmlAttr(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
+function unescapeXmlAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&');
+}
+
+function parseXmlAttributes(fragment: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  const attrRegex = /([A-Za-z_][\w:.-]*)="([^"]*)"/g;
+  let attrMatch: RegExpExecArray | null;
+  while ((attrMatch = attrRegex.exec(fragment)) != null) {
+    attrs.set(attrMatch[1], attrMatch[2]);
+  }
+  return attrs;
+}
+
 function parseRootInfo(documentXml: string): RootInfo {
   const rootTagMatch = documentXml.match(/<w:document\b[^>]*>/);
   if (!rootTagMatch) {
@@ -719,6 +738,62 @@ async function readZipPartBuffer(zip: JSZip, partPath: string): Promise<Buffer |
   if (!file) return null;
   const data = await file.async('nodebuffer');
   return Buffer.from(data);
+}
+
+function getPartRelationshipsPath(partPath: string): string {
+  const dir = pathPosix.dirname(partPath);
+  const base = pathPosix.basename(partPath);
+  return pathPosix.join(dir, '_rels', `${base}.rels`);
+}
+
+function resolveRelationshipTargetPath(partPath: string, target: string): string | null {
+  const cleanTarget = safeText(target).split('#')[0].split('?')[0].trim();
+  if (!cleanTarget) return null;
+
+  const baseDir = pathPosix.dirname(partPath);
+  const normalized = pathPosix.normalize(pathPosix.join(baseDir, cleanTarget));
+  if (!normalized.startsWith('word/')) return null;
+  return normalized;
+}
+
+function extractTemplateImageMarkerPath(value: string | undefined): string | null {
+  if (!value) return null;
+  const unescaped = unescapeXmlAttr(value).trim();
+  const markerMatch = /^\{\{\s*([^}]+?)\s*\}\}$/u.exec(unescaped);
+  if (!markerMatch) return null;
+
+  const token = markerMatch[1].trim();
+  if (!token || token.startsWith('FOR ') || token.startsWith('END-FOR ') || token.startsWith('INCLUDE ')) {
+    return null;
+  }
+
+  return token.startsWith('$') ? token.slice(1) : token;
+}
+
+function findEmbedRelationshipIdAtDocPr(xml: string, docPrIndex: number): string | null {
+  const inlineStart = xml.lastIndexOf('<wp:inline', docPrIndex);
+  const anchorStart = xml.lastIndexOf('<wp:anchor', docPrIndex);
+
+  let containerStart = -1;
+  let containerEndTag = '';
+  if (inlineStart > anchorStart) {
+    containerStart = inlineStart;
+    containerEndTag = '</wp:inline>';
+  } else if (anchorStart >= 0) {
+    containerStart = anchorStart;
+    containerEndTag = '</wp:anchor>';
+  }
+
+  if (containerStart < 0) return null;
+
+  const containerEnd = xml.indexOf(containerEndTag, docPrIndex);
+  if (containerEnd < 0) return null;
+
+  const containerXml = xml.slice(containerStart, containerEnd + containerEndTag.length);
+  const embedMatch = /<a:blip\b[^>]*\br:embed="([^"]+)"/.exec(containerXml);
+  if (embedMatch?.[1]) return embedMatch[1];
+  const linkMatch = /<a:blip\b[^>]*\br:link="([^"]+)"/.exec(containerXml);
+  return linkMatch?.[1] ?? null;
 }
 
 async function copyTargetPartToMaster(
@@ -1366,6 +1441,81 @@ async function enableUpdateFieldsOnOpen(renderedDocx: Buffer): Promise<Buffer> {
   return Buffer.from(updated);
 }
 
+async function replaceTemplateImagePlaceholders(
+  renderedDocx: Buffer,
+  context: Record<string, unknown>,
+  requestId?: string
+): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(renderedDocx);
+  const imageCache = new Map<string, Promise<ImagePatchValue | null>>();
+  let replacements = 0;
+
+  const wordXmlParts = Object.keys(zip.files)
+    .filter(
+      (fileName) =>
+        fileName.startsWith('word/') &&
+        fileName.endsWith('.xml') &&
+        !fileName.includes('/_rels/')
+    )
+    .sort();
+
+  for (const partPath of wordXmlParts) {
+    const partFile = zip.file(partPath);
+    if (!partFile) continue;
+
+    const xml = await partFile.async('string');
+    if (!xml.includes('<wp:docPr') || !xml.includes('{{')) continue;
+
+    const relsPath = getPartRelationshipsPath(partPath);
+    const relsFile = zip.file(relsPath);
+    if (!relsFile) continue;
+    const relationships = parseRelationships(await relsFile.async('string'));
+
+    const docPrRegex = /<wp:docPr\b([^>]*?)(?:\/>|>)/g;
+    let docPrMatch: RegExpExecArray | null;
+    while ((docPrMatch = docPrRegex.exec(xml)) != null) {
+      const attributes = parseXmlAttributes(docPrMatch[1] ?? '');
+      const markerPath =
+        extractTemplateImageMarkerPath(attributes.get('descr')) ??
+        extractTemplateImageMarkerPath(attributes.get('title'));
+      if (!markerPath) continue;
+
+      const embedId = findEmbedRelationshipIdAtDocPr(xml, docPrMatch.index);
+      if (!embedId) continue;
+
+      const relationship = relationships.entryById.get(embedId);
+      if (!relationship || safeText(relationship.targetMode).toLowerCase() === 'external') continue;
+
+      const targetPath = resolveRelationshipTargetPath(partPath, relationship.target);
+      if (!targetPath) continue;
+
+      const markerValue = resolvePath(context, markerPath);
+      if (markerValue == null) continue;
+
+      let imagePromise = imageCache.get(markerPath);
+      if (!imagePromise) {
+        imagePromise = resolveImagePatchValueFromUnknown(
+          markerValue,
+          requestId,
+          `template image "${markerPath}"`
+        );
+        imageCache.set(markerPath, imagePromise);
+      }
+
+      const image = await imagePromise;
+      if (!image) continue;
+
+      zip.file(targetPath, image.data);
+      replacements += 1;
+    }
+  }
+
+  if (replacements === 0) return renderedDocx;
+
+  logDocx(`template image placeholders replaced count=${replacements}`, requestId);
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
+}
+
 function rewritePlaceholderInstances(xml: string, keyPrefix = ''): {
   rewrittenXml: string;
   instances: Record<string, PlaceholderInstance>;
@@ -1881,6 +2031,7 @@ async function renderDocxTemplate(
   }
 
   let rendered: Buffer = Buffer.from(result);
+  rendered = await replaceTemplateImagePlaceholders(rendered, context, requestId);
   rendered = await replaceUnresolvedPatchInstances(rendered, allInstances, context, payloads, requestId);
   await assertNoUnresolvedPatchInstances(rendered, requestId);
   rendered = await enableUpdateFieldsOnOpen(rendered);
@@ -2090,25 +2241,23 @@ function parseAssetPointer(assetId: string): { bucket: string; key: string } | n
   };
 }
 
-async function resolveDashboardImagePatchPayload(
-  provided: Record<string, unknown>,
-  requestId?: string
-): Promise<PatchPayload> {
-  const dashboardImageRaw = resolvePath(provided, 'dashboardImage');
-  const dashboardImage = parseDashboardImageInput(dashboardImageRaw);
-  if (!dashboardImage) {
-    return { mode: 'plain', value: '' };
-  }
+async function resolveImagePatchValueFromUnknown(
+  rawValue: unknown,
+  requestId?: string,
+  logLabel: string = 'template image'
+): Promise<ImagePatchValue | null> {
+  const imageInput = parseDashboardImageInput(rawValue);
+  if (!imageInput) return null;
 
-  const requestedWidthPx = toClampedPositiveInt(dashboardImage.widthPx);
-  const requestedHeightPx = toClampedPositiveInt(dashboardImage.heightPx);
+  const requestedWidthPx = toClampedPositiveInt(imageInput.widthPx);
+  const requestedHeightPx = toClampedPositiveInt(imageInput.heightPx);
 
   let buffer: Buffer | null = null;
-  let mimeTypeHint: string | null = safeText(dashboardImage.mimeType).toLowerCase() || null;
+  let mimeTypeHint: string | null = safeText(imageInput.mimeType).toLowerCase() || null;
 
   const inlineBase64 =
-    (typeof dashboardImage.dataBase64 === 'string' && dashboardImage.dataBase64.trim()) ||
-    (typeof dashboardImage.dataUrl === 'string' && dashboardImage.dataUrl.trim()) ||
+    (typeof imageInput.dataBase64 === 'string' && imageInput.dataBase64.trim()) ||
+    (typeof imageInput.dataUrl === 'string' && imageInput.dataUrl.trim()) ||
     '';
   if (inlineBase64) {
     const fromDataUrl = parseDataUrl(inlineBase64);
@@ -2117,29 +2266,27 @@ async function resolveDashboardImagePatchPayload(
     buffer = decodeBase64ToBuffer(base64);
   }
 
-  if (!buffer && dashboardImage.assetId) {
-    const pointer = parseAssetPointer(dashboardImage.assetId);
+  if (!buffer && imageInput.assetId) {
+    const pointer = parseAssetPointer(imageInput.assetId);
     if (pointer) {
       try {
         const bytes = await getObjectBytes(pointer);
         buffer = Buffer.from(bytes);
       } catch (error: unknown) {
         logDocx(
-          `dashboard image asset fetch failed assetId="${dashboardImage.assetId}" error="${error instanceof Error ? error.message : String(error)}"`,
+          `${logLabel} asset fetch failed assetId="${imageInput.assetId}" error="${error instanceof Error ? error.message : String(error)}"`,
           requestId
         );
       }
     }
   }
 
-  if (!buffer || buffer.byteLength === 0) {
-    return { mode: 'plain', value: '' };
-  }
+  if (!buffer || buffer.byteLength === 0) return null;
 
   const imageType = detectImageType(buffer, mimeTypeHint);
   if (!imageType) {
-    logDocx('dashboard image fallback: unsupported format', requestId);
-    return { mode: 'plain', value: '' };
+    logDocx(`${logLabel} fallback: unsupported format`, requestId);
+    return null;
   }
 
   const sourceSize = detectImageSize(buffer);
@@ -2150,18 +2297,33 @@ async function resolveDashboardImagePatchPayload(
   });
 
   logDocx(
-    `dashboard image resolved bytes=${buffer.byteLength} width=${fitted.widthPx} height=${fitted.heightPx}`,
+    `${logLabel} resolved bytes=${buffer.byteLength} width=${fitted.widthPx} height=${fitted.heightPx}`,
     requestId
   );
 
   return {
+    type: imageType,
+    data: buffer,
+    widthPx: fitted.widthPx,
+    heightPx: fitted.heightPx,
+  };
+}
+
+async function resolveDashboardImagePatchPayload(
+  provided: Record<string, unknown>,
+  requestId?: string
+): Promise<PatchPayload> {
+  const dashboardImageRaw = resolvePath(provided, 'dashboardImage');
+  const resolved = await resolveImagePatchValueFromUnknown(
+    dashboardImageRaw,
+    requestId,
+    'dashboard image'
+  );
+  if (!resolved) return { mode: 'plain', value: '' };
+
+  return {
     mode: 'image',
-    value: {
-      type: imageType,
-      data: buffer,
-      widthPx: fitted.widthPx,
-      heightPx: fitted.heightPx,
-    } satisfies ImagePatchValue,
+    value: resolved satisfies ImagePatchValue,
   };
 }
 

@@ -228,9 +228,9 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
       - [x] Implement fallback behavior when image is missing/invalid.
       - [x] Gate: `make typecheck-api` + `make lint-api`
-      - [ ] Partial UAT:
-        - [ ] Verify dashboard image is present at expected location and remains readable.
-        - [ ] Verify fallback rendering when bitmap is omitted.
+      - [x] Partial UAT:
+        - [x] Verify dashboard image is present at expected location and remains readable.
+        - [x] Verify fallback rendering when bitmap is omitted.
     - [ ] **Lot 2.3.4 — Integration hardening (API only)**
       - [ ] Finalize provider/normalization for executive summary + annex data.
       - [ ] Ensure use-case one-page DOCX export remains stable and unaffected.

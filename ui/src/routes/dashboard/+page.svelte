@@ -404,7 +404,8 @@
           job?.type === 'docx_generate' &&
           job?.data?.templateId === 'executive-synthesis-multipage' &&
           job?.data?.entityType === 'folder' &&
-          job?.data?.entityId === folderId
+          job?.data?.entityId === folderId &&
+          typeof job?.data?.provided?.dashboardImage === 'object'
       )
       .sort((a, b) => {
         const aTs = new Date(a?.createdAt || 0).getTime();
@@ -495,17 +496,14 @@
         scatterSnapshot?.dataUrl?.startsWith('data:')
           ? (scatterSnapshot.dataUrl.split(',', 2)[1] ?? '')
           : '';
-      const provided: Record<string, unknown> =
-        base64Payload && scatterSnapshot
-          ? {
-              dashboardImage: {
-                dataBase64: base64Payload,
-                mimeType: 'image/png',
-                widthPx: scatterSnapshot.widthPx,
-                heightPx: scatterSnapshot.heightPx,
-              },
-            }
-          : {};
+      const provided: Record<string, unknown> = {
+        dashboardImage: {
+          dataBase64: base64Payload,
+          mimeType: 'image/png',
+          widthPx: scatterSnapshot?.widthPx ?? 0,
+          heightPx: scatterSnapshot?.heightPx ?? 0,
+        },
+      };
 
       const result = await startDocxGeneration({
         templateId: 'executive-synthesis-multipage',
