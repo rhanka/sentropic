@@ -221,7 +221,7 @@ Return structured errors so UI can present the right state:
 
 ## UI changes (proposal)
 
-### Settings (`/parametres`)
+### Settings (`/settings`)
 Split global admin settings from user settings:
 - **My account**
   - status banner (pending approval, due date, disabled)
