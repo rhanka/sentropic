@@ -252,14 +252,14 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `make test-api-queue SCOPE=tests/queue/queue.test.ts ENV=test ...`
       - [x] `make test-api-ai SCOPE=tests/ai/executive-summary-sync.test.ts ENV=test ...`
     - [x] Regression gate: `make test-api ENV=test ...`
-    - [ ] Deferred API suites (Wave 1 + Wave 2 backlog):
-      - [ ] `api/tests/api/import-export.test.ts`
-      - [ ] `api/tests/api/docx.test.ts` (one-page + executive synthesis contract)
-      - [ ] `api/tests/api/ai-settings.test.ts`
-      - [ ] `api/tests/api/use-cases.test.ts`
-      - [ ] `api/tests/api/companies.test.ts` (organization API coverage)
-      - [ ] `api/tests/api/folders.test.ts`
-      - [ ] `api/tests/api/matrix.test.ts` (if present)
+    - [x] Deferred API suites (Wave 1 + Wave 2 backlog):
+      - [x] `api/tests/api/import-export.test.ts`
+      - [x] `api/tests/api/docx.test.ts` (one-page + executive synthesis contract)
+      - [x] `api/tests/api/ai-settings.test.ts`
+      - [x] `api/tests/api/use-cases.test.ts`
+      - [x] `api/tests/api/companies.test.ts` (organization API coverage)
+      - [x] `api/tests/api/folders.test.ts`
+      - [x] `api/tests/api/use-cases-generate-matrix.test.ts` (matrix-mode generation coverage)
     - [x] Sub-lot gate: `make test-api ENV=test ...`
   - [ ] **UI tests (TypeScript only)**
     - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
