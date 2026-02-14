@@ -95,7 +95,9 @@ test.describe('Dashboard', () => {
       try {
         await page.goto('/dashboard');
         await page.waitForLoadState('domcontentloaded');
-        const lockButton = page.locator('button[aria-label="Mode lecture seule : édition / génération désactivées."]');
+        const lockButton = page.locator(
+          'button.print-hidden[aria-label*="lecture seule"], button.print-hidden[aria-label*="read-only"]'
+        );
         await expect(lockButton).toBeVisible({ timeout: 10_000 });
         await expect(lockButton).toHaveClass(/print-hidden/);
       } finally {

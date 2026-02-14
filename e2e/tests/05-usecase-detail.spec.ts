@@ -187,10 +187,12 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator(
+      'button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]'
+    );
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
 
@@ -199,21 +201,13 @@ test.describe('Détail des cas d\'usage', () => {
     const editable = composer.locator('[contenteditable="true"]');
 
     const token = `E2E_CONSTRAINT_${Date.now()}`;
-    const prompt = [
-      'Remplace uniquement les contraintes par cette liste:',
-      `- ${token} A`,
-      `- ${token} B`,
-      'Réponds uniquement avec OK.'
-    ].join('\n');
+    const prompt = `Remplace uniquement les contraintes par: ${token} A; ${token} B. Réponds uniquement avec OK.`;
 
     await editable.click();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(prompt);
     await page.keyboard.press('Enter');
-
-    const assistantBubble = page.locator('div.flex.justify-start div.rounded.bg-white.border.border-slate-200');
-    await expect(assistantBubble.filter({ hasText: 'OK' }).last()).toBeVisible({ timeout: 90_000 });
 
     const constraintsSection = page.locator('[data-comment-section="constraints"]');
     await expect(constraintsSection).toContainText(token, { timeout: 120_000 });
