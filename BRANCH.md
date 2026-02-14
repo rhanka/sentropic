@@ -299,8 +299,71 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `e2e/tests/07-matrix.spec.ts`
       - [x] `e2e/tests/07-workflow.spec.ts`
       - [x] `e2e/tests/07_comment_assistant.spec.ts`
-      - [x] `e2e/tests/executive-summary.spec.ts` (not present in repo)
-      - [ ] Ctrl+P docx->pdf->print flow (when implemented)
+      - [x] `e2e/tests/05-executive-summary.spec.ts`
     - [x] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+  - [ ] **Delta-based inventory: required tests from `origin/main..HEAD`**
+    - [ ] API — DOCX async/templating/queue:
+      - [x] `POST /api/v1/docx/generate` success test for `templateId=executive-synthesis-multipage` + `entityType=folder`.
+      - [x] Locale propagation test (`Accept-Language` -> `locale`) for DOCX generation requests.
+      - [x] Source hash behavior tests:
+        - [x] same payload + same locale => same reusable job.
+        - [x] same payload + different locale => different source hash/new job.
+      - [x] Download path from S3 storage key (`storageBucket`/`storageKey`) with valid DOCX headers/body.
+      - [ ] Cache invalidation tests for `invalidateDocxCacheForEntity` when source changes.
+      - [ ] Publishing queue-class behavior tests (respect `publishingConcurrency`, independent from AI queue).
+      - [x] Worker failure propagation test (`docx_generate` job -> failed with explicit error payload).
+      - [ ] Worker progress stream test (`job_<id>` emits progress/status/done sequence).
+    - [ ] API — matrix generation integration:
+      - [x] Explicit test for `matrix_mode=generate` request path (not only default inference).
+      - [x] Explicit test for `matrix_mode=default` request path.
+      - [x] Explicit behavior test: `matrix_mode=generate` without `organization_id` falls back to `default` (current API behavior).
+      - [ ] Strict failure policy test: matrix generation failure blocks downstream generation.
+      - [ ] Prompt payload contract test for `organization_matrix_template` inputs.
+    - [ ] API — use-case detail payload contract regression:
+      - [ ] Add assertions that generated payload contains all required scalar fields with non-empty values (not only `constraints`).
+      - [ ] Add assertions that required list fields are present and non-empty arrays (`technologies`, `benefits`, `metrics`, `risks`, `constraints`, `nextSteps`, `dataSources`, `dataObjects`, scores arrays).
+      - [ ] Keep a dedicated guard for `constraints[]` (historical regression already observed on this field).
+      - [ ] Add negative test rejecting empty/placeholder-only list items during generation normalization.
+    - [x] API — AI settings / queue config:
+      - [x] `PUT /api/v1/ai-settings` test including `publishingConcurrency` update + queue manager reload effect.
+      - [x] `PUT /api/v1/ai-settings/:key` test for `publishing_concurrency`.
+    - [ ] UI unit tests (TypeScript):
+      - [ ] Add `ui/tests/utils/docx.test.ts` coverage for:
+        - [ ] `startDocxGeneration` request shape.
+        - [ ] `waitForDocxJobCompletion` timeout/failure/success polling.
+        - [ ] `downloadCompletedDocxJob` filename extraction from `content-disposition`.
+      - [ ] Add dashboard state-machine tests for `idle -> preparing -> ready -> idle`.
+      - [ ] Add tests for “ready toast with action button” behavior.
+      - [ ] Add tests for reset-to-idle when folder/executive summary changes.
+    - [ ] E2E — executive synthesis DOCX:
+      - [ ] Dashboard file menu action flow:
+        - [ ] “Prepare DOCX” visible in idle.
+        - [ ] switches to “Preparing…” while job running.
+        - [ ] switches to “Download DOCX” when done.
+      - [ ] Toast flow:
+        - [ ] “preparation started” toast appears.
+        - [ ] persistent “document ready” toast appears with download action.
+      - [ ] Download correctness:
+        - [ ] download event is triggered from menu download action.
+        - [ ] downloaded filename matches executive synthesis naming contract.
+      - [ ] Invalidation behavior:
+        - [ ] edit executive summary content, then menu returns to “Prepare DOCX”.
+      - [ ] Locale-sensitive export:
+        - [ ] switch FR -> EN, export synthesis DOCX, assert EN projection behavior.
+        - [ ] switch EN -> FR, export synthesis DOCX, assert FR projection behavior.
+      - [ ] Annex rendering regression:
+        - [ ] annex contains all use cases for target folder.
+        - [ ] no blank annex pages introduced by loop/section breaks.
+    - [ ] E2E — i18n reliability hardening:
+      - [ ] Remove/replace permissive `if (isVisible)` branches on critical i18n assertions.
+      - [ ] Replace skipped “change language across pages” test with deterministic selectors.
+      - [ ] Add explicit checks for recently fixed labels:
+        - [ ] dashboard quadrant labels.
+        - [ ] folder new labels/placeholders.
+        - [ ] matrix warning banner.
+    - [ ] E2E — quality debt cleanup:
+      - [ ] Reduce broad conditional passes in `03-dashboard` and `05-executive-summary`.
+      - [ ] Convert high-value skipped tests to active deterministic tests (where feature exists).
+      - [ ] Keep non-implemented features as explicit deferred items only.
   - [ ] User smoke test
   - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.

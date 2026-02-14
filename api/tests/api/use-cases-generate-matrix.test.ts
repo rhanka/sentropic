@@ -167,4 +167,109 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const data = await response.json();
     expect(data.message).toBe('Organization matrix template not found');
   });
+
+  it('accepts explicit matrix_mode=default even when an org template exists', async () => {
+    const organizationId = await createOrganization();
+    const organizationTemplate = {
+      ...defaultMatrixConfig,
+      valueAxes: defaultMatrixConfig.valueAxes.map((axis) => ({
+        ...axis,
+        description: `${axis.description} (org template)`,
+      })),
+    };
+
+    await db
+      .update(organizations)
+      .set({
+        data: {
+          industry: 'Tech',
+          references: [],
+          matrixTemplate: organizationTemplate,
+        },
+      })
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, user.workspaceId)));
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/use-cases/generate',
+      user.sessionToken!,
+      {
+        input: `Generate ${createTestId()}`,
+        organization_id: organizationId,
+        matrix_mode: 'default',
+        use_case_count: 1,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.matrix_mode).toBe('default');
+    expect(data.matrixJobId).toBeUndefined();
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, data.folder_id), eq(folders.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(folder).toBeDefined();
+    expect(JSON.parse(folder!.matrixConfig!)).toEqual(defaultMatrixConfig);
+  });
+
+  it('accepts explicit matrix_mode=generate when org template exists and enqueues matrix job', async () => {
+    const organizationId = await createOrganization();
+    await db
+      .update(organizations)
+      .set({
+        data: {
+          industry: 'Tech',
+          references: [],
+          matrixTemplate: defaultMatrixConfig,
+        },
+      })
+      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, user.workspaceId)));
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/use-cases/generate',
+      user.sessionToken!,
+      {
+        input: `Generate ${createTestId()}`,
+        organization_id: organizationId,
+        matrix_mode: 'generate',
+        use_case_count: 1,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.matrix_mode).toBe('generate');
+    expect(data.matrixJobId).toBeDefined();
+
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId));
+    const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
+    expect(matrixJob?.type).toBe('matrix_generate');
+  });
+
+  it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/use-cases/generate',
+      user.sessionToken!,
+      {
+        input: `Generate ${createTestId()}`,
+        matrix_mode: 'generate',
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.matrix_mode).toBe('default');
+    expect(data.matrixJobId).toBeUndefined();
+  });
 });
