@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '../../src/lib/utils/documents';
+import { API_BASE_URL } from '../../src/lib/config';
 
 describe('documents utils', () => {
   beforeEach(() => {
@@ -18,7 +19,7 @@ describe('documents utils', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       const [url, init] = fetchMock.mock.calls[0];
-      expect(String(url)).toContain('http://localhost:8787/api/v1/documents?');
+      expect(String(url)).toContain(`${API_BASE_URL}/documents?`);
       expect(String(url)).toContain('context_type=folder');
       expect(String(url)).toContain('context_id=f_1');
       expect(init?.credentials).toBe('include');
@@ -75,7 +76,7 @@ describe('documents utils', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [url, init] = fetchMock.mock.calls[0];
-      expect(String(url)).toBe('http://localhost:8787/api/v1/documents?workspace_id=ws_1');
+      expect(String(url)).toBe(`${API_BASE_URL}/documents?workspace_id=ws_1`);
       expect(init?.method).toBe('POST');
       expect(init?.credentials).toBe('include');
       expect(init?.body).toBeInstanceOf(FormData);
@@ -90,12 +91,12 @@ describe('documents utils', () => {
   describe('getDownloadUrl', () => {
     it('should build /documents/:id/content URL', () => {
       const url = getDownloadUrl({ documentId: 'doc_1' });
-      expect(url).toBe('http://localhost:8787/api/v1/documents/doc_1/content');
+      expect(url).toBe(`${API_BASE_URL}/documents/doc_1/content`);
     });
 
     it('should include workspace_id when provided', () => {
       const url = getDownloadUrl({ documentId: 'doc_1', workspaceId: 'ws_1' });
-      expect(url).toBe('http://localhost:8787/api/v1/documents/doc_1/content?workspace_id=ws_1');
+      expect(url).toBe(`${API_BASE_URL}/documents/doc_1/content?workspace_id=ws_1`);
     });
   });
 
@@ -107,11 +108,10 @@ describe('documents utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url, init] = fetchMock.mock.calls[0];
-      expect(String(url)).toBe('http://localhost:8787/api/v1/documents/doc_1');
+      expect(String(url)).toBe(`${API_BASE_URL}/documents/doc_1`);
       expect(init?.method).toBe('DELETE');
       expect(init?.credentials).toBe('include');
     });
   });
 });
-
 
