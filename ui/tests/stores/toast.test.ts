@@ -56,6 +56,27 @@ describe('toast store', () => {
     expect(toast.duration).toBe(10000);
   });
 
+  it('should keep action metadata for a persistent ready-toast', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined);
+    addToast({
+      type: 'success',
+      message: 'Document ready',
+      duration: 0,
+      actionLabel: 'Download DOCX',
+      actionIcon: 'download',
+      onAction,
+    });
+
+    const toast = get(toasts)[0];
+    expect(toast.duration).toBe(0);
+    expect(toast.actionLabel).toBe('Download DOCX');
+    expect(toast.actionIcon).toBe('download');
+    expect(typeof toast.onAction).toBe('function');
+
+    await toast.onAction?.();
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
   it('should not auto-remove when duration is 0', () => {
     addToast({
       type: 'info',
