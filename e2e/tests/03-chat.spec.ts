@@ -98,7 +98,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
     
     // Ouvrir le ChatWidget (bouton en bas à droite)
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
@@ -134,7 +134,7 @@ test.describe.serial('Chat', () => {
   });
 
   test('devrait envoyer le bon contexte primaire au backend selon la route', async ({ page }) => {
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
 
     // 1) /folders → no contextId (expect no primaryContextType)
@@ -210,7 +210,7 @@ test.describe.serial('Chat', () => {
 
   test('devrait gérer les contextes provisoires et persistants', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
 
@@ -280,7 +280,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
@@ -288,16 +288,16 @@ test.describe.serial('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
     
-    // Basculer vers Jobs IA via l'onglet
-    const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: 'Jobs IA' }).first();
+    // Basculer vers Jobs via l'onglet
+    const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: /^Jobs(?: IA)?$/i }).first();
     await expect(jobsTab).toBeVisible({ timeout: 5000 });
     await jobsTab.click();
     
-    // Vérifier que le panneau Jobs IA est visible (pas le chat)
+    // Vérifier que le panneau Jobs est visible (pas le chat)
     await expect(composer).not.toBeVisible({ timeout: 1000 });
     
     // Basculer de retour vers Chat
-    const chatTab = page.locator('button, [role="tab"]').filter({ hasText: 'Chat IA' }).first();
+    const chatTab = page.locator('button, [role="tab"]').filter({ hasText: /^Chat(?: IA)?$/i }).first();
     await expect(chatTab).toBeVisible({ timeout: 5000 });
     await chatTab.click();
     
@@ -312,7 +312,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
@@ -352,7 +352,7 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
 
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
 
@@ -415,7 +415,7 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
 
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
 
@@ -461,7 +461,7 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
 
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
@@ -516,7 +516,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -561,7 +561,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -607,7 +607,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -673,4 +673,3 @@ test.describe.serial('Chat', () => {
   });
 
 });
-

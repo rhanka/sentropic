@@ -7,6 +7,17 @@ test.describe('Page Paramètres', () => {
   const USER_B_STATE = './.auth/user-b.json';
   let workspaceAlphaId = '';
   let workspaceAlphaName = '';
+  const toCanonicalRole = (value: string): string => {
+    const normalized = value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'editeur' || normalized === 'editor') return 'editor';
+    if (normalized === 'admin') return 'admin';
+    if (normalized === 'viewer') return 'viewer';
+    return normalized;
+  };
 
   const createScopedPage = async (
     browser: import('@playwright/test').Browser,
@@ -323,12 +334,13 @@ test.describe('Page Paramètres', () => {
       const roleCellB = pageB.locator('tbody tr').filter({ hasText: workspaceLiveName }).locator('td').nth(2);
       await expect
         .poll(async () => {
-          const text = (await roleCellB.textContent())?.trim() ?? '';
-          if (text && text !== 'editor') {
+          const text = (await roleCellB.textContent()) ?? '';
+          const canonical = toCanonicalRole(text);
+          if (canonical && canonical !== 'editor') {
             await pageB.reload({ waitUntil: 'domcontentloaded' });
             await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
           }
-          return (await roleCellB.textContent())?.trim() ?? '';
+          return toCanonicalRole((await roleCellB.textContent()) ?? '');
         }, { timeout: 15_000 })
         .toBe('editor');
 
