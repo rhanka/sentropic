@@ -1,212 +1,128 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
-test.describe('Internationalisation (i18n)', () => {
-  test.skip('devrait changer de langue sur toutes les pages', async ({ page }) => {
-    // Test skip: strict mode violation (multiple selects)
-  });
+test.describe('Internationalization reliability', () => {
+  test.use({ storageState: './.auth/user-a.json' });
 
-  test('devrait afficher les textes en français par défaut', async ({ page }) => {
+  const WORKSPACE_ID = 'e2e-ws-a';
+  const FOLDER_ID = 'e2e-folder-a';
+
+  const setDashboardScope = async (page: Page) => {
+    await page.addInitScript(
+      ({ workspaceId, folderId }) => {
+        window.localStorage.setItem('workspaceScopeId', workspaceId);
+        window.localStorage.setItem('currentFolderId', folderId);
+      },
+      { workspaceId: WORKSPACE_ID, folderId: FOLDER_ID }
+    );
+  };
+
+  const setLanguage = async (page: Page, lang: 'fr' | 'en') => {
+    const languageSelect = page.locator('header select').first();
+    await expect(languageSelect).toBeVisible({ timeout: 15_000 });
+    await languageSelect.selectOption(lang);
+    await expect(languageSelect).toHaveValue(lang);
+  };
+
+  const ensureFolderMatrixConfigured = async (page: Page) => {
+    const defaultMatrixResponse = await page.request.get('/api/v1/folders/matrix/default');
+    expect(defaultMatrixResponse.ok()).toBeTruthy();
+    const defaultMatrixConfig = await defaultMatrixResponse.json();
+
+    const matrixUrl = `/api/v1/folders/${FOLDER_ID}/matrix?workspace_id=${WORKSPACE_ID}`;
+    const updateMatrixResponse = await page.request.put(matrixUrl, {
+      data: defaultMatrixConfig,
+    });
+    expect(updateMatrixResponse.ok()).toBeTruthy();
+
+    const matrixReadResponse = await page.request.get(matrixUrl);
+    expect(matrixReadResponse.ok()).toBeTruthy();
+    const updatedMatrix = await matrixReadResponse.json();
+    expect(Array.isArray(updatedMatrix?.valueAxes)).toBeTruthy();
+    expect(updatedMatrix.valueAxes.length).toBeGreaterThan(0);
+  };
+
+  test('French is the default locale on navigation labels', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    
-    // Vérifier que les textes français sont présents
-    const frenchTexts = page.locator('text=Accueil, text=Dossiers, text=Organisations, text=Configuration métier, text=Cas d\'usage, text=Matrice, text=Dashboard, text=Design, text=Données, text=Paramètres');
-    
-    if (await frenchTexts.count() > 0) {
-      await expect(frenchTexts.first()).toBeVisible();
-    }
+
+    await expect(page.getByRole('link', { name: 'Accueil' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dossiers' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Organisations' })).toBeVisible();
+    await expect(page.getByRole('link', { name: "Cas d'usage" })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Évaluation' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
   });
 
-  test('devrait afficher les textes en anglais après changement', async ({ page }) => {
+  test('language change to English persists across pages', async ({ page }) => {
+    await setDashboardScope(page);
+
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    
-    // Changer vers l'anglais
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Vérifier que les textes anglais sont présents
-        const englishTexts = page.locator('text=Home, text=Folders, text=Organizations, text=Business Configuration, text=Use Cases, text=Matrix, text=Dashboard, text=Design, text=Data, text=Settings');
-        
-        if (await englishTexts.count() > 0) {
-          await expect(englishTexts.first()).toBeVisible();
-        }
-      }
-    }
+
+    await setLanguage(page, 'en');
+
+    await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Folders' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Organizations' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Use cases' })).toBeVisible();
+
+    await page.goto('/organizations');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
+
+    await page.goto(`/folders/${FOLDER_ID}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    await page.goto('/folder/new');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByText('Folder name')).toBeVisible();
+    await expect(page.getByPlaceholder('Enter the folder name (optional)')).toBeVisible();
   });
 
-  test('devrait persister le choix de langue entre les pages', async ({ page }) => {
-    // Changer la langue sur la page d'accueil
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Naviguer vers une autre page
-        await page.goto('/organizations');
-        await page.waitForLoadState('domcontentloaded');
-        
-        // Vérifier que la langue est toujours en anglais
-        const englishText = page.locator('text=Organizations, text=Add, text=Name, text=Sector');
-        
-        if (await englishText.count() > 0) {
-          await expect(englishText.first()).toBeVisible();
-        }
-      }
-    }
-  });
+  test('recently fixed labels stay translated (dashboard ROI + matrix warning + folder new labels)', async ({ page }) => {
+    await setDashboardScope(page);
+    await ensureFolderMatrixConfigured(page);
 
-  test('devrait traduire les messages d\'erreur', async ({ page }) => {
-    // Changer vers l'anglais
-    await page.goto('/');
+    await page.goto(`/folders/${FOLDER_ID}`);
     await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Aller sur une page qui peut générer des erreurs
-        await page.goto('/organizations');
-        await page.waitForLoadState('domcontentloaded');
-        
-        // Essayer de créer une entreprise sans nom pour générer une erreur
-        await page.click('button:has-text("Add")');
-        await page.click('button:has-text("Save")');
-        
-        // Vérifier que les messages d'erreur sont en anglais
-        const englishErrors = page.locator('text=Required, text=Error, text=Field required, text=Please fill');
-        
-        if (await englishErrors.count() > 0) {
-          await expect(englishErrors.first()).toBeVisible();
-        }
-      }
-    }
-  });
 
-  test('devrait traduire les formulaires', async ({ page }) => {
-    // Changer vers l'anglais
-    await page.goto('/');
+    await page.goto('/dashboard');
     await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Aller sur la page des entreprises
-        await page.goto('/organizations');
-        await page.waitForLoadState('domcontentloaded');
-        
-        // Ouvrir le formulaire d'ajout
-        await page.click('button:has-text("Add")');
-        
-        // Vérifier que les labels sont en anglais
-        const englishLabels = page.locator('text=Organization Name, text=Sector, text=Name, text=Activity');
-        
-        if (await englishLabels.count() > 0) {
-          await expect(englishLabels.first()).toBeVisible();
-        }
-      }
-    }
-  });
 
-  test('devrait traduire les boutons d\'action', async ({ page }) => {
-    // Changer vers l'anglais
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Aller sur la page des entreprises
-        await page.goto('/organizations');
-        await page.waitForLoadState('domcontentloaded');
-        
-        // Vérifier que les boutons sont en anglais
-        const englishButtons = page.locator('button:has-text("Add"), button:has-text("Edit"), button:has-text("Delete"), button:has-text("Save")');
-        
-        if (await englishButtons.count() > 0) {
-          await expect(englishButtons.first()).toBeVisible();
-        }
-      }
-    }
-  });
+    await setLanguage(page, 'en');
+    await expect(page.locator('button[title="ROI quadrant configuration"]')).toBeVisible({ timeout: 15_000 });
 
-  test('devrait traduire les messages de statut', async ({ page }) => {
-    // Changer vers l'anglais
-    await page.goto('/');
+    await page.goto('/matrix');
     await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      const englishOption = languageSelect.locator('option[value="en"], option:has-text("English")');
-      
-      if (await englishOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'en' });
-        await page.waitForLoadState('networkidle');
-        
-        // Aller sur la page des cas d'usage
-        await page.goto('/usecase');
-        await page.waitForLoadState('networkidle');
-        
-        // Vérifier que les statuts sont en anglais
-        const englishStatus = page.locator('text=Active, text=Draft, text=Generating, text=In Progress, text=Value, text=Complexity');
-        
-        if (await englishStatus.count() > 0) {
-          await expect(englishStatus.first()).toBeVisible();
-        }
-      }
-    }
-  });
+    await expect(
+      page
+        .getByText('Warning: changing weights will automatically recalculate all scores for your existing use cases.')
+        .or(page.getByText('No matrix configured for this folder'))
+        .first()
+    ).toBeVisible({ timeout: 15_000 });
 
-  test('devrait gérer les textes manquants gracieusement', async ({ page }) => {
-    // Simuler une clé de traduction manquante en changeant la langue vers une langue non supportée
-    await page.goto('/');
+    await page.goto('/folder/new');
     await page.waitForLoadState('domcontentloaded');
-    
-    const languageSelect = page.locator('select, [data-testid="language-select"]');
-    
-    if (await languageSelect.isVisible()) {
-      // Essayer de sélectionner une langue non supportée
-      const unsupportedOption = languageSelect.locator('option[value="es"], option:has-text("Español")');
-      
-      if (await unsupportedOption.isVisible()) {
-        await languageSelect.selectOption({ value: 'es' });
-        await page.waitForLoadState('networkidle');
-        
-        // Vérifier que l'application ne plante pas et affiche des textes de fallback
-        const bodyText = await page.locator('body').textContent();
-        expect(bodyText?.length).toBeGreaterThan(0);
-      }
-    }
+    await expect(page.getByText('Folder name')).toBeVisible();
+    await expect(page.getByPlaceholder('Enter the folder name (optional)')).toBeVisible();
+
+    await setLanguage(page, 'fr');
+    await page.goto('/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('button[title="Configuration du quadrant ROI"]')).toBeVisible({ timeout: 15_000 });
+
+    await page.goto('/matrix');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(
+      page
+        .getByText("Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.")
+        .or(page.getByText('Aucune matrice configurée pour ce dossier'))
+        .first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.goto('/folder/new');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByText('Nom du dossier')).toBeVisible();
+    await expect(page.getByPlaceholder('Saisir le nom du dossier (optionnel)')).toBeVisible();
   });
 });
