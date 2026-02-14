@@ -40,10 +40,18 @@ export type UpdateUseCaseFieldsInput = {
   toolCallId?: string | null;
 };
 
+const USECASE_FIELD_ALIASES: Record<string, string> = {
+  contraintes: 'constraints',
+};
+
 function normalizeDataPath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) throw new Error('Invalid path');
-  return trimmed.startsWith('data.') ? trimmed : `data.${trimmed}`;
+  const normalized = trimmed.startsWith('data.') ? trimmed.slice('data.'.length) : trimmed;
+  const firstSegment = normalized.split('.')[0] || normalized;
+  const mapped = USECASE_FIELD_ALIASES[firstSegment] ?? firstSegment;
+  const rest = normalized.slice(firstSegment.length);
+  return `data.${mapped}${rest}`;
 }
 
 function getPathSegments(path: string): string[] {
@@ -94,6 +102,45 @@ function coerceMarkdownList(value: unknown): string | null {
   return items.map((s) => `- ${s}`).join('\n');
 }
 
+const LIST_FIELDS = new Set([
+  'benefits',
+  'risks',
+  'constraints',
+  'metrics',
+  'nextSteps',
+  'technologies',
+  'dataSources',
+  'dataObjects'
+]);
+
+function coerceListArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const items = value
+    .map((v) => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object' && 'key' in (v as Record<string, unknown>)) {
+        return String((v as Record<string, unknown>).key ?? '');
+      }
+      return '';
+    })
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return items;
+}
+
+function coerceMarkdownStringToArray(value: unknown): string[] | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const lines = trimmed.replace(/\r\n/g, '\n').split('\n');
+  const items = lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^\s*(?:[-*+]|(?:\d+\.)|\u2022|\u2023|\u25e6)\s+/, '').trim())
+    .filter(Boolean);
+  return items;
+}
+
 function coerceToolUpdateValue(pathSegments: string[], value: unknown): unknown {
   // Guard: certains champs UI sont des strings markdown (pas des arrays d'objets).
   if (pathSegments.length === 1) {
@@ -101,6 +148,10 @@ function coerceToolUpdateValue(pathSegments: string[], value: unknown): unknown 
     if (field === 'problem' || field === 'solution' || field === 'description') {
       const asList = coerceMarkdownList(value);
       if (asList) return asList;
+    }
+    if (LIST_FIELDS.has(field)) {
+      const asArray = coerceListArray(value) ?? coerceMarkdownStringToArray(value);
+      if (asArray) return asArray;
     }
   }
   return value;

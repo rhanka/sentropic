@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { app } from '../../src/app';
+import { env } from '../../src/config/env';
 import { 
   createAuthenticatedUser, 
   authenticatedRequest, 
@@ -9,6 +10,7 @@ import {
 
 describe('Basic Security Tests', () => {
   let user: any;
+  const allowedOrigin = env.CORS_ALLOWED_ORIGINS.split(',')[0]?.trim() || 'http://localhost:5173';
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
@@ -72,7 +74,7 @@ describe('Basic Security Tests', () => {
            it('should include CORS headers on preflight requests', async () => {
              // Test OPTIONS preflight request with valid origin
              const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/organizations', null, {
-               'Origin': 'http://localhost:5173',
+               'Origin': allowedOrigin,
                'Access-Control-Request-Method': 'GET',
                'Access-Control-Request-Headers': 'Content-Type, Authorization'
              });
@@ -82,7 +84,7 @@ describe('Basic Security Tests', () => {
              const headers = response.headers;
              
              // Check that CORS headers are present
-             expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+             expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
              expect(headers.get('Access-Control-Allow-Methods')).toBe('GET,POST,PUT,PATCH,DELETE,OPTIONS');
              expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type,Authorization');
              expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');

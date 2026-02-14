@@ -339,7 +339,7 @@ describe('Import/Export API', () => {
     });
     expect(res.status).toBe(200);
     const contentDisposition = res.headers.get('content-disposition') || '';
-    expect(contentDisposition).toContain('organisations');
+    expect(contentDisposition).toContain('organizations');
 
     const resFolders = await authenticatedRequest(app, 'POST', '/api/v1/exports', admin.sessionToken!, {
       scope: 'workspace',
@@ -348,7 +348,7 @@ describe('Import/Export API', () => {
     });
     expect(resFolders.status).toBe(200);
     const contentDispositionFolders = resFolders.headers.get('content-disposition') || '';
-    expect(contentDispositionFolders).toContain('dossiers');
+    expect(contentDispositionFolders).toContain('folders');
   });
 
   it('rejects workspace export for viewer', async () => {

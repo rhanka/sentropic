@@ -12,6 +12,8 @@
   import { addToast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
@@ -46,7 +48,7 @@
       const existing = await fetchOrganizationById(draftId);
       // Si ce n'est plus un brouillon, on bascule vers la vue [id]
       if (existing?.status && existing.status !== 'draft') {
-        goto(`/organisations/${existing.id}`);
+        goto(`/organizations/${existing.id}`);
         return;
       }
       organization = { ...existing };
@@ -56,7 +58,7 @@
         type: 'error',
         message: err instanceof Error ? err.message : 'Impossible de charger le brouillon'
       });
-      goto('/organisations');
+      goto('/organizations');
     }
   };
 
@@ -67,8 +69,8 @@
   $: if ($workspaceScopeHydrated && !readOnlyChecked) {
     readOnlyChecked = true;
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : création désactivée.' });
-      goto('/organisations');
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyCreateDisabled') });
+      goto('/organizations');
     }
   }
 
@@ -100,7 +102,7 @@
       organization = { ...organization, id: draftOrganization.id };
       return draftOrganization.id;
     } catch (err) {
-      draftError = err instanceof Error ? err.message : 'Erreur lors de la création du brouillon';
+      draftError = err instanceof Error ? err.message : get(_)('organizations.errors.draftCreate');
       return null;
     } finally {
       draftCreating = false;
@@ -120,7 +122,7 @@
 
   const handleEnrichOrganization = async () => {
     if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (!organization.name?.trim()) return;
@@ -130,20 +132,20 @@
 
     try {
       const id = (await ensureDraftOrganization()) || '';
-      if (!id) throw new Error("Impossible de créer l'organisation brouillon");
+      if (!id) throw new Error(get(_)('organizations.errors.draftMissing'));
       await startOrganizationEnrichment(id);
 
       addToast({
         type: 'success',
-        message: "Organisation créée ! L'enrichissement avec l'IA est en cours..."
+        message: get(_)('organizations.toast.createdEnriching')
       });
 
-      goto('/organisations');
+      goto('/organizations');
     } catch (err) {
       console.error('Failed to create and enrich organization:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : "Erreur lors de la création de l'organisation"
+        message: err instanceof Error ? err.message : get(_)('organizations.errors.create')
       });
     } finally {
       isEnriching = false;
@@ -157,7 +159,7 @@
 
   const handleCreateOrganization = async () => {
     if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: 'Mode lecture seule : action non autorisée.' });
+      addToast({ type: 'error', message: get(_)('organizations.errors.readOnlyActionNotAllowed') });
       return;
     }
     if (!organization.name?.trim()) return;
@@ -168,23 +170,23 @@
       if (!id) {
         // fallback: create directly if draft couldn't be created
       const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
-        addToast({ type: 'success', message: 'Organisation créée avec succès !' });
+        addToast({ type: 'success', message: get(_)('organizations.toast.created') });
         if (newOrganization?.id) {
         unsavedChangesStore.reset();
-        goto(`/organisations/${newOrganization.id}`);
+        goto(`/organizations/${newOrganization.id}`);
         }
         return;
       }
 
       await updateOrganization(id, organization as Partial<Organization>);
-      addToast({ type: 'success', message: 'Organisation créée avec succès !' });
+      addToast({ type: 'success', message: get(_)('organizations.toast.created') });
       unsavedChangesStore.reset();
-      goto(`/organisations/${id}`);
+      goto(`/organizations/${id}`);
     } catch (err) {
       console.error('Failed to create organization:', err);
       addToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Erreur lors de la création'
+        message: err instanceof Error ? err.message : get(_)('organizations.errors.create')
       });
     } finally {
       isCreating = false;
@@ -197,7 +199,7 @@
     if (id) {
       void deleteOrganization(id).catch(() => {});
     }
-    goto('/organisations');
+    goto('/organizations');
   };
 </script>
 
@@ -209,7 +211,7 @@
     locked={$workspaceReadOnlyScope}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}
-    nameLabel="Nom de l'organisation"
+    nameLabel={$_('organizations.form.nameLabel')}
   >
     <div slot="actions" class="flex items-center gap-2">
         <button
@@ -217,8 +219,8 @@
           data-testid="enrich-organization"
           on:click={handleEnrichOrganization}
         disabled={$workspaceReadOnlyScope || isEnriching || !organization.name?.trim() || docsUploading}
-        title="IA"
-        aria-label="IA"
+        title={$_('common.ai')}
+        aria-label={$_('common.ai')}
         >
         {#if isEnriching}
           <Loader2 class="w-5 h-5 animate-spin" />
@@ -228,8 +230,8 @@
         </button>
         <button
         class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50"
-          title="Créer"
-        aria-label="Créer"
+          title={$_('common.create')}
+        aria-label={$_('common.create')}
           on:click={handleCreateOrganization}
           disabled={$workspaceReadOnlyScope || !organization.name?.trim() || isCreating}
         >
@@ -242,8 +244,8 @@
       <button
         class="rounded p-2 transition text-warning hover:bg-slate-100"
         on:click={handleCancel}
-        title="Annuler"
-        aria-label="Annuler"
+        title={$_('common.cancel')}
+        aria-label={$_('common.cancel')}
       >
         <Trash2 class="w-5 h-5" />
         </button>
@@ -263,7 +265,7 @@
         />
       {:else}
         <div class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          Renseigner un nom d’organisation pour activer l’ajout de documents.
+          {$_('organizations.form.docsHint')}
         </div>
       {/if}
     </div>
@@ -272,7 +274,7 @@
       {#if organization.references && organization.references.length > 0}
     <div class="rounded border border-slate-200 bg-white p-4">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold">Références</h3>
+            <h3 class="font-semibold">{$_('common.references')}</h3>
       </div>
           <References references={organization.references} referencesScaleFactor={1} />
     </div>
@@ -280,5 +282,3 @@
     </div>
   </OrganizationForm>
 {/if}
-
-

@@ -1,7 +1,7 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
-  // Tous les usages de {@html} dans ce fichier passent par renderMarkdownWithRefs() ou parseReferencesInText()
-  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  // All {@html} usage in this file is routed through renderMarkdownWithRefs() or parseReferencesInText(),
+  // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import References from '$lib/components/References.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -10,6 +10,7 @@
   import { scoreToStars } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import { apiGet } from '$lib/utils/api';
   import { useCasesStore } from '$lib/stores/useCases';
   import { goto } from '$app/navigation';
@@ -73,7 +74,7 @@
   };
 
 const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'deadline'] as const;
-const LIST_FIELDS = ['benefits', 'risks', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
+const LIST_FIELDS = ['benefits', 'risks', 'constraints', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
 
@@ -104,6 +105,7 @@ let textOriginals: Record<TextField, string> = {
 let listBuffers: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
+  constraints: [],
   metrics: [],
   nextSteps: [],
   technologies: [],
@@ -113,6 +115,7 @@ let listBuffers: Record<ListField, string[]> = {
 let listOriginals: Record<ListField, string[]> = {
   benefits: [],
   risks: [],
+  constraints: [],
   metrics: [],
   nextSteps: [],
   technologies: [],
@@ -122,6 +125,7 @@ let listOriginals: Record<ListField, string[]> = {
 let listMarkdowns: Record<ListField, string> = {
   benefits: '',
   risks: '',
+  constraints: '',
   metrics: '',
   nextSteps: '',
   technologies: '',
@@ -380,6 +384,10 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
   $: parsedRisks = (useCase?.data?.risks || useCase?.risks)
     ? (useCase.data?.risks || useCase.risks || []).map((risk: string) => renderMarkdownWithRefs(risk, references, { addListStyles: true, listPadding: 1.5 }))
     : [];
+
+  $: parsedConstraints = (useCase?.data?.constraints)
+    ? (useCase.data.constraints || []).map((c: string) => renderMarkdownWithRefs(c, references, { addListStyles: true, listPadding: 1.5 }))
+    : [];
   
   $: parsedTechnologies = (useCase?.data?.technologies || useCase?.technologies)
     ? (useCase.data?.technologies || useCase.technologies || []).map((tech: string) => renderMarkdownWithRefs(tech, references, { addListStyles: true, listPadding: 1.5 }))
@@ -476,11 +484,11 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
           <p class="text-sm text-blue-700 font-medium">
             {#if useCase.status === 'detailing'}
-              Détail en cours de génération...
+              {$_('usecase.status.detailing')}
             {:else if useCase.status === 'generating'}
-              Cas d'usage en cours de génération...
+              {$_('usecase.status.generating')}
             {:else if useCase.status === 'pending'}
-              Génération en attente...
+              {$_('usecase.status.pending')}
             {/if}
           </p>
         </div>
@@ -493,14 +501,14 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="col-span-8 print:col-span-1 min-w-0">
         {#if isPrinting}
           <h1 class="text-3xl font-semibold break-words">
-            {nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+            {nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
           </h1>
         {:else}
           <h1 class="text-3xl font-semibold break-words mb-0">
             <EditableInput
               locked={locked}
               label=""
-              value={nameBuffer || useCase?.data?.name || useCase?.name || 'Cas d\'usage sans nom'}
+              value={nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
               markdown={false}
               multiline={true}
               apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
@@ -524,10 +532,10 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <button
               type="button"
               class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
-              on:click={() => goto(`/organisations/${organizationId}`)}
-              title="Voir l'organisation"
+              on:click={() => goto(`/organizations/${organizationId}`)}
+              title={$_('organizations.view')}
             >
-              {organizationName || 'Organisation'}
+              {organizationName || $_('organizations.organization')}
             </button>
           {/if}
           {#if useCase.model}
@@ -544,7 +552,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="col-span-4 print:col-span-1 flex items-center justify-end">
           {#if organizationId}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700">
-              {organizationName || 'Organisation'}
+              {organizationName || $_('organizations.organization')}
             </span>
           {/if}
           {#if useCase.model}
@@ -563,7 +571,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
               <CheckCircle2 class="w-5 h-5" />
-              Valeur calculée
+              {$_('usecase.scores.totalValue')}
             </h3>
           </div>
           <div class="flex items-center gap-3">
@@ -573,7 +581,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {/each}
             </div>
             <span class="font-bold text-green-600">
-              ({totalValueScore.toFixed(0)} points)
+              ({totalValueScore.toFixed(0)} {$_('common.pointsAbbr')})
             </span>
           </div>
         </div>
@@ -584,7 +592,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
             <h3 class="font-semibold flex items-center gap-2">
               <AlertTriangle class="w-5 h-5" />
-              Complexité calculée
+              {$_('usecase.scores.totalComplexity')}
             </h3>
           </div>
           <div class="flex items-center gap-3">
@@ -598,7 +606,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               {/each}
             </div>
             <span class="font-bold text-red-600">
-              ({totalComplexityScore.toFixed(0)} points)
+              ({totalComplexityScore.toFixed(0)} {$_('common.pointsAbbr')})
             </span>
           </div>
         </div>
@@ -608,7 +616,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
             <Clock class="w-5 h-5 text-slate-500" />
-            Délai
+            {$_('usecase.fields.deadline')}
             <CommentBadge
               count={commentCounts?.deadline ?? 0}
               disabled={!onOpenComments}
@@ -651,7 +659,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
             <h3 class="font-semibold flex items-center gap-2 group">
               <FileText class="w-5 h-5 text-slate-500" />
-              Description
+              {$_('usecase.fields.description')}
               <CommentBadge
                 count={commentCounts?.description ?? 0}
                 disabled={!onOpenComments}
@@ -692,7 +700,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-orange-100 text-orange-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <AlertTriangle class="w-5 h-5" />
-                Problème
+                {$_('usecase.fields.problem')}
                 <CommentBadge
                   count={commentCounts?.problem ?? 0}
                   disabled={!onOpenComments}
@@ -731,7 +739,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <Lightbulb class="w-5 h-5" />
-                Solution
+                {$_('usecase.fields.solution')}
                 <CommentBadge
                   count={commentCounts?.solution ?? 0}
                   disabled={!onOpenComments}
@@ -766,15 +774,14 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
         </div>
 
-        <!-- Autes (COL A, chacun 1/3 de page) -->
-        <!-- Groupe Bénéfices + (Risques + Mesures du succès) (span 2 colonnes, lui-même en 2 colonnes) -->
-        <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2">
-          <!-- Bénéfices -->
+        <!-- 2x2 grid: Benefits | Constraints / Metrics | Risks -->
+        <div class="grid gap-6 lg:grid-cols-2 lg:col-span-2 layout-quad">
+          <!-- Row 1, Col 1: Bénéfices -->
           <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="benefits">
             <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
               <h3 class="font-semibold flex items-center gap-2 group">
                 <TrendingUp class="w-5 h-5" />
-                Bénéfices recherchés
+                {$_('usecase.fields.benefits')}
                 <CommentBadge
                   count={commentCounts?.benefits ?? 0}
                   disabled={!onOpenComments}
@@ -812,93 +819,133 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             {/if}
           </div>
 
-          <!-- Colonne 2 : Risques + Mesures du succès (empilés verticalement) -->
-          <div class="space-y-6">
-            <!-- Risques -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="risks">
-              <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2 group">
-                  <AlertTriangle class="w-5 h-5" />
-                  Risques
-                  <CommentBadge
-                    count={commentCounts?.risks ?? 0}
-                    disabled={!onOpenComments}
-                    on:click={() => openComments('risks')}
-                  />
-                </h3>
-              </div>
-              {#if isPrinting}
-                <ul class="space-y-2">
-                  {#each parsedRisks as risk}
-                    <li class="flex items-start gap-2 text-sm text-slate-600">
-                      <span class="text-red-500 mt-1">•</span>
-                      <span>{@html risk}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {:else}
-                <div class="text-sm text-slate-600">
-                  <EditableInput
-                    locked={locked}
-                    label=""
-                    value={listMarkdowns.risks || ''}
-                    markdown={true}
-                    forceList={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                    fullData={getListFullData('risks')}
-                    fullDataGetter={(() => getListFullData('risks')) as any}
-                    changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
-                    originalValue={arrayToMarkdown(listOriginals.risks) || ''}
-                    references={references}
-                    on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
-                    on:saved={handleFieldSaved}
-                  />
-                </div>
-              {/if}
+          <!-- Row 1, Col 2: Contraintes -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="constraints">
+            <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <AlertTriangle class="w-5 h-5" />
+                {$_('usecase.fields.constraints')}
+                <CommentBadge
+                  count={commentCounts?.constraints ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('constraints')}
+                />
+              </h3>
             </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedConstraints as constraint}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-red-500 mt-1">•</span>
+                    <span>{@html constraint}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.constraints || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('constraints')}
+                  fullDataGetter={(() => getListFullData('constraints')) as any}
+                  changeId={useCase?.id ? `usecase-constraints-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.constraints) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('constraints', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
+          </div>
 
-            <!-- Mesures du succès -->
-            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="metrics">
-              <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                <h3 class="font-semibold flex items-center gap-2 group">
-                  <BarChart3 class="w-5 h-5" />
-                  Mesures du succès
-                  <CommentBadge
-                    count={commentCounts?.metrics ?? 0}
-                    disabled={!onOpenComments}
-                    on:click={() => openComments('metrics')}
-                  />
-                </h3>
-              </div>
-              {#if isPrinting}
-                <ul class="space-y-2">
-                  {#each parsedMetrics as metric}
-                    <li class="flex items-start gap-2 text-sm text-slate-600">
-                      <span class="text-blue-500 mt-1">•</span>
-                      <span>{@html metric}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {:else}
-                <div class="text-sm text-slate-600">
-                  <EditableInput
-                    locked={locked}
-                    label=""
-                    value={listMarkdowns.metrics || ''}
-                    markdown={true}
-                    forceList={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-                    fullData={getListFullData('metrics')}
-                    fullDataGetter={(() => getListFullData('metrics')) as any}
-                    changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
-                    originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
-                    references={references}
-                    on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
-                    on:saved={handleFieldSaved}
-                  />
-                </div>
-              {/if}
+          <!-- Row 2, Col 1: Mesures du succès -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="metrics">
+            <div class="bg-blue-100 text-blue-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <BarChart3 class="w-5 h-5" />
+                {$_('usecase.fields.metrics')}
+                <CommentBadge
+                  count={commentCounts?.metrics ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('metrics')}
+                />
+              </h3>
             </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedMetrics as metric}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-blue-500 mt-1">•</span>
+                    <span>{@html metric}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.metrics || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('metrics')}
+                  fullDataGetter={(() => getListFullData('metrics')) as any}
+                  changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.metrics) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('metrics', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
+          </div>
+
+          <!-- Row 2, Col 2: Risques -->
+          <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="risks">
+            <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
+              <h3 class="font-semibold flex items-center gap-2 group">
+                <AlertTriangle class="w-5 h-5" />
+                {$_('usecase.fields.risks')}
+                <CommentBadge
+                  count={commentCounts?.risks ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('risks')}
+                />
+              </h3>
+            </div>
+            {#if isPrinting}
+              <ul class="space-y-2">
+                {#each parsedRisks as risk}
+                  <li class="flex items-start gap-2 text-sm text-slate-600">
+                    <span class="text-red-500 mt-1">•</span>
+                    <span>{@html risk}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <div class="text-sm text-slate-600">
+                <EditableInput
+                  locked={locked}
+                  label=""
+                  value={listMarkdowns.risks || ''}
+                  markdown={true}
+                  forceList={true}
+                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  fullData={getListFullData('risks')}
+                  fullDataGetter={(() => getListFullData('risks')) as any}
+                  changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
+                  originalValue={arrayToMarkdown(listOriginals.risks) || ''}
+                  references={references}
+                  on:change={(e) => setListBuffer('risks', markdownToArray(e.detail.value))}
+                  on:saved={handleFieldSaved}
+                />
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -908,9 +955,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- Informations -->
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="contact">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-          <h3 class="font-semibold flex items-center gap-2 group">
-            <Info class="w-5 h-5 text-slate-500" />
-            Informations
+	          <h3 class="font-semibold flex items-center gap-2 group">
+	            <Info class="w-5 h-5 text-slate-500" />
+	            {$_('usecase.info.title')}
             <CommentBadge
               count={commentCounts?.contact ?? 0}
               disabled={!onOpenComments}
@@ -919,8 +966,8 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </h3>
         </div>
         <div class="space-y-3">
-          <div class="flex items-start gap-2">
-            <span class="font-medium text-slate-700 mt-1">Contact:</span>
+	          <div class="flex items-start gap-2">
+	            <span class="font-medium text-slate-700 mt-1">{$_('usecase.info.contact')}</span>
             {#if isPrinting}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
                 {@html (useCase?.data?.contact || useCase?.contact) ? renderMarkdownWithRefs(useCase?.data?.contact || useCase?.contact || '', references) : ''}
@@ -952,9 +999,9 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       {#if (useCase?.data?.technologies || useCase?.technologies) && (useCase?.data?.technologies || useCase?.technologies || []).length > 0}
         <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="technologies">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2 group">
-              <Monitor class="w-5 h-5 text-slate-500" />
-              Technologies
+	            <h3 class="font-semibold flex items-center gap-2 group">
+	              <Monitor class="w-5 h-5 text-slate-500" />
+	              {$_('usecase.info.technologies')}
               <CommentBadge
                 count={commentCounts?.technologies ?? 0}
                 disabled={!onOpenComments}
@@ -1001,7 +1048,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
             <Database class="w-5 h-5 text-slate-500" />
-            Sources des données
+            {$_('usecase.info.dataSources')}
             <CommentBadge
               count={commentCounts?.dataSources ?? 0}
               disabled={!onOpenComments}
@@ -1050,7 +1097,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">
             <Database class="w-5 h-5 text-slate-500" />
-            Données
+            {$_('usecase.info.dataObjects')}
             <CommentBadge
               count={commentCounts?.dataObjects ?? 0}
               disabled={!onOpenComments}
@@ -1103,7 +1150,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="bg-purple-100 text-purple-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
         <h3 class="font-semibold flex items-center gap-2 group">
           <ClipboardList class="w-5 h-5" />
-          Prochaines étapes
+          {$_('usecase.fields.nextSteps')}
           <CommentBadge
             count={commentCounts?.nextSteps ?? 0}
             disabled={!onOpenComments}
@@ -1146,7 +1193,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="references">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
-            Références
+            {$_('common.references')}
             <CommentBadge
               count={commentCounts?.references ?? 0}
               disabled={!onOpenComments}
@@ -1164,7 +1211,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
           <h3 class="font-semibold flex items-center gap-2">
             <CheckCircle2 class="w-5 h-5" />
-            Axes de Valeur
+            {$_('matrix.valueAxes')}
           </h3>
         </div>
         <div class="space-y-4">
@@ -1185,7 +1232,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                         <Star class="w-4 h-4 {i < stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}" />
                       {/each}
                     </div>
-                    <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                    <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
                   </div>
                 </div>
                 {#if isPrinting}
@@ -1219,7 +1266,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
         <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
           <h3 class="font-semibold flex items-center gap-2">
             <AlertTriangle class="w-5 h-5" />
-            Axes de Complexité
+            {$_('matrix.complexityAxes')}
           </h3>
         </div>
         <div class="space-y-4">
@@ -1244,7 +1291,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                         {/if}
                       {/each}
                     </div>
-                    <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                    <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
                   </div>
                 </div>
                 {#if isPrinting}

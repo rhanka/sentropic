@@ -76,4 +76,5 @@ RUN npm install --omit=dev
 RUN npm audit --audit-level=high --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=base /app/drizzle ./drizzle
+COPY --from=base /app/templates ./templates
 CMD ["node", "dist/index.js"]

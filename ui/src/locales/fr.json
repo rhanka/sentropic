@@ -11,6 +11,861 @@
     "settings": "Paramètres",
     "admin": "Admin"
   },
+  "header": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "settings": "Paramètres",
+    "devices": "Mes appareils",
+    "language": "Langue",
+    "refreshInfo": "Actualiser les informations"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "refresh": "Rafraîchir",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "edit": "Modifier",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "menu": "Menu",
+    "closeMenu": "Fermer le menu",
+    "search": "Rechercher",
+    "noResults": "Aucun résultat",
+    "error": "Erreur",
+    "success": "Succès",
+    "readOnly": "Mode lecture seule",
+    "draft": "Brouillon",
+    "active": "Active",
+    "open": "Ouvrir",
+    "clickToView": "Cliquez pour voir les détails",
+    "sessionCheck": "Vérification de la session…",
+    "redirecting": "Redirection…",
+    "user": "Utilisateur",
+    "na": "N/A",
+    "readOnlyDisabled": "Mode lecture seule : création / suppression désactivées."
+    ,
+    "ai": "IA",
+    "references": "Références"
+    ,
+    "pointsAbbr": "pts"
+    ,
+    "add": "Ajouter",
+    "general": "Général",
+    "yesterday": "Hier",
+    "send": "Envoyer",
+    "copy": "Copier",
+    "retry": "Réessayer",
+    "openMenu": "Ouvrir le menu",
+    "saving": "Sauvegarde…",
+    "unsavedChanges": "Modifications non sauvegardées"
+    ,
+    "unspecified": "Non renseigné",
+    "useMedian": "Utiliser la médiane",
+    "actions": "Actions",
+    "new": "Nouveau",
+    "import": "Importer",
+    "export": "Exporter",
+    "downloadDocx": "Télécharger DOCX",
+    "print": "Imprimer",
+    "visibility": "Visibilité",
+    "hidden": "Caché",
+    "adminOnly": "Réservé aux admins",
+    "yes": "Oui",
+    "no": "Non",
+    "readOnlyEditDisabled": "Mode lecture seule : modification désactivée.",
+    "median": "Médiane",
+    "email": "Email",
+    "name": "Nom",
+    "role": "Rôle",
+    "status": "Statut",
+    "workspace": "Espace de travail",
+    "all": "Tous"
+  },
+  "unsavedChanges": {
+    "dialog": {
+      "title": "Modifications non sauvegardées",
+      "body": "Vous avez des modifications non sauvegardées. Que souhaitez-vous faire ?"
+    },
+    "beforeUnload": "Sauvegarde des modifications en cours…",
+    "actions": {
+      "cancel": "Annuler",
+      "discardAndContinue": "Ignorer et continuer",
+      "saveAndContinue": "Sauvegarder et continuer",
+      "discardAndClose": "Ignorer et fermer",
+      "saveAndClose": "Sauvegarder et fermer"
+    },
+    "toast": {
+      "saved": "Toutes les modifications ont été sauvegardées.",
+      "saveError": "Erreur lors de la sauvegarde des modifications.",
+      "discarded": "Modifications non sauvegardées supprimées."
+    }
+  },
+  "roles": {
+    "viewer": "Lecteur",
+    "commenter": "Commentateur",
+    "editor": "Editeur",
+    "admin": "Admin"
+  },
+  "home": {
+    "welcomeTitle": "Bienvenue sur Top AI Ideas",
+    "tagline": "Décrivez votre contexte métier et découvrez des cas d'usage d'intelligence artificielle priorisés par valeur et complexité.",
+    "getStarted": "Commencer",
+    "redirectingTo": "Redirection vers {path}…"
+  },
+  "errors": {
+    "notFoundTitle": "Page non trouvée",
+    "notFoundMessage": "La page demandée n'existe pas.",
+    "backHome": "Retour à l'accueil"
+  },
+  "auth": {
+    "emailPlaceholder": "vous@example.com",
+    "webauthnRegisterNotice": "Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.",
+    "devicesTitle": "Mes appareils",
+    "loading": "Chargement…",
+    "noDevices": "Aucun appareil enregistré",
+    "addedOn": "Ajouté le {date}",
+    "lastUsed": "Dernière utilisation : {date}",
+    "verifyInProgress": "Vérification en cours…",
+    "redirectingDashboard": "Redirection vers le tableau de bord…",
+    "registerDeviceNow": "Vous allez maintenant enregistrer votre appareil WebAuthn",
+    "devices": {
+      "title": "Mes appareils",
+      "subtitle": "Gérez les appareils enregistrés pour l'authentification WebAuthn",
+      "empty": "Aucun appareil enregistré",
+      "register": "Enregistrer un appareil",
+      "addNew": "Ajouter un nouvel appareil",
+      "rename": "Renommer",
+      "revoke": "Révoquer",
+      "uvEnabled": "UV activée",
+      "addedOn": "Ajouté le {date}",
+      "lastUsed": "Dernière utilisation : {date}",
+      "confirmRevoke": "Êtes-vous sûr de vouloir révoquer l'appareil \"{deviceName}\" ? Vous ne pourrez plus vous connecter avec cet appareil.",
+      "errors": {
+        "load": "Erreur lors du chargement des appareils",
+        "update": "Erreur lors de la mise à jour",
+        "revoke": "Erreur lors de la révocation"
+      }
+    },
+    "magicLink": {
+      "title": "Vérification du lien magique",
+      "successTitle": "Connexion réussie !",
+      "errorTitle": "Erreur de vérification",
+      "backToLogin": "Retour à la connexion",
+      "errors": {
+        "missingToken": "Token manquant dans l'URL",
+        "verifyFailed": "Erreur lors de la vérification du lien magique"
+      }
+    },
+    "login": {
+      "title": "Connexion",
+      "supportedHint": "Utilisez votre passkey ou biométrie",
+      "notAvailable": "WebAuthn non disponible sur ce navigateur",
+      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
+      "button": "Se connecter avec WebAuthn",
+      "buttonLoading": "Connexion…",
+      "lostDevice": "J'ai perdu mon appareil",
+      "noAccount": "Pas encore de compte ? S'inscrire",
+      "lostDeviceTitle": "Perte d'appareil",
+      "registerNewDevice": "Enregistrer un nouvel appareil (workflow complet)",
+      "backToLogin": "Retour à la connexion normale"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Authentification sécurisée avec WebAuthn",
+      "unsupportedBrowserTitle": "Navigateur non compatible",
+      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
+      "emailLabel": "Email",
+      "getCode": "Obtenir un code",
+      "sendingCode": "Envoi…",
+      "alreadyHaveAccount": "Déjà un compte ? Se connecter",
+      "codeLabel": "Code à 6 chiffres",
+      "codeHelp": "Saisissez le code reçu par email",
+      "verifyCode": "Vérifier le code",
+      "verifyingCode": "Vérification…",
+      "changeEmail": "Modifier l'email",
+      "codeVerifiedTitle": "Code vérifié !",
+      "registerDevice": "Enregistrer mon appareil WebAuthn",
+      "registering": "Enregistrement…",
+      "successTitle": "Inscription réussie !",
+      "success": {
+        "codeSent": "Code envoyé par email",
+        "redirecting": "Inscription réussie ! Redirection…"
+      },
+      "errors": {
+        "invalidEmail": "Veuillez saisir une adresse email valide",
+        "sendCode": "Erreur lors de l'envoi du code"
+      }
+    }
+    ,
+    "webauthn": {
+      "errors": {
+        "registrationCancelled": "Vous avez annulé l'inscription",
+        "authenticationCancelled": "Vous avez annulé l'authentification",
+        "alreadyRegistered": "Cet appareil est déjà enregistré",
+        "noMatchingAuthenticator": "Aucun appareil reconnu",
+        "notSupportedAuthenticator": "Cet authentificateur n'est pas supporté",
+        "notSupportedBrowser": "Votre navigateur ne supporte pas WebAuthn"
+      }
+    }
+  },
+  "matrix": {
+    "title": "Configuration de l'évaluation Valeur/Complexité",
+    "details": {
+      "title": "Évaluation Matrice"
+    },
+    "loading": "Chargement de la matrice…",
+    "empty": "Aucune matrice configurée pour ce dossier",
+    "readOnlyTooltip": "Mode lecture seule : modification désactivée.",
+    "valueAxes": "Axes de Valeur",
+    "complexityAxes": "Axes de Complexité",
+    "criterion": "Critère",
+    "weight": "Poids",
+    "action": "Action",
+    "addValueAxis": "Ajouter un axe de valeur",
+    "addComplexityAxis": "Ajouter un axe de complexité",
+    "viewLevels": "Voir les niveaux",
+    "viewLevelsFor": "Voir les niveaux de {name}",
+    "levelDescriptionsTitle": "Description des niveaux",
+    "deleteAxis": "Supprimer cet axe",
+    "deleteAxisFor": "Supprimer {name}",
+    "export": "Exporter la matrice",
+    "valueThresholdsTitle": "Configuration des seuils de Valeur",
+    "complexityThresholdsTitle": "Configuration des seuils de Complexité",
+    "value": "Valeur",
+    "complexity": "Complexité",
+    "fibonacciPoints": "Points Fibonacci",
+    "useCaseCount": "Nombre de cas",
+    "level": "Niveau",
+    "description": "Description",
+    "baseEvaluation": "Évaluation de base",
+    "baseEvaluationDesc": "Utiliser la matrice par défaut avec toutes les descriptions complètes",
+    "copyExisting": "Copier une matrice existante",
+    "copyExistingDesc": "Copier la matrice d'un autre dossier",
+    "selectFolder": "Sélectionner un dossier…",
+    "blankEvaluation": "Évaluation vierge",
+    "blankEvaluationDesc": "Commencer avec une matrice vide",
+    "lockError": "Erreur de verrouillage",
+    "unlockRequestSent": "Demande de déverrouillage envoyée",
+    "unlockRequestError": "Erreur demande de déverrouillage",
+    "lockForced": "Verrou forcé",
+    "lockForceError": "Erreur forçage verrou",
+    "pleaseSelectFolder": "Veuillez sélectionner un dossier pour voir sa matrice",
+    "folderLoaded": "Évaluation du dossier \"{name}\" chargée",
+    "folderNoMatrix": "Le dossier \"{name}\" n'a pas de matrice configurée",
+    "loadError": "Erreur lors du chargement de la matrice"
+    ,
+    "autoSaveError": "Erreur lors de la sauvegarde automatique de la configuration",
+    "saveSuccess": "Configuration de la matrice mise à jour",
+    "saveError": "Erreur lors de la sauvegarde de la matrice",
+    "saveErrorGeneric": "Erreur lors de la sauvegarde",
+    "newValueAxisName": "Nouvel axe de valeur",
+    "newComplexityAxisName": "Nouvel axe de complexité",
+    "valueAxisAdded": "Nouvel axe de valeur ajouté",
+    "complexityAxisAdded": "Nouvel axe de complexité ajouté",
+  "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.",
+  "valueAxisDeleted": "Axe de valeur supprimé",
+  "complexityAxisDeleted": "Axe de complexité supprimé",
+  "weightsRecalcWarning": "Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.",
+  "levelN": "Niveau {level}",
+  "selectedFolder": "Dossier sélectionné",
+  "createNew": "Créer une nouvelle matrice",
+  "createDialogBody": "Choisissez le type de matrice à créer :",
+    "help": {
+      "intro": "Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.",
+      "details": "La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun. Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux."
+    },
+    "toasts": {
+      "created": "Nouvelle matrice créée avec succès."
+    },
+    "errors": {
+      "create": "Erreur lors de la création de la matrice."
+    }
+  },
+  "folders": {
+    "title": "Dossiers",
+    "folder": "Dossier",
+    "import": {
+      "title": "Importer un dossier",
+      "targetFolder": "Dossier cible"
+    },
+    "export": {
+      "title": "Exporter les dossiers",
+      "singleTitle": "Exporter le dossier",
+      "objectName": "Tous les dossiers",
+      "include": {
+        "organizations": "Inclure les organisations",
+        "organization": "Inclure l'organisation",
+        "usecases": "Inclure les cas d'usage",
+        "matrix": "Inclure la matrice"
+      }
+    },
+    "actions": "Actions dossier",
+    "loading": "Chargement des dossiers…",
+    "useCaseCount": "{count} cas d'usage",
+    "deleteSuccess": "Dossier supprimé avec succès !",
+    "deleteError": "Erreur lors de la suppression du dossier",
+    "toast": {
+      "selected": "Dossier \"{name}\" sélectionné"
+    },
+    "errors": {
+      "load": "Erreur lors du chargement des dossiers"
+    },
+    "detail": {
+      "defaultTitle": "Dossier",
+      "title": "Dossier",
+      "loadingUseCases": "Chargement des cas d'usage…",
+      "context": "Contexte",
+      "valueLabel": "Valeur:",
+      "complexityLabel": "Complexité:",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce dossier ?",
+      "errors": {
+        "load": "Erreur lors du chargement du dossier",
+        "readOnlyAction": "Action non autorisée (mode lecture seule)."
+      }
+    },
+  "new": {
+    "nameLabel": "Nom du dossier",
+    "namePlaceholder": "Saisir le nom du dossier (optionnel)",
+    "orgOptional": "Organisation (optionnel)",
+    "unspecified": "Non spécifié",
+    "createOrg": "Créer une organisation",
+    "context": "Contexte",
+    "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
+      "useCaseCount": "Nombre de cas d'usage",
+      "default": "Défaut: {count}",
+      "loadingOrganizations": "Chargement des organisations…",
+      "noOrganizations": "Aucune organisation disponible.",
+      "documentsTitle": "Documents",
+      "documentsHelp": "Ajouter des documents au contexte. Un résumé est généré automatiquement.",
+      "addDocument": "Ajouter un document",
+      "noDocumentsYet": "Aucun document pour le moment.",
+      "defaultInput": {
+        "documentsContext": "Utiliser les documents du dossier comme contexte principal.",
+        "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal."
+      },
+      "matrix": {
+        "title": "Matrice d'évaluation",
+        "useOrganization": "Utiliser la matrice de l'organisation",
+        "useOrganizationHint": "Option cochée par défaut quand l'organisation possède déjà une matrice sauvegardée.",
+        "generateOrganization": "Générer une matrice pour l'organisation",
+        "generateOrganizationHint": "Option cochée par défaut car aucune matrice n'est encore associée à cette organisation."
+      },
+      "errors": {
+        "draftCreateFailed": "Impossible de créer un brouillon de dossier",
+        "loadOrganizations": "Erreur lors du chargement des organisations",
+        "readOnlyCreateDisabled": "Mode lecture seule : création désactivée.",
+        "readOnlyActionNotAllowed": "Mode lecture seule : action non autorisée.",
+        "draftLoadFailed": "Impossible de charger le brouillon",
+        "missingInput": "Renseigner un contexte, un nom, ou ajouter un document.",
+        "create": "Erreur lors de la création du dossier",
+        "generationStart": "Erreur lors du démarrage de la génération"
+      },
+      "toast": {
+        "created": "Dossier créé avec succès !",
+        "generationStarted": "Génération démarrée…"
+      }
+    }
+  },
+  "organizations": {
+    "title": "Organisations",
+    "organization": "Organisation",
+    "view": "Voir l'organisation",
+    "import": {
+      "title": "Importer une organisation"
+    },
+    "export": {
+      "title": "Exporter les organisations",
+      "singleTitle": "Exporter l'organisation",
+      "objectName": "Toutes les organisations",
+      "include": {
+        "folders": "Inclure les dossiers rattachés"
+      }
+    },
+    "actions": "Actions organisation",
+    "enriching": "Enrichissement en cours…",
+    "delete": "Supprimer l'organisation",
+    "deleteSuccess": "Organisation supprimée avec succès !",
+    "deleteError": "Erreur lors de la suppression",
+    "industry": "Secteur: {value}",
+    "sizeLabel": "Taille",
+    "clickForDetails": "Cliquez pour voir les détails",
+    "form": {
+      "nameLabel": "Nom de l'organisation",
+      "docsHint": "Renseigner un nom d’organisation pour activer l’ajout de documents.",
+      "namePlaceholder": "Saisir le nom de l'organisation"
+    },
+    "fields": {
+      "industry": "Secteur:",
+      "size": "Taille",
+      "technologies": "Technologies",
+      "products": "Produits et Services",
+      "processes": "Processus Métier",
+      "kpis": "Indicateurs de performance",
+      "challenges": "Défis Principaux",
+      "objectives": "Objectifs Stratégiques"
+    },
+    "toast": {
+      "created": "Organisation créée avec succès !",
+      "createdEnriching": "Organisation créée ! L'enrichissement avec l'IA est en cours..."
+    },
+    "errors": {
+      "readOnlyCreateDisabled": "Mode lecture seule : création désactivée.",
+      "readOnlyActionNotAllowed": "Mode lecture seule : action non autorisée.",
+      "draftCreate": "Erreur lors de la création du brouillon",
+      "draftMissing": "Impossible de créer l'organisation brouillon",
+      "create": "Erreur lors de la création de l'organisation",
+      "load": "Erreur lors du chargement de l'organisation",
+      "loadList": "Erreur lors du chargement des organisations"
+    }
+    ,
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette organisation ?"
+  },
+  "locks": {
+    "lockError": "Erreur de verrouillage",
+    "unlockRequestSent": "Demande de déverrouillage envoyée",
+    "unlockRequestError": "Erreur demande de déverrouillage",
+    "lockForced": "Verrou forcé",
+    "lockForceError": "Erreur forçage verrou",
+    "presence": {
+      "ariaLabel": "Verrou du document",
+      "button": {
+        "ariaLabel": "Verrou du document"
+      },
+      "locking": "Verrouillage…",
+      "connectedOne": "1 utilisateur connecté",
+      "connectedMany": "{count} utilisateurs connectés",
+      "tooltip": {
+        "noLock": "{connected}.",
+        "lockedByMe": "{connected}, vous verrouillez le document.",
+        "lockedByOtherNoRequest": "{connected}, {owner} verrouille le document.",
+        "lockedByOtherCanRequest": "{connected}, {owner} verrouille le document. Cliquez pour demander le déverrouillage."
+      },
+      "actions": {
+        "releaseFor": "Déverrouiller pour {label}",
+        "requestUnlock": "Demander le déverrouillage",
+        "requestSent": "Demande envoyée",
+        "forceUnlock": "Forcer le déverrouillage"
+      }
+    }
+  },
+  "dashboard": {
+    "reportTitle": "Rapport Top AI Ideas",
+    "execSummary": "Synthèse exécutive",
+    "execSummaryGenerating": "Génération de la synthèse exécutive en cours…",
+    "execSummaryGeneratingHint": "Cela peut prendre quelques instants",
+    "execSummaryEmpty": "Aucune synthèse exécutive disponible pour ce dossier",
+    "execSummaryGenerate": "Générer la synthèse exécutive",
+    "loadingData": "Chargement des données…",
+  "useCaseCount": "Nombre de cas d'usage",
+  "quickWins": "Gains rapides",
+  "roiQuadrants": {
+    "quickWins": "Gains rapides",
+    "majorProjects": "Projets majeurs",
+    "wait": "Attendre",
+    "dontDo": "Ne pas faire"
+  },
+  "roiQuadrantConfig": "Configuration du quadrant ROI",
+  "roiStats": {
+    "medianValue": "Valeur médiane",
+    "medianComplexity": "Complexité médiane"
+  },
+    "roiConfig": {
+      "buttonTitle": "Configuration du quadrant ROI",
+      "close": "Fermer la configuration",
+      "valueThreshold": "Seuil de valeur (pts)",
+      "complexityThreshold": "Seuil de complexité (pts)",
+      "customThreshold": "Seuil personnalisé",
+      "currentMedian": "Médiane actuelle",
+      "resetToMedians": "Réinitialiser aux médianes"
+    },
+    "introduction": "Introduction",
+    "toc": "Sommaire",
+    "analysis": "Analyse",
+    "recommendations": "Recommandations",
+    "references": "Références",
+    "annex": "Annexe",
+    "annexUseCases": "Fiches des cas d'usage",
+    "subtitle": "Priorisez vos innovations par l'apport de valeur",
+    "about": "À Propos"
+    ,
+    "backCover": {
+      "p1": "Top AI Ideas s'inscrit dans la vision de SENT-tech : plus de vingt ans d'expertise en innovation, données, digital et intelligence artificielle. Ici, l'IA n'est jamais une finalité, mais un levier devenu indispensable à la compétitivité.",
+      "p2": "La valeur naît d'une approche holistique, où les opportunités d'affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.",
+      "p3": "Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel."
+    },
+    "readOnlyGenerationDisabled": "Mode lecture seule : génération désactivée.",
+    "docx": {
+      "menu": {
+        "prepare": "Préparer le DOCX",
+        "preparing": "Préparation en cours…",
+        "download": "Télécharger le DOCX"
+      }
+    },
+    "toast": {
+      "generationStarted": "Génération de la synthèse exécutive démarrée",
+      "docxPreparationStarted": "Préparation du document lancée.",
+      "docxReady": "Document prêt au téléchargement."
+    },
+    "regenerateTooltip": "Régénérer la synthèse exécutive",
+    "errors": {
+      "load": "Erreur lors du chargement des données du dashboard",
+      "generate": "Erreur lors de la génération de la synthèse exécutive",
+      "docxPrepare": "Erreur lors de la préparation du DOCX"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "accountWorkspace": "Compte & Workspace",
+    "account": "Compte",
+    "workspace": "Workspace",
+    "dangerZone": "Zone dangereuse",
+    "adminOnlyHint": "Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.",
+    "emailLabel": "Email",
+    "nameLabel": "Nom",
+    "effectiveRoleLabel": "Role effectif",
+    "statusLabel": "Statut",
+    "promptManagement": "Gestion des Prompts IA",
+    "aiConfig": "Configuration IA",
+    "aiLoading": "Chargement des paramètres…",
+    "aiDefaultModel": "Modèle OpenAI par défaut",
+    "aiDefaultModelHint": "Modèle utilisé par défaut pour toutes les opérations IA",
+    "aiConcurrency": "Jobs simultanés",
+    "aiConcurrencyHint": "Nombre de jobs IA traités en parallèle (1-50)",
+    "publishingConcurrency": "Jobs publishing simultanés",
+    "publishingConcurrencyHint": "Nombre de jobs publishing traités en parallèle (1-50)",
+    "aiInterval": "Intervalle de traitement (ms)",
+    "aiIntervalHint": "Délai entre les cycles de traitement de la queue (1000-60000ms)",
+    "queueManagement": "Gestion de la queue des jobs",
+    "queueTotal": "Total",
+    "queuePending": "En attente",
+    "queueRunning": "En cours",
+    "queueDone": "Terminés",
+    "queueFailed": "Échoués",
+    "systemInfo": "Informations système",
+    "systemInfoLabels": {
+      "version": "Version",
+      "database": "Base de données",
+      "api": "API",
+      "frontend": "Frontend"
+    },
+    "editPrompt": "Éditer le prompt",
+    "promptName": "Nom du prompt",
+    "promptDescription": "Description",
+    "detectedVariables": "Variables détectées",
+    "noVariablesDetected": "Aucune variable détectée",
+    "promptContent": "Contenu du prompt"
+    ,
+    "confirmDeactivate": "Désactiver votre compte ? Vous pourrez demander une réactivation.",
+    "confirmDeleteAccount": "SUPPRESSION DÉFINITIVE: supprimer votre compte et toutes vos données immédiatement ?",
+    "deactivateAccount": "Désactiver mon compte",
+    "deleteAccount": "Supprimer mon compte",
+    "accountStatus": {
+      "pendingAdminApproval": "Compte en attente de validation admin (48h). Après expiration: accès lecture seule.",
+      "approvalExpiredReadonly": "Validation expirée: accès lecture seule (guest). Un admin peut réactiver."
+    },
+    "toast": {
+      "deactivatedLogout": "Compte désactivé. Veuillez vous reconnecter.",
+      "deleted": "Compte supprimé."
+    },
+    "errors": {
+      "deactivate": "Erreur désactivation",
+      "delete": "Erreur suppression"
+    },
+    "prompts": {
+      "description": "Configurez les prompts utilisés par l'IA pour générer du contenu. Cliquez sur un prompt pour le modifier.",
+      "toast": {
+        "updated": "Prompt mis à jour avec succès !"
+      },
+      "errors": {
+        "save": "Erreur lors de la sauvegarde du prompt"
+      },
+      "closeEditor": "Fermer l'éditeur de prompt",
+      "editorPlaceholder": "Entrez le contenu du prompt..."
+    },
+    "ai": {
+      "description": "Configurez les paramètres de l'intelligence artificielle et de la queue de traitement.",
+      "save": "Sauvegarder les paramètres",
+      "saving": "Sauvegarde…",
+      "toast": {
+        "updated": "Paramètres IA mis à jour avec succès !"
+      },
+      "errors": {
+        "load": "Erreur lors du chargement des paramètres IA",
+        "save": "Erreur lors de la sauvegarde des paramètres IA"
+      }
+    },
+    "queue": {
+      "description": "Surveillez et gérez la queue de traitement des jobs.",
+      "refresh": "Actualiser",
+      "purging": "Purge…",
+      "purgePending": "Purger en attente ({count})",
+      "purgeProcessing": "Purger en cours ({count})",
+      "purgeAll": "Tout purger ({count})",
+      "confirmPurgePending": "Êtes-vous sûr de vouloir purger tous les jobs en attente ? Cette action est irréversible.",
+      "confirmPurgeProcessing": "Êtes-vous sûr de vouloir purger tous les jobs en cours (probablement bloqués) ? Cette action est irréversible.",
+      "confirmPurgeAll": "Êtes-vous sûr de vouloir purger TOUS les jobs de la queue ? Cette action est irréversible.",
+      "errors": {
+        "purge": "Erreur lors de la purge de la queue"
+      }
+    },
+    "admin": {
+      "resetDescription": "Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.",
+      "confirmResetAll": "Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.",
+      "reset": "Supprimer toutes les données",
+      "resetting": "Suppression en cours…",
+      "toast": {
+        "resetDone": "Toutes les données ont été supprimées avec succès !"
+      },
+      "errors": {
+        "reset": "Erreur lors de la suppression des données"
+      }
+    }
+  },
+  "usecase": {
+    "useCase": "Cas d'usage",
+    "unnamed": "Cas d'usage sans nom",
+    "status": {
+      "detailing": "Détail en cours de génération…",
+      "detailingShort": "Détail en cours…",
+      "generating": "Cas d'usage en cours de génération…",
+      "pending": "Génération en attente…"
+    },
+    "info": {
+      "title": "Informations",
+      "contact": "Contact:",
+      "technologies": "Technologies",
+      "dataSources": "Sources des données",
+      "dataObjects": "Données"
+    },
+    "fields": {
+      "description": "Description",
+      "problem": "Problème",
+      "solution": "Solution",
+      "benefits": "Bénéfices recherchés",
+      "constraints": "Contraintes",
+      "metrics": "Mesures du succès",
+      "risks": "Risques",
+      "nextSteps": "Prochaines étapes",
+      "deadline": "Délai"
+    },
+    "scores": {
+      "totalValue": "Valeur calculée",
+      "totalComplexity": "Complexité calculée"
+    },
+    "errors": {
+      "load": "Erreur lors du chargement du cas d'usage",
+      "readOnlyAction": "Action non autorisée (mode lecture seule).",
+      "delete": "Erreur lors de la suppression"
+    },
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce cas d'usage ?",
+    "export": {
+      "title": "Exporter le cas d'usage",
+      "include": {
+        "folder": "Inclure le dossier",
+        "folderMatrix": "Inclure la matrice du dossier",
+        "organization": "Inclure l'organisation"
+      }
+    },
+    "import": {
+      "title": "Importer un cas d'usage"
+    },
+    "toast": {
+      "deleted": "Cas d'usage supprimé avec succès !"
+    },
+    "scatterPlot": {
+      "title": "Matrice de priorisation",
+      "empty": "Aucun cas d'usage à afficher",
+      "loading": "Chargement de la matrice…",
+      "placingLabels": "Placement des labels en cours…",
+      "clickHint": "Cliquez sur un point pour voir le détail.",
+      "axis": {
+        "value": "Valeur (0-100 pts)",
+        "complexity": "Complexité (0-100 pts)"
+      },
+      "tooltip": {
+        "descriptionPrefix": "Description:",
+        "valueLine": "Valeur: {pts} pts ({stars})",
+        "complexityLine": "Complexité: {pts} pts ({crosses})"
+      }
+    }
+  },
+  "chat": {
+    "tabs": {
+      "comments": "Commentaires",
+      "chat": "Chat IA",
+      "jobs": "Jobs"
+    },
+    "sections": {
+      "usecase": {
+        "description": "Description",
+        "problem": "Problème",
+        "solution": "Solution",
+        "benefits": "Bénéfices recherchés",
+        "risks": "Risques",
+        "metrics": "Mesures du succès",
+        "nextSteps": "Prochaines étapes",
+        "technologies": "Technologies",
+        "dataSources": "Sources des données",
+        "dataObjects": "Données",
+        "references": "Références",
+        "contact": "Contact",
+        "deadline": "Délai"
+      },
+      "organization": {
+        "size": "Taille",
+        "technologies": "Technologies",
+        "products": "Produits et Services",
+        "processes": "Processus Métier",
+        "kpis": "Indicateurs de performance",
+        "challenges": "Défis Principaux",
+        "objectives": "Objectifs Stratégiques",
+        "references": "Références"
+      },
+      "folder": {
+        "description": "Contexte",
+        "name": "Nom du dossier"
+      },
+      "executiveSummary": {
+        "introduction": "Introduction",
+        "analysis": "Analyse",
+        "recommendations": "Recommandations",
+        "summary": "Synthèse"
+      }
+    },
+    "widget": {
+      "bubbleLabel": "Chat / Jobs",
+      "switchToWidget": "Basculer en widget",
+      "switchToPanel": "Basculer en panneau"
+    },
+    "queue": {
+      "badge": {
+        "active": "{count} job(s) en cours",
+        "failed": "{count} job(s) en échec"
+      },
+      "confirmPurgeMine": "Êtes-vous sûr de vouloir supprimer TOUS vos jobs ? Cette action est irréversible.",
+      "confirmPurgeAllGlobal": "Êtes-vous sûr de vouloir supprimer TOUS les jobs (global) ? Cette action est irréversible.",
+      "purgeMine": "Supprimer tous mes jobs",
+      "purgeAllGlobal": "Supprimer tous les jobs (global)",
+      "errors": {
+        "purgeMine": "Erreur lors de la suppression de vos jobs",
+        "purgeAllGlobal": "Erreur lors de la suppression de tous les jobs (global)"
+      }
+    },
+    "sessions": {
+      "choose": "Choisir une conversation",
+      "new": "Nouvelle session",
+      "delete": "Supprimer la conversation",
+      "none": "Aucune conversation",
+      "defaultTitle": "Conversation {id}",
+      "confirmDelete": "Supprimer cette conversation ?"
+    },
+    "composer": {
+      "ariaLabel": "Composer",
+      "placeholder": {
+        "chat": "Écrire un message…"
+      }
+    },
+    "documents": {
+      "addFile": "Ajouter un fichier",
+      "delete": {
+        "ariaLabel": "Supprimer le document"
+      },
+      "status": {
+        "uploaded": "En attente",
+        "processing": "Résumé en cours",
+        "ready": "Résumé prêt",
+        "failed": "Échec",
+        "unknown": "Inconnu"
+      }
+    },
+    "contexts": {
+      "title": "Contexte(s)",
+      "none": "Aucun contexte actif."
+    },
+    "context": {
+      "executiveSummaryPrefix": "Synthèse: {name}"
+    },
+    "tools": {
+      "title": "Outils",
+      "documents": {
+        "label": "Documents",
+        "description": "Lister / analyser les documents"
+      },
+      "commentAssistant": {
+        "label": "Commentaires (résolution)",
+        "description": "Analyser et proposer des résolutions"
+      },
+      "webSearch": {
+        "label": "Web search",
+        "description": "Rechercher des infos sur le web"
+      },
+      "webExtract": {
+        "label": "Web extract",
+        "description": "Extraire le contenu des URLs"
+      },
+      "organizationRead": { "label": "Organisation (lecture)" },
+      "organizationUpdate": { "label": "Organisation (édition)" },
+      "folderRead": { "label": "Dossier (lecture)" },
+      "folderUpdate": { "label": "Dossier (édition)" },
+      "usecaseRead": { "label": "Cas d'usage (lecture)" },
+      "usecaseUpdate": { "label": "Cas d'usage (édition)" },
+      "matrix": { "label": "Matrice (lecture/édition)" },
+      "executiveSummary": { "label": "Synthèse exécutive" }
+    },
+    "comments": {
+      "chooseThread": "Choisir une conversation",
+      "newThread": "Nouvelle conversation",
+      "none": "Aucune conversation",
+      "deleteThread": "Supprimer la conversation",
+      "confirmDeleteThread": "Supprimer cette conversation de commentaires ?",
+      "noContext": "Aucun contexte sélectionné. Ouvre un dossier, une organisation ou un cas d’usage.",
+      "placeholder": {
+        "disabledViewer": "Commentaires désactivés pour le rôle viewer.",
+        "resolved": "Commentaire résolu. Réouvrez pour répondre.",
+        "write": "Écrire un commentaire…"
+      },
+      "resolvedAt": "Résolu {at}",
+      "assignedToMe": "Vous est assigné",
+      "assignedTo": "Assigné à @{label}",
+      "selectThreadHint": "Sélectionne une conversation pour commencer ou écris un commentaire.",
+      "noMessagesThread": "Aucun message dans cette conversation.",
+      "updating": "Mise à jour…",
+      "assignedToLabel": "Assigné à @{label}",
+      "unassign": "Retirer l'assignation",
+      "mention": {
+        "loadError": "Erreur de chargement",
+        "none": "Aucun membre"
+      },
+      "resolve": "Résoudre",
+      "reopen": "Réouvrir"
+    },
+    "chat": {
+      "empty": "Aucun message. Écris un message pour démarrer."
+    },
+    "edit": {
+      "placeholder": "Modifier le message…"
+    },
+    "feedback": {
+      "useful": "Utile",
+      "notUseful": "Pas utile"
+    },
+    "errors": {
+      "copy": "Impossible de copier le message",
+      "editMessage": "Erreur lors de la modification du message",
+      "retry": "Erreur lors du retry",
+      "loadSessions": "Erreur lors du chargement des sessions",
+      "loadMessages": "Erreur lors du chargement des messages",
+      "deleteSession": "Erreur lors de la suppression de la session",
+      "send": "Erreur lors de l’envoi",
+      "stop": "Erreur lors de l’arrêt",
+      "feedback": "Erreur lors de la mise à jour du feedback"
+    }
+  },
+  "workspace": {
+    "hiddenAutosaveWarning": "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications."
+  },
   "documents": {
     "title": "Documents",
     "subtitle": "Ajoutez des documents au contexte. Un résumé est généré automatiquement.",
@@ -18,6 +873,7 @@
     "loading": "Chargement…",
     "empty": "Aucun document pour le moment.",
     "table": {
+      "summary": "Résumé",
       "name": "Nom",
       "size": "Taille",
       "status": "Statut",
@@ -47,6 +903,230 @@
       "cta": "Supprimer",
       "confirm": "Supprimer ce document ?",
       "success": "Document supprimé."
+    }
+  },
+  "queueMonitor": {
+    "empty": "Aucun job en cours",
+    "duration": "Durée: {duration}",
+    "errorPrefix": "Erreur: {error}",
+    "status": {
+      "pending": "pending",
+      "processing": "processing",
+      "completed": "completed",
+      "failed": "failed"
+    },
+    "type": {
+      "organizationEnrich": "Enrichissement organisation",
+      "matrixGenerate": "Génération matrice",
+      "usecaseList": "Génération cas d'usage",
+      "usecaseDetail": "Détail cas d'usage",
+      "executiveSummary": "Synthèse exécutive",
+      "documentSummary": "Résumé document",
+      "chatMessage": "Chat",
+      "docxGenerate": "Génération DOCX"
+    },
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce job ? Cette action est irréversible.",
+    "toast": {
+      "cancelled": "Job annulé avec succès",
+      "retried": "Job relancé avec succès",
+      "deleted": "Job supprimé avec succès"
+    },
+    "errors": {
+      "cancel": "Erreur lors de l'annulation du job",
+      "retry": "Erreur lors du relancement du job",
+      "delete": "Erreur lors de la suppression du job"
+    },
+    "actions": {
+      "viewDetails": "Voir le détail (historique)",
+      "hideDetails": "Masquer le détail",
+      "cancel": "Annuler le job",
+      "retry": "Relancer le job",
+      "delete": "Supprimer le job"
+    }
+  },
+  "stream": {
+    "inProgress": "En cours…",
+    "preparing": "Préparation…",
+    "detailLoading": "Chargement du détail…",
+    "reasoning": "Raisonnement",
+    "reasoningEffort": "Effort de raisonnement",
+    "reasoningEffortFailed": "Effort de raisonnement (échec)",
+    "response": "Réponse",
+    "done": "Terminé",
+    "error": "Erreur",
+    "unknownError": "Erreur inconnue",
+    "status": "Statut: {state}",
+    "tool": "Outil: {name}",
+    "toolArgs": "Outil: {name} (args)",
+    "toolArgsFallback": "Outil (args)",
+    "toolCalls": "{count} appel(s) outil(s)",
+    "stepRunning": "Étape en cours: {title}",
+    "actions": {
+      "expandDetails": "Déplier le détail",
+      "collapseDetails": "Replier le détail"
+    }
+  },
+  "adminUsers": {
+    "title": "Admin · Utilisateurs",
+    "embeddedTitle": {
+      "approvals": "Admin · Utilisateurs (approbations)"
+    },
+    "accessDenied": {
+      "title": "Admin",
+      "body": "Accès refusé (admin_app requis)."
+    },
+    "empty": "Aucun utilisateur.",
+    "roleOnApprove": "Rôle à l'approbation",
+    "table": {
+      "emailVerified": "Email vérifié"
+    },
+    "status": {
+      "pending_admin_approval": "En attente de validation admin",
+      "approval_expired_readonly": "Validation expirée (lecture seule)",
+      "active": "Actif",
+      "disabled_by_admin": "Désactivé par admin",
+      "disabled_by_user": "Désactivé par utilisateur"
+    },
+    "role": {
+      "editor": "editor",
+      "guest": "guest",
+      "admin_org": "admin_org",
+      "admin_app": "admin_app"
+    },
+    "actions": {
+      "approve": "Approuver",
+      "reactivate": "Réactiver",
+      "disable": "Désactiver"
+    },
+    "confirm": {
+      "disable": "Désactiver cet utilisateur ? (réversible via Reactivate)",
+      "deletePermanently": "SUPPRESSION DÉFINITIVE : supprimer {target} et toutes ses données ?"
+    },
+    "toasts": {
+      "approved": "Utilisateur approuvé.",
+      "disabled": "Utilisateur désactivé.",
+      "reactivated": "Utilisateur réactivé.",
+      "deleted": "Utilisateur supprimé définitivement."
+    },
+    "errors": {
+      "load": "Erreur de chargement admin.",
+      "approve": "Erreur approval.",
+      "disable": "Erreur disable.",
+      "reactivate": "Erreur reactivate.",
+      "mustDisableBeforeDelete": "Veuillez d'abord désactiver l'utilisateur avant suppression.",
+      "delete": "Erreur suppression utilisateur."
+    }
+  },
+  "workspaceSettings": {
+    "actionsMenu": "Actions workspace",
+    "banners": {
+      "hiddenWorkspace": "Espace de travail caché sélectionné : accès restreint aux Paramètres. Rendre l'espace visible pour accéder aux autres vues.",
+      "noWorkspaces": "Vous n'êtes membre d'aucun workspace. Demander une invitation ou créer un nouveau workspace.",
+      "allHidden": "Tous vos workspaces sont cachés. Restaurer un workspace (si rôle admin) ou créer un nouveau workspace."
+    },
+    "table": {
+      "selectWorkspace": "Cliquer pour sélectionner ce workspace"
+    },
+    "actions": {
+      "unhide": "Rendre visible (unhide)",
+      "hide": "Rendre invisible (hide)",
+      "deletePermanently": "Supprimer définitivement",
+      "deletePermanentlyDisabled": "Supprimer définitivement (cacher d'abord)"
+    },
+    "members": {
+      "title": "Membres",
+      "remove": "Retirer ce membre"
+    },
+    "export": {
+      "title": "Exporter un workspace",
+      "include": {
+        "organizations": "Inclure les organisations",
+        "folders": "Inclure les dossiers",
+        "usecases": "Inclure les cas d'usage",
+        "matrix": "Inclure les matrices"
+      }
+    },
+    "import": {
+      "title": "Importer un workspace"
+    },
+    "createDialog": {
+      "title": "Nouveau workspace",
+      "nameLabel": "Nom du workspace",
+      "namePlaceholder": "Nom du workspace"
+    },
+    "confirm": {
+      "deletePermanently": "Supprimer définitivement ce workspace (uniquement possible si caché) ?",
+      "removeMember": "Retirer ce membre du workspace ?"
+    },
+    "toasts": {
+      "created": "Workspace créé.",
+      "hidden": "Workspace caché.",
+      "unhidden": "Workspace restauré.",
+      "deleted": "Workspace supprimé.",
+      "memberAdded": "Membre ajouté.",
+      "roleUpdated": "Rôle mis à jour.",
+      "memberRemoved": "Membre retiré.",
+      "nameUpdated": "Nom du workspace mis à jour."
+    },
+    "errors": {
+      "create": "Erreur création workspace.",
+      "hide": "Erreur hide workspace.",
+      "unhide": "Erreur unhide workspace.",
+      "delete": "Erreur suppression workspace.",
+      "loadMembers": "Erreur chargement membres.",
+      "addMember": "Erreur ajout membre.",
+      "updateRole": "Erreur update rôle.",
+      "removeMember": "Erreur suppression membre."
+    }
+  },
+  "importExport": {
+    "title": {
+      "export": "Exporter",
+      "import": "Importer"
+    },
+    "action": {
+      "export": "Exporter",
+      "import": "Importer"
+    },
+    "objectFallback": "Objet",
+    "includeComments": "Inclure les commentaires",
+    "includeDocuments": "Inclure les documents",
+    "zipFileLabel": "Fichier .zip",
+    "analyzing": "Analyse en cours…",
+    "typesToImport": "Types à importer",
+    "type": {
+      "organizations": "Organisations",
+      "folders": "Dossiers",
+      "usecases": "Cas d'usage",
+      "matrix": "Matrices"
+    },
+    "targetWorkspace": "Workspace cible",
+    "createWorkspace": "Créer un nouveau workspace",
+    "targetLabelFallback": "Cible",
+    "importHint": "Pour un import d’objet (dossier, cas d’usage, organisation), un workspace cible est requis.",
+    "scope": {
+      "workspace": "Workspace",
+      "folder": "Dossier",
+      "usecase": "Cas d'usage",
+      "organization": "Organisation",
+      "matrix": "Matrice"
+    },
+    "folderOption": {
+      "fromImport": "{name} (import)",
+      "createNew": "Créer un nouveau dossier"
+    },
+    "errors": {
+      "scopeIdRequired": "Le scope id est requis pour cet export.",
+      "export": "Erreur export",
+      "preview": "Erreur prévisualisation",
+      "import": "Erreur import",
+      "loadFolders": "Erreur chargement dossiers",
+      "selectZip": "Choisir un fichier .zip",
+      "selectAtLeastOneType": "Sélectionner au moins un type à importer."
+    },
+    "toast": {
+      "exportStarted": "Export lancé.",
+      "importDone": "Import terminé ({scope} → {workspace})."
     }
   }
 }

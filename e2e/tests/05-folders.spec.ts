@@ -43,8 +43,8 @@ test.describe('Gestion des dossiers', () => {
   test('devrait afficher la page des dossiers', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
-      await expect(page).toHaveURL('/dossiers');
+      await page.goto('/folders');
+      await expect(page).toHaveURL('/folders');
       await expect(page.locator('h1')).toContainText('Dossiers');
     } finally {
       await context.close();
@@ -54,7 +54,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait permettre de créer un nouveau dossier', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       // Chercher le bouton de création
       const createButton = page.locator('button:has-text("Nouveau dossier")');
       if (await createButton.isVisible()) {
@@ -73,7 +73,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait afficher la liste des dossiers', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       // Vérifier le titre h1 comme assertion minimale
       await expect(page.locator('h1')).toContainText('Dossiers');
@@ -85,7 +85,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait permettre de cliquer sur un dossier et afficher les cas d\'usage', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       
       // Chercher un dossier cliquable (pas en génération ou avec cas d'usage)
@@ -99,8 +99,8 @@ test.describe('Gestion des dossiers', () => {
         await firstFolder.waitFor({ state: 'visible' });
         await firstFolder.click();
         
-        // Attendre la redirection vers /cas-usage avec timeout
-        await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
+        // Attendre la redirection vers /usecase avec timeout
+        await page.waitForURL(/\/usecase/, { timeout: 2000 });
         
         // Vérifier le titre "Cas d'usage"
         await expect(page.locator('h1')).toContainText('Cas d\'usage');
@@ -117,7 +117,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait afficher les informations des dossiers', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       
       // Vérifier qu'il y a des informations sur les dossiers
@@ -134,7 +134,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait permettre de supprimer un dossier', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       
       // Chercher un bouton de suppression
@@ -159,7 +159,7 @@ test.describe('Gestion des dossiers', () => {
   test('devrait exporter tous les dossiers avec le toggle organisations', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 
       const actionsButton = page.locator('button[aria-label="Actions dossier"]');
@@ -191,14 +191,14 @@ test.describe('Gestion des dossiers', () => {
   test('devrait exporter le dossier depuis le menu detail', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
     try {
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 
       const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
       if (await folderItems.count() === 0) return;
       await folderItems.first().click();
 
-      await page.waitForURL(/\/dossiers\//, { timeout: 5000 });
+      await page.waitForURL(/\/folders\//, { timeout: 5000 });
       await page.waitForLoadState('domcontentloaded');
 
       const actionsButton = page.locator('button[aria-label="Actions"]');
@@ -222,7 +222,7 @@ test.describe('Gestion des dossiers', () => {
     test('liste: pas de création ni suppression + lock visible', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_B_STATE, workspaceAId);
       try {
-        await page.goto('/dossiers');
+        await page.goto('/folders');
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('button:has-text("Nouveau dossier")')).toHaveCount(0);
@@ -238,13 +238,13 @@ test.describe('Gestion des dossiers', () => {
     test('détail: champs non éditables', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_B_STATE, workspaceAId);
       try {
-        await page.goto('/dossiers');
+        await page.goto('/folders');
         await page.waitForLoadState('domcontentloaded');
 
         const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
         if (await folderItems.count() === 0) return;
         await folderItems.first().click();
-        await page.waitForURL(/\/cas-usage/, { timeout: 2000 });
+        await page.waitForURL(/\/usecase/, { timeout: 2000 });
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });

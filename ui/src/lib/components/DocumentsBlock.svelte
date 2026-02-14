@@ -227,8 +227,8 @@
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-slate-500">
-              <th class="py-2 pr-2 w-10"><span class="sr-only">Résumé</span></th>
-              <th class="py-2 pr-2 w-10"><span class="sr-only">Télécharger</span></th>
+              <th class="py-2 pr-2 w-10"><span class="sr-only">{$_('documents.table.summary')}</span></th>
+              <th class="py-2 pr-2 w-10"><span class="sr-only">{$_('documents.action.download')}</span></th>
               <th class="py-2 pr-4">{$_('documents.table.name')}</th>
               <th class="py-2 pr-4 text-center">{$_('documents.table.size')}</th>
               <th class="py-2 pr-4 w-36 whitespace-nowrap text-center">{$_('documents.table.status')}</th>
@@ -317,5 +317,4 @@
     {/if}
   </div>
 </div>
-
 

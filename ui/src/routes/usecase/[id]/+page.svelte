@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
+  import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
   import { deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
+  import { generateDocxAndDownload } from '$lib/utils/docx';
   import { goto } from '$app/navigation';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
@@ -224,7 +227,7 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('locks.lockError');
     } finally {
       lockLoading = false;
     }
@@ -267,9 +270,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     try {
       const res = await requestUnlock('usecase', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
     }
   };
 
@@ -277,9 +280,9 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     if (!lockTargetId) return;
     try {
       await forceUnlock('usecase', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
     }
   };
 
@@ -377,8 +380,8 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
       useCase = useCases.find(uc => uc.id === useCaseId);
       
       if (!useCase) {
-        addToast({ type: 'error', message: 'Erreur lors du chargement du cas d\'usage' });
-        error = 'Erreur lors du chargement du cas d\'usage';
+        addToast({ type: 'error', message: get(_)('usecase.errors.load') });
+        error = get(_)('usecase.errors.load');
         return;
       }
       
@@ -392,28 +395,52 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
   const handleDelete = async () => {
     if (!useCase) return;
     if (isReadOnly) {
-      addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+      addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       return;
     }
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
+    if (!confirm(get(_)('usecase.confirmDelete'))) return;
 
     try {
       await deleteUseCase(useCase.id);
       useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
-      addToast({ type: 'success', message: 'Cas d\'usage supprimé avec succès !' });
+      addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
       if (useCase.folderId) {
-        goto(`/dossiers/${useCase.folderId}`);
+        goto(`/folders/${useCase.folderId}`);
       } else {
-        goto('/dossiers');
+        goto('/folders');
       }
     } catch (err) {
       console.error('Failed to delete use case:', err);
       const anyErr = err as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       } else {
-      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: err instanceof Error ? err.message : get(_)('usecase.errors.delete') });
       }
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (!useCase) return;
+    const name = (useCase?.data?.name || useCase?.name || 'usecase').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const fallback = `usecase-${name || useCase.id}.docx`;
+    try {
+      await generateDocxAndDownload(
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: useCase.id,
+          provided: {},
+          controls: {},
+        },
+        fallback
+      );
+    } catch (error) {
+      console.error('Failed to download use case DOCX:', error);
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('usecase.errors.load'),
+      });
     }
   };
 
@@ -570,21 +597,23 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
               showNew={false}
               showImport={false}
               showExport={true}
+              showDownloadDocx={true}
               showPrint={true}
               showDelete={!isReadOnly}
               disabledImport={isReadOnly}
               disabledExport={isReadOnly}
               onExport={() => openUseCaseExport(useCaseId)}
+              onDownloadDocx={handleDownloadDocx}
               onPrint={() => window.print()}
               onDelete={handleDelete}
-              triggerTitle="Actions"
-              triggerAriaLabel="Actions"
+              triggerTitle={$_('common.actions')}
+              triggerAriaLabel={$_('common.actions')}
             />
             {#if isReadOnly && showReadOnlyLock && !showPresenceBadge}
               <button
                 class="p-2 text-slate-400 cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
-                title="Mode lecture seule : création / suppression désactivées."
-                aria-label="Mode lecture seule : création / suppression désactivées."
+                title={$_('common.readOnlyDisabled')}
+                aria-label={$_('common.readOnlyDisabled')}
                 type="button"
                 disabled
               >
@@ -614,7 +643,7 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
   <ImportExportDialog
     bind:open={$useCaseExportState.open}
     mode="export"
-    title="Exporter le cas d'usage"
+    title={$_('usecase.export.title')}
     scope="usecase"
     scopeId={$useCaseExportState.useCaseId ?? useCase.id}
     allowScopeSelect={false}
@@ -624,10 +653,10 @@ import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportStat
     commentsAvailable={commentsTotal > 0}
     documentsAvailable={hasDocuments}
     includeOptions={[
-      { id: 'folders', label: 'Inclure le dossier', defaultChecked: true },
-      { id: 'matrix', label: 'Inclure la matrice du dossier', defaultChecked: true },
+      { id: 'folders', label: $_('usecase.export.include.folder'), defaultChecked: true },
+      { id: 'matrix', label: $_('usecase.export.include.folderMatrix'), defaultChecked: true },
       ...(organizationId
-        ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+        ? [{ id: 'organization', label: $_('usecase.export.include.organization'), defaultChecked: true }]
         : []),
     ]}
     includeDependencies={{ matrix: ['folders'] }}

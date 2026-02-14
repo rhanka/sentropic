@@ -1,5 +1,6 @@
 <script>
   import { onMount, afterUpdate, createEventDispatcher, tick } from "svelte";
+  import { _ } from "svelte-i18n";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
@@ -615,10 +616,10 @@
         {/if}
       {/if}
       {#if hasUnsavedChanges}
-        <span class="unsaved-indicator" title="Modifications non sauvegardées">●</span>
+        <span class="unsaved-indicator" title={$_('common.unsavedChanges')}>●</span>
       {/if}
       {#if isSaving}
-        <span class="saving-indicator" title="Sauvegarde en cours...">⟳</span>
+        <span class="saving-indicator" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
   {:else}
@@ -629,7 +630,7 @@
         </div>
       </div>
       {#if isSaving}
-        <span class="saving-indicator-markdown" title="Sauvegarde en cours...">⟳</span>
+        <span class="saving-indicator-markdown" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
   {/if}

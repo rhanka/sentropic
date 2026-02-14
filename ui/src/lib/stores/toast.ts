@@ -5,6 +5,9 @@ export type Toast = {
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   duration?: number;
+  actionLabel?: string;
+  actionIcon?: 'download';
+  onAction?: (() => void | Promise<void>) | null;
 };
 
 export const toasts = writable<Toast[]>([]);
@@ -38,5 +41,4 @@ export const removeToast = (id: string) => {
 export const clearToasts = () => {
   toasts.set([]);
 };
-
 

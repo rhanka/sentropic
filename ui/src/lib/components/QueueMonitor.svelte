@@ -6,6 +6,7 @@
   import { isAuthenticated } from '$lib/stores/session';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Clock, Loader2, CheckCircle2, XCircle, HelpCircle, Menu, X, RotateCcw, Trash2 } from '@lucide/svelte';
+  import { _ } from 'svelte-i18n';
 
   // Détails par job (éviter N relectures d’historique au montage)
   let expandedJobId: string | null = null;
@@ -44,13 +45,25 @@
 
   const getTypeLabel = (type: JobType): string => {
     switch (type) {
-      case 'organization_enrich': return 'Enrichissement organisation';
-      case 'usecase_list': return 'Génération cas d\'usage';
-      case 'usecase_detail': return 'Détail cas d\'usage';
-      case 'executive_summary': return 'Synthèse exécutive';
-      case 'document_summary': return 'Résumé document';
-      case 'chat_message': return 'Chat';
+      case 'organization_enrich': return $_('queueMonitor.type.organizationEnrich');
+      case 'matrix_generate': return $_('queueMonitor.type.matrixGenerate');
+      case 'usecase_list': return $_('queueMonitor.type.usecaseList');
+      case 'usecase_detail': return $_('queueMonitor.type.usecaseDetail');
+      case 'executive_summary': return $_('queueMonitor.type.executiveSummary');
+      case 'document_summary': return $_('queueMonitor.type.documentSummary');
+      case 'chat_message': return $_('queueMonitor.type.chatMessage');
+      case 'docx_generate': return $_('queueMonitor.type.docxGenerate');
       default: return type;
+    }
+  };
+
+  const getStatusLabel = (status: JobStatus): string => {
+    switch (status) {
+      case 'pending': return $_('queueMonitor.status.pending');
+      case 'processing': return $_('queueMonitor.status.processing');
+      case 'completed': return $_('queueMonitor.status.completed');
+      case 'failed': return $_('queueMonitor.status.failed');
+      default: return status;
     }
   };
 
@@ -63,6 +76,11 @@
     if (job?.type === 'usecase_list' && (job?.data?.folderId || job?.data?.folder_id)) {
       const folderId = job.data.folderId ?? job.data.folder_id;
       return `folder_${folderId}`;
+    }
+    // Pour matrix_generate: streamId déterministe basé sur le dossier (matrix_<folderId>)
+    if (job?.type === 'matrix_generate' && (job?.data?.folderId || job?.data?.folder_id)) {
+      const folderId = job.data.folderId ?? job.data.folder_id;
+      return `matrix_${folderId}`;
     }
     // Pour usecase_detail: streamId déterministe basé sur le cas (usecase_<useCaseId>)
     if (job?.type === 'usecase_detail' && (job?.data?.useCaseId || job?.data?.use_case_id)) {
@@ -92,14 +110,14 @@
       await cancelJob(jobId);
       addToast({
         type: 'success',
-        message: 'Job annulé avec succès'
+        message: $_('queueMonitor.toast.cancelled')
       });
       await loadJobs();
     } catch (error) {
       console.error('Failed to cancel job:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de l\'annulation du job'
+        message: $_('queueMonitor.errors.cancel')
       });
     }
   };
@@ -109,20 +127,20 @@
       await retryJob(jobId);
       addToast({
         type: 'success',
-        message: 'Job relancé avec succès'
+        message: $_('queueMonitor.toast.retried')
       });
       await loadJobs();
     } catch (error) {
       console.error('Failed to retry job:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du relancement du job'
+        message: $_('queueMonitor.errors.retry')
       });
     }
   };
 
   const handleDeleteJob = async (jobId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce job ? Cette action est irréversible.')) {
+    if (!confirm($_('queueMonitor.confirmDelete'))) {
       return;
     }
     
@@ -130,14 +148,14 @@
       await deleteJob(jobId);
       addToast({
         type: 'success',
-        message: 'Job supprimé avec succès'
+        message: $_('queueMonitor.toast.deleted')
       });
       await loadJobs();
     } catch (error) {
       console.error('Failed to delete job:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la suppression du job'
+        message: $_('queueMonitor.errors.delete')
       });
     }
   };
@@ -148,7 +166,7 @@
         {#if $queueStore.jobs.length === 0}
           <div class="p-4 text-center text-gray-500">
             <Menu class="w-12 h-12 mx-auto mb-2 text-gray-300" />
-            <p>Aucun job en cours</p>
+            <p>{$_('queueMonitor.empty')}</p>
           </div>
         {:else}
           {#each $queueStore.jobs as job (`${job.id}-${job.status}-${job.completedAt || ''}`)}
@@ -160,7 +178,7 @@
                     <StatusIcon class="w-5 h-5 {job.status === 'processing' ? 'animate-spin' : ''}" />
                     <span class="font-medium text-sm">{getTypeLabel(job.type)}</span>
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {getStatusColor(job.status)}">
-                      {job.status}
+                      {getStatusLabel(job.status)}
                     </span>
                   </div>
 
@@ -171,7 +189,7 @@
                         style="width: {getJobProgress(job)}%"
                       ></div>
                     </div>
-                    <p class="text-xs text-gray-500">Durée: {getJobDuration(job)}</p>
+                    <p class="text-xs text-gray-500">{$_('queueMonitor.duration', { values: { duration: getJobDuration(job) } })}</p>
                   {/if}
 
             {#if job.status === 'pending' || job.status === 'processing' || expandedJobId === job.id}
@@ -187,7 +205,7 @@
 
                   {#if job.error}
                     <p class="text-xs text-red-600 mt-1 bg-red-50 p-2 rounded">
-                      Erreur: {job.error}
+                      {$_('queueMonitor.errorPrefix', { values: { error: job.error } })}
                     </p>
                   {/if}
                 </div>
@@ -197,7 +215,7 @@
                     <button
                       class="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded"
                       on:click={() => (expandedJobId = job.id)}
-                      title="Voir le détail (historique)"
+                      title={$_('queueMonitor.actions.viewDetails')}
                     >
                       <Menu class="w-4 h-4" />
                     </button>
@@ -205,7 +223,7 @@
                     <button
                       class="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded"
                       on:click={() => (expandedJobId = null)}
-                      title="Masquer le détail"
+                      title={$_('queueMonitor.actions.hideDetails')}
                     >
                       <X class="w-4 h-4" />
                     </button>
@@ -214,7 +232,7 @@
                     <button
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleCancelJob(job.id)}
-                      title="Annuler le job"
+                      title={$_('queueMonitor.actions.cancel')}
                     >
                       <X class="w-4 h-4" />
                     </button>
@@ -224,14 +242,14 @@
                     <button
                       class="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded"
                       on:click={() => handleRetryJob(job.id)}
-                      title="Relancer le job"
+                      title={$_('queueMonitor.actions.retry')}
                     >
                       <RotateCcw class="w-4 h-4" />
                     </button>
                     <button
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleDeleteJob(job.id)}
-                      title="Supprimer le job"
+                      title={$_('queueMonitor.actions.delete')}
                     >
                       <Trash2 class="w-4 h-4" />
                     </button>

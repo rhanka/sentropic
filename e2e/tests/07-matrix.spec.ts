@@ -84,12 +84,12 @@ test.describe('Configuration de la matrice', () => {
   };
 
   test.beforeEach(async ({ page }, testInfo) => {
-    await page.goto('/matrice');
+    await page.goto('/matrix');
     await page.waitForLoadState('domcontentloaded');
   });
 
   test('devrait afficher la page de configuration de la matrice', async ({ page }) => {
-    await expect(page).toHaveURL('/matrice');
+    await expect(page).toHaveURL('/matrix');
     await expect(page.locator('h1')).toContainText('Configuration de l\'évaluation Valeur/Complexité');
   });
 
@@ -156,7 +156,7 @@ test.describe('Configuration de la matrice', () => {
         },
         { wsId: workspaceAId }
       );
-      await page.goto('/dossiers');
+      await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await page
         .waitForResponse((res) => res.url().includes('/api/v1/folders') && res.request().method() === 'GET', {
@@ -170,24 +170,26 @@ test.describe('Configuration de la matrice', () => {
       await expect(folderRow).toBeVisible({ timeout: 10_000 });
       await folderRow.scrollIntoViewIfNeeded();
       await folderRow.click({ force: true });
-      await page.waitForURL(new RegExp(`/dossiers/${folderId}`), { timeout: 10_000 });
-      await page.locator('a[href="/matrice"]').click();
+      await page.waitForURL(new RegExp(`/folders/${folderId}`), { timeout: 10_000 });
+      await page.locator('a[href="/matrix"]').click();
       await page.waitForLoadState('domcontentloaded');
 
-      const actionsButton = page.locator('button[aria-label="Actions matrice"]');
+      const actionsButton = page
+        .locator('button[aria-label="Actions"], button[aria-label="Actions matrice"], button[aria-label="Matrix actions"]')
+        .first();
       await expect(actionsButton).toBeVisible();
       await actionsButton.click();
 
-      const exportAction = page.locator('button:has-text("Exporter")');
+      const exportAction = page.locator('button').filter({ hasText: /Exporter|Export/i }).first();
       await expect(exportAction).toBeVisible();
       await exportAction.click();
 
-      const exportDialog = page.locator('h3:has-text("Exporter la matrice")');
+      const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
       await expect(exportDialog).toBeVisible({ timeout: 10_000 });
 
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 20_000 }),
-        page.locator('button:has-text("Exporter")').click(),
+        page.locator('button').filter({ hasText: /Exporter|Export/i }).last().click(),
       ]);
       expect(download.suggestedFilename()).toMatch(/\.zip$/);
     });
@@ -422,13 +424,13 @@ test.describe('Configuration de la matrice', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await ensureCurrentFolderId(pageA);
 
-      await pageA.click('a[href="/matrice"]');
-      await expect(pageA).toHaveURL(/\/matrice/);
+      await pageA.click('a[href="/matrix"]');
+      await expect(pageA).toHaveURL(/\/matrix/);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageA);
@@ -447,7 +449,7 @@ test.describe('Configuration de la matrice', () => {
 
       await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await expect
@@ -457,13 +459,13 @@ test.describe('Configuration de la matrice', () => {
         .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
         .toBe(folderId);
 
-      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await ensureCurrentFolderId(pageB);
 
-      await pageB.click('a[href="/matrice"]');
-      await expect(pageB).toHaveURL(/\/matrice/);
+      await pageB.click('a[href="/matrix"]');
+      await expect(pageB).toHaveURL(/\/matrix/);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageB);
@@ -510,13 +512,13 @@ test.describe('Configuration de la matrice', () => {
       });
       const pageA = await userAContext.newPage();
 
-      await pageA.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await ensureCurrentFolderId(pageA);
 
-      await pageA.click('a[href="/matrice"]');
-      await expect(pageA).toHaveURL(/\/matrice/);
+      await pageA.click('a[href="/matrix"]');
+      await expect(pageA).toHaveURL(/\/matrix/);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageA);
@@ -524,7 +526,7 @@ test.describe('Configuration de la matrice', () => {
       await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       // Navigate to another page to trigger SSE cleanup
-      await pageA.goto('/dossiers');
+      await pageA.goto('/folders');
       await pageA.waitForLoadState('domcontentloaded');
       // Wait a bit for SSE cleanup to complete
       await pageA.waitForTimeout(1000);
@@ -536,13 +538,13 @@ test.describe('Configuration de la matrice', () => {
         storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
       });
       const pageB = await userBContext.newPage();
-      await pageB.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
       await ensureCurrentFolderId(pageB);
 
-      await pageB.click('a[href="/matrice"]');
-      await expect(pageB).toHaveURL(/\/matrice/);
+      await pageB.click('a[href="/matrix"]');
+      await expect(pageB).toHaveURL(/\/matrix/);
       await pageB.waitForLoadState('domcontentloaded');
       await ensureCurrentFolderId(pageB);
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});

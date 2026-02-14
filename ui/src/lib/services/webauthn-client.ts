@@ -5,6 +5,8 @@ import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
 } from '@simplewebauthn/browser';
+import { get } from 'svelte/store';
+import { _ } from 'svelte-i18n';
 
 /**
  * WebAuthn Client Service
@@ -118,14 +120,16 @@ export function getWebAuthnErrorMessage(error: any): string {
   
   const message = error?.message || 'Unknown error';
   
-  // Map technical errors to user-friendly messages
-  const errorMap: Record<string, string> = {
-    'Registration cancelled by user': 'Vous avez annulé l\'inscription',
-    'Authentication cancelled by user': 'Vous avez annulé l\'authentification',
-    'This authenticator is already registered': 'Cet appareil est déjà enregistré',
-    'No matching authenticator found': 'Aucun appareil reconnu',
-    'WebAuthn is not supported in this browser': 'Votre navigateur ne supporte pas WebAuthn',
+  const t = get(_);
+  const errorKeyMap: Record<string, string> = {
+    'Registration cancelled by user': 'auth.webauthn.errors.registrationCancelled',
+    'Authentication cancelled by user': 'auth.webauthn.errors.authenticationCancelled',
+    'This authenticator is already registered': 'auth.webauthn.errors.alreadyRegistered',
+    'No matching authenticator found': 'auth.webauthn.errors.noMatchingAuthenticator',
+    'This authenticator is not supported': 'auth.webauthn.errors.notSupportedAuthenticator',
+    'WebAuthn is not supported in this browser': 'auth.webauthn.errors.notSupportedBrowser',
   };
   
-  return errorMap[message] || message;
+  const key = errorKeyMap[message];
+  return key ? t(key) : message;
 }

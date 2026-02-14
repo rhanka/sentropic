@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { API_BASE_URL } from '$lib/config';
   import { addToast } from '$lib/stores/toast';
   import {
@@ -78,11 +79,11 @@
   let workspaceTouched = false;
 
   const scopeOptions: Array<{ value: ExportScope; label: string }> = [
-    { value: 'workspace', label: 'Workspace' },
-    { value: 'folder', label: 'Dossier' },
-    { value: 'usecase', label: "Cas d'usage" },
-    { value: 'organization', label: 'Organisation' },
-    { value: 'matrix', label: 'Matrice' },
+    { value: 'workspace', label: $_('importExport.scope.workspace') },
+    { value: 'folder', label: $_('importExport.scope.folder') },
+    { value: 'usecase', label: $_('importExport.scope.usecase') },
+    { value: 'organization', label: $_('importExport.scope.organization') },
+    { value: 'matrix', label: $_('importExport.scope.matrix') },
   ];
 
   $: showCommentsToggle =
@@ -164,7 +165,7 @@
     const payloadScope = allowScopeSelect ? selectedScope : scope;
     const payloadScopeId = allowScopeIdEdit ? selectedScopeId.trim() : (scopeId ?? '');
     if (payloadScope !== 'workspace' && !payloadScopeId) {
-      addToast({ type: 'error', message: 'Le scope id est requis pour cet export.' });
+      addToast({ type: 'error', message: $_('importExport.errors.scopeIdRequired') });
       return;
     }
     isBusy = true;
@@ -195,7 +196,7 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as any)?.message ?? 'Erreur export');
+        throw new Error((data as any)?.message ?? $_('importExport.errors.export'));
       }
       const blob = await res.blob();
       const name = parseDownloadName(res);
@@ -207,10 +208,10 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      addToast({ type: 'success', message: 'Export lancé.' });
+      addToast({ type: 'success', message: $_('importExport.toast.exportStarted') });
       close();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur export' });
+      addToast({ type: 'error', message: e?.message ?? $_('importExport.errors.export') });
     } finally {
       isBusy = false;
     }
@@ -237,7 +238,7 @@
     if (importTargetType !== 'folder') return null;
     if (imported.length === 0) return null;
     const first = imported[0];
-    return { id: `import:${first.id}`, label: `${first.name} (importer)` };
+    return { id: `import:${first.id}`, label: $_('importExport.folderOption.fromImport', { values: { name: first.name } }) };
   };
 
   const isNewWorkspace = () => targetWorkspaceId === '__new__' || targetWorkspaceId === '';
@@ -258,14 +259,14 @@
     const options: Array<{ id: string; label: string }> = [];
     const importOption = getImportFolderOption();
     if (importOption) options.push(importOption);
-    options.push({ id: 'new', label: 'Créer un nouveau dossier' });
+    options.push({ id: 'new', label: $_('importExport.folderOption.createNew') });
     options.push(...normalizedBase);
     return options;
   };
 
   const loadImportPreview = async () => {
     if (!selectedFile) {
-      addToast({ type: 'error', message: 'Choisir un fichier .zip' });
+      addToast({ type: 'error', message: $_('importExport.errors.selectZip') });
       return;
     }
     importPreviewLoading = true;
@@ -281,7 +282,7 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as any)?.message ?? 'Erreur prévisualisation');
+        throw new Error((data as any)?.message ?? $_('importExport.errors.preview'));
       }
       const data = await res.json();
       importPreview = data;
@@ -295,7 +296,7 @@
         }
       }
     } catch (e: any) {
-      importPreviewError = e?.message ?? 'Erreur prévisualisation';
+      importPreviewError = e?.message ?? $_('importExport.errors.preview');
     } finally {
       importPreviewLoading = false;
     }
@@ -303,13 +304,13 @@
 
   const handleImport = async () => {
     if (!selectedFile) {
-      addToast({ type: 'error', message: 'Choisir un fichier .zip' });
+      addToast({ type: 'error', message: $_('importExport.errors.selectZip') });
       return;
     }
     if (importPreview) {
       const selectedTypes = buildSelectedTypes();
       if (selectedTypes.length === 0) {
-        addToast({ type: 'error', message: 'Sélectionner au moins un type à importer.' });
+        addToast({ type: 'error', message: $_('importExport.errors.selectAtLeastOneType') });
         return;
       }
     }
@@ -343,12 +344,14 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as any)?.message ?? 'Erreur import');
+        throw new Error((data as any)?.message ?? $_('importExport.errors.import'));
       }
       const data = await res.json();
       addToast({
         type: 'success',
-        message: `Import terminé (${data?.scope ?? 'scope'} → ${data?.workspace_id ?? 'workspace'}).`,
+        message: $_('importExport.toast.importDone', {
+          values: { scope: data?.scope ?? 'scope', workspace: data?.workspace_id ?? 'workspace' },
+        }),
       });
       const importedWorkspaceId = typeof data?.workspace_id === 'string' ? data.workspace_id : null;
       const importedFolderId = typeof data?.target_folder_id === 'string' ? data.target_folder_id : null;
@@ -363,7 +366,7 @@
       dispatch('imported', { scope: data?.scope, workspaceId: data?.workspace_id, folderId: importedFolderId ?? undefined });
       close();
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur import' });
+      addToast({ type: 'error', message: e?.message ?? $_('importExport.errors.import') });
     } finally {
       isBusy = false;
     }
@@ -392,12 +395,12 @@
         const url = new URL(`${API_BASE_URL}/folders`);
         url.searchParams.set('workspace_id', targetWorkspaceId);
         const res = await fetch(url.toString(), { credentials: 'include' });
-        if (!res.ok) throw new Error('Erreur chargement dossiers');
+        if (!res.ok) throw new Error($_('importExport.errors.loadFolders'));
         const data = await res.json();
         const items = Array.isArray(data?.items) ? data.items : [];
         importTargetOptionsState = buildImportTargetOptions(items.map((folder: any) => ({
           id: folder.id,
-          label: folder.name || 'Dossier',
+          label: folder.name || $_('importExport.scope.folder'),
         })));
         if (targetWorkspaceId !== lastTargetWorkspaceIdForDefault) {
           lastTargetWorkspaceIdForDefault = targetWorkspaceId;
@@ -406,7 +409,7 @@
           importTargetId = importTargetOptionsState[0]?.id ?? '';
         }
       } catch (e: any) {
-        importPreviewError = e?.message ?? 'Erreur chargement dossiers';
+        importPreviewError = e?.message ?? $_('importExport.errors.loadFolders');
       } finally {
         // no-op
       }
@@ -434,12 +437,12 @@
             <Upload class="w-4 h-4 text-slate-500" />
           {/if}
           <h3 class="text-lg font-semibold">
-            {title ?? (mode === 'export' ? 'Exporter' : 'Importer')}
+            {title ?? (mode === 'export' ? $_('importExport.title.export') : $_('importExport.title.import'))}
           </h3>
         </div>
         <button
           class="text-slate-400 hover:text-slate-600"
-          aria-label="Fermer"
+          aria-label={$_('common.close')}
           type="button"
           on:click={close}
         >
@@ -449,15 +452,15 @@
 
       <div class="px-5 py-4 space-y-4">
         {#if mode === 'export'}
-          <div class="grid gap-3">
+            <div class="grid gap-3">
             <div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-              <div class="text-slate-500 text-xs">Workspace</div>
+              <div class="text-slate-500 text-xs">{$_('importExport.scope.workspace')}</div>
               <div class="text-slate-800 font-medium">{workspaceName || '—'}</div>
             </div>
             {#if objectName}
               <div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <div class="text-slate-500 text-xs">
-                  {objectLabel ?? scopeOptions.find((o) => o.value === scope)?.label ?? 'Objet'}
+                  {objectLabel ?? scopeOptions.find((o) => o.value === scope)?.label ?? $_('importExport.objectFallback')}
                 </div>
                 <div class="text-slate-800 font-medium">{objectName}</div>
               </div>
@@ -473,20 +476,20 @@
             {#if showCommentsToggle}
               <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" bind:checked={includeComments} />
-                <span>Inclure les commentaires</span>
+                <span>{$_('importExport.includeComments')}</span>
               </label>
             {/if}
             {#if showDocumentsToggle}
               <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" bind:checked={includeDocuments} />
-                <span>Inclure les documents</span>
+                <span>{$_('importExport.includeDocuments')}</span>
               </label>
             {/if}
           </div>
         {:else}
           <div class="grid gap-3">
             <label class="block text-sm">
-              <div class="text-slate-600">Fichier .zip</div>
+              <div class="text-slate-600">{$_('importExport.zipFileLabel')}</div>
               <input
                 class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
                 type="file"
@@ -495,14 +498,14 @@
               />
             </label>
             {#if importPreviewLoading}
-              <div class="text-sm text-slate-500">Analyse en cours...</div>
+              <div class="text-sm text-slate-500">{$_('importExport.analyzing')}</div>
             {/if}
             {#if importPreviewError}
               <div class="text-sm text-rose-600">{importPreviewError}</div>
             {/if}
             {#if importPreview}
               <div class="rounded border border-slate-200 px-3 py-2 text-sm">
-                <div class="text-slate-500 text-xs mb-2">Types à importer</div>
+                <div class="text-slate-500 text-xs mb-2">{$_('importExport.typesToImport')}</div>
                 <div class="space-y-1">
                   {#each importAllowedTypes as type}
                     {@const items = importPreview.objects[type] || []}
@@ -514,26 +517,26 @@
                       />
                       <span>
                         {type === 'organizations'
-                          ? 'Organisations'
+                          ? $_('importExport.type.organizations')
                           : type === 'folders'
-                            ? 'Dossiers'
+                            ? $_('importExport.type.folders')
                             : type === 'usecases'
-                              ? "Cas d'usage"
-                              : 'Matrices'} ({items.length})
+                              ? $_('importExport.type.usecases')
+                              : $_('importExport.type.matrix')} ({items.length})
                       </span>
                     </label>
                   {/each}
                 </div>
               </div>
               <label class="block text-sm">
-                <div class="text-slate-600">Workspace cible</div>
+                <div class="text-slate-600">{$_('importExport.targetWorkspace')}</div>
                 <select
                   class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
                   bind:value={targetWorkspaceId}
                   disabled={lockTargetWorkspace}
                   on:change={() => (workspaceTouched = true)}
                 >
-                  <option value="__new__">Créer un nouveau workspace</option>
+                  <option value="__new__">{$_('importExport.createWorkspace')}</option>
                   {#each importWorkspaceOptions as ws}
                     <option value={ws.id}>{ws.name} ({ws.role})</option>
                   {/each}
@@ -541,7 +544,7 @@
               </label>
             {#if importTargetOptionsState.length > 0}
                 <label class="block text-sm">
-                  <div class="text-slate-600">{importTargetLabel ?? 'Cible'}</div>
+                  <div class="text-slate-600">{importTargetLabel ?? $_('importExport.targetLabelFallback')}</div>
                   <select
                     class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
                     bind:value={importTargetId}
@@ -556,19 +559,19 @@
               {#if importPreview.has_comments}
                 <label class="flex items-center gap-2 text-sm">
                   <input type="checkbox" bind:checked={importIncludeComments} />
-                  <span>Inclure les commentaires</span>
+                  <span>{$_('importExport.includeComments')}</span>
                 </label>
               {/if}
               {#if importPreview.has_documents}
                 <label class="flex items-center gap-2 text-sm">
                   <input type="checkbox" bind:checked={importIncludeDocuments} />
-                  <span>Inclure les documents</span>
+                  <span>{$_('importExport.includeDocuments')}</span>
                 </label>
               {/if}
             {/if}
             {#if !importPreview}
               <div class="text-[11px] text-slate-500">
-                Pour un import d’objet (dossier, cas d’usage, organisation), un workspace cible est requis.
+                {$_('importExport.importHint')}
               </div>
             {/if}
           </div>
@@ -582,7 +585,7 @@
           on:click={close}
           disabled={isBusy}
         >
-          Annuler
+          {$_('common.cancel')}
         </button>
         <button
           class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
@@ -590,7 +593,7 @@
           on:click={mode === 'export' ? handleExport : handleImport}
           disabled={isBusy}
         >
-          {mode === 'export' ? 'Exporter' : 'Importer'}
+          {mode === 'export' ? $_('importExport.action.export') : $_('importExport.action.import')}
         </button>
       </div>
     </div>
