@@ -486,6 +486,10 @@ up-api: ## Start the api stack in detached mode
 up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
+.PHONY: up-api-test-ci
+up-api-test-ci: ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d api --wait api
+
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui --wait ui
