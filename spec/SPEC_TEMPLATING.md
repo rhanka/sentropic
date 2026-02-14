@@ -161,9 +161,9 @@ Rules:
 
 ## 5. Technical support model (API and processing)
 
-### 5.1 Current model (as-is)
-- Existing route: `GET /api/v1/use-cases/:id/docx`
-- Existing renderer path:
+### 5.1 Legacy model (pre-Wave 2, for context)
+- Legacy route: `GET /api/v1/use-cases/:id/docx` (now disabled with `410 Gone`)
+- Existing renderer path kept as technical base:
   - `api/src/services/docx-service.ts`
   - template loading from `api/templates`
   - placeholder patching with `dolanmiu/docx` and XML loop expansion.
