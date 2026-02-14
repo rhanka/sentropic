@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { app } from '../../src/app';
+import { env } from '../../src/config/env';
 import { 
   createAuthenticatedUser, 
   authenticatedRequest, 
@@ -9,6 +10,7 @@ import {
 
 describe('CORS Security Tests', () => {
   let user: any;
+  const allowedOrigin = env.CORS_ALLOWED_ORIGINS.split(',')[0]?.trim() || 'http://localhost:5173';
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
@@ -22,7 +24,7 @@ describe('CORS Security Tests', () => {
     it('should include proper CORS headers for preflight requests', async () => {
       // Test OPTIONS preflight request
       const response = await unauthenticatedRequest(app, 'OPTIONS', '/api/v1/organizations', null, {
-        'Origin': 'http://localhost:5173',
+        'Origin': allowedOrigin,
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers': 'Content-Type, Authorization'
       });
@@ -30,7 +32,7 @@ describe('CORS Security Tests', () => {
       expect(response.status).toBe(204);
       
       const headers = response.headers;
-      expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+      expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
       expect(headers.get('Access-Control-Allow-Methods')).toContain('GET');
       expect(headers.get('Access-Control-Allow-Headers')).toContain('Content-Type');
       expect(headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
@@ -42,7 +44,7 @@ describe('CORS Security Tests', () => {
       const response = await app.request('/api/v1/organizations', {
         method: 'GET',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Cookie': `session=${user.sessionToken}`
         }
       });
@@ -50,7 +52,7 @@ describe('CORS Security Tests', () => {
       expect(response.status).toBe(200);
       
       const headers = response.headers;
-      expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+      expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
       expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');
     });
 
@@ -122,7 +124,7 @@ describe('CORS Security Tests', () => {
       const response = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Content-Type': 'application/json',
           'Cookie': `session=${user.sessionToken}`
         },
@@ -132,7 +134,7 @@ describe('CORS Security Tests', () => {
       expect(response.status).toBe(201);
       
       const headers = response.headers;
-      expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+      expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
       expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');
     });
 
@@ -141,7 +143,7 @@ describe('CORS Security Tests', () => {
       const createResponse = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Content-Type': 'application/json',
           'Cookie': `session=${user.sessionToken}`
         },
@@ -162,7 +164,7 @@ describe('CORS Security Tests', () => {
       const updateResponse = await app.request(`/api/v1/organizations/${createdCompany.id}`, {
         method: 'PUT',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Content-Type': 'application/json',
           'Cookie': `session=${user.sessionToken}`
         },
@@ -179,7 +181,7 @@ describe('CORS Security Tests', () => {
       expect(updateResponse.status).toBe(200);
       
       const headers = updateResponse.headers;
-      expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+      expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
       expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');
     });
 
@@ -188,7 +190,7 @@ describe('CORS Security Tests', () => {
       const createResponse = await app.request('/api/v1/organizations', {
         method: 'POST',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Content-Type': 'application/json',
           'Cookie': `session=${user.sessionToken}`
         },
@@ -209,7 +211,7 @@ describe('CORS Security Tests', () => {
       const deleteResponse = await app.request(`/api/v1/organizations/${createdCompany.id}`, {
         method: 'DELETE',
         headers: {
-          'Origin': 'http://localhost:5173',
+          'Origin': allowedOrigin,
           'Cookie': `session=${user.sessionToken}`
         }
       });
@@ -217,7 +219,7 @@ describe('CORS Security Tests', () => {
       expect(deleteResponse.status).toBe(204);
       
       const headers = deleteResponse.headers;
-      expect(headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+      expect(headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
       expect(headers.get('Access-Control-Allow-Credentials')).toBe('true');
     });
   });
