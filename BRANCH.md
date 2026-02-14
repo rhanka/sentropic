@@ -245,7 +245,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `make clean ENV=e2e ...`
       - [x] `make test-e2e E2E_SPEC=... ENV=e2e ...`
       - [x] `make clean ENV=e2e ...`
-  - [ ] **API tests**
+  - [x] **API tests**
     - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-api ENV=test ...` + `make lint-api ENV=test ...`
     - [x] Scoped evolution suites:
       - [x] `make test-api-endpoints SCOPE=tests/api/folders.test.ts ENV=test ...`
@@ -263,11 +263,11 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
     - [x] Sub-lot gate: `make test-api ENV=test ...`
   - [ ] **UI tests (TypeScript only)**
     - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
-    - [ ] Regression gate: `make test-ui ENV=test ...`
+    - [x] Regression gate: `make test-ui ENV=test ...`
     - [ ] Deferred UI suites:
       - [ ] `ui/tests/i18n.spec.ts` (if present)
-      - [ ] `ui/tests/folders.spec.ts` (if present)
-    - [ ] Sub-lot gate: `make test-ui ENV=test ...`
+      - [x] `ui/tests/stores/folders.test.ts`
+    - [x] Sub-lot gate: `make test-ui ENV=test ...`
   - [ ] **E2E tests**
     - [ ] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [ ] Scoped evolution specs:

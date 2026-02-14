@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
+import { API_BASE_URL } from '../../src/lib/config';
 import {
   listComments,
   createComment,
@@ -32,7 +33,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('http://localhost:8787/api/v1/comments?');
+    expect(String(url)).toContain(`${API_BASE_URL}/comments?`);
     expect(String(url)).toContain('context_type=usecase');
     expect(String(url)).toContain('context_id=uc_1');
     expect(String(url)).toContain('section_key=description');
@@ -55,7 +56,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/comments');
+    expect(String(url)).toBe(`${API_BASE_URL}/comments`);
     expect(init?.method).toBe('POST');
     const body = JSON.parse(String(init?.body ?? '{}'));
     expect(body).toEqual({
@@ -75,7 +76,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/comments/c_1');
+    expect(String(url)).toBe(`${API_BASE_URL}/comments/c_1`);
     expect(init?.method).toBe('PATCH');
     const body = JSON.parse(String(init?.body ?? '{}'));
     expect(body).toEqual({ content: 'Updated', assigned_to: 'user_2' });
@@ -87,7 +88,7 @@ describe('comments utils', () => {
 
     let fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     let [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/comments/c_1/close');
+    expect(String(url)).toBe(`${API_BASE_URL}/comments/c_1/close`);
     expect(init?.method).toBe('POST');
 
     resetFetchMock();
@@ -95,7 +96,7 @@ describe('comments utils', () => {
     await reopenComment('c_1');
     fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/comments/c_1/reopen');
+    expect(String(url)).toBe(`${API_BASE_URL}/comments/c_1/reopen`);
     expect(init?.method).toBe('POST');
   });
 
@@ -106,7 +107,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/comments/c_1');
+    expect(String(url)).toBe(`${API_BASE_URL}/comments/c_1`);
     expect(init?.method).toBe('DELETE');
   });
 
@@ -119,7 +120,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8787/api/v1/workspaces/ws-target/members');
+    expect(String(url)).toBe(`${API_BASE_URL}/workspaces/ws-target/members`);
   });
 
   it('scopes list comments with workspace_id when available', async () => {
@@ -131,7 +132,7 @@ describe('comments utils', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('http://localhost:8787/api/v1/comments?');
+    expect(String(url)).toContain(`${API_BASE_URL}/comments?`);
     expect(String(url)).toContain('workspace_id=ws-selected');
   });
 });
