@@ -96,13 +96,15 @@ test.describe.serial('Comment assistant', () => {
       }
     });
 
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator(
+      'button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]'
+    );
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
 
     const widget = page.locator('#chat-widget-dialog');
     await expect(widget).toBeVisible({ timeout: 10_000 });
-    await widget.locator('button:has-text("Chat IA")').click();
+    await widget.locator('button').filter({ hasText: /^Chat(?: IA)?$/i }).click();
 
     const composer = widget.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 10_000 });
