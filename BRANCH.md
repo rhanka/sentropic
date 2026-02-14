@@ -313,13 +313,13 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Publishing queue-class behavior tests (respect `publishingConcurrency`, independent from AI queue).
       - [x] Worker failure propagation test (`docx_generate` job -> failed with explicit error payload).
       - [x] Worker progress stream test (`job_<id>` emits progress/status/done sequence).
-    - [ ] API — matrix generation integration:
+    - [x] API — matrix generation integration:
       - [x] Explicit test for `matrix_mode=generate` request path (not only default inference).
       - [x] Explicit test for `matrix_mode=default` request path.
       - [x] Explicit behavior test: `matrix_mode=generate` without `organization_id` falls back to `default` (current API behavior).
       - [x] Strict failure policy test: matrix generation failure blocks downstream generation.
       - [x] Prompt payload contract test for `organization_matrix_template` inputs.
-    - [ ] API — use-case detail payload contract regression:
+    - [x] API — use-case detail payload contract regression:
       - [x] Add assertions that generated payload contains all required scalar fields with non-empty values (not only `constraints`).
       - [x] Add assertions that required list fields are present and non-empty arrays (`technologies`, `benefits`, `metrics`, `risks`, `constraints`, `nextSteps`, `dataSources`, `dataObjects`, scores arrays).
       - [x] Keep a dedicated guard for `constraints[]` (historical regression already observed on this field).
@@ -327,14 +327,14 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
     - [x] API — AI settings / queue config:
       - [x] `PUT /api/v1/ai-settings` test including `publishingConcurrency` update + queue manager reload effect.
       - [x] `PUT /api/v1/ai-settings/:key` test for `publishing_concurrency`.
-    - [ ] UI unit tests (TypeScript):
-      - [ ] Add `ui/tests/utils/docx.test.ts` coverage for:
-        - [ ] `startDocxGeneration` request shape.
-        - [ ] `waitForDocxJobCompletion` timeout/failure/success polling.
-        - [ ] `downloadCompletedDocxJob` filename extraction from `content-disposition`.
-      - [ ] Add dashboard state-machine tests for `idle -> preparing -> ready -> idle`.
-      - [ ] Add tests for “ready toast with action button” behavior.
-      - [ ] Add tests for reset-to-idle when folder/executive summary changes.
+    - [x] UI unit tests (TypeScript, no Svelte component tests):
+      - [x] Add `ui/tests/utils/docx.test.ts` coverage for:
+        - [x] `startDocxGeneration` request shape.
+        - [x] `waitForDocxJobCompletion` timeout/failure/success polling.
+        - [x] `downloadCompletedDocxJob` filename extraction from `content-disposition`.
+      - [x] Add dashboard state-machine tests for `idle -> preparing -> ready -> idle`.
+      - [x] Add tests for “ready toast with action button” behavior.
+      - [x] Add tests for reset-to-idle when folder/executive summary changes.
     - [ ] E2E — executive synthesis DOCX:
       - [ ] Dashboard file menu action flow:
         - [ ] “Prepare DOCX” visible in idle.
