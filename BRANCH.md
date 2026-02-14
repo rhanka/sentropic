@@ -40,6 +40,6 @@ Decouple API image build from API unit/integration tests so E2E can start earlie
   - [x] Evaluate matrix for API unit/integration suites.
   - [x] Implement CI matrix strategy for API suites.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Validate workflow syntax and structural consistency.
-  - [ ] Review final diff and document behavior changes.
+- [x] **Lot N — Final validation**
+  - [x] Validate workflow syntax and structural consistency.
+  - [x] Review final diff and document behavior changes.
