@@ -233,6 +233,33 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Verify fallback rendering when bitmap is omitted.
 
 - [ ] **Lot N — Final validation**
+  - [ ] Wave 2 current campaign (isolated environments, no `ENV=dev`):
+    - [ ] API/UI environment: `ENV=test API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1083`
+    - [ ] E2E environment: `ENV=e2e API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080`
+    - [ ] Rule: split **evolution checks** (recent changes) vs **regression checks** (existing behavior not touched directly).
+    - [ ] Rule: if a failure appears on a priori non-touched scope, inspect branch history from `main` before deciding:
+      - [ ] `git log --oneline origin/main..HEAD -- <affected-path>`
+      - [ ] `git blame <affected-file>` around failing lines
+      - [ ] decide explicitly: fix code regression vs fix stale/invalid test.
+    - [ ] Rule: E2E hygiene between runs:
+      - [ ] `make ENV=e2e clean`
+      - [ ] `make ENV=e2e test-e2e E2E_SPEC=...`
+      - [ ] `make ENV=e2e clean`
+  - [ ] Evolution checks (recent DOCX/template/dashboard changes):
+    - [ ] API gates: `make ENV=test typecheck-api` + `make ENV=test lint-api`
+    - [ ] UI gates: `make ENV=test typecheck-ui` + `make ENV=test lint-ui`
+    - [ ] API targeted suites:
+      - [ ] `make ENV=test test-api-endpoints SCOPE=tests/api/folders.test.ts`
+      - [ ] `make ENV=test test-api-queue SCOPE=tests/queue/queue.test.ts`
+      - [ ] `make ENV=test test-api-ai SCOPE=tests/ai/executive-summary-sync.test.ts`
+    - [ ] E2E targeted specs:
+      - [ ] `e2e/tests/03-dashboard.spec.ts`
+      - [ ] `e2e/tests/05-executive-summary.spec.ts`
+      - [ ] `e2e/tests/05-usecase-detail.spec.ts`
+  - [ ] Regression checks (post-evolution pass):
+    - [ ] `make ENV=test test-ui`
+    - [ ] `make ENV=test test-api`
+    - [ ] `make ENV=e2e clean test-e2e`
   - [ ] Consolidate deferred test backlog from Wave 1 and Wave 2 scopes.
   - [ ] Deferred tests (by scope, by file):
     - [ ] API (Wave 1 carry-over):
