@@ -3,6 +3,7 @@
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { OpenCommentsHandler } from '$lib/types/comments';
   import type { OnFieldUpdate } from '$lib/components/organization-form.types';
+  import { _ } from 'svelte-i18n';
 
   export let organization: Record<string, any> | null = null;
   export let organizationData: Record<string, any> = {};
@@ -31,14 +32,14 @@
             markdown={false}
             multiline={true}
             locked={locked}
-            placeholder="Saisir le nom de l'organisation"
+            placeholder={$_('organizations.form.namePlaceholder')}
             on:change={(e) => onFieldUpdate?.('name', e.detail.value)}
             on:saved={() => {}}
           />
         </h1>
 
         <p class="text-lg text-slate-600 mt-1">
-          <span class="font-medium">Secteur:</span>
+          <span class="font-medium">{$_('organizations.fields.industry')}</span>
           <EditableInput
             value={organizationData?.industry || organization.industry || ''}
             originalValue={apiEndpoint ? (organizationData?.industry || organization.industry || '') : ''}
@@ -46,7 +47,7 @@
             apiEndpoint={apiEndpoint}
             fullData={organizationData}
             locked={locked}
-            placeholder="Non renseigné"
+            placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
             on:saved={() => {}}
           />
@@ -63,7 +64,7 @@
     <div class="grid gap-6 md:grid-cols-2">
       <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="size">
       <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-        Taille
+        {$_('organizations.fields.size')}
         <CommentBadge
           count={commentCounts?.size ?? 0}
           disabled={!onOpenComments}
@@ -79,7 +80,7 @@
             fullData={organizationData}
             markdown={true}
             locked={locked}
-            placeholder="Non renseigné"
+            placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('size', e.detail.value)}
             on:saved={() => {}}
           />
@@ -88,7 +89,7 @@
 
       <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="technologies">
       <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-        Technologies
+        {$_('organizations.fields.technologies')}
         <CommentBadge
           count={commentCounts?.technologies ?? 0}
           disabled={!onOpenComments}
@@ -104,7 +105,7 @@
             fullData={organizationData}
             markdown={true}
             locked={locked}
-            placeholder="Non renseigné"
+            placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('technologies', e.detail.value)}
             on:saved={() => {}}
           />
@@ -114,7 +115,7 @@
 
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="products">
     <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-      Produits et Services
+      {$_('organizations.fields.products')}
       <CommentBadge
         count={commentCounts?.products ?? 0}
         disabled={!onOpenComments}
@@ -130,7 +131,7 @@
           fullData={organizationData}
           markdown={true}
           locked={locked}
-          placeholder="Non renseigné"
+          placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('products', e.detail.value)}
           on:saved={() => {}}
         />
@@ -139,7 +140,7 @@
 
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="processes">
     <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-      Processus Métier
+      {$_('organizations.fields.processes')}
       <CommentBadge
         count={commentCounts?.processes ?? 0}
         disabled={!onOpenComments}
@@ -155,7 +156,7 @@
           fullData={organizationData}
           markdown={true}
           locked={locked}
-          placeholder="Non renseigné"
+          placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('processes', e.detail.value)}
           on:saved={() => {}}
         />
@@ -167,7 +168,7 @@
     {#if showKpis}
       <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="kpis">
       <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-        Indicateurs de performance
+        {$_('organizations.fields.kpis')}
         <CommentBadge
           count={commentCounts?.kpis ?? 0}
           disabled={!onOpenComments}
@@ -184,7 +185,7 @@
             markdown={true}
             multiline={true}
             locked={locked}
-            placeholder="Non renseigné"
+            placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('kpis', e.detail.value)}
             on:saved={() => {}}
           />
@@ -194,7 +195,7 @@
 
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="challenges">
     <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-      Défis Principaux
+      {$_('organizations.fields.challenges')}
       <CommentBadge
         count={commentCounts?.challenges ?? 0}
         disabled={!onOpenComments}
@@ -210,7 +211,7 @@
           fullData={organizationData}
           markdown={true}
           locked={locked}
-          placeholder="Non renseigné"
+          placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('challenges', e.detail.value)}
           on:saved={() => {}}
         />
@@ -219,7 +220,7 @@
 
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="objectives">
     <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2 group">
-      Objectifs Stratégiques
+      {$_('organizations.fields.objectives')}
       <CommentBadge
         count={commentCounts?.objectives ?? 0}
         disabled={!onOpenComments}
@@ -235,7 +236,7 @@
           fullData={organizationData}
           markdown={true}
           locked={locked}
-          placeholder="Non renseigné"
+          placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('objectives', e.detail.value)}
           on:saved={() => {}}
         />
@@ -245,5 +246,4 @@
     <slot name="bottom" />
   </div>
 {/if}
-
 

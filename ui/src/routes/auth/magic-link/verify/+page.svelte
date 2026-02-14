@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-import { apiPost } from '$lib/utils/api';
-import { setUser } from '$lib/stores/session';
-import { CheckCircle2 } from '@lucide/svelte';
+	import { apiPost } from '$lib/utils/api';
+	import { setUser } from '$lib/stores/session';
+	import { CheckCircle2 } from '@lucide/svelte';
 
   let loading = true;
   let error = '';
@@ -14,7 +16,7 @@ import { CheckCircle2 } from '@lucide/svelte';
     const token = $page.url.searchParams.get('token');
 
     if (!token) {
-      error = 'Token manquant dans l\'URL';
+      error = get(_)('auth.magicLink.errors.missingToken');
       loading = false;
       return;
     }
@@ -45,7 +47,7 @@ import { CheckCircle2 } from '@lucide/svelte';
         goto('/dashboard');
       }, 1000);
     } catch (err: any) {
-      error = err.message || 'Erreur lors de la vérification du lien magique';
+      error = err.message || get(_)('auth.magicLink.errors.verifyFailed');
       loading = false;
     }
   });
@@ -55,7 +57,7 @@ import { CheckCircle2 } from '@lucide/svelte';
   <div class="max-w-md w-full space-y-8">
     <div>
       <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-        Vérification du lien magique
+        {$_('auth.magicLink.title')}
       </h2>
     </div>
 
@@ -63,7 +65,7 @@ import { CheckCircle2 } from '@lucide/svelte';
       {#if loading && !error}
         <div class="text-center">
           <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p class="mt-4 text-sm text-gray-600">Vérification en cours...</p>
+          <p class="mt-4 text-sm text-gray-600">{$_('auth.verifyInProgress')}</p>
         </div>
       {:else if success}
         <div class="rounded-md bg-green-50 p-4">
@@ -73,10 +75,10 @@ import { CheckCircle2 } from '@lucide/svelte';
             </div>
             <div class="ml-3">
               <h3 class="text-sm font-medium text-green-800">
-                Connexion réussie !
+                {$_('auth.magicLink.successTitle')}
               </h3>
               <div class="mt-2 text-sm text-green-700">
-                <p>Redirection vers le tableau de bord...</p>
+                <p>{$_('auth.redirectingDashboard')}</p>
               </div>
             </div>
           </div>
@@ -86,7 +88,7 @@ import { CheckCircle2 } from '@lucide/svelte';
           <div class="flex">
             <div class="ml-3">
               <h3 class="text-sm font-medium text-red-800">
-                Erreur de vérification
+                {$_('auth.magicLink.errorTitle')}
               </h3>
               <div class="mt-2 text-sm text-red-700">
                 <p>{error}</p>
@@ -98,7 +100,7 @@ import { CheckCircle2 } from '@lucide/svelte';
               href="/auth/login"
               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200"
             >
-              Retour à la connexion
+              {$_('auth.magicLink.backToLogin')}
             </a>
           </div>
         </div>
@@ -106,4 +108,3 @@ import { CheckCircle2 } from '@lucide/svelte';
     </div>
   </div>
 </div>
-

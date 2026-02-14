@@ -19,6 +19,7 @@ aiSettingsRouter.get('/', async (c) => {
 // PUT /ai-settings - Mettre à jour les paramètres IA
 const updateAISettingsSchema = z.object({
   concurrency: z.number().min(1).max(50).optional(),
+  publishingConcurrency: z.number().min(1).max(50).optional(),
   defaultModel: z.string().min(1).optional(),
   processingInterval: z.number().min(1000).max(60000).optional(),
 });
@@ -96,7 +97,7 @@ aiSettingsRouter.put('/:key', async (c) => {
     await settingsService.set(key, value, description);
 
     // Recharger les paramètres si c'est un paramètre IA
-    if (['ai_concurrency', 'default_model', 'queue_processing_interval'].includes(key)) {
+    if (['ai_concurrency', 'publishing_concurrency', 'default_model', 'queue_processing_interval'].includes(key)) {
       await queueManager.reloadSettings();
     }
 

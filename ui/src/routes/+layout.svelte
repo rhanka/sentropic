@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { beforeNavigate, goto } from '$app/navigation';
+  import { get } from 'svelte/store';
   import '../app.css';
   import '../app.print.css';
   import Header from '$lib/components/Header.svelte';
@@ -9,6 +10,7 @@
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import '$lib/i18n';
+  import { _ } from 'svelte-i18n';
   import { initializeSession, session } from '$lib/stores/session';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
@@ -24,7 +26,7 @@
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
 
-  // Routes publiques (accessibles sans authentification)
+  // Public routes (accessible without authentication)
   const PUBLIC_ROUTES = [
     '/',
     '/auth/login',
@@ -35,14 +37,14 @@
   // Routes protégées (nécessitent une authentification)
   const PROTECTED_ROUTES = [
     '/home',
-    '/organisations',
-    '/dossiers',
-    '/dossier',
-    '/cas-usage',
-    '/matrice',
+    '/organizations',
+    '/folders',
+    '/folder',
+    '/usecase',
+    '/matrix',
     '/dashboard',
     '/dashboard-tmp',
-    '/parametres',
+    '/settings',
     '/auth/devices'
   ];
 
@@ -53,13 +55,13 @@
 
   // Vérifier si une route est protégée
   function isProtectedRoute(path: string): boolean {
-    // Routes dynamiques avec paramètres (ex: /organisations/[id], /organisations/new, /dossiers/[id], /cas-usage/[id])
-    // Ces routes sont toutes protégées
+    // Dynamic routes with params (e.g. /organizations/[id], /organizations/new, /folders/[id], /usecase/[id])
+    // These routes are all protected
     if (
-      path.startsWith('/organisations/') ||
-      path.startsWith('/dossiers/') || 
-      path.startsWith('/dossier/') ||
-      path.startsWith('/cas-usage/')
+      path.startsWith('/organizations/') ||
+      path.startsWith('/folders/') || 
+      path.startsWith('/folder/') ||
+      path.startsWith('/usecase/')
     ) {
       return true;
     }
@@ -210,12 +212,12 @@
     }
   }
 
-  // No-workspace lock: if user has zero workspaces, restrict navigation to /parametres.
+  // No-workspace lock: if user has zero workspaces, restrict navigation to /settings.
   let lastNoWorkspaceRedirectPath: string | null = null;
   let noWorkspaceNavCancelInProgress = false;
 
   // Hidden workspace navigation lock (Option A):
-  // - If a hidden workspace is selected (admin role), restrict navigation to /parametres (+ public/auth routes).
+  // - If a hidden workspace is selected (admin role), restrict navigation to /settings (+ public/auth routes).
   // - Redirect must be immediate (wins over autosave), but autosave can run best-effort in background.
   let lastHiddenLockRedirectPath: string | null = null;
   let hiddenNavCancelInProgress = false;
@@ -232,15 +234,15 @@
 
       if ($noWorkspaceLock) {
         const isAllowed =
-          toPath === '/parametres' ||
-          toPath.startsWith('/parametres/') ||
+          toPath === '/settings' ||
+          toPath.startsWith('/settings/') ||
           toPath.startsWith('/auth/') ||
           isPublicRoute(toPath);
 
         if (!isAllowed) {
           nav.cancel();
           noWorkspaceNavCancelInProgress = true;
-          void goto('/parametres').finally(() => {
+          void goto('/settings').finally(() => {
             noWorkspaceNavCancelInProgress = false;
           });
         }
@@ -250,8 +252,8 @@
       if (!$hiddenWorkspaceLock) return;
 
       const isAllowed =
-        toPath === '/parametres' ||
-        toPath.startsWith('/parametres/') ||
+        toPath === '/settings' ||
+        toPath.startsWith('/settings/') ||
         toPath.startsWith('/auth/') ||
         isPublicRoute(toPath);
 
@@ -262,15 +264,14 @@
         if (unsavedChangesStore.hasUnsavedChanges()) {
           void unsavedChangesStore.saveAll().then((ok) => {
             if (!ok) {
-              addToast({
-                type: 'warning',
-                message:
-                  "Espace de travail caché : accès restreint aux Paramètres. Sauvegarde automatique impossible pour certaines modifications.",
-              });
+                  addToast({
+                    type: 'warning',
+                    message: get(_)('workspace.hiddenAutosaveWarning'),
+                  });
             }
           });
         }
-        void goto('/parametres').finally(() => {
+        void goto('/settings').finally(() => {
           hiddenNavCancelInProgress = false;
         });
       }
@@ -279,14 +280,14 @@
   $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $noWorkspaceLock) {
     const path = $page.url.pathname;
     const isAllowed =
-      path === '/parametres' ||
-      path.startsWith('/parametres/') ||
+      path === '/settings' ||
+      path.startsWith('/settings/') ||
       path.startsWith('/auth/') ||
       isPublicRoute(path);
 
     if (!isAllowed && path !== lastNoWorkspaceRedirectPath) {
       lastNoWorkspaceRedirectPath = path;
-      goto('/parametres');
+      goto('/settings');
     }
   } else {
     lastNoWorkspaceRedirectPath = null;
@@ -295,15 +296,15 @@
   $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
     const path = $page.url.pathname;
     const isAllowed =
-      path === '/parametres' ||
-      path.startsWith('/parametres/') ||
+      path === '/settings' ||
+      path.startsWith('/settings/') ||
       path.startsWith('/auth/') ||
       isPublicRoute(path);
 
     if (!isAllowed && path !== lastHiddenLockRedirectPath) {
       lastHiddenLockRedirectPath = path;
 
-      goto('/parametres');
+      goto('/settings');
     }
   } else {
     lastHiddenLockRedirectPath = null;
@@ -325,11 +326,11 @@
     {/if}
     <main class="mx-auto max-w-7xl px-4 py-8">
       {#if showSpinner}
-        <!-- Afficher un loader pendant la vérification de session -->
+        <!-- Show a loader while we validate the session -->
         <div class="flex items-center justify-center min-h-[60vh]">
           <div class="text-center">
             <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-            <p class="text-sm text-slate-600">Vérification de la session...</p>
+            <p class="text-sm text-slate-600">{$_('common.sessionCheck')}</p>
           </div>
         </div>
       {:else if canShowContent}

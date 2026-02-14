@@ -1,54 +1,375 @@
-# Feature: CI - Reduce time (multiworkers + split E2E)
+# Feature: Wave 2 - Mono-branch integration on `feat/i18-print` (i18n bilingual + matrix + executive synthesis DOCX)
 
 ## Objective
-Reduce CI time by enabling API multiworkers and splitting E2E tests into two parallel groups.
+Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) with partial UAT after coherent lots, while keeping Wave 1 as historical context and deferring full automated tests to Lot N.
 
 ## Scope / Guardrails
-- Scope limited to CI/test configuration (Make targets, CI workflow, test runner config).
-- One migration max in `api/drizzle/*.sql` (not expected).
-- Make-only workflow, no direct Docker commands.
-- All new text in English.
-
-## Scoping Decisions
-- **API workers**: Use a `WORKERS` variable in the Makefile (same pattern as E2E target), default to 4.
-- **E2E split**: Group A (00–03, 14 files) / Group B (04–07, 16 files). Confirmed by reviewing CI times (~8 min bottleneck).
-- **CI strategy**: Use GitHub Actions matrix strategy for E2E groups.
+- Make-only workflow (no direct Docker or npm).
+- All new text in English (docs/commits/errors).
+- Partial UAT lots are mandatory; full test suites are deferred to Lot N.
+- Avoid unrelated refactors; keep changes minimal per lot.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- Rationale: Grouped into a single CI-focused branch to keep waves at four branches.
+- [x] **Mono-branch + sequential lots**
+- Rationale: Reduce coordination overhead and run UAT on a single integrated environment.
 
-## UAT Management (in orchestration context)
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+## References (former Wave 2 branch plans)
+- `tmp/feat-i18n-prompts-bilingual/BRANCH.md`
+- `tmp/feat-i18n-bilingual-modeling/BRANCH.md`
+- `tmp/feat-usecase-matrix-generation/BRANCH.md`
+- `tmp/feat-print-exec-synthesis-multipage/BRANCH.md`
+
+## UAT Management
+- Before each UAT lot: run the relevant gates (`make typecheck-*`, `make lint-*`).
+- Keep UAT checklists inside each lot as `[ ]` items. Do not tick UAT items before the user executes them.
+- Wave 2 items are intentionally **all unchecked** (execution restarts from Wave 2 baseline).
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read the relevant `.mdc` files and `README.md`.
-  - [x] Capture Makefile targets needed for debug/testing.
-  - [x] Confirm scope and guardrails.
-  - [x] Scoping decisions confirmed by user.
 
-- [x] **Lot 1 — Enable API multiworkers**
-  - [x] Update `api/vitest.config.ts`: remove `singleFork: true`, enable multiple workers.
-  - [x] Add `API_TEST_WORKERS` variable to Makefile test-api targets (default 4), following the E2E WORKERS pattern.
-  - [x] Pass workers setting to vitest via env or CLI.
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`
+- [x] **Lot 0 — Baseline and rules**
+  - [x] Read `.cursor/rules/MASTER.mdc` and `.cursor/rules/workflow.mdc`.
+  - [x] Read relevant scope rules (`architecture.mdc`, `testing.mdc`, `data.mdc`, `security.mdc`).
+  - [x] Confirm current branch is `feat/i18-print` and aligned with `origin/main`.
+  - [x] Confirm commit workflow is enforced: selective staging + `make commit MSG="..."` only.
 
-- [x] **Lot 2 — Split E2E into 2 parallel groups (matrix strategy)**
-  - [x] Update `.github/workflows/ci.yml`: replace single `test-e2e` job with matrix strategy (group-a: 00-03, group-b: 04-07).
-  - [x] Ensure both matrix jobs run in parallel after dependencies.
-  - [x] Test that each group runs independently.
-  - [ ] Lot gate: CI passes with both groups
+- [x] **Lot 1 — Wave 1 (historical, already completed)**
+  - [x] **Environment** (Wave 1 UAT performed in tmp workspaces):
+    - `tmp/feat-print-docx-usecase-onepage` → `ENV=feat-print-docx-usecase-onepage`
+    - `tmp/feat-i18n-core-and-tech-keys` → `ENV=feat-i18n-core-and-tech-keys`
+    - `tmp/feat-usecase-constraints` → `ENV=feat-usecase-constraints`
+  - [x] **feat/print-docx-usecase-onepage**
+    - [x] Implement DOCX export endpoint/service based on `dolanmiu/docx`.
+    - [x] Integrate one-page DOCX template and UI download action from use case detail.
+    - [x] Stabilize markdown rendering, loop expansion, style preservation, spacing, links, stars/crosses.
+    - [x] UAT: Download DOCX from use case detail (File menu).
+    - [!] UAT: Ctrl+P flow (deferred; validate when implemented).
+  - [x] **feat/i18n-core-and-tech-keys**
+    - [x] Add FR/EN locale keys and wire header/layout labels to i18n.
+    - [x] Rename routes and technical keys to English conventions.
+    - [x] Update API import/export prefixes and E2E route references.
+    - [x] UAT: Header labels show FR/EN and language switch works.
+    - [x] UAT: Navigate to renamed routes (usecase, folders, folder, organizations, matrix, settings).
+  - [x] **feat/usecase-constraints**
+    - [x] Add `constraints` in API validation/types and AI schema/prompt.
+    - [x] Add constraints in UI store/detail and print layout (2x2 grid).
+    - [x] UAT: Use case detail shows 2x2 grid with Constraints (edit + print preview).
+    - [x] UAT: Chat IA update bullet list fields live in UI (benefits, constraints, ...).
+  - [x] **Wave 1 integration merge on `feat/i18-print`**
+    - [x] Merge `feat/i18n-core-and-tech-keys`.
+    - [x] Merge `feat/usecase-constraints`.
+    - [x] Merge `feat/print-docx-usecase-onepage`.
+
+- [x] **Lot 1.5 — Integration UAT (post-merge, Wave 1, completed)**
+  - [x] Applied integration fixes:
+    - [x] Compact reference links in template via `{{$ref.link}}` (title linked to URL).
+    - [x] Bottom background image anchoring fixed (page-fixed, full-width, bottom-aligned).
+  - [x] UAT on integration environment: `feat/i18-print`.
+    - [x] Retest route and navigation consistency:
+      - [x] Open `/usecase`, `/folders`, `/folder/new`, `/organizations`, `/matrix`, `/settings`.
+    - [x] Retest use case detail UI (constraints + editing):
+      - [x] Validate 2x2 grid (Benefits | Constraints / Success Metrics | Risks).
+      - [x] Validate live updates from chat for list fields (including constraints).
+    - [x] Retest print/docx flow:
+      - [x] Download DOCX from Use Case detail File menu.
+      - [x] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
+      - [x] Confirm no extra blank line above matrix iteration tables.
+
+- [x] **Lot 2 — Wave 2 (mono-branch execution on `feat/i18-print`)**
+
+  - [x] **Lot 2.1 — Bilingual exhaustive translations**
+    - [x] **Bilingual exhaustive translations (inventory + implementation)**
+      - [x] Inventory (file-by-file):
+        - [x] Generate a complete file list for the codebase scopes:
+          - [x] UI: `ui/src/**`
+          - [x] API: `api/src/**`
+          - [x] E2E: `e2e/tests/**` (labels/selectors that assume FR strings)
+        - [x] Commands (run from repo root):
+          - [x] `rg --files ui/src api/src e2e/tests > /tmp/wave2-i18n-filelist.txt`
+        - [x] Optional: focus only on likely user-visible strings:
+            - [x] `rg -n \"(\\$_\\(|\\bt\\(|\\$t\\b|i18n|locale|lang)\" ui/src api/src | sort > /tmp/wave2-i18n-hotspots.txt` (includes Svelte `{$_('...')}` usage)
+            - [x] `rg -n \"[\\\"']([^\\\"']{3,})[\\\"']\" ui/src | head -n 50 > /tmp/wave2-i18n-strings-sample.txt` (spot-check: hardcoded strings sample)
+            - [x] `rg -n \">[^<{\\\\n][^<]{2,}<\" ui/src/routes ui/src/lib/components | head -n 200 > /tmp/wave2-i18n-textnodes-sample.txt` (spot-check: raw text nodes sample)
+        - [x] Walk the list and identify every user-visible string that must be translated or moved to i18n keys (fully exhaustive, including shared components):
+          - [x] UI routes/views (navigation, page titles, buttons, empty states, dialogs, toasts, form labels, table headers)
+          - [x] UI components/shared text
+          - [x] API user-facing error messages (only if surfaced directly to users) (inventory scan done; implementation deferred to bilingual prompts/later lots)
+          - [x] Emails/templates (if present) (none found in `api/src/**`)
+        - [x] Record findings in this section (date + short bullet list of missing keys + the files where they occur).
+      - [x] Inventory log (append-only):
+        - [x] 2026-02-10: Inventory started. Filelist: `/tmp/wave2-i18n-filelist.txt` (210 files). Findings:
+          - [x] Hotspots: `/tmp/wave2-i18n-hotspots.txt` (95 lines, updated regex includes `$_(`).
+          - [x] Samples generated:
+            - [x] `/tmp/wave2-i18n-strings-sample.txt` (50 lines)
+            - [x] `/tmp/wave2-i18n-textnodes-sample.txt` (200 lines)
+          - [x] Preliminary findings (cleared by implementation below):
+            - [x] Hardcoded FR strings across key views and shared components (dashboard, matrix, folders, organizations, settings, auth, shared UI).
+        - [x] 2026-02-10: Implementation progress snapshot (pre-UAT):
+          - [x] i18n applied to key routes/components: auth pages, dashboard (ROI config + back cover), matrix dialogs/tooltips, folders list/new/detail, organizations list/detail, settings (admin panel + system info), use case detail/export, and shared components (ChatWidget/ChatPanel, ImportExportDialog, FileMenu, StreamMessage, QueueMonitor, LockPresenceBadge, DocumentsBlock, etc).
+          - [x] Locale dictionaries extended (FR/EN) with new namespaces: `adminUsers`, `workspaceSettings`, `unsavedChanges`, plus additions to `common`, `folders`, `organizations`, `usecase`, `dashboard`, `settings`, `matrix`.
+      - [x] Implementation:
+        - [x] Add missing i18n keys (FR/EN) for all identified strings (up to the next Partial UAT checkpoint).
+        - [x] Replace hardcoded strings with i18n lookups consistently (up to the next Partial UAT checkpoint).
+        - [x] Ensure technical keys remain stable and English-only (no i18n key renames without migration plan).
+      - [x] Gates:
+        - [x] `make typecheck-ui` + `make lint-ui`
+        - [x] `make typecheck-api` + `make lint-api`
+      - [x] Partial UAT (user-driven):
+        - [x] Exhaustive UI translation sweep (complete all relevant views; extend this list during the inventory):
+          - [x] Home
+          - [x] Dashboard
+          - [x] Use cases list (`/usecase`)
+          - [x] Use case detail (`/usecase/:id`)
+          - [x] Folders list (`/folders`)
+          - [x] Folder new (`/folder/new`)
+          - [x] Folder detail (`/folders/:id`)
+          - [x] Organizations list (`/organizations`)
+          - [x] Organization new (`/organizations/new`)
+          - [x] Organization detail (`/organizations/:id`)
+          - [x] Matrix (`/matrix`)
+          - [x] Settings (`/settings`)
+          - [x] Auth pages (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
+        - [x] Locale switching sweep:
+          - [x] Switch FR→EN without reload and confirm all visible labels update.
+          - [x] Switch EN→FR without reload and confirm all visible labels update.
+      - [x] Use case AI generation (constraints must not be empty):
+        - [x] Generate a new use case via AI and confirm `Constraints` is populated (non-empty, no marker-only placeholders).
+
+  - [x] **Lot 2.2 — Matrix generation per organization/folder**
+    - [x] Spec reference: `spec/SPEC_MATRIX_GENERATION_ORG.md`
+    - [x] Confirm parity with existing generation architecture (API trigger -> queue job -> context service -> `defaultPrompts` -> `executeWithToolsStream` -> persistence/events).
+    - [x] Folder generation option behavior:
+      - [x] With selected organization + existing organization matrix: show only `Use organization matrix` option (checked by default, user can uncheck).
+      - [x] With selected organization + no organization matrix: show only `Generate organization matrix` option (checked by default).
+    - [x] Implement generation flow for organization-level matrix template.
+    - [x] Enforce matrix adaptation rules:
+      - [x] Keep axes/weights/thresholds unchanged.
+      - [x] Adapt only level descriptions for targeted axes based on organization specifics.
+    - [x] Implement folder generation option for matrix reuse vs folder-specific generation.
+    - [x] Persist and expose template selection in API/UI.
+    - [x] Queue orchestration:
+      - [x] Run `matrix_generate` in parallel with `usecase_list` for generation mode.
+      - [x] Ensure generated/reused matrix is available before `usecase_detail` uses it.
+    - [x] Failure policy:
+      - [x] Strict mode: if `matrix_generate` fails, block generation (no fallback to default matrix).
+      - [x] Retry/restart via existing failed jobs flow.
+    - [x] Gates:
+      - [x] `make typecheck-api` + `make lint-api`
+      - [x] `make typecheck-ui` + `make lint-ui`
+    - [x] Partial UAT (user-driven):
+      - [x] Org without template: generate folder -> `matrix_generate` exists, and `organizations.data.matrixTemplate` is created.
+      - [x] Same org, default checked (`Use organization matrix`): generate folder -> no `matrix_generate`, and `folders.matrixConfig` = org template.
+      - [x] Same org, uncheck `Use organization matrix`: generate folder -> `folders.matrixConfig` = generic default matrix (`defaultMatrixConfig`), different from org template.
+      - [x] UI options: exactly one matrix option is visible and checked by default (`Use organization matrix` if template exists, otherwise `Generate organization matrix`).
+
+  - [x] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
+    - [x] **Lot 2.3.0 — Intake lock and contract freeze**
+      - [x] Assess current model and define `spec/SPEC_TEMPLATING.md` for target mutualized endpoint and template requirements (based on use-case templating and existing template/README)
+      - [x] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
+      - [x] Update `api/templates/README.md` with template authoring guide (required markers, TOC rules, Word/LibreOffice/Google Docs workflow).
+      - [x] Freeze TOC strategy (Word native TOC field, heading-level contract, update-fields policy).
+      - [x] User input bundle (single intake):
+        - [x] Provide `executive-synthesis.docx` master template.
+        - [x] Provide annex intent (include annex section: yes/no; pagination controlled by template layout). => include annex = yes, page break before each use case configured in sub-template
+        - [x] Provide dashboard intent (include dashboard image: yes/no) => yes (from UI)
+        - [x] Provide one reference UAT dataset (folder id with executive summary + multiple use cases) folder 1c871982-9962-468c-8fd9-353c2d27a023
+      - [x] Extract template marker inventory from the provided DOCX (all `{{...}}` placeholders).
+      - [x] Freeze endpoint I/O contract (request/response schema) based on the template markers.
+      - [x] Freeze annex/dashboard composition intents.
+      - Notes:
+        - Markers extracted from `executive_synthesis.docx`: `report.title`, `folder.name`, `folder.executiveSummary.synthese_executive`, `folder.executiveSummary.introduction`, `folder.executiveSummary.analyse`, `folder.executiveSummary.recommandation`, `folder.execSummary.references`, `annex.title`, `annex.subtitle`, `provided.dashboardImage`, and annex loop (`FOR uc ... INCLUDE ... END-FOR uc`).
+        - Unified payload contract frozen: `templateId`, `entityType`, `entityId`, `provided`, `controls` (+ legacy alias `options`).
+    - [x] **Lot 2.3.1 — Unified endpoint + template registry skeleton**
+      - [x] Introduce unified generation endpoint for DOCX (`templateId`, `entityType`, `entityId`, `provided`, `controls`) with backward-compatible alias for legacy `options`.
+      - [x] Implement template registry strategy (`templateId -> validator/provider/renderer`).
+      - [x] Remove synchronous binary DOCX API flow (DoS risk): no direct inline rendering in request thread.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
+    - [x] **Lot 2.3.1.b — Queue split (`ai` vs `publishing`) + async DOCX jobs**
+      - [x] Introduce `docx_generate` job type and route all DOCX generation through queue manager.
+      - [x] Implement queue-class scheduling (`ai` vs `publishing`) on shared `job_queue`.
+      - [x] Add configurable `publishing_concurrency` (default 5) and keep `ai_concurrency` isolated.
+      - [x] Expose async generation contract:
+        - [x] `POST /api/v1/docx/generate` returns `jobId` (enqueue only, no binary payload).
+        - [x] `GET /api/v1/docx/jobs/:jobId/download` returns binary when job is completed.
+      - [x] Remove/retire legacy sync route `GET /api/v1/use-cases/:id/docx`.
+      - [x] Implement real queue cancel endpoint for interruptible jobs (`/queue/jobs/:id/cancel`).
+      - [x] Gate: `make typecheck-api` + `make lint-api`
+    - [x] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
+      - [x] Wire `executive-synthesis.docx` master template.
+      - [x] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
+      - [x] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
+      - [x] Ensure heading styles are preserved for synthesis sections and annexed use case titles (TOC-compatible).
+      - [x] Ensure references rendering uses the marker contract.
+      - [x] Stream DOCX progress events on `job_<jobId>` (`status` with `state/progress/current/total`).
+      - [x] Surface DOCX progress in queue snapshots/UI job card.
+      - [x] Replace UI label `Jobs IA` / `AI jobs` with `Jobs`.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Gate: `make typecheck-ui` + `make lint-ui`
+      - [x] Cleanup temporary DOCX diagnostic logs after async/UAT retests (keep only durable operational logs).
+      - [x] Partial UAT:
+        - [x] Download use case DOCX and verify there is no regression
+        - [x] Download synthesis DOCX
+        - [x] Trigger DOCX generation and verify async behavior (API remains responsive; job visible under Jobs tab).
+        - [x] Verify interruptibility: cancel running DOCX job and confirm `failed/cancelled` state.
+        - [x] Verify live progress stream updates during annex rendering (`current/total` increments).
+        - [x] DOCX and verify section order follows template marker placement.
+        - [x] PDF css print still renders correctly (with same limitations)
+        - [x] DOCX contains rendered usecase
+        - [x] DOCX titles map PDF ones
+        - [x] Verify annex starts exactly at template-defined separator/location.
+        - [x] Verify TOC lists all section
+        - [!] Verify TOC lists all annex entries = each use case title with correct page numbers after field update (deferred)
+        - [x] Verify links/references rendering is preserved.
+        - [x] Pop up when preparing doc
+        - [x] Pop up keeps open, with button when prepared
+        - [x] App is still alive when preparing doc (worker)
+        - [x] Isolated API check (`ENV=e2e`): magic-link auth + `POST /docx/generate` + `GET /docx/jobs/:id/download` returns a valid DOCX binary.
+    - [x] **Lot 2.3.3 — Dashboard bitmap injection**
+      - [x] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
+      - [x] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
+      - [x] Implement fallback behavior when image is missing/invalid.
+      - [x] Gate: `make typecheck-api` + `make lint-api`
+      - [x] Partial UAT:
+        - [x] Verify dashboard image is present at expected location and remains readable.
+        - [x] Verify fallback rendering when bitmap is omitted.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Tests (by scope, by file)
-  - [ ] API: none (no test updates in scope)
-  - [ ] UI: none (no test updates in scope)
-  - [ ] E2E: none (no test updates in scope)
-  - [ ] Sub-lot gate: `make test-api`
-  - [ ] Sub-lot gate: `make test-ui`
-  - [ ] Prepare E2E build: `make build-api build-ui-image`
-  - [ ] Sub-lot gate: `make clean test-e2e`
-  - [ ] Final gate: Create PR with BRANCH.md content & verify CI
-  - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
+  - [x] Campaign rules and isolated environments:
+    - [x] API/UI environment: `ENV=test API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1083`
+    - [x] E2E environment (adjust ports if occupied by `dev`): `ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Split checks between evolution scope and regression scope.
+    - [x] On non-touched failure, inspect history before deciding fix direction:
+      - [x] `git log --oneline origin/main..HEAD -- <affected-path>`
+      - [x] `git blame <affected-file>` around failing lines
+      - [x] Decide explicitly: code regression vs stale/invalid test.
+    - [x] E2E hygiene rule for each run:
+      - [x] `make clean ENV=e2e ...`
+      - [x] `make test-e2e E2E_SPEC=... ENV=e2e ...`
+      - [x] `make clean ENV=e2e ...`
+  - [x] **API tests**
+    - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-api ENV=test ...` + `make lint-api ENV=test ...`
+    - [x] Scoped evolution suites:
+      - [x] `make test-api-endpoints SCOPE=tests/api/folders.test.ts ENV=test ...`
+      - [x] `make test-api-queue SCOPE=tests/queue/queue.test.ts ENV=test ...`
+      - [x] `make test-api-ai SCOPE=tests/ai/executive-summary-sync.test.ts ENV=test ...`
+    - [x] Regression gate: `make test-api ENV=test ...`
+    - [x] Deferred API suites (Wave 1 + Wave 2 backlog):
+      - [x] `api/tests/api/import-export.test.ts`
+      - [x] `api/tests/api/docx.test.ts` (one-page + executive synthesis contract)
+      - [x] `api/tests/api/ai-settings.test.ts`
+      - [x] `api/tests/api/use-cases.test.ts`
+      - [x] `api/tests/api/companies.test.ts` (organization API coverage)
+      - [x] `api/tests/api/folders.test.ts`
+      - [x] `api/tests/api/use-cases-generate-matrix.test.ts` (matrix-mode generation coverage)
+    - [x] Sub-lot gate: `make test-api ENV=test ...`
+  - [x] **UI tests (TypeScript only)**
+    - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
+    - [x] Regression gate: `make test-ui ENV=test ...`
+    - [x] Deferred UI suites:
+      - [x] `ui/tests/i18n.spec.ts` (not present in repo)
+      - [x] `ui/tests/stores/folders.test.ts`
+    - [x] Sub-lot gate: `make test-ui ENV=test ...`
+  - [x] **E2E tests**
+    - [x] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Scoped evolution specs:
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Deferred E2E suites (Wave 1 + Wave 2 backlog):
+      - [x] `e2e/tests/00-access-control.spec.ts`
+      - [x] `e2e/tests/00-ai-generation.spec.ts`
+      - [x] `e2e/tests/01-admin-users.spec.ts`
+      - [x] `e2e/tests/01-app.spec.ts`
+      - [x] `e2e/tests/01-organizations-detail.spec.ts`
+      - [x] `e2e/tests/02-organizations.spec.ts`
+      - [x] `e2e/tests/03-chat.spec.ts`
+      - [x] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+      - [x] `e2e/tests/04-dossiers-reload-draft.spec.ts`
+      - [x] `e2e/tests/04-documents-summary.spec.ts`
+      - [x] `e2e/tests/04-documents-ui-actions.spec.ts`
+      - [x] `e2e/tests/04-tenancy-workspaces.spec.ts`
+      - [x] `e2e/tests/05-error-handling.spec.ts`
+      - [x] `e2e/tests/05-folders.spec.ts`
+      - [x] `e2e/tests/05-i18n.spec.ts`
+      - [x] `e2e/tests/05-usecase-detail.spec.ts` (DOCX + constraints live update)
+      - [x] `e2e/tests/06-settings.spec.ts`
+      - [x] `e2e/tests/06-streams.spec.ts`
+      - [x] `e2e/tests/06-usecase.spec.ts`
+      - [x] `e2e/tests/07-import-export.spec.ts`
+      - [x] `e2e/tests/07-matrix.spec.ts`
+      - [x] `e2e/tests/07-workflow.spec.ts`
+      - [x] `e2e/tests/07_comment_assistant.spec.ts`
+      - [x] `e2e/tests/05-executive-summary.spec.ts`
+    - [x] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+  - [ ] **Delta-based inventory: required tests from `origin/main..HEAD`**
+    - [x] API — DOCX async/templating/queue:
+      - [x] `POST /api/v1/docx/generate` success test for `templateId=executive-synthesis-multipage` + `entityType=folder`.
+      - [x] Locale propagation test (`Accept-Language` -> `locale`) for DOCX generation requests.
+      - [x] Source hash behavior tests:
+        - [x] same payload + same locale => same reusable job.
+        - [x] same payload + different locale => different source hash/new job.
+      - [x] Download path from S3 storage key (`storageBucket`/`storageKey`) with valid DOCX headers/body.
+      - [x] Cache invalidation tests for `invalidateDocxCacheForEntity` when source changes.
+      - [x] Publishing queue-class behavior tests (respect `publishingConcurrency`, independent from AI queue).
+      - [x] Worker failure propagation test (`docx_generate` job -> failed with explicit error payload).
+      - [x] Worker progress stream test (`job_<id>` emits progress/status/done sequence).
+    - [x] API — matrix generation integration:
+      - [x] Explicit test for `matrix_mode=generate` request path (not only default inference).
+      - [x] Explicit test for `matrix_mode=default` request path.
+      - [x] Explicit behavior test: `matrix_mode=generate` without `organization_id` falls back to `default` (current API behavior).
+      - [x] Strict failure policy test: matrix generation failure blocks downstream generation.
+      - [x] Prompt payload contract test for `organization_matrix_template` inputs.
+    - [x] API — use-case detail payload contract regression:
+      - [x] Add assertions that generated payload contains all required scalar fields with non-empty values (not only `constraints`).
+      - [x] Add assertions that required list fields are present and non-empty arrays (`technologies`, `benefits`, `metrics`, `risks`, `constraints`, `nextSteps`, `dataSources`, `dataObjects`, scores arrays).
+      - [x] Keep a dedicated guard for `constraints[]` (historical regression already observed on this field).
+      - [x] Add negative test rejecting empty/placeholder-only list items during generation normalization.
+    - [x] API — AI settings / queue config:
+      - [x] `PUT /api/v1/ai-settings` test including `publishingConcurrency` update + queue manager reload effect.
+      - [x] `PUT /api/v1/ai-settings/:key` test for `publishing_concurrency`.
+    - [x] UI unit tests (TypeScript, no Svelte component tests):
+      - [x] Add `ui/tests/utils/docx.test.ts` coverage for:
+        - [x] `startDocxGeneration` request shape.
+        - [x] `waitForDocxJobCompletion` timeout/failure/success polling.
+        - [x] `downloadCompletedDocxJob` filename extraction from `content-disposition`.
+      - [x] Add dashboard state-machine tests for `idle -> preparing -> ready -> idle`.
+      - [x] Add tests for “ready toast with action button” behavior.
+      - [x] Add tests for reset-to-idle when folder/executive summary changes.
+    - [ ] E2E — executive synthesis DOCX:
+      - [x] E2E file map (explicit touched/added files for this lot):
+        - [x] `e2e/tests/03-dashboard.spec.ts` (retouch): menu flow `Prepare DOCX` -> `Preparing...` -> `Download DOCX`, started/ready toasts, invalidation back to `Prepare DOCX`.
+        - [x] `e2e/tests/05-executive-summary.spec.ts` (retouch): annex rendering regression checks (all use cases rendered, no unintended blank annex pages in print layout assertions).
+        - [x] `e2e/tests/05-i18n.spec.ts` (retouch): deterministic FR/EN switch checks (remove permissive `if (isVisible)` guards + unskip cross-page language persistence check).
+        - [x] `e2e/tests/05-executive-summary-docx.spec.ts` (not required; assertions kept in existing files above).
+      - [x] Dashboard file menu action flow:
+        - [x] “Prepare DOCX” visible in idle.
+        - [x] switches to “Preparing…” while job running.
+        - [x] switches to “Download DOCX” when done.
+      - [x] Toast flow:
+        - [x] “preparation started” toast appears.
+        - [x] persistent “document ready” toast appears with download action.
+      - [x] Download correctness:
+        - [x] download event is triggered from menu download action.
+        - [x] downloaded filename matches executive synthesis naming contract.
+      - [x] Invalidation behavior:
+        - [x] edit executive summary content, then menu returns to “Prepare DOCX”.
+      - [ ] Locale-sensitive export:
+        - [ ] switch FR -> EN, export synthesis DOCX, assert EN projection behavior.
+        - [ ] switch EN -> FR, export synthesis DOCX, assert FR projection behavior.
+      - [x] Annex rendering regression:
+        - [x] annex contains all use cases for target folder.
+        - [x] no blank annex pages introduced by loop/section breaks.
+    - [ ] E2E — i18n reliability hardening:
+      - [x] Remove/replace permissive `if (isVisible)` branches on critical i18n assertions.
+      - [x] Replace skipped “change language across pages” test with deterministic selectors.
+      - [ ] Add explicit checks for recently fixed labels:
+        - [x] dashboard quadrant labels.
+        - [x] folder new labels/placeholders.
+        - [ ] matrix warning banner.
+          - [x] Deterministic fallback covered in matrix area when warning is not rendered: empty-state label + create-modal labels (FR/EN).
+    - [x] E2E — quality debt cleanup:
+      - [x] Reduce broad conditional passes in `03-dashboard` and `05-executive-summary`.
+      - [x] Convert high-value skipped tests to active deterministic tests (where feature exists).
+      - [x] Keep non-implemented features as explicit deferred items only.
+  - [ ] User smoke test
+  - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.

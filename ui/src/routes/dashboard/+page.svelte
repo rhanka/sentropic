@@ -1,12 +1,12 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
-  // L'usage de {@html} dans ce fichier passe par renderMarkdownWithRefs()
-  // qui sanitize automatiquement le HTML avec DOMPurify pour protéger contre les attaques XSS
+  // {@html} usage in this file is routed through renderMarkdownWithRefs(),
+  // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import { onMount, onDestroy, tick } from 'svelte';
   import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
-  import { addToast } from '$lib/stores/toast';
+  import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
@@ -15,9 +15,22 @@
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import FileMenu from '$lib/components/FileMenu.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
-  import { Printer, RotateCcw, FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import {
+    downloadCompletedDocxJob,
+    startDocxGeneration,
+    waitForDocxJobCompletion,
+  } from '$lib/utils/docx';
+  import {
+    getDashboardDocxMenuState,
+    reduceDashboardDocxState,
+    type DashboardDocxEvent,
+  } from '$lib/utils/dashboard-docx-state';
+  import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
 
   let isLoading = false;
   let summaryBox: HTMLElement | null = null;
@@ -27,16 +40,30 @@
   let currentFolder: any = null;
   let executiveSummary: any = null;
   let isGeneratingSummary = false;
+  let dashboardDocxState: 'idle' | 'preparing' | 'ready' = 'idle';
+  let dashboardDocxJobId: string | null = null;
+  let dashboardDocxWatchToken = 0;
+  let lastDocxStateFolderId: string | null = null;
+  let dashboardDocxMenuLabel = '';
+  let dashboardDocxActionDisabled = true;
+  let dashboardDocxReadyToastId: string | null = null;
+  let scatterPlotRef:
+    | {
+        getDocxBitmapSnapshot?: () =>
+          | { dataUrl: string; widthPx: number; heightPx: number }
+          | null;
+      }
+    | null = null;
   const HUB_KEY = 'dashboardPage';
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   
-  // Variables locales pour l'édition markdown (non persistantes)
+  // Local state for markdown editing (not persisted)
   let editedIntroduction = '';
   let editedAnalyse = '';
   let editedRecommandation = '';
   let editedSyntheseExecutive = '';
   
-  // Fonction pour initialiser les valeurs éditées depuis executiveSummary
+  // Initialize edited values from executiveSummary
   function initializeEditedValues() {
     if (!executiveSummary) {
       editedIntroduction = '';
@@ -166,6 +193,7 @@
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    clearDashboardDocxReadyToast();
   });
 
   const loadData = async () => {
@@ -191,7 +219,7 @@
       console.error('Failed to load dashboard data:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des données du dashboard'
+        message: get(_)('dashboard.errors.load')
       });
     } finally {
       isLoading = false;
@@ -222,7 +250,7 @@
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
     if ($workspaceReadOnlyScope) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : génération désactivée.' });
+      addToast({ type: 'warning', message: get(_)('dashboard.readOnlyGenerationDisabled') });
       return;
     }
     
@@ -236,7 +264,7 @@
       
       addToast({
         type: 'success',
-        message: result.message || 'Génération de la synthèse exécutive démarrée'
+        message: result.message || get(_)('dashboard.toast.generationStarted')
       });
       
       // Recharger le folder pour mettre à jour le statut
@@ -249,7 +277,7 @@
       console.error('Failed to generate executive summary:', error);
       addToast({
         type: 'error',
-        message: error?.data?.message || 'Erreur lors de la génération de la synthèse exécutive'
+        message: error?.data?.message || get(_)('dashboard.errors.generate')
       });
     } finally {
       isGeneratingSummary = false;
@@ -303,6 +331,9 @@
           // Les variables edited* seront mises à jour via la réactivité de initializeEditedValues
         }
       }
+
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'content_changed' });
     } catch (error) {
       console.error('Failed to reload folder after save:', error);
     }
@@ -327,10 +358,234 @@
       // Mettre à jour le store des dossiers
       const folders = await fetchFolders();
       foldersStore.set(folders);
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'content_changed' });
     } catch (error) {
       console.error('Failed to reload folder after name save:', error);
     }
   };
+
+  const clearDashboardDocxReadyToast = () => {
+    if (dashboardDocxReadyToastId) {
+      removeToast(dashboardDocxReadyToastId);
+      dashboardDocxReadyToastId = null;
+    }
+  };
+
+  const applyDashboardDocxEvent = (event: DashboardDocxEvent) => {
+    const next = reduceDashboardDocxState(
+      {
+        state: dashboardDocxState,
+        jobId: dashboardDocxJobId,
+      },
+      event
+    );
+    dashboardDocxState = next.state;
+    dashboardDocxJobId = next.jobId;
+  };
+
+  const showDashboardDocxReadyToast = (jobId: string) => {
+    clearDashboardDocxReadyToast();
+    dashboardDocxReadyToastId = addToast({
+      type: 'success',
+      message: get(_)('dashboard.toast.docxReady'),
+      duration: 0,
+      actionLabel: get(_)('dashboard.docx.menu.download'),
+      actionIcon: 'download',
+      onAction: async () => {
+        try {
+          await downloadCompletedDocxJob(jobId, getExecutiveSynthesisFallbackName());
+          clearDashboardDocxReadyToast();
+          applyDashboardDocxEvent({ type: 'downloaded' });
+        } catch (error) {
+          addToast({
+            type: 'error',
+            message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+          });
+        }
+      },
+    });
+  };
+
+  const getExecutiveSynthesisFallbackName = () =>
+    `executive-synthesis-${(selectedFolderName || 'dashboard').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'dashboard'}.docx`;
+
+  const findLatestExecutiveSynthesisDocxJob = async (folderId: string) => {
+    const jobs = await apiGet<any[]>('/queue/jobs');
+    const matches = (jobs || [])
+      .filter(
+        (job) =>
+          job?.type === 'docx_generate' &&
+          job?.data?.templateId === 'executive-synthesis-multipage' &&
+          job?.data?.entityType === 'folder' &&
+          job?.data?.entityId === folderId &&
+          typeof job?.data?.provided?.dashboardImage === 'object'
+      )
+      .sort((a, b) => {
+        const aTs = new Date(a?.createdAt || 0).getTime();
+        const bTs = new Date(b?.createdAt || 0).getTime();
+        return bTs - aTs;
+      });
+    return matches[0] || null;
+  };
+
+  const watchExecutiveSynthesisDocxJob = async (jobId: string, notifyOnReady: boolean) => {
+    const watchToken = ++dashboardDocxWatchToken;
+    try {
+      const finalJob = await waitForDocxJobCompletion(jobId);
+      if (watchToken !== dashboardDocxWatchToken) return;
+
+      if (finalJob.status === 'completed') {
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId });
+        if (notifyOnReady) {
+          showDashboardDocxReadyToast(jobId);
+        }
+        return;
+      }
+
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'prepare_failed' });
+      addToast({
+        type: 'error',
+        message: finalJob.error || get(_)('dashboard.errors.docxPrepare'),
+      });
+    } catch (error) {
+      if (watchToken !== dashboardDocxWatchToken) return;
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'prepare_failed' });
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+      });
+    }
+  };
+
+  const refreshExecutiveSynthesisDocxState = async (folderId: string) => {
+    try {
+      const latestJob = await findLatestExecutiveSynthesisDocxJob(folderId);
+      if (!latestJob) {
+        dashboardDocxWatchToken += 1;
+        clearDashboardDocxReadyToast();
+        applyDashboardDocxEvent({ type: 'cleared' });
+        return;
+      }
+
+      if (latestJob.status === 'completed') {
+        dashboardDocxWatchToken += 1;
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId: latestJob.id });
+        return;
+      }
+
+      if (latestJob.status === 'pending' || latestJob.status === 'processing') {
+        clearDashboardDocxReadyToast();
+        applyDashboardDocxEvent({ type: 'prepare_started', jobId: latestJob.id });
+        void watchExecutiveSynthesisDocxJob(latestJob.id, false);
+        return;
+      }
+
+      dashboardDocxWatchToken += 1;
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'cleared' });
+    } catch {
+      dashboardDocxWatchToken += 1;
+      clearDashboardDocxReadyToast();
+      applyDashboardDocxEvent({ type: 'cleared' });
+    }
+  };
+
+  const startExecutiveSynthesisDocxPreparation = async () => {
+    if (!selectedFolderId) return;
+
+    try {
+      const scatterSnapshot = scatterPlotRef?.getDocxBitmapSnapshot?.() ?? null;
+      const base64Payload =
+        scatterSnapshot?.dataUrl?.startsWith('data:')
+          ? (scatterSnapshot.dataUrl.split(',', 2)[1] ?? '')
+          : '';
+      const provided: Record<string, unknown> = {
+        dashboardImage: {
+          dataBase64: base64Payload,
+          mimeType: 'image/png',
+          widthPx: scatterSnapshot?.widthPx ?? 0,
+          heightPx: scatterSnapshot?.heightPx ?? 0,
+        },
+      };
+
+      const result = await startDocxGeneration({
+        templateId: 'executive-synthesis-multipage',
+        entityType: 'folder',
+        entityId: selectedFolderId,
+        provided,
+        controls: {},
+      });
+      if (result.status === 'completed') {
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId: result.jobId });
+        showDashboardDocxReadyToast(result.jobId);
+      } else {
+        clearDashboardDocxReadyToast();
+        applyDashboardDocxEvent({ type: 'prepare_started', jobId: result.jobId });
+        addToast({
+          type: 'info',
+          message: get(_)('dashboard.toast.docxPreparationStarted'),
+        });
+        void watchExecutiveSynthesisDocxJob(result.jobId, true);
+      }
+    } catch (error) {
+      console.error('Failed to start executive synthesis DOCX preparation:', error);
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+      });
+    }
+  };
+
+  const handleDashboardDocxMenuAction = async () => {
+    if (!selectedFolderId || dashboardDocxState === 'preparing') return;
+
+    if (dashboardDocxState === 'ready' && dashboardDocxJobId) {
+      try {
+        await downloadCompletedDocxJob(dashboardDocxJobId, getExecutiveSynthesisFallbackName());
+      } catch (error) {
+        console.error('Failed to download executive synthesis DOCX:', error);
+        addToast({
+          type: 'error',
+          message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
+        });
+      } finally {
+        clearDashboardDocxReadyToast();
+        applyDashboardDocxEvent({ type: 'downloaded' });
+      }
+      return;
+    }
+
+    await startExecutiveSynthesisDocxPreparation();
+  };
+
+  $: {
+    const menuState = getDashboardDocxMenuState(
+      { state: dashboardDocxState, jobId: dashboardDocxJobId },
+      Boolean(selectedFolderId)
+    );
+    dashboardDocxMenuLabel =
+      menuState.labelKey === 'preparing'
+        ? get(_)('dashboard.docx.menu.preparing')
+        : menuState.labelKey === 'download'
+          ? get(_)('dashboard.docx.menu.download')
+          : get(_)('dashboard.docx.menu.prepare');
+    dashboardDocxActionDisabled = menuState.disabled;
+  }
+
+  $: if (selectedFolderId && selectedFolderId !== lastDocxStateFolderId) {
+    lastDocxStateFolderId = selectedFolderId;
+    void refreshExecutiveSynthesisDocxState(selectedFolderId);
+  }
+
+  $: if (!selectedFolderId) {
+    lastDocxStateFolderId = null;
+    dashboardDocxWatchToken += 1;
+    clearDashboardDocxReadyToast();
+    applyDashboardDocxEvent({ type: 'cleared' });
+  }
 
 
 
@@ -523,13 +778,13 @@
 {#if selectedFolderId && executiveSummary}
   <div class="report-cover-page">
     <div class="report-cover-header">
-      <h1 class="report-cover-title">Rapport Top AI Ideas</h1>
+      <h1 class="report-cover-title">{$_('dashboard.reportTitle')}</h1>
       <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
     </div>
     
     {#if editedSyntheseExecutive}
       <div class="report-cover-summary" bind:this={summaryBox}>
-        <h3>Synthèse exécutive</h3>
+        <h3>{$_('dashboard.execSummary')}</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
             {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
@@ -546,8 +801,8 @@
 
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="w-full print-hidden">
-    <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0 flex-1">
+    <div class="grid grid-cols-12 items-start gap-4">
+      <div class="col-span-8 min-w-0">
         {#if selectedFolderId}
           {#if $workspaceReadOnlyScope}
             <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
@@ -571,17 +826,33 @@
           <h1 class="text-3xl font-semibold">{selectedFolderName || 'Dashboard'}</h1>
         {/if}
       </div>
-      {#if showReadOnlyLock}
-        <button
-          class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
-          title="Mode lecture seule : édition / génération désactivées."
-          aria-label="Mode lecture seule : édition / génération désactivées."
-          type="button"
-          disabled
-        >
-          <Lock class="w-5 h-5" />
-        </button>
-      {/if}
+      <div class="col-span-4 flex items-center justify-end gap-2 pt-1">
+        <FileMenu
+          showNew={false}
+          showImport={false}
+          showExport={false}
+          showDelete={false}
+          showDownloadDocx={true}
+          showPrint={true}
+          labelDownloadDocx={dashboardDocxMenuLabel}
+          disabledDownloadDocx={dashboardDocxActionDisabled}
+          onDownloadDocx={handleDashboardDocxMenuAction}
+          onPrint={() => window.print()}
+          triggerTitle={$_('common.actions')}
+          triggerAriaLabel={$_('common.actions')}
+        />
+        {#if showReadOnlyLock}
+          <button
+            class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
+            title={$_('dashboard.readOnlyGenerationDisabled')}
+            aria-label={$_('dashboard.readOnlyGenerationDisabled')}
+            type="button"
+            disabled
+          >
+            <Lock class="w-5 h-5" />
+          </button>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -592,33 +863,16 @@
         <div class="flex items-center gap-3">
           <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
           <div>
-            <p class="text-sm font-medium text-blue-700">Génération de la synthèse exécutive en cours...</p>
-            <p class="text-xs text-blue-600 mt-1">Cela peut prendre quelques instants</p>
+            <p class="text-sm font-medium text-blue-700">{$_('dashboard.execSummaryGenerating')}</p>
+            <p class="text-xs text-blue-600 mt-1">{$_('dashboard.execSummaryGeneratingHint')}</p>
           </div>
         </div>
       </div>
     {:else if executiveSummary}
       <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
         <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
-          <h2 class="text-2xl font-semibold text-slate-900">Synthèse exécutive</h2>
-          <div class="flex items-center gap-2">
-            <button
-              on:click={() => window.print()}
-              class="p-2 text-blue-600 hover:text-blue-700 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
-              title="Imprimer ou exporter le rapport en PDF"
-            >
-              <Printer class="w-5 h-5" />
-            </button>
-          <button
-            on:click={generateExecutiveSummary}
-            disabled={isGeneratingSummary}
-              class="p-2 text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
-              title="Régénérer la synthèse exécutive"
-          >
-              <RotateCcw class="w-5 h-5 {isGeneratingSummary ? 'animate-spin' : ''}" />
-          </button>
+          <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
         </div>
-            </div>
         
         {#if editedSyntheseExecutive}
           <EditableInput
@@ -640,15 +894,15 @@
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-slate-900 mb-1">Synthèse exécutive</h2>
-            <p class="text-sm text-slate-600">Aucune synthèse exécutive disponible pour ce dossier</p>
+            <h2 class="text-lg font-semibold text-slate-900 mb-1">{$_('dashboard.execSummary')}</h2>
+            <p class="text-sm text-slate-600">{$_('dashboard.execSummaryEmpty')}</p>
           </div>
           <button
             on:click={generateExecutiveSummary}
             disabled={isGeneratingSummary}
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isGeneratingSummary ? 'Génération...' : 'Générer la synthèse'}
+            {isGeneratingSummary ? $_('dashboard.execSummaryGenerating') : $_('dashboard.execSummaryGenerate')}
           </button>
         </div>
       </div>
@@ -659,7 +913,7 @@
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
       <div class="flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-        <p class="text-sm text-blue-700 font-medium">Chargement des données...</p>
+        <p class="text-sm text-blue-700 font-medium">{$_('dashboard.loadingData')}</p>
       </div>
     </div>
   {:else}
@@ -675,11 +929,11 @@
                 <FileText class="w-8 h-8 text-blue-500" />
               </div>
               <div class="ml-4">
-                <p class="text-sm font-medium text-slate-500">Nombre de cas d'usage</p>
+                <p class="text-sm font-medium text-slate-500">{$_('dashboard.useCaseCount')}</p>
                 <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
                 {#if roiStats.count > 0}
                   <p class="text-xs text-green-600 mt-1">
-                    Valeur médiane: {roiStats.avgValue.toFixed(1)} pts | Complexité médiane: {roiStats.avgComplexity.toFixed(1)} pts
+                    {$_('dashboard.roiStats.medianValue')}: {roiStats.avgValue.toFixed(1)} {$_('common.pointsAbbr')} | {$_('dashboard.roiStats.medianComplexity')}: {roiStats.avgComplexity.toFixed(1)} {$_('common.pointsAbbr')}
                   </p>
                 {/if}
               </div>
@@ -693,7 +947,7 @@
                   <TrendingUp class="w-8 h-8 text-green-600" />
                 </div>
                 <div class="ml-4 flex-1">
-                  <p class="text-sm font-medium text-green-700">Gains rapides</p>
+                  <p class="text-sm font-medium text-green-700">{$_('dashboard.quickWins')}</p>
                   <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
                 </div>
               </div>
@@ -709,7 +963,7 @@
               <button
                 on:click={() => configOpen = !configOpen}
                 class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
-                title="Configuration du quadrant ROI"
+                title={$_('dashboard.roiConfig.buttonTitle')}
               >
                 <Settings class="w-5 h-5 text-slate-500" />
                 {#if valueThreshold !== null || complexityThreshold !== null}
@@ -720,11 +974,11 @@
               {#if configOpen}
                 <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
                   <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-slate-700">Configuration du quadrant ROI</span>
+                    <span class="text-sm font-medium text-slate-700">{$_('dashboard.roiQuadrantConfig')}</span>
                     <button
                       on:click={() => configOpen = false}
                       class="text-slate-400 hover:text-slate-600"
-                      aria-label="Fermer la configuration"
+                      aria-label={$_('dashboard.roiConfig.close')}
                     >
                       <X class="w-5 h-5" />
                     </button>
@@ -732,7 +986,7 @@
                   <div class="grid gap-4 md:grid-cols-2">
                     <div>
                       <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        Seuil de valeur (pts)
+                        {$_('dashboard.roiConfig.valueThreshold')}
                       </label>
                       <div class="flex items-center gap-2">
                         <input
@@ -752,19 +1006,21 @@
                         <button
                           on:click={() => valueThreshold = null}
                           class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title="Utiliser la médiane"
+                          title={$_('common.useMedian')}
                         >
-                          Médiane ({medianValue.toFixed(1)})
+                          {$_('common.median')} ({medianValue.toFixed(1)})
                         </button>
                       </div>
                       <p class="text-xs text-slate-500 mt-1">
-                        {valueThreshold !== null ? `Seuil personnalisé: ${valueThreshold.toFixed(1)}` : `Médiane actuelle: ${medianValue.toFixed(1)}`}
+                        {valueThreshold !== null
+                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${valueThreshold.toFixed(1)}`
+                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianValue.toFixed(1)}`}
                       </p>
                     </div>
                     
                     <div>
                       <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        Seuil de complexité (pts)
+                        {$_('dashboard.roiConfig.complexityThreshold')}
                       </label>
                       <div class="flex items-center gap-2">
                         <input
@@ -784,13 +1040,15 @@
                         <button
                           on:click={() => complexityThreshold = null}
                           class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title="Utiliser la médiane"
+                          title={$_('common.useMedian')}
                         >
-                          Médiane ({medianComplexity.toFixed(1)})
+                          {$_('common.median')} ({medianComplexity.toFixed(1)})
                         </button>
                       </div>
                       <p class="text-xs text-slate-500 mt-1">
-                        {complexityThreshold !== null ? `Seuil personnalisé: ${complexityThreshold.toFixed(1)}` : `Médiane actuelle: ${medianComplexity.toFixed(1)}`}
+                        {complexityThreshold !== null
+                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${complexityThreshold.toFixed(1)}`
+                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianComplexity.toFixed(1)}`}
                       </p>
                     </div>
                   </div>
@@ -800,7 +1058,7 @@
                       on:click={resetToMedians}
                       class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors"
                     >
-                      Réinitialiser aux médianes
+                      {$_('dashboard.roiConfig.resetToMedians')}
                     </button>
                   </div>
                 </div>
@@ -810,6 +1068,7 @@
           
           <div class="flex justify-center">
             <UseCaseScatterPlot 
+              bind:this={scatterPlotRef}
               useCases={completedUseCases} 
               {matrix} 
               bind:roiStats 
@@ -826,7 +1085,7 @@
         {#if editedIntroduction}
           <div id="section-introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Introduction</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.introduction')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -853,35 +1112,35 @@
     <!-- Sommaire (page 3) -->
     {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
       <div class="report-table-of-contents">
-        <h2 class="text-2xl font-semibold text-slate-900 mb-6">Sommaire</h2>
+        <h2 class="text-2xl font-semibold text-slate-900 mb-6">{$_('dashboard.toc')}</h2>
         <ul class="space-y-2 text-slate-700">
           <li class="toc-item">
-            <a href="#section-introduction" class="toc-title toc-link">Introduction</a>
+            <a href="#section-introduction" class="toc-title toc-link">{$_('dashboard.introduction')}</a>
             <span class="toc-dots"></span>
             <span class="toc-page">{pageNumbers.introduction || '-'}</span>
           </li>
           <li class="toc-item">
-            <a href="#section-analyse" class="toc-title toc-link">Analyse</a>
+            <a href="#section-analyse" class="toc-title toc-link">{$_('dashboard.analysis')}</a>
             <span class="toc-dots"></span>
             <span class="toc-page">{pageNumbers.analyse || '-'}</span>
           </li>
           {#if executiveSummary.recommandation}
             <li class="toc-item">
-              <a href="#section-recommandations" class="toc-title toc-link">Recommandations</a>
+              <a href="#section-recommandations" class="toc-title toc-link">{$_('dashboard.recommendations')}</a>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.recommandations || '-'}</span>
             </li>
           {/if}
           {#if executiveSummary.references && executiveSummary.references.length > 0}
             <li class="toc-item">
-              <a href="#section-references" class="toc-title toc-link">Références</a>
+              <a href="#section-references" class="toc-title toc-link">{$_('dashboard.references')}</a>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.references || '-'}</span>
             </li>
           {/if}
           {#if filteredUseCases.length > 0}
             <li class="toc-item">
-              <span class="toc-title">Annexes</span>
+              <span class="toc-title">{$_('dashboard.annex')}</span>
               <span class="toc-dots"></span>
               <span class="toc-page">{pageNumbers.annexes || '-'}</span>
             </li>
@@ -904,7 +1163,7 @@
         {#if editedAnalyse}
           <div id="section-analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Analyse</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.analysis')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -929,7 +1188,7 @@
         {#if editedRecommandation}
           <div id="section-recommandations" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Recommandations</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.recommendations')}</h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -954,7 +1213,7 @@
         {#if executiveSummary.references && executiveSummary.references.length > 0}
           <div id="section-references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">Références</h2>
+              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.references')}</h2>
             </div>
             <References references={executiveSummary.references} />
           </div>
@@ -968,8 +1227,8 @@
 {#if selectedFolderId && filteredUseCases.length > 0}
   <div class="report-cover-page">
     <div class="report-cover-header">
-      <h1 class="report-cover-title">Annexe</h1>
-      <h2 class="report-cover-subtitle">Fiches des cas d'usage</h2>
+      <h1 class="report-cover-title">{$_('dashboard.annex')}</h1>
+      <h2 class="report-cover-subtitle">{$_('dashboard.annexUseCases')}</h2>
     </div>
   </div>
 {/if}
@@ -982,7 +1241,7 @@
           id="usecase-{useCase.id}" 
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
-          data-usecase-title={useCase?.data?.name || useCase?.name || 'Cas d\'usage'}>
+          data-usecase-title={useCase?.data?.name || useCase?.name || $_('usecase.useCase')}>
             <UseCaseDetail
               useCase={useCase}
               matrix={matrix}
@@ -1000,20 +1259,20 @@
 <div class="report-cover-page">
   <div class="report-cover-header">
     <h1 class="report-cover-title">Top AI Ideas</h1>
-    <h2 class="report-cover-subtitle">Priorisez vos innovations par l'apport de valeur</h2>
+    <h2 class="report-cover-subtitle">{$_('dashboard.subtitle')}</h2>
   </div>
   <div class="report-cover-summary">
-    <h3>À Propos</h3>
+    <h3>{$_('dashboard.about')}</h3>
     <div class="prose prose-slate max-w-none">
       <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
         <p>
-          Top AI Ideas s’inscrit dans la vision de SENT-tech : plus de vingt ans d’expertise en innovation, données, digital et intelligence artificielle. Ici, l’IA n’est jamais une finalité, mais un levier devenu indispensable à la compétitivité.
+          {$_('dashboard.backCover.p1')}
         </p>
         <p>
-          La valeur naît d’une approche holistique, où les opportunités d’affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.
+          {$_('dashboard.backCover.p2')}
         </p>
         <p>
-          Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel.
+          {$_('dashboard.backCover.p3')}
         </p>
       </div>
     </div>

@@ -16,6 +16,8 @@
   import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
+  import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
 
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
@@ -103,7 +105,7 @@
       foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
     } catch (error) {
       console.error('Failed to load folder/use cases:', error);
-      addToast({ type: 'error', message: 'Erreur lors du chargement du dossier' });
+      addToast({ type: 'error', message: get(_)('folders.detail.errors.load') });
       currentFolder = null;
     } finally {
       isLoading = false;
@@ -114,7 +116,7 @@
     const folderId = event.detail?.folderId;
     if (folderId && folderId !== currentFolder?.id) {
       currentFolderId.set(folderId);
-      await goto(`/dossiers/${folderId}`);
+      await goto(`/folders/${folderId}`);
       return;
     }
     await loadUseCases();
@@ -206,42 +208,42 @@
 
   const handleUseCaseClick = (useCaseId: string, status: string) => {
     if (status === 'generating' || status === 'detailing') return;
-    goto(`/cas-usage/${useCaseId}`);
+    goto(`/usecase/${useCaseId}`);
   };
 
   const handleDeleteUseCase = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cas d'usage ?")) return;
+    if (!confirm(get(_)('usecase.confirmDelete'))) return;
     try {
       await deleteUseCase(id);
       useCasesStore.update((items) => items.filter((uc) => uc.id !== id));
-      addToast({ type: 'success', message: "Cas d'usage supprimé avec succès !" });
+      addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
     } catch (error) {
       console.error('Failed to delete use case:', error);
       const anyErr = error as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('usecase.errors.readOnlyAction') });
       } else {
-      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+      addToast({ type: 'error', message: get(_)('usecase.errors.delete') });
       }
     }
   };
 
   const handleDeleteFolder = async () => {
     if (!currentFolder) return;
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
+    if (!confirm(get(_)('folders.detail.confirmDelete'))) return;
     try {
       await apiDelete(`/folders/${currentFolder.id}`);
       foldersStore.update((items) => items.filter((f) => f.id !== currentFolder?.id));
       currentFolderId.set(null);
-      addToast({ type: 'success', message: 'Dossier supprimé avec succès !' });
-      goto('/dossiers');
+      addToast({ type: 'success', message: get(_)('folders.deleteSuccess') });
+      goto('/folders');
     } catch (error) {
       console.error('Failed to delete folder:', error);
       const anyErr = error as any;
       if (anyErr?.status === 403) {
-        addToast({ type: 'error', message: 'Action non autorisée (mode lecture seule).' });
+        addToast({ type: 'error', message: get(_)('folders.detail.errors.readOnlyAction') });
       } else {
-        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+        addToast({ type: 'error', message: get(_)('folders.deleteError') });
       }
     }
   };
@@ -359,7 +361,7 @@
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('locks.lockError');
     } finally {
       lockLoading = false;
     }
@@ -402,9 +404,9 @@
     try {
       const res = await requestUnlock('folder', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
     }
   };
 
@@ -412,9 +414,9 @@
     if (!lockTargetId) return;
     try {
       await forceUnlock('folder', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
     }
   };
 
@@ -497,7 +499,7 @@
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
         {#if isReadOnly || isLockedByOther}
-          <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || 'Dossier'}</h1>
+          <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || $_('folders.detail.defaultTitle')}</h1>
         {:else}
           <h1 class="text-3xl font-semibold mb-0 break-words">
             <EditableInput
@@ -521,10 +523,10 @@
           <button
             type="button"
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
-            on:click={() => goto(`/organisations/${orgId}`)}
-            title="Voir l'organisation"
+            on:click={() => goto(`/organizations/${orgId}`)}
+            title={$_('organizations.view')}
           >
-            {currentFolder.organizationName || 'Organisation'}
+            {currentFolder.organizationName || $_('organizations.organization')}
           </button>
         {/if}
         {#if currentFolder.model}
@@ -560,14 +562,14 @@
           onImport={() => (showImportDialog = true)}
           onExport={() => openFolderExport(folderId)}
           onDelete={handleDeleteFolder}
-          triggerTitle="Actions"
-          triggerAriaLabel="Actions"
+          triggerTitle={$_('common.actions')}
+          triggerAriaLabel={$_('common.actions')}
         />
         {#if showReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-            title="Mode lecture seule : création / suppression désactivées."
-            aria-label="Mode lecture seule : création / suppression désactivées."
+            title={$_('common.readOnlyDisabled')}
+            aria-label={$_('common.readOnlyDisabled')}
             type="button"
             disabled
           >
@@ -580,7 +582,7 @@
     <!-- Contexte (entre le titre et le bloc documents) -->
     <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="description">
       <div class="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2 group">
-        Contexte
+        {$_('folders.detail.context')}
         <CommentBadge
           count={commentCounts?.description ?? 0}
           disabled={!openCommentsFor}
@@ -591,7 +593,7 @@
         label=""
         value={editedContext}
         markdown={true}
-        placeholder="Décrire le contexte métier et les objectifs…"
+        placeholder={$_('folders.new.contextPlaceholder')}
         apiEndpoint={`/folders/${currentFolder.id}`}
         fullData={{ description: editedContext }}
         originalValue={currentFolder.description || ''}
@@ -609,12 +611,12 @@
       }}
     />
   {:else}
-    <h1 class="text-3xl font-semibold">Dossier</h1>
+    <h1 class="text-3xl font-semibold">{$_('folders.detail.title')}</h1>
   {/if}
 
   {#if isLoading}
     <div class="rounded border border-blue-200 bg-blue-50 p-4">
-      <p class="text-sm text-blue-700">Chargement des cas d'usage...</p>
+      <p class="text-sm text-blue-700">{$_('folders.detail.loadingUseCases')}</p>
     </div>
   {/if}
 
@@ -641,14 +643,14 @@
             <h2
               class="text-lg sm:text-xl font-medium truncate {(isDetailing || isGenerating) ? 'text-slate-400' : 'text-blue-800 group-hover:text-blue-900 transition-colors'}"
             >
-              {useCase?.data?.name || useCase?.name || "Cas d'usage sans nom"}
+              {useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
             </h2>
           </div>
           {#if !isReadOnly}
             <button
               class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
-              title="Supprimer"
+              title={$_('common.delete')}
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -667,7 +669,7 @@
           {:else}
             <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
               <div class="flex items-center gap-1 flex-wrap">
-                <span class="whitespace-nowrap">Valeur:</span>
+                <span class="whitespace-nowrap">{$_('folders.detail.valueLabel')}</span>
                 {#if matrix}
                   {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
                   {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
@@ -684,15 +686,15 @@
                       {/each}
                     </div>
                   {:else}
-                    <span class="text-gray-400">N/A</span>
+                    <span class="text-gray-400">{$_('common.na')}</span>
                   {/if}
                 {:else}
-                  <span class="text-gray-400">N/A</span>
+                  <span class="text-gray-400">{$_('common.na')}</span>
                 {/if}
               </div>
 
               <div class="flex items-center gap-1 flex-wrap">
-                <span class="whitespace-nowrap">Complexité:</span>
+                <span class="whitespace-nowrap">{$_('folders.detail.complexityLabel')}</span>
                 {#if matrix}
                   {@const valueScores = useCase?.data?.valueScores || useCase?.valueScores}
                   {@const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores}
@@ -709,10 +711,10 @@
                       {/each}
                     </div>
                   {:else}
-                    <span class="text-gray-400">N/A</span>
+                    <span class="text-gray-400">{$_('common.na')}</span>
                   {/if}
                 {:else}
-                  <span class="text-gray-400">N/A</span>
+                  <span class="text-gray-400">{$_('common.na')}</span>
                 {/if}
               </div>
             </div>
@@ -722,13 +724,13 @@
         <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
           <span class="text-xs text-slate-400 whitespace-nowrap">
             {#if isDetailing}
-              Détail en cours...
+              {$_('usecase.status.detailing')}
             {:else if isGenerating}
-              Génération en cours...
+              {$_('usecase.status.generating')}
             {:else if isDraft}
-              Brouillon
+              {$_('common.draft')}
             {:else}
-              Cliquez pour voir les détails
+              {$_('common.clickToView')}
             {/if}
           </span>
 
@@ -741,11 +743,11 @@
             {#if isDetailing}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
                 <Loader2 class="w-3 h-3 mr-1 animate-spin flex-shrink-0" />
-                Détail en cours
+                {$_('usecase.status.detailingShort')}
               </span>
             {:else if isDraft}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 whitespace-nowrap">
-                Brouillon
+                {$_('common.draft')}
               </span>
             {/if}
           </div>
@@ -763,7 +765,7 @@
   <ImportExportDialog
     bind:open={$folderExportState.open}
     mode="export"
-    title="Exporter le dossier"
+    title={$_('folders.export.singleTitle')}
     scope="folder"
     scopeId={$folderExportState.folderId ?? currentFolder.id}
     allowScopeSelect={false}
@@ -775,10 +777,10 @@
     includeOptions={
       [
         ...(currentFolder?.organizationId
-          ? [{ id: 'organization', label: "Inclure l'organisation", defaultChecked: true }]
+          ? [{ id: 'organization', label: $_('folders.export.include.organization'), defaultChecked: true }]
           : []),
-        { id: 'usecases', label: "Inclure les cas d'usage", defaultChecked: true },
-        { id: 'matrix', label: 'Inclure la matrice', defaultChecked: true },
+        { id: 'usecases', label: $_('folders.export.include.usecases'), defaultChecked: true },
+        { id: 'matrix', label: $_('folders.export.include.matrix'), defaultChecked: true },
       ]
     }
     includeAffectsComments={['organization', 'usecases', 'matrix']}
@@ -788,16 +790,14 @@
   <ImportExportDialog
     bind:open={showImportDialog}
     mode="import"
-    title="Importer un cas d'usage"
+    title={$_('usecase.import.title')}
     scope="folder"
     defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
     importObjectTypes={['usecases']}
     importTargetType="folder"
-    importTargetLabel="Dossier cible"
+    importTargetLabel={$_('folders.import.targetFolder')}
     importTargetOptions={[{ id: currentFolder.id, label: currentFolder.name }]}
     defaultImportTargetId={currentFolder.id}
     on:imported={handleImportComplete}
   />
 {/if}
-
-

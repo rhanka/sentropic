@@ -65,14 +65,25 @@ queueRouter.get('/jobs/:id', async (c) => {
 // POST /queue/jobs/:id/cancel - Annuler un job
 queueRouter.post('/jobs/:id/cancel', async (c) => {
   try {
-    // Pour l'instant, on ne peut pas vraiment annuler un job en cours
-    // On peut juste marquer qu'il a échoué
-    // TODO: Implémenter une vraie annulation si nécessaire
-    // const jobId = c.req.param('id');
-    
-    return c.json({ 
-      success: true, 
-      message: 'Job cancellation requested (not yet implemented)' 
+    const jobId = c.req.param('id');
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
+    const originalJob = await queueManager.getJobStatus(jobId);
+    if (!originalJob) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+    if (originalJob.workspaceId && originalJob.workspaceId !== targetWorkspaceId) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+
+    const result = await queueManager.cancelJob(jobId, 'user_cancel');
+    if (!result) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Job cancelled successfully',
+      status: result.status,
     });
   } catch (error) {
     console.error('Error cancelling job:', error);
@@ -150,9 +161,11 @@ queueRouter.get('/stats', async (c) => {
       failed: jobs.filter(j => j.status === 'failed').length,
       byType: {
         organization_enrich: jobs.filter(j => j.type === 'organization_enrich').length,
+        matrix_generate: jobs.filter(j => j.type === 'matrix_generate').length,
         usecase_list: jobs.filter(j => j.type === 'usecase_list').length,
         usecase_detail: jobs.filter(j => j.type === 'usecase_detail').length,
         document_summary: jobs.filter(j => j.type === 'document_summary').length,
+        docx_generate: jobs.filter(j => j.type === 'docx_generate').length,
       }
     };
     

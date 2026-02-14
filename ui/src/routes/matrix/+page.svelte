@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { matrixStore, type MatrixAxis } from '$lib/stores/matrix';
   import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
@@ -46,14 +48,14 @@
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   
-  // Variables pour l'auto-save de la matrice (seuils, poids, axes)
+  // Auto-save state for the matrix (thresholds, weights, axes)
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
   let isSavingMatrix = false;
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
-  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || get(_)('common.user');
   $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   $: isReadOnly = $workspaceReadOnlyScope || isLockedByOther;
@@ -69,7 +71,7 @@
   });
 
   onDestroy(() => {
-    // Nettoyer le timeout d'auto-save si la page est quittée
+    // Clean up the auto-save timeout when leaving the page
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
@@ -127,7 +129,7 @@
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('matrix.lockError');
     } finally {
       lockLoading = false;
     }
@@ -170,9 +172,9 @@
     try {
       const res = await requestUnlock('folder', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('matrix.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('matrix.unlockRequestError') });
     }
   };
 
@@ -180,9 +182,9 @@
     if (!lockTargetId) return;
     try {
       await forceUnlock('folder', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('matrix.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('matrix.lockForceError') });
     }
   };
 
@@ -259,11 +261,11 @@
     }
   }
 
-  const loadMatrix = async () => {
+ const loadMatrix = async () => {
     if (!$currentFolderId) {
       addToast({
         type: 'info',
-        message: 'Veuillez sélectionner un dossier pour voir sa matrice'
+        message: get(_)('matrix.pleaseSelectFolder')
       });
       return;
     }
@@ -282,19 +284,19 @@
         originalConfig = { ...matrix };
         addToast({
           type: 'success',
-          message: `Évaluation du dossier "${folder.name}" chargée`
+          message: get(_)('matrix.folderLoaded', { values: { name: folder.name } })
         });
       } else {
         addToast({
           type: 'warning',
-          message: `Le dossier "${folder.name}" n'a pas de matrice configurée`
+          message: get(_)('matrix.folderNoMatrix', { values: { name: folder.name } })
         });
       }
     } catch (error) {
       console.error('Failed to load matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement de la matrice'
+        message: get(_)('matrix.loadError')
       });
     } finally {
       isLoading = false;
@@ -302,18 +304,18 @@
   };
 
   /**
-   * Détermine le niveau (1-5) d'un score en comparant avec les thresholds
-   * Le niveau est le plus grand level tel que score >= threshold.points
+   * Determine the level (1-5) for a score by comparing against thresholds.
+   * The level is the highest level such that score >= threshold.points.
    */
   const getLevelFromScore = (score: number, thresholds: Array<{ level: number; points: number }>): number => {
-    // Trier les thresholds par level décroissant pour trouver le plus grand level qui correspond
+    // Sort thresholds by descending level to find the highest matching level.
     const sortedThresholds = [...thresholds].sort((a, b) => b.level - a.level);
     for (const threshold of sortedThresholds) {
       if (score >= threshold.points) {
         return threshold.level;
       }
     }
-    return 1; // Par défaut, niveau 1 si aucun threshold ne correspond
+    return 1; // Default to level 1 if no threshold matches.
   };
 
   /**
@@ -533,7 +535,7 @@
       console.error('Failed to save matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde automatique de la configuration'
+        message: get(_)('matrix.autoSaveError')
       });
     } finally {
       isSavingMatrix = false;
@@ -542,7 +544,7 @@
 
   const saveChanges = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: get(_)('matrix.readOnlyTooltip') });
       return;
     }
     if (!$currentFolderId) return;
@@ -555,13 +557,13 @@
       await updateCaseCounts();
       addToast({
         type: 'success',
-        message: 'Configuration de la matrice mise à jour'
+        message: get(_)('matrix.saveSuccess')
       });
     } catch (error) {
       console.error('Failed to save matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde de la matrice'
+        message: get(_)('matrix.saveError')
       });
     }
   };
@@ -572,7 +574,7 @@
   const addAxis = (isValue: boolean) => {
     const newAxis: MatrixAxis = {
       id: `axis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: isValue ? 'Nouvel axe de valeur' : 'Nouvel axe de complexité',
+      name: isValue ? get(_)('matrix.newValueAxisName') : get(_)('matrix.newComplexityAxisName'),
       weight: 1.0,
       description: '',
       levelDescriptions: []
@@ -601,7 +603,7 @@
     
     addToast({
       type: 'success',
-      message: `Nouvel axe ${isValue ? 'de valeur' : 'de complexité'} ajouté`
+      message: isValue ? get(_)('matrix.valueAxisAdded') : get(_)('matrix.complexityAxisAdded')
     });
   };
 
@@ -609,7 +611,7 @@
    * Supprime un axe de valeur ou de complexité
    */
   const removeAxis = (isValue: boolean, index: number) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.`)) {
+    if (!confirm(get(_)('matrix.confirmDeleteAxis'))) {
       return;
     }
     
@@ -636,7 +638,7 @@
     
     addToast({
       type: 'success',
-      message: `Axe ${isValue ? 'de valeur' : 'de complexité'} supprimé`
+      message: isValue ? get(_)('matrix.valueAxisDeleted') : get(_)('matrix.complexityAxisDeleted')
     });
   };
 
@@ -681,7 +683,7 @@
 
   const handleCloseWarningSave = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: get(_)('matrix.readOnlyTooltip') });
       showCloseWarning = false;
       showDescriptionsDialog = false;
       return;
@@ -694,7 +696,7 @@
       console.error('Erreur lors de la sauvegarde:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la sauvegarde'
+        message: get(_)('matrix.saveErrorGeneric')
       });
     }
   };
@@ -702,10 +704,10 @@
   // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
 
   const getLevelDescription = (axis: any, level: number): string => {
-    if (!axis.levelDescriptions) return `Niveau ${level}`;
+    if (!axis.levelDescriptions) return get(_)('matrix.levelN', { values: { level } });
     
     const levelDesc = axis.levelDescriptions.find((ld: any) => ld.level === level);
-    return levelDesc?.description || `Niveau ${level}`;
+    return levelDesc?.description || get(_)('matrix.levelN', { values: { level } });
   };
 
   const updateLevelDescription = (levelNum: number, description: string) => {
@@ -767,7 +769,7 @@
 
   const createNewMatrix = async () => {
     if (isReadOnly) {
-      addToast({ type: 'warning', message: 'Mode lecture seule : modification désactivée.' });
+      addToast({ type: 'warning', message: $_('common.readOnlyEditDisabled') });
       return;
     }
     console.log('createNewMatrix called, currentFolderId:', $currentFolderId);
@@ -808,14 +810,14 @@
         await updateCaseCounts();
         addToast({
           type: 'success',
-          message: 'Nouvelle matrice créée avec succès'
+          message: $_('matrix.toasts.created')
         });
       }
     } catch (error) {
       console.error('Failed to create matrix:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la création de la matrice'
+        message: $_('matrix.errors.create')
       });
     }
   };
@@ -828,7 +830,7 @@
 
 <div class="container mx-auto px-4 py-8">
 <div class="mb-6 flex items-start justify-between gap-4">
-  <h1 class="text-3xl font-bold text-navy">Configuration de l'évaluation Valeur/Complexité</h1>
+  <h1 class="text-3xl font-bold text-navy">{$_('matrix.title')}</h1>
   <div class="flex items-center gap-2 flex-wrap justify-end">
     {#if $currentFolderId}
       <FileMenu
@@ -839,8 +841,8 @@
         showDelete={false}
         disabledExport={isReadOnly}
         onExport={() => (showExportDialog = true)}
-        triggerTitle="Actions matrice"
-        triggerAriaLabel="Actions matrice"
+        triggerTitle={$_('common.actions')}
+        triggerAriaLabel={$_('common.actions')}
       />
     {/if}
     <LockPresenceBadge
@@ -860,54 +862,53 @@
       on:forceUnlock={handleForceUnlock}
       on:releaseLock={handleReleaseLock}
     />
-    {#if showReadOnlyLock && !showPresenceBadge}
-      <button
-        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-        title="Mode lecture seule : modification désactivée."
-        aria-label="Mode lecture seule : modification désactivée."
-        type="button"
-        disabled
-      >
+	    {#if showReadOnlyLock && !showPresenceBadge}
+	      <button
+	        class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+	        title={$_('matrix.readOnlyTooltip')}
+	        aria-label={$_('matrix.readOnlyTooltip')}
+	        type="button"
+	        disabled
+	      >
         <Lock class="w-5 h-5" />
       </button>
   {/if}
   </div>
 </div>
   
-  {#if $currentFolderId}
-    <p class="text-gray-600 -mt-4 mb-6">
-      Dossier sélectionné
-    </p>
-  {/if}
+	  {#if $currentFolderId}
+	    <p class="text-gray-600 -mt-4 mb-6">
+	      {$_('matrix.selectedFolder')}
+	    </p>
+	  {/if}
   
   <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8">
     <div class="flex">
       <Info class="h-6 w-6 text-blue-500 mr-2" />
       <div>
-        <p class="mb-2">
-          Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.
-        </p>
-        <p class="text-sm">
-          La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun.
-          Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux.
-        </p>
+	        <p class="mb-2">
+	          {$_('matrix.help.intro')}
+	        </p>
+	        <p class="text-sm">
+	          {$_('matrix.help.details')}
+	        </p>
       </div>
     </div>
   </div>
   
   {#if isLoading}
     <div class="text-center py-8">
-      <p class="text-gray-600">Chargement de la matrice...</p>
+      <p class="text-gray-600">{$_('matrix.loading')}</p>
     </div>
   {:else if !$matrixStore.valueAxes || $matrixStore.valueAxes.length === 0}
     <div class="text-center py-8">
-      <p class="text-gray-600 mb-4">Aucune matrice configurée pour ce dossier</p>
-      <button 
-        on:click={openCreateMatrixDialog}
-        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
-      >
-        Créer une nouvelle matrice
-      </button>
+      <p class="text-gray-600 mb-4">{$_('matrix.empty')}</p>
+	      <button 
+	        on:click={openCreateMatrixDialog}
+	        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+	      >
+	        {$_('matrix.createNew')}
+	      </button>
     </div>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -915,7 +916,7 @@
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
-            <span class="mr-2">Axes de Valeur</span>
+            <span class="mr-2">{$_('matrix.valueAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
             {#each range(3) as i (i)}
                 <Star class="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -925,22 +926,22 @@
         {/each}
             </div>
           </h2>
-          <button
-            on:click={() => addAxis(true)}
-            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
-            title="Ajouter un axe de valeur"
-          >
-            <Plus class="w-4 h-4 mr-1" />
-            Ajouter
-          </button>
+	          <button
+	            on:click={() => addAxis(true)}
+	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            title={$_('matrix.addValueAxis')}
+	          >
+	            <Plus class="w-4 h-4 mr-1" />
+	            {$_('common.add')}
+	          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">{$_('matrix.criterion')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.weight')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -983,16 +984,16 @@
                     <button 
                       class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
                       on:click={() => openAxisDescriptions(axis, true)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
+                      title={$_('matrix.viewLevels')}
+                      aria-label={`${$_('matrix.viewLevels')}: ${axis.name}`}
                     >
                       <Eye class="w-4 h-4" />
         </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
                         on:click={() => removeAxis(true, index)}
-                        title="Supprimer cet axe"
-                        aria-label="Supprimer {axis.name}"
+                        title={$_('matrix.deleteAxis')}
+                        aria-label={`${$_('matrix.deleteAxis')}: ${axis.name}`}
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -1009,7 +1010,7 @@
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
-            <span class="mr-2">Axes de Complexité</span>
+            <span class="mr-2">{$_('matrix.complexityAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
             {#each range(3) as i (i)}
                 <X class="w-5 h-5 text-white" />
@@ -1019,22 +1020,22 @@
         {/each}
             </div>
           </h2>
-          <button
-            on:click={() => addAxis(false)}
-            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
-            title="Ajouter un axe de complexité"
-          >
-            <Plus class="w-4 h-4 mr-1" />
-            Ajouter
-          </button>
+	          <button
+	            on:click={() => addAxis(false)}
+	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            title={$_('matrix.addComplexityAxis')}
+	          >
+	            <Plus class="w-4 h-4 mr-1" />
+	            {$_('common.add')}
+	          </button>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">Critère</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Poids</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">Action</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/2">{$_('matrix.criterion')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.weight')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/4">{$_('matrix.action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1074,19 +1075,19 @@
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
-                    <button 
-                      class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
-                      on:click={() => openAxisDescriptions(axis, false)}
-                      title="Voir les niveaux"
-                      aria-label="Voir les niveaux de {axis.name}"
-                    >
-                      <Eye class="w-4 h-4" />
-        </button>
+                      <button 
+                        class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded"
+                        on:click={() => openAxisDescriptions(axis, false)}
+                        title={$_('matrix.viewLevels')}
+                        aria-label={`${$_('matrix.viewLevels')}: ${axis.name}`}
+                      >
+                        <Eye class="w-4 h-4" />
+                      </button>
                       <button
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
                         on:click={() => removeAxis(false, index)}
-                        title="Supprimer cet axe"
-                        aria-label="Supprimer {axis.name}"
+                        title={$_('matrix.deleteAxis')}
+                        aria-label={`${$_('matrix.deleteAxis')}: ${axis.name}`}
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -1104,15 +1105,15 @@
       <!-- Value Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
-          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Valeur</h2>
+          <h2 class="text-white text-lg font-semibold">{$_('matrix.valueThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-purple-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Valeur</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Points Fibonacci</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">Nombre de cas</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.value')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.fibonacciPoints')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/3">{$_('matrix.useCaseCount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1152,15 +1153,15 @@
       <!-- Complexity Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
         <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
-          <h2 class="text-white text-lg font-semibold">Configuration des seuils de Complexité</h2>
+          <h2 class="text-white text-lg font-semibold">{$_('matrix.complexityThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Complexité</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Points Fibonacci</th>
-                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">Nombre de cas</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.complexity')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.fibonacciPoints')}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 w-1/5">{$_('matrix.useCaseCount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1202,7 +1203,7 @@
       <div class="flex">
         <AlertTriangle class="h-6 w-6 text-yellow-500 mr-2" />
         <p>
-          Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.
+          {$_('matrix.weightsRecalcWarning')}
         </p>
       </div>
     </div>
@@ -1213,14 +1214,14 @@
         class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
       >
         <Plus class="mr-2 h-4 w-4" />
-        Créer une nouvelle matrice
+        {$_('matrix.createNew')}
       </button>
       <button 
         on:click={saveChanges}
         class="bg-navy hover:bg-navy/90 text-white px-4 py-2 rounded flex items-center"
       >
         <Upload class="mr-2 h-4 w-4" />
-        Enregistrer la configuration
+        {$_('common.save')}
       </button>
     </div>
   {/if}
@@ -1232,17 +1233,17 @@
     <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-2">
-          {selectedAxis?.name} - Description des niveaux
+          {selectedAxis?.name} - {$_('matrix.levelDescriptionsTitle')}
         </h3>
         <p class="text-gray-600 mb-4">
-          Vous pouvez modifier les descriptions des 5 niveaux pour ce critère en cliquant sur le texte:
+          {$_('matrix.help.details')}
         </p>
         
         <table class="w-full">
           <thead>
             <tr class="border-b">
-              <th class="text-left py-2">Niveau</th>
-              <th class="text-left py-2">Description</th>
+              <th class="text-left py-2">{$_('matrix.level')}</th>
+              <th class="text-left py-2">{$_('matrix.description')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1294,7 +1295,7 @@
             on:click={handleCloseDescriptionsDialog}
             class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
           >
-            Fermer
+            {$_('common.close')}
         </button>
         </div>
       </div>
@@ -1305,13 +1306,13 @@
 <ImportExportDialog
   bind:open={showExportDialog}
   mode="export"
-  title="Exporter la matrice"
+  title={$_('matrix.export')}
   scope="matrix"
   scopeId={$currentFolderId || ''}
   allowScopeSelect={false}
   allowScopeIdEdit={false}
   workspaceName={workspaceName}
-  objectName={currentFolderName || 'Matrice'}
+  objectName={currentFolderName || $_('matrix.details.title')}
   commentsAvailable={false}
   documentsAvailable={false}
 />
@@ -1322,10 +1323,10 @@
     <div class="bg-white rounded-lg max-w-md w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-4">
-          Créer une nouvelle matrice
+          {$_('matrix.createNew')}
         </h3>
         <p class="text-gray-600 mb-6">
-          Choisissez le type de matrice à créer :
+          {$_('matrix.createDialogBody')}
         </p>
         
         <div class="space-y-4">
@@ -1338,8 +1339,8 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Évaluation de base</div>
-              <div class="text-sm text-gray-600">Utiliser la matrice par défaut avec toutes les descriptions complètes</div>
+              <div class="font-medium">{$_('matrix.baseEvaluation')}</div>
+              <div class="text-sm text-gray-600">{$_('matrix.baseEvaluationDesc')}</div>
             </div>
           </label>
           
@@ -1352,14 +1353,14 @@
               class="mr-3"
             />
             <div class="flex-1">
-              <div class="font-medium">Copier une matrice existante</div>
-              <div class="text-sm text-gray-600 mb-2">Copier la matrice d'un autre dossier</div>
+              <div class="font-medium">{$_('matrix.copyExisting')}</div>
+              <div class="text-sm text-gray-600 mb-2">{$_('matrix.copyExistingDesc')}</div>
               {#if createMatrixType === 'copy'}
                 <select 
                   bind:value={selectedFolderToCopy}
                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm"
                 >
-                  <option value="">Sélectionner un dossier...</option>
+                  <option value="">{$_('matrix.selectFolder')}</option>
                   {#each availableFolders as folder}
                     <option value={folder.id}>{folder.name}</option>
         {/each}
@@ -1377,8 +1378,8 @@
               class="mr-3"
             />
             <div>
-              <div class="font-medium">Évaluation vierge</div>
-              <div class="text-sm text-gray-600">Commencer avec une matrice vide</div>
+              <div class="font-medium">{$_('matrix.blankEvaluation')}</div>
+              <div class="text-sm text-gray-600">{$_('matrix.blankEvaluationDesc')}</div>
             </div>
           </label>
         </div>
@@ -1388,14 +1389,14 @@
             on:click={() => showCreateMatrixDialog = false}
             class="px-4 py-2 text-gray-600 hover:text-gray-800"
           >
-            Annuler
+            {$_('common.cancel')}
           </button>
           <button 
             on:click={createNewMatrix}
             disabled={createMatrixType === 'copy' && !selectedFolderToCopy}
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Créer
+            {$_('common.create')}
           </button>
         </div>
       </div>
@@ -1410,12 +1411,12 @@
       <div class="flex items-center mb-4">
         <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />
         <h3 class="text-lg font-semibold text-gray-900">
-          Modifications non sauvegardées
+          {$_('unsavedChanges.dialog.title')}
         </h3>
       </div>
       
       <p class="text-gray-600 mb-6">
-        Vous avez des modifications non sauvegardées. Que souhaitez-vous faire ?
+        {$_('unsavedChanges.dialog.body')}
       </p>
       
       <div class="flex justify-end gap-3">
@@ -1423,19 +1424,19 @@
           on:click={handleCloseWarningCancel}
           class="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
         >
-          Annuler
+          {$_('unsavedChanges.actions.cancel')}
         </button>
         <button 
           on:click={handleCloseWarningDiscard}
           class="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded"
         >
-          Ignorer et fermer
+          {$_('unsavedChanges.actions.discardAndClose')}
         </button>
         <button 
           on:click={handleCloseWarningSave}
           class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Sauvegarder et fermer
+          {$_('unsavedChanges.actions.saveAndClose')}
         </button>
       </div>
     </div>

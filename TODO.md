@@ -73,10 +73,10 @@
   - [x] Feedback utilisateur (👍/👎) sur les suggestions
   - [x] icones sous le chat utilisateurs (visibles au hover sur la bulle de chat ou les icones)
     - [x] Modification d'un message utilisateur
-      - [x] Propose l'annulation des modifications effectuées dans le chat (objets édités le cas échéant depuis le point du chat) ou de les garder (rollback) 
+      - [x] Propose l'annulation des modifications effectuées dans le chat (objets édités le cas échéant depuis le point du chat) ou de les garder (rollback)
     - [x] Retry d'un message utilisateur (supprime la suite déjà effectuée) (idem propose annulation ou pas)
     - [x] Copie d'un message utilisateur
-  - [x] icones soue le chat de réponse 
+  - [x] icones soue le chat de réponse
     - [x] Copie d'une réponse (visibles au hover sur la bulle de chat ou les icones)
   - [x] Amélioration de la bulle d'input utlisateur
     - [x] Mode monoligne
@@ -128,14 +128,41 @@
 - [ ] Reduce CI time
   - [ ] Enable mutliple workers in test-api
   - [ ] Split test-e2e in two // execution groups
-- [ ] remplacer le modèle de print par un modèle de template (docx-templates)
-  - [ ] define a model for usecase fitting in one page
-  - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
+- [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
+  - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
+  - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
+- [ ] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
+  - [ ] Lot 1 (courant): DOCX
+    - [ ] define a model for usecase fitting in one page
+    - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
+- [ ] Templating — Lot 2 (post-clôture du lot DOCX multipage)
+  - [ ] TOC/page numbers policy (limitation actuelle):
+    - [ ] Keep current behavior as fail-safe: TOC refresh is user-driven (`manual update required`), not guaranteed server-side.
+    - [ ] Document mandatory user action in template guide (`api/templates/README.md`): Word `Ctrl+A` + `F9` / LibreOffice update index.
+  - [ ] TOC automation options (future):
+    - [ ] Layout engine sidecar to compute final pagination (true server-side TOC refresh).
+    - [ ] Candidate A: LibreOffice UNO worker/sidecar (heavy ops/runtime dependency).
+    - [ ] Candidate B: ONLYOFFICE Document Builder post-processing.
+    - [ ] Candidate C: Aspose.Words service (`.NET`/`Java` microservice).
+    - [ ] Fallback alternatives if no engine: static TOC without page numbers, or DOCX+PDF dual export.
+  - [ ] PowerPoint templating
+    - [ ] Define `pptx` template contract aligned with folder/usecase objects.
+    - [ ] Add generation path for presentation exports (design + API runtime).
+  - [ ] Google Workspace suite
+    - [ ] Define authoring workflow with Google Docs/Slides and export normalization constraints.
+    - [ ] Define managed template lifecycle and sync strategy (Drive objects, versions, fallbacks).
 - [ ] basculer en i18n bilingue anglais / français
+  - [x] Résumé fait (déjà en place) : inventaire exhaustif des chaînes UI, remplacement par i18n, dictionnaires FR/EN étendus, switch de langue validé sur vues clés (see Wave 2 Lot 2.1).
   - [ ] identifier tous les messages
-  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
+  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
   - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
+  - [ ] Normalize executive summary technical keys to English (`analysis`, `recommendation`, `executive_summary`) with backward-compatible aliases for legacy keys (`analyse`, `recommandation`, `synthese_executive`).
+- [ ] **Lot 2.3 Bilingual modeling (storage + projection)**
+  - [ ] multilingual storage model scope (use case, organization, folder, prompts).
+  - [ ] Implement API/UI typing + validation + normalization with backward compatibility.
+  - [ ] multilingual prompt model and fallback contract.
+  - [ ] Implement storage/editor/runtime prompt selection by locale.
 - [ ] amélioration gestion idéation cas d'usage
   - [ ] ajouter les contraintes (constraints) au cas d'usage
     - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
@@ -162,6 +189,11 @@
   - [ ] Gere les objets incluant des listes
   - [ ] Ajoute la gestion d'images illustratives
   - [ ] Ajoute la gestion de graphiques illustratives (chartjs comme la matrice priorisation)
+  - [ ] Add server-side simulated-annealing layout support for dashboard charts
+    - [ ] Define a pure solver contract (`points/labels/dimensions/thresholds` -> `boxes/connectors/collisionScore`)
+    - [ ] Run layout computation in a worker with a publishing-compatible API contract
+    - [ ] Integrate this computation in the DOCX/dashboard image publishing flow with UI fallback on error/timeout
+    - [ ] Measure impact (UI render time, job duration, stability) and decide interactive dashboard rollout
   - [ ] Gestion d'objet dérivé (pptx d'un docx): agents de présentation
   - [ ] Gere le mode print (design complémentaire cf synthèse exec qui est une vue particulière de l'objet folder)
   - [ ] Document managé (avec des tags dans le xml pour permettre le reprage)
@@ -186,7 +218,147 @@
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
   - [ ] proposer un plan d'implémentation en une branche
-- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant 
+- [ ] Modularisation de l'UI permettre de supporter différents déploiements du module chatwidegt - design phase
+  - [ ] Plugin VS code (+tools "locaux")
+  - [ ] Plugin chrome (+ tools "locaux")
+  - [ ] App standalone desktop (+ tools "locaux")
+- [ ] Tools de productivité
+  - [ ] Todo/Plan
+    - [ ] Todo basic
+    - [ ] Révisable
+    - [ ] Mutli étapes
+    - [ ] Synchro avec outils
+      - [ ] Fichier md (coding)
+      - [ ] Issues/Roadmap Github (approfondir)
+      - [ ] Todo bureautique (approfondir : Google, Microsoft, Notion)
+    - [ ] tool (mono agent)
+    - [ ] agentic (conductor)
+    - [ ] personnel
+    - [ ] collaboratif
+- [ ] AI optim
+  - [ ] Global session (offrir à tous)
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+  - [ ] Par utilisateur
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+- [ ] Concevoir le plugin chrome
+  - [ ] UI
+    - [ ] mode bulle + flottant
+    - [ ] mode docker/side panel
+    - [ ] toasters également
+  - [ ] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+    - [ ] Lecture d'un tab
+    - [ ] Automation d'un tab (cliquer ...)
+    - [ ] Collaboration local / remote (outils d'un workspace)
+  - Tools spécialisés
+    - [ ] Interaction avec applications via UI
+      - [ ] Google workspace
+        - [ ] Gmail
+        - [ ] Google sheet
+        - [ ] Google doc
+        - [ ] Google slide
+        - [ ] Google chat
+        - [ ] Gemini
+      - [ ] Microsoft
+        - [ ] Outlook
+        - [ ] Teams
+        - [ ] Sharepoint / Excel
+        - [ ] Sharepoint / Word
+        - [ ] Sharepoint / Powerpoint
+        - [ ] Copilot
+      - [ ] Github
+        - [ ] Issues
+        - [ ] PR
+    - [ ] Pilotage API pour accélération
+      - [ ] Capacité local / délégation remote (via Auth appli)
+      - [ ] Google workspace
+        - [ ] Gmail
+        - [ ] Google sheet
+        - [ ] Google doc
+        - [ ] Google slide
+        - [ ] Google chat
+        - [ ] Gemini
+      - [ ] Microsoft
+        - [ ] Outlook
+        - [ ] Teams
+        - [ ] Sharepoint / Excel
+        - [ ] Sharepoint / Word
+        - [ ] Sharepoint / Powerpoint
+- [ ] Créer une capacité d'agentique en worker (cluster kube) (approfondir)
+- [ ] Agent de code (vs code + remote) (approfondir)
+  - [ ] Vs code
+    - [ ] Modeles
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] Re-edit = Checkpoint base code (git)
+    - [ ] Manage context summary
+    - [ ] Tools
+      - [ ] apply-patch
+      - [ ] grep
+      - [ ] look up chat history (limit red fish effet)
+      - [ ] Shell
+        - [ ] facilité de choix (git commit mais pas git push etc)
+        - [ ] background exec
+      - [ ] Remote exec (kube)
+      - [ ] Plan (révisable)
+      - [ ] Conductor model (subagentique)
+  - [ ] Autonomous agent
+    - [ ] Use plan and conductor model
+    - [ ] Manage feedback with human
+      - [ ] Summary with key decision points (code base architecture change)
+      - [ ] Key code base change proposal
+    - Agents:
+      - [ ] Autonomy (remove lib dependency)
+      - [ ] Backport to third langage (api: rust, ui: react, vue)
+      - [ ] Code security
+      - [ ] Code lib upgrade
+      - [ ] Design
+      - [ ] Spec & doc consolidation
+      - [ ] PO / Product & Marketing
+      - [ ] QA / testing (with vision)
+- [ ] Checkpoints (rassembler ici la gesiton de checkpoint: retour arrière sur un chat = lister et ajouter une version des objets / sous objets modifiés / gestion conflit multi utilisateur). Checkpoint humain vs utilisateur : ne pas verisonner après un ajout "immédiat" mais après un mode à définir de latence raisonnable (eg 5 seconde après sortie du champ etc).
+- [ ] Interrompre vs steering (à mettre qq part)
+- [ ] Specs mdc
+  - [ ] Consolidate sub agentique / mutlibranch mode - chaque branche doit être dans un env isolée. l'utilisateur teste toujours sur 5173 (favoriser une collaboration multibranches orthogonale: lorsque l'utilisatur test il est sur le . alors que les branches sont dév dans tmp/branch - l'utilisateur peut donc tranquillement tester ls différentes branches en permanence sans perdre ses données)
+  - [ ] cherry peek des spec kit MS
+- [ ] CI evols
+  - [ ] Separer build-api des test unitaires et intégration pour permettre test-e2e de commencer plus tôt, et mettre le publish api en dépendance des tests unitaires et intégration
+  - [ ] Envisager le matrix pour les text unitaires et intégration
+- [ ] Minor evols
+  - [ ] Toaster: passer en bas (adjoint à l'icone de chat)
+  - [ ] EditableInput: passer d'une attente de 5 seconde à un retour immédiat
+  - [ ] Editable input dans les view:
+    - [ ] Matrice: passer à un mode input texte / md pour les axes
+    - [ ] Secteur = trop petit
+    - [ ] Inspecter les autres pb de tail similaire à secteur
+  - [ ] Agents de génération : créer un commentaire par défaut
+  - [ ] Tool de modification : mettre un commentaire sur les champs modifiés
+- [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
     - [ ] aide locale : en mode "discovery", l'agent intervient lorsqu'une vue n'a pas encore été activée
@@ -213,7 +385,13 @@
   - [ ] Un agent passif gère les déroulés dans l'écran
 - [ ] Renforcement de la structure agentique (phase design)
   Etudier les finalités/opportunités suivantes afin de définir le meilleur modele cible
-  - [ ] Opportunité du RL / modele adaptatif
+  - [ ] Finalités à supporter (on ne fait que la partie agentique ici)
+    - [ ] La finalité sera de pouvoir faire une application auto-codante. La structure de l'agentique est un élément coeur du redesign, il faut penser aux différent contextes et aux interactions d'outils de l'agentique pour lui fournir la meilleur gestion, y compris en gestion de version de lui même
+    - [ ] use case plugin vs code (gère les cas d'agent sous agents)
+    - [ ] use case plugin gmail/googleworkspace (remplacer gemini dans ces contextes)
+    - [ ] use case d'autodoc et assistant de l'app (expert utilisation et test e2e de l'appli) cf paragraph associé
+    - [ ] use case assistant chrome capable de gérer les situations
+  - [ ] Opportunité du RL / modele adaptatif (agentique autonome / apprenant)
   - [ ] Favoriser le templating d'agent (gestion de librairies d'agents, export/import, versionnement)
   - [ ] Pivoter vers langchain (multi model provider, easier agentic / tools orchestration) ou un autre modèle
   - [ ] Permettre à l'utilisateur de configurer le modèle de l'agent en cours d'utilisation (soit change de llm ou de puissance de réflexion)
@@ -241,7 +419,7 @@
     - [ ] Gestion de roadmap d'architecture d'entreprise (applications / infrastructures / plan d'évolution / scénarios / critères de priorisation / vision planifiée / gestion des risques)
     - [ ] High level design dossier (movitation for change / diagramme system as-is / composants du system as-is / évaluation SWOT de ces composants / vision business au sens archimate / architecture drivers (constraints, standard, principles) / buisness requirements / non-functional requirements / business objects / high level design scenario = descriptions & schema avec composants / scenario evaluation selon critères / vue de transition / présentation de l'initiative=scenario privilégié (description intiative, Digital scope for initiative, initial goals, prerequisites, buisness outcomes, estimation budget, initiative timelines/milestones, risks, archi dimension) )
     - [ ] Business case management / Porfolio
-    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences 
+    - [ ] Gestion de Profils / Compétences / CV / Porfolio d'expériences
     - [ ] Définition d'un business plan (à approfondir)
     - [ ] Evaluation d'intelligence économique (des docs seront fournis)
     - [ ] Veille stratégique (à approfondir)
@@ -342,4 +520,3 @@
     3. Normaliser sur `name` partout OU documenter la rétrocompatibilité
     4. Supprimer les fallbacks `(useCase as any)?.titre || (useCase as any)?.nom` si plus nécessaires
     5. Mettre à jour l'interface `UseCaseListItem` si nécessaire
-

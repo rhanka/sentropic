@@ -1,0 +1,671 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { app } from '../../src/app';
+import { db } from '../../src/db/client';
+import { chatStreamEvents, folders, jobQueue, useCases } from '../../src/db/schema';
+import { queueManager } from '../../src/services/queue-manager';
+import * as storageS3 from '../../src/services/storage-s3';
+import * as docxRenderWorker from '../../src/services/docx-render-worker';
+import {
+  authenticatedRequest,
+  cleanupAuthData,
+  createAuthenticatedUser,
+} from '../utils/auth-helper';
+import { createTestId } from '../utils/test-helpers';
+
+describe('DOCX API', () => {
+  let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+  let processJobsSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    user = await createAuthenticatedUser('editor');
+    processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue();
+  });
+
+  afterEach(async () => {
+    processJobsSpy.mockRestore();
+    await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
+    await db.delete(useCases).where(eq(useCases.workspaceId, user.workspaceId));
+    await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
+    await cleanupAuthData();
+  });
+
+  async function createFolderAndUseCase() {
+    const folderRes = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {
+      name: `Folder ${createTestId()}`,
+      description: 'DOCX test folder',
+    });
+    expect(folderRes.status).toBe(201);
+    const folder = await folderRes.json();
+
+    const useCaseRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/use-cases',
+      user.sessionToken!,
+      {
+        folderId: folder.id,
+        name: `Use case ${createTestId()}`,
+        description: 'DOCX test use case',
+      }
+    );
+    expect(useCaseRes.status).toBe(201);
+    const useCase = await useCaseRes.json();
+
+    return { folder, useCase };
+  }
+
+  it('returns 410 on legacy synchronous endpoint', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/use-cases/${createTestId()}/docx`,
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(410);
+    const data = await response.json();
+    expect(String(data.message)).toContain('Synchronous DOCX download route is disabled');
+  });
+
+  it('rejects template/entity mismatch', async () => {
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
+      templateId: 'usecase-onepage',
+      entityType: 'folder',
+      entityId: createTestId(),
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(String(data.message)).toContain('Invalid entityType for templateId usecase-onepage');
+  });
+
+  it('accepts options alias and enqueues a docx job', async () => {
+    const { useCase } = await createFolderAndUseCase();
+
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
+      templateId: 'usecase-onepage',
+      entityType: 'usecase',
+      entityId: useCase.id,
+      options: {
+        dashboardImage: { dataBase64: 'ZGFzaGJvYXJk' },
+      },
+    });
+
+    expect(response.status).toBe(202);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    expect(data.jobId).toBeDefined();
+    expect(data.queueClass).toBe('publishing');
+    expect(data.streamId).toBe(`job_${data.jobId}`);
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, data.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+
+    expect(job).toBeDefined();
+    expect(job?.type).toBe('docx_generate');
+
+    const payload = JSON.parse(job!.data) as Record<string, unknown>;
+    expect(payload.templateId).toBe('usecase-onepage');
+    expect(payload.entityType).toBe('usecase');
+    expect(payload.entityId).toBe(useCase.id);
+    expect((payload.provided as Record<string, unknown>)?.dashboardImage).toBeDefined();
+    expect(typeof payload.sourceHash).toBe('string');
+  });
+
+  it('enqueues executive synthesis template for folder entity', async () => {
+    const { folder } = await createFolderAndUseCase();
+
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
+      templateId: 'executive-synthesis-multipage',
+      entityType: 'folder',
+      entityId: folder.id,
+    });
+
+    expect(response.status).toBe(202);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    expect(data.queueClass).toBe('publishing');
+    expect(data.jobId).toBeDefined();
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, data.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job?.type).toBe('docx_generate');
+
+    const payload = JSON.parse(job!.data) as Record<string, unknown>;
+    expect(payload.templateId).toBe('executive-synthesis-multipage');
+    expect(payload.entityType).toBe('folder');
+    expect(payload.entityId).toBe(folder.id);
+  });
+
+  it('reuses job for same locale and creates a new one for a different locale', async () => {
+    const { useCase } = await createFolderAndUseCase();
+    const payload = {
+      templateId: 'usecase-onepage',
+      entityType: 'usecase',
+      entityId: useCase.id,
+    } as const;
+
+    const firstRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'en-US' }
+    );
+    expect(firstRes.status).toBe(202);
+    const first = await firstRes.json();
+
+    const secondRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'en-US' }
+    );
+    expect([200, 202]).toContain(secondRes.status);
+    const second = await secondRes.json();
+    expect(second.jobId).toBe(first.jobId);
+
+    const [firstJob] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, first.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    const firstPayload = JSON.parse(firstJob!.data) as Record<string, unknown>;
+    expect(firstPayload.locale).toBe('en');
+
+    const thirdRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'fr-FR' }
+    );
+    expect(thirdRes.status).toBe(202);
+    const third = await thirdRes.json();
+    expect(third.jobId).not.toBe(first.jobId);
+
+    const [thirdJob] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, third.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+
+    const thirdPayload = JSON.parse(thirdJob!.data) as Record<string, unknown>;
+    expect(thirdPayload.locale).toBe('fr');
+    expect(firstPayload.sourceHash).not.toBe(thirdPayload.sourceHash);
+  });
+
+  it('reuses the same pending job for identical payload', async () => {
+    const { useCase } = await createFolderAndUseCase();
+    const payload = {
+      templateId: 'usecase-onepage',
+      entityType: 'usecase',
+      entityId: useCase.id,
+    } as const;
+
+    const firstRes = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, payload);
+    expect(firstRes.status).toBe(202);
+    const first = await firstRes.json();
+
+    const secondRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload
+    );
+    expect([200, 202]).toContain(secondRes.status);
+    const second = await secondRes.json();
+
+    expect(second.jobId).toBe(first.jobId);
+    expect(second.queueClass).toBe('publishing');
+  });
+
+  it('returns 409 when download is requested for pending job', async () => {
+    const jobId = createTestId();
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'docx_generate',
+      status: 'pending',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({
+        templateId: 'usecase-onepage',
+        entityType: 'usecase',
+        entityId: createTestId(),
+      }),
+      createdAt: new Date(),
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/docx/jobs/${jobId}/download`,
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(409);
+    const data = await response.json();
+    expect(String(data.message)).toContain('still running');
+  });
+
+  it('returns 400 when job type is not docx_generate', async () => {
+    const jobId = createTestId();
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'organization_enrich',
+      status: 'completed',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({ organizationId: createTestId() }),
+      result: JSON.stringify({ ok: true }),
+      createdAt: new Date(),
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/docx/jobs/${jobId}/download`,
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 422 with failure details for failed docx jobs', async () => {
+    const jobId = createTestId();
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'docx_generate',
+      status: 'failed',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({
+        templateId: 'executive-synthesis-multipage',
+        entityType: 'folder',
+        entityId: createTestId(),
+      }),
+      error: 'template marker missing',
+      createdAt: new Date(),
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/docx/jobs/${jobId}/download`,
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(422);
+    const data = await response.json();
+    expect(data.message).toBe('DOCX generation failed');
+    expect(String(data.error)).toContain('template marker missing');
+  });
+
+  it('returns docx bytes from legacy contentBase64 fallback', async () => {
+    const jobId = createTestId();
+    const raw = Buffer.from('docx-bytes');
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'docx_generate',
+      status: 'completed',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({
+        templateId: 'usecase-onepage',
+        entityType: 'usecase',
+        entityId: createTestId(),
+      }),
+      result: JSON.stringify({
+        fileName: 'sample.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        contentBase64: raw.toString('base64'),
+      }),
+      createdAt: new Date(),
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/docx/jobs/${jobId}/download`,
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(response.headers.get('content-disposition')).toContain('sample.docx');
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    expect(bytes.equals(raw)).toBe(true);
+  });
+
+  it('returns docx bytes from S3 storage key result', async () => {
+    const storageSpy = vi.spyOn(storageS3, 'getObjectBytes');
+    const raw = Buffer.from('s3-docx-bytes');
+    storageSpy.mockResolvedValue(new Uint8Array(raw));
+
+    try {
+      const jobId = createTestId();
+      await db.insert(jobQueue).values({
+        id: jobId,
+        type: 'docx_generate',
+        status: 'completed',
+        workspaceId: user.workspaceId!,
+        data: JSON.stringify({
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+        }),
+        result: JSON.stringify({
+          fileName: 'from-s3.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          storageBucket: 'docs-test',
+          storageKey: 'docx/test/file.docx',
+        }),
+        createdAt: new Date(),
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/docx/jobs/${jobId}/download`,
+        user.sessionToken!
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-disposition')).toContain('from-s3.docx');
+      expect(storageSpy).toHaveBeenCalledWith({ bucket: 'docs-test', key: 'docx/test/file.docx' });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      expect(bytes.equals(raw)).toBe(true);
+    } finally {
+      storageSpy.mockRestore();
+    }
+  });
+
+  it('invalidates previous docx cache entries when source changes', async () => {
+    const { useCase } = await createFolderAndUseCase();
+    const deleteSpy = vi.spyOn(storageS3, 'deleteObject').mockResolvedValue();
+    const oldCompletedJobId = createTestId();
+    const oldPendingJobId = createTestId();
+
+    try {
+      await db.insert(jobQueue).values([
+        {
+          id: oldCompletedJobId,
+          type: 'docx_generate',
+          status: 'completed',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: useCase.id,
+            sourceHash: 'old-source-hash-completed',
+          }),
+          result: JSON.stringify({
+            fileName: 'old.docx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            sourceHash: 'old-source-hash-completed',
+            storageBucket: 'docs-test',
+            storageKey: `docx-cache/${oldCompletedJobId}.docx`,
+          }),
+          createdAt: new Date(Date.now() - 5000),
+        },
+        {
+          id: oldPendingJobId,
+          type: 'docx_generate',
+          status: 'pending',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: useCase.id,
+            sourceHash: 'old-source-hash-pending',
+          }),
+          createdAt: new Date(Date.now() - 2000),
+        },
+      ]);
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/docx/generate',
+        user.sessionToken!,
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: useCase.id,
+        },
+        { 'Accept-Language': 'fr-FR' }
+      );
+
+      expect(response.status).toBe(202);
+      const data = await response.json();
+      expect(data.jobId).toBeDefined();
+      expect(data.jobId).not.toBe(oldCompletedJobId);
+      expect(data.jobId).not.toBe(oldPendingJobId);
+
+      const staleRows = await db
+        .select({ id: jobQueue.id })
+        .from(jobQueue)
+        .where(
+          and(
+            eq(jobQueue.workspaceId, user.workspaceId),
+            eq(jobQueue.type, 'docx_generate')
+          )
+        );
+      const staleIds = new Set(staleRows.map((row) => row.id));
+      expect(staleIds.has(oldCompletedJobId)).toBe(false);
+      expect(staleIds.has(oldPendingJobId)).toBe(false);
+      expect(staleIds.has(data.jobId)).toBe(true);
+
+      expect(deleteSpy).toHaveBeenCalledWith({
+        bucket: 'docs-test',
+        key: `docx-cache/${oldCompletedJobId}.docx`,
+      });
+    } finally {
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it('processes publishing jobs even when AI queue slots are saturated', async () => {
+    processJobsSpy.mockRestore();
+
+    const processJobSpy = vi.spyOn(queueManager as unknown as { processJob: (job: unknown) => Promise<void> }, 'processJob')
+      .mockResolvedValue();
+    const originalAiConcurrency = (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs;
+    const originalPublishingConcurrency = (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs;
+    const originalProcessingInterval = (queueManager as unknown as { processingInterval: number }).processingInterval;
+    const aiProcessingJobId = createTestId();
+    const docxPendingJobId = createTestId();
+
+    try {
+      (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs = 1;
+      (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs = 1;
+      (queueManager as unknown as { processingInterval: number }).processingInterval = 10;
+
+      await db.insert(jobQueue).values([
+        {
+          id: aiProcessingJobId,
+          type: 'chat_message',
+          status: 'processing',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            userId: user.id,
+            sessionId: createTestId(),
+            assistantMessageId: createTestId(),
+          }),
+          createdAt: new Date(Date.now() - 5000),
+          startedAt: new Date(Date.now() - 5000).toISOString(),
+        },
+        {
+          id: docxPendingJobId,
+          type: 'docx_generate',
+          status: 'pending',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: createTestId(),
+          }),
+          createdAt: new Date(),
+        },
+      ]);
+
+      await queueManager.processJobs();
+
+      expect(processJobSpy).toHaveBeenCalledTimes(1);
+      const [calledJob] = processJobSpy.mock.calls[0] ?? [];
+      expect((calledJob as { id: string; type: string }).id).toBe(docxPendingJobId);
+      expect((calledJob as { id: string; type: string }).type).toBe('docx_generate');
+
+      const [aiRow] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, aiProcessingJobId))
+        .limit(1);
+      const [docxRow] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, docxPendingJobId))
+        .limit(1);
+
+      expect(aiRow?.status).toBe('processing');
+      expect(docxRow?.status).toBe('processing');
+    } finally {
+      processJobSpy.mockRestore();
+      (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs = originalAiConcurrency;
+      (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs = originalPublishingConcurrency;
+      (queueManager as unknown as { processingInterval: number }).processingInterval = originalProcessingInterval;
+      processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue();
+    }
+  });
+
+  it('emits DOCX stream progress with status updates and final done event', async () => {
+    const jobId = createTestId();
+    const streamId = `job_${jobId}`;
+    const workerSpy = vi
+      .spyOn(docxRenderWorker, 'runDocxGenerationInWorker')
+      .mockImplementation(async ({ onProgress }) => {
+        await onProgress?.({
+          state: 'rendering_annex',
+          progress: 55,
+          current: 1,
+          total: 2,
+          message: 'Rendering use case 1/2',
+        });
+        await onProgress?.({
+          state: 'rendering_annex',
+          progress: 78,
+          current: 2,
+          total: 2,
+          message: 'Rendering use case 2/2',
+        });
+        return {
+          fileName: 'generated.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          buffer: Buffer.from('docx-bytes'),
+        };
+      });
+    const bucketSpy = vi.spyOn(storageS3, 'getDocumentsBucketName').mockReturnValue('docs-test');
+    const putSpy = vi.spyOn(storageS3, 'putObject').mockResolvedValue();
+
+    try {
+      await db.insert(jobQueue).values({
+        id: jobId,
+        type: 'docx_generate',
+        status: 'processing',
+        workspaceId: user.workspaceId!,
+        data: JSON.stringify({
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+          locale: 'fr',
+        }),
+        createdAt: new Date(),
+      });
+
+      await (queueManager as unknown as {
+        processDocxGenerate: (data: Record<string, unknown>, id: string) => Promise<void>;
+      }).processDocxGenerate(
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+          locale: 'fr',
+        },
+        jobId
+      );
+
+      const streamResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/streams/events/${streamId}`,
+        user.sessionToken!
+      );
+      expect(streamResponse.status).toBe(200);
+      const streamData = await streamResponse.json();
+      const events = streamData.events as Array<{ eventType: string; data: Record<string, unknown> }>;
+      expect(events.length).toBeGreaterThan(0);
+
+      const statusEvents = events.filter((event) => event.eventType === 'status');
+      expect(statusEvents.length).toBeGreaterThanOrEqual(4);
+      const states = statusEvents.map((event) => String(event.data?.state));
+      expect(states).toContain('queued');
+      expect(states).toContain('loading_data');
+      expect(states).toContain('rendering_annex');
+      expect(states).toContain('packaging');
+
+      const doneEvent = events[events.length - 1];
+      expect(doneEvent.eventType).toBe('done');
+      expect(doneEvent.data?.state).toBe('done');
+      expect(doneEvent.data?.progress).toBe(100);
+      expect(doneEvent.data?.storageBucket).toBe('docs-test');
+      expect(String(doneEvent.data?.storageKey || '')).toContain('/usecase/');
+
+      expect(workerSpy).toHaveBeenCalledTimes(1);
+      expect(putSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
+      workerSpy.mockRestore();
+      bucketSpy.mockRestore();
+      putSpy.mockRestore();
+    }
+  });
+
+  it('enforces workspace isolation on docx download', async () => {
+    const otherUser = await createAuthenticatedUser('editor');
+    const jobId = createTestId();
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'docx_generate',
+      status: 'completed',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({
+        templateId: 'usecase-onepage',
+        entityType: 'usecase',
+        entityId: createTestId(),
+      }),
+      result: JSON.stringify({
+        fileName: 'hidden.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        contentBase64: Buffer.from('x').toString('base64'),
+      }),
+      createdAt: new Date(),
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/docx/jobs/${jobId}/download`,
+      otherUser.sessionToken!
+    );
+    expect(response.status).toBe(404);
+  });
+});

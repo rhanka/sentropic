@@ -3,6 +3,7 @@
   import type { MatrixConfig } from '../../types/matrix';
   import type { ScoreEntry } from '../utils/scoring';
   import { scoreToStars } from '../utils/scoring';
+  import { _ } from 'svelte-i18n';
   
   export let matrix: MatrixConfig;
   export let valueScores: ScoreEntry[];
@@ -19,12 +20,12 @@
 </script>
 
 <div class="space-y-6">
-  <h3 class="text-lg font-semibold text-slate-900">Évaluation Matrice</h3>
+  <h3 class="text-lg font-semibold text-slate-900">{$_('matrix.details.title')}</h3>
   
   <div class="grid gap-6 md:grid-cols-2">
     <!-- Axes de Valeur -->
     <div class="space-y-4">
-      <h4 class="font-medium text-slate-800">Axes de Valeur</h4>
+      <h4 class="font-medium text-slate-800">{$_('matrix.valueAxes')}</h4>
       {#each matrix.valueAxes as axis}
         {@const score = getAxisScore(axis.id, valueScores)}
         {#if score}
@@ -36,7 +37,7 @@
               <h5 class="font-medium text-slate-900">{axis.name}</h5>
               <div class="flex items-center gap-2">
                 <StarRating filled={stars} empty={5 - stars} type="stars" size="sm" />
-                <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
               </div>
             </div>
             <p class="text-sm text-slate-600">{description}</p>
@@ -47,7 +48,7 @@
     
     <!-- Axes de Complexité -->
     <div class="space-y-4">
-      <h4 class="font-medium text-slate-800">Axes de Complexité</h4>
+      <h4 class="font-medium text-slate-800">{$_('matrix.complexityAxes')}</h4>
       {#each matrix.complexityAxes as axis}
         {@const score = getAxisScore(axis.id, complexityScores)}
         {#if score}
@@ -59,7 +60,7 @@
               <h5 class="font-medium text-slate-900">{axis.name}</h5>
               <div class="flex items-center gap-2">
                 <StarRating filled={stars} empty={5 - stars} type="x" size="sm" />
-                <span class="text-sm text-slate-600">({score.rating} pts)</span>
+                <span class="text-sm text-slate-600">({score.rating} {$_('common.pointsAbbr')})</span>
               </div>
             </div>
             <p class="text-sm text-slate-600">{description}</p>

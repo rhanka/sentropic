@@ -15,11 +15,11 @@ export type UseCaseData = {
   // === Champs principaux (obligatoires) ===
   name: string; // Nom du cas d'usage
   description?: string; // Description courte (30-60 mots)
-  
+
   // === Nouveaux champs ===
   problem?: string; // 40-80 mots
   solution?: string; // 40-80 mots
-  
+
   // === Détails métier ===
   process?: string;
   domain?: string;
@@ -27,22 +27,23 @@ export type UseCaseData = {
   prerequisites?: string;
   deadline?: string;
   contact?: string;
-  
+
   // === Listes ===
   benefits?: string[];
+  constraints?: string[];
   metrics?: string[];
   risks?: string[];
   nextSteps?: string[];
   dataSources?: string[];
   dataObjects?: string[];
-  
+
   // === Références ===
   references?: Array<{
     title: string;
     url: string;
     excerpt?: string;
   }>;
-  
+
   // === Scores détaillés (pour recalcul dynamique) ===
   valueScores?: ScoreEntry[];
   complexityScores?: ScoreEntry[];
@@ -70,12 +71,11 @@ export type UseCase = {
   status: string;
   model?: string | null;
   createdAt: Date | string;
-  
+
   // === Données métier (JSONB, inclut name et description) ===
   data: UseCaseData;
-  
+
   // === Scores calculés dynamiquement (non stockés en DB) ===
   totalValueScore?: number | null;
   totalComplexityScore?: number | null;
 };
-

@@ -168,7 +168,7 @@ async function getLatestCommentDate(params: {
 function getUseCaseName(row: typeof useCases.$inferSelect): string {
   const data = row.data as Record<string, unknown> | null | undefined;
   const name = typeof data?.name === 'string' ? data.name : '';
-  return name.trim() || 'cas-usage';
+  return name.trim() || 'usecase';
 }
 
 async function resolveExportFileInfo(opts: {
@@ -183,7 +183,7 @@ async function resolveExportFileInfo(opts: {
     const latestComment = await getLatestCommentDate({ workspaceId: opts.workspaceId });
     const date = latestComment || ws?.updatedAt || ws?.createdAt || null;
     const slug = slugifyName(wsName) || 'workspace';
-    const suffix = opts.exportKind === 'folders' ? 'dossiers' : opts.exportKind === 'organizations' ? 'organisations' : null;
+    const suffix = opts.exportKind === 'folders' ? 'folders' : opts.exportKind === 'organizations' ? 'organizations' : null;
     if (suffix) {
       return { prefix: `workspace_${slug}_${suffix}`, slug: '', date };
     }
@@ -195,19 +195,19 @@ async function resolveExportFileInfo(opts: {
 
   if (opts.scope === 'organization') {
     const [org] = await db.select().from(organizations).where(eq(organizations.id, opts.scopeId)).limit(1);
-    const name = org?.name?.trim() || 'organisation';
+    const name = org?.name?.trim() || 'organization';
     const latestComment = await getLatestCommentDate({
       workspaceId: opts.workspaceId,
       contextType: 'organization',
       contextId: opts.scopeId,
     });
     const date = latestComment || org?.updatedAt || org?.createdAt || null;
-    return { prefix: 'organisation', slug: slugifyName(name) || 'organisation', date };
+    return { prefix: 'organization', slug: slugifyName(name) || 'organization', date };
   }
 
   if (opts.scope === 'folder') {
     const [folder] = await db.select().from(folders).where(eq(folders.id, opts.scopeId)).limit(1);
-    const name = folder?.name?.trim() || 'dossier';
+    const name = folder?.name?.trim() || 'folder';
     const useCaseRows = await db
       .select({ id: useCases.id, createdAt: useCases.createdAt })
       .from(useCases)
@@ -239,19 +239,19 @@ async function resolveExportFileInfo(opts: {
         if (!acc || next > acc) return next;
         return acc;
       }, null);
-    return { prefix: 'dossier', slug: slugifyName(name) || 'dossier', date };
+    return { prefix: 'folder', slug: slugifyName(name) || 'folder', date };
   }
 
   if (opts.scope === 'usecase') {
     const [useCase] = await db.select().from(useCases).where(eq(useCases.id, opts.scopeId)).limit(1);
-    const name = useCase ? getUseCaseName(useCase) : 'cas-usage';
+    const name = useCase ? getUseCaseName(useCase) : 'usecase';
     const latestComment = await getLatestCommentDate({
       workspaceId: opts.workspaceId,
       contextType: 'usecase',
       contextId: opts.scopeId,
     });
     const date = latestComment || useCase?.createdAt || null;
-    return { prefix: 'cas-usage', slug: slugifyName(name) || 'cas-usage', date };
+    return { prefix: 'usecase', slug: slugifyName(name) || 'usecase', date };
   }
 
   if (opts.scope === 'matrix') {
