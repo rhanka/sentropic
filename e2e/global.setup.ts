@@ -471,7 +471,7 @@ export default async function globalSetup() {
   try {
     browser = await chromium.launch({
       args: [
-        '--unsafely-treat-insecure-origin-as-secure=http://localhost:5173,http://localhost:8787',
+        `--unsafely-treat-insecure-origin-as-secure=${BASE_URL},${API_BASE_URL}`,
         '--allow-insecure-localhost'
       ]
     });
@@ -499,5 +499,4 @@ export default async function globalSetup() {
     throw err;
   }
 }
-
 

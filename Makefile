@@ -12,6 +12,9 @@ export API_PORT ?= 8787
 export UI_PORT ?= 5173
 export MAILDEV_UI_PORT ?= 1080
 export VITE_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
+export API_BASE_URL ?= http://localhost:$(API_PORT)
+export UI_BASE_URL ?= http://localhost:$(UI_PORT)
+export MAILDEV_API_URL ?= http://localhost:$(MAILDEV_UI_PORT)
 export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 
@@ -336,7 +339,7 @@ test-contract:
 wait-ready:
 	@echo "⏳ Checking API/UI readiness..."
 	@bash -c 'for i in {1..30}; do \
-	  curl -sf http://localhost:8787/api/v1/health >/dev/null && curl -sf http://localhost:5173 >/dev/null && exit 0; \
+	  curl -sf $(API_BASE_URL)/api/v1/health >/dev/null && curl -sf $(UI_BASE_URL) >/dev/null && exit 0; \
 	  echo "Waiting for services... ($$i/30)"; sleep 2; \
 	done; echo "Services not ready"; exit 1'
 
@@ -344,7 +347,7 @@ wait-ready:
 wait-ready-api:
 	@echo "⏳ Checking API readiness..."
 	@bash -c 'for i in {1..30}; do \
-	  curl -sf http://localhost:8787/api/v1/health >/dev/null && exit 0; \
+	  curl -sf $(API_BASE_URL)/api/v1/health >/dev/null && exit 0; \
 	  echo "Waiting for API... ($$i/30)"; sleep 2; \
 	done; echo "API not ready"; exit 1'
 
@@ -389,8 +392,10 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    if [ -n "$$E2E_SPEC" ]; then \
-	      echo "▶ Running scoped Playwright: $$E2E_SPEC (workers=$$workers retries=$$retries $${extra:-})"; \
-	      npx playwright test "$$E2E_SPEC" --workers="$$workers" --retries="$$retries" $$extra; \
+	      spec_path="$$E2E_SPEC"; \
+	      spec_path="$${spec_path#e2e/}"; \
+	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
+	      npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
 	    else \
 	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
 	      for g in $$E2E_GROUPS; do \
@@ -942,12 +947,12 @@ test-api-smoke-restore: ## Run smoke tests in production mode (for restore valid
 
 queue-clear: ## Clear all pending jobs from the queue
 	@echo "🧹 Clearing job queue..."
-	@curl -X POST http://localhost:8787/api/v1/queue/purge -H "Content-Type: application/json" -d '{"status": "force"}' || echo "API not available, using fallback"
+	@curl -X POST $(API_BASE_URL)/api/v1/queue/purge -H "Content-Type: application/json" -d '{"status": "force"}' || echo "API not available, using fallback"
 	@echo "✅ Queue cleared"
 
 queue-status: ## Show current queue status
 	@echo "📊 Queue status:"
-	@curl -s http://localhost:8787/api/v1/queue/stats | jq . || echo "API not available"
+	@curl -s $(API_BASE_URL)/api/v1/queue/stats | jq . || echo "API not available"
 
 queue-reset: queue-clear ## Reset queue and clear all jobs (alias for queue-clear)
 
