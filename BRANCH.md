@@ -264,8 +264,8 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
   - [ ] **UI tests (TypeScript only)**
     - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
     - [x] Regression gate: `make test-ui ENV=test ...`
-    - [ ] Deferred UI suites:
-      - [ ] `ui/tests/i18n.spec.ts` (if present)
+    - [x] Deferred UI suites:
+      - [x] `ui/tests/i18n.spec.ts` (not present in repo)
       - [x] `ui/tests/stores/folders.test.ts`
     - [x] Sub-lot gate: `make test-ui ENV=test ...`
   - [ ] **E2E tests**
@@ -274,33 +274,33 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
       - [x] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
       - [x] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
-    - [ ] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [ ] Deferred E2E suites (Wave 1 + Wave 2 backlog):
-      - [ ] `e2e/tests/00-access-control.spec.ts`
-      - [ ] `e2e/tests/00-ai-generation.spec.ts`
-      - [ ] `e2e/tests/01-admin-users.spec.ts`
-      - [ ] `e2e/tests/01-app.spec.ts`
-      - [ ] `e2e/tests/01-organizations-detail.spec.ts`
-      - [ ] `e2e/tests/02-organizations.spec.ts`
-      - [ ] `e2e/tests/03-chat.spec.ts`
-      - [ ] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
-      - [ ] `e2e/tests/04-dossiers-reload-draft.spec.ts`
-      - [ ] `e2e/tests/04-documents-summary.spec.ts`
-      - [ ] `e2e/tests/04-documents-ui-actions.spec.ts`
-      - [ ] `e2e/tests/04-tenancy-workspaces.spec.ts`
-      - [ ] `e2e/tests/05-error-handling.spec.ts`
-      - [ ] `e2e/tests/05-folders.spec.ts`
-      - [ ] `e2e/tests/05-i18n.spec.ts`
-      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (DOCX + constraints live update)
-      - [ ] `e2e/tests/06-settings.spec.ts`
-      - [ ] `e2e/tests/06-streams.spec.ts`
-      - [ ] `e2e/tests/06-usecase.spec.ts`
-      - [ ] `e2e/tests/07-import-export.spec.ts`
-      - [ ] `e2e/tests/07-matrix.spec.ts`
-      - [ ] `e2e/tests/07-workflow.spec.ts`
-      - [ ] `e2e/tests/07_comment_assistant.spec.ts`
-      - [ ] `e2e/tests/executive-summary.spec.ts` (if present)
+      - [x] `e2e/tests/00-access-control.spec.ts`
+      - [x] `e2e/tests/00-ai-generation.spec.ts`
+      - [x] `e2e/tests/01-admin-users.spec.ts`
+      - [x] `e2e/tests/01-app.spec.ts`
+      - [x] `e2e/tests/01-organizations-detail.spec.ts`
+      - [x] `e2e/tests/02-organizations.spec.ts`
+      - [x] `e2e/tests/03-chat.spec.ts`
+      - [x] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+      - [x] `e2e/tests/04-dossiers-reload-draft.spec.ts`
+      - [x] `e2e/tests/04-documents-summary.spec.ts`
+      - [x] `e2e/tests/04-documents-ui-actions.spec.ts`
+      - [x] `e2e/tests/04-tenancy-workspaces.spec.ts`
+      - [x] `e2e/tests/05-error-handling.spec.ts`
+      - [x] `e2e/tests/05-folders.spec.ts`
+      - [x] `e2e/tests/05-i18n.spec.ts`
+      - [x] `e2e/tests/05-usecase-detail.spec.ts` (DOCX + constraints live update)
+      - [x] `e2e/tests/06-settings.spec.ts`
+      - [x] `e2e/tests/06-streams.spec.ts`
+      - [x] `e2e/tests/06-usecase.spec.ts`
+      - [x] `e2e/tests/07-import-export.spec.ts`
+      - [x] `e2e/tests/07-matrix.spec.ts`
+      - [x] `e2e/tests/07-workflow.spec.ts`
+      - [x] `e2e/tests/07_comment_assistant.spec.ts`
+      - [x] `e2e/tests/executive-summary.spec.ts` (not present in repo)
       - [ ] Ctrl+P docx->pdf->print flow (when implemented)
-    - [ ] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
   - [ ] User smoke test
   - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.
