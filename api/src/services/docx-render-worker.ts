@@ -1,7 +1,8 @@
 import { Worker } from 'node:worker_threads';
-import { mkdir } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { constants } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 type DocxWorkerInput = {
   templateId: 'usecase-onepage' | 'executive-synthesis-multipage';
@@ -59,7 +60,7 @@ function createAbortError(message: string): Error {
 
 async function buildDevWorkerBundle(): Promise<URL> {
   const [{ build }] = await Promise.all([import('esbuild')]);
-  const sourcePath = fileURLToPath(new URL('../workers/docx-render.worker.ts', import.meta.url));
+  const sourcePath = resolve(process.cwd(), 'src', 'workers', 'docx-render.worker.ts');
   const outputPath = resolve(
     process.cwd(),
     'node_modules',
@@ -82,12 +83,21 @@ async function buildDevWorkerBundle(): Promise<URL> {
   return pathToFileURL(outputPath);
 }
 
-async function resolveDocxWorkerRuntimeSpec(): Promise<{ entry: URL; execArgv: string[] }> {
-  const inDist = import.meta.url.includes('/dist/');
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  if (inDist) {
+async function resolveDocxWorkerRuntimeSpec(): Promise<{ entry: URL; execArgv: string[] }> {
+  const distWorkerPath = resolve(process.cwd(), 'dist', 'workers', 'docx-render.worker.js');
+
+  if (await fileExists(distWorkerPath)) {
     return {
-      entry: new URL('../workers/docx-render.worker.js', import.meta.url),
+      entry: pathToFileURL(distWorkerPath),
       execArgv: [],
     };
   }
