@@ -22,10 +22,25 @@ This document defines the testing strategy for the assistant project, ensuring a
 
 ### Main Test Commands
 On TARGET=development:
-- `make test-ui [SCOPE=tests/test.ts]` - UI unit tests (Vitest)
-- `make test-api [SCOPE=tests/test.ts]` - API unit + integration tests (Vitest)
+- `make test-ui [SCOPE=tests/test.ts] ENV=test` - UI unit tests (Vitest)
+- `make test-api [SCOPE=tests/test.ts] ENV=test` - API unit + integration tests (Vitest)
 On TARGET=production (requires first `make build-api build-ui-image`):
-- `make test-e2e [E2E_SPEC=tests/test.ts]` - E2E tests (Playwright)
+- `make test-e2e [E2E_SPEC=tests/test.ts] API_PORT=<api_port> UI_PORT=<ui_port> MAILDEV_UI_PORT=<maildev_port> ENV=e2e` - E2E tests (Playwright)
+
+### Environment Isolation Rules (MANDATORY)
+- Keep user UAT/dev on root workspace only: `~/src/top-ai-ideas-fullstack` with `ENV=dev` (default user environment, stable data).
+- Develop branch changes in isolated worktrees only: `tmp/feat-<slug>` (even for a single active branch).
+- Never run test campaigns on root `dev`:
+  - API/UI tests run on dedicated envs (`ENV=test` or branch-specific env).
+  - E2E tests run on dedicated env (`ENV=e2e`), isolated ports, isolated compose project.
+- During UAT cycle:
+  - code/test in `tmp/feat-<slug>`,
+  - push branch,
+  - switch to root workspace for user UAT on dev,
+  - switch back to `tmp/feat-<slug>` for continuation.
+- Command style is mandatory: `ENV` must be the last argument in all `make` commands.
+  - Valid: `make test-e2e E2E_SPEC=tests/foo.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
+  - Invalid: `ENV=e2e make test-e2e ...`
 
 ### Branch Workflow Alignment
 - Defer full test runs until the end of the branch to preserve user test data.
@@ -36,7 +51,7 @@ On TARGET=production (requires first `make build-api build-ui-image`):
   - E2E: `make test-e2e E2E_SPEC=tests/your-file.spec.ts`
 - Use full gates at the end: `make test-api`, `make test-ui`, and `make clean test-e2e`.
 - E2E runs must be preceded by `make build-api build-ui-image`.
-- Between E2E passes: run `make clean test-e2e` (clean first, then run tests).
+- Between E2E passes: run `make clean ... ENV=e2e` first, then `make test-e2e ... ENV=e2e`, then `make clean ... ENV=e2e`.
 - Update the test plan in `BRANCH.md` after each lot (what changed and what must be re-tested).
 - UI testing scope: only TypeScript tests (`ui/tests/**/*.ts`), no Svelte component tests yet.
 - Respect existing test structure when adding tests (`api/tests/**`, `e2e/tests/**`).
@@ -141,4 +156,3 @@ On TARGET=production (requires first `make build-api build-ui-image`):
 - **Integration tests must pass** before E2E tests
 - **API tests**: Comprehensive coverage of endpoints, AI, and queue
 - **E2E tests**: Critical user workflows validation
-

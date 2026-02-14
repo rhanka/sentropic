@@ -7,6 +7,10 @@
 - Scope limited to <areas>.
 - One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 
 ## Questions / Notes
@@ -21,11 +25,19 @@
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
 - **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
 - UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-<slug>`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
   - [ ] Read the relevant `.mdc` files and `README.md`.
+  - [ ] Create/confirm isolated worktree `tmp/feat-<slug>` and run development there.
   - [ ] Capture Makefile targets needed for debug/testing.
+  - [ ] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
+  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [ ] Confirm scope and guardrails.
   - [ ] If the branch is complex, add `spec/BRANCH_SPEC_EVOL.md` (initial draft).
 
@@ -49,18 +61,18 @@
   - [ ] **API tests**
     - [ ] <Exhaustive list of API test updates (file-by-file, existing + new)>
     - [ ] <Evolve or add API tests (e.g., update `api/tests/api/organizations.spec.ts` or add `api/tests/api/new-feature.spec.ts`)>
-    - [ ] <Scoped runs while evolving tests: `make test-api-<suite> SCOPE=tests/your-file.spec.ts`>
-    - [ ] Sub-lot gate: `make test-api`
+    - [ ] <Scoped runs while evolving tests: `make test-api-<suite> SCOPE=tests/your-file.spec.ts ENV=test`>
+    - [ ] Sub-lot gate: `make test-api ENV=test`
   - [ ] **UI tests (TypeScript only)**
     - [ ] <Exhaustive list of UI TS test updates (file-by-file, existing + new)>
     - [ ] <Evolve or add UI TS tests (e.g., update `ui/tests/stores/organizations.spec.ts` or add `ui/tests/utils/new-feature.spec.ts`)>
-    - [ ] <Scoped runs while evolving tests: `make test-ui SCOPE=tests/your-file.spec.ts`>
-    - [ ] Sub-lot gate: `make test-ui`
+    - [ ] <Scoped runs while evolving tests: `make test-ui SCOPE=tests/your-file.spec.ts ENV=test`>
+    - [ ] Sub-lot gate: `make test-ui ENV=test`
   - [ ] **E2E tests**
-    - [ ] Prepare E2E build: `make build-api build-ui-image`
+    - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
     - [ ] <Exhaustive list of E2E test updates (file-by-file, existing + new)>
     - [ ] <Evolve or add E2E tests (e.g., update `e2e/tests/05-organizations.spec.ts` or add `e2e/tests/10-new-feature.spec.ts`)>
-    - [ ] <Scoped runs while evolving tests: `make test-e2e E2E_SPEC=tests/your-file.spec.ts`>
-    - [ ] Sub-lot gate: `make clean test-e2e`
+    - [ ] <Scoped runs while evolving tests: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`>
+    - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
   - [ ] Final gate: Créate PR with BRANCH.md content as initial message & Verify CI for the branch
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
