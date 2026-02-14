@@ -269,11 +269,11 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `ui/tests/stores/folders.test.ts`
     - [x] Sub-lot gate: `make test-ui ENV=test ...`
   - [ ] **E2E tests**
-    - [ ] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
-    - [ ] Scoped evolution specs:
-      - [ ] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
-      - [ ] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
-      - [ ] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Scoped evolution specs:
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [x] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [ ] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [ ] Deferred E2E suites (Wave 1 + Wave 2 backlog):
       - [ ] `e2e/tests/00-access-control.spec.ts`
