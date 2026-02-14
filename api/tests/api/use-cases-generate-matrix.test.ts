@@ -272,4 +272,56 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(data.matrix_mode).toBe('default');
     expect(data.matrixJobId).toBeUndefined();
   });
+
+  it('blocks usecase detail when matrix_generate failed for the folder (strict policy)', async () => {
+    const organizationId = await createOrganization();
+    const folderId = createTestId();
+    const useCaseId = createTestId();
+
+    await db.insert(folders).values({
+      id: folderId,
+      workspaceId: user.workspaceId!,
+      name: `Matrix strict ${createTestId()}`,
+      description: 'Folder waiting for generated matrix',
+      organizationId,
+      matrixConfig: null,
+      status: 'generating',
+      createdAt: new Date(),
+    });
+
+    await db.insert(useCases).values({
+      id: useCaseId,
+      workspaceId: user.workspaceId!,
+      folderId,
+      organizationId,
+      status: 'generating',
+      data: {
+        name: 'Use case waiting matrix',
+        description: 'Should fail before detail generation',
+      },
+      createdAt: new Date(),
+    });
+
+    await db.insert(jobQueue).values({
+      id: createTestId(),
+      type: 'matrix_generate',
+      status: 'failed',
+      workspaceId: user.workspaceId!,
+      data: JSON.stringify({ folderId, organizationId }),
+      error: 'Matrix generation failed for strict-policy test',
+      createdAt: new Date(),
+    });
+
+    await expect(
+      (queueManager as unknown as {
+        processUseCaseDetail: (data: Record<string, unknown>) => Promise<void>;
+      }).processUseCaseDetail({
+        useCaseId,
+        useCaseName: 'Use case waiting matrix',
+        folderId,
+        matrixMode: 'generate',
+        model: 'gpt-4.1-nano',
+      })
+    ).rejects.toThrow('Matrix generation failed for strict-policy test');
+  });
 });
