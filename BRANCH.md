@@ -343,11 +343,11 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] `e2e/tests/05-executive-summary-docx.spec.ts` (not required; assertions kept in existing files above).
       - [ ] Dashboard file menu action flow:
         - [x] “Prepare DOCX” visible in idle.
-        - [ ] switches to “Preparing…” while job running.
+        - [x] switches to “Preparing…” while job running.
         - [x] switches to “Download DOCX” when done.
       - [ ] Toast flow:
-        - [ ] “preparation started” toast appears.
-        - [ ] persistent “document ready” toast appears with download action.
+        - [x] “preparation started” toast appears.
+        - [x] persistent “document ready” toast appears with download action.
       - [ ] Download correctness:
         - [x] download event is triggered from menu download action.
         - [x] downloaded filename matches executive synthesis naming contract.
@@ -366,6 +366,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] dashboard quadrant labels.
         - [x] folder new labels/placeholders.
         - [ ] matrix warning banner.
+          - [x] Deterministic fallback covered in matrix area when warning is not rendered: empty-state label + create-modal labels (FR/EN).
     - [ ] E2E — quality debt cleanup:
       - [x] Reduce broad conditional passes in `03-dashboard` and `05-executive-summary`.
       - [x] Convert high-value skipped tests to active deterministic tests (where feature exists).
