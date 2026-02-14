@@ -222,6 +222,121 @@
   - [ ] Plugin VS code (+tools "locaux")
   - [ ] Plugin chrome (+ tools "locaux")
   - [ ] App standalone desktop (+ tools "locaux")
+- [ ] Tools de productivité
+  - [ ] Todo/Plan
+    - [ ] Todo basic
+    - [ ] Révisable
+    - [ ] Mutli étapes
+    - [ ] Synchro avec outils
+      - [ ] Fichier md (coding)
+      - [ ] Issues/Roadmap Github (approfondir)
+      - [ ] Todo bureautique (approfondir : Google, Microsoft, Notion)
+    - [ ] tool (mono agent)
+    - [ ] agentic (conductor)
+    - [ ] personnel
+    - [ ] collaboratif
+- [ ] AI optim
+  - [ ] Global session (offrir à tous)
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+  - [ ] Par utilisateur
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+- [ ] Concevoir le plugin chrome
+  - [ ] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+    - [ ] Lecture d'un tab
+    - [ ] Automation d'un tab (cliquer ...)
+    - [ ] Collaboration local / remote (outils d'un workspace)
+  - Tools spécialisés
+    - [ ] Interaction avec applications via UI
+      - [ ] Google workspace
+        - [ ] Gmail
+        - [ ] Google sheet
+        - [ ] Google doc
+        - [ ] Google slide
+        - [ ] Google chat
+        - [ ] Gemini
+      - [ ] Microsoft
+        - [ ] Outlook
+        - [ ] Teams
+        - [ ] Sharepoint / Excel
+        - [ ] Sharepoint / Word
+        - [ ] Sharepoint / Powerpoint
+        - [ ] Copilot
+      - [ ] Github
+        - [ ] Issues
+        - [ ] PR
+    - [ ] Pilotage API pour accélération
+      - [ ] Capacité local / délégation remote (via Auth appli)
+      - [ ] Google workspace
+        - [ ] Gmail
+        - [ ] Google sheet
+        - [ ] Google doc
+        - [ ] Google slide
+        - [ ] Google chat
+        - [ ] Gemini
+      - [ ] Microsoft
+        - [ ] Outlook
+        - [ ] Teams
+        - [ ] Sharepoint / Excel
+        - [ ] Sharepoint / Word
+        - [ ] Sharepoint / Powerpoint
+- [ ] Créer une capacité d'agentique en worker (cluster kube) (approfondir)
+- [ ] Agent de code (vs code + remote) (approfondir)
+  - [ ] Vs code
+    - [ ] Modeles
+    - [ ] BYOK
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] SSO
+      - [ ] openAI
+      - [ ] Gemini
+      - [ ] Claude
+      - [ ] Mistral
+    - [ ] Re-edit = Checkpoint base code (git)
+    - [ ] Manage context summary
+    - [ ] Tools
+      - [ ] apply-patch
+      - [ ] grep
+      - [ ] look up chat history (limit red fish effet)
+      - [ ] Shell
+        - [ ] facilité de choix (git commit mais pas git push etc)
+        - [ ] background exec
+      - [ ] Remote exec (kube)
+      - [ ] Plan (révisable)
+      - [ ] Conductor model (subagentique)
+  - [ ] Autonomous agent
+    - [ ] Use plan and conductor model
+    - [ ] Manage feedback with human
+      - [ ] Summary with key decision points (code base architecture change)
+      - [ ] Key code base change proposal
+    - Agents:
+      - [ ] Autonomy (remove lib dependency)
+      - [ ] Backport to third langage (api: rust, ui: react, vue)
+      - [ ] Code security
+      - [ ] Code lib upgrade
+      - [ ] Design
+      - [ ] Spec & doc consolidation
+      - [ ] PO / Product & Marketing
+      - [ ] QA / testing (with vision)
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
