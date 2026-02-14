@@ -233,85 +233,74 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Verify fallback rendering when bitmap is omitted.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Wave 2 current campaign (isolated environments, no `ENV=dev`):
-    - [ ] API/UI environment: `ENV=test API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1083`
-    - [ ] E2E environment: `ENV=e2e API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080`
-    - [ ] Rule: split **evolution checks** (recent changes) vs **regression checks** (existing behavior not touched directly).
-    - [ ] Rule: if a failure appears on a priori non-touched scope, inspect branch history from `main` before deciding:
-      - [ ] `git log --oneline origin/main..HEAD -- <affected-path>`
-      - [ ] `git blame <affected-file>` around failing lines
-      - [ ] decide explicitly: fix code regression vs fix stale/invalid test.
-    - [ ] Rule: E2E hygiene between runs:
-      - [ ] `make ENV=e2e clean`
-      - [ ] `make ENV=e2e test-e2e E2E_SPEC=...`
-      - [ ] `make ENV=e2e clean`
-  - [ ] Evolution checks (recent DOCX/template/dashboard changes):
-    - [ ] API gates: `make ENV=test typecheck-api` + `make ENV=test lint-api`
-    - [ ] UI gates: `make ENV=test typecheck-ui` + `make ENV=test lint-ui`
-    - [ ] API targeted suites:
-      - [ ] `make ENV=test test-api-endpoints SCOPE=tests/api/folders.test.ts`
-      - [ ] `make ENV=test test-api-queue SCOPE=tests/queue/queue.test.ts`
-      - [ ] `make ENV=test test-api-ai SCOPE=tests/ai/executive-summary-sync.test.ts`
-    - [ ] E2E targeted specs:
-      - [ ] `e2e/tests/03-dashboard.spec.ts`
-      - [ ] `e2e/tests/05-executive-summary.spec.ts`
-      - [ ] `e2e/tests/05-usecase-detail.spec.ts`
-  - [ ] Regression checks (post-evolution pass):
-    - [ ] `make ENV=test test-ui`
-    - [ ] `make ENV=test test-api`
-    - [ ] `make ENV=e2e clean test-e2e`
-  - [ ] Consolidate deferred test backlog from Wave 1 and Wave 2 scopes.
-  - [ ] Deferred tests (by scope, by file):
-    - [ ] API (Wave 1 carry-over):
-      - [ ] `api/tests/api/import-export.test.ts` (i18n/export prefixes)
-      - [ ] `api/tests/api/docx.test.ts` (one-page DOCX generation and template contract)
-    - [ ] API (Wave 2):
-      - [ ] `api/tests/api/ai-settings.test.ts` (bilingual prompt selection + fallback)
-      - [ ] `api/tests/api/use-cases.test.ts` (bilingual payload normalization + backward compatibility)
-      - [ ] `api/tests/api/organizations.test.ts` (bilingual organization payload consumption, if impacted)
-      - [ ] `api/tests/api/folders.test.ts` (matrix selection persistence + executive summary payload)
-      - [ ] `api/tests/api/matrix.test.ts` (matrix generation per org/folder, if separate suite exists)
-      - [ ] `api/tests/api/docx.test.ts` (extend: executive synthesis generation via unified endpoint)
-    - [ ] Gating : `make ENV=test test-api`
-    - [ ] UI (Wave 1):
-      - [ ] None explicitly required by Wave 1 scopes
-    - [ ] UI (Wave 2):
-      - [ ] `ui/tests/i18n.spec.ts` (bilingual edit + locale switching behavior, if tests exist)
-      - [ ] `ui/tests/folders.spec.ts` (folder generation matrix option/selection, if tests exist)
-     - [ ] Gating : `make ENV=test test-ui`
-    - [ ] E2E (Wave 1 carry-over):
-      - [ ] `make ENV=test-e2e build-api build-ui-image`
-      - [ ] i18n/route regression pack:
-        - [ ] `e2e/tests/00-access-control.spec.ts`
-        - [ ] `e2e/tests/00-ai-generation.spec.ts`
-        - [ ] `e2e/tests/01-admin-users.spec.ts`
-        - [ ] `e2e/tests/01-app.spec.ts`
-        - [ ] `e2e/tests/01-organizations-detail.spec.ts`
-        - [ ] `e2e/tests/02-organizations.spec.ts`
-        - [ ] `e2e/tests/03-chat.spec.ts`
-        - [ ] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
-        - [ ] `e2e/tests/04-dossiers-reload-draft.spec.ts`
-        - [ ] `e2e/tests/04-documents-summary.spec.ts`
-        - [ ] `e2e/tests/04-documents-ui-actions.spec.ts`
-        - [ ] `e2e/tests/04-tenancy-workspaces.spec.ts`
-        - [ ] `e2e/tests/05-error-handling.spec.ts`
-        - [ ] `e2e/tests/05-folders.spec.ts`
-        - [ ] `e2e/tests/05-i18n.spec.ts`
-        - [ ] `e2e/tests/05-usecase-detail.spec.ts`
-        - [ ] `e2e/tests/06-settings.spec.ts`
-        - [ ] `e2e/tests/06-streams.spec.ts`
-        - [ ] `e2e/tests/06-usecase.spec.ts`
-        - [ ] `e2e/tests/07-import-export.spec.ts`
-        - [ ] `e2e/tests/07-matrix.spec.ts`
-        - [ ] `e2e/tests/07-workflow.spec.ts`
-        - [ ] `e2e/tests/07_comment_assistant.spec.ts`
-      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (DOCX download assertions)
-      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (constraints live update via chat/SSE)
+  - [x] Campaign rules and isolated environments:
+    - [x] API/UI environment: `ENV=test API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1083`
+    - [x] E2E environment (adjust ports if occupied by `dev`): `ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [x] Split checks between evolution scope and regression scope.
+    - [x] On non-touched failure, inspect history before deciding fix direction:
+      - [x] `git log --oneline origin/main..HEAD -- <affected-path>`
+      - [x] `git blame <affected-file>` around failing lines
+      - [x] Decide explicitly: code regression vs stale/invalid test.
+    - [x] E2E hygiene rule for each run:
+      - [x] `make clean ENV=e2e ...`
+      - [x] `make test-e2e E2E_SPEC=... ENV=e2e ...`
+      - [x] `make clean ENV=e2e ...`
+  - [ ] **API tests**
+    - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-api ENV=test ...` + `make lint-api ENV=test ...`
+    - [x] Scoped evolution suites:
+      - [x] `make test-api-endpoints SCOPE=tests/api/folders.test.ts ENV=test ...`
+      - [x] `make test-api-queue SCOPE=tests/queue/queue.test.ts ENV=test ...`
+      - [x] `make test-api-ai SCOPE=tests/ai/executive-summary-sync.test.ts ENV=test ...`
+    - [x] Regression gate: `make test-api ENV=test ...`
+    - [ ] Deferred API suites (Wave 1 + Wave 2 backlog):
+      - [ ] `api/tests/api/import-export.test.ts`
+      - [ ] `api/tests/api/docx.test.ts` (one-page + executive synthesis contract)
+      - [ ] `api/tests/api/ai-settings.test.ts`
+      - [ ] `api/tests/api/use-cases.test.ts`
+      - [ ] `api/tests/api/companies.test.ts` (organization API coverage)
+      - [ ] `api/tests/api/folders.test.ts`
+      - [ ] `api/tests/api/matrix.test.ts` (if present)
+    - [x] Sub-lot gate: `make test-api ENV=test ...`
+  - [ ] **UI tests (TypeScript only)**
+    - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
+    - [ ] Regression gate: `make test-ui ENV=test ...`
+    - [ ] Deferred UI suites:
+      - [ ] `ui/tests/i18n.spec.ts` (if present)
+      - [ ] `ui/tests/folders.spec.ts` (if present)
+    - [ ] Sub-lot gate: `make test-ui ENV=test ...`
+  - [ ] **E2E tests**
+    - [ ] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [ ] Scoped evolution specs:
+      - [ ] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [ ] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+      - [ ] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [ ] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
+    - [ ] Deferred E2E suites (Wave 1 + Wave 2 backlog):
+      - [ ] `e2e/tests/00-access-control.spec.ts`
+      - [ ] `e2e/tests/00-ai-generation.spec.ts`
+      - [ ] `e2e/tests/01-admin-users.spec.ts`
+      - [ ] `e2e/tests/01-app.spec.ts`
+      - [ ] `e2e/tests/01-organizations-detail.spec.ts`
+      - [ ] `e2e/tests/02-organizations.spec.ts`
+      - [ ] `e2e/tests/03-chat.spec.ts`
+      - [ ] `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+      - [ ] `e2e/tests/04-dossiers-reload-draft.spec.ts`
+      - [ ] `e2e/tests/04-documents-summary.spec.ts`
+      - [ ] `e2e/tests/04-documents-ui-actions.spec.ts`
+      - [ ] `e2e/tests/04-tenancy-workspaces.spec.ts`
+      - [ ] `e2e/tests/05-error-handling.spec.ts`
+      - [ ] `e2e/tests/05-folders.spec.ts`
+      - [ ] `e2e/tests/05-i18n.spec.ts`
+      - [ ] `e2e/tests/05-usecase-detail.spec.ts` (DOCX + constraints live update)
+      - [ ] `e2e/tests/06-settings.spec.ts`
+      - [ ] `e2e/tests/06-streams.spec.ts`
+      - [ ] `e2e/tests/06-usecase.spec.ts`
+      - [ ] `e2e/tests/07-import-export.spec.ts`
+      - [ ] `e2e/tests/07-matrix.spec.ts`
+      - [ ] `e2e/tests/07-workflow.spec.ts`
+      - [ ] `e2e/tests/07_comment_assistant.spec.ts`
+      - [ ] `e2e/tests/executive-summary.spec.ts` (if present)
       - [ ] Ctrl+P docx->pdf->print flow (when implemented)
-    - [ ] E2E (Wave 2):
-      - [ ] `e2e/tests/03-chat.spec.ts` (FR/EN generation parity and fallback)
-      - [ ] `e2e/tests/07-matrix.spec.ts` (folder generation matrix reuse vs specific)
-      - [ ] `e2e/tests/executive-summary.spec.ts` (if exists: synthesis download contract)
-  - [ ] `make ENV=test-e2e clean test-e2e`
+    - [ ] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
   - [ ] User smoke test
   - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.
