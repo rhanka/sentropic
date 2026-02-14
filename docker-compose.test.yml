@@ -1,7 +1,7 @@
 services:
   api:
     environment:
-      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
       - ADMIN_EMAIL=e2e-admin@example.com
       - LOCK_TTL_MS=15000  # 15s for E2E tests (default: 60s)
       - WEBAUTHN_RP_ID=localhost
@@ -19,6 +19,10 @@ services:
     build:
       context: ./e2e
       dockerfile: Dockerfile
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://localhost:${API_PORT:-8787}}
+      - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${UI_PORT:-5173}}
+      - MAILDEV_API_URL=${MAILDEV_API_URL:-http://localhost:${MAILDEV_UI_PORT:-1080}}
     volumes:
       - ./e2e/tests:/app/tests
       - ./e2e/helpers:/app/helpers
