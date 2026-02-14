@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { folders, jobQueue, useCases } from '../../src/db/schema';
+import { chatStreamEvents, folders, jobQueue, useCases } from '../../src/db/schema';
 import { queueManager } from '../../src/services/queue-manager';
 import * as storageS3 from '../../src/services/storage-s3';
+import * as docxRenderWorker from '../../src/services/docx-render-worker';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -385,6 +386,256 @@ describe('DOCX API', () => {
       expect(bytes.equals(raw)).toBe(true);
     } finally {
       storageSpy.mockRestore();
+    }
+  });
+
+  it('invalidates previous docx cache entries when source changes', async () => {
+    const { useCase } = await createFolderAndUseCase();
+    const deleteSpy = vi.spyOn(storageS3, 'deleteObject').mockResolvedValue();
+    const oldCompletedJobId = createTestId();
+    const oldPendingJobId = createTestId();
+
+    try {
+      await db.insert(jobQueue).values([
+        {
+          id: oldCompletedJobId,
+          type: 'docx_generate',
+          status: 'completed',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: useCase.id,
+            sourceHash: 'old-source-hash-completed',
+          }),
+          result: JSON.stringify({
+            fileName: 'old.docx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            sourceHash: 'old-source-hash-completed',
+            storageBucket: 'docs-test',
+            storageKey: `docx-cache/${oldCompletedJobId}.docx`,
+          }),
+          createdAt: new Date(Date.now() - 5000),
+        },
+        {
+          id: oldPendingJobId,
+          type: 'docx_generate',
+          status: 'pending',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: useCase.id,
+            sourceHash: 'old-source-hash-pending',
+          }),
+          createdAt: new Date(Date.now() - 2000),
+        },
+      ]);
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/docx/generate',
+        user.sessionToken!,
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: useCase.id,
+        },
+        { 'Accept-Language': 'fr-FR' }
+      );
+
+      expect(response.status).toBe(202);
+      const data = await response.json();
+      expect(data.jobId).toBeDefined();
+      expect(data.jobId).not.toBe(oldCompletedJobId);
+      expect(data.jobId).not.toBe(oldPendingJobId);
+
+      const staleRows = await db
+        .select({ id: jobQueue.id })
+        .from(jobQueue)
+        .where(
+          and(
+            eq(jobQueue.workspaceId, user.workspaceId),
+            eq(jobQueue.type, 'docx_generate')
+          )
+        );
+      const staleIds = new Set(staleRows.map((row) => row.id));
+      expect(staleIds.has(oldCompletedJobId)).toBe(false);
+      expect(staleIds.has(oldPendingJobId)).toBe(false);
+      expect(staleIds.has(data.jobId)).toBe(true);
+
+      expect(deleteSpy).toHaveBeenCalledWith({
+        bucket: 'docs-test',
+        key: `docx-cache/${oldCompletedJobId}.docx`,
+      });
+    } finally {
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it('processes publishing jobs even when AI queue slots are saturated', async () => {
+    processJobsSpy.mockRestore();
+
+    const processJobSpy = vi.spyOn(queueManager as unknown as { processJob: (job: unknown) => Promise<void> }, 'processJob')
+      .mockResolvedValue();
+    const originalAiConcurrency = (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs;
+    const originalPublishingConcurrency = (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs;
+    const originalProcessingInterval = (queueManager as unknown as { processingInterval: number }).processingInterval;
+    const aiProcessingJobId = createTestId();
+    const docxPendingJobId = createTestId();
+
+    try {
+      (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs = 1;
+      (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs = 1;
+      (queueManager as unknown as { processingInterval: number }).processingInterval = 10;
+
+      await db.insert(jobQueue).values([
+        {
+          id: aiProcessingJobId,
+          type: 'chat_message',
+          status: 'processing',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            userId: user.id,
+            sessionId: createTestId(),
+            assistantMessageId: createTestId(),
+          }),
+          createdAt: new Date(Date.now() - 5000),
+          startedAt: new Date(Date.now() - 5000).toISOString(),
+        },
+        {
+          id: docxPendingJobId,
+          type: 'docx_generate',
+          status: 'pending',
+          workspaceId: user.workspaceId!,
+          data: JSON.stringify({
+            templateId: 'usecase-onepage',
+            entityType: 'usecase',
+            entityId: createTestId(),
+          }),
+          createdAt: new Date(),
+        },
+      ]);
+
+      await queueManager.processJobs();
+
+      expect(processJobSpy).toHaveBeenCalledTimes(1);
+      const [calledJob] = processJobSpy.mock.calls[0] ?? [];
+      expect((calledJob as { id: string; type: string }).id).toBe(docxPendingJobId);
+      expect((calledJob as { id: string; type: string }).type).toBe('docx_generate');
+
+      const [aiRow] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, aiProcessingJobId))
+        .limit(1);
+      const [docxRow] = await db
+        .select({ status: jobQueue.status })
+        .from(jobQueue)
+        .where(eq(jobQueue.id, docxPendingJobId))
+        .limit(1);
+
+      expect(aiRow?.status).toBe('processing');
+      expect(docxRow?.status).toBe('processing');
+    } finally {
+      processJobSpy.mockRestore();
+      (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs = originalAiConcurrency;
+      (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs = originalPublishingConcurrency;
+      (queueManager as unknown as { processingInterval: number }).processingInterval = originalProcessingInterval;
+      processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue();
+    }
+  });
+
+  it('emits DOCX stream progress with status updates and final done event', async () => {
+    const jobId = createTestId();
+    const streamId = `job_${jobId}`;
+    const workerSpy = vi
+      .spyOn(docxRenderWorker, 'runDocxGenerationInWorker')
+      .mockImplementation(async ({ onProgress }) => {
+        await onProgress?.({
+          state: 'rendering_annex',
+          progress: 55,
+          current: 1,
+          total: 2,
+          message: 'Rendering use case 1/2',
+        });
+        await onProgress?.({
+          state: 'rendering_annex',
+          progress: 78,
+          current: 2,
+          total: 2,
+          message: 'Rendering use case 2/2',
+        });
+        return {
+          fileName: 'generated.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          buffer: Buffer.from('docx-bytes'),
+        };
+      });
+    const bucketSpy = vi.spyOn(storageS3, 'getDocumentsBucketName').mockReturnValue('docs-test');
+    const putSpy = vi.spyOn(storageS3, 'putObject').mockResolvedValue();
+
+    try {
+      await db.insert(jobQueue).values({
+        id: jobId,
+        type: 'docx_generate',
+        status: 'processing',
+        workspaceId: user.workspaceId!,
+        data: JSON.stringify({
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+          locale: 'fr',
+        }),
+        createdAt: new Date(),
+      });
+
+      await (queueManager as unknown as {
+        processDocxGenerate: (data: Record<string, unknown>, id: string) => Promise<void>;
+      }).processDocxGenerate(
+        {
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+          locale: 'fr',
+        },
+        jobId
+      );
+
+      const streamResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/streams/events/${streamId}`,
+        user.sessionToken!
+      );
+      expect(streamResponse.status).toBe(200);
+      const streamData = await streamResponse.json();
+      const events = streamData.events as Array<{ eventType: string; data: Record<string, unknown> }>;
+      expect(events.length).toBeGreaterThan(0);
+
+      const statusEvents = events.filter((event) => event.eventType === 'status');
+      expect(statusEvents.length).toBeGreaterThanOrEqual(4);
+      const states = statusEvents.map((event) => String(event.data?.state));
+      expect(states).toContain('queued');
+      expect(states).toContain('loading_data');
+      expect(states).toContain('rendering_annex');
+      expect(states).toContain('packaging');
+
+      const doneEvent = events[events.length - 1];
+      expect(doneEvent.eventType).toBe('done');
+      expect(doneEvent.data?.state).toBe('done');
+      expect(doneEvent.data?.progress).toBe(100);
+      expect(doneEvent.data?.storageBucket).toBe('docs-test');
+      expect(String(doneEvent.data?.storageKey || '')).toContain('/usecase/');
+
+      expect(workerSpy).toHaveBeenCalledTimes(1);
+      expect(putSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
+      workerSpy.mockRestore();
+      bucketSpy.mockRestore();
+      putSpy.mockRestore();
     }
   });
 
