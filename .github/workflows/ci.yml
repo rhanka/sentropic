@@ -189,9 +189,11 @@ jobs:
       matrix:
         include:
           - group: group-a
-            e2e_groups: "00 01 02 03"
+            e2e_groups: "00 01 02"
           - group: group-b
-            e2e_groups: "04 05 06 07"
+            e2e_groups: "03 04 05"
+          - group: group-c
+            e2e_groups: "06 07"
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
