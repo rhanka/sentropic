@@ -2,6 +2,8 @@
   import { foldersStore, currentFolderId, fetchFolders } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete } from '$lib/utils/api';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { streamHub } from '$lib/stores/streamHub';
@@ -87,14 +89,14 @@
         currentFolderId.set(folders[0].id);
         addToast({
           type: 'info',
-          message: `Dossier "${folders[0].name}" sélectionné`
+          message: get(_)('folders.toast.selected', { values: { name: folders[0].name } })
         });
       }
     } catch (error) {
       console.error('Failed to load folders:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors du chargement des dossiers'
+        message: get(_)('folders.errors.load')
       });
     } finally {
       isLoading = false;
@@ -120,7 +122,7 @@
     // Draft: retourner sur la vue "new" (édition brouillon + icônes IA/Créer/Annuler)
     if (folderStatus === 'draft') {
       currentFolderId.set(folderId);
-      goto(`/dossier/new?draft=${encodeURIComponent(folderId)}`);
+      goto(`/folder/new?draft=${encodeURIComponent(folderId)}`);
       return;
     }
 
@@ -133,7 +135,7 @@
     
     // Naviguer vers la vue dossier (qui contient la liste des cas d'usage)
     currentFolderId.set(folderId);
-    goto(`/dossiers/${folderId}`);
+    goto(`/folders/${folderId}`);
   };
 
   const getUseCaseCount = (folderId: string) => {
@@ -141,7 +143,7 @@
   };
 
   const handleDeleteFolder = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce dossier ?')) return;
+    if (!confirm(get(_)('folders.detail.confirmDelete'))) return;
     
     try {
       await apiDelete(`/folders/${id}`);
@@ -164,13 +166,13 @@
       
       addToast({
         type: 'success',
-        message: 'Dossier supprimé avec succès !'
+        message: get(_)('folders.deleteSuccess')
       });
     } catch (error) {
       console.error('Failed to delete folder:', error);
       addToast({
         type: 'error',
-        message: 'Erreur lors de la suppression du dossier'
+        message: get(_)('folders.deleteError')
       });
     }
   };
@@ -179,7 +181,7 @@
 
 <section class="space-y-6">
   <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold">Dossiers</h1>
+    <h1 class="text-3xl font-semibold">{$_('folders.title')}</h1>
     {#if !isReadOnly}
       <FileMenu
         showNew={true}
@@ -187,17 +189,17 @@
         showExport={true}
         showPrint={false}
         showDelete={false}
-        onNew={() => goto('/dossier/new')}
+        onNew={() => goto('/folder/new')}
         onImport={() => (showImportDialog = true)}
         onExport={() => (showExportDialog = true)}
-        triggerTitle="Actions dossier"
-        triggerAriaLabel="Actions dossier"
+        triggerTitle={$_('folders.actions')}
+        triggerAriaLabel={$_('folders.actions')}
       />
     {:else if showReadOnlyLock}
       <button
         class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-        title="Mode lecture seule : création / suppression désactivées."
-        aria-label="Mode lecture seule : création / suppression désactivées."
+        title={$_('common.readOnlyDisabled')}
+        aria-label={$_('common.readOnlyDisabled')}
         type="button"
         disabled
       >
@@ -205,10 +207,10 @@
       </button>
     {/if}
   </div>
-      {#if isLoading}
-        <div class="rounded border border-blue-200 bg-blue-50 p-4">
-          <p class="text-sm text-blue-700">Chargement des dossiers...</p>
-        </div>
+	      {#if isLoading}
+	        <div class="rounded border border-blue-200 bg-blue-50 p-4">
+	          <p class="text-sm text-blue-700">{$_('folders.loading')}</p>
+	        </div>
       {:else}
         <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {#each $foldersStore as folder}
@@ -233,15 +235,15 @@
                   <h2 class="text-lg sm:text-xl font-medium truncate {canClick ? 'text-green-800 group-hover:text-green-900 transition-colors' : 'text-slate-400'}">{folder.name}</h2>
                 </div>
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  {#if !isReadOnly}
-                    <button 
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                      on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
-                      title="Supprimer"
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  {/if}
+	                  {#if !isReadOnly}
+	                    <button 
+	                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+	                      on:click|stopPropagation={() => handleDeleteFolder(folder.id)}
+	                      title={$_('common.delete')}
+	                    >
+	                      <Trash2 class="w-4 h-4" />
+	                    </button>
+	                  {/if}
                 </div>
               </div>
               
@@ -252,10 +254,10 @@
                 {/if}
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
                   {#if !(isGenerating && useCaseCount === 0)}
-                  <span class="flex items-center gap-1 whitespace-nowrap">
-                    <FileText class="w-4 h-4 flex-shrink-0" />
-                    {useCaseCount} cas d'usage
-                  </span>
+	                  <span class="flex items-center gap-1 whitespace-nowrap">
+	                    <FileText class="w-4 h-4 flex-shrink-0" />
+	                    {$_('folders.useCaseCount', { values: { count: useCaseCount } })}
+	                  </span>
                   {/if}
                   <div class="flex items-center gap-2 flex-wrap">
                     <!-- badge "Sélectionné" supprimé (affiché dans le footer) -->
@@ -273,9 +275,9 @@
               <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
                 <span class="text-xs text-slate-400 whitespace-nowrap">
                   {#if isDraft}
-                    Brouillon
+                    {$_('common.draft')}
                   {:else}
-                    Ouvrir
+                    {$_('common.open')}
                   {/if}
                 </span>
                 <div class="flex items-center gap-2 flex-wrap">
@@ -291,13 +293,13 @@
         </div>
       {/if}
 
-  <!-- Création déplacée vers /dossier/new (plus de modal ici) -->
+  <!-- Creation moved to /folder/new (no modal here) -->
 </section>
 
 <ImportExportDialog
   bind:open={showImportDialog}
   mode="import"
-  title="Importer un dossier"
+  title={$_('folders.import.title')}
   scope="folder"
   defaultTargetWorkspaceId={getScopedWorkspaceIdForUser()}
   importObjectTypes={['folders', 'usecases', 'organizations', 'matrix']}
@@ -307,15 +309,15 @@
 <ImportExportDialog
   bind:open={showExportDialog}
   mode="export"
-  title="Exporter les dossiers"
+  title={$_('folders.export.title')}
   scope="workspace"
   allowScopeSelect={false}
   allowScopeIdEdit={false}
   workspaceName={workspaceName}
-  objectName="Tous les dossiers"
-  objectLabel="Dossier"
+  objectName={$_('folders.export.objectName')}
+  objectLabel={$_('folders.folder')}
   fixedInclude={['folders', 'usecases', 'matrix']}
-  includeOptions={[{ id: 'organizations', label: 'Inclure les organisations', defaultChecked: false }]}
+  includeOptions={[{ id: 'organizations', label: $_('folders.export.include.organizations'), defaultChecked: false }]}
   includeAffectsComments={['organizations']}
   includeAffectsDocuments={['organizations']}
   exportKind="folders"

@@ -79,7 +79,7 @@ test.describe.serial('Génération IA', () => {
 
   // 1) Génération d'entreprise (enrichissement IA) via l'UI
   test('devrait générer une organisation via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
-    await page.goto('/organisations');
+    await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
 
     // Aller à la page de création via le menu d'actions
@@ -89,7 +89,7 @@ test.describe.serial('Génération IA', () => {
     const newAction = page.locator('button:has-text("Nouveau")');
     await expect(newAction).toBeVisible();
     await newAction.click();
-    await page.waitForURL('/organisations/new', { timeout: 30_000 });
+    await page.waitForURL('/organizations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Remplir le nom de l'entreprise (EditableInput)
@@ -127,14 +127,14 @@ test.describe.serial('Génération IA', () => {
     const enrichJobId = String((enrichJson as any)?.jobId ?? '').trim();
     if (!enrichJobId) throw new Error(`Réponse enrich organization sans jobId: ${JSON.stringify(enrichJson)}`);
     
-    // Vérifier la redirection vers /organisations
-    await page.waitForURL('/organisations', { timeout: 30_000 });
+    // Vérifier la redirection vers /organizations
+    await page.waitForURL('/organizations', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     debug(`Enrich jobId: ${enrichJobId} — attente fin du job...`);
     await waitForJobTerminal(page, enrichJobId, { timeoutMs: 6 * 60_000, intervalMs: 1000 });
 
-    // La liste /organisations est alimentée par API + potentiellement SSE; après job terminal on force un refresh.
+    // La liste /organizations est alimentée par API + potentiellement SSE; après job terminal on force un refresh.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
@@ -144,7 +144,7 @@ test.describe.serial('Génération IA', () => {
     
     // Cliquer sur la carte pour voir les détails
     await organizationCard.click();
-    await page.waitForURL(/\/organisations\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
+    await page.waitForURL(/\/organizations\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier que le titre contient BRP (textarea pour multiline)
@@ -177,15 +177,15 @@ test.describe.serial('Génération IA', () => {
     await expect(commencerLink).toBeVisible({ timeout: 30_000 });
     debug('Lien Commencer trouvé, clic...');
     await commencerLink.click();
-    // /home redirige désormais vers /dossier/new
-    await page.waitForURL(/\/dossier\/new$/, { timeout: 30_000 });
+    // /home redirige désormais vers /folder/new
+    await page.waitForURL(/\/folder\/new$/, { timeout: 30_000 });
     debug(`Après clic + redirection - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
-    debug('Page /dossier/new chargée');
+    debug('Page /folder/new chargée');
     
     // Vérifier à nouveau la session
     const urlAfterStart = page.url();
-    debug(`URL après chargement /dossier/new: ${urlAfterStart}`);
+    debug(`URL après chargement /folder/new: ${urlAfterStart}`);
     if (urlAfterStart.includes('/auth/login')) {
       debug('ERROR: Session révoquée après navigation');
       throw new Error('Session révoquée - utilisateur non authentifié');
@@ -206,7 +206,7 @@ test.describe.serial('Génération IA', () => {
     // Sélectionner l'organisation contenant Delpharm
     // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
     debug('Recherche du select organisation...');
-    // /dossier/new: label visuel (div) + select dans le même bloc
+    // /folder/new: label visuel (div) + select dans le même bloc
     const organizationSelect = page
       .locator('div.space-y-2')
       .filter({ hasText: 'Organisation (optionnel)' })
@@ -271,12 +271,12 @@ test.describe.serial('Génération IA', () => {
     debug(`Réponse /use-cases/generate: jobId=${genJobId} folderId=${folderId}`);
     if (!genJobId || !folderId) throw new Error(`Réponse generate invalide: ${JSON.stringify(genJson)}`);
     
-    // Vérifier la redirection vers /dossiers (comportement après génération avec nouveau dossier)
-    debug('Attente redirection vers /dossiers...');
-    await page.waitForURL('/dossiers', { timeout: 60_000 });
-    debug(`Redirection réussie vers /dossiers, URL: ${page.url()}`);
+    // Vérifier la redirection vers /folders (comportement après génération avec nouveau dossier)
+    debug('Attente redirection vers /folders...');
+    await page.waitForURL('/folders', { timeout: 60_000 });
+    debug(`Redirection réussie vers /folders, URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
-    debug('Page /dossiers chargée');
+    debug('Page /folders chargée');
 
     // Attendre que la queue confirme la fin du job, puis attendre qu'au moins un cas d'usage soit terminé (API).
     debug(`Attente fin job usecase_list: ${genJobId}`);
@@ -284,15 +284,15 @@ test.describe.serial('Génération IA', () => {
     debug(`Job ${genJobId} terminal, attente d'au moins un use case terminé (folder=${folderId})...`);
     await waitForAnyUseCaseCompleted(page, folderId, 6 * 60_000);
 
-    // Navigation déterministe vers la page dossier (liste cas d'usage est sur /dossiers/[id])
-    await page.goto(`/dossiers/${encodeURIComponent(folderId)}`);
+    // Navigation déterministe vers la page dossier (liste cas d'usage est sur /folders/[id])
+    await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
     
     // Attendre une carte terminée et y naviguer
     const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Valeur:' }).first();
     await expect(firstUseCaseCard).toBeVisible({ timeout: 60_000 });
     await firstUseCaseCard.click();
-    await page.waitForURL(/\/cas-usage\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
+    await page.waitForURL(/\/usecase\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier la section Références
@@ -329,7 +329,9 @@ test.describe.serial('Génération IA', () => {
     
     // Test 1: read_usecase
     debug('Test Chat: read_usecase');
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator(
+      'button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]'
+    );
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     

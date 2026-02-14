@@ -7,6 +7,17 @@ test.describe('Page Paramètres', () => {
   const USER_B_STATE = './.auth/user-b.json';
   let workspaceAlphaId = '';
   let workspaceAlphaName = '';
+  const toCanonicalRole = (value: string): string => {
+    const normalized = value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'editeur' || normalized === 'editor') return 'editor';
+    if (normalized === 'admin') return 'admin';
+    if (normalized === 'viewer') return 'viewer';
+    return normalized;
+  };
 
   const createScopedPage = async (
     browser: import('@playwright/test').Browser,
@@ -42,9 +53,9 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher la page des paramètres', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL('/parametres');
+      await expect(page).toHaveURL('/settings');
       await expect(page.locator('h1')).toContainText('Paramètres');
     } finally {
       await context.close();
@@ -54,7 +65,7 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher les sections de configuration', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Vérifier qu'il y a du contenu de configuration
       const bodyText = await page.locator('body').textContent();
@@ -74,7 +85,7 @@ test.describe('Page Paramètres', () => {
   test('devrait permettre de modifier les paramètres', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher uniquement des inputs texte (pas select ou number)
       const textInput = page.locator('input[type="text"], textarea').first();
@@ -91,7 +102,7 @@ test.describe('Page Paramètres', () => {
   test('devrait permettre de sauvegarder les paramètres', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher un bouton de sauvegarde
       const saveButton = page.locator('button:has-text("Sauvegarder"), button:has-text("Enregistrer"), button:has-text("Save")');
@@ -111,7 +122,7 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher les paramètres de langue', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher un sélecteur de langue (premier select trouvé)
       const languageSelect = page.locator('select').first();
@@ -133,7 +144,7 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher les paramètres de l\'API', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher des paramètres liés à l'API
       const apiSettings = page.locator('text=API, text=OpenAI, text=Configuration, text=Endpoint');
@@ -149,7 +160,7 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher les paramètres de la base de données', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher des paramètres liés à la base de données
       const dbSettings = page.locator('text=Base de données, text=Database, text=SQLite, text=Backup');
@@ -165,7 +176,7 @@ test.describe('Page Paramètres', () => {
   test('devrait permettre de réinitialiser les paramètres', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher un bouton de réinitialisation
       const resetButton = page.locator('button:has-text("Réinitialiser"), button:has-text("Reset"), button:has-text("Restaurer")');
@@ -188,7 +199,7 @@ test.describe('Page Paramètres', () => {
   test('devrait afficher les informations de version', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {
-      await page.goto('/parametres');
+      await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       // Chercher des informations de version
       const versionInfo = page.locator('text=Version, text=v1, text=Build, text=©');
@@ -209,7 +220,7 @@ test.describe('Page Paramètres', () => {
     test('UX table: icons only + row title + actions do not change selection', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
       try {
-        await page.goto('/parametres');
+        await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
         const rowAlpha = page.locator('tbody tr').filter({ has: page.locator('.editable-input') }).first();
         await expect(rowAlpha).toBeVisible({ timeout: 10_000 });
@@ -232,7 +243,7 @@ test.describe('Page Paramètres', () => {
     test('renommer un workspace via EditableInput', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
       try {
-        await page.goto('/parametres');
+        await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
         const newName = `${workspaceAlphaName}-renamed`;
         const rowAlpha = page.locator('tbody tr').filter({ has: page.locator('.editable-input') }).first();
@@ -295,8 +306,8 @@ test.describe('Page Paramètres', () => {
         }, { timeout: 10_000 })
         .toBe(true);
 
-      await pageA.goto('/parametres');
-      await pageB.goto('/parametres');
+      await pageA.goto('/settings');
+      await pageB.goto('/settings');
       await pageA.waitForLoadState('domcontentloaded');
       await pageB.waitForLoadState('domcontentloaded');
       await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
@@ -323,12 +334,13 @@ test.describe('Page Paramètres', () => {
       const roleCellB = pageB.locator('tbody tr').filter({ hasText: workspaceLiveName }).locator('td').nth(2);
       await expect
         .poll(async () => {
-          const text = (await roleCellB.textContent())?.trim() ?? '';
-          if (text && text !== 'editor') {
+          const text = (await roleCellB.textContent()) ?? '';
+          const canonical = toCanonicalRole(text);
+          if (canonical && canonical !== 'editor') {
             await pageB.reload({ waitUntil: 'domcontentloaded' });
             await pageB.waitForResponse((res) => res.url().includes('/api/v1/workspaces'), { timeout: 10_000 }).catch(() => {});
           }
-          return (await roleCellB.textContent())?.trim() ?? '';
+          return toCanonicalRole((await roleCellB.textContent()) ?? '');
         }, { timeout: 15_000 })
         .toBe('editor');
 
@@ -351,7 +363,7 @@ test.describe('Page Paramètres', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      await pageA.goto('/parametres');
+      await pageA.goto('/settings');
       await pageA.waitForLoadState('domcontentloaded');
       await pageA.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
 
@@ -396,7 +408,7 @@ test.describe('Page Paramètres', () => {
           return items.some((ws) => ws.id === workspaceLiveId);
         }, { timeout: 10_000 })
         .toBe(true);
-      await pageB.goto('/parametres');
+      await pageB.goto('/settings');
       await pageB.waitForLoadState('domcontentloaded');
       await pageB.waitForResponse((res) => res.url().includes('/api/v1/me'), { timeout: 10_000 }).catch(() => {});
       await pageB.evaluate(() => window.dispatchEvent(new CustomEvent('streamhub:workspace_update', { detail: {} })));
@@ -435,7 +447,7 @@ test.describe('Page Paramètres', () => {
     test('workspace export menu ouvre dialog', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
       try {
-        await page.goto('/parametres');
+        await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
         const actionsButton = page.locator('button[aria-label="Actions workspace"]');
         await expect(actionsButton).toBeVisible({ timeout: 10_000 });
@@ -455,7 +467,7 @@ test.describe('Page Paramètres', () => {
     test('workspace import menu ouvre dialog + close', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
       try {
-        await page.goto('/parametres');
+        await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
         const actionsButton = page.locator('button[aria-label="Actions workspace"]');
         await expect(actionsButton).toBeVisible({ timeout: 10_000 });

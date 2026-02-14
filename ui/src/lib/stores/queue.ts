@@ -3,16 +3,19 @@ import { writable } from 'svelte/store';
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type JobType =
   | 'organization_enrich'
+  | 'matrix_generate'
   | 'usecase_list'
   | 'usecase_detail'
   | 'executive_summary'
   | 'document_summary'
-  | 'chat_message';
+  | 'chat_message'
+  | 'docx_generate';
 
 export interface Job {
   id: string;
   type: JobType;
   data: any;
+  result?: any;
   status: JobStatus;
   createdAt: string;
   startedAt?: string;
@@ -134,6 +137,10 @@ export const getJobsByStatus = (jobs: Job[], status: JobStatus): Job[] => {
 };
 
 export const getJobProgress = (job: Job): number => {
+  const explicitProgress = Number(job?.result?.progress);
+  if (Number.isFinite(explicitProgress)) {
+    return Math.max(0, Math.min(100, explicitProgress));
+  }
   if (job.status === 'completed') return 100;
   if (job.status === 'failed') return 0;
   if (job.status === 'pending') return 0;

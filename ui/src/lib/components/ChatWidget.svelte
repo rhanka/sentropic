@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import { _ } from 'svelte-i18n';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
@@ -262,7 +263,7 @@
 
   const formatSessionLabel = (s: ChatSession) => {
     if (s.title) return s.title;
-    return `Conversation ${s.id.slice(0, 6)}`;
+    return $_('chat.sessions.defaultTitle', { values: { id: s.id.slice(0, 6) } });
   };
 
   $: activeJobsCount = $queueStore.jobs.filter((job) => job.status === 'pending' || job.status === 'processing').length;
@@ -275,22 +276,22 @@
     params: Record<string, string>,
     folderId: string | null
   ): { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null => {
-    if (routeId === '/cas-usage/[id]' && params.id) {
+    if (routeId === '/usecase/[id]' && params.id) {
       return { type: 'usecase', id: params.id };
     }
-    if (routeId === '/cas-usage' && folderId) {
+    if (routeId === '/usecase' && folderId) {
       return { type: 'folder', id: folderId };
     }
     if (routeId === '/dashboard' && folderId) {
       return { type: 'folder', id: folderId };
     }
-    if (routeId === '/matrice' && folderId) {
+    if (routeId === '/matrix' && folderId) {
       return { type: 'folder', id: folderId };
     }
-    if (routeId === '/dossiers/[id]' && params.id) {
+    if (routeId === '/folders/[id]' && params.id) {
       return { type: 'folder', id: params.id };
     }
-    if (routeId === '/organisations/[id]' && params.id) {
+    if (routeId === '/organizations/[id]' && params.id) {
       return { type: 'organization', id: params.id };
     }
     return null;
@@ -313,48 +314,49 @@
     }
   }
 
-  const SECTION_LABELS: Record<string, Record<string, string>> = {
+  const SECTION_LABEL_KEYS: Record<string, Record<string, string>> = {
     usecase: {
-      description: 'Description',
-      problem: 'Problème',
-      solution: 'Solution',
-      benefits: 'Bénéfices recherchés',
-      risks: 'Risques',
-      metrics: 'Mesures du succès',
-      nextSteps: 'Prochaines étapes',
-      technologies: 'Technologies',
-      dataSources: 'Sources des données',
-      dataObjects: 'Données',
-      references: 'Références',
-      contact: 'Contact',
-      deadline: 'Délai',
+      description: 'chat.sections.usecase.description',
+      problem: 'chat.sections.usecase.problem',
+      solution: 'chat.sections.usecase.solution',
+      benefits: 'chat.sections.usecase.benefits',
+      risks: 'chat.sections.usecase.risks',
+      metrics: 'chat.sections.usecase.metrics',
+      nextSteps: 'chat.sections.usecase.nextSteps',
+      technologies: 'chat.sections.usecase.technologies',
+      dataSources: 'chat.sections.usecase.dataSources',
+      dataObjects: 'chat.sections.usecase.dataObjects',
+      references: 'chat.sections.usecase.references',
+      contact: 'chat.sections.usecase.contact',
+      deadline: 'chat.sections.usecase.deadline',
     },
     organization: {
-      size: 'Taille',
-      technologies: 'Technologies',
-      products: 'Produits et Services',
-      processes: 'Processus Métier',
-      kpis: 'Indicateurs de performance',
-      challenges: 'Défis Principaux',
-      objectives: 'Objectifs Stratégiques',
-      references: 'Références',
+      size: 'chat.sections.organization.size',
+      technologies: 'chat.sections.organization.technologies',
+      products: 'chat.sections.organization.products',
+      processes: 'chat.sections.organization.processes',
+      kpis: 'chat.sections.organization.kpis',
+      challenges: 'chat.sections.organization.challenges',
+      objectives: 'chat.sections.organization.objectives',
+      references: 'chat.sections.organization.references',
     },
     folder: {
-      description: 'Contexte',
-      name: 'Nom du dossier',
+      description: 'chat.sections.folder.description',
+      name: 'chat.sections.folder.name',
     },
     executive_summary: {
-      introduction: 'Introduction',
-      analyse: 'Analyse',
-      recommandation: 'Recommandations',
-      synthese: 'Synthèse',
+      introduction: 'chat.sections.executiveSummary.introduction',
+      analyse: 'chat.sections.executiveSummary.analysis',
+      recommandation: 'chat.sections.executiveSummary.recommendations',
+      synthese: 'chat.sections.executiveSummary.summary',
     },
   };
 
   const getSectionLabel = (type: string | null, key: string | null) => {
     if (!type) return null;
-    if (!key) return 'Général';
-    return SECTION_LABELS[type]?.[key] ?? key;
+    if (!key) return $_('common.general');
+    const i18nKey = SECTION_LABEL_KEYS[type]?.[key];
+    return i18nKey ? $_(i18nKey) : key;
   };
 
   $: commentSectionLabel = getSectionLabel(commentContext?.type ?? null, commentSectionKey);
@@ -559,7 +561,7 @@
 
   const handleDeleteCommentThread = async () => {
     if (!commentThreadId || !currentCommentThread) return;
-    if (!confirm('Supprimer cette conversation de commentaires ?')) return;
+    if (!confirm($_('chat.comments.confirmDeleteThread'))) return;
     try {
       await deleteComment(currentCommentThread.rootId);
       commentThreadId = null;
@@ -624,7 +626,7 @@
   };
 
   const handlePurgeMyJobs = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS vos jobs IA ? Cette action est irréversible.')) {
+    if (!confirm($_('chat.queue.confirmPurgeMine'))) {
       return;
     }
     try {
@@ -633,12 +635,12 @@
       await loadJobs();
     } catch (error) {
       console.error('Failed to purge my jobs:', error);
-      addToast({ type: 'error', message: 'Erreur lors de la suppression de vos jobs' });
+      addToast({ type: 'error', message: $_('chat.queue.errors.purgeMine') });
     }
   };
 
   const handlePurgeAllJobsGlobal = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS les jobs (global) ? Cette action est irréversible.')) {
+    if (!confirm($_('chat.queue.confirmPurgeAllGlobal'))) {
       return;
     }
     try {
@@ -648,7 +650,7 @@
       await loadJobs();
     } catch (error) {
       console.error('Failed to purge ALL jobs (global):', error);
-      addToast({ type: 'error', message: 'Erreur lors de la suppression de tous les jobs (global)' });
+      addToast({ type: 'error', message: $_('chat.queue.errors.purgeAllGlobal') });
     }
   };
 
@@ -679,8 +681,8 @@
     class:pointer-events-none={isVisible}
     on:click={toggle}
     on:keydown={onBubbleKeyDown}
-    title="Chat / Jobs IA"
-    aria-label="Chat / Jobs IA"
+    title={$_('chat.widget.bubbleLabel')}
+    aria-label={$_('chat.widget.bubbleLabel')}
     aria-haspopup="dialog"
     aria-expanded={isVisible}
     aria-controls="chat-widget-dialog"
@@ -697,12 +699,18 @@
       </span>
     {:else if hasActiveJobs}
       <!-- Badge: jobs en cours => montre -->
-      <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow" title={`${activeJobsCount} job(s) en cours`}>
+      <span
+        class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
+        title={$_('chat.queue.badge.active', { values: { count: activeJobsCount } })}
+      >
         <Clock class="w-3 h-3" aria-hidden="true" />
       </span>
     {:else if hasFailedJobs}
       <!-- Badge: au moins un job en échec -->
-      <span class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow" title={`${failedJobsCount} job(s) en échec`}>
+      <span
+        class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
+        title={$_('chat.queue.badge.failed', { values: { count: failedJobsCount } })}
+      >
         <X class="w-3 h-3" aria-hidden="true" />
       </span>
     {/if}
@@ -726,7 +734,7 @@
     <div
       id="chat-widget-dialog"
       role="dialog"
-      aria-label="Chat / Jobs IA"
+      aria-label={$_('chat.widget.bubbleLabel')}
       aria-modal={isDocked ? 'false' : 'true'}
       tabindex="-1"
       bind:this={dialogEl}
@@ -745,7 +753,7 @@
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
                 on:click={() => window.dispatchEvent(new CustomEvent('topai:toggle-burger-menu'))}
-                aria-label="Menu"
+                aria-label={$_('common.menu')}
                 type="button"
               >
                 <Menu class="h-5 w-5" aria-hidden="true" />
@@ -759,21 +767,21 @@
                 type="button"
                 on:click={() => (activeTab = 'comments')}
               >
-                Commentaires
+                {$_('chat.tabs.comments')}
               </button>
               <button
                 class="rounded px-2 py-1 text-xs transition {activeTab === 'chat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
                 type="button"
                 on:click={() => (activeTab = 'chat')}
               >
-                Chat IA
+                {$_('chat.tabs.chat')}
               </button>
               <button
                 class="rounded px-2 py-1 text-xs transition {activeTab === 'queue' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
                 type="button"
                 on:click={() => (activeTab = 'queue')}
               >
-                Jobs IA
+                {$_('chat.tabs.jobs')}
               </button>
               </div>
             </div>
@@ -786,8 +794,8 @@
                   <button
                     class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                     on:click={toggle}
-                    title="Choisir une conversation"
-                    aria-label="Choisir une conversation"
+                    title={$_('chat.sessions.choose')}
+                    aria-label={$_('chat.sessions.choose')}
                     type="button"
                     bind:this={sessionMenuButtonRef}
                   >
@@ -803,13 +811,13 @@
                       handleNewSession();
                     }}
                   >
-                    Nouvelle session
+                    {$_('chat.sessions.new')}
                   </button>
                   <div class="border-t border-slate-100 my-1"></div>
                   {#if chatLoadingSessions}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">Chargement...</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
                   {:else if chatSessions.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">Aucune conversation</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
                   {:else}
                     <div class="max-h-48 overflow-auto slim-scroll">
                       {#each chatSessions as s (s.id)}
@@ -831,8 +839,8 @@
               <button
                 class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 on:click={() => chatPanelRef?.newSession?.()}
-                title="Nouvelle session"
-                aria-label="Nouvelle session"
+                title={$_('chat.sessions.new')}
+                aria-label={$_('chat.sessions.new')}
                 type="button"
               >
                 <Plus class="w-4 h-4" />
@@ -841,8 +849,8 @@
               <button
                 class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
                 on:click={() => chatPanelRef?.deleteCurrentSession?.()}
-                title="Supprimer la conversation"
-                aria-label="Supprimer la conversation"
+                title={$_('chat.sessions.delete')}
+                aria-label={$_('chat.sessions.delete')}
                 type="button"
                 disabled={!chatSessionId}
               >
@@ -855,8 +863,8 @@
                   <button
                     class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                     on:click={toggle}
-                    title="Choisir une conversation"
-                    aria-label="Choisir une conversation"
+                    title={$_('chat.comments.chooseThread')}
+                    aria-label={$_('chat.comments.chooseThread')}
                     type="button"
                     bind:this={commentMenuButtonRef}
                   >
@@ -875,10 +883,10 @@
                     >
                       {#if showResolvedComments}
                         <Eye class="w-3.5 h-3.5" />
-                        <span>Masquer les commentaires résolus</span>
+                        <span>{$_('chat.comments.hideResolved')}</span>
                       {:else}
                         <EyeOff class="w-3.5 h-3.5" />
-                        <span>Afficher les commentaires résolus</span>
+                        <span>{$_('chat.comments.showResolved')}</span>
                       {/if}
                     </button>
                     <div class="border-t border-slate-100 my-1"></div>
@@ -891,11 +899,12 @@
                       commentThreadId = null;
                     }}
                   >
-                    Nouvelle conversation{commentSectionLabel ? ` — ${commentSectionLabel}` : ''}
+                    {$_('chat.comments.newThread')}
+                    {commentSectionLabel ? ` — ${commentSectionLabel}` : ''}
                   </button>
                   <div class="border-t border-slate-100 my-1"></div>
                   {#if visibleCommentThreads.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">Aucune conversation</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
                   {:else}
                     <div class="max-h-56 overflow-auto slim-scroll space-y-1">
                       {#each visibleCommentThreads as t (t.id)}
@@ -911,7 +920,7 @@
                         >
                           <div class="flex items-center justify-between gap-2">
                             <span class="truncate">
-                              {getSectionLabel(commentContext?.type ?? null, t.sectionKey) || 'Commentaires'}
+                              {getSectionLabel(commentContext?.type ?? null, t.sectionKey) || $_('chat.tabs.comments')}
                             </span>
                             <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
                               <MessageCircle class="w-3 h-3" />
@@ -930,8 +939,8 @@
               <button
                 class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 on:click={handleNewCommentThread}
-                title="Nouvelle conversation"
-                aria-label="Nouvelle conversation"
+                title={$_('chat.comments.newThread')}
+                aria-label={$_('chat.comments.newThread')}
                 type="button"
               >
                 <Plus class="w-4 h-4" />
@@ -939,8 +948,8 @@
               <button
                 class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
                 on:click={() => void handleResolveCommentThread()}
-                title={isCurrentResolved ? 'Réouvrir' : 'Résoudre'}
-                aria-label={isCurrentResolved ? 'Réouvrir' : 'Résoudre'}
+                title={isCurrentResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
+                aria-label={isCurrentResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
                 type="button"
                 disabled={!currentCommentThread || !canResolveCurrent}
               >
@@ -953,8 +962,8 @@
               <button
                 class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
                 on:click={() => void handleDeleteCommentThread()}
-                title="Supprimer la conversation"
-                aria-label="Supprimer la conversation"
+                title={$_('chat.comments.deleteThread')}
+                aria-label={$_('chat.comments.deleteThread')}
                 type="button"
                 disabled={!commentThreadId}
               >
@@ -965,8 +974,8 @@
               <button
                 class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
                 on:click={handlePurgeMyJobs}
-                title="Supprimer tous mes jobs"
-                aria-label="Supprimer tous mes jobs"
+                title={$_('chat.queue.purgeMine')}
+                aria-label={$_('chat.queue.purgeMine')}
                 type="button"
               >
                 <Trash2 class="w-4 h-4" />
@@ -975,8 +984,8 @@
                 <button
                   class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
                   on:click={handlePurgeAllJobsGlobal}
-                  title="Supprimer tous les jobs (global)"
-                  aria-label="Supprimer tous les jobs (global)"
+                  title={$_('chat.queue.purgeAllGlobal')}
+                  aria-label={$_('chat.queue.purgeAllGlobal')}
                   type="button"
                 >
                   <Minus class="w-4 h-4" />
@@ -987,8 +996,8 @@
             <button
               class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
               on:click={toggleDisplayMode}
-              title={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
-              aria-label={isDocked ? 'Basculer en widget' : 'Basculer en panneau'}
+              title={isDocked ? $_('chat.widget.switchToWidget') : $_('chat.widget.switchToPanel')}
+              aria-label={isDocked ? $_('chat.widget.switchToWidget') : $_('chat.widget.switchToPanel')}
               type="button"
             >
               {#if isDocked}
@@ -997,7 +1006,7 @@
                 <Maximize2 class="w-4 h-4" aria-hidden="true" />
               {/if}
             </button>
-            <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label="Fermer" type="button" bind:this={closeButtonEl}>
+            <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label={$_('common.close')} type="button" bind:this={closeButtonEl}>
               <X class="w-5 h-5" />
             </button>
           </div>
@@ -1026,7 +1035,7 @@
               />
             {:else}
               <div class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">
-                Aucun contexte sélectionné. Ouvre un dossier, une organisation ou un cas d’usage.
+                {$_('chat.comments.noContext')}
               </div>
             {/if}
           </div>
@@ -1043,4 +1052,3 @@
     </div>
   {/if}
 </div>
-

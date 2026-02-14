@@ -15,6 +15,8 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
   import { addToast } from '$lib/stores/toast';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
@@ -215,7 +217,7 @@
       const organizations = $organizationsStore;
       organization = organizations.find((o) => o.id === organizationId) || null;
       if (!organization) {
-        error = "Erreur lors du chargement de l'organisation";
+        error = get(_)('organizations.errors.load');
         return;
       }
       error = '';
@@ -309,7 +311,7 @@
       }
       scheduleLockRefresh();
     } catch (e: any) {
-      lockError = e?.message ?? 'Erreur de verrouillage';
+      lockError = e?.message ?? get(_)('locks.lockError');
     } finally {
       lockLoading = false;
     }
@@ -352,9 +354,9 @@
     try {
       const res = await requestUnlock('organization', lockTargetId);
       lock = res.lock;
-      addToast({ type: 'success', message: 'Demande de déverrouillage envoyée' });
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur demande de déverrouillage' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
     }
   };
 
@@ -362,9 +364,9 @@
     if (!lockTargetId) return;
     try {
       await forceUnlock('organization', lockTargetId);
-      addToast({ type: 'success', message: 'Verrou forcé' });
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
     } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? 'Erreur forçage verrou' });
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
     }
   };
 
@@ -436,14 +438,14 @@
     if (!organization) return;
     if (!canDelete) return;
 
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette organisation ?")) return;
+    if (!confirm($_('organizations.confirmDelete'))) return;
 
     try {
       await deleteOrganization(organization.id);
       unsavedChangesStore.reset();
-      goto('/organisations');
+      goto('/organizations');
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+      error = err instanceof Error ? err.message : $_('organizations.deleteError');
     }
   };
 </script>
@@ -494,17 +496,17 @@
         disabledExport={isReadOnlyRole}
         onExport={() => organization && openOrganizationExport(organization.id)}
         onDelete={handleDelete}
-        triggerTitle="Actions"
-        triggerAriaLabel="Actions"
+        triggerTitle={$_('common.actions')}
+        triggerAriaLabel={$_('common.actions')}
       />
-      {#if !canDelete && showReadOnlyLock && !showPresenceBadge}
-        <button
-          class="rounded p-2 transition text-slate-400 cursor-not-allowed"
-          title="Mode lecture seule : création / suppression désactivées."
-          aria-label="Mode lecture seule : création / suppression désactivées."
-          type="button"
-          disabled
-        >
+	      {#if !canDelete && showReadOnlyLock && !showPresenceBadge}
+	        <button
+	          class="rounded p-2 transition text-slate-400 cursor-not-allowed"
+	          title={$_('common.readOnlyDisabled')}
+	          aria-label={$_('common.readOnlyDisabled')}
+	          type="button"
+	          disabled
+	        >
           <Lock class="w-5 h-5" />
         </button>
       {/if}
@@ -521,13 +523,13 @@
     </div>
 
     <div slot="bottom">
-      <!-- Références (lecture seule, en fin de page) -->
+	      <!-- References (read-only, end of page) -->
       {#if organization.references && organization.references.length > 0}
         <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="references">
           <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold flex items-center gap-2 group">
-              Références
-              <CommentBadge
+	            <h3 class="font-semibold flex items-center gap-2 group">
+	              {$_('common.references')}
+	              <CommentBadge
                 count={commentCounts?.references ?? 0}
                 disabled={!openCommentsFor}
                 on:click={() => openCommentsFor('references')}
@@ -542,7 +544,7 @@
   <!-- Commentaires gérés par ChatWidget -->
 {:else if !error}
   <div class="text-center py-12">
-    <p class="text-slate-500">Chargement...</p>
+    <p class="text-slate-500">{$_('common.loading')}</p>
   </div>
 {/if}
 
@@ -550,7 +552,7 @@
   <ImportExportDialog
     bind:open={$organizationExportState.open}
     mode="export"
-    title="Exporter l'organisation"
+    title={$_('organizations.export.singleTitle')}
     scope="organization"
     scopeId={$organizationExportState.organizationId ?? organization.id}
     allowScopeSelect={false}
@@ -561,7 +563,7 @@
     documentsAvailable={hasDocuments}
     includeOptions={
       organizationFolderCount > 0
-        ? [{ id: 'folders', label: 'Inclure les dossiers rattachés', defaultChecked: false }]
+        ? [{ id: 'folders', label: $_('organizations.export.include.folders'), defaultChecked: false }]
         : []
     }
     includeAffectsComments={['folders']}
@@ -569,5 +571,3 @@
     on:close={closeOrganizationExport}
   />
 {/if}
-
-

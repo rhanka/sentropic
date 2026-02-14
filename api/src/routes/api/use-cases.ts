@@ -63,6 +63,7 @@ const useCaseInput = z.object({
   benefits: z.array(z.string()).optional(),
   metrics: z.array(z.string()).optional(),
   risks: z.array(z.string()).optional(),
+  constraints: z.array(z.string()).optional(),
   nextSteps: z.array(z.string()).optional(),
   dataSources: z.array(z.string()).optional(),
   dataObjects: z.array(z.string()).optional(),
@@ -78,6 +79,8 @@ const useCaseInput = z.object({
 type UseCaseInput = z.infer<typeof useCaseInput>;
 
 export type SerializedUseCase = typeof useCases.$inferSelect;
+
+type MatrixMode = 'organization' | 'generate' | 'default';
 
 // Type pour rétrocompatibilité avec les anciennes colonnes (avant migration 0008)
 // Permet l'accès aux propriétés qui peuvent encore exister dans certains backups
@@ -109,6 +112,27 @@ const parseJson = <T>(value: string | null): T | undefined => {
     return undefined;
   }
 };
+
+function parseOrganizationData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function parseOrganizationMatrixTemplate(value: unknown): Record<string, unknown> | null {
+  const data = parseOrganizationData(value);
+  const candidate = data.matrixTemplate;
+  if (!candidate || typeof candidate !== 'object') return null;
+  return candidate as Record<string, unknown>;
+}
 
 /**
  * Extrait les données de data JSONB et des colonnes temporaires (rétrocompatibilité)
@@ -321,6 +345,7 @@ const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial
   if (payload.benefits !== undefined) data.benefits = payload.benefits;
   if (payload.metrics !== undefined) data.metrics = payload.metrics;
   if (payload.risks !== undefined) data.risks = payload.risks;
+  if (payload.constraints !== undefined) data.constraints = payload.constraints;
   if (payload.nextSteps !== undefined) data.nextSteps = payload.nextSteps;
   if (payload.dataSources !== undefined) data.dataSources = payload.dataSources;
   if (payload.dataObjects !== undefined) data.dataObjects = payload.dataObjects;
@@ -510,18 +535,47 @@ const generateInput = z.object({
   folder_id: z.string().optional(),
   use_case_count: z.coerce.number().int().min(1).max(25).optional(),
   organization_id: z.string().optional(),
+  matrix_mode: z.enum(['organization', 'generate', 'default']).optional(),
   model: z.string().optional()
 });
 
 useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId } = c.get('user') as { workspaceId: string };
-    const { input, folder_id, use_case_count, organization_id, model } = c.req.valid('json');
+    const { input, folder_id, use_case_count, organization_id, matrix_mode, model } = c.req.valid('json');
     const organizationId = organization_id;
+    const isExplicitDefaultMatrixMode = matrix_mode === 'default';
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
+
+    let organizationMatrixTemplate: Record<string, unknown> | null = null;
+    if (organizationId) {
+      const [org] = await db
+        .select()
+        .from(organizations)
+        .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
+        .limit(1);
+      if (!org) return c.json({ message: 'Not found' }, 404);
+      organizationMatrixTemplate = parseOrganizationMatrixTemplate(org.data);
+    }
+
+    const resolvedMatrixMode: MatrixMode = (() => {
+      if (!organizationId) return 'default';
+      if (matrix_mode) return matrix_mode;
+      return organizationMatrixTemplate ? 'organization' : 'generate';
+    })();
+
+    if (resolvedMatrixMode === 'organization' && !organizationId) {
+      return c.json({ message: 'matrix_mode=organization requires organization_id' }, 400);
+    }
+    if (resolvedMatrixMode === 'organization' && !organizationMatrixTemplate) {
+      return c.json({ message: 'Organization matrix template not found' }, 400);
+    }
+    if (resolvedMatrixMode === 'generate' && !organizationId) {
+      return c.json({ message: 'matrix_mode=generate requires organization_id' }, 400);
+    }
     
     let folderId: string | undefined;
     
@@ -530,18 +584,15 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       folderId = folder_id;
 
       const [folder] = await db
-        .select({ id: folders.id })
+        .select({ id: folders.id, organizationId: folders.organizationId, matrixConfig: folders.matrixConfig })
         .from(folders)
         .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
         .limit(1);
       if (!folder) return c.json({ message: 'Not found' }, 404);
 
       if (organizationId) {
-        const [org] = await db
-          .select({ id: organizations.id })
-          .from(organizations)
-          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
-          .limit(1);
+        // Already validated above; keep defensive check for maintainability.
+        const [org] = await db.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId))).limit(1);
         if (!org) return c.json({ message: 'Not found' }, 404);
       }
 
@@ -550,7 +601,16 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
         .set({
           status: 'generating',
           // Garder la description synchronisée avec l'input (source de vérité côté UI pour /dossier/new)
-          description: input
+          description: input,
+          organizationId: organizationId ?? folder.organizationId,
+          matrixConfig:
+            resolvedMatrixMode === 'organization'
+              ? JSON.stringify(organizationMatrixTemplate)
+              : resolvedMatrixMode === 'generate'
+                ? null
+                : isExplicitDefaultMatrixMode
+                  ? JSON.stringify(defaultMatrixConfig)
+                  : folder.matrixConfig ?? JSON.stringify(defaultMatrixConfig),
         })
         .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)));
       await notifyFolderEvent(folderId);
@@ -561,26 +621,35 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       
       folderId = createId();
 
-      if (organizationId) {
-        const [org] = await db
-          .select({ id: organizations.id })
-          .from(organizations)
-          .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
-          .limit(1);
-        if (!org) return c.json({ message: 'Not found' }, 404);
-      }
-
       await db.insert(folders).values({
         id: folderId,
         workspaceId,
         name: folderName,
         description: folderDescription,
         organizationId: organizationId || null,
-        matrixConfig: JSON.stringify(defaultMatrixConfig),
+        matrixConfig:
+          resolvedMatrixMode === 'organization'
+            ? JSON.stringify(organizationMatrixTemplate)
+            : resolvedMatrixMode === 'generate'
+              ? null
+              : JSON.stringify(defaultMatrixConfig),
         status: 'generating'
         // createdAt omitted to use defaultNow() in Postgres
       });
       await notifyFolderEvent(folderId);
+    }
+
+    let matrixJobId: string | undefined;
+    if (resolvedMatrixMode === 'generate' && organizationId) {
+      matrixJobId = await queueManager.addJob(
+        'matrix_generate',
+        {
+          folderId: folderId!,
+          organizationId,
+          model: selectedModel,
+        },
+        { workspaceId, maxRetries: 1 }
+      );
     }
     
     // Ajouter le job à la queue
@@ -588,6 +657,7 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       folderId: folderId!,
       input,
       organizationId,
+      matrixMode: resolvedMatrixMode,
       model: selectedModel,
       useCaseCount: use_case_count
     }, { workspaceId, maxRetries: 1 });
@@ -598,7 +668,9 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       status: 'generating',
       folder_id: folderId,
       created_folder_id: folder_id ? undefined : folderId,
-      jobId
+      matrix_mode: resolvedMatrixMode,
+      jobId,
+      matrixJobId
     });
     
   } catch (error) {

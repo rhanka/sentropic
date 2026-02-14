@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
+import { queueManager } from '../../src/services/queue-manager';
+import { settingsService } from '../../src/services/settings';
 
 describe('AI Settings API', () => {
   let user: any;
@@ -40,6 +42,84 @@ describe('AI Settings API', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toBeDefined();
+    });
+  });
+
+  describe('PUT /ai-settings', () => {
+    it('updates publishingConcurrency and reloads queue settings', async () => {
+      const updateSpy = vi.spyOn(settingsService, 'updateAISettings').mockResolvedValue();
+      const reloadSpy = vi.spyOn(queueManager, 'reloadSettings').mockResolvedValue();
+      const getSpy = vi.spyOn(settingsService, 'getAISettings').mockResolvedValue({
+        concurrency: 9,
+        publishingConcurrency: 7,
+        defaultModel: 'gpt-4.1-mini',
+        processingInterval: 1500,
+      });
+
+      try {
+        const response = await authenticatedRequest(app, 'PUT', '/api/v1/ai-settings', user.sessionToken!, {
+          publishingConcurrency: 7,
+        });
+
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data.success).toBe(true);
+        expect(data.settings.publishingConcurrency).toBe(7);
+        expect(updateSpy).toHaveBeenCalledWith({ publishingConcurrency: 7 });
+        expect(reloadSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        updateSpy.mockRestore();
+        reloadSpy.mockRestore();
+        getSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('PUT /ai-settings/:key', () => {
+    it('updates publishing_concurrency and reloads queue settings', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      const reloadSpy = vi.spyOn(queueManager, 'reloadSettings').mockResolvedValue();
+
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/publishing_concurrency',
+          user.sessionToken!,
+          { value: '6' }
+        );
+
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data.success).toBe(true);
+        expect(setSpy).toHaveBeenCalledWith('publishing_concurrency', '6', undefined);
+        expect(reloadSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        setSpy.mockRestore();
+        reloadSpy.mockRestore();
+      }
+    });
+
+    it('does not reload queue settings for non-queue keys', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      const reloadSpy = vi.spyOn(queueManager, 'reloadSettings').mockResolvedValue();
+
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/custom_key',
+          user.sessionToken!,
+          { value: 'custom-value' }
+        );
+
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('custom_key', 'custom-value', undefined);
+        expect(reloadSpy).not.toHaveBeenCalled();
+      } finally {
+        setSpy.mockRestore();
+        reloadSpy.mockRestore();
+      }
     });
   });
 });

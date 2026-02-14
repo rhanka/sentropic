@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { apiRequest, ApiError } from '../../src/lib/utils/api';
+import { API_BASE_URL } from '../../src/lib/config';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import { setUser, clearUser } from '../../src/lib/stores/session';
 import { setWorkspaceScope, workspaceScope } from '../../src/lib/stores/workspaceScope';
@@ -65,7 +66,7 @@ describe('API Utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url] = fetchMock.mock.calls[0];
-      expect(String(url)).toContain('http://localhost:8787/api/v1/organizations');
+      expect(String(url)).toContain(`${API_BASE_URL}/organizations`);
       expect(String(url)).toContain('workspace_id=ws-1');
     });
 
@@ -78,7 +79,7 @@ describe('API Utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url] = fetchMock.mock.calls[0];
-      expect(String(url)).toContain('http://localhost:8787/api/v1/comments?');
+      expect(String(url)).toContain(`${API_BASE_URL}/comments?`);
       expect(String(url)).toContain('status=open');
       expect(String(url)).toContain('workspace_id=ws-1');
     });
@@ -92,7 +93,7 @@ describe('API Utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url] = fetchMock.mock.calls[0];
-      expect(String(url)).toContain('http://localhost:8787/api/v1/comments?workspace_id=ws-2');
+      expect(String(url)).toContain(`${API_BASE_URL}/comments?workspace_id=ws-2`);
       expect(String(url)).not.toContain('workspace_id=ws-1');
     });
 
@@ -105,7 +106,7 @@ describe('API Utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url] = fetchMock.mock.calls[0];
-      expect(String(url)).toBe('http://localhost:8787/api/v1/workspaces/ws-1/members');
+      expect(String(url)).toBe(`${API_BASE_URL}/workspaces/ws-1/members`);
     });
 
     it('does not append workspace_id for auth endpoints', async () => {
@@ -117,7 +118,7 @@ describe('API Utils', () => {
 
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
       const [url] = fetchMock.mock.calls[0];
-      expect(String(url)).toBe('http://localhost:8787/api/v1/auth/session');
+      expect(String(url)).toBe(`${API_BASE_URL}/auth/session`);
     });
   });
 });

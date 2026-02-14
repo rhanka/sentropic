@@ -38,9 +38,10 @@ import { arrayToMarkdown, markdownToArray } from '$lib/utils/markdown';
       return arrayToMarkdown(items);
     };
 
-    // Mettre à jour uniquement si value change depuis l'extérieur
-    // En mode forceList, on désactive le watcher pour éviter les boucles (normalisation uniquement à l'init)
-    $: if (editor && value !== lastValue && !forceList) {
+    // Mettre à jour uniquement si value change depuis l'extérieur.
+    // En mode forceList, on garde le watcher mais on évite de réinitialiser
+    // l'éditeur quand il est focus (préserve l'édition en cours).
+    $: if (editor && value !== lastValue) {
         const processed = ensureListMarkdown(value);
         // If parent clears the value (e.g., message sent), enforce content reset even when focused.
         const shouldForceReset = processed.trim().length === 0 && editor.isFocused;

@@ -3,24 +3,25 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { currentFolderId } from '$lib/stores/folders';
+  import { _ } from 'svelte-i18n';
 
   onMount(() => {
-    // Page liste déplacée vers /dossiers/[id]
+    // Use case list moved to /folders/[id]
     const urlParams = new URLSearchParams($page.url.search);
     const folderId = urlParams.get('folder');
     if (folderId) {
       currentFolderId.set(folderId);
-      goto(`/dossiers/${folderId}`, { replaceState: true });
+      goto(`/folders/${folderId}`, { replaceState: true });
       return;
     }
     if ($currentFolderId) {
-      goto(`/dossiers/${$currentFolderId}`, { replaceState: true });
+      goto(`/folders/${$currentFolderId}`, { replaceState: true });
       return;
     }
-    goto('/dossiers', { replaceState: true });
+    goto('/folders', { replaceState: true });
   });
 </script>
 
 <section class="space-y-6">
-  <h1 class="text-3xl font-semibold">Redirection…</h1>
+  <h1 class="text-3xl font-semibold">{$_('common.redirecting')}</h1>
 </section>

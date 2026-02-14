@@ -2,11 +2,12 @@
   import { createEventDispatcher } from 'svelte';
   import { Key, Lock } from '@lucide/svelte';
   import type { LockSnapshot } from '$lib/utils/object-lock';
+  import { _ } from 'svelte-i18n';
 
   export let lock: LockSnapshot | null = null;
   export let lockLoading: boolean = false;
   export let lockError: string | null = null;
-  export let lockOwnerLabel: string = 'Utilisateur';
+  export let lockOwnerLabel: string = 'User';
   export let lockRequestedByMe: boolean = false;
   export let isAdmin: boolean = false;
   export let isLockedByMe: boolean = false;
@@ -46,12 +47,21 @@
   })();
 
   $: safeCount = connectedCount || orderedAvatars.length || (lock ? 1 : 0);
-  $: connectedLabel = safeCount === 1 ? '1 utilisateur connecté' : `${safeCount} utilisateurs connectés`;
+  $: connectedLabel =
+    safeCount === 1
+      ? $_('locks.presence.connectedOne')
+      : $_('locks.presence.connectedMany', { values: { count: safeCount } });
   $: tooltipText = (() => {
-    if (!lock) return `${connectedLabel}.`;
-    if (isLockedByMe) return `${connectedLabel}, vous verrouillez le document.`;
-    if (!canRequestUnlock) return `${connectedLabel}, ${lockOwnerLabel} verrouille le document.`;
-    return `${connectedLabel}, ${lockOwnerLabel} verrouille le document. Cliquer pour demander le déverrouillage.`;
+    if (!lock) return $_('locks.presence.tooltip.noLock', { values: { connected: connectedLabel } });
+    if (isLockedByMe) return $_('locks.presence.tooltip.lockedByMe', { values: { connected: connectedLabel } });
+    if (!canRequestUnlock) {
+      return $_('locks.presence.tooltip.lockedByOtherNoRequest', {
+        values: { connected: connectedLabel, owner: lockOwnerLabel },
+      });
+    }
+    return $_('locks.presence.tooltip.lockedByOtherCanRequest', {
+      values: { connected: connectedLabel, owner: lockOwnerLabel },
+    });
   })();
 
   const openTooltip = () => {
@@ -86,7 +96,7 @@
     const requesterId = lock?.unlockRequestedByUserId;
     if (!requesterId) return null;
     const match = avatars.find((u) => u.userId === requesterId);
-    return match?.label || 'cet utilisateur';
+    return match?.label || $_('common.user');
   })();
   $: showReleaseAction = isLockedByMe && Boolean(lock?.unlockRequestedByUserId);
 </script>
@@ -95,14 +105,14 @@
   <div
     class="relative flex items-center gap-2"
     role="group"
-    aria-label="Verrou du document"
+    aria-label={$_('locks.presence.ariaLabel')}
     on:mouseenter={openTooltip}
     on:mouseleave={closeTooltip}
     on:focusin={openTooltip}
     on:focusout={closeTooltip}
   >
     {#if lockLoading}
-      <span class="text-xs text-slate-500">Verrouillage…</span>
+      <span class="text-xs text-slate-500">{$_('locks.presence.locking')}</span>
     {/if}
     {#if lockError}
       <span class="text-xs text-rose-600">{lockError}</span>
@@ -131,7 +141,7 @@
             class="ml-2 inline-flex items-center justify-center rounded p-2 text-slate-400 hover:bg-slate-100"
             on:click|stopPropagation={handleRequest}
             type="button"
-            aria-label="Verrou du document"
+            aria-label={$_('locks.presence.button.ariaLabel')}
             title={tooltipText}
             aria-disabled={!canRequestUnlock}
           >
@@ -158,8 +168,8 @@
               class="inline-flex items-center justify-center text-slate-600 hover:text-slate-800"
               on:click|stopPropagation={handleRelease}
               type="button"
-              aria-label={`Déverrouiller pour ${unlockRequesterLabel ?? ''}`.trim()}
-              title={`Déverrouiller pour ${unlockRequesterLabel ?? ''}`.trim()}
+              aria-label={$_('locks.presence.actions.releaseFor', { values: { label: unlockRequesterLabel ?? '' } }).trim()}
+              title={$_('locks.presence.actions.releaseFor', { values: { label: unlockRequesterLabel ?? '' } }).trim()}
             >
               <Lock class="h-4 w-4" />
             </button>
@@ -170,8 +180,8 @@
               on:click|stopPropagation={handleRequest}
               disabled={lockRequestedByMe}
               type="button"
-              aria-label="Demander le déverrouillage"
-              title={lockRequestedByMe ? 'Demande envoyée' : 'Demander le déverrouillage'}
+              aria-label={$_('locks.presence.actions.requestUnlock')}
+              title={lockRequestedByMe ? $_('locks.presence.actions.requestSent') : $_('locks.presence.actions.requestUnlock')}
             >
               <Key class="h-4 w-4" />
             </button>
@@ -181,8 +191,8 @@
               class="inline-flex items-center justify-center text-rose-600 hover:text-rose-700"
               on:click|stopPropagation={handleForce}
               type="button"
-              aria-label="Forcer le déverrouillage"
-              title="Forcer le déverrouillage"
+              aria-label={$_('locks.presence.actions.forceUnlock')}
+              title={$_('locks.presence.actions.forceUnlock')}
             >
               <Lock class="h-4 w-4" />
             </button>

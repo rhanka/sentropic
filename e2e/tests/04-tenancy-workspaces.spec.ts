@@ -16,7 +16,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
         storageState: await withWorkspaceStorageState(USER_A_STATE, WORKSPACE_A_ID),
       });
       const page = await userAContext.newPage();
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
@@ -32,7 +32,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
         storageState: await withWorkspaceStorageState(USER_B_STATE, WORKSPACE_B_ID),
       });
       const page = await userBContext.newPage();
-      await page.goto('/organisations');
+      await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
 
       await expect(page.locator('h1')).toContainText('Organisations', { timeout: 15_000 });
@@ -65,7 +65,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
       storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceId),
     });
     const pageB = await userBContext.newPage();
-    await pageB.goto('/parametres');
+    await pageB.goto('/settings');
     await pageB.waitForLoadState('domcontentloaded');
     const rowB = pageB.locator('tbody tr').filter({ hasText: workspaceName }).first();
     await expect(rowB).toBeVisible({ timeout: 10_000 });
@@ -81,13 +81,13 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
 
     await userAApi.patch(`/api/v1/workspaces/${workspaceId}/members/${userB.userId}`, { data: { role: 'editor' } });
     await pageB.reload({ waitUntil: 'domcontentloaded' });
-    await expect(pageB.locator('tbody tr').filter({ hasText: workspaceName }).locator('td').nth(2)).toHaveText('editor');
+    await expect(pageB.locator('tbody tr').filter({ hasText: workspaceName }).locator('td').nth(2)).toHaveText(/editor|editeur|éditeur/i);
 
     await userAApi.patch(`/api/v1/workspaces/${workspaceId}/members/${userB.userId}`, { data: { role: 'admin' } });
     await pageB.reload({ waitUntil: 'domcontentloaded' });
     const rowAdmin = pageB.locator('tbody tr').filter({ has: pageB.locator('.editable-input') }).first();
     await expect(rowAdmin.locator('.editable-input').first()).toHaveValue(workspaceName, { timeout: 10_000 });
-    await expect(rowAdmin.locator('td').nth(2)).toHaveText('admin');
+    await expect(rowAdmin.locator('td').nth(2)).toHaveText(/admin/i);
 
     await userBContext.close();
     await userAApi.dispose();
@@ -154,7 +154,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     const pageB = await wsBContext.newPage();
 
     const openMentionMenu = async (page: typeof pageA, useCaseId: string) => {
-      await page.goto(`/cas-usage/${encodeURIComponent(useCaseId)}`);
+      await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       const section = page.locator('[data-comment-section="description"]');
@@ -208,21 +208,21 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceId),
     });
     const pageA = await userAContext.newPage();
-    await pageA.goto('/parametres');
+    await pageA.goto('/settings');
     await pageA.waitForLoadState('domcontentloaded');
     const rowA = pageA.locator('tbody tr').filter({ has: pageA.locator('.editable-input') }).first();
     await expect(rowA.locator('.editable-input').first()).toHaveValue(workspaceName, { timeout: 10_000 });
     await rowA.locator('button[title="Rendre invisible (hide)"]').click();
 
-    await pageA.goto('/organisations');
+    await pageA.goto('/organizations');
     await pageA.waitForLoadState('domcontentloaded');
-    await expect(pageA).toHaveURL(/\/parametres/);
+    await expect(pageA).toHaveURL(/\/settings/);
 
     const userBContext = await browser.newContext({
       storageState: USER_B_STATE,
     });
     const pageB = await userBContext.newPage();
-    await pageB.goto('/parametres');
+    await pageB.goto('/settings');
     await pageB.waitForLoadState('domcontentloaded');
     await expect(pageB.locator('tbody tr').filter({ hasText: workspaceName })).toHaveCount(0);
 
@@ -244,10 +244,10 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
         body: JSON.stringify({ items: [] }),
       });
     });
-    await pageB.goto('/organisations');
+    await pageB.goto('/organizations');
     await pageB.waitForLoadState('domcontentloaded');
-    await expect(pageB).toHaveURL(/\/parametres/);
-    await expect(pageB.locator('text=Vous n’êtes membre d’aucun workspace')).toBeVisible();
+    await expect(pageB).toHaveURL(/\/settings/);
+    await expect(pageB.getByText(/Vous n[’']êtes membre d[’']aucun workspace|You are not a member of any workspace/i)).toBeVisible();
     await userBContext.close();
   });
 });
