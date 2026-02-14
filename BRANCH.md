@@ -74,7 +74,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Validate DOCX content rendering: markdown emphasis, lists, links, stars/crosses, matrix tables.
       - [x] Confirm no extra blank line above matrix iteration tables.
 
-- [ ] **Lot 2 — Wave 2 (mono-branch execution on `feat/i18-print`)**
+- [x] **Lot 2 — Wave 2 (mono-branch execution on `feat/i18-print`)**
 
   - [x] **Lot 2.1 — Bilingual exhaustive translations**
     - [x] **Bilingual exhaustive translations (inventory + implementation)**
@@ -134,7 +134,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Use case AI generation (constraints must not be empty):
         - [x] Generate a new use case via AI and confirm `Constraints` is populated (non-empty, no marker-only placeholders).
 
-  - [ ] **Lot 2.2 — Matrix generation per organization/folder**
+  - [x] **Lot 2.2 — Matrix generation per organization/folder**
     - [x] Spec reference: `spec/SPEC_MATRIX_GENERATION_ORG.md`
     - [x] Confirm parity with existing generation architecture (API trigger -> queue job -> context service -> `defaultPrompts` -> `executeWithToolsStream` -> persistence/events).
     - [x] Folder generation option behavior:
@@ -161,8 +161,8 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Same org, uncheck `Use organization matrix`: generate folder -> `folders.matrixConfig` = generic default matrix (`defaultMatrixConfig`), different from org template.
       - [x] UI options: exactly one matrix option is visible and checked by default (`Use organization matrix` if template exists, otherwise `Generate organization matrix`).
 
-  - [ ] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
-    - [ ] **Lot 2.3.0 — Intake lock and contract freeze**
+  - [x] **Lot 2.3 — Executive synthesis multipage DOCX (template-driven)**
+    - [x] **Lot 2.3.0 — Intake lock and contract freeze**
       - [x] Assess current model and define `spec/SPEC_TEMPLATING.md` for target mutualized endpoint and template requirements (based on use-case templating and existing template/README)
       - [x] Provide `executive-synthesis.docx` master template requirements ({{vars}}, where to put it ...)
       - [x] Update `api/templates/README.md` with template authoring guide (required markers, TOC rules, Word/LibreOffice/Google Docs workflow).
@@ -193,7 +193,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Remove/retire legacy sync route `GET /api/v1/use-cases/:id/docx`.
       - [x] Implement real queue cancel endpoint for interruptible jobs (`/queue/jobs/:id/cancel`).
       - [x] Gate: `make typecheck-api` + `make lint-api`
-    - [ ] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
+    - [x] **Lot 2.3.2 — Master synthesis template composition (no hardcoding)**
       - [x] Wire `executive-synthesis.docx` master template.
       - [x] Implement marker-driven chapter rendering (no hardcoded chapter sequencing in service code).
       - [x] Implement template-controlled annex insertion using the target loop syntax (`{{FOR uc IN (usecases || [])}}` + `{{INCLUDE template.usecase-onepage.docx WITH ($uc.data || $uc)}}` + `{{END-FOR uc}}`).
@@ -205,7 +205,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Gate: `make typecheck-api` + `make lint-api`
       - [x] Gate: `make typecheck-ui` + `make lint-ui`
       - [x] Cleanup temporary DOCX diagnostic logs after async/UAT retests (keep only durable operational logs).
-      - [ ] Partial UAT:
+      - [x] Partial UAT:
         - [x] Download use case DOCX and verify there is no regression
         - [x] Download synthesis DOCX
         - [x] Trigger DOCX generation and verify async behavior (API remains responsive; job visible under Jobs tab).
@@ -223,7 +223,7 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
         - [x] Pop up keeps open, with button when prepared
         - [x] App is still alive when preparing doc (worker)
         - [x] Isolated API check (`ENV=e2e`): magic-link auth + `POST /docx/generate` + `GET /docx/jobs/:id/download` returns a valid DOCX binary.
-    - [ ] **Lot 2.3.3 — Dashboard bitmap injection**
+    - [x] **Lot 2.3.3 — Dashboard bitmap injection**
       - [x] Accept dashboard bitmap in endpoint `provided` (according to the frozen contract).
       - [x] Insert image at template marker (e.g. `{{provided.dashboardImage}}`) with deterministic sizing.
       - [x] Implement fallback behavior when image is missing/invalid.
@@ -261,21 +261,21 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `api/tests/api/folders.test.ts`
       - [x] `api/tests/api/use-cases-generate-matrix.test.ts` (matrix-mode generation coverage)
     - [x] Sub-lot gate: `make test-api ENV=test ...`
-  - [ ] **UI tests (TypeScript only)**
+  - [x] **UI tests (TypeScript only)**
     - [x] Evolution gates (DOCX/template/dashboard): `make typecheck-ui ENV=test ...` + `make lint-ui ENV=test ...`
     - [x] Regression gate: `make test-ui ENV=test ...`
     - [x] Deferred UI suites:
       - [x] `ui/tests/i18n.spec.ts` (not present in repo)
       - [x] `ui/tests/stores/folders.test.ts`
     - [x] Sub-lot gate: `make test-ui ENV=test ...`
-  - [ ] **E2E tests**
+  - [x] **E2E tests**
     - [x] Prepare E2E build: `make build-api build-ui-image ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [x] Scoped evolution specs:
       - [x] `make test-e2e E2E_SPEC=e2e/tests/03-dashboard.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
       - [x] `make test-e2e E2E_SPEC=e2e/tests/05-executive-summary.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
       - [x] `make test-e2e E2E_SPEC=e2e/tests/05-usecase-detail.spec.ts ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
     - [x] Regression gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
-    - [ ] Deferred E2E suites (Wave 1 + Wave 2 backlog):
+    - [x] Deferred E2E suites (Wave 1 + Wave 2 backlog):
       - [x] `e2e/tests/00-access-control.spec.ts`
       - [x] `e2e/tests/00-ai-generation.spec.ts`
       - [x] `e2e/tests/01-admin-users.spec.ts`
