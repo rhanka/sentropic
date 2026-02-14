@@ -342,9 +342,13 @@
       - [ ] PO / Product & Marketing
       - [ ] QA / testing (with vision)
 - [ ] Checkpoints (rassembler ici la gesiton de checkpoint: retour arrière sur un chat = lister et ajouter une version des objets / sous objets modifiés / gestion conflit multi utilisateur). Checkpoint humain vs utilisateur : ne pas verisonner après un ajout "immédiat" mais après un mode à définir de latence raisonnable (eg 5 seconde après sortie du champ etc).
+- [ ] Interrompre vs steering (à mettre qq part)
 - [ ] Specs mdc
-  - [ ] Spec consolidation
-  - [ ] Consoidate sub agentique / mutlibranch mode
+  - [ ] Consolidate sub agentique / mutlibranch mode - chaque branche doit être dans un env isolée. l'utilisateur teste toujours sur 5173 (favoriser une collaboration multibranches orthogonale: lorsque l'utilisatur test il est sur le . alors que les branches sont dév dans tmp/branch - l'utilisateur peut donc tranquillement tester ls différentes branches en permanence sans perdre ses données)
+  - [ ] cherry peek des spec kit MS
+- [ ] CI evols
+  - [ ] Separer build-api des test unitaires et intégration pour permettre test-e2e de commencer plus tôt, et mettre le publish api en dépendance des tests unitaires et intégration
+  - [ ] Envisager le matrix pour les text unitaires et intégration
 - [ ] Minor evols
   - [ ] Toaster: passer en bas (adjoint à l'icone de chat)
   - [ ] EditableInput: passer d'une attente de 5 seconde à un retour immédiat
