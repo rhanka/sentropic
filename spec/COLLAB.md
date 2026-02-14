@@ -12,7 +12,7 @@ Collaboration features enable multi-user workspace sharing with role-based acces
 - **Hide/Unhide**: Workspaces can be hidden (soft delete) by `admin` members. Hidden workspaces remain accessible for unhide/export/final suppression.
 - **Final Suppression**: Hard delete (cascade all data) is only possible for hidden workspaces, by `admin` members.
 - **Remove `shareWithAdmin`**: The legacy `shareWithAdmin` field is removed (no longer useful with membership-based access).
-- **No workspace edge-case**: If a user is removed from all workspaces, the UI redirects to `/parametres` and shows a warning; no new workspace is auto-created on login.
+- **No workspace edge-case**: If a user is removed from all workspaces, the UI redirects to `/settings` and shows a warning; no new workspace is auto-created on login.
 
 ### Workspace Membership Roles
 
@@ -35,7 +35,7 @@ Replace dropdown selector with a table showing (column order):
 - Row is clickable to select workspace.
 - Hover message on row: "Click to select workspace" (hover disabled on action buttons).
 - Icons: icons only, no text/border (same style as existing icons).
-- Workspace admins can rename the **selected** workspace in `/parametres` using an inline `EditableInput` (writes to `PUT /workspaces/:id`).
+- Workspace admins can rename the **selected** workspace in `/settings` using an inline `EditableInput` (writes to `PUT /workspaces/:id`).
 - **Same UI for all roles**: admin, editor, viewer share the same table layout and columns; admin-only actions are rendered but disabled for non-admins (tooltip "Reserved for admins").
 
 ### Workspace Members UI
@@ -52,8 +52,8 @@ Replace dropdown selector with a table showing (column order):
 ### Hidden Workspace Navigation Lock (UI)
 
 When an `admin` selects a **hidden** workspace:
-- The user must be **restricted to the Settings (/parametres) page** until the workspace is made visible again.
-- If the user tries to navigate elsewhere (via URL or navigation), they are redirected to `/parametres`.
+- The user must be **restricted to the Settings (/settings) page** until the workspace is made visible again.
+- If the user tries to navigate elsewhere (via URL or navigation), they are redirected to `/settings`.
 - A persistent banner must be shown to explain: "workspace hidden — unhide to access other views".
 
 ## Object Edition Locks
@@ -243,12 +243,12 @@ Notes:
 - Comments/documents options apply to selected types only.
 
 #### View-specific rules
-- `/dossiers/[id]`: import **use cases** into the **current folder**.
+- `/folders/[id]`: import **use cases** into the **current folder**.
   - Ignore folder metadata inside the ZIP.
   - Do **not** create a new folder during import.
-- `/dossiers`: import **folders** into the current workspace.
-- `/organisations`: import **organizations** into the current workspace.
-- `/parametres`: import **workspaces** into new or current workspace (role-gated).
+- `/folders`: import **folders** into the current workspace.
+- `/organizations`: import **organizations** into the current workspace.
+- `/settings`: import **workspaces** into new or current workspace (role-gated).
 
 ### Export Permissions
 
@@ -323,10 +323,10 @@ For a good UX and to avoid misleading feedback:
 
 **Read-only lock icon placement (viewer UX)**:
 - Shown in the actions area (where `+` / trash normally is) on:
-  - `/organisations`, `/organisations/[id]`
-  - `/dossiers`, `/dossiers/[id]`
-  - `/cas-usage/[id]`
-  - `/matrice`, `/dashboard`
+  - `/organizations`, `/organizations/[id]`
+  - `/folders`, `/folders/[id]`
+  - `/usecase/[id]`
+  - `/matrix`, `/dashboard`
 - On `/dashboard`, the lock icon must be **hidden in print mode** (PDF export / printing).
 
 **Endpoints to update**:

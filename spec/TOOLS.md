@@ -60,14 +60,14 @@ This document is the single checklist for **chat tools**: what is already implem
   - [x] `organization_get` is allowed from `folder`/`executive_summary` only if `organizationId` matches the folder’s `organizationId`
 
 ### UI context wiring
-- [x] `/organisations` (organizations list) sends `primaryContextType=organization` (no id)
-- [x] `/organisations/[id]` sends `primaryContextType=organization` + `primaryContextId`
-- [x] `/dossiers` (folders list) sends `primaryContextType=folder` (no id)
-- [x] `/dossiers/[id]` sends `primaryContextType=folder` + `primaryContextId`
-- [x] `/cas-usage` uses `currentFolderId` and sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
-- [x] `/cas-usage/[id]` sends `primaryContextType=usecase` + `primaryContextId`
+- [x] `/organizations` (organizations list) sends `primaryContextType=organization` (no id)
+- [x] `/organizations/[id]` sends `primaryContextType=organization` + `primaryContextId`
+- [x] `/folders` (folders list) sends `primaryContextType=folder` (no id)
+- [x] `/folders/[id]` sends `primaryContextType=folder` + `primaryContextId`
+- [x] `/usecase` uses `currentFolderId` and sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
+- [x] `/usecase/[id]` sends `primaryContextType=usecase` + `primaryContextId`
 - [x] `/dashboard` sends `primaryContextType=folder` + `primaryContextId=currentFolderId` (dashboard syncs `currentFolderId`)
-- [x] `/matrice` sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
+- [x] `/matrix` sends `primaryContextType=folder` + `primaryContextId=currentFolderId`
 - [x] Chat composer sends `contexts[]` and `tools[]` per message (multi‑contexte + toggles)
 
 ### UI live refresh (SSE)
