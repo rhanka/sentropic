@@ -12,7 +12,7 @@ test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 10_000 });
 
     // Open chat
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
 

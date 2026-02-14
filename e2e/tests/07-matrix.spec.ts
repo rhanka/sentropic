@@ -174,20 +174,22 @@ test.describe('Configuration de la matrice', () => {
       await page.locator('a[href="/matrix"]').click();
       await page.waitForLoadState('domcontentloaded');
 
-      const actionsButton = page.locator('button[aria-label="Actions matrice"]');
+      const actionsButton = page
+        .locator('button[aria-label="Actions"], button[aria-label="Actions matrice"], button[aria-label="Matrix actions"]')
+        .first();
       await expect(actionsButton).toBeVisible();
       await actionsButton.click();
 
-      const exportAction = page.locator('button:has-text("Exporter")');
+      const exportAction = page.locator('button').filter({ hasText: /Exporter|Export/i }).first();
       await expect(exportAction).toBeVisible();
       await exportAction.click();
 
-      const exportDialog = page.locator('h3:has-text("Exporter la matrice")');
+      const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
       await expect(exportDialog).toBeVisible({ timeout: 10_000 });
 
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 20_000 }),
-        page.locator('button:has-text("Exporter")').click(),
+        page.locator('button').filter({ hasText: /Exporter|Export/i }).last().click(),
       ]);
       expect(download.suggestedFilename()).toMatch(/\.zip$/);
     });

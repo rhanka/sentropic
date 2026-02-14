@@ -81,13 +81,13 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
 
     await userAApi.patch(`/api/v1/workspaces/${workspaceId}/members/${userB.userId}`, { data: { role: 'editor' } });
     await pageB.reload({ waitUntil: 'domcontentloaded' });
-    await expect(pageB.locator('tbody tr').filter({ hasText: workspaceName }).locator('td').nth(2)).toHaveText('editor');
+    await expect(pageB.locator('tbody tr').filter({ hasText: workspaceName }).locator('td').nth(2)).toHaveText(/editor|editeur|éditeur/i);
 
     await userAApi.patch(`/api/v1/workspaces/${workspaceId}/members/${userB.userId}`, { data: { role: 'admin' } });
     await pageB.reload({ waitUntil: 'domcontentloaded' });
     const rowAdmin = pageB.locator('tbody tr').filter({ has: pageB.locator('.editable-input') }).first();
     await expect(rowAdmin.locator('.editable-input').first()).toHaveValue(workspaceName, { timeout: 10_000 });
-    await expect(rowAdmin.locator('td').nth(2)).toHaveText('admin');
+    await expect(rowAdmin.locator('td').nth(2)).toHaveText(/admin/i);
 
     await userBContext.close();
     await userAApi.dispose();
@@ -247,7 +247,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     await pageB.goto('/organizations');
     await pageB.waitForLoadState('domcontentloaded');
     await expect(pageB).toHaveURL(/\/settings/);
-    await expect(pageB.locator('text=Vous n’êtes membre d’aucun workspace')).toBeVisible();
+    await expect(pageB.getByText(/Vous n[’']êtes membre d[’']aucun workspace|You are not a member of any workspace/i)).toBeVisible();
     await userBContext.close();
   });
 });

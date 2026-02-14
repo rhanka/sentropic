@@ -329,7 +329,9 @@ test.describe.serial('Génération IA', () => {
     
     // Test 1: read_usecase
     debug('Test Chat: read_usecase');
-    const chatButton = page.locator('button[title="Chat / Jobs IA"]');
+    const chatButton = page.locator(
+      'button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]'
+    );
     await expect(chatButton).toBeVisible({ timeout: 5000 });
     await chatButton.click();
     
