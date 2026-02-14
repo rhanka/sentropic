@@ -302,28 +302,28 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] `e2e/tests/05-executive-summary.spec.ts`
     - [x] Sub-lot gate: `make clean test-e2e ENV=e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084`
   - [ ] **Delta-based inventory: required tests from `origin/main..HEAD`**
-    - [ ] API — DOCX async/templating/queue:
+    - [x] API — DOCX async/templating/queue:
       - [x] `POST /api/v1/docx/generate` success test for `templateId=executive-synthesis-multipage` + `entityType=folder`.
       - [x] Locale propagation test (`Accept-Language` -> `locale`) for DOCX generation requests.
       - [x] Source hash behavior tests:
         - [x] same payload + same locale => same reusable job.
         - [x] same payload + different locale => different source hash/new job.
       - [x] Download path from S3 storage key (`storageBucket`/`storageKey`) with valid DOCX headers/body.
-      - [ ] Cache invalidation tests for `invalidateDocxCacheForEntity` when source changes.
-      - [ ] Publishing queue-class behavior tests (respect `publishingConcurrency`, independent from AI queue).
+      - [x] Cache invalidation tests for `invalidateDocxCacheForEntity` when source changes.
+      - [x] Publishing queue-class behavior tests (respect `publishingConcurrency`, independent from AI queue).
       - [x] Worker failure propagation test (`docx_generate` job -> failed with explicit error payload).
-      - [ ] Worker progress stream test (`job_<id>` emits progress/status/done sequence).
+      - [x] Worker progress stream test (`job_<id>` emits progress/status/done sequence).
     - [ ] API — matrix generation integration:
       - [x] Explicit test for `matrix_mode=generate` request path (not only default inference).
       - [x] Explicit test for `matrix_mode=default` request path.
       - [x] Explicit behavior test: `matrix_mode=generate` without `organization_id` falls back to `default` (current API behavior).
-      - [ ] Strict failure policy test: matrix generation failure blocks downstream generation.
-      - [ ] Prompt payload contract test for `organization_matrix_template` inputs.
+      - [x] Strict failure policy test: matrix generation failure blocks downstream generation.
+      - [x] Prompt payload contract test for `organization_matrix_template` inputs.
     - [ ] API — use-case detail payload contract regression:
-      - [ ] Add assertions that generated payload contains all required scalar fields with non-empty values (not only `constraints`).
-      - [ ] Add assertions that required list fields are present and non-empty arrays (`technologies`, `benefits`, `metrics`, `risks`, `constraints`, `nextSteps`, `dataSources`, `dataObjects`, scores arrays).
-      - [ ] Keep a dedicated guard for `constraints[]` (historical regression already observed on this field).
-      - [ ] Add negative test rejecting empty/placeholder-only list items during generation normalization.
+      - [x] Add assertions that generated payload contains all required scalar fields with non-empty values (not only `constraints`).
+      - [x] Add assertions that required list fields are present and non-empty arrays (`technologies`, `benefits`, `metrics`, `risks`, `constraints`, `nextSteps`, `dataSources`, `dataObjects`, scores arrays).
+      - [x] Keep a dedicated guard for `constraints[]` (historical regression already observed on this field).
+      - [x] Add negative test rejecting empty/placeholder-only list items during generation normalization.
     - [x] API — AI settings / queue config:
       - [x] `PUT /api/v1/ai-settings` test including `publishingConcurrency` update + queue manager reload effect.
       - [x] `PUT /api/v1/ai-settings/:key` test for `publishing_concurrency`.
