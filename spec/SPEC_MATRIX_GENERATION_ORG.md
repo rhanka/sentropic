@@ -133,16 +133,19 @@ The matrix generation implementation must mirror the pattern above:
 
 ### `POST /api/v1/use-cases/generate`
 Add optional request field:
-- `matrix_mode`: `'organization' | 'generate'`
+- `matrix_mode`: `'organization' | 'generate' | 'default'`
 
 Server behavior:
 - If omitted, server computes default:
   - organization selected + matrix template exists -> `organization`
   - organization selected + no matrix template -> `generate`
   - no organization -> current default behavior
+- If no organization is selected:
+  - effective mode is `default` (including when caller sends `matrix_mode='generate'` in current implementation).
 
 Validation:
 - Reject `matrix_mode='organization'` when no organization is selected.
+- Reject `matrix_mode='organization'` when selected organization has no matrix template.
 
 ## Prompt/Service Design
 

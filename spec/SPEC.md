@@ -42,19 +42,19 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
    - Fields: `currentInput` (free text), optional `organization` selection, `createNewFolder` option.
    - Actions: `generateUseCases(input, createNewFolder)` → optionally creates a folder + generates a list of use cases and their details via OpenAI.
    - Dependencies: `organizations`, `currentOrganizationId`, `folders`, `currentFolderId`, toasts.
-   - Navigation: redirect to `/cas-usage` on success.
+   - Navigation: redirect to `/folders` on success.
 
-3. Folders `Folders` (/dossiers)
+3. Folders `Folders` (/folders)
    - Folder CRUD: `addFolder(name, description)`, `updateFolder`, `deleteFolder`, `setCurrentFolder`.
    - Shows number of use cases per folder, optional association to an `organizationId`.
-   - Navigation: selecting a folder redirects to `/cas-usage`.
+   - Navigation: selecting a folder redirects to `/usecase`.
 
-4. Use case list `UseCaseList` (/cas-usage)
+4. Use case list `UseCaseList` (/usecase)
    - Filter by `currentFolderId`.
    - Actions: view details, delete (dialog), future manual creation.
    - Shows value/complexity summary notes based on `matrixConfig`.
 
-5. Use case detail `UseCaseDetail` (/cas-usage/:id)
+5. Use case detail `UseCaseDetail` (/usecase/:id)
    - Displays `UseCase` fields and allows editing: description, benefits, metrics, risks, nextSteps, sources, relatedData, process, technology, deadline, contact.
    - Evaluation tables by `valueScores` and `complexityScores` with recomputation of `totalValueScore`/`totalComplexityScore`.
    - Use case deletion.
@@ -63,25 +63,21 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
    - Scatter visualization Value vs Ease of implementation (inverse of complexity), legend by `process`.
    - Counts/thresholds based on `matrixConfig` and cases in the `currentFolder`.
 
-7. Matrix `Matrix` (/matrice)
+7. Matrix `Matrix` (/matrix)
    - Configure value/complexity axes (weights), thresholds (points, threshold, cases) and level descriptions (1..5).
    - Updates scores for use cases in the current folder.
 
-8. Organizations `Organizations` (/organisations, /organisations/:id)
+8. Organizations `Organizations` (/organizations, /organizations/:id)
    - Organization CRUD, selection of a `currentOrganizationId`.
    - Used to contextualize generation prompts (OpenAI) and folder→organization association.
 
-9. Settings `Settings` (/parametres)
+9. Settings `Settings` (/settings)
    - Stored via backend API: prompts, models (list/detail/folder/organization), advanced settings `maxRetries`, `parallelQueue`. `OPENAI_API_KEY` stays server-side (never client-side).
 
-10. Business configuration `BusinessConfiguration` (/configuration-metier)
-    - **To implement** - Basic list/edit of sectors and processes.
-    - Reference for detailed prompt consistency.
+10. Authentication routes (`/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify`)
+    - Session bootstrap and account access flows.
 
-11. Data `Data` (/donnees)
-    - **To implement** - Technical/tooling view (tables, data preview).
-
-12. 404 `NotFound`
+11. 404 `NotFound`
     - Simple error page.
 
 ### Header (Main navigation)
@@ -89,15 +85,12 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
 - Intent: provide a coherent navigation bar, quick access to main views, auth status, FR/EN language selector.
 - Items:
   - Home `/`
-  - Folders `/dossiers`
-  - Organizations `/organisations`
-  - Sectors and processes `/configuration-metier`
-  - Use cases `/cas-usage`
-  - Matrix `/matrice`
+  - Folders `/folders`
+  - Organizations `/organizations`
+  - Use cases `/usecase`
+  - Matrix `/matrix`
   - Dashboard `/dashboard`
-  - Design `/design`
-  - Data `/donnees`
-  - Settings `/parametres`
+  - Settings `/settings`
 - Behavior:
   - Highlight active tab.
   - Right side: Login button (Google/LinkedIn) when logged out; avatar + menu (Logout) when logged in; FR/EN selector.
@@ -122,15 +115,15 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - GET `/api/v1/organizations`
     - Response 200: `{ items: Organization[] }`
   - POST `/api/v1/use-cases/generate`
-    - Request JSON: `{ input: string; folder_id?: string; organization_id?: string }`
-    - Response 200: `{ success: true; status: "generating"; created_folder_id?: string; jobId: string }`
-    - Server effects: optional folder creation (`folders.status="generating"`), enqueue `usecase_list` job (then `usecase_detail`), persistence, streaming via `chat_stream_events` + global SSE.
+    - Request JSON: `{ input: string; folder_id?: string; organization_id?: string; matrix_mode?: "organization" | "generate" | "default"; use_case_count?: number; model?: string }`
+    - Response 200: `{ success: true; status: "generating"; created_folder_id?: string; matrix_mode: "organization" | "generate" | "default"; jobId: string; matrixJobId?: string }`
+    - Server effects: optional folder creation (`folders.status="generating"`), resolve effective `matrix_mode`, optionally enqueue `matrix_generate` in parallel, enqueue `usecase_list` (then `usecase_detail`), persistence, streaming via `chat_stream_events` + global SSE.
   - Errors: 400 if `input` is empty, 429/5xx for OpenAI/server; UI shows error toasts.
 - State/UI:
   - Loading during generation; progress toasts.
-  - Success → navigate to `/dossiers` (status/stream tracking), then access `/cas-usage` list.
+  - Success → navigate to `/folders` (status/stream tracking), then access `/usecase` list.
 
-3) Folders `Folders` (/dossiers)
+3) Folders `Folders` (/folders)
 - Intent: organize production by scope; associate a folder to an organization; manage the active folder.
 - UI:
   - Folder list with: name, description, date, associated organization (if any), use case count.
@@ -144,7 +137,7 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - Optional (count): GET `/api/v1/use-cases/count?folder_id=...` → `{ count: number }`
 - State/UI: create/edit/delete modals; confirmations; toasts.
 
-4) Use case list `UseCaseList` (/cas-usage)
+4) Use case list `UseCaseList` (/usecase)
 - Intent: quickly view cases in the active folder, access details, basic sorting, prepare prioritization.
 - UI:
   - Grid/list of cases filtered by active folder.
@@ -155,7 +148,7 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - DELETE `/api/v1/use-cases/{id}` → 204
  - State/UI: empty state if no active folder or list is empty; success/error toasts.
 
-5) Use case detail `UseCaseDetail` (/cas-usage/:id)
+5) Use case detail `UseCaseDetail` (/usecase/:id)
 - Intent: enable enriched editing and full qualification of a case with score traceability.
 - UI:
   - Displays/edits: `name`, `description`, `benefits[]`, `metrics[]`, `risks[]`, `next_steps[]`, `sources[]`, `related_data[]`, `process`, `technology`, `deadline`, `contact`.
@@ -183,7 +176,7 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
     - Response: `{ items: { id: string; name: string; process: string; value_norm: number; ease: number; original_value: number; original_ease: number }[] }`
  - State/UI: loading; empty state when no cases.
 
-7) Matrix `Matrix` (/matrice)
+7) Matrix `Matrix` (/matrix)
 - Intent: govern the evaluation method (axes, weights, thresholds, descriptions) and recalculate case scores.
 - UI:
   - Weight edit tables for value/complexity axes.
@@ -194,10 +187,9 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
 - API:
   - GET `/api/v1/folders/{id}/matrix` → `MatrixConfig`
   - PUT `/api/v1/folders/{id}/matrix` body `MatrixConfig` → `MatrixConfig`
-  - POST `/api/v1/folders/{id}/recalculate` → 202/200 (recalculates all folder scores)
-- State/UI: impact confirmation (recalculation); success/error toasts.
+- State/UI: editing and save flow on the active folder matrix; success/error toasts.
 
-8) Organizations `Organizations` (/organisations, /organisations/:id)
+8) Organizations `Organizations` (/organizations, /organizations/:id)
 - Intent: create/maintain rich organization profiles to contextualize generation and analysis.
 - UI:
   - Organization list; detail with `name` + profile in `data` (`industry`, `size`, `products`, `processes`, `kpis`, `challenges`, `objectives`, `technologies`, `references`).
@@ -214,7 +206,7 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - POST `/api/v1/organizations/ai-enrich` body `{ name: string; model?: string }` → `OrganizationData` (sync enrichment, no persistence)
 - State/UI: side sheet for create/edit; toasts.
 
-9) Settings `Settings` (/parametres)
+9) Settings `Settings` (/settings)
 - Intent: industrialize generation (prompts, models, limits), separate secrets and tuning server-side.
 - UI:
   - Prompt editing: `useCaseListPrompt`, `useCaseDetailPrompt`, `folderNamePrompt`, `organizationInfoPrompt`.
@@ -227,28 +219,17 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - PUT `/api/v1/settings` body `SettingsInput` → `Settings`
  - State/UI: simple validation; toasts.
 
-10) Business configuration `BusinessConfiguration` (/configuration-metier)
-- Intent: control the sectors/processes reference used by prompts and analysis.
-- UI:
-  - Editable tables for sectors and processes; actions Add/Edit/Delete.
-- Store: `businessStore`.
+10) Business configuration (API-only in current UI)
+- Intent: control sectors/processes references used by prompts and analysis.
 - API:
   - GET `/api/v1/business-config` → `{ sectors: Sector[]; processes: Process[] }`
   - PUT `/api/v1/business-config` body `{ sectors: Sector[]; processes: Process[] }` → same object
-- State/UI: success/error toasts.
+- UI note: no dedicated route in current branch; managed through admin/API workflows.
 
 11) 404 `NotFound`
 - No calls; back link to `/`.
 
-12) Design `/design`
-- Intent: UI exploration space (component library, visual prototypes).
-- API: no business calls.
-
-13) Data `/donnees`
-- Intent: technical/tooling view (tables, data preview).
-- API: utility endpoints if needed (optional), otherwise mock/demo.
-
-14) Collaboration — Comments (ChatWidget)
+12) Collaboration — Comments (ChatWidget)
 - Scope: comments are scoped to the **current object view** (contextType + contextId), not to the whole workspace.
 - Menu: comment menu lists **all threads for the current object view** (no section filter in the menu).
 - Threads: flat conversations by `thread_id` (no nested replies).
@@ -273,7 +254,7 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - Proposes actions (close/reassign/note) and requires explicit confirmation before applying.
   - Context scoping follows existing tool expansion rules (usecase strict; folder/org expand).
 
-15) Collaboration — Import/Export (permissions)
+13) Collaboration — Import/Export (permissions)
 - Workspace export: **admin only**.
 - Object export (folder/usecase/organization/matrix): **admin + editor**.
 - Workspace import into a **new** workspace: any authenticated user (API creates workspace).
@@ -466,7 +447,12 @@ Main endpoints (API v1):
   - GET `/api/v1/use-cases/{id}` → retrieve
   - PUT `/api/v1/use-cases/{id}` → update
   - DELETE `/api/v1/use-cases/{id}` → delete
-  - POST `/api/v1/use-cases/generate` → start generation (job queue): body `{ input, folder_id?, organization_id? }` → returns `{ created_folder_id, jobId }`
+  - POST `/api/v1/use-cases/generate` → start generation (job queue): body `{ input, folder_id?, organization_id?, matrix_mode?, use_case_count?, model? }` → returns `{ created_folder_id?, folder_id, matrix_mode, jobId, matrixJobId? }`
+
+- DOCX publishing
+  - POST `/api/v1/docx/generate` → enqueue DOCX generation job (`docx_generate`)
+  - GET `/api/v1/docx/jobs/{id}/download` → download rendered binary when job is completed
+  - GET `/api/v1/use-cases/{id}/docx` → `410 Gone` (legacy synchronous route disabled)
 
 - Analytics
   - GET `/api/v1/analytics/summary?folder_id=...` → summary stats
@@ -530,6 +516,8 @@ Parameters: prompts, models, limits (retries/parallelism) stored in DB (`/settin
 **Prompt ↔ endpoint mapping:**
 - `/api/v1/use-cases/generate` :
   - If `folder_id` is not provided: creates a folder `folders.status="generating"` (name/description may be generated via prompt)
+  - Resolve `matrix_mode` (`organization` | `generate` | `default`) from payload + organization context
+  - If `matrix_mode=generate` and organization is selected: enqueue `matrix_generate` in parallel with `usecase_list`
   - Enqueue `usecase_list` job (list prompt), then `usecase_detail` jobs (detail prompt)
   - Persistence in `use_cases.data` (JSONB) + stream events in `chat_stream_events`
 - `/api/v1/organizations/{id}/enrich` : enqueue `organization_enrich` job (organization prompt)
@@ -556,18 +544,20 @@ flowchart TD
 Routing (adapter-static):
 - `/` → Index
 - `/home` → Home (generation)
-- `/dossiers` → Folders
-- `/cas-usage` → UseCaseList
-- `/cas-usage/[id]` → UseCaseDetail
+- `/folder/new` → Folder creation
+- `/folders` → Folders
+- `/folders/[id]` → Folder detail
+- `/usecase` → UseCaseList
+- `/usecase/[id]` → UseCaseDetail
 - `/dashboard` → Dashboard
-- `/matrice` → Matrix
-- `/organisations` (+ `/organisations/[id]`) → Organizations
-- `/parametres` → Settings
-- `/configuration-metier` → BusinessConfiguration
+- `/matrix` → Matrix
+- `/organizations` (+ `/organizations/new`, `/organizations/[id]`) → Organizations
+- `/settings` → Settings
+- `/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify` → Authentication
 - `+error.svelte` → NotFound
 
 State management:
-- Stores Svelte: `organizationsStore`, `foldersStore`, `useCasesStore`, `matrixStore`, `settingsStore`, `businessStore`.
+- Stores Svelte: `organizationsStore`, `foldersStore`, `useCasesStore`, `matrixStore`, `settingsStore`.
  - Stores sync via the backend API; no critical local persistence. Caches may exist in `sessionStorage` if needed for UX.
 
 Key components:
