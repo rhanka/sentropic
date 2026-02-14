@@ -4,6 +4,7 @@ import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { folders, jobQueue, useCases } from '../../src/db/schema';
 import { queueManager } from '../../src/services/queue-manager';
+import * as storageS3 from '../../src/services/storage-s3';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -112,6 +113,96 @@ describe('DOCX API', () => {
     expect(payload.entityId).toBe(useCase.id);
     expect((payload.provided as Record<string, unknown>)?.dashboardImage).toBeDefined();
     expect(typeof payload.sourceHash).toBe('string');
+  });
+
+  it('enqueues executive synthesis template for folder entity', async () => {
+    const { folder } = await createFolderAndUseCase();
+
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
+      templateId: 'executive-synthesis-multipage',
+      entityType: 'folder',
+      entityId: folder.id,
+    });
+
+    expect(response.status).toBe(202);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    expect(data.queueClass).toBe('publishing');
+    expect(data.jobId).toBeDefined();
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, data.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job?.type).toBe('docx_generate');
+
+    const payload = JSON.parse(job!.data) as Record<string, unknown>;
+    expect(payload.templateId).toBe('executive-synthesis-multipage');
+    expect(payload.entityType).toBe('folder');
+    expect(payload.entityId).toBe(folder.id);
+  });
+
+  it('reuses job for same locale and creates a new one for a different locale', async () => {
+    const { useCase } = await createFolderAndUseCase();
+    const payload = {
+      templateId: 'usecase-onepage',
+      entityType: 'usecase',
+      entityId: useCase.id,
+    } as const;
+
+    const firstRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'en-US' }
+    );
+    expect(firstRes.status).toBe(202);
+    const first = await firstRes.json();
+
+    const secondRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'en-US' }
+    );
+    expect([200, 202]).toContain(secondRes.status);
+    const second = await secondRes.json();
+    expect(second.jobId).toBe(first.jobId);
+
+    const [firstJob] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, first.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    const firstPayload = JSON.parse(firstJob!.data) as Record<string, unknown>;
+    expect(firstPayload.locale).toBe('en');
+
+    const thirdRes = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/docx/generate',
+      user.sessionToken!,
+      payload,
+      { 'Accept-Language': 'fr-FR' }
+    );
+    expect(thirdRes.status).toBe(202);
+    const third = await thirdRes.json();
+    expect(third.jobId).not.toBe(first.jobId);
+
+    const [thirdJob] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, third.jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+
+    const thirdPayload = JSON.parse(thirdJob!.data) as Record<string, unknown>;
+    expect(thirdPayload.locale).toBe('fr');
+    expect(firstPayload.sourceHash).not.toBe(thirdPayload.sourceHash);
   });
 
   it('reuses the same pending job for identical payload', async () => {
@@ -252,6 +343,49 @@ describe('DOCX API', () => {
 
     const bytes = Buffer.from(await response.arrayBuffer());
     expect(bytes.equals(raw)).toBe(true);
+  });
+
+  it('returns docx bytes from S3 storage key result', async () => {
+    const storageSpy = vi.spyOn(storageS3, 'getObjectBytes');
+    const raw = Buffer.from('s3-docx-bytes');
+    storageSpy.mockResolvedValue(new Uint8Array(raw));
+
+    try {
+      const jobId = createTestId();
+      await db.insert(jobQueue).values({
+        id: jobId,
+        type: 'docx_generate',
+        status: 'completed',
+        workspaceId: user.workspaceId!,
+        data: JSON.stringify({
+          templateId: 'usecase-onepage',
+          entityType: 'usecase',
+          entityId: createTestId(),
+        }),
+        result: JSON.stringify({
+          fileName: 'from-s3.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          storageBucket: 'docs-test',
+          storageKey: 'docx/test/file.docx',
+        }),
+        createdAt: new Date(),
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/docx/jobs/${jobId}/download`,
+        user.sessionToken!
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-disposition')).toContain('from-s3.docx');
+      expect(storageSpy).toHaveBeenCalledWith({ bucket: 'docs-test', key: 'docx/test/file.docx' });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      expect(bytes.equals(raw)).toBe(true);
+    } finally {
+      storageSpy.mockRestore();
+    }
   });
 
   it('enforces workspace isolation on docx download', async () => {
