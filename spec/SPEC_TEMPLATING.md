@@ -109,7 +109,8 @@ Rules:
 - Optional marker missing:
   - if optional section is disabled, no error;
   - if optional section is enabled but marker missing, return contract error (`422`).
-- One-page route remains available as compatibility wrapper during migration.
+- One-page export remains available through the unified async DOCX flow (`templateId=usecase-onepage`);
+  legacy synchronous route is intentionally disabled (`410`).
 
 ## 4. Data model articulation
 
@@ -321,8 +322,9 @@ Current limitations:
   - each annexed use case title must be inserted as heading style so it appears in TOC;
   - page breaks for annex entries follow template layout/style rules.
 - Field update policy:
-  - generated DOCX enables "update fields on open" behavior;
-  - UAT validates that opening the document updates TOC entries and page numbers.
+  - generated DOCX marks TOC fields as dirty and enables `updateFields`;
+  - effective page-number refresh remains editor-dependent (Word/LibreOffice/Google Docs behavior differs);
+  - operational policy for Wave 2: treat TOC refresh as a manual user action after opening the document.
 
 ## 7. Acceptance criteria for Lot 2.3.0
 - Current model is documented and limitations are explicit.
