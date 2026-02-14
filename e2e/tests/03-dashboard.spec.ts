@@ -12,6 +12,8 @@ test.describe('Dashboard DOCX flow', () => {
   const DOCX_PREPARE_LABEL = /Préparer le DOCX|Prepare DOCX/i;
   const DOCX_PREPARING_LABEL = /Préparation en cours|Preparation in progress/i;
   const DOCX_DOWNLOAD_LABEL = /Télécharger le DOCX|Download DOCX/i;
+  const DOCX_STARTED_TOAST = /Préparation du document lancée\.|Document preparation started\./i;
+  const DOCX_READY_TOAST = /Document prêt au téléchargement\.|Document ready for download\./i;
 
   let workspaceId = '';
   let organizationId = '';
@@ -296,9 +298,23 @@ test.describe('Dashboard DOCX flow', () => {
       const payload = (await generateResponse.json().catch(() => null)) as
         | { jobId?: string; status?: string }
         | null;
+      if (payload?.status !== 'completed') {
+        await expect(page.getByRole('alert').filter({ hasText: DOCX_STARTED_TOAST }).first()).toBeVisible({
+          timeout: 8_000,
+        });
+      }
       if (payload?.jobId && payload.status !== 'completed') {
+        await expect
+          .poll(async () => getDocxMenuState(page), {
+            timeout: 12_000,
+            intervals: [300, 500, 800],
+          })
+          .toBe('preparing');
         await waitForDocxJobCompletion(page, payload.jobId, 55_000);
       }
+      const readyToast = page.getByRole('alert').filter({ hasText: DOCX_READY_TOAST }).first();
+      await expect(readyToast).toBeVisible({ timeout: 55_000 });
+      await expect(readyToast.getByRole('button', { name: DOCX_DOWNLOAD_LABEL })).toBeVisible();
       await waitForDocxMenuState(page, 'download', 55_000);
 
       await openActionsMenu(page);
