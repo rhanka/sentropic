@@ -129,6 +129,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Docker
         uses: docker/setup-buildx-action@v3
+      - name: Start API test stack
+        run: make up-api-test
       - name: Test API (${{ matrix.suite }})
         run: make test-api-${{ matrix.suite }}
         env:
