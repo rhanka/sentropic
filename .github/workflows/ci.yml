@@ -131,6 +131,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Start API test stack
         run: make up-api-test
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       - name: Test API (${{ matrix.suite }})
         run: make test-api-${{ matrix.suite }}
         env:
