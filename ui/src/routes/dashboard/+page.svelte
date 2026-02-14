@@ -23,6 +23,11 @@
     startDocxGeneration,
     waitForDocxJobCompletion,
   } from '$lib/utils/docx';
+  import {
+    getDashboardDocxMenuState,
+    reduceDashboardDocxState,
+    type DashboardDocxEvent,
+  } from '$lib/utils/dashboard-docx-state';
   import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
@@ -328,8 +333,7 @@
       }
 
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'content_changed' });
     } catch (error) {
       console.error('Failed to reload folder after save:', error);
     }
@@ -355,8 +359,7 @@
       const folders = await fetchFolders();
       foldersStore.set(folders);
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'content_changed' });
     } catch (error) {
       console.error('Failed to reload folder after name save:', error);
     }
@@ -367,6 +370,18 @@
       removeToast(dashboardDocxReadyToastId);
       dashboardDocxReadyToastId = null;
     }
+  };
+
+  const applyDashboardDocxEvent = (event: DashboardDocxEvent) => {
+    const next = reduceDashboardDocxState(
+      {
+        state: dashboardDocxState,
+        jobId: dashboardDocxJobId,
+      },
+      event
+    );
+    dashboardDocxState = next.state;
+    dashboardDocxJobId = next.jobId;
   };
 
   const showDashboardDocxReadyToast = (jobId: string) => {
@@ -381,8 +396,7 @@
         try {
           await downloadCompletedDocxJob(jobId, getExecutiveSynthesisFallbackName());
           clearDashboardDocxReadyToast();
-          dashboardDocxState = 'idle';
-          dashboardDocxJobId = null;
+          applyDashboardDocxEvent({ type: 'downloaded' });
         } catch (error) {
           addToast({
             type: 'error',
@@ -422,8 +436,7 @@
       if (watchToken !== dashboardDocxWatchToken) return;
 
       if (finalJob.status === 'completed') {
-        dashboardDocxState = 'ready';
-        dashboardDocxJobId = jobId;
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId });
         if (notifyOnReady) {
           showDashboardDocxReadyToast(jobId);
         }
@@ -431,8 +444,7 @@
       }
 
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'prepare_failed' });
       addToast({
         type: 'error',
         message: finalJob.error || get(_)('dashboard.errors.docxPrepare'),
@@ -440,8 +452,7 @@
     } catch (error) {
       if (watchToken !== dashboardDocxWatchToken) return;
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'prepare_failed' });
       addToast({
         type: 'error',
         message: error instanceof Error ? error.message : get(_)('dashboard.errors.docxPrepare'),
@@ -455,35 +466,30 @@
       if (!latestJob) {
         dashboardDocxWatchToken += 1;
         clearDashboardDocxReadyToast();
-        dashboardDocxState = 'idle';
-        dashboardDocxJobId = null;
+        applyDashboardDocxEvent({ type: 'cleared' });
         return;
       }
 
       if (latestJob.status === 'completed') {
         dashboardDocxWatchToken += 1;
-        dashboardDocxState = 'ready';
-        dashboardDocxJobId = latestJob.id;
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId: latestJob.id });
         return;
       }
 
       if (latestJob.status === 'pending' || latestJob.status === 'processing') {
         clearDashboardDocxReadyToast();
-        dashboardDocxState = 'preparing';
-        dashboardDocxJobId = latestJob.id;
+        applyDashboardDocxEvent({ type: 'prepare_started', jobId: latestJob.id });
         void watchExecutiveSynthesisDocxJob(latestJob.id, false);
         return;
       }
 
       dashboardDocxWatchToken += 1;
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'cleared' });
     } catch {
       dashboardDocxWatchToken += 1;
       clearDashboardDocxReadyToast();
-      dashboardDocxState = 'idle';
-      dashboardDocxJobId = null;
+      applyDashboardDocxEvent({ type: 'cleared' });
     }
   };
 
@@ -513,13 +519,11 @@
         controls: {},
       });
       if (result.status === 'completed') {
-        dashboardDocxState = 'ready';
-        dashboardDocxJobId = result.jobId;
+        applyDashboardDocxEvent({ type: 'prepare_completed', jobId: result.jobId });
         showDashboardDocxReadyToast(result.jobId);
       } else {
         clearDashboardDocxReadyToast();
-        dashboardDocxState = 'preparing';
-        dashboardDocxJobId = result.jobId;
+        applyDashboardDocxEvent({ type: 'prepare_started', jobId: result.jobId });
         addToast({
           type: 'info',
           message: get(_)('dashboard.toast.docxPreparationStarted'),
@@ -549,8 +553,7 @@
         });
       } finally {
         clearDashboardDocxReadyToast();
-        dashboardDocxState = 'idle';
-        dashboardDocxJobId = null;
+        applyDashboardDocxEvent({ type: 'downloaded' });
       }
       return;
     }
@@ -558,14 +561,19 @@
     await startExecutiveSynthesisDocxPreparation();
   };
 
-  $: dashboardDocxMenuLabel =
-    dashboardDocxState === 'preparing'
-      ? get(_)('dashboard.docx.menu.preparing')
-      : dashboardDocxState === 'ready'
-        ? get(_)('dashboard.docx.menu.download')
-        : get(_)('dashboard.docx.menu.prepare');
-
-  $: dashboardDocxActionDisabled = !selectedFolderId || dashboardDocxState === 'preparing';
+  $: {
+    const menuState = getDashboardDocxMenuState(
+      { state: dashboardDocxState, jobId: dashboardDocxJobId },
+      Boolean(selectedFolderId)
+    );
+    dashboardDocxMenuLabel =
+      menuState.labelKey === 'preparing'
+        ? get(_)('dashboard.docx.menu.preparing')
+        : menuState.labelKey === 'download'
+          ? get(_)('dashboard.docx.menu.download')
+          : get(_)('dashboard.docx.menu.prepare');
+    dashboardDocxActionDisabled = menuState.disabled;
+  }
 
   $: if (selectedFolderId && selectedFolderId !== lastDocxStateFolderId) {
     lastDocxStateFolderId = selectedFolderId;
@@ -576,8 +584,7 @@
     lastDocxStateFolderId = null;
     dashboardDocxWatchToken += 1;
     clearDashboardDocxReadyToast();
-    dashboardDocxState = 'idle';
-    dashboardDocxJobId = null;
+    applyDashboardDocxEvent({ type: 'cleared' });
   }
 
 
