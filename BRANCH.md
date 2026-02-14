@@ -231,13 +231,6 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [x] Partial UAT:
         - [x] Verify dashboard image is present at expected location and remains readable.
         - [x] Verify fallback rendering when bitmap is omitted.
-    - [ ] **Lot 2.3.4 — Integration hardening (API only)**
-      - [ ] Finalize provider/normalization for executive summary + annex data.
-      - [ ] Ensure use-case one-page DOCX export remains stable and unaffected.
-      - [ ] Gate: `make typecheck-api` + `make lint-api`
-      - [ ] Partial UAT:
-        - [ ] One-page export regression check from use case detail.
-        - [ ] Synthesis generation with/without references and with/without dashboard image.
 
 - [ ] **Lot N — Final validation**
   - [ ] Consolidate deferred test backlog from Wave 1 and Wave 2 scopes.
@@ -252,12 +245,15 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] `api/tests/api/folders.test.ts` (matrix selection persistence + executive summary payload)
       - [ ] `api/tests/api/matrix.test.ts` (matrix generation per org/folder, if separate suite exists)
       - [ ] `api/tests/api/docx.test.ts` (extend: executive synthesis generation via unified endpoint)
+    - [ ] Gating : `make ENV=test test-api`
     - [ ] UI (Wave 1):
       - [ ] None explicitly required by Wave 1 scopes
     - [ ] UI (Wave 2):
       - [ ] `ui/tests/i18n.spec.ts` (bilingual edit + locale switching behavior, if tests exist)
       - [ ] `ui/tests/folders.spec.ts` (folder generation matrix option/selection, if tests exist)
+     - [ ] Gating : `make ENV=test test-ui`
     - [ ] E2E (Wave 1 carry-over):
+      - [ ] `make ENV=test-e2e build-api build-ui-image`
       - [ ] i18n/route regression pack:
         - [ ] `e2e/tests/00-access-control.spec.ts`
         - [ ] `e2e/tests/00-ai-generation.spec.ts`
@@ -289,8 +285,6 @@ Execute Wave 2 sequentially on a single integration branch (`feat/i18-print`) wi
       - [ ] `e2e/tests/03-chat.spec.ts` (FR/EN generation parity and fallback)
       - [ ] `e2e/tests/07-matrix.spec.ts` (folder generation matrix reuse vs specific)
       - [ ] `e2e/tests/executive-summary.spec.ts` (if exists: synthesis download contract)
-  - [ ] `make test-api`
-  - [ ] `make test-ui`
-  - [ ] `make build-api build-ui-image`
-  - [ ] `make clean test-e2e`
+  - [ ] `make ENV=test-e2e clean test-e2e`
+  - [ ] User smoke test
   - [ ] Final gate: CI green for `feat/i18-print` and merge-ready.
