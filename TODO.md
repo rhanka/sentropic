@@ -259,6 +259,10 @@
       - [ ] Claude
       - [ ] Mistral
 - [ ] Concevoir le plugin chrome
+  - [ ] UI
+    - [ ] mode bulle + flottant
+    - [ ] mode docker/side panel
+    - [ ] toasters également
   - [ ] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
     - [ ] Lecture d'un tab
     - [ ] Automation d'un tab (cliquer ...)
@@ -337,6 +341,19 @@
       - [ ] Spec & doc consolidation
       - [ ] PO / Product & Marketing
       - [ ] QA / testing (with vision)
+- [ ] Checkpoints (rassembler ici la gesiton de checkpoint: retour arrière sur un chat = lister et ajouter une version des objets / sous objets modifiés / gestion conflit multi utilisateur). Checkpoint humain vs utilisateur : ne pas verisonner après un ajout "immédiat" mais après un mode à définir de latence raisonnable (eg 5 seconde après sortie du champ etc).
+- [ ] Specs mdc
+  - [ ] Spec consolidation
+  - [ ] Consoidate sub agentique / mutlibranch mode
+- [ ] Minor evols
+  - [ ] Toaster: passer en bas (adjoint à l'icone de chat)
+  - [ ] EditableInput: passer d'une attente de 5 seconde à un retour immédiat
+  - [ ] Editable input dans les view:
+    - [ ] Matrice: passer à un mode input texte / md pour les axes
+    - [ ] Secteur = trop petit
+    - [ ] Inspecter les autres pb de tail similaire à secteur
+  - [ ] Agents de génération : créer un commentaire par défaut
+  - [ ] Tool de modification : mettre un commentaire sur les champs modifiés
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
