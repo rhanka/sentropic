@@ -123,18 +123,24 @@
     - [x] Options d'export : avec ou sans commentaire
 - [x] Permettre l'interruption du chatbot (produire une réponse immédiatement, ou stop)
 - [x] bug: hors mode docker, il n'y a plus de barre de défilement alors que le contenu dépasse l'écran
+- [x] Reduce CI time
+  - [x] Enable mutliple workers in test-api
+  - [x] Split test-e2e in two // execution groups
+- [x] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
+  - [x] Lot 1 (courant): DOCX
+    - [x] define a model for usecase fitting in one page
+    - [x] define multiplage model for executive synthesis + compilation of uses cases as annex
+- [x] basculer en i18n bilingue anglais / français
+  - [x] Résumé fait (déjà en place) : inventaire exhaustif des chaînes UI, remplacement par i18n, dictionnaires FR/EN étendus, switch de langue validé sur vues clés (see Wave 2 Lot 2.1).
+  - [x] identifier et traduire tous les messages
+techniques restent anglophones (e.g migrer cas-usage vers usecase)
+  - [x] Normalize executive summary technical keys to English (`analysis`, `recommendation`, `executive_summary`) with backward-compatible aliases for legacy keys (`analyse`, `recommandation`, `synthese_executive`).
+  - [x] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 
 **⏳ À faire :**
-- [ ] Reduce CI time
-  - [ ] Enable mutliple workers in test-api
-  - [ ] Split test-e2e in two // execution groups
 - [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
   - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
   - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
-- [ ] remplacer le modèle de print par un modèle de template (.docx patché via dolanmiu/docx)
-  - [ ] Lot 1 (courant): DOCX
-    - [ ] define a model for usecase fitting in one page
-    - [ ] define multiplage model for executive synthesis + compilation of uses cases as annex
 - [ ] Templating — Lot 2 (post-clôture du lot DOCX multipage)
   - [ ] TOC/page numbers policy (limitation actuelle):
     - [ ] Keep current behavior as fail-safe: TOC refresh is user-driven (`manual update required`), not guaranteed server-side.
@@ -151,13 +157,6 @@
   - [ ] Google Workspace suite
     - [ ] Define authoring workflow with Google Docs/Slides and export normalization constraints.
     - [ ] Define managed template lifecycle and sync strategy (Drive objects, versions, fallbacks).
-- [ ] basculer en i18n bilingue anglais / français
-  - [x] Résumé fait (déjà en place) : inventaire exhaustif des chaînes UI, remplacement par i18n, dictionnaires FR/EN étendus, switch de langue validé sur vues clés (see Wave 2 Lot 2.1).
-  - [ ] identifier tous les messages
-  - [ ] modéliser le bilinguisme d'un objet (usecase, etc, mais aussi prompt, avec une langue master pour éviter les pb de traduction réciproque)
-  - [ ] rendre bilingue les prompts (ie. permettre qu'ils génère en français, en anglais)
-  - [ ] assurer que les éléments techniques restent anglophones (e.g migrer cas-usage vers usecase)
-  - [ ] Normalize executive summary technical keys to English (`analysis`, `recommendation`, `executive_summary`) with backward-compatible aliases for legacy keys (`analyse`, `recommandation`, `synthese_executive`).
 - [ ] **Lot 2.3 Bilingual modeling (storage + projection)**
   - [ ] multilingual storage model scope (use case, organization, folder, prompts).
   - [ ] Implement API/UI typing + validation + normalization with backward compatibility.
@@ -167,7 +166,6 @@
   - [ ] ajouter les contraintes (constraints) au cas d'usage
     - [ ] modif modèle de donnée appli (devrait pas générer de migrate)
     - [ ] modif de la présentation et du print (mettre benefices / contraintes / mesure succès / risques)
-  - [ ] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [ ] Workflow / Authoring
   - [ ] Gérer le statut de validation de chaque objet
   - [ ] Gérer les modèles d'autorisation / partie d'objet
