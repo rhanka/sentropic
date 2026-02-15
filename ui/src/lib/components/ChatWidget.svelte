@@ -2,6 +2,8 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import type { ContextProvider } from '$lib/core/context-provider';
+  import { createSvelteKitContextProvider } from '$lib/core/context-provider';
   import { _ } from 'svelte-i18n';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
@@ -52,6 +54,13 @@
   let chatLoadingSessions = false;
   let commentContext: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
   let commentContextOverride: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
+
+  // Core abstraction: allows Chrome extension to inject its own context provider.
+  // Defaults to SvelteKit's page store for backward compatibility.
+  export let contextProvider: ContextProvider | null = null;
+  $: ctxProvider = contextProvider ?? createSvelteKitContextProvider(page, browser);
+  $: contextStore = ctxProvider.context;
+
   let commentSectionKey: string | null = null;
   let commentSectionLabel: string | null = null;
   let commentThreadId: string | null = null;
@@ -298,12 +307,12 @@
   };
 
   $: commentContext =
-    commentContextOverride ?? detectCommentContextFromRoute($page.route.id ?? null, $page.params, $currentFolderId);
+    commentContextOverride ?? detectCommentContextFromRoute($contextStore.route.id ?? null, $contextStore.params, $currentFolderId);
   $: if (activeTab !== 'chat' && showSessionMenu) showSessionMenu = false;
   $: if (activeTab !== 'comments' && showCommentMenu) showCommentMenu = false;
 
   $: {
-    const detected = detectCommentContextFromRoute($page.route.id ?? null, $page.params, $currentFolderId);
+    const detected = detectCommentContextFromRoute($contextStore.route.id ?? null, $contextStore.params, $currentFolderId);
     if (
       commentContextOverride &&
       (!detected ||
@@ -374,7 +383,7 @@
   }
 
   $: {
-    const routeKey = `${$page.route.id ?? ''}:${$page.params?.id ?? ''}:${$currentFolderId ?? ''}`;
+    const routeKey = `${$contextStore.route.id ?? ''}:${$contextStore.params?.id ?? ''}:${$currentFolderId ?? ''}`;
     if (routeKey !== lastCommentRouteKey) {
       lastCommentRouteKey = routeKey;
       // Reset selection when changing view to avoid stale section/thread.

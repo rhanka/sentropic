@@ -50,13 +50,13 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Create `ui/src/lib/core/navigation-adapter.ts` (NavigationAdapter interface)
   - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed, zero new errors)
 
-- [ ] **Lot 2 — ChatWidget & ChatPanel refactoring**
-  - [ ] Refactor `ChatWidget.svelte`: replace `$app/stores` (page) and `$app/environment` (browser) with `ContextProvider`
-  - [ ] Refactor `ChatPanel.svelte`: replace `$app/stores` (page) with `ContextProvider`
-  - [ ] Refactor `session.ts`: decouple `goto` via `NavigationAdapter`
-  - [ ] Refactor `streamHub.ts`: accept injected `baseUrl`
-  - [ ] Verify non-regression: existing web app ChatWidget remains functional
-  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+- [x] **Lot 2 — ChatWidget & ChatPanel refactoring**
+  - [x] Refactor `ChatWidget.svelte`: replace `$app/stores` (page) and `$app/environment` (browser) with `ContextProvider`
+  - [x] Refactor `ChatPanel.svelte`: N/A — no `$app` imports found (already decoupled)
+  - [x] Refactor `session.ts`: decouple `goto` via `NavigationAdapter`
+  - [x] Refactor `streamHub.ts`: accept injected `baseUrl` via `getApiBaseUrl()` fallback
+  - [x] Verify non-regression: typecheck + lint gates pass (existing web app behavior preserved via fallbacks)
+  - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed)
   - [ ] UAT: open chat on web app, send message, verify streaming and tool calls work
 
 - [ ] **Lot 3 — Chrome extension skeleton**
