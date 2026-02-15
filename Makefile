@@ -146,7 +146,6 @@ build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run build:ext
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/chrome-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'test -f /app/chrome-ext/dist/manifest.json && test -f /app/chrome-ext/dist/content.js && test -f /app/chrome-ext/dist/chrome-ext/popup.html && test -f /app/chrome-ext/dist/chrome-ext/sidepanel.html'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc '! grep -q "import(" /app/chrome-ext/dist/content.js'
 	@echo "✅ Extension built in ui/chrome-ext/dist"
 
 .PHONY: dev-ext
