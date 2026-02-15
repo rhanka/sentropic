@@ -34,21 +34,21 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read the relevant `.mdc` files and `README.md`.
   - [x] Create/confirm isolated worktree `tmp/feat-chrome-plugin` and run development there.
-  - [ ] Capture Makefile targets needed for debug/testing.
-  - [ ] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [x] Confirm scope and guardrails.
   - [x] Add `spec/SPEC_CHROME_PLUGIN.md` (initial draft).
 
-- [ ] **Lot 1 — Abstraction layer (ui/src/lib/core/)**
-  - [ ] Create `ui/src/lib/core/context-provider.ts` (ContextProvider interface + SvelteKit impl + Extension impl)
-  - [ ] Create `ui/src/lib/core/api-client.ts` (configurable ApiClient without `$app` deps)
-  - [ ] Create `ui/src/lib/core/auth-bridge.ts` (AuthBridge interface)
-  - [ ] Create `ui/src/lib/core/navigation-adapter.ts` (NavigationAdapter interface)
-  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+- [x] **Lot 1 — Abstraction layer (ui/src/lib/core/)**
+  - [x] Create `ui/src/lib/core/context-provider.ts` (ContextProvider interface + SvelteKit impl + Extension impl)
+  - [x] Create `ui/src/lib/core/api-client.ts` (configurable ApiClient without `$app` deps)
+  - [x] Create `ui/src/lib/core/auth-bridge.ts` (AuthBridge interface)
+  - [x] Create `ui/src/lib/core/navigation-adapter.ts` (NavigationAdapter interface)
+  - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed, zero new errors)
 
 - [ ] **Lot 2 — ChatWidget & ChatPanel refactoring**
   - [ ] Refactor `ChatWidget.svelte`: replace `$app/stores` (page) and `$app/environment` (browser) with `ContextProvider`
