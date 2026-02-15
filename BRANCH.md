@@ -57,7 +57,11 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Refactor `streamHub.ts`: accept injected `baseUrl` via `getApiBaseUrl()` fallback
   - [x] Verify non-regression: typecheck + lint gates pass (existing web app behavior preserved via fallbacks)
   - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed)
-  - [ ] UAT: open chat on web app, send message, verify streaming and tool calls work
+  - [x] **UAT: Non-regression checklist (Web App)**
+    - [x] **Auth**: Logout and Login back in (verifies `session.ts` navigation adapter).
+    - [x] **Chat**: Open the global chat (floating widget).
+    - [x] **Context**: Navigate to a specific folder/usecase and verify the chat knows the context (verifies `ChatWidget` context provider).
+    - [x] **Streaming**: Send a message "Hello" and verify the response streams back (verifies `streamHub.ts` and `api.ts`).
 
 - [ ] **Lot 3 — Chrome extension skeleton**
   - [ ] Create `ui/chrome-ext/manifest.json` (Manifest V3)
