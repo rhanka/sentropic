@@ -1,0 +1,123 @@
+# Feature: Chrome Extension Plugin
+
+## Objective
+Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web page via Shadow DOM, allowing users to chat with the Top AI Ideas assistant and leverage local Chrome tools (tab reading, screenshots, click automation) alongside server-side tools.
+
+## Scope / Guardrails
+- Scope limited to: abstraction layer (`ui/src/lib/core/`), ChatWidget/ChatPanel refactoring, Chrome extension skeleton (`ui/chrome-ext/`), local Chrome tools, minimal API evolution for local tool support.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-chrome-plugin` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+
+## Questions / Notes
+- Shadow DOM + Svelte 5: portals and modals may need workarounds. Handle with `{ target: document.body }` fallback if needed.
+- API evolution for `localToolDefinitions` and `tool-results` endpoint: keep backward-compatible (optional fields only).
+- The `git worktree` approach is used instead of `git clone` for the isolated workspace (faster, shared objects).
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single feature (Chrome extension), all changes are interdependent (abstraction layer required for the extension), single branch is sufficient.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-chrome-plugin`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-chrome-plugin` after UAT.
+
+## Plan / Todo (lot-based)
+
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read the relevant `.mdc` files and `README.md`.
+  - [x] Create/confirm isolated worktree `tmp/feat-chrome-plugin` and run development there.
+  - [ ] Capture Makefile targets needed for debug/testing.
+  - [ ] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
+  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Add `spec/SPEC_CHROME_PLUGIN.md` (initial draft).
+
+- [ ] **Lot 1 — Abstraction layer (ui/src/lib/core/)**
+  - [ ] Create `ui/src/lib/core/context-provider.ts` (ContextProvider interface + SvelteKit impl + Extension impl)
+  - [ ] Create `ui/src/lib/core/api-client.ts` (configurable ApiClient without `$app` deps)
+  - [ ] Create `ui/src/lib/core/auth-bridge.ts` (AuthBridge interface)
+  - [ ] Create `ui/src/lib/core/navigation-adapter.ts` (NavigationAdapter interface)
+  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+
+- [ ] **Lot 2 — ChatWidget & ChatPanel refactoring**
+  - [ ] Refactor `ChatWidget.svelte`: replace `$app/stores` (page) and `$app/environment` (browser) with `ContextProvider`
+  - [ ] Refactor `ChatPanel.svelte`: replace `$app/stores` (page) with `ContextProvider`
+  - [ ] Refactor `session.ts`: decouple `goto` via `NavigationAdapter`
+  - [ ] Refactor `streamHub.ts`: accept injected `baseUrl`
+  - [ ] Verify non-regression: existing web app ChatWidget remains functional
+  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+  - [ ] UAT: open chat on web app, send message, verify streaming and tool calls work
+
+- [ ] **Lot 3 — Chrome extension skeleton**
+  - [ ] Create `ui/chrome-ext/manifest.json` (Manifest V3)
+  - [ ] Create `ui/chrome-ext/content.ts` (Shadow DOM bootstrap + ChatWidget mount)
+  - [ ] Create `ui/chrome-ext/background.ts` (service worker skeleton)
+  - [ ] Create `ui/chrome-ext/popup.html` + `popup.ts` (API URL config)
+  - [ ] Create `ui/chrome-ext/sidepanel.html` + `sidepanel.ts` (side panel placeholder)
+  - [ ] Create `ui/chrome-ext/vite.config.ext.ts` (multi-entry Vite build)
+  - [ ] Create `ui/chrome-ext/chatwidget-entry.ts` (Svelte mount with extension providers)
+  - [ ] Add Makefile targets: `build-ext`, `dev-ext`, `package-ext`
+  - [ ] Add `package.json` scripts: `build:ext`, `dev:ext`
+  - [ ] Create extension icons (placeholder)
+  - [ ] Lot gate: `make build-ext ENV=test` succeeds
+  - [ ] UAT: load unpacked extension in Chrome, verify bubble appears on a page
+
+- [ ] **Lot 4 — Local Chrome tools (service worker)**
+  - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
+    - [ ] `tab_read_dom` (extract DOM text via `chrome.scripting.executeScript`)
+    - [ ] `tab_screenshot` (capture via `chrome.tabs.captureVisibleTab`)
+    - [ ] `tab_click` (click by selector or coordinates)
+    - [ ] `tab_type` (type text into input element)
+    - [ ] `tab_scroll` (scroll page by direction/pixels)
+    - [ ] `tab_info` (page metadata: URL, title, headings, links)
+  - [ ] Create `ui/src/lib/stores/localTools.ts` (LocalToolStore + execution bridge)
+  - [ ] Wire service worker message listener to tool executor
+  - [ ] Wire ChatPanel to intercept local tool calls from SSE stream
+  - [ ] Lot gate: tools execute correctly from the extension context
+
+- [ ] **Lot 5 — API evolution for local tools**
+  - [ ] Add `localToolDefinitions` optional field to `POST /chat/messages` input
+  - [ ] Merge local tool definitions with server tools in `chat-service.ts`
+  - [ ] Add `POST /api/v1/chat/messages/:id/tool-results` endpoint
+  - [ ] Implement generation resume after receiving local tool result
+  - [ ] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test`
+
+- [ ] **Lot 6 — Integration & i18n**
+  - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read_dom` → extension executes → result sent to API → LLM continues
+  - [ ] i18n initialization from `chrome.i18n.getUILanguage()`
+  - [ ] Verify all UI modes: floating bubble, popup, side panel placeholder
+  - [ ] Lot gate: full flow works manually
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Refactor and integrate `spec/SPEC_CHROME_PLUGIN.md` into existing specs (if not a new standalone spec).
+  - [ ] Update `TODO.md` to reflect completed items.
+
+- [ ] **Lot N — Final validation**
+  - [ ] **API tests**
+    - [ ] Add tests for `localToolDefinitions` merge in chat-service
+    - [ ] Add tests for `tool-results` endpoint
+    - [ ] Scoped runs: `make test-api SCOPE=tests/your-file.spec.ts ENV=test`
+    - [ ] Sub-lot gate: `make test-api ENV=test`
+  - [ ] **UI tests (TypeScript only)**
+    - [ ] Add unit tests for `core/` abstractions (context-provider, api-client, auth-bridge, navigation-adapter)
+    - [ ] Add unit tests for `localTools.ts` store
+    - [ ] Scoped runs: `make test-ui SCOPE=tests/your-file.spec.ts ENV=test`
+    - [ ] Sub-lot gate: `make test-ui ENV=test`
+  - [ ] **E2E tests**
+    - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
+    - [ ] Non-regression on existing chat E2E tests
+    - [ ] Scoped runs: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
+    - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
+  - [ ] Final gate: Create PR with BRANCH.md content as initial message & Verify CI for the branch
+  - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
