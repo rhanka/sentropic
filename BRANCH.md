@@ -84,11 +84,12 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4)**
     - [x] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
     - [x] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
-    - [ ] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
-    - [ ] Keep same visual style/tokens as existing components (no custom inline style system for widget/panel)
-    - [ ] Keep same toasts behavior and placement as existing ChatWidget/ChatPanel flow
-    - [ ] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
+    - [x] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
+    - [x] Keep same visual style/tokens as existing components (no custom inline style system for widget/panel)
+    - [x] Keep same toasts behavior and placement as existing ChatWidget/ChatPanel flow
+    - [x] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
     - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+    - [x] Ready for partial UAT Lot 3B on root workspace (`.`) with current branch state.
     - [ ] **Partial UAT Lot 3B (root workspace, behavior parity)**
       - [ ] **Bubble parity**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
       - [ ] **Open parity**: Clicking bubble opens the same panel structure and actions as existing widget.
