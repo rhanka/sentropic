@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { goto } from '$app/navigation';
+import { getNavigation } from '$lib/core/navigation-adapter';
 import { API_BASE_URL } from '$lib/config';
 
 /**
@@ -85,29 +85,29 @@ export const isLoadingSession = derived(
 export async function initializeSession(): Promise<void> {
   try {
     const stored = localStorage.getItem('userSession');
-    
+
     console.log('🔍 Session init debug:', {
       hasStoredData: !!stored,
       storedData: stored ? JSON.parse(stored) : null
     });
-    
+
     if (stored) {
       try {
         const sessionData = JSON.parse(stored);
         const age = Date.now() - sessionData.timestamp;
         const maxAge = 24 * 60 * 60 * 1000;
-        
+
         console.log('🔍 localStorage data analysis:', {
           age: age,
           maxAge: maxAge,
           ageHours: Math.round(age / (60 * 60 * 1000) * 100) / 100,
           isRecent: age < maxAge
         });
-        
+
         if (age < maxAge) {
           console.log('✅ Restoring from localStorage:', sessionData);
           sessionStore.set({ user: sessionData.user, loading: false });
-          
+
           console.log('🔄 Starting background validation...');
           validateSessionInBackground();
           return;
@@ -120,21 +120,21 @@ export async function initializeSession(): Promise<void> {
         localStorage.removeItem('userSession');
       }
     }
-    
+
     try {
       const data = await authRequest<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session', {
         method: 'GET'
       });
-      
+
       const user: User = {
         id: data.userId,
         email: data.email ?? null,
         displayName: data.displayName ?? null,
         role: data.role as User['role'],
       };
-      
+
       sessionStore.set({ user, loading: false });
-      
+
       const sessionData = {
         user,
         timestamp: Date.now(),
@@ -156,7 +156,7 @@ export async function initializeSession(): Promise<void> {
               const sessionData = JSON.parse(stored);
               const age = Date.now() - sessionData.timestamp;
               const maxAge = 24 * 60 * 60 * 1000;
-              
+
               if (age < maxAge && sessionData.user) {
                 // Session valide en localStorage, garder l'état actuel mais marquer comme non-loading
                 const currentState = get(sessionStore);
@@ -208,23 +208,23 @@ async function validateSessionInBackground(): Promise<void> {
     const data = await authRequest<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session', {
       method: 'GET'
     });
-    
+
     const user: User = {
       id: data.userId,
       email: data.email ?? null,
       displayName: data.displayName ?? null,
       role: data.role as User['role'],
     };
-    
+
     console.log('✅ Background validation: session valid, updating localStorage');
-    
+
     const sessionData = {
       user,
       timestamp: Date.now(),
       cookieExists: true
     };
     localStorage.setItem('userSession', JSON.stringify(sessionData));
-    
+
     const currentState = get(sessionStore);
     if (currentState.user?.id === 'unknown') {
       console.log('🔄 Background validation: updating store from unknown state');
@@ -248,7 +248,7 @@ async function validateSessionInBackground(): Promise<void> {
             const sessionData = JSON.parse(stored);
             const age = Date.now() - sessionData.timestamp;
             const maxAge = 24 * 60 * 60 * 1000;
-            
+
             if (age >= maxAge || !sessionData.user) {
               // Session expirée ou invalide, effacer
               console.warn('⚠️ Background validation: rate limited but localStorage session expired, clearing');
@@ -275,7 +275,7 @@ async function validateSessionInBackground(): Promise<void> {
 export function setUser(user: User): void {
   console.log('💾 Saving user to store and localStorage:', user);
   sessionStore.update(state => ({ ...state, user }));
-  
+
   // Persist user data in localStorage
   const sessionData = {
     user,
@@ -292,7 +292,7 @@ export function setUser(user: User): void {
  */
 export async function retrySessionInit(): Promise<void> {
   const currentState = get(sessionStore);
-  
+
   // Only retry if we're in an "unknown" state
   if (currentState.user?.id === 'unknown') {
     console.log('Retrying session initialization...');
@@ -316,16 +316,16 @@ export function clearUser(): void {
 export function hasRole(role: User['role']): boolean {
   const currentState = get(sessionStore);
   const currentUser = currentState.user;
-  
+
   if (!currentUser) return false;
-  
+
   const roleHierarchy: Record<User['role'], number> = {
     admin_app: 4,
     admin_org: 3,
     editor: 2,
     guest: 1,
   };
-  
+
   return roleHierarchy[currentUser.role] >= roleHierarchy[role];
 }
 
@@ -335,7 +335,7 @@ export function hasRole(role: User['role']): boolean {
 export function isAdmin(): boolean {
   const currentState = get(sessionStore);
   const currentUser = currentState.user;
-  
+
   return currentUser?.role === 'admin_app' || currentUser?.role === 'admin_org';
 }
 
@@ -350,21 +350,21 @@ export async function logout(): Promise<void> {
     console.error('Logout request failed:', error);
     // Continue with logout even if API call fails (rate limiting, etc.)
   }
-  
+
   // Always clear local state regardless of API response
   clearUser();
-  
+
   // Clear session storage
   sessionStorage.removeItem('sessionToken');
   sessionStorage.removeItem('refreshToken');
-  
+
   // Clear session cookie by setting it to expire in the past
   // Include all cookie attributes to ensure it's removed
   document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;';
   document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax; Secure;';
-  
+
   // Redirect to login
-  goto('/auth/login');
+  getNavigation().goto('/auth/login');
 }
 
 /**
@@ -378,21 +378,21 @@ export async function logoutAll(): Promise<void> {
     console.error('Logout all request failed:', error);
     // Continue with logout even if API call fails
   }
-  
+
   // Always clear local state regardless of API response
   clearUser();
-  
+
   // Clear session storage
   sessionStorage.removeItem('sessionToken');
   sessionStorage.removeItem('refreshToken');
-  
+
   // Clear session cookie by setting it to expire in the past
   // Include all cookie attributes to ensure it's removed
   document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;';
   document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax; Secure;';
-  
+
   // Redirect to login
-  goto('/auth/login');
+  getNavigation().goto('/auth/login');
 }
 
 // Export the store
