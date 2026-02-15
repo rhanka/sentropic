@@ -78,10 +78,10 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Add ownership normalization in `make build-ext` so unpacked load does not fail on file permissions
     - [x] Ignore extension build artifacts in Git (`ui/chrome-ext/dist/`) and stop tracking `dist` files
     - [x] **Partial UAT Lot 3A (root workspace)**
-      - [x] **Build**: Run `make build-ext ENV=test`. Verification: `✅ Extension built` and files in `ui/chrome-ext/dist/`.
+      - [x] **Build**: Run `make build-ext`. Verification: `✅ Extension built` and files in `ui/chrome-ext/dist/`.
       - [x] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
       - [x] **Verify loadability**: Manifest is accepted by Chrome (no load blocker on manifest/content script).
-  - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4)**
+  - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4A)**
     - [x] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
     - [x] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
     - [x] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
@@ -92,26 +92,67 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
     - [x] Ready for partial UAT Lot 3B on root workspace (`.`) with current branch state.
     - [ ] **Partial UAT Lot 3B — Chrome Extension parity (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
-      - [ ] **Prepare extension build**: Run `make build-ext ENV=test` from root workspace (`.`).
-      - [ ] **Reload extension**: In `chrome://extensions`, click "Reload" on unpacked extension (or load `ui/chrome-ext/dist` again if needed).
-      - [ ] **Bubble parity (Chrome page)**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
-      - [ ] **Open parity (Chrome page)**: Clicking bubble opens the same panel structure/actions as existing widget.
-      - [ ] **Close parity (Chrome page)**: Closing/minimizing restores same collapsed behavior and button placement.
-      - [ ] **Position parity (Chrome page)**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
-      - [ ] **Style parity (Chrome page)**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system.
-      - [ ] **Behavior parity (Chrome page)**: Send one message and verify streaming response behavior remains consistent.
-      - [ ] **No runtime errors (Chrome page)**: No extension content-script error in extension page/console during open-close-send flow.
-    - [ ] **Partial UAT Lot 3B — Web App non-regression (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
-      - [ ] **Auth**: Logout and login back in (session navigation behavior unchanged).
-      - [ ] **Chat open**: Open the global chat in web app and verify initial collapsed/expanded behavior.
-      - [ ] **Context**: Navigate to folder/usecase and verify chat context is still correct.
-      - [ ] **Streaming**: Send a message and verify streaming response behavior is unchanged.
-      - [ ] **Toasts**: Trigger one success/error feedback path and verify toast style/placement unchanged in web app.
+      - [x] **Prepare extension build**: Run `make build-ext` from root workspace (`.`).
+      - [x] **Reload extension**: In `chrome://extensions`, click "Reload" on unpacked extension (or load `ui/chrome-ext/dist` again if needed).
+      - [x] **Bubble parity (Chrome page)**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
+      - [x] **Open parity (Chrome page)**: Clicking bubble opens the same panel structure/actions as existing widget.
+      - [x] **Close parity (Chrome page)**: Closing/minimizing restores same collapsed behavior and button placement.
+      - [x] **Position parity (Chrome page)**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
+      - [x] **Style parity (Chrome page)**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system, except font-family parity.
+      - [ ] **Font parity (Chrome page)**: Same font-family token as web app in extension context (tracked in Lot 3C).
+      - [x] **Behavior parity (Chrome page)**: Send one message and verify streaming response behavior remains consistent.
+      - [x] **No runtime errors (Chrome page)**: No extension content-script error in extension page/console during open-close-send flow.
+    - [x] **Partial UAT Lot 3B — Web App non-regression (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
+      - [x] **Auth**: Logout and login back in (session navigation behavior unchanged).
+      - [x] **Chat open**: Open the global chat in web app and verify initial collapsed/expanded behavior.
+      - [x] **Context**: Navigate to folder/usecase and verify chat context is still correct.
+      - [x] **Streaming**: Send a message and verify streaming response behavior is unchanged.
+      - [x] **Toasts**: Trigger one success/error feedback path and verify toast style/placement unchanged in web app.
   - [ ] **UAT: Integrated App + Chrome Extension (close Lot 3, root workspace only)**
-    - [ ] Confirm both partial checklists are completed: `3B Chrome Extension parity` + `3B Web App non-regression`.
-    - [ ] Confirm no cross-regression between extension behavior and web app behavior in the same UAT cycle.
+    - [x] Confirm both partial checklists are completed: `3B Chrome Extension parity` + `3B Web App non-regression` (with one known gap: font parity only).
+    - [x] Confirm no cross-regression between extension behavior and web app behavior in the same UAT cycle.
+    - [ ] Close Lot 3 only after Lot 3C font parity is validated.
 
-- [ ] **Lot 4 — Local Chrome tools (service worker)**
+- [ ] **Lot 3C — Runtime parity hardening (font, side panel, host exclusion)**
+  - [ ] Define a single shared font token (e.g. `--chat-font-family`) used by both web app and extension widget.
+  - [ ] Apply the shared font token at ChatWidget root level to avoid host page font override in Shadow DOM.
+  - [ ] Replace extension in-page docked behavior with official Chrome Side Panel behavior for docked mode.
+  - [ ] Implement state handoff between floating bubble and side panel (active tab, draft, current session, open/close state).
+  - [ ] Add extension activation guard on Top AI Ideas app domains:
+    - [ ] `manifest.json` `exclude_matches` for localhost/prod app domains.
+    - [ ] Runtime hostname denylist fallback in `content.ts`.
+  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` + `make build-ext ENV=test`
+  - [ ] **Partial UAT Lot 3C (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [ ] Run `make build-ext`, reload unpacked extension.
+    - [ ] Validate font parity between web app widget and extension widget.
+    - [ ] Validate side panel mode keeps same component style/behavior as floating mode.
+    - [ ] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
+
+- [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
+  - [ ] Add extension runtime profiles: `UAT`, `PROD` (API base URL mandatory, app base URL, optional WS base URL).
+  - [ ] Add profile/config UI (popup or options page) with validation and persistence.
+  - [ ] Ensure both `UAT` and `PROD` profiles are API-connected (no disconnected mock-only flow).
+  - [ ] Add API connectivity test action (`/api/v1/health`) and visible status in extension UI.
+  - [ ] Wire ChatWidget API client to extension profile config with clear error states when config is invalid.
+  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+  - [ ] **Partial UAT Lot 4A (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [ ] Switch profile `UAT`/`PROD` and verify endpoint persistence.
+    - [ ] Validate connectivity status and chat send/streaming in both profiles.
+    - [ ] Validate failure mode when endpoint is invalid (clear user feedback, no silent failure).
+
+- [ ] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
+  - [ ] Design and implement a dedicated extension auth token flow (access token + renewal strategy).
+  - [ ] Ensure auth is started only from explicit extension user action (never passive bootstrap from content script).
+  - [ ] Prevent third-party-page WebAuthn side effects (no unexpected local-device permission prompts).
+  - [ ] Add secure token storage and logout/revoke path in extension context.
+  - [ ] Document compatibility path with future local/remote WS delegation.
+  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+  - [ ] **Partial UAT Lot 4B (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [ ] Validate extension login without unexpected local-network/WebAuthn prompts.
+    - [ ] Validate token renewal and expired-session recovery path.
+    - [ ] Validate logout/revoke and blocked access after logout.
+
+- [ ] **Lot 5 — Local Chrome tools (service worker)**
   - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
     - [ ] `tab_read_dom` (extract DOM text via `chrome.scripting.executeScript`)
     - [ ] `tab_screenshot` (capture via `chrome.tabs.captureVisibleTab`)
@@ -124,14 +165,14 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [ ] Wire ChatPanel to intercept local tool calls from SSE stream
   - [ ] Lot gate: tools execute correctly from the extension context
 
-- [ ] **Lot 5 — API evolution for local tools**
+- [ ] **Lot 6 — API evolution for local tools**
   - [ ] Add `localToolDefinitions` optional field to `POST /chat/messages` input
   - [ ] Merge local tool definitions with server tools in `chat-service.ts`
   - [ ] Add `POST /api/v1/chat/messages/:id/tool-results` endpoint
   - [ ] Implement generation resume after receiving local tool result
   - [ ] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test`
 
-- [ ] **Lot 6 — Integration & i18n**
+- [ ] **Lot 7 — Integration & i18n**
   - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read_dom` → extension executes → result sent to API → LLM continues
   - [ ] i18n initialization from `chrome.i18n.getUILanguage()`
   - [ ] Verify all UI modes: floating bubble, popup, side panel placeholder
