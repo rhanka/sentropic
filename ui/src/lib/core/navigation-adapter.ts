@@ -92,9 +92,16 @@ export function createExtensionNavigation(apiBaseUrl?: string): NavigationAdapte
                 absoluteUrl = `${baseOrigin}${url}`;
             }
 
-            // Prefer Chrome API when available, fallback to window.open
-            if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
-                void chrome.tabs.create({ url: absoluteUrl });
+            // Prefer Chrome API when available, fallback to window.open.
+            // Use globalThis access to avoid TS errors when DOM typings do not expose `chrome`.
+            type ChromeApi = {
+                tabs?: {
+                    create?: (createProperties: { url?: string }) => Promise<unknown>;
+                };
+            };
+            const chromeApi = (globalThis as typeof globalThis & { chrome?: ChromeApi }).chrome;
+            if (chromeApi?.tabs?.create) {
+                void chromeApi.tabs.create({ url: absoluteUrl });
             } else if (typeof window !== 'undefined') {
                 window.open(absoluteUrl, '_blank');
             }
