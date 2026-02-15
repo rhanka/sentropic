@@ -88,6 +88,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Keep same visual style/tokens as existing components (no custom inline style system for widget/panel)
     - [x] Keep same toasts behavior and placement as existing ChatWidget/ChatPanel flow
     - [x] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
+    - [x] Fix dynamic import mount contract: `chatwidget.js` now registers a global mount fallback and `content.ts` resolves `mount` from export/default/global.
     - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
     - [x] Ready for partial UAT Lot 3B on root workspace (`.`) with current branch state.
     - [ ] **Partial UAT Lot 3B — Chrome Extension parity (execute on root workspace `~/src/top-ai-ideas-fullstack`)**

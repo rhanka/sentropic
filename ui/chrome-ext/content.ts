@@ -32,8 +32,15 @@ function bootstrap() {
         try {
             const src = chrome.runtime.getURL('chatwidget.js');
             const module = await import(src);
-            if (module && module.mount) {
-                module.mount(mountPoint);
+            const mountFn =
+                (module as { mount?: ((target: Element) => void); default?: { mount?: (target: Element) => void } })
+                    ?.mount ??
+                (module as { default?: { mount?: (target: Element) => void } })?.default?.mount ??
+                (globalThis as typeof globalThis & { __topAiIdeasMountChatWidget?: (target: Element) => void })
+                    .__topAiIdeasMountChatWidget;
+
+            if (mountFn) {
+                mountFn(mountPoint);
                 console.log('ChatWidget mounted successfully.');
             } else {
                 console.error('ChatWidget module loaded but mount function not found.');
