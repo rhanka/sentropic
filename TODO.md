@@ -258,6 +258,9 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Claude
       - [ ] Mistral
 - [ ] Concevoir le plugin chrome
+  - [ ] SDLC
+    - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
+    - [ ] isoler correctement le chatwidget et ses stores pour permettre ce mode
   - [ ] UI
     - [ ] mode bulle + flottant
     - [ ] mode docker/side panel
