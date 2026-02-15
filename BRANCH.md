@@ -114,14 +114,15 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [ ] Close Lot 3 only after Lot 3C font parity is validated.
 
 - [ ] **Lot 3C — Runtime parity hardening (font, side panel, host exclusion)**
-  - [ ] Define a single shared font token (e.g. `--chat-font-family`) used by both web app and extension widget.
-  - [ ] Apply the shared font token at ChatWidget root level to avoid host page font override in Shadow DOM.
-  - [ ] Replace extension in-page docked behavior with official Chrome Side Panel behavior for docked mode.
-  - [ ] Implement state handoff between floating bubble and side panel (active tab, draft, current session, open/close state).
-  - [ ] Add extension activation guard on Top AI Ideas app domains:
-    - [ ] `manifest.json` `exclude_matches` for localhost/prod app domains.
-    - [ ] Runtime hostname denylist fallback in `content.ts`.
-  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` + `make build-ext ENV=test`
+  - [x] Define a single shared font token (e.g. `--chat-font-family`) used by both web app and extension widget.
+  - [x] Apply the shared font token at ChatWidget root level to avoid host page font override in Shadow DOM.
+  - [x] Replace extension in-page docked behavior with official Chrome Side Panel behavior for docked mode.
+  - [x] Implement state handoff between floating bubble and side panel (active tab, draft, current session, open/close state).
+  - [x] Add extension activation guard on Top AI Ideas app domains:
+    - [x] `manifest.json` `exclude_matches` for localhost/prod app domains.
+    - [x] Runtime hostname denylist fallback in `content.ts`.
+  - [x] Lot gate: `make typecheck-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make build-ext API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin`
+  - [x] Ready for partial UAT Lot 3C on root workspace (`.`).
   - [ ] **Partial UAT Lot 3C (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [ ] Run `make build-ext`, reload unpacked extension.
     - [ ] Validate font parity between web app widget and extension widget.
