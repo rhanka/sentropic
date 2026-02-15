@@ -33,10 +33,10 @@
         }
     ],
     "side_panel": {
-        "default_path": "sidepanel.html"
+        "default_path": "chrome-ext/sidepanel.html"
     },
     "action": {
-        "default_popup": "popup.html",
+        "default_popup": "chrome-ext/popup.html",
         "default_title": "Top AI Ideas Assistant"
     },
     "web_accessible_resources": [

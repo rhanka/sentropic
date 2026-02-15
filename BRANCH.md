@@ -57,13 +57,9 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Refactor `streamHub.ts`: accept injected `baseUrl` via `getApiBaseUrl()` fallback
   - [x] Verify non-regression: typecheck + lint gates pass (existing web app behavior preserved via fallbacks)
   - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed)
-  - [x] **UAT: Non-regression checklist (Web App)**
-    - [x] **Auth**: Logout and Login back in (verifies `session.ts` navigation adapter).
-    - [x] **Chat**: Open the global chat (floating widget).
-    - [x] **Context**: Navigate to a specific folder/usecase and verify the chat knows the context (verifies `ChatWidget` context provider).
-    - [x] **Streaming**: Send a message "Hello" and verify the response streams back (verifies `streamHub.ts` and `api.ts`).
+  - [x] **UAT planning update**: defer Web App non-regression UAT from Lot 2 to Lot 3 integrated UAT (plugin + app in the same cycle).
 
-- [x] **Lot 3 — Chrome extension skeleton**
+- [ ] **Lot 3 — Chrome extension skeleton + behavior parity**
   - [x] Create `ui/chrome-ext/manifest.json` (Manifest V3)
   - [x] Create `ui/chrome-ext/content.ts` (Shadow DOM bootstrap + ChatWidget mount)
   - [x] Create `ui/chrome-ext/background.ts` (service worker skeleton)
@@ -75,11 +71,34 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Add `package.json` scripts: `build:ext`, `dev:ext`
   - [x] Create extension icons (placeholder) (via copy script)
   - [x] Lot gate: `make build-ext ENV=test` succeeds
-  - [ ] **UAT: Chrome Extension (Run in `tmp/feat-chrome-plugin`)**
-    - [ ] **Build**: Run `make build-ext ENV=test`. Verification: Check for `✅ Extension built` message and files in `ui/chrome-ext/dist/`.
-    - [ ] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
-    - [ ] **Verify Overlay**: Open `https://example.com`. Verify the chat bubble appears in bottom-right.
-    - [ ] **Verify Open/Close**: Click bubble to open chat. Click close button to minimize. (Note: Auth may be missing in this isolated context, that is expected).
+  - [x] **Lot 3A — Extension loading/packaging (validated)**
+    - [x] Fix manifest popup/sidepanel paths to built files (`chrome-ext/popup.html`, `chrome-ext/sidepanel.html`)
+    - [x] Ensure `make build-ext` produces a directly loadable `ui/chrome-ext/dist` output
+    - [x] Add build checks in `make build-ext` for required files (`manifest.json`, `content.js`, popup/sidepanel html)
+    - [x] Add ownership normalization in `make build-ext` so unpacked load does not fail on file permissions
+    - [x] **Partial UAT Lot 3A (root workspace)**
+      - [x] **Build**: Run `make build-ext ENV=test`. Verification: `✅ Extension built` and files in `ui/chrome-ext/dist/`.
+      - [x] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
+      - [x] **Verify loadability**: Manifest is accepted by Chrome (no load blocker on manifest/content script).
+  - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4)**
+    - [ ] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
+    - [ ] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
+    - [ ] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
+    - [ ] Keep same visual style/tokens as existing components (no custom inline style system for widget/panel)
+    - [ ] Keep same toasts behavior and placement as existing ChatWidget/ChatPanel flow
+    - [ ] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
+    - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+    - [ ] **Partial UAT Lot 3B (root workspace, behavior parity)**
+      - [ ] **Bubble parity**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
+      - [ ] **Open parity**: Clicking bubble opens the same panel structure and actions as existing widget.
+      - [ ] **Close parity**: Closing/minimizing restores same collapsed behavior and button placement.
+      - [ ] **Position parity**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
+      - [ ] **Style parity**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system.
+      - [ ] **Behavior parity**: Send one message and verify streaming response behavior remains consistent.
+      - [ ] **No runtime errors**: No extension content-script error in Chrome extension page/console during open-close-send flow.
+  - [ ] **UAT: Integrated App + Chrome Extension (close Lot 3)**
+    - [ ] Confirm Web App non-regression checklist remains valid after Lot 3B implementation.
+    - [ ] Confirm Chrome Extension checklist (3A + 3B) is fully validated in the same cycle.
 
 - [ ] **Lot 4 — Local Chrome tools (service worker)**
   - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
