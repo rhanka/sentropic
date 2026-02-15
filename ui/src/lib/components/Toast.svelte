@@ -38,7 +38,7 @@
 
 </script>
 
-<div class="fixed top-4 right-4 z-50 space-y-2">
+<div class="toast-container fixed bottom-20 right-4 z-50 space-y-2 max-w-[calc(100vw-2rem)]">
   {#each $toasts as toast (toast.id)}
     {@const Icon = getIcon(toast.type)}
     <div
