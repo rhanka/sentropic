@@ -6,7 +6,6 @@
 import ChatWidget from '$lib/components/ChatWidget.svelte';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { init as initI18n, register } from 'svelte-i18n';
-import { get } from 'svelte/store';
 
 // Import locales
 import en from '../src/locales/en.json';
@@ -36,3 +35,9 @@ export function mount(target: Element) {
         }
     });
 }
+
+// Keep a global fallback to tolerate bundlers that drop entry exports.
+const globalMountKey = '__topAiIdeasMountChatWidget';
+(globalThis as typeof globalThis & { [key: string]: unknown })[globalMountKey] = mount;
+
+export default { mount };
