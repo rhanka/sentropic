@@ -1,5 +1,5 @@
 import { writable, get, derived } from 'svelte/store';
-import { browser } from '$app/environment';
+const browser = typeof window !== 'undefined';
 import { ApiError, apiGet } from '$lib/utils/api';
 import { session } from '$lib/stores/session';
 

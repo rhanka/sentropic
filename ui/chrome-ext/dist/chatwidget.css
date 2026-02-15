@@ -1,0 +1,320 @@
+
+	.ProseMirror-focused {
+        border: none!important;
+        outline: none!important;
+    }
+
+    /* Placeholder (tiptap/extension-placeholder) */
+    .markdown-wrapper .ProseMirror p.is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        float: left;
+        color: #94a3b8; /* text-slate-400 */
+        pointer-events: none;
+        height: 0;
+    }
+
+    /* Masquer le paragraphe vide que TipTap ajoute après une liste
+       IMPORTANT: ne pas masquer l'unique paragraphe vide, sinon le placeholder ne peut pas s'afficher. */
+    .markdown-wrapper .ProseMirror > p:last-child:empty:not(:first-child),
+    .markdown-wrapper .ProseMirror > p:last-child:not(:first-child):has(> br:only-child) {
+        display: none;
+    }
+
+    .markdown-wrapper .ProseMirror > *:last-child,
+    .markdown-wrapper .ProseMirror > *:nth-last-child(2):is(p, ul, ol),
+    .markdown-wrapper .ProseMirror > ul:last-child,
+    .markdown-wrapper .ProseMirror > ol:last-child,
+    .markdown-wrapper .ProseMirror > ul:nth-last-child(2),
+    .markdown-wrapper .ProseMirror > ol:nth-last-child(2),
+    .markdown-wrapper .ProseMirror > ul:last-child li:last-child,
+    .markdown-wrapper .ProseMirror > ol:last-child li:last-child {
+        margin-bottom: 0 !important;
+    }
+
+    .markdown-wrapper .ProseMirror > ul:nth-last-child(2) li:last-child,
+    .markdown-wrapper .ProseMirror > ol:nth-last-child(2) li:last-child {
+        margin-bottom: 0 !important;
+    }
+
+    /* Supprimé: padding-bottom: 0.2rem sur .tiptap > ul > li */
+    /* Maintenant géré par les classes Tailwind (space-y-2 + mb-1) */
+
+  .editable-container.svelte-10rjlnc {
+    display: inline-flex;
+    flex-direction: column;
+    margin-right: 0;
+    vertical-align: bottom;
+  }
+
+  .editable-container.full-width.svelte-10rjlnc {
+    display: flex;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .editable-container.svelte-10rjlnc label:where(.svelte-10rjlnc) {
+    display: block;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* font-medium */
+    color: #334155; /* text-slate-700 */
+    margin-bottom: 0.25rem;
+  }
+
+  .input-wrapper.svelte-10rjlnc {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .input-wrapper.full-width.svelte-10rjlnc {
+    display: block;
+    width: 100%;
+  }
+
+  .markdown-wrapper.svelte-10rjlnc {
+    width: 100%;
+    /* Supprimé: padding-left: 1rem (simplification) */
+    /* Les listes ont maintenant padding-left: 1.5rem via classes Tailwind */
+  }
+
+  /* Supprimé: marges réduites et compensations */
+  /* Maintenant géré par les classes Tailwind et prose */
+
+  /* Styles globaux pour les liens de références dans TipTap */
+  .markdown-wrapper a[href^='#ref-'] {
+    color: #2563eb !important; /* text-blue-600 */
+    text-decoration: none !important;
+  }
+
+  .markdown-wrapper a[href^='#ref-']:hover {
+    color: #1e40af !important; /* text-blue-800 */
+    text-decoration: underline !important;
+  }
+
+  .markdown-wrapper a[href^='#ref-'].reference-link {
+    color: #2563eb !important;
+    cursor: pointer !important;
+  }
+  textarea.svelte-10rjlnc {
+    border: 1px;
+    margin-left: 1rem;
+  }
+
+  textarea.svelte-10rjlnc:focus {
+    border: 1px solid #ccc;
+    outline: none;
+  }
+
+  .size-measure.svelte-10rjlnc {
+    font-size: inherit;
+    font-weight: inherit;
+    font-family: inherit;
+    letter-spacing: inherit;
+    white-space: pre;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .editable-input.svelte-10rjlnc {
+    border: none;
+    border-bottom: 1px solid transparent;
+    outline: none;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
+    padding: 0;
+    background: none;
+    transition:
+      border-color 0.3s,
+      background-color 0.3s;
+    color: inherit;
+    cursor: text;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .editable-input.svelte-10rjlnc:hover {
+    border-bottom: 1px solid #ced4da;
+  }
+
+  .editable-input.svelte-10rjlnc:focus {
+    border-bottom: 1px solid #495057;
+    background-color: #f8f9fa;
+  }
+
+  .editable-input.has-unsaved-changes.svelte-10rjlnc {
+    border-bottom: 1px solid #ffc107;
+  }
+
+  .editable-input.is-saving.svelte-10rjlnc {
+    border-bottom: 1px solid #007bff;
+  }
+
+  .editable-input.svelte-10rjlnc:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Styles pour les textareas */
+  .editable-textarea.svelte-10rjlnc {
+    border: none;
+    border-bottom: 1px solid transparent;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    outline: none;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
+    padding: 0;
+    padding-bottom: 0;
+    margin: 0;
+    margin-bottom: 0;
+    background: none;
+    transition:
+      border-bottom-color 0.3s,
+      background-color 0.3s;
+    color: inherit;
+    cursor: text;
+    resize: none;
+    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .editable-textarea.svelte-10rjlnc:focus-visible {
+    border: none;
+  }
+
+  .editable-textarea.svelte-10rjlnc:hover {
+    border-bottom: 1px solid #ced4da;
+    background-color: transparent;
+  }
+
+  .editable-textarea.svelte-10rjlnc:focus {
+    border-bottom: 1px solid #495057;
+    background-color: #f8f9fa;
+  }
+
+  .editable-textarea.has-unsaved-changes.svelte-10rjlnc {
+    border-bottom: 1px solid #ffc107;
+  }
+
+  .editable-textarea.is-saving.svelte-10rjlnc {
+    border-bottom: 1px solid #007bff;
+  }
+
+  .editable-textarea.svelte-10rjlnc:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* Styles pour les inputs markdown */
+  .markdown-input-wrapper.svelte-10rjlnc {
+    position: relative;
+    padding-left: 0.5rem;
+    margin-left: -0.5rem;
+    border-left: 3px solid transparent;
+    transition:
+      border-left-color 0.1s,
+      background-color 0.3s;
+  }
+
+  .markdown-input-wrapper.svelte-10rjlnc:hover {
+    border-left-color: #ced4da;
+    background-color: #f8f9fa;
+  }
+
+  .markdown-input-wrapper.has-unsaved-changes.svelte-10rjlnc {
+    border-left-color: #ffc107 !important;
+  }
+
+  /* S'assurer que la bordure orange reste visible même quand TipTap a le focus */
+  /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
+  /* svelte-ignore a11y-no-unused-selector */
+  
+      .markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused)
+     {
+    border-left-color: #ffc107 !important;
+  }
+
+  .markdown-input-wrapper.has-unsaved-changes.svelte-10rjlnc:hover {
+    border-left-color: #ffc107 !important;
+    background-color: #f8f9fa;
+  }
+
+  /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
+  /* svelte-ignore a11y-no-unused-selector */
+  
+      .markdown-input-wrapper.has-unsaved-changes:hover:has(
+          .ProseMirror-focused
+        )
+     {
+    border-left-color: #ffc107 !important;
+    background-color: #f8f9fa;
+  }
+
+  .saving-indicator-markdown.svelte-10rjlnc {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.25rem;
+    color: #007bff;
+    font-size: 0.875rem;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 10;
+    animation: svelte-10rjlnc-spin 1s linear infinite;
+  }
+
+  @keyframes svelte-10rjlnc-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .editable-input.svelte-10rjlnc::-moz-placeholder {
+    color: #ced4da;
+  }
+
+  .editable-input.svelte-10rjlnc::placeholder {
+    color: #ced4da;
+  }
+
+  .unsaved-indicator.svelte-10rjlnc {
+    position: absolute;
+    right: -15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ffc107;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .saving-indicator.svelte-10rjlnc {
+    position: absolute;
+    right: -15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #007bff;
+    font-size: 12px;
+    animation: svelte-10rjlnc-spin 1s linear infinite;
+  }
+
+  @keyframes svelte-10rjlnc-spin {
+    from {
+      transform: translateY(-50%) rotate(0deg);
+    }
+    to {
+      transform: translateY(-50%) rotate(360deg);
+    }
+  }
