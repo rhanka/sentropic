@@ -142,6 +142,8 @@ build-ui: ## Build the SvelteKit UI (static)
 
 .PHONY: build-ext
 build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
+	@echo "📦 Syncing UI dependencies in container..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
 	@echo "🧩 Building Chrome Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run build:ext
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/chrome-ext/dist'
