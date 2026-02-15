@@ -90,17 +90,25 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
     - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
     - [x] Ready for partial UAT Lot 3B on root workspace (`.`) with current branch state.
-    - [ ] **Partial UAT Lot 3B (root workspace, behavior parity)**
-      - [ ] **Bubble parity**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
-      - [ ] **Open parity**: Clicking bubble opens the same panel structure and actions as existing widget.
-      - [ ] **Close parity**: Closing/minimizing restores same collapsed behavior and button placement.
-      - [ ] **Position parity**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
-      - [ ] **Style parity**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system.
-      - [ ] **Behavior parity**: Send one message and verify streaming response behavior remains consistent.
-      - [ ] **No runtime errors**: No extension content-script error in Chrome extension page/console during open-close-send flow.
-  - [ ] **UAT: Integrated App + Chrome Extension (close Lot 3)**
-    - [ ] Confirm Web App non-regression checklist remains valid after Lot 3B implementation.
-    - [ ] Confirm Chrome Extension checklist (3A + 3B) is fully validated in the same cycle.
+    - [ ] **Partial UAT Lot 3B — Chrome Extension parity (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
+      - [ ] **Prepare extension build**: Run `make build-ext ENV=test` from root workspace (`.`).
+      - [ ] **Reload extension**: In `chrome://extensions`, click "Reload" on unpacked extension (or load `ui/chrome-ext/dist` again if needed).
+      - [ ] **Bubble parity (Chrome page)**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
+      - [ ] **Open parity (Chrome page)**: Clicking bubble opens the same panel structure/actions as existing widget.
+      - [ ] **Close parity (Chrome page)**: Closing/minimizing restores same collapsed behavior and button placement.
+      - [ ] **Position parity (Chrome page)**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
+      - [ ] **Style parity (Chrome page)**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system.
+      - [ ] **Behavior parity (Chrome page)**: Send one message and verify streaming response behavior remains consistent.
+      - [ ] **No runtime errors (Chrome page)**: No extension content-script error in extension page/console during open-close-send flow.
+    - [ ] **Partial UAT Lot 3B — Web App non-regression (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
+      - [ ] **Auth**: Logout and login back in (session navigation behavior unchanged).
+      - [ ] **Chat open**: Open the global chat in web app and verify initial collapsed/expanded behavior.
+      - [ ] **Context**: Navigate to folder/usecase and verify chat context is still correct.
+      - [ ] **Streaming**: Send a message and verify streaming response behavior is unchanged.
+      - [ ] **Toasts**: Trigger one success/error feedback path and verify toast style/placement unchanged in web app.
+  - [ ] **UAT: Integrated App + Chrome Extension (close Lot 3, root workspace only)**
+    - [ ] Confirm both partial checklists are completed: `3B Chrome Extension parity` + `3B Web App non-regression`.
+    - [ ] Confirm no cross-regression between extension behavior and web app behavior in the same UAT cycle.
 
 - [ ] **Lot 4 — Local Chrome tools (service worker)**
   - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
