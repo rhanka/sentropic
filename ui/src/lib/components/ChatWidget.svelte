@@ -35,6 +35,7 @@
     EyeOff,
   } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
+  import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -44,6 +45,7 @@
   let activeTab: Tab = 'chat';
   let isVisible = false;
   let hasOpenedOnce = false;
+  let chatDraft = '';
 
   // Header Chat (sessions) piloté par ChatPanel via bindings
   type ChatSession = {
@@ -68,6 +70,8 @@
   // Core abstraction: allows Chrome extension to inject its own context provider.
   // Defaults to SvelteKit's page store for backward compatibility.
   export let contextProvider: ContextProvider;
+  export let hostMode: 'overlay' | 'sidepanel' = 'overlay';
+  export let initialState: ChatWidgetHandoffState | null = null;
   $: contextStore = contextProvider.context;
   $: isBrowser = contextProvider.isBrowser;
 
@@ -130,10 +134,22 @@
 
   type DisplayMode = 'floating' | 'docked';
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
+  const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
+  const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
   let displayMode: DisplayMode = 'floating';
+  let isSidePanelHost = false;
+  let isExtensionOverlayHost = false;
+  const isExtensionRuntime = () => {
+    const ext = globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string } };
+    };
+    return Boolean(ext.chrome?.runtime?.id);
+  };
+  $: isSidePanelHost = hostMode === 'sidepanel';
+  $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
   $: if (isBrowser) {
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
-    if (saved === 'docked') displayMode = 'docked';
+    if (saved === 'docked' && !isExtensionOverlayHost) displayMode = 'docked';
   }
   let dockWidthCss = '0px';
 
@@ -168,7 +184,13 @@
     setBodyScrollLocked(Boolean(isVisible && isMobile));
   };
 
-  $: effectiveMode = isMobileViewport ? 'docked' : displayMode;
+  $: effectiveMode = isSidePanelHost
+    ? 'docked'
+    : isExtensionOverlayHost
+      ? 'floating'
+      : isMobileViewport
+        ? 'docked'
+        : displayMode;
   $: isDocked = effectiveMode === 'docked';
 
   const computeDockWidthCss = (): string => {
@@ -188,7 +210,13 @@
   const publishLayout = () => {
     // Important: compute from current state, do not rely on reactive $: order.
     // Otherwise switching modes can publish the previous value and invert the padding logic.
-    const modeNow: DisplayMode = isMobileViewport ? 'docked' : displayMode;
+    const modeNow: DisplayMode = isSidePanelHost
+      ? 'docked'
+      : isExtensionOverlayHost
+        ? 'floating'
+        : isMobileViewport
+          ? 'docked'
+          : displayMode;
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible && modeNow === 'docked',
@@ -202,9 +230,88 @@
     publishLayout();
   };
 
+  const buildHandoffState = (
+    source: 'content' | 'sidepanel',
+  ): ChatWidgetHandoffState => ({
+    activeTab,
+    chatSessionId,
+    draft: chatDraft,
+    commentThreadId,
+    commentSectionKey,
+    displayMode: isSidePanelHost ? 'docked' : displayMode,
+    isOpen: isVisible,
+    updatedAt: Date.now(),
+    source,
+  });
+
+  const applyInitialState = (state: ChatWidgetHandoffState | null) => {
+    if (!state) return;
+    if (
+      state.activeTab === 'chat' ||
+      state.activeTab === 'queue' ||
+      state.activeTab === 'comments'
+    ) {
+      activeTab = state.activeTab;
+    }
+    chatSessionId = state.chatSessionId ?? null;
+    commentThreadId = state.commentThreadId ?? null;
+    commentSectionKey = state.commentSectionKey ?? null;
+    chatDraft = state.draft ?? '';
+  };
+
+  let lastHandoffStateFingerprint = '';
+  const publishHandoffStateIfChanged = () => {
+    if (!isBrowser || !isBrowserReady) return;
+    const source = isSidePanelHost ? 'sidepanel' : 'content';
+    const payload = buildHandoffState(source);
+    const fingerprint = JSON.stringify({
+      activeTab: payload.activeTab,
+      chatSessionId: payload.chatSessionId,
+      draft: payload.draft,
+      commentThreadId: payload.commentThreadId,
+      commentSectionKey: payload.commentSectionKey,
+      displayMode: payload.displayMode,
+      isOpen: payload.isOpen,
+      source: payload.source,
+    });
+    if (fingerprint === lastHandoffStateFingerprint) return;
+    lastHandoffStateFingerprint = fingerprint;
+    window.dispatchEvent(
+      new CustomEvent<ChatWidgetHandoffState>(HANDOFF_EVENT, {
+        detail: payload,
+      }),
+    );
+  };
+
+  const requestOpenSidePanel = () => {
+    if (!isBrowser || !isExtensionOverlayHost) return;
+    publishHandoffStateIfChanged();
+    window.dispatchEvent(new CustomEvent(OPEN_SIDEPANEL_EVENT));
+  };
+
   const toggleDisplayMode = () => {
+    if (isExtensionOverlayHost) {
+      requestOpenSidePanel();
+      close();
+      return;
+    }
+    if (isSidePanelHost) {
+      publishHandoffStateIfChanged();
+      window.close();
+      return;
+    }
     setDisplayMode(displayMode === 'docked' ? 'floating' : 'docked');
   };
+
+  $: if (isBrowserReady) {
+    activeTab;
+    chatSessionId;
+    chatDraft;
+    commentThreadId;
+    commentSectionKey;
+    isVisible;
+    publishHandoffStateIfChanged();
+  }
 
   const getFocusableElements = (container: HTMLElement): HTMLElement[] => {
     const selectors = [
@@ -514,6 +621,15 @@
 
   onMount(async () => {
     isBrowserReady = true;
+    applyInitialState(initialState);
+    if (isExtensionOverlayHost) {
+      displayMode = 'floating';
+    }
+    if (isSidePanelHost) {
+      displayMode = 'docked';
+      isVisible = true;
+      hasOpenedOnce = true;
+    }
     if (typeof window !== 'undefined' && 'matchMedia' in window) {
       mobileMql = window.matchMedia('(max-width: 639px)');
       isMobileViewport = mobileMql.matches;
@@ -699,6 +815,11 @@
   };
 
   const close = () => {
+    if (isSidePanelHost) {
+      publishHandoffStateIfChanged();
+      window.close();
+      return;
+    }
     isVisible = false;
     syncScrollLock();
     publishLayout();
@@ -770,52 +891,59 @@
   });
 </script>
 
-<div class="queue-monitor fixed bottom-4 right-4 z-50">
+<div
+  class={isSidePanelHost
+    ? 'queue-monitor h-full'
+    : 'queue-monitor fixed bottom-4 right-4 z-50'}
+  style="font-family: var(--chat-font-family, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);"
+>
   <!-- Bulle unique (commune Chat/Queue) -->
-  <button
-    class="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
-    class:opacity-0={isVisible}
-    class:pointer-events-none={isVisible}
-    on:click={toggle}
-    on:keydown={onBubbleKeyDown}
-    title={$_('chat.widget.bubbleLabel')}
-    aria-label={$_('chat.widget.bubbleLabel')}
-    aria-haspopup="dialog"
-    aria-expanded={isVisible}
-    aria-controls="chat-widget-dialog"
-    bind:this={bubbleButtonEl}
-    type="button"
-  >
-    <!-- Icône principale: chat (toujours visible) -->
-    <MessageCircle class="w-6 h-6" aria-hidden="true" />
+  {#if !isSidePanelHost}
+    <button
+      class="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
+      class:opacity-0={isVisible}
+      class:pointer-events-none={isVisible}
+      on:click={toggle}
+      on:keydown={onBubbleKeyDown}
+      title={$_('chat.widget.bubbleLabel')}
+      aria-label={$_('chat.widget.bubbleLabel')}
+      aria-haspopup="dialog"
+      aria-expanded={isVisible}
+      aria-controls="chat-widget-dialog"
+      bind:this={bubbleButtonEl}
+      type="button"
+    >
+      <!-- Icône principale: chat (toujours visible) -->
+      <MessageCircle class="w-6 h-6" aria-hidden="true" />
 
-    <!-- Badge: loading (petit spinner) -->
-    {#if $queueStore.isLoading}
-      <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
-        <Loader2 class="w-3 h-3 animate-spin" />
-      </span>
-    {:else if hasActiveJobs}
-      <!-- Badge: jobs en cours => montre -->
-      <span
-        class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
-        title={$_('chat.queue.badge.active', {
-          values: { count: activeJobsCount },
-        })}
-      >
-        <Clock class="w-3 h-3" aria-hidden="true" />
-      </span>
-    {:else if hasFailedJobs}
-      <!-- Badge: au moins un job en échec -->
-      <span
-        class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
-        title={$_('chat.queue.badge.failed', {
-          values: { count: failedJobsCount },
-        })}
-      >
-        <X class="w-3 h-3" aria-hidden="true" />
-      </span>
-    {/if}
-  </button>
+      <!-- Badge: loading (petit spinner) -->
+      {#if $queueStore.isLoading}
+        <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
+          <Loader2 class="w-3 h-3 animate-spin" />
+        </span>
+      {:else if hasActiveJobs}
+        <!-- Badge: jobs en cours => montre -->
+        <span
+          class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
+          title={$_('chat.queue.badge.active', {
+            values: { count: activeJobsCount },
+          })}
+        >
+          <Clock class="w-3 h-3" aria-hidden="true" />
+        </span>
+      {:else if hasFailedJobs}
+        <!-- Badge: au moins un job en échec -->
+        <span
+          class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
+          title={$_('chat.queue.badge.failed', {
+            values: { count: failedJobsCount },
+          })}
+        >
+          <X class="w-3 h-3" aria-hidden="true" />
+        </span>
+      {/if}
+    </button>
+  {/if}
 
   {#if hasOpenedOnce}
     {#if !isDocked}
@@ -844,10 +972,12 @@
       tabindex="-1"
       bind:this={dialogEl}
       on:keydown={onDialogKeyDown}
-      class={isDocked
+      class={isSidePanelHost
+        ? 'h-full w-full bg-white overflow-hidden flex flex-col'
+        : isDocked
         ? 'fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 overflow-hidden flex flex-col'
         : 'fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
-      style={isDocked ? `width: ${dockWidthCss};` : ''}
+      style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
     >
       <!-- Header commun (tabs) -->
@@ -1142,24 +1272,26 @@
                 </button>
               {/if}
             {/if}
-            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-            <button
-              class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-              on:click={toggleDisplayMode}
-              title={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              aria-label={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              type="button"
-            >
-              {#if isDocked}
-                <Minimize2 class="w-4 h-4" aria-hidden="true" />
-              {:else}
-                <Maximize2 class="w-4 h-4" aria-hidden="true" />
-              {/if}
-            </button>
+            {#if !isSidePanelHost}
+              <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
+              <button
+                class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={toggleDisplayMode}
+                title={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                aria-label={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                type="button"
+              >
+                {#if isDocked}
+                  <Minimize2 class="w-4 h-4" aria-hidden="true" />
+                {:else}
+                  <Maximize2 class="w-4 h-4" aria-hidden="true" />
+                {/if}
+              </button>
+            {/if}
             <button
               class="text-gray-400 hover:text-gray-600"
               on:click={close}
@@ -1208,6 +1340,7 @@
             bind:this={chatPanelRef}
             bind:sessions={chatSessions}
             bind:sessionId={chatSessionId}
+            bind:draft={chatDraft}
             bind:loadingSessions={chatLoadingSessions}
             {contextStore}
           />

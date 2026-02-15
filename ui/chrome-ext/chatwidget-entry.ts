@@ -5,6 +5,7 @@
 
 import '../src/app.css';
 import ChatWidget from '$lib/components/ChatWidget.svelte';
+import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
@@ -23,10 +24,15 @@ initI18n({
     initialLocale: browserLocale === 'en' ? 'en' : 'fr'
 });
 
+export type ChatWidgetMountOptions = {
+    hostMode?: 'overlay' | 'sidepanel';
+    initialState?: ChatWidgetHandoffState | null;
+};
+
 /**
  * Mounts the ChatWidget into the target element.
  */
-export function mount(target: Element) {
+export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
     // Use the extension context provider
     const contextProvider = createExtensionContextProvider();
 
@@ -34,6 +40,8 @@ export function mount(target: Element) {
         target: target as HTMLElement,
         props: {
             contextProvider,
+            hostMode: options.hostMode ?? 'overlay',
+            initialState: options.initialState ?? null,
         },
     });
 }
