@@ -3,6 +3,7 @@
  * This file is bundled as `chatwidget.js`.
  */
 
+import '../src/app.css';
 import ChatWidget from '$lib/components/ChatWidget.svelte';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { init as initI18n, register } from 'svelte-i18n';
