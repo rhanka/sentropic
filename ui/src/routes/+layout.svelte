@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
+  import { browser } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
   import { get } from 'svelte/store';
   import '../app.css';
@@ -9,17 +10,29 @@
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
+  import { createSvelteKitContextProvider } from '$lib/core/context-provider';
+
+  const contextProvider = createSvelteKitContextProvider(page, browser);
   import '$lib/i18n';
   import { _ } from 'svelte-i18n';
   import { initializeSession, session } from '$lib/stores/session';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
-  import { organizationsStore, currentOrganizationId } from '$lib/stores/organizations';
+  import {
+    organizationsStore,
+    currentOrganizationId,
+  } from '$lib/stores/organizations';
   import { foldersStore, currentFolderId } from '$lib/stores/folders';
   import { useCasesStore } from '$lib/stores/useCases';
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
-  import { hiddenWorkspaceLock, noWorkspaceLock, workspaceScopeHydrated, loadUserWorkspaces, workspaceScope } from '$lib/stores/workspaceScope';
+  import {
+    hiddenWorkspaceLock,
+    noWorkspaceLock,
+    workspaceScopeHydrated,
+    loadUserWorkspaces,
+    workspaceScope,
+  } from '$lib/stores/workspaceScope';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
 
@@ -31,7 +44,7 @@
     '/',
     '/auth/login',
     '/auth/register',
-    '/auth/magic-link'
+    '/auth/magic-link',
   ];
 
   // Routes protégées (nécessitent une authentification)
@@ -45,7 +58,7 @@
     '/dashboard',
     '/dashboard-tmp',
     '/settings',
-    '/auth/devices'
+    '/auth/devices',
   ];
 
   $: hideHeader = AUTH_ROUTES.some((route) => {
@@ -59,14 +72,16 @@
     // These routes are all protected
     if (
       path.startsWith('/organizations/') ||
-      path.startsWith('/folders/') || 
+      path.startsWith('/folders/') ||
       path.startsWith('/folder/') ||
       path.startsWith('/usecase/')
     ) {
       return true;
     }
     // Vérifier les routes exactes protégées
-    return PROTECTED_ROUTES.some(route => path === route || path.startsWith(`${route}/`));
+    return PROTECTED_ROUTES.some(
+      (route) => path === route || path.startsWith(`${route}/`),
+    );
   }
 
   // Vérifier si une route est publique
@@ -76,7 +91,9 @@
       return true;
     }
     // Vérifier les routes exactes publiques
-    return PUBLIC_ROUTES.some(route => path === route || path.startsWith(`${route}/`));
+    return PUBLIC_ROUTES.some(
+      (route) => path === route || path.startsWith(`${route}/`),
+    );
   }
 
   // Déterminer si on peut afficher le contenu (pour éviter le flash avant redirection)
@@ -85,12 +102,13 @@
     const path = $page.url.pathname;
     const publicRoute = isPublicRoute(path);
     const protectedRoute = isProtectedRoute(path);
-    
+
     // On peut afficher si :
     // - Route publique : toujours afficher (pas besoin d'attendre la session)
     // - Route protégée : attendre que la session soit chargée ET que l'utilisateur soit authentifié
     // - Route non trouvée (404) : toujours afficher
-    canShowContent = publicRoute || (!$session.loading && protectedRoute && !!$session.user);
+    canShowContent =
+      publicRoute || (!$session.loading && protectedRoute && !!$session.user);
   }
 
   // État du spinner avec délais pour éviter les blinks
@@ -102,15 +120,21 @@
   let lockBodyScrollForDock = false;
 
   $: chatDockPaddingRight =
-    $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss !== '100vw'
+    $chatWidgetLayout.mode === 'docked' &&
+    $chatWidgetLayout.isOpen &&
+    $chatWidgetLayout.dockWidthCss !== '100vw'
       ? $chatWidgetLayout.dockWidthCss
       : '0px';
 
   // Docked layout: keep the main page scrollbar on the LEFT pane (before the docked chat),
   // not at the far right of the viewport.
   $: lockBodyScrollForDock =
-    $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss !== '100vw';
-  $: chatDockLeftWidth = lockBodyScrollForDock ? `calc(100vw - ${$chatWidgetLayout.dockWidthCss})` : '100%';
+    $chatWidgetLayout.mode === 'docked' &&
+    $chatWidgetLayout.isOpen &&
+    $chatWidgetLayout.dockWidthCss !== '100vw';
+  $: chatDockLeftWidth = lockBodyScrollForDock
+    ? `calc(100vw - ${$chatWidgetLayout.dockWidthCss})`
+    : '100%';
 
   // Gérer l'affichage du spinner avec délai de 0.5s
   $: {
@@ -202,7 +226,7 @@
     const path = $page.url.pathname;
     const publicRoute = isPublicRoute(path);
     const protectedRoute = isProtectedRoute(path);
-    
+
     // Rediriger vers login uniquement si :
     // - C'est une route protégée
     // - L'utilisateur n'est pas authentifié
@@ -264,10 +288,10 @@
         if (unsavedChangesStore.hasUnsavedChanges()) {
           void unsavedChangesStore.saveAll().then((ok) => {
             if (!ok) {
-                  addToast({
-                    type: 'warning',
-                    message: get(_)('workspace.hiddenAutosaveWarning'),
-                  });
+              addToast({
+                type: 'warning',
+                message: get(_)('workspace.hiddenAutosaveWarning'),
+              });
             }
           });
         }
@@ -277,7 +301,12 @@
       }
     });
   });
-  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $noWorkspaceLock) {
+  $: if (
+    !$session.loading &&
+    $session.user &&
+    $workspaceScopeHydrated &&
+    $noWorkspaceLock
+  ) {
     const path = $page.url.pathname;
     const isAllowed =
       path === '/settings' ||
@@ -293,7 +322,12 @@
     lastNoWorkspaceRedirectPath = null;
   }
 
-  $: if (!$session.loading && $session.user && $workspaceScopeHydrated && $hiddenWorkspaceLock) {
+  $: if (
+    !$session.loading &&
+    $session.user &&
+    $workspaceScopeHydrated &&
+    $hiddenWorkspaceLock
+  ) {
     const path = $page.url.pathname;
     const isAllowed =
       path === '/settings' ||
@@ -329,7 +363,9 @@
         <!-- Show a loader while we validate the session -->
         <div class="flex items-center justify-center min-h-[60vh]">
           <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+            <div
+              class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"
+            ></div>
             <p class="text-sm text-slate-600">{$_('common.sessionCheck')}</p>
           </div>
         </div>
@@ -341,6 +377,6 @@
     <NavigationGuard />
   </div>
   {#if $session.user}
-    <ChatWidget />
+    <ChatWidget {contextProvider} />
   {/if}
 </div>
