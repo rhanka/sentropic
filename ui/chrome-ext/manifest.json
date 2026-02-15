@@ -42,7 +42,9 @@
     "web_accessible_resources": [
         {
             "resources": [
+                "chatwidget.js",
                 "chatwidget.css",
+                "chunks/*",
                 "assets/*"
             ],
             "matches": [
