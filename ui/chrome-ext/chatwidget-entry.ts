@@ -6,6 +6,7 @@
 import ChatWidget from '$lib/components/ChatWidget.svelte';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { init as initI18n, register } from 'svelte-i18n';
+import { mount as mountSvelte } from 'svelte';
 
 // Import locales
 import en from '../src/locales/en.json';
@@ -28,11 +29,11 @@ export function mount(target: Element) {
     // Use the extension context provider
     const contextProvider = createExtensionContextProvider();
 
-    new ChatWidget({
-        target,
+    mountSvelte(ChatWidget, {
+        target: target as HTMLElement,
         props: {
-            contextProvider
-        }
+            contextProvider,
+        },
     });
 }
 
