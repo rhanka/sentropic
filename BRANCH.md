@@ -76,18 +76,19 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Ensure `make build-ext` produces a directly loadable `ui/chrome-ext/dist` output
     - [x] Add build checks in `make build-ext` for required files (`manifest.json`, `content.js`, popup/sidepanel html)
     - [x] Add ownership normalization in `make build-ext` so unpacked load does not fail on file permissions
+    - [x] Ignore extension build artifacts in Git (`ui/chrome-ext/dist/`) and stop tracking `dist` files
     - [x] **Partial UAT Lot 3A (root workspace)**
       - [x] **Build**: Run `make build-ext ENV=test`. Verification: `✅ Extension built` and files in `ui/chrome-ext/dist/`.
       - [x] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
       - [x] **Verify loadability**: Manifest is accepted by Chrome (no load blocker on manifest/content script).
   - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4)**
-    - [ ] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
-    - [ ] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
+    - [x] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
+    - [x] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
     - [ ] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
     - [ ] Keep same visual style/tokens as existing components (no custom inline style system for widget/panel)
     - [ ] Keep same toasts behavior and placement as existing ChatWidget/ChatPanel flow
     - [ ] Preserve context + streaming behavior through existing stores/adapters (no UX regression introduced by extension mount)
-    - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+    - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
     - [ ] **Partial UAT Lot 3B (root workspace, behavior parity)**
       - [ ] **Bubble parity**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
       - [ ] **Open parity**: Clicking bubble opens the same panel structure and actions as existing widget.

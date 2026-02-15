@@ -6,6 +6,7 @@
 ui/build/
 ui/.svelte-kit/
 ui/dist/
+ui/chrome-ext/dist/
 api/dist/
 api/.tsbuildinfo
 api/templates/.~lock*
