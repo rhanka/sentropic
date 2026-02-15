@@ -211,6 +211,7 @@
   export let sessions: ChatSession[] = [];
   export let contextStore: Readable<AppContext>;
   export let sessionId: string | null = null;
+  export let draft = '';
   export let loadingSessions = false;
   export let mode: 'ai' | 'comments' = 'ai';
   export let commentContextType: CommentContextType | null = null;
@@ -415,7 +416,7 @@
   let sending = false;
   let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
-  let input = '';
+  let input = draft;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
@@ -506,6 +507,20 @@
   let streamDetailsLoading = false;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
+
+  let lastDraftApplied = draft;
+  $: if (draft !== lastDraftApplied && draft !== input) {
+    input = draft;
+    lastDraftApplied = draft;
+  }
+  const syncDraftFromInput = () => {
+    if (draft === input) return;
+    draft = input;
+    lastDraftApplied = input;
+  };
+  $: if (mode === 'ai') {
+    syncDraftFromInput();
+  }
 
   /**
    * Détecte le contexte depuis la route actuelle
