@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '$lib/config';
+import { getApiBaseUrl } from '$lib/core/api-client';
 import { isAuthenticated } from '$lib/stores/session';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
@@ -288,7 +289,8 @@ class StreamHub {
     // `API_BASE_URL` can be relative in production (e.g. `/api/v1` when the UI is served by Nginx
     // and proxies `/api/v1/*` to the API). `new URL('/api/v1/...')` throws in browsers unless a base is provided.
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
-    const urlObj = new URL(`${API_BASE_URL}/streams/sse`, window.location.origin);
+    const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
+    const urlObj = new URL(`${baseUrl}/streams/sse`, window.location.origin);
     const scoped = getScopedWorkspaceIdForUser();
     if (scoped) urlObj.searchParams.set('workspace_id', scoped);
     const url = urlObj.toString();
