@@ -63,19 +63,23 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] **Context**: Navigate to a specific folder/usecase and verify the chat knows the context (verifies `ChatWidget` context provider).
     - [x] **Streaming**: Send a message "Hello" and verify the response streams back (verifies `streamHub.ts` and `api.ts`).
 
-- [ ] **Lot 3 — Chrome extension skeleton**
-  - [ ] Create `ui/chrome-ext/manifest.json` (Manifest V3)
-  - [ ] Create `ui/chrome-ext/content.ts` (Shadow DOM bootstrap + ChatWidget mount)
-  - [ ] Create `ui/chrome-ext/background.ts` (service worker skeleton)
-  - [ ] Create `ui/chrome-ext/popup.html` + `popup.ts` (API URL config)
-  - [ ] Create `ui/chrome-ext/sidepanel.html` + `sidepanel.ts` (side panel placeholder)
-  - [ ] Create `ui/chrome-ext/vite.config.ext.ts` (multi-entry Vite build)
-  - [ ] Create `ui/chrome-ext/chatwidget-entry.ts` (Svelte mount with extension providers)
-  - [ ] Add Makefile targets: `build-ext`, `dev-ext`, `package-ext`
-  - [ ] Add `package.json` scripts: `build:ext`, `dev:ext`
-  - [ ] Create extension icons (placeholder)
-  - [ ] Lot gate: `make build-ext ENV=test` succeeds
-  - [ ] UAT: load unpacked extension in Chrome, verify bubble appears on a page
+- [x] **Lot 3 — Chrome extension skeleton**
+  - [x] Create `ui/chrome-ext/manifest.json` (Manifest V3)
+  - [x] Create `ui/chrome-ext/content.ts` (Shadow DOM bootstrap + ChatWidget mount)
+  - [x] Create `ui/chrome-ext/background.ts` (service worker skeleton)
+  - [x] Create `ui/chrome-ext/popup.html` + `popup.ts` (API URL config)
+  - [x] Create `ui/chrome-ext/sidepanel.html` + `sidepanel.ts` (side panel placeholder)
+  - [x] Create `ui/chrome-ext/vite.config.ext.ts` (multi-entry Vite build)
+  - [x] Create `ui/chrome-ext/chatwidget-entry.ts` (Svelte mount with extension providers)
+  - [x] Add Makefile targets: `build-ext`, `dev-ext`, `package-ext`
+  - [x] Add `package.json` scripts: `build:ext`, `dev:ext`
+  - [x] Create extension icons (placeholder) (via copy script)
+  - [x] Lot gate: `make build-ext ENV=test` succeeds
+  - [ ] **UAT: Chrome Extension (Run in `tmp/feat-chrome-plugin`)**
+    - [ ] **Build**: Run `make build-ext ENV=test`. Verification: Check for `✅ Extension built` message and files in `ui/chrome-ext/dist/`.
+    - [ ] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
+    - [ ] **Verify Overlay**: Open `https://example.com`. Verify the chat bubble appears in bottom-right.
+    - [ ] **Verify Open/Close**: Click bubble to open chat. Click close button to minimize. (Note: Auth may be missing in this isolated context, that is expected).
 
 - [ ] **Lot 4 — Local Chrome tools (service worker)**
   - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:

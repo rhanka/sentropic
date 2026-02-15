@@ -4,7 +4,7 @@
  * Centralized API calling utilities with authentication support.
  */
 
-import { browser as _skBrowser } from '$app/environment';
+const _skBrowser = typeof window !== 'undefined';
 import { getApiBrowserFlag } from '$lib/core/api-client';
 import { API_BASE_URL } from '$lib/config';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';

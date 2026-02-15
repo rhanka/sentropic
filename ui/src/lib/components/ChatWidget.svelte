@@ -1,9 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
   import type { ContextProvider } from '$lib/core/context-provider';
-  import { createSvelteKitContextProvider } from '$lib/core/context-provider';
   import { _ } from 'svelte-i18n';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
@@ -11,8 +8,15 @@
   import { isAuthenticated, session } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
   import { currentFolderId } from '$lib/stores/folders';
-  import { workspaceCanComment, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
-  import { closeComment, reopenComment, deleteComment } from '$lib/utils/comments';
+  import {
+    workspaceCanComment,
+    selectedWorkspaceRole,
+  } from '$lib/stores/workspaceScope';
+  import {
+    closeComment,
+    reopenComment,
+    deleteComment,
+  } from '$lib/utils/comments';
   import {
     MessageCircle,
     Loader2,
@@ -28,7 +32,7 @@
     Check,
     FolderOpen,
     Eye,
-    EyeOff
+    EyeOff,
   } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
 
@@ -52,14 +56,20 @@
   let chatSessions: ChatSession[] = [];
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
-  let commentContext: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
-  let commentContextOverride: { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null = null;
+  let commentContext: {
+    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    id?: string;
+  } | null = null;
+  let commentContextOverride: {
+    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    id?: string;
+  } | null = null;
 
   // Core abstraction: allows Chrome extension to inject its own context provider.
   // Defaults to SvelteKit's page store for backward compatibility.
-  export let contextProvider: ContextProvider | null = null;
-  $: ctxProvider = contextProvider ?? createSvelteKitContextProvider(page, browser);
-  $: contextStore = ctxProvider.context;
+  export let contextProvider: ContextProvider;
+  $: contextStore = contextProvider.context;
+  $: isBrowser = contextProvider.isBrowser;
 
   let commentSectionKey: string | null = null;
   let commentSectionLabel: string | null = null;
@@ -120,8 +130,11 @@
 
   type DisplayMode = 'floating' | 'docked';
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
-  let displayMode: DisplayMode =
-    browser && localStorage.getItem(DISPLAY_MODE_STORAGE_KEY) === 'docked' ? 'docked' : 'floating';
+  let displayMode: DisplayMode = 'floating';
+  $: if (isBrowser) {
+    const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
+    if (saved === 'docked') displayMode = 'docked';
+  }
   let dockWidthCss = '0px';
 
   let bubbleButtonEl: HTMLButtonElement | null = null;
@@ -159,7 +172,7 @@
   $: isDocked = effectiveMode === 'docked';
 
   const computeDockWidthCss = (): string => {
-    if (!browser) return '0px';
+    if (!isBrowser) return '0px';
     const w = window.innerWidth;
     const minWidgetPx = 28 * 16; // 28rem ~= widget width (matches floating width)
     if (w < 640) return '100vw'; // mobile: full screen dock
@@ -179,13 +192,13 @@
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible && modeNow === 'docked',
-      dockWidthCss
+      dockWidthCss,
     });
   };
 
   const setDisplayMode = (next: DisplayMode) => {
     displayMode = next;
-    if (browser) localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, next);
+    if (isBrowser) localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, next);
     publishLayout();
   };
 
@@ -200,9 +213,11 @@
       'textarea:not([disabled])',
       'input:not([disabled])',
       'select:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])'
+      '[tabindex]:not([tabindex="-1"])',
     ];
-    const nodes = Array.from(container.querySelectorAll<HTMLElement>(selectors.join(',')));
+    const nodes = Array.from(
+      container.querySelectorAll<HTMLElement>(selectors.join(',')),
+    );
     return nodes.filter((el) => {
       const style = window.getComputedStyle(el);
       return style.display !== 'none' && style.visibility !== 'hidden';
@@ -210,7 +225,7 @@
   };
 
   const focusFirstFocusable = async () => {
-    if (!browser) return;
+    if (!isBrowser) return;
     await tick();
     // Prefer the chat composer first (better UX + matches UAT expectation)
     if (activeTab === 'chat') {
@@ -245,13 +260,21 @@
     if (!active) return;
 
     // UX: from chat composer -> conversations menu button
-    if (!e.shiftKey && active.tagName.toLowerCase() === 'textarea' && sessionMenuButtonRef) {
+    if (
+      !e.shiftKey &&
+      active.tagName.toLowerCase() === 'textarea' &&
+      sessionMenuButtonRef
+    ) {
       e.preventDefault();
       sessionMenuButtonRef.focus();
       return;
     }
     // UX: shift+tab from composer -> close button
-    if (e.shiftKey && active.tagName.toLowerCase() === 'textarea' && closeButtonEl) {
+    if (
+      e.shiftKey &&
+      active.tagName.toLowerCase() === 'textarea' &&
+      closeButtonEl
+    ) {
       e.preventDefault();
       closeButtonEl.focus();
       return;
@@ -272,19 +295,28 @@
 
   const formatSessionLabel = (s: ChatSession) => {
     if (s.title) return s.title;
-    return $_('chat.sessions.defaultTitle', { values: { id: s.id.slice(0, 6) } });
+    return $_('chat.sessions.defaultTitle', {
+      values: { id: s.id.slice(0, 6) },
+    });
   };
 
-  $: activeJobsCount = $queueStore.jobs.filter((job) => job.status === 'pending' || job.status === 'processing').length;
+  $: activeJobsCount = $queueStore.jobs.filter(
+    (job) => job.status === 'pending' || job.status === 'processing',
+  ).length;
   $: hasActiveJobs = activeJobsCount > 0;
-  $: failedJobsCount = $queueStore.jobs.filter((job) => job.status === 'failed').length;
+  $: failedJobsCount = $queueStore.jobs.filter(
+    (job) => job.status === 'failed',
+  ).length;
   $: hasFailedJobs = failedJobsCount > 0;
 
   const detectCommentContextFromRoute = (
     routeId: string | null,
     params: Record<string, string>,
-    folderId: string | null
-  ): { type: 'organization' | 'folder' | 'usecase' | 'executive_summary'; id?: string } | null => {
+    folderId: string | null,
+  ): {
+    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    id?: string;
+  } | null => {
     if (routeId === '/usecase/[id]' && params.id) {
       return { type: 'usecase', id: params.id };
     }
@@ -307,12 +339,21 @@
   };
 
   $: commentContext =
-    commentContextOverride ?? detectCommentContextFromRoute($contextStore.route.id ?? null, $contextStore.params, $currentFolderId);
+    commentContextOverride ??
+    detectCommentContextFromRoute(
+      $contextStore.route.id ?? null,
+      $contextStore.params,
+      $currentFolderId,
+    );
   $: if (activeTab !== 'chat' && showSessionMenu) showSessionMenu = false;
   $: if (activeTab !== 'comments' && showCommentMenu) showCommentMenu = false;
 
   $: {
-    const detected = detectCommentContextFromRoute($contextStore.route.id ?? null, $contextStore.params, $currentFolderId);
+    const detected = detectCommentContextFromRoute(
+      $contextStore.route.id ?? null,
+      $contextStore.params,
+      $currentFolderId,
+    );
     if (
       commentContextOverride &&
       (!detected ||
@@ -368,7 +409,10 @@
     return i18nKey ? $_(i18nKey) : key;
   };
 
-  $: commentSectionLabel = getSectionLabel(commentContext?.type ?? null, commentSectionKey);
+  $: commentSectionLabel = getSectionLabel(
+    commentContext?.type ?? null,
+    commentSectionKey,
+  );
 
   $: if (commentContext?.id && commentContext?.type) {
     const nextKey = `${commentContext.type}:${commentContext.id}`;
@@ -401,7 +445,9 @@
       pendingCommentAutoSelectReady = true;
     } else if (pendingCommentAutoSelectReady || commentThreads.length > 0) {
       const matches = commentSectionKey
-        ? commentThreads.filter((t) => t.sectionKey === commentSectionKey && t.status !== 'closed')
+        ? commentThreads.filter(
+            (t) => t.sectionKey === commentSectionKey && t.status !== 'closed',
+          )
         : commentThreads.filter((t) => t.status !== 'closed');
       const next = matches[0] ?? null;
       commentThreadId = next?.id ?? null;
@@ -414,12 +460,13 @@
   }
 
   $: currentCommentThread = commentThreadId
-    ? commentThreads.find((t) => t.id === commentThreadId) ?? null
+    ? (commentThreads.find((t) => t.id === commentThreadId) ?? null)
     : null;
   $: isCurrentResolved = currentCommentThread?.status === 'closed';
   $: canResolveCurrent =
     Boolean(currentCommentThread) &&
-    (currentCommentThread?.createdBy === $session.user?.id || $selectedWorkspaceRole === 'admin') &&
+    (currentCommentThread?.createdBy === $session.user?.id ||
+      $selectedWorkspaceRole === 'admin') &&
     $workspaceCanComment;
   $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
   $: resolvedCount = resolvedThreads.length;
@@ -427,11 +474,15 @@
     ? commentThreads
     : commentThreads.filter((t) => t.status !== 'closed');
 
-  $: if (activeTab === 'comments' && commentThreadId && commentThreads.length > 0 && !commentLoading) {
+  $: if (
+    activeTab === 'comments' &&
+    commentThreadId &&
+    commentThreads.length > 0 &&
+    !commentLoading
+  ) {
     const exists = commentThreads.some((t) => t.id === commentThreadId);
     if (!exists) commentThreadId = null;
   }
-
 
   const handleSelectSession = async (id: string) => {
     if (id === chatSessionId) return;
@@ -487,7 +538,9 @@
     handleCommentSectionClick = (event: MouseEvent) => {
       if (!commentContext?.id || !commentContext?.type) return;
       const target = event.target as HTMLElement | null;
-      const sectionEl = target?.closest?.('[data-comment-section]') as HTMLElement | null;
+      const sectionEl = target?.closest?.(
+        '[data-comment-section]',
+      ) as HTMLElement | null;
       if (!sectionEl) return;
       const sectionKey = sectionEl.getAttribute('data-comment-section');
       if (!sectionKey || sectionKey === commentSectionKey) return;
@@ -498,9 +551,16 @@
     };
     document.addEventListener('click', handleCommentSectionClick, true);
     handleOpenComments = (event: CustomEvent) => {
-      const detail = event?.detail as { contextType?: string; contextId?: string; sectionKey?: string } | null;
+      const detail = event?.detail as {
+        contextType?: string;
+        contextId?: string;
+        sectionKey?: string;
+      } | null;
       if (!detail?.contextType || !detail?.contextId) return;
-      commentContextOverride = { type: detail.contextType as any, id: detail.contextId };
+      commentContextOverride = {
+        type: detail.contextType as any,
+        id: detail.contextId,
+      };
       activeTab = 'comments';
       commentSectionKey = detail.sectionKey ?? null;
       commentThreadId = null;
@@ -532,7 +592,13 @@
     }
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName?.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target as any)?.isContentEditable) return;
+    if (
+      tag === 'input' ||
+      tag === 'textarea' ||
+      tag === 'select' ||
+      (target as any)?.isContentEditable
+    )
+      return;
     e.preventDefault();
     void toggle();
   };
@@ -545,7 +611,9 @@
   };
 
   const toggle = async () => {
-    if (browser) lastActiveElement = (document.activeElement as HTMLElement | null) ?? null;
+    if (isBrowser)
+      lastActiveElement =
+        (document.activeElement as HTMLElement | null) ?? null;
     isVisible = !isVisible;
     if (isVisible) hasOpenedOnce = true;
     syncScrollLock();
@@ -555,7 +623,9 @@
 
   const openWidget = async () => {
     if (isVisible) return;
-    if (browser) lastActiveElement = (document.activeElement as HTMLElement | null) ?? null;
+    if (isBrowser)
+      lastActiveElement =
+        (document.activeElement as HTMLElement | null) ?? null;
     isVisible = true;
     hasOpenedOnce = true;
     syncScrollLock();
@@ -580,14 +650,20 @@
     }
   };
 
-  const selectNextOpenThreadAfterResolve = (current: typeof currentCommentThread) => {
-    const openThreads = commentThreads.filter((t) => t.status !== 'closed' && t.id !== current?.id);
+  const selectNextOpenThreadAfterResolve = (
+    current: typeof currentCommentThread,
+  ) => {
+    const openThreads = commentThreads.filter(
+      (t) => t.status !== 'closed' && t.id !== current?.id,
+    );
     if (openThreads.length === 0) {
       commentThreadId = null;
       return;
     }
     if (commentSectionKey) {
-      const nextSameSection = openThreads.find((t) => t.sectionKey === commentSectionKey);
+      const nextSameSection = openThreads.find(
+        (t) => t.sectionKey === commentSectionKey,
+      );
       if (nextSameSection) {
         commentThreadId = nextSameSection.id;
         return;
@@ -595,7 +671,10 @@
       commentThreadId = null;
       return;
     }
-    const nextSectionThread = openThreads.find((t) => t.sectionKey && t.sectionKey !== current?.sectionKey) ?? openThreads[0];
+    const nextSectionThread =
+      openThreads.find(
+        (t) => t.sectionKey && t.sectionKey !== current?.sectionKey,
+      ) ?? openThreads[0];
     commentThreadId = nextSectionThread?.id ?? null;
     if (nextSectionThread?.sectionKey) {
       commentSectionKey = nextSectionThread.sectionKey;
@@ -623,7 +702,7 @@
     isVisible = false;
     syncScrollLock();
     publishLayout();
-    if (browser) {
+    if (isBrowser) {
       void tick().then(() => {
         if (bubbleButtonEl) {
           bubbleButtonEl.focus();
@@ -659,13 +738,17 @@
       await loadJobs();
     } catch (error) {
       console.error('Failed to purge ALL jobs (global):', error);
-      addToast({ type: 'error', message: $_('chat.queue.errors.purgeAllGlobal') });
+      addToast({
+        type: 'error',
+        message: $_('chat.queue.errors.purgeAllGlobal'),
+      });
     }
   };
 
   onDestroy(() => {
     try {
-      if (mobileMqlChangeHandler) mobileMql?.removeEventListener?.('change', mobileMqlChangeHandler);
+      if (mobileMqlChangeHandler)
+        mobileMql?.removeEventListener?.('change', mobileMqlChangeHandler);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       (mobileMql as any)?.removeListener?.(mobileMqlChangeHandler);
     } catch {
@@ -674,8 +757,13 @@
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
     window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
-    if (handleCommentSectionClick) document.removeEventListener('click', handleCommentSectionClick, true);
-    if (handleOpenComments) window.removeEventListener('topai:open-comments', handleOpenComments as any);
+    if (handleCommentSectionClick)
+      document.removeEventListener('click', handleCommentSectionClick, true);
+    if (handleOpenComments)
+      window.removeEventListener(
+        'topai:open-comments',
+        handleOpenComments as any,
+      );
     setBodyScrollLocked(false);
     publishLayout();
     streamHub.delete('chatWidgetJobs');
@@ -710,7 +798,9 @@
       <!-- Badge: jobs en cours => montre -->
       <span
         class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
-        title={$_('chat.queue.badge.active', { values: { count: activeJobsCount } })}
+        title={$_('chat.queue.badge.active', {
+          values: { count: activeJobsCount },
+        })}
       >
         <Clock class="w-3 h-3" aria-hidden="true" />
       </span>
@@ -718,7 +808,9 @@
       <!-- Badge: au moins un job en échec -->
       <span
         class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
-        title={$_('chat.queue.badge.failed', { values: { count: failedJobsCount } })}
+        title={$_('chat.queue.badge.failed', {
+          values: { count: failedJobsCount },
+        })}
       >
         <X class="w-3 h-3" aria-hidden="true" />
       </span>
@@ -727,7 +819,11 @@
 
   {#if hasOpenedOnce}
     {#if !isDocked}
-      <div class="fixed inset-0 z-40 sm:hidden" class:hidden={!isVisible} aria-hidden="true">
+      <div
+        class="fixed inset-0 z-40 sm:hidden"
+        class:hidden={!isVisible}
+        aria-hidden="true"
+      >
         <!-- Mobile backdrop (click to close) -->
         <button
           type="button"
@@ -761,7 +857,10 @@
             {#if isDocked && isMobileViewport}
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
-                on:click={() => window.dispatchEvent(new CustomEvent('topai:toggle-burger-menu'))}
+                on:click={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('topai:toggle-burger-menu'),
+                  )}
                 aria-label={$_('common.menu')}
                 type="button"
               >
@@ -771,34 +870,46 @@
 
             <div class="flex items-center gap-2">
               <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
-              <button
-                class="rounded px-2 py-1 text-xs transition {activeTab === 'comments' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
-                type="button"
-                on:click={() => (activeTab = 'comments')}
-              >
-                {$_('chat.tabs.comments')}
-              </button>
-              <button
-                class="rounded px-2 py-1 text-xs transition {activeTab === 'chat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
-                type="button"
-                on:click={() => (activeTab = 'chat')}
-              >
-                {$_('chat.tabs.chat')}
-              </button>
-              <button
-                class="rounded px-2 py-1 text-xs transition {activeTab === 'queue' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
-                type="button"
-                on:click={() => (activeTab = 'queue')}
-              >
-                {$_('chat.tabs.jobs')}
-              </button>
+                <button
+                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  'comments'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'}"
+                  type="button"
+                  on:click={() => (activeTab = 'comments')}
+                >
+                  {$_('chat.tabs.comments')}
+                </button>
+                <button
+                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  'chat'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'}"
+                  type="button"
+                  on:click={() => (activeTab = 'chat')}
+                >
+                  {$_('chat.tabs.chat')}
+                </button>
+                <button
+                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  'queue'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'}"
+                  type="button"
+                  on:click={() => (activeTab = 'queue')}
+                >
+                  {$_('chat.tabs.jobs')}
+                </button>
               </div>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
             {#if activeTab === 'chat'}
-              <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
+              <MenuPopover
+                bind:open={showSessionMenu}
+                bind:triggerRef={sessionMenuButtonRef}
+              >
                 <svelte:fragment slot="trigger" let:toggle>
                   <button
                     class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
@@ -824,14 +935,21 @@
                   </button>
                   <div class="border-t border-slate-100 my-1"></div>
                   {#if chatLoadingSessions}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">
+                      {$_('common.loading')}
+                    </div>
                   {:else if chatSessions.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">
+                      {$_('chat.sessions.none')}
+                    </div>
                   {:else}
                     <div class="max-h-48 overflow-auto slim-scroll">
                       {#each chatSessions as s (s.id)}
                         <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
+                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId ===
+                          s.id
+                            ? 'text-slate-900 font-semibold'
+                            : 'text-slate-600'}"
                           type="button"
                           on:click={() => {
                             close();
@@ -867,7 +985,11 @@
               </button>
             {/if}
             {#if activeTab === 'comments'}
-              <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-64">
+              <MenuPopover
+                bind:open={showCommentMenu}
+                bind:triggerRef={commentMenuButtonRef}
+                widthClass="w-64"
+              >
                 <svelte:fragment slot="trigger" let:toggle>
                   <button
                     class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
@@ -913,25 +1035,40 @@
                   </button>
                   <div class="border-t border-slate-100 my-1"></div>
                   {#if visibleCommentThreads.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
+                    <div class="px-2 py-1 text-[11px] text-slate-500">
+                      {$_('chat.comments.none')}
+                    </div>
                   {:else}
                     <div class="max-h-56 overflow-auto slim-scroll space-y-1">
                       {#each visibleCommentThreads as t (t.id)}
                         <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
+                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId ===
+                          t.id
+                            ? 'text-slate-900 font-semibold'
+                            : 'text-slate-600'} {t.status === 'closed'
+                            ? 'line-through text-slate-400'
+                            : ''}"
                           type="button"
                           on:click={() => {
                             close();
                             commentThreadId = t.id;
                             commentSectionKey = t.sectionKey;
-                            commentSectionLabel = getSectionLabel(commentContext?.type ?? null, t.sectionKey);
+                            commentSectionLabel = getSectionLabel(
+                              commentContext?.type ?? null,
+                              t.sectionKey,
+                            );
                           }}
                         >
                           <div class="flex items-center justify-between gap-2">
                             <span class="truncate">
-                              {getSectionLabel(commentContext?.type ?? null, t.sectionKey) || $_('chat.tabs.comments')}
+                              {getSectionLabel(
+                                commentContext?.type ?? null,
+                                t.sectionKey,
+                              ) || $_('chat.tabs.comments')}
                             </span>
-                            <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                            <span
+                              class="inline-flex items-center gap-1 text-[10px] text-slate-400"
+                            >
                               <MessageCircle class="w-3 h-3" />
                               {t.count}
                             </span>
@@ -957,8 +1094,12 @@
               <button
                 class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
                 on:click={() => void handleResolveCommentThread()}
-                title={isCurrentResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
-                aria-label={isCurrentResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
+                title={isCurrentResolved
+                  ? $_('chat.comments.reopen')
+                  : $_('chat.comments.resolve')}
+                aria-label={isCurrentResolved
+                  ? $_('chat.comments.reopen')
+                  : $_('chat.comments.resolve')}
                 type="button"
                 disabled={!currentCommentThread || !canResolveCurrent}
               >
@@ -1005,8 +1146,12 @@
             <button
               class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
               on:click={toggleDisplayMode}
-              title={isDocked ? $_('chat.widget.switchToWidget') : $_('chat.widget.switchToPanel')}
-              aria-label={isDocked ? $_('chat.widget.switchToWidget') : $_('chat.widget.switchToPanel')}
+              title={isDocked
+                ? $_('chat.widget.switchToWidget')
+                : $_('chat.widget.switchToPanel')}
+              aria-label={isDocked
+                ? $_('chat.widget.switchToWidget')
+                : $_('chat.widget.switchToPanel')}
               type="button"
             >
               {#if isDocked}
@@ -1015,7 +1160,13 @@
                 <Maximize2 class="w-4 h-4" aria-hidden="true" />
               {/if}
             </button>
-            <button class="text-gray-400 hover:text-gray-600" on:click={close} aria-label={$_('common.close')} type="button" bind:this={closeButtonEl}>
+            <button
+              class="text-gray-400 hover:text-gray-600"
+              on:click={close}
+              aria-label={$_('common.close')}
+              type="button"
+              bind:this={closeButtonEl}
+            >
               <X class="w-5 h-5" />
             </button>
           </div>
@@ -1041,9 +1192,12 @@
                 {commentSectionLabel}
                 commentContextType={commentContext.type}
                 commentContextId={commentContext.id}
+                {contextStore}
               />
             {:else}
-              <div class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">
+              <div
+                class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500"
+              >
                 {$_('chat.comments.noContext')}
               </div>
             {/if}
@@ -1055,6 +1209,7 @@
             bind:sessions={chatSessions}
             bind:sessionId={chatSessionId}
             bind:loadingSessions={chatLoadingSessions}
+            {contextStore}
           />
         </div>
       </div>
