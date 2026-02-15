@@ -21,9 +21,9 @@ export default defineConfig({
     build: {
         outDir: path.resolve(__dirname, 'dist'),
         emptyOutDir: true,
-        target: 'esnext',
+        target: 'chrome110',
         minify: false, // Easier debugging for now
-        sourcemap: 'inline',
+        sourcemap: false,
         rollupOptions: {
             input: {
                 background: path.resolve(__dirname, 'background.ts'),
