@@ -1,52 +1,55 @@
 <script>
-  import { onMount, afterUpdate, createEventDispatcher, tick } from 'svelte';
-  import { _ } from 'svelte-i18n';
-  import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
-  import TipTap from './TipTap.svelte';
-  import { apiPut } from '$lib/utils/api';
-
-  export let label = ''; // Le label affiché au-dessus
-  export let value = ''; // La valeur de l'input
+  import { onMount, afterUpdate, createEventDispatcher, tick } from "svelte";
+  import { _ } from "svelte-i18n";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
+  import TipTap from "./TipTap.svelte";
+  import { apiPut } from "$lib/utils/api";
+  
+  export let label = ""; // Le label affiché au-dessus
+  export let value = ""; // La valeur de l'input
   export let markdown = false;
-  export let apiEndpoint = ''; // Endpoint API pour la sauvegarde
-  export let saveDelay = 5000; // Délai en ms avant sauvegarde (défaut: 5s)
-  export let placeholder = ''; // Placeholder (input/textarea + markdown via TipTap)
+  export let apiEndpoint = ""; // Endpoint API pour la sauvegarde
+  export let saveDelay = 0; // Save delay in ms (default: immediate)
+  export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
   export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)
   export let fullWidth = false; // If true, input/textarea takes 100% width of its container (disables auto-size)
-  export let changeId = ''; // ID unique pour cette modification
+  export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
   export let fullDataGetter = null; // Fonction pour récupérer les données complètes au moment de la sauvegarde
-  export let originalValue = ''; // Valeur originale pour comparaison
+  export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]
-
+  
   // Générer un ID unique pour associer le label au contrôle
   const inputId = `editable-input-${Math.random().toString(36).substr(2, 9)}`;
   export let forceList = false;
   export let multiline = false; // Si true, utilise un textarea au lieu d'un input (pour permettre les retours à la ligne)
-
+  
   let tiptapContainer;
   $: isLocked = Boolean(locked || disabled);
-
+  
   const dispatch = createEventDispatcher();
-
+  
   let isEditing = false;
   let hasUnsavedChanges = false;
   let saveTimeout = null;
   let isSaving = false;
-
+  let saveRequestedWhileSaving = false;
+  
   // Référence pour le span, l'input et le textarea
   let span;
   let input;
   let textarea;
-
+  
   // Basculer entre le mode édition et le mode affichage
   const toggleEditing = () => {
     if (isLocked) return;
     isEditing = !isEditing;
   };
-
+  
   // Fonction pour ajuster la largeur de l'input
   const adjustWidth = () => {
     if (fullWidth) {
@@ -63,7 +66,7 @@
       return;
     }
     if (!markdown && !multiline && span && input) {
-      span.textContent = value || ' '; // Mise à jour du contenu du span
+      span.textContent = value || " "; // Mise à jour du contenu du span
       const measuredWidth = span.offsetWidth + 4;
       const maxWidth = input.parentElement?.offsetWidth || Infinity;
       // Limiter la largeur à la largeur du conteneur parent ou 48rem (max-w-3xl)
@@ -76,29 +79,42 @@
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   };
-
+  
   // Fonction de sauvegarde avec buffer
   const saveWithBuffer = async () => {
     if (isLocked) return;
-    if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
+    if (!apiEndpoint || !hasUnsavedChanges) return;
 
+    if (isSaving) {
+      saveRequestedWhileSaving = true;
+      return;
+    }
+    
     // Annuler le timeout précédent s'il existe
     if (saveTimeout) {
       clearTimeout(saveTimeout);
+      saveTimeout = null;
+    }
+
+    const delay = Math.max(0, Number(saveDelay) || 0);
+    if (delay === 0) {
+      await performSave();
+      return;
     }
 
     // Programmer la sauvegarde
     saveTimeout = setTimeout(async () => {
       await performSave();
-    }, saveDelay);
+    }, delay);
   };
-
+  
   // Effectuer la sauvegarde réelle
   const performSave = async () => {
     if (isLocked) return;
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
-
+    
     isSaving = true;
+    const saveValue = value;
     try {
       // Extract endpoint path from full URL if needed
       // apiEndpoint can be either "/organizations/123" or "http://.../organizations/123"
@@ -111,49 +127,65 @@
         }
       }
       await apiPut(apiEndpoint, payload);
-
+      
       // Success - response is OK by default (apiPut throws on error)
-      hasUnsavedChanges = false;
-      // Supprimer du store des modifications non sauvegardées
+      const hasChangedDuringSave = value !== saveValue;
+      hasUnsavedChanges = hasChangedDuringSave ? value !== originalValue : false;
       if (changeId) {
-        unsavedChangesStore.removeChange(changeId);
+        if (hasUnsavedChanges) {
+          unsavedChangesStore.addChange({
+            id: changeId,
+            component: 'EditableInput',
+            value: value,
+            saveFunction: performSave
+          });
+        } else {
+          // Supprimer du store des modifications non sauvegardées
+          unsavedChangesStore.removeChange(changeId);
+        }
       }
-      dispatch('saved', { value });
+      dispatch('saved', { value: saveValue });
     } catch (error) {
       console.error('Failed to save:', error);
       dispatch('saveError', { error, value });
     } finally {
       isSaving = false;
+      if (saveRequestedWhileSaving && hasUnsavedChanges) {
+        saveRequestedWhileSaving = false;
+        await saveWithBuffer();
+      } else {
+        saveRequestedWhileSaving = false;
+      }
     }
   };
-
+  
   // Gérer les changements de valeur (pour les inputs HTML)
   const handleInput = (event) => {
     if (isLocked) return;
     const newValue = event.target.value;
     value = newValue;
-
+    
     // Ne marquer comme modifié que si la valeur a vraiment changé
     hasUnsavedChanges = newValue !== originalValue;
-
+    
     // Ajuster la largeur/hauteur après le changement
     tick().then(() => {
       adjustWidth();
     });
-
+    
     // Ajouter au store des modifications non sauvegardées seulement si nécessaire
     if (changeId && apiEndpoint && hasUnsavedChanges) {
       unsavedChangesStore.addChange({
         id: changeId,
         component: 'EditableInput',
         value: value,
-        saveFunction: performSave,
+        saveFunction: performSave
       });
     } else if (changeId && !hasUnsavedChanges) {
       // Supprimer du store si pas de modifications
       unsavedChangesStore.removeChange(changeId);
     }
-
+    
     if (hasUnsavedChanges) {
       saveWithBuffer();
     }
@@ -165,30 +197,30 @@
     if (isLocked) return;
     const newValue = event.detail.value;
     value = newValue;
-
+    
     // Mettre à jour hasUnsavedChanges immédiatement pour un feedback visuel instantané
     const isUnsaved = newValue !== originalValue;
     hasUnsavedChanges = isUnsaved;
-
+    
     // Ajouter au store des modifications non sauvegardées seulement si nécessaire
     if (changeId && apiEndpoint && isUnsaved) {
       unsavedChangesStore.addChange({
         id: changeId,
         component: 'EditableInput',
         value: value,
-        saveFunction: performSave,
+        saveFunction: performSave
       });
     } else if (changeId && !isUnsaved) {
       // Supprimer du store si pas de modifications
       unsavedChangesStore.removeChange(changeId);
     }
-
+    
     if (isUnsaved) {
       saveWithBuffer();
     }
     dispatch('change', { value });
   };
-
+  
   // Sauvegarder immédiatement si nécessaire (avant navigation)
   const saveImmediately = async () => {
     if (isLocked) return;
@@ -199,7 +231,7 @@
       await performSave();
     }
   };
-
+  
   // Handler direct attaché sur chaque lien pour garantir l'interception
   // IMPORTANT: Utiliser une fonction nommée pour pouvoir la supprimer plus tard si nécessaire
   const handleReferenceClickDirect = async (e) => {
@@ -208,33 +240,39 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
     e.cancelBubble = true; // Pour IE/anciens navigateurs
-
+    
     const link = e.currentTarget || e.target;
     if (!link || link.tagName !== 'A') return false;
-
+    
     const href = link.getAttribute('href');
     if (!href || !href.startsWith('#ref-')) return false;
-
+    
     const refId = href.substring(1);
     const targetElement = document.getElementById(refId);
     if (!targetElement) return false;
-
-    // Use history API to update URL without reload
-    const currentUrl = new URL(window.location.href);
-    currentUrl.hash = refId;
-
+    
+    // Utiliser goto de SvelteKit pour mettre à jour l'URL
+    const currentUrl = $page.url;
+    const newUrl = `${currentUrl.pathname}${currentUrl.search}#${refId}`;
+    
     try {
-      window.history.pushState(null, '', currentUrl.toString());
-
-      // Scroll to reference
+      await goto(newUrl, {
+        noScroll: true,
+        keepFocus: true,
+        invalidateAll: false,
+        replaceState: false,
+      });
+      
+      // Scroll vers la référence après un petit délai
       setTimeout(() => {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
       }, 10);
     } catch (error) {
-      // Fallback
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Fallback: scroll simple + update URL manuel
+      targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+      window.history.pushState(null, '', `#${refId}`);
     }
-
+    
     return false;
   };
 
@@ -243,55 +281,58 @@
     // Vérifier si le clic est sur un lien de référence (#ref-...)
     // Vérifier aussi si c'est un texte à l'intérieur d'un lien
     let link = e.target.closest('a[href^="#ref-"]');
-    if (
-      !link &&
-      e.target.tagName === 'A' &&
-      e.target.getAttribute('href')?.startsWith('#ref-')
-    ) {
+    if (!link && e.target.tagName === 'A' && e.target.getAttribute('href')?.startsWith('#ref-')) {
       link = e.target;
     }
     if (!link) return;
-
+    
     // Empêcher TOUT comportement par défaut (navigation, ouverture nouvel onglet, etc.)
     // IMPORTANT: appeler preventDefault() en premier, avant toute autre opération
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-
+    
     // Empêcher aussi le comportement par défaut sur le link lui-même
     if (link.onclick) {
       link.onclick = null; // Supprimer tout onclick existant
     }
-
+    
     // Extraire le refId du href (format: #ref-1)
     const href = link.getAttribute('href');
     if (!href || !href.startsWith('#ref-')) return;
-
+    
     const refId = href.substring(1); // Retirer le # pour obtenir ref-1
-
+    
     // Vérifier que l'élément cible existe
     const targetElement = document.getElementById(refId);
     if (!targetElement) return;
-
+    
     // Utiliser goto de SvelteKit pour mettre à jour l'URL avec le hash
     // Cela ajoute le #ref-X à l'URL sans recharger la page
     // Utiliser $page.url pour obtenir le path et search params actuels
-    // Use history API to update URL
-    const currentUrl = new URL(window.location.href);
-    currentUrl.hash = refId;
-
+    const currentUrl = $page.url;
+    const newUrl = `${currentUrl.pathname}${currentUrl.search}#${refId}`;
+    
     try {
-      window.history.pushState(null, '', currentUrl.toString());
-
-      // Scroll to reference
+      await goto(newUrl, {
+        noScroll: true, // On gère le scroll manuellement
+        keepFocus: true, // Garder le focus sur l'élément actuel
+        invalidateAll: false, // Ne pas recharger les données
+        replaceState: false, // Garder dans l'historique pour pouvoir faire back
+      });
+      
+      // Scroll vers la référence après un petit délai pour s'assurer que la navigation est terminée
       setTimeout(() => {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
       }, 10);
     } catch (error) {
-      console.warn('Failed to update URL:', error);
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // En cas d'erreur avec goto, fallback sur scroll simple
+      console.warn('Failed to navigate with goto, using direct scroll:', error);
+      targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+      // Mettre à jour l'URL manuellement en dernier recours
+      window.history.pushState(null, '', `#${refId}`);
     }
-
+    
     return false;
   };
 
@@ -315,15 +356,15 @@
 
   onMount(() => {
     adjustWidth();
-
+    
     // Initialiser originalValue si pas défini
     if (!originalValue && value) {
       originalValue = value;
     }
-
+    
     // Exposer la fonction de sauvegarde immédiate
     window.addEventListener('beforeunload', saveImmediately);
-
+    
     return () => {
       window.removeEventListener('beforeunload', saveImmediately);
       if (saveTimeout) {
@@ -340,7 +381,7 @@
       adjustWidth();
     }
   });
-
+  
   // Fonction pour créer un lien de référence
   // Note: Le gestionnaire de clic est géré par délégation d'événements (handleReferenceClick)
   // On garde juste la création du lien avec les bons attributs
@@ -351,67 +392,64 @@
     link.target = '_self'; // Forcer l'ouverture dans le même onglet
     link.setAttribute('data-ref-num', num);
     // Forcer les classes CSS et les styles inline pour garantir le style bleu
-    link.className =
-      'reference-link text-blue-600 hover:text-blue-800 hover:underline cursor-pointer';
+    link.className = 'reference-link text-blue-600 hover:text-blue-800 hover:underline cursor-pointer';
     link.style.color = '#2563eb'; // text-blue-600 en couleur explicite
     link.style.textDecoration = 'none';
     link.title = ref.title || '';
     link.textContent = `[${num}]`;
-
+    
     // Ne pas ajouter onclick ici - on utilise addEventListener pour un meilleur contrôle
     // Le handler sera attaché après l'insertion dans le DOM
-
+    
     return link;
   };
 
   // Post-traiter le DOM TipTap pour transformer les références [1], [2] en liens cliquables
   const processReferencesInTipTap = () => {
-    if (!markdown || !tiptapContainer || !references || references.length === 0)
-      return;
-
+    if (!markdown || !tiptapContainer || !references || references.length === 0) return;
+    
     // Trouver l'élément ProseMirror à l'intérieur du container
     const proseMirror = tiptapContainer.querySelector('.ProseMirror, .tiptap');
     if (!proseMirror) return;
-
+    
     // Vérifier les liens existants - réappliquer les classes si nécessaire
     const existingLinks = proseMirror.querySelectorAll('a[href^="#ref-"]');
-
+    
     // Si des liens existent déjà, réappliquer les classes, styles et gestionnaires
     if (existingLinks.length > 0) {
-      existingLinks.forEach((link) => {
+      existingLinks.forEach(link => {
         const href = link.getAttribute('href');
         if (href && href.startsWith('#ref-')) {
           // Extraire le numéro de référence
           const refNum = href.match(/ref-(\d+)/)?.[1];
-
+          
           // Réappliquer les classes et styles
-          link.className =
-            'reference-link text-blue-600 hover:text-blue-800 hover:underline cursor-pointer';
+          link.className = 'reference-link text-blue-600 hover:text-blue-800 hover:underline cursor-pointer';
           link.style.color = '#2563eb'; // text-blue-600
           link.style.textDecoration = 'none';
           link.target = '_self';
-
+          
           // S'assurer que data-ref-num est défini
           if (refNum) {
             link.setAttribute('data-ref-num', refNum);
           }
-
+          
           // Supprimer tous les listeners existants en clonant le nœud
           const newLink = link.cloneNode(true);
           link.parentNode?.replaceChild(newLink, link);
-
+          
           // Attacher directement le handler sur le lien récréé
           // Utiliser capture: true pour intercepter AVANT NavigationGuard
           // Utiliser once: false pour permettre plusieurs clics
-          newLink.addEventListener('click', handleReferenceClickDirect, {
-            capture: true,
+          newLink.addEventListener('click', handleReferenceClickDirect, { 
+            capture: true, 
             once: false,
-            passive: false, // Important pour pouvoir preventDefault
+            passive: false // Important pour pouvoir preventDefault
           });
-
+          
           // Supprimer tout onclick existant
           newLink.onclick = null;
-
+          
           // Empêcher aussi le comportement via onmousedown (plus tôt dans la chaîne)
           newLink.onmousedown = () => {
             // Ne pas empêcher complètement, juste marquer le lien
@@ -421,7 +459,7 @@
       });
       return; // Les liens sont déjà là, on a juste mis à jour les classes/styles
     }
-
+    
     // Utiliser Range API pour remplacer le texte par des liens
     const walker = document.createTreeWalker(
       proseMirror,
@@ -432,76 +470,69 @@
           if (node.parentElement && node.parentElement.tagName === 'A') {
             return NodeFilter.FILTER_REJECT;
           }
-          return node.textContent && node.textContent.match(/\[\d+\]/)
-            ? NodeFilter.FILTER_ACCEPT
+          return node.textContent && node.textContent.match(/\[\d+\]/) 
+            ? NodeFilter.FILTER_ACCEPT 
             : NodeFilter.FILTER_REJECT;
-        },
-      },
+        }
+      }
     );
-
+    
     const textNodesToProcess = [];
     let node;
     while ((node = walker.nextNode())) {
       textNodesToProcess.push(node);
     }
-
+    
     // Traiter chaque text node
-    textNodesToProcess.forEach((textNode) => {
+    textNodesToProcess.forEach(textNode => {
       const text = textNode.textContent || '';
       const regex = /\[(\d+)\]/g;
       const matches = [];
       let match;
-
+      
       while ((match = regex.exec(text)) !== null) {
         matches.push({
           index: match.index,
           num: match[1],
-          length: match[0].length,
+          length: match[0].length
         });
       }
-
+      
       if (matches.length === 0) return;
-
+      
       // Créer un fragment avec les remplacements
       const fragment = document.createDocumentFragment();
       let lastIndex = 0;
-
+      
       matches.forEach(({ index, num, length }) => {
         // Ajouter le texte avant le match
         if (index > lastIndex) {
-          fragment.appendChild(
-            document.createTextNode(text.slice(lastIndex, index)),
-          );
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, index)));
         }
-
-        // Créer le lien si la référence existe
-        const refIndex = parseInt(num) - 1;
-        if (refIndex >= 0 && refIndex < references.length) {
-          const link = createReferenceLink(num, references[refIndex]);
-          link.setAttribute('data-ref-num', num);
-
-          // Attacher directement le handler sur le lien pour garantir l'interception
-          link.addEventListener('click', handleReferenceClickDirect, {
-            capture: true,
-            once: false,
-          });
-
-          fragment.appendChild(link);
-        } else {
-          // Garder le texte original
-          fragment.appendChild(
-            document.createTextNode(text.slice(index, index + length)),
-          );
-        }
-
+        
+          // Créer le lien si la référence existe
+          const refIndex = parseInt(num) - 1;
+          if (refIndex >= 0 && refIndex < references.length) {
+            const link = createReferenceLink(num, references[refIndex]);
+            link.setAttribute('data-ref-num', num);
+            
+            // Attacher directement le handler sur le lien pour garantir l'interception
+            link.addEventListener('click', handleReferenceClickDirect, { capture: true, once: false });
+            
+            fragment.appendChild(link);
+          } else {
+            // Garder le texte original
+            fragment.appendChild(document.createTextNode(text.slice(index, index + length)));
+          }
+        
         lastIndex = index + length;
       });
-
+      
       // Ajouter le texte restant
       if (lastIndex < text.length) {
         fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
       }
-
+      
       // Remplacer le text node
       if (textNode.parentNode) {
         textNode.parentNode.replaceChild(fragment, textNode);
@@ -519,7 +550,7 @@
       });
     }
   });
-
+  
   // Réagir aux changements de tiptapContainer (bind:this)
   $: if (markdown && tiptapContainer) {
     tick().then(() => {
@@ -529,15 +560,9 @@
       }
     });
   }
-
+  
   // Réagir aux changements de value pour retraiter les références
-  $: if (
-    markdown &&
-    value &&
-    references &&
-    references.length > 0 &&
-    tiptapContainer
-  ) {
+  $: if (markdown && value && references && references.length > 0 && tiptapContainer) {
     tick().then(() => {
       // Attendre un peu plus longtemps pour que TipTap ait fini de mettre à jour le DOM
       setTimeout(() => {
@@ -546,7 +571,7 @@
       }, 100);
     });
   }
-
+  
   // Surveillez les changements de `value`
   $: if (value) {
     adjustWidth();
@@ -555,16 +580,12 @@
       originalValue = value;
     }
   }
-
+  
   // Exposer la fonction pour les composants parents
   export { saveImmediately, hasUnsavedChanges };
 </script>
 
-<div
-  class="editable-container"
-  style={markdown ? 'width: 100%!important' : ''}
-  class:full-width={(fullWidth || multiline) && !markdown}
->
+<div class="editable-container" style={markdown ? "width: 100%!important" : ""} class:full-width={(fullWidth || multiline) && !markdown}>
   {#if label}
     <label for={inputId}>{label}</label>
   {/if}
@@ -625,41 +646,21 @@
         {/if}
       {/if}
       {#if hasUnsavedChanges}
-        <span class="unsaved-indicator" title={$_('common.unsavedChanges')}
-          >●</span
-        >
+        <span class="unsaved-indicator" title={$_('common.unsavedChanges')}>●</span>
       {/if}
       {#if isSaving}
         <span class="saving-indicator" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
   {:else}
-    <div
-      class="markdown-input-wrapper"
-      class:has-unsaved-changes={hasUnsavedChanges}
-      role="textbox"
-      aria-label={label || undefined}
-    >
-      <div
-        class="prose prose-slate max-w-none markdown-wrapper"
-        bind:this={tiptapContainer}
-      >
-        <div
-          class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0"
-        >
-          <TipTap
-            bind:value
-            on:change={handleTipTapChange}
-            {forceList}
-            {placeholder}
-            disabled={isLocked}
-          />
+    <div class="markdown-input-wrapper" class:has-unsaved-changes={hasUnsavedChanges} role="textbox" aria-label={label || undefined}>
+      <div class="prose prose-slate max-w-none markdown-wrapper" bind:this={tiptapContainer}>
+        <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+          <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder} disabled={isLocked}/>
         </div>
       </div>
       {#if isSaving}
-        <span class="saving-indicator-markdown" title={$_('common.saving')}
-          >⟳</span
-        >
+        <span class="saving-indicator-markdown" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
   {/if}
@@ -708,19 +709,19 @@
 
   /* Supprimé: marges réduites et compensations */
   /* Maintenant géré par les classes Tailwind et prose */
-
+  
   /* Styles globaux pour les liens de références dans TipTap */
-  :global(.markdown-wrapper a[href^='#ref-']) {
+  :global(.markdown-wrapper a[href^="#ref-"]) {
     color: #2563eb !important; /* text-blue-600 */
     text-decoration: none !important;
   }
-
-  :global(.markdown-wrapper a[href^='#ref-']:hover) {
+  
+  :global(.markdown-wrapper a[href^="#ref-"]:hover) {
     color: #1e40af !important; /* text-blue-800 */
     text-decoration: underline !important;
   }
-
-  :global(.markdown-wrapper a[href^='#ref-'].reference-link) {
+  
+  :global(.markdown-wrapper a[href^="#ref-"].reference-link) {
     color: #2563eb !important;
     cursor: pointer !important;
   }
@@ -851,9 +852,7 @@
     padding-left: 0.5rem;
     margin-left: -0.5rem;
     border-left: 3px solid transparent;
-    transition:
-      border-left-color 0.1s,
-      background-color 0.3s;
+    transition: border-left-color 0.1s, background-color 0.3s;
   }
 
   .markdown-input-wrapper:hover {
@@ -868,9 +867,7 @@
   /* S'assurer que la bordure orange reste visible même quand TipTap a le focus */
   /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
   /* svelte-ignore a11y-no-unused-selector */
-  :global(
-      .markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused)
-    ) {
+  :global(.markdown-input-wrapper.has-unsaved-changes:has(.ProseMirror-focused)) {
     border-left-color: #ffc107 !important;
   }
 
@@ -881,11 +878,7 @@
 
   /* Note: .ProseMirror-focused est ajouté dynamiquement par TipTap */
   /* svelte-ignore a11y-no-unused-selector */
-  :global(
-      .markdown-input-wrapper.has-unsaved-changes:hover:has(
-          .ProseMirror-focused
-        )
-    ) {
+  :global(.markdown-input-wrapper.has-unsaved-changes:hover:has(.ProseMirror-focused)) {
     border-left-color: #ffc107 !important;
     background-color: #f8f9fa;
   }
@@ -936,11 +929,7 @@
   }
 
   @keyframes spin {
-    from {
-      transform: translateY(-50%) rotate(0deg);
-    }
-    to {
-      transform: translateY(-50%) rotate(360deg);
-    }
+    from { transform: translateY(-50%) rotate(0deg); }
+    to { transform: translateY(-50%) rotate(360deg); }
   }
 </style>
