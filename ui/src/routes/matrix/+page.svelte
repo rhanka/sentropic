@@ -36,7 +36,8 @@
   let editedConfig = { ...$matrixStore };
   let originalConfig = { ...$matrixStore };
   let lastAppliedMatrixSnapshot = '';
-  let selectedAxis: any = null;
+  let selectedAxisId: string | null = null;
+  let selectedAxis: MatrixAxis | null = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
   let showCreateMatrixDialog = false;
@@ -184,6 +185,18 @@
     if (override) override(draft);
     return draft;
   };
+
+  const findAxisById = (
+    config: MatrixConfig,
+    axisId: string | null,
+    valueAxis: boolean
+  ): MatrixAxis | null => {
+    if (!axisId) return null;
+    const axes = valueAxis ? config.valueAxes : config.complexityAxes;
+    return axes.find((axis) => axis.id === axisId) ?? null;
+  };
+
+  $: selectedAxis = findAxisById(editedConfig as MatrixConfig, selectedAxisId, isValueAxis);
 
   const applyMatrixSnapshotFromFolder = (
     folderData: any,
@@ -814,8 +827,13 @@
     // Les modifications sont maintenant gérées par le store unsavedChanges
   };
 
-  const openAxisDescriptions = (axis: any, isValue: boolean) => {
-    selectedAxis = axis;
+  const closeDescriptionsDialog = () => {
+    selectedAxisId = null;
+    showDescriptionsDialog = false;
+  };
+
+  const openAxisDescriptions = (axis: MatrixAxis, isValue: boolean) => {
+    selectedAxisId = axis.id;
     isValueAxis = isValue;
     showDescriptionsDialog = true;
   };
@@ -825,7 +843,7 @@
     if ($unsavedChangesStore.changes.length > 0) {
       showCloseWarning = true;
     } else {
-      showDescriptionsDialog = false;
+      closeDescriptionsDialog();
     }
   };
 
@@ -836,20 +854,20 @@
   const handleCloseWarningDiscard = () => {
     unsavedChangesStore.reset();
     showCloseWarning = false;
-    showDescriptionsDialog = false;
+    closeDescriptionsDialog();
   };
 
   const handleCloseWarningSave = async () => {
     if (isReadOnly) {
       addToast({ type: 'warning', message: get(_)('matrix.readOnlyTooltip') });
       showCloseWarning = false;
-      showDescriptionsDialog = false;
+      closeDescriptionsDialog();
       return;
     }
     try {
       await unsavedChangesStore.saveAll();
       showCloseWarning = false;
-      showDescriptionsDialog = false;
+      closeDescriptionsDialog();
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
       addToast({
@@ -861,18 +879,27 @@
 
   // Ces fonctions ne sont plus nécessaires car on utilise directement le template Svelte
 
-  const getLevelDescription = (axis: any, level: number): string => {
-    if (!axis.levelDescriptions) return get(_)('matrix.levelN', { values: { level } });
+  const getLevelDescription = (axis: MatrixAxis | null, level: number): string => {
+    if (!axis?.levelDescriptions) return get(_)('matrix.levelN', { values: { level } });
     
-    const levelDesc = axis.levelDescriptions.find((ld: any) => ld.level === level);
+    const levelDesc = axis.levelDescriptions.find((ld) => ld.level === level);
     return levelDesc?.description || get(_)('matrix.levelN', { values: { level } });
   };
 
+  const getSelectedLevelDescription = (level: number): string => {
+    return getLevelDescription(selectedAxis, level);
+  };
+
+  const getSelectedLevelOriginalDescription = (level: number): string => {
+    const originalAxis = findAxisById(originalConfig as MatrixConfig, selectedAxisId, isValueAxis);
+    return getLevelDescription(originalAxis, level);
+  };
+
   const updateLevelDescription = (levelNum: number, description: string) => {
-    if (!selectedAxis) return;
+    if (!selectedAxisId) return;
     
     if (isValueAxis) {
-      const axisIndex = editedConfig.valueAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      const axisIndex = editedConfig.valueAxes.findIndex((a: MatrixAxis) => a.id === selectedAxisId);
       if (axisIndex === -1) return;
       
       const newValueAxes = [...editedConfig.valueAxes];
@@ -892,7 +919,7 @@
       
       editedConfig = { ...editedConfig, valueAxes: newValueAxes };
     } else {
-      const axisIndex = editedConfig.complexityAxes.findIndex((a: any) => a.name === selectedAxis.name);
+      const axisIndex = editedConfig.complexityAxes.findIndex((a: MatrixAxis) => a.id === selectedAxisId);
       if (axisIndex === -1) return;
       
       const newComplexityAxes = [...editedConfig.complexityAxes];
@@ -1450,9 +1477,9 @@
                 <td class="py-3">
                   <EditableInput
                     locked={isReadOnly}
-                    value={getLevelDescription(selectedAxis, levelNum)}
-                    originalValue={getLevelDescription(selectedAxis, levelNum)}
-                    changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis ? selectedAxis.name : 'unknown'}-level-${levelNum}`}
+                    value={getSelectedLevelDescription(levelNum)}
+                    originalValue={getSelectedLevelOriginalDescription(levelNum)}
+                    changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis?.id ?? selectedAxisId ?? 'unknown'}-level-${levelNum}`}
                     apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
                     fullDataGetter={() => buildMatrixPayload()}
