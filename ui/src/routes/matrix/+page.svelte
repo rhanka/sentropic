@@ -37,6 +37,8 @@
   let originalConfig = { ...$matrixStore };
   let lastAppliedMatrixSnapshot = '';
   let selectedAxisId: string | null = null;
+  let selectedAxisLive: MatrixAxis | null = null;
+  let selectedAxisOriginal: MatrixAxis | null = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
   let showCreateMatrixDialog = false;
@@ -194,12 +196,12 @@
     const axes = valueAxis ? config.valueAxes : config.complexityAxes;
     return axes.find((axis) => axis.id === axisId) ?? null;
   };
-
-  const getSelectedAxis = (): MatrixAxis | null =>
-    findAxisById(editedConfig as MatrixConfig, selectedAxisId, isValueAxis);
-
-  const getSelectedAxisOriginal = (): MatrixAxis | null =>
-    findAxisById(originalConfig as MatrixConfig, selectedAxisId, isValueAxis);
+  $: selectedAxisLive = findAxisById(editedConfig as MatrixConfig, selectedAxisId, isValueAxis);
+  $: selectedAxisOriginal = findAxisById(
+    originalConfig as MatrixConfig,
+    selectedAxisId,
+    isValueAxis
+  );
 
   const applyMatrixSnapshotFromFolder = (
     folderData: any,
@@ -889,14 +891,6 @@
     return levelDesc?.description || get(_)('matrix.levelN', { values: { level } });
   };
 
-  const getSelectedLevelDescription = (level: number): string => {
-    return getLevelDescription(getSelectedAxis(), level);
-  };
-
-  const getSelectedLevelOriginalDescription = (level: number): string => {
-    return getLevelDescription(getSelectedAxisOriginal(), level);
-  };
-
   const updateLevelDescription = (levelNum: number, description: string) => {
     if (!selectedAxisId) return;
     
@@ -1438,7 +1432,7 @@
     <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-2">
-          {getSelectedAxis()?.name || ''} - {$_('matrix.levelDescriptionsTitle')}
+          {selectedAxisLive?.name || ''} - {$_('matrix.levelDescriptionsTitle')}
         </h3>
         <p class="text-gray-600 mb-4">
           {$_('matrix.help.details')}
@@ -1479,8 +1473,8 @@
                 <td class="py-3">
                   <EditableInput
                     locked={isReadOnly}
-                    value={getSelectedLevelDescription(levelNum)}
-                    originalValue={getSelectedLevelOriginalDescription(levelNum)}
+                    value={getLevelDescription(selectedAxisLive, levelNum)}
+                    originalValue={getLevelDescription(selectedAxisOriginal, levelNum)}
                     changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxisId ?? 'unknown'}-level-${levelNum}`}
                     apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
