@@ -198,7 +198,7 @@ const handleVisibilityChange = () => {
         return;
     }
     stopOpenHeartbeat();
-    void notifyContentSidePanelState('closed');
+    notifyContentSidePanelClosedOnce();
 };
 
 const bootstrap = async () => {
