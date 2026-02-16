@@ -78,7 +78,7 @@ function parseOrganizationData(value: unknown): OrganizationData {
   return {};
 }
 
-function hydrateOrganization(row: typeof organizations.$inferSelect): {
+export function hydrateOrganization(row: typeof organizations.$inferSelect): {
   id: string;
   name: string;
   status: 'draft' | 'enriching' | 'completed' | null;
@@ -383,4 +383,3 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
   await notifyOrganizationEvent(id);
   return c.body(null, 204);
 });
-

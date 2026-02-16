@@ -29,6 +29,18 @@ export interface RenderMarkdownOptions {
 }
 
 /**
+ * Normalise uniquement les fins de ligne pour éviter les écarts entre
+ * snapshots API, SSE et éditeurs texte.
+ * - Convertit `\r\n` et `\r` en `\n`
+ * - Ne modifie pas le contenu markdown (puces, paragraphes, etc.)
+ */
+export function normalizeMarkdownLineEndings(text: unknown): string {
+  if (text === null || text === undefined) return '';
+  const value = typeof text === 'string' ? text : String(text);
+  return value.replace(/\r\n?/g, '\n');
+}
+
+/**
  * Normalise un champ markdown issu des use cases historiques.
  * - Convertit les puces unicode en listes markdown `-`
  * - Ajoute un saut de ligne supplémentaire entre les paragraphes
@@ -62,7 +74,7 @@ export function normalizeUseCaseMarkdown(text: unknown): string {
   if (!input) return '';
 
   // Normaliser les retours Windows/ancien format
-  let normalized = input.replace(/\r\n/g, '\n');
+  let normalized = normalizeMarkdownLineEndings(input);
 
   // Convertir les puces unicode en listes Markdown
   normalized = normalized.replace(BULLET_PATTERN, '$1- ');
@@ -81,7 +93,7 @@ export function normalizeUseCaseMarkdown(text: unknown): string {
 export function stripTrailingEmptyParagraph(text: string | null | undefined): string {
   if (!text) return '';
 
-  const normalized = text.replace(/\r\n/g, '\n');
+  const normalized = normalizeMarkdownLineEndings(text);
   const lines = normalized.split('\n');
 
   let removed = false;
@@ -264,5 +276,4 @@ export function renderInlineMarkdown(text: string | null | undefined): string {
 
   return sanitizeHtml(html);
 }
-
 
