@@ -135,7 +135,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
 
 - [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
-  - [ ] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains. (implementation done via proxy, pending UAT)
+  - [ ] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains. (implementation done via proxy + stream polling fallback, pending UAT)
   - [x] Add extension runtime profiles: `UAT`, `PROD` (API base URL mandatory, app base URL, optional WS base URL).
   - [x] Add profile/config UI (popup or options page) with validation and persistence.
   - [x] Implement extension background fetch proxy for overlay API calls to avoid page-origin CORS/mixed-content failures.
