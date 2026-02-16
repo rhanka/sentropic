@@ -1,7 +1,12 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { matrixStore, type MatrixAxis } from '$lib/stores/matrix';
+  import {
+    matrixStore,
+    type MatrixAxis,
+    type MatrixConfig,
+    type MatrixThreshold
+  } from '$lib/stores/matrix';
   import { currentFolderId, type Folder } from '$lib/stores/folders';
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPut } from '$lib/utils/api';
@@ -23,10 +28,13 @@
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
   const HUB_KEY = 'matrixPage';
+  const MATRIX_SAVE_DELAY_MS = 400;
+  const MATRIX_UNSAVED_CHANGE_PREFIXES = ['value-axis-', 'complexity-axis-', 'matrix-config-all'];
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
   let originalConfig = { ...$matrixStore };
+  let lastAppliedMatrixSnapshot = '';
   let selectedAxis: any = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
@@ -63,41 +71,147 @@
   let lastReadOnlyRole = $workspaceReadOnlyScope;
   const LOCK_REFRESH_MS = 10 * 1000;
 
-  const parseJsonObject = (value: unknown): Record<string, any> | null => {
-    if (!value) return null;
+  const parseOptionalObject = (value: unknown): Record<string, any> | null | undefined => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
     if (typeof value === 'object') return value as Record<string, any>;
     if (typeof value === 'string') {
       try {
         const parsed = JSON.parse(value);
-        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+        if (parsed === null) return null;
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : undefined;
       } catch {
-        return null;
+        return undefined;
       }
     }
-    return null;
+    return undefined;
   };
 
-  const applyMatrixSnapshotFromFolder = (folderData: any) => {
+  const normalizeAxis = (
+    axis: Record<string, any> | null | undefined,
+    kind: 'value' | 'complexity',
+    index: number
+  ): MatrixAxis => ({
+    id:
+      typeof axis?.id === 'string' && axis.id.trim().length > 0
+        ? axis.id
+        : `${kind}-axis-${index + 1}`,
+    name: typeof axis?.name === 'string' ? axis.name : '',
+    weight: Number.isFinite(Number(axis?.weight)) ? Number(axis?.weight) : 1,
+    description: typeof axis?.description === 'string' ? axis.description : '',
+    levelDescriptions: Array.isArray(axis?.levelDescriptions)
+      ? axis.levelDescriptions.map((ld: Record<string, any>, levelIndex: number) => ({
+          level: Number.isFinite(Number(ld?.level)) ? Number(ld.level) : levelIndex + 1,
+          description: typeof ld?.description === 'string' ? ld.description : ''
+        }))
+      : []
+  });
+
+  const normalizeThreshold = (
+    threshold: Record<string, any> | null | undefined,
+    index: number
+  ): MatrixThreshold => {
+    const points = Number.isFinite(Number(threshold?.points)) ? Number(threshold?.points) : 0;
+    const level = Number.isFinite(Number(threshold?.level)) ? Number(threshold?.level) : index + 1;
+    return {
+      level,
+      points,
+      threshold: Number.isFinite(Number(threshold?.threshold))
+        ? Number(threshold?.threshold)
+        : points,
+      ...(Number.isFinite(Number(threshold?.cases))
+        ? { cases: Number(threshold?.cases) }
+        : {})
+    };
+  };
+
+  const cloneMatrixConfig = (matrix: Record<string, any>): MatrixConfig => {
+    const cloned: MatrixConfig = {
+      valueAxes: Array.isArray(matrix.valueAxes)
+        ? matrix.valueAxes.map((axis: Record<string, any>, index: number) =>
+            normalizeAxis(axis, 'value', index)
+          )
+        : [],
+      complexityAxes: Array.isArray(matrix.complexityAxes)
+        ? matrix.complexityAxes.map((axis: Record<string, any>, index: number) =>
+            normalizeAxis(axis, 'complexity', index)
+          )
+        : [],
+      valueThresholds: Array.isArray(matrix.valueThresholds)
+        ? matrix.valueThresholds.map((threshold: Record<string, any>, index: number) =>
+            normalizeThreshold(threshold, index)
+          )
+        : [],
+      complexityThresholds: Array.isArray(matrix.complexityThresholds)
+        ? matrix.complexityThresholds.map((threshold: Record<string, any>, index: number) =>
+            normalizeThreshold(threshold, index)
+          )
+        : []
+    };
+
+    if (Array.isArray(matrix.valueLevelDescriptions)) {
+      cloned.valueLevelDescriptions = matrix.valueLevelDescriptions.map((value: unknown) =>
+        value == null ? '' : String(value)
+      );
+    }
+    if (Array.isArray(matrix.complexityLevelDescriptions)) {
+      cloned.complexityLevelDescriptions = matrix.complexityLevelDescriptions.map((value: unknown) =>
+        value == null ? '' : String(value)
+      );
+    }
+    return cloned;
+  };
+
+  const stringifyMatrixConfig = (value: unknown): string => {
+    if (!value || typeof value !== 'object') return '';
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  };
+
+  const hasPendingMatrixChanges = () => {
+    const changes = get(unsavedChangesStore).changes;
+    return changes.some((change) =>
+      MATRIX_UNSAVED_CHANGE_PREFIXES.some((prefix) => change.id.startsWith(prefix))
+    );
+  };
+
+  const buildMatrixPayload = (override?: any): MatrixConfig => {
+    const draft = cloneMatrixConfig(editedConfig as Record<string, any>);
+    if (override) override(draft);
+    return draft;
+  };
+
+  const applyMatrixSnapshotFromFolder = (
+    folderData: any,
+    origin: 'load' | 'sse' = 'sse'
+  ) => {
     if (!folderData) return;
     if (typeof folderData.name === 'string') {
       currentFolderName = folderData.name;
     }
-    const parsedMatrix =
-      typeof folderData.matrixConfig === 'string'
-        ? parseJsonObject(folderData.matrixConfig)
-        : folderData.matrixConfig;
-    if (parsedMatrix && typeof parsedMatrix === 'object') {
-      matrixStore.set(parsedMatrix);
-      editedConfig = { ...parsedMatrix };
-      originalConfig = { ...parsedMatrix };
+    const rawMatrix = folderData.matrixConfig ?? folderData.matrix_config;
+    const parsedMatrix = parseOptionalObject(rawMatrix);
+    if (!parsedMatrix || typeof parsedMatrix !== 'object') return;
+    const normalizedMatrix = cloneMatrixConfig(parsedMatrix);
+    const nextSnapshot = stringifyMatrixConfig(normalizedMatrix);
+    if (!nextSnapshot || nextSnapshot === lastAppliedMatrixSnapshot) return;
+    lastAppliedMatrixSnapshot = nextSnapshot;
+
+    const preserveLocalDraft = origin === 'sse' && hasPendingMatrixChanges();
+    originalConfig = cloneMatrixConfig(normalizedMatrix);
+    matrixStore.set(cloneMatrixConfig(normalizedMatrix));
+    if (!preserveLocalDraft) {
+      editedConfig = cloneMatrixConfig(normalizedMatrix);
       unsavedChangesStore.removeChange('matrix-config-all');
-      void updateCaseCounts();
     }
+    void updateCaseCounts();
   };
 
   onMount(async () => {
     await loadMatrix();
-    await updateCaseCounts();
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type !== 'folder_update') return;
       const folderId: string = evt.folderId;
@@ -105,7 +219,7 @@
       if (!folderId || !$currentFolderId || folderId !== $currentFolderId) return;
       if (data?.deleted) return;
       if (data?.folder) {
-        applyMatrixSnapshotFromFolder(data.folder);
+        applyMatrixSnapshotFromFolder(data.folder, 'sse');
       }
     });
     document.addEventListener('visibilitychange', handleVisibility);
@@ -318,14 +432,11 @@
     try {
       const folder = await apiGet(`/folders/${$currentFolderId}`);
       currentFolderName = folder.name || '';
-      
-      if (folder.matrixConfig) {
-        const matrix = typeof folder.matrixConfig === 'string' 
-          ? JSON.parse(folder.matrixConfig) 
-          : folder.matrixConfig;
-        matrixStore.set(matrix);
-        editedConfig = { ...matrix };
-        originalConfig = { ...matrix };
+
+      const rawMatrix = folder.matrixConfig ?? folder.matrix_config;
+      const matrix = parseOptionalObject(rawMatrix);
+      if (matrix && typeof matrix === 'object') {
+        applyMatrixSnapshotFromFolder(folder, 'load');
         addToast({
           type: 'success',
           message: get(_)('matrix.folderLoaded', { values: { name: folder.name } })
@@ -529,7 +640,7 @@
   };
 
   /**
-   * Programme la sauvegarde de la matrice après 5 secondes d'inactivité
+   * Programme la sauvegarde de la matrice après une courte inactivité
    * Utilisé pour les seuils, poids d'axes, et autres modifications
    */
   const scheduleMatrixSave = () => {
@@ -538,16 +649,16 @@
       clearTimeout(saveTimeout);
     }
     
-    // Programmer la sauvegarde après 5 secondes
+    // Programmer la sauvegarde avec un debounce court
     saveTimeout = setTimeout(async () => {
       await saveMatrix();
-    }, 5000);
+    }, MATRIX_SAVE_DELAY_MS);
   };
 
   /**
    * Sauvegarde automatique de la matrice modifiée
    * Cette fonction est appelée soit :
-   * - Automatiquement après 5 secondes d'inactivité (via scheduleMatrixSave)
+   * - Automatiquement après un court délai d'inactivité (via scheduleMatrixSave)
    * - Par NavigationGuard lors de la navigation (via unsavedChangesStore.saveAll)
    */
   const saveMatrix = async () => {
@@ -559,6 +670,7 @@
       await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
       matrixStore.set(editedConfig);
       originalConfig = { ...editedConfig };
+      lastAppliedMatrixSnapshot = stringifyMatrixConfig(originalConfig);
       
       // Nettoyer la modification sauvegardée du store
       // On retire la modification globale de la config matrice
@@ -597,6 +709,7 @@
       await apiPut(`/folders/${$currentFolderId}/matrix`, editedConfig);
       matrixStore.set(editedConfig);
       originalConfig = { ...editedConfig };
+      lastAppliedMatrixSnapshot = stringifyMatrixConfig(originalConfig);
       // Mettre à jour les comptages après sauvegarde
       await updateCaseCounts();
       addToast({
@@ -1000,6 +1113,15 @@
                         changeId={`value-axis-${index}-name`}
                         apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
+                        fullDataGetter={() =>
+                          buildMatrixPayload((draft: MatrixConfig) => {
+                            if (!draft.valueAxes?.[index]) return;
+                            draft.valueAxes[index] = {
+                              ...draft.valueAxes[index],
+                              name: axis.name
+                            };
+                          })
+                        }
                         multiline={true}
                         markdown={false}
                         on:change={(e) => updateAxisName(true, index, e.detail.value)}
@@ -1094,6 +1216,15 @@
                         changeId={`complexity-axis-${index}-name`}
                         apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                         fullData={editedConfig}
+                        fullDataGetter={() =>
+                          buildMatrixPayload((draft: MatrixConfig) => {
+                            if (!draft.complexityAxes?.[index]) return;
+                            draft.complexityAxes[index] = {
+                              ...draft.complexityAxes[index],
+                              name: axis.name
+                            };
+                          })
+                        }
                         multiline={true}
                         markdown={false}
                         on:change={(e) => updateAxisName(false, index, e.detail.value)}
@@ -1323,6 +1454,7 @@
                     changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis ? selectedAxis.name : 'unknown'}-level-${levelNum}`}
                     apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
+                    fullDataGetter={() => buildMatrixPayload()}
                     on:change={(e) => updateLevelDescription(levelNum, e.detail.value)}
                     on:saved={() => {
                       originalConfig = { ...editedConfig };
