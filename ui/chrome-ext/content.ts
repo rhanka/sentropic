@@ -18,12 +18,14 @@ const BLOCKED_HOSTNAMES = new Set([
 ]);
 type ChatTab = 'chat' | 'queue' | 'comments';
 type SidePanelState = 'open' | 'closed';
+const SIDEPANEL_HEARTBEAT_TTL_MS = 2500;
 let hostContainer: HTMLDivElement | null = null;
 let isOverlaySuppressed = false;
 let overlayOpenedFromPanelSwitch = false;
 let mountReady = false;
 let pendingOpenTab: ChatTab | null = null;
 let invalidContextReloadScheduled = false;
+let sidePanelLastOpenHeartbeat = 0;
 
 const isBlockedHost = (): boolean => BLOCKED_HOSTNAMES.has(window.location.hostname);
 
@@ -57,15 +59,25 @@ const handleHandoffState = (event: Event) => {
     });
 };
 
-const openSidePanel = async () => {
+const openSidePanel = async (): Promise<boolean> => {
     try {
-        await chrome.runtime.sendMessage({ type: 'open_side_panel' });
+        const response = await chrome.runtime.sendMessage({
+            type: 'open_side_panel',
+        }) as { ok?: boolean; error?: string } | undefined;
+        if (response?.ok) return true;
+        const reason = response?.error ?? 'unknown reason';
+        console.error('Failed to request side panel opening:', reason);
+        if (reason.includes('Extension context invalidated')) {
+            scheduleInvalidContextRecovery();
+        }
+        return false;
     } catch (error) {
         console.error('Failed to request side panel opening.', error);
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes('Extension context invalidated')) {
             scheduleInvalidContextRecovery();
         }
+        return false;
     }
 };
 
@@ -110,6 +122,7 @@ const collapseOverlayToBubble = () => {
 
 const handleSidePanelState = (state: SidePanelState) => {
     if (state === 'open') {
+        sidePanelLastOpenHeartbeat = Date.now();
         overlayOpenedFromPanelSwitch = false;
         isOverlaySuppressed = true;
         syncOverlayVisibility();
@@ -193,6 +206,17 @@ function bootstrap() {
             }
         }
     }, 2000);
+
+    // If side panel close signal is missed (Chrome UI close), recover to bubble mode
+    // using the latest "panel open" heartbeat.
+    window.setInterval(() => {
+        if (!isOverlaySuppressed) return;
+        if (sidePanelLastOpenHeartbeat <= 0) return;
+        if (Date.now() - sidePanelLastOpenHeartbeat <= SIDEPANEL_HEARTBEAT_TTL_MS) {
+            return;
+        }
+        handleSidePanelState('closed');
+    }, 1000);
 
     // Load the Svelte app
     // We use dynamic import to load the module which contains the Svelte component

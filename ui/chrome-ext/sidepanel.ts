@@ -8,6 +8,7 @@ const SIDEPANEL_STATE_MESSAGE = 'sidepanel_state';
 type ChatTab = 'chat' | 'queue' | 'comments';
 let ownerTabId: number | null = null;
 let closeSignalSent = false;
+let openHeartbeatTimer: number | null = null;
 
 const readHandoffState = async (): Promise<ChatWidgetHandoffState | null> => {
     try {
@@ -161,6 +162,31 @@ const notifyContentSidePanelClosedOnce = () => {
     void notifyContentSidePanelState('closed');
 };
 
+const startOpenHeartbeat = () => {
+    if (openHeartbeatTimer !== null) return;
+    void notifyContentSidePanelState('open');
+    openHeartbeatTimer = window.setInterval(() => {
+        if (document.visibilityState !== 'visible') return;
+        void notifyContentSidePanelState('open');
+    }, 1000);
+};
+
+const stopOpenHeartbeat = () => {
+    if (openHeartbeatTimer === null) return;
+    window.clearInterval(openHeartbeatTimer);
+    openHeartbeatTimer = null;
+};
+
+const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+        closeSignalSent = false;
+        startOpenHeartbeat();
+        return;
+    }
+    stopOpenHeartbeat();
+    void notifyContentSidePanelState('closed');
+};
+
 const bootstrap = async () => {
     console.log('Side panel script loaded');
     injectStyles();
@@ -181,13 +207,18 @@ const bootstrap = async () => {
 
     window.addEventListener(HANDOFF_EVENT, handleHandoffState as EventListener);
     window.addEventListener(OPEN_OVERLAY_EVENT, handleOpenOverlayRequest as EventListener);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', notifyContentSidePanelClosedOnce, {
         once: true,
     });
     window.addEventListener('beforeunload', notifyContentSidePanelClosedOnce, {
         once: true,
     });
-    void notifyContentSidePanelState('open');
+    if (document.visibilityState === 'visible') {
+        startOpenHeartbeat();
+    } else {
+        void notifyContentSidePanelState('closed');
+    }
 };
 
 void bootstrap();

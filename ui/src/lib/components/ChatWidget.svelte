@@ -304,7 +304,6 @@
   const toggleDisplayMode = () => {
     if (isExtensionOverlayHost) {
       requestOpenSidePanel();
-      close();
       return;
     }
     if (isSidePanelHost) {
