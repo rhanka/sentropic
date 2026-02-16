@@ -22,6 +22,7 @@
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+  const HUB_KEY = 'matrixPage';
 
   let isLoading = false;
   let editedConfig = { ...$matrixStore };
@@ -62,9 +63,51 @@
   let lastReadOnlyRole = $workspaceReadOnlyScope;
   const LOCK_REFRESH_MS = 10 * 1000;
 
+  const parseJsonObject = (value: unknown): Record<string, any> | null => {
+    if (!value) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const applyMatrixSnapshotFromFolder = (folderData: any) => {
+    if (!folderData) return;
+    if (typeof folderData.name === 'string') {
+      currentFolderName = folderData.name;
+    }
+    const parsedMatrix =
+      typeof folderData.matrixConfig === 'string'
+        ? parseJsonObject(folderData.matrixConfig)
+        : folderData.matrixConfig;
+    if (parsedMatrix && typeof parsedMatrix === 'object') {
+      matrixStore.set(parsedMatrix);
+      editedConfig = { ...parsedMatrix };
+      originalConfig = { ...parsedMatrix };
+      unsavedChangesStore.removeChange('matrix-config-all');
+      void updateCaseCounts();
+    }
+  };
+
   onMount(async () => {
     await loadMatrix();
     await updateCaseCounts();
+    streamHub.set(HUB_KEY, (evt: any) => {
+      if (evt?.type !== 'folder_update') return;
+      const folderId: string = evt.folderId;
+      const data: any = evt.data ?? {};
+      if (!folderId || !$currentFolderId || folderId !== $currentFolderId) return;
+      if (data?.deleted) return;
+      if (data?.folder) {
+        applyMatrixSnapshotFromFolder(data.folder);
+      }
+    });
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handleLeave);
     window.addEventListener('beforeunload', handleLeave);
@@ -75,6 +118,7 @@
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
+    streamHub.delete(HUB_KEY);
     if (lockHubKey) streamHub.delete(lockHubKey);
     if (lockRefreshTimer) clearInterval(lockRefreshTimer);
     if (lockTargetId) void leavePresence('folder', lockTargetId);

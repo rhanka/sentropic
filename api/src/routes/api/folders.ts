@@ -511,5 +511,6 @@ foldersRouter.put('/:id/matrix', requireEditor, requireWorkspaceEditorRole(), zV
   if (updated.length === 0) {
     return c.json({ message: 'Not found' }, 404);
   }
+  await notifyFolderEvent(id);
   return c.json(matrix);
 });
