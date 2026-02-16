@@ -1,9 +1,14 @@
 <script lang="ts">
   import { toasts, removeToast } from '$lib/stores/toast';
+  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { CheckCircle2, XCircle, AlertTriangle, Info, Download, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
+
+  $: isDockedOpen = $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen;
+  $: shiftLeftForDock = isDockedOpen && $chatWidgetLayout.dockWidthCss !== '100vw';
+  $: rightOffset = shiftLeftForDock ? `calc(${$chatWidgetLayout.dockWidthCss} + 1rem)` : '1rem';
 
   const getToastClasses = (type: string) => {
     const baseClasses = 'rounded-lg p-4 shadow-lg border max-w-sm w-full';
@@ -38,7 +43,10 @@
 
 </script>
 
-<div class="toast-container fixed bottom-20 right-4 z-50 space-y-2 max-w-[calc(100vw-2rem)]">
+<div
+  class="toast-container fixed bottom-20 z-[70] space-y-2 max-w-[calc(100vw-2rem)] transition-[right] duration-200"
+  style:right={rightOffset}
+>
   {#each $toasts as toast (toast.id)}
     {@const Icon = getIcon(toast.type)}
     <div
