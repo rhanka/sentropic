@@ -9,7 +9,7 @@ import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { initApiClient } from '$lib/core/api-client';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { initializeSession } from '$lib/stores/session';
-import { loadExtensionConfig } from './extension-config';
+import { loadExtensionConfig, type ExtensionRuntimeConfig } from './extension-config';
 import { installOverlayFetchProxy } from './network-bridge';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
@@ -33,6 +33,8 @@ export type ChatWidgetMountOptions = {
     initialState?: ChatWidgetHandoffState | null;
 };
 
+const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
+
 /**
  * Mounts the ChatWidget into the target element.
  */
@@ -41,14 +43,18 @@ export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
         const hostMode = options.hostMode ?? 'overlay';
         const runtimeConfig = await loadExtensionConfig();
 
-        initApiClient({
-            baseUrl: runtimeConfig.apiBaseUrl,
-            isBrowser: true,
-        });
+        const applyRuntimeConfig = (config: Pick<ExtensionRuntimeConfig, 'apiBaseUrl'>) => {
+            initApiClient({
+                baseUrl: config.apiBaseUrl,
+                isBrowser: true,
+            });
 
-        if (hostMode === 'overlay') {
-            installOverlayFetchProxy(runtimeConfig.apiBaseUrl);
-        }
+            if (hostMode === 'overlay') {
+                installOverlayFetchProxy(config.apiBaseUrl);
+            }
+        };
+
+        applyRuntimeConfig(runtimeConfig);
 
         // Use the extension context provider
         const contextProvider = createExtensionContextProvider();
@@ -61,6 +67,16 @@ export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
                 initialState: options.initialState ?? null,
             },
         });
+
+        const onConfigUpdated = (event: Event) => {
+            const detail = (event as CustomEvent<Partial<ExtensionRuntimeConfig>>).detail;
+            if (!detail?.apiBaseUrl) return;
+            applyRuntimeConfig({
+                apiBaseUrl: detail.apiBaseUrl,
+            });
+            void initializeSession();
+        };
+        window.addEventListener(EXTENSION_CONFIG_UPDATED_EVENT, onConfigUpdated);
 
         // Ensure stores relying on auth state (SSE, queue badges) are hydrated in extension contexts.
         void initializeSession();
