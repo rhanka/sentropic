@@ -11,7 +11,6 @@
     organizationExportState,
   } from '$lib/stores/organizations';
   import { goto } from '$app/navigation';
-  import { API_BASE_URL } from '$lib/config';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { streamHub } from '$lib/stores/streamHub';
   import { addToast } from '$lib/stores/toast';
@@ -111,10 +110,9 @@
 
   const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
     if (!text) return '';
-    const normalized = text.replace(/\r\n?/g, '\n');
-    return normalized
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/([^\n])\n([^\n])/g, '$1\n\n$2');
+    // Keep markdown stable between editor <-> API snapshots.
+    // Only normalize line endings to avoid newline amplification loops.
+    return text.replace(/\r\n?/g, '\n');
   };
 
   const refreshOrgaDebugFlag = () => {
@@ -618,7 +616,7 @@
   <OrganizationForm
     organization={organization}
     {organizationData}
-    apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
+    apiEndpoint={`/organizations/${organization.id}`}
     locked={isLockedByOther || isReadOnlyRole}
     onFieldUpdate={handleFieldUpdate}
     onFieldSaved={handleFieldSaved}
