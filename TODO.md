@@ -261,6 +261,7 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [ ] SDLC
     - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
     - [ ] isoler correctement le chatwidget et ses stores pour permettre ce mode
+    - [ ] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
   - [ ] UI
     - [ ] mode bulle + flottant
     - [ ] mode docker/side panel
