@@ -309,7 +309,6 @@
     }
     if (isSidePanelHost) {
       requestOpenOverlay();
-      close();
       return;
     }
     setDisplayMode(displayMode === 'docked' ? 'floating' : 'docked');
