@@ -59,7 +59,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test` (passed)
   - [x] **UAT planning update**: defer Web App non-regression UAT from Lot 2 to Lot 3 integrated UAT (plugin + app in the same cycle).
 
-- [ ] **Lot 3 — Chrome extension skeleton + behavior parity**
+- [x] **Lot 3 — Chrome extension skeleton + behavior parity**
   - [x] Create `ui/chrome-ext/manifest.json` (Manifest V3)
   - [x] Create `ui/chrome-ext/content.ts` (Shadow DOM bootstrap + ChatWidget mount)
   - [x] Create `ui/chrome-ext/background.ts` (service worker skeleton)
@@ -81,7 +81,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
       - [x] **Build**: Run `make build-ext`. Verification: `✅ Extension built` and files in `ui/chrome-ext/dist/`.
       - [x] **Install**: Open `chrome://extensions`, enable "Developer mode", click "Load unpacked", select `ui/chrome-ext/dist` folder.
       - [x] **Verify loadability**: Manifest is accepted by Chrome (no load blocker on manifest/content script).
-  - [ ] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4A)**
+  - [x] **Lot 3B — ChatWidget/ChatPanel exact UX parity (mandatory before Lot 4A)**
     - [x] Remove temporary fallback UI from `ui/chrome-ext/content.ts` (no custom `AI` button, no ad-hoc popup panel)
     - [x] Mount the existing ChatWidget implementation only (same bubble icon/component and same UI contract as web app)
     - [x] Keep same opening/closing behavior and anchoring (no unexpected move/jump when opening panel)
@@ -91,7 +91,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Fix dynamic import mount contract: `chatwidget.js` now registers a global mount fallback and `content.ts` resolves `mount` from export/default/global.
     - [x] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
     - [x] Ready for partial UAT Lot 3B on root workspace (`.`) with current branch state.
-    - [ ] **Partial UAT Lot 3B — Chrome Extension parity (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [x] **Partial UAT Lot 3B — Chrome Extension parity (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
       - [x] **Prepare extension build**: Run `make build-ext` from root workspace (`.`).
       - [x] **Reload extension**: In `chrome://extensions`, click "Reload" on unpacked extension (or load `ui/chrome-ext/dist` again if needed).
       - [x] **Bubble parity (Chrome page)**: Same chat bubble icon as web app (not text `AI`), same default collapsed state.
@@ -99,7 +99,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
       - [x] **Close parity (Chrome page)**: Closing/minimizing restores same collapsed behavior and button placement.
       - [x] **Position parity (Chrome page)**: Bubble remains anchored in expected corner before/after toggles (no drift/jump).
       - [x] **Style parity (Chrome page)**: Header/body/input/actions/toasts match existing ChatWidget/ChatPanel visual system, except font-family parity.
-      - [ ] **Font parity (Chrome page)**: Same font-family token as web app in extension context (tracked in Lot 3C).
+      - [x] **Font parity (Chrome page)**: Same font-family token as web app in extension context (tracked in Lot 3C).
       - [x] **Behavior parity (Chrome page)**: Send one message and verify streaming response behavior remains consistent.
       - [x] **No runtime errors (Chrome page)**: No extension content-script error in extension page/console during open-close-send flow.
     - [x] **Partial UAT Lot 3B — Web App non-regression (execute on root workspace `~/src/top-ai-ideas-fullstack`)**
@@ -108,12 +108,12 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
       - [x] **Context**: Navigate to folder/usecase and verify chat context is still correct.
       - [x] **Streaming**: Send a message and verify streaming response behavior is unchanged.
       - [x] **Toasts**: Trigger one success/error feedback path and verify toast style/placement unchanged in web app.
-  - [ ] **UAT: Integrated App + Chrome Extension (close Lot 3, root workspace only)**
-    - [x] Confirm both partial checklists are completed: `3B Chrome Extension parity` + `3B Web App non-regression` (with one known gap: font parity only).
+  - [x] **UAT: Integrated App + Chrome Extension (close Lot 3, root workspace only)**
+    - [x] Confirm both partial checklists are completed: `3B Chrome Extension parity` + `3B Web App non-regression`.
     - [x] Confirm no cross-regression between extension behavior and web app behavior in the same UAT cycle.
-    - [ ] Close Lot 3 only after Lot 3C font parity is validated.
+    - [x] Close Lot 3 only after Lot 3C font parity is validated.
 
-- [ ] **Lot 3C — Runtime parity hardening (font, side panel, host exclusion)**
+- [x] **Lot 3C — Runtime parity hardening (font, side panel, host exclusion)**
   - [x] Define a single shared font token (e.g. `--chat-font-family`) used by both web app and extension widget.
   - [x] Apply the shared font token at ChatWidget root level to avoid host page font override in Shadow DOM.
   - [x] Replace extension in-page docked behavior with official Chrome Side Panel behavior for docked mode.
@@ -127,14 +127,15 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Runtime hostname denylist fallback in `content.ts`.
   - [x] Lot gate: `make typecheck-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make typecheck-api API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-api API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make build-ext API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin`
   - [x] Ready for partial UAT Lot 3C on root workspace (`.`).
-  - [ ] **Partial UAT Lot 3C (root workspace `~/src/top-ai-ideas-fullstack`)**
-    - [ ] Run `make build-ext`, reload unpacked extension.
-    - [ ] Validate font parity between web app widget and extension widget.
-    - [ ] Validate side panel mode keeps same component style/behavior as floating mode.
-    - [ ] Validate side panel critical regressions are fixed: overlay/panel switch button visible and functional, streaming works, composer stays at bottom, messages list is scrollable, no empty burger action.
-    - [ ] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
+  - [x] **Partial UAT Lot 3C (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [x] Run `make build-ext`, reload unpacked extension.
+    - [x] Validate font parity between web app widget and extension widget.
+    - [x] Validate side panel mode keeps same component style/behavior as floating mode.
+    - [x] Validate side panel critical regressions are fixed: overlay/panel switch button visible and functional, streaming works, composer stays at bottom, messages list is scrollable, no empty burger action.
+    - [x] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
 
 - [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
+  - [ ] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains.
   - [ ] Add extension runtime profiles: `UAT`, `PROD` (API base URL mandatory, app base URL, optional WS base URL).
   - [ ] Add profile/config UI (popup or options page) with validation and persistence.
   - [ ] Ensure both `UAT` and `PROD` profiles are API-connected (no disconnected mock-only flow).
@@ -144,6 +145,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [ ] **Partial UAT Lot 4A (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [ ] Switch profile `UAT`/`PROD` and verify endpoint persistence.
     - [ ] Validate connectivity status and chat send/streaming in both profiles.
+    - [ ] Validate floating overlay widget can initialize session and chat send/stream without `Failed to initialize session` / `Failed to fetch`.
     - [ ] Validate failure mode when endpoint is invalid (clear user feedback, no silent failure).
 
 - [ ] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
