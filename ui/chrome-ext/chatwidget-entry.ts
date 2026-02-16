@@ -6,8 +6,11 @@
 import '../src/app.css';
 import ChatWidget from '$lib/components/ChatWidget.svelte';
 import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+import { initApiClient } from '$lib/core/api-client';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
 import { initializeSession } from '$lib/stores/session';
+import { loadExtensionConfig } from './extension-config';
+import { installOverlayFetchProxy } from './network-bridge';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
 
@@ -34,20 +37,34 @@ export type ChatWidgetMountOptions = {
  * Mounts the ChatWidget into the target element.
  */
 export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
-    // Ensure stores relying on auth state (SSE, queue badges) are hydrated in extension contexts.
-    void initializeSession();
+    void (async () => {
+        const hostMode = options.hostMode ?? 'overlay';
+        const runtimeConfig = await loadExtensionConfig();
 
-    // Use the extension context provider
-    const contextProvider = createExtensionContextProvider();
+        initApiClient({
+            baseUrl: runtimeConfig.apiBaseUrl,
+            isBrowser: true,
+        });
 
-    mountSvelte(ChatWidget, {
-        target: target as HTMLElement,
-        props: {
-            contextProvider,
-            hostMode: options.hostMode ?? 'overlay',
-            initialState: options.initialState ?? null,
-        },
-    });
+        if (hostMode === 'overlay') {
+            installOverlayFetchProxy(runtimeConfig.apiBaseUrl);
+        }
+
+        // Use the extension context provider
+        const contextProvider = createExtensionContextProvider();
+
+        mountSvelte(ChatWidget, {
+            target: target as HTMLElement,
+            props: {
+                contextProvider,
+                hostMode,
+                initialState: options.initialState ?? null,
+            },
+        });
+
+        // Ensure stores relying on auth state (SSE, queue badges) are hydrated in extension contexts.
+        void initializeSession();
+    })();
 }
 
 // Keep a global fallback to tolerate bundlers that drop entry exports.
