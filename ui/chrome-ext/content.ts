@@ -2,12 +2,12 @@
 // Bootstraps the ChatWidget inside a Shadow DOM to avoid CSS conflicts.
 
 import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
-import { CHATWIDGET_HANDOFF_STORAGE_KEY } from '$lib/core/chatwidget-handoff';
 import type { ChatWidgetMountOptions } from './chatwidget-entry';
 
 console.log('Top AI Ideas Content Script loading...');
 
 const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
+const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
 const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
 const OPEN_CHAT_EVENT = 'topai:open-chat';
 const BLOCKED_HOSTNAMES = new Set([
