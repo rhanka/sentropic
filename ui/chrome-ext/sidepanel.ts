@@ -52,15 +52,36 @@ const openOverlayInActiveTab = async (
             console.warn('No active tab found to reopen chat overlay.');
             return false;
         }
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-            type: 'open_overlay_chat',
-            activeTab: activeTab ?? 'chat',
-        });
-        if (!response?.ok) {
-            console.warn('Overlay open request was not acknowledged by content script.');
+        const sendOpenRequest = async (): Promise<boolean> => {
+            try {
+                const response = await chrome.tabs.sendMessage(targetTabId, {
+                    type: 'open_overlay_chat',
+                    activeTab: activeTab ?? 'chat',
+                });
+                return Boolean(response?.ok);
+            } catch {
+                return false;
+            }
+        };
+
+        if (await sendOpenRequest()) {
+            return true;
+        }
+
+        // Fallback: content script may not yet be present (new tab / delayed injection).
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: targetTabId },
+                files: ['content.js'],
+            });
+        } catch (injectError) {
+            console.warn(
+                'Unable to inject content script before reopening chat overlay.',
+                injectError,
+            );
             return false;
         }
-        return true;
+        return sendOpenRequest();
     } catch (error) {
         console.warn('Unable to request chat overlay opening from side panel.', error);
         return false;
