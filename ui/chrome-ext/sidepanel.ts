@@ -9,6 +9,7 @@ type ChatTab = 'chat' | 'queue' | 'comments';
 let ownerTabId: number | null = null;
 let closeSignalSent = false;
 let openHeartbeatTimer: number | null = null;
+let overlaySwitchInProgress = false;
 
 const readHandoffState = async (): Promise<ChatWidgetHandoffState | null> => {
     try {
@@ -95,10 +96,23 @@ const openOverlayInActiveTab = async (
 };
 
 const handleOpenOverlayRequest = (event: Event) => {
+    if (overlaySwitchInProgress) return;
+    overlaySwitchInProgress = true;
     const detail = (event as CustomEvent<{ activeTab?: ChatTab }>).detail;
+    stopOpenHeartbeat();
+    closeSignalSent = false;
+    void notifyContentSidePanelState('closed');
     void (async () => {
         const opened = await openOverlayInActiveTab(detail?.activeTab);
-        if (!opened) return;
+        if (!opened) {
+            overlaySwitchInProgress = false;
+            if (document.visibilityState === 'visible') {
+                startOpenHeartbeat();
+            } else {
+                void notifyContentSidePanelState('closed');
+            }
+            return;
+        }
         window.close();
     })();
 };

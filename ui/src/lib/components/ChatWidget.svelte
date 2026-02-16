@@ -285,10 +285,36 @@
     );
   };
 
-  const requestOpenSidePanel = () => {
-    if (!isBrowser || !isExtensionOverlayHost) return;
+  const requestOpenSidePanel = async (): Promise<boolean> => {
+    if (!isBrowser || !isExtensionOverlayHost) return false;
+    const runtime = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: any };
+    }).chrome?.runtime;
+
+    if (runtime?.sendMessage) {
+      try {
+        const response = await runtime.sendMessage({
+          type: 'open_side_panel',
+        });
+        if (response?.ok) {
+          publishHandoffStateIfChanged();
+          return true;
+        }
+        console.error(
+          'Failed to request side panel opening:',
+          response?.error ?? 'unknown reason',
+        );
+        return false;
+      } catch (error) {
+        console.error('Failed to request side panel opening.', error);
+        return false;
+      }
+    }
+
+    // Legacy fallback (should not happen in normal extension runtime).
     publishHandoffStateIfChanged();
     window.dispatchEvent(new CustomEvent(OPEN_SIDEPANEL_EVENT));
+    return false;
   };
 
   const requestOpenOverlay = () => {
@@ -301,9 +327,10 @@
     );
   };
 
-  const toggleDisplayMode = () => {
+  const toggleDisplayMode = async () => {
     if (isExtensionOverlayHost) {
-      requestOpenSidePanel();
+      const opened = await requestOpenSidePanel();
+      if (opened) close();
       return;
     }
     if (isSidePanelHost) {
