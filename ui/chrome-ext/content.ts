@@ -26,7 +26,7 @@ let ignoreOpenStateUntil = 0;
 let ignoreClosedStateUntil = 0;
 let mountReady = false;
 let pendingOpenTab: ChatTab | null = null;
-let invalidContextReloadScheduled = false;
+let invalidContextWarningShown = false;
 let sidePanelLastOpenHeartbeat = 0;
 
 const isBlockedHost = (): boolean => BLOCKED_HOSTNAMES.has(window.location.hostname);
@@ -84,14 +84,11 @@ const openSidePanel = async (): Promise<boolean> => {
 };
 
 const scheduleInvalidContextRecovery = () => {
-    if (invalidContextReloadScheduled) return;
-    invalidContextReloadScheduled = true;
+    if (invalidContextWarningShown) return;
+    invalidContextWarningShown = true;
     console.warn(
-        'Extension context invalidated. Reloading page to recover content script context.',
+        'Extension context invalidated. Please reload the extension and refresh the tab manually.',
     );
-    window.setTimeout(() => {
-        window.location.reload();
-    }, 50);
 };
 
 const syncOverlayVisibility = () => {
@@ -204,19 +201,6 @@ function bootstrap() {
     window.addEventListener(OPEN_SIDEPANEL_EVENT, () => {
         void openSidePanel();
     });
-
-    // Dev/UAT safety: after extension reload, old content-script contexts become invalid.
-    // Detect and self-recover instead of keeping a half-broken widget on the page.
-    window.setInterval(() => {
-        try {
-            void chrome.runtime.getURL('');
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (message.includes('Extension context invalidated')) {
-                scheduleInvalidContextRecovery();
-            }
-        }
-    }, 2000);
 
     // If side panel close signal is missed (Chrome UI close), recover to bubble mode
     // using the latest "panel open" heartbeat.
