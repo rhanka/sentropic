@@ -19,6 +19,7 @@
   export let changeId = ""; // ID unique pour cette modification
   /** @type {any} */
   export let fullData = null; // Données complètes à envoyer (optionnel)
+  /** @type {(() => any) | null} */
   export let fullDataGetter = null; // Fonction pour récupérer les données complètes au moment de la sauvegarde
   export let originalValue = ""; // Valeur originale pour comparaison
   export let references = []; // Références pour post-traitement des citations [1], [2]
@@ -145,6 +146,19 @@
         const computed = fullDataGetter();
         if (computed) {
           payload = computed;
+        }
+      }
+      // Guardrail: when payload is a single primitive field, always persist the latest edited value.
+      // This prevents stale snapshot writes if parent fullData lagged behind the current input state.
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        const entries = Object.entries(payload);
+        if (entries.length === 1) {
+          const [onlyKey, onlyValue] = entries[0];
+          const isPrimitiveValue =
+            onlyValue == null || ['string', 'number', 'boolean'].includes(typeof onlyValue);
+          if (isPrimitiveValue) {
+            payload = { ...payload, [onlyKey]: saveValue };
+          }
         }
       }
       await apiPut(apiEndpoint, payload);

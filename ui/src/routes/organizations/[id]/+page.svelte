@@ -30,6 +30,7 @@
   import { listComments } from '$lib/utils/comments';
   import { fetchFolders } from '$lib/stores/folders';
   import { Lock } from '@lucide/svelte';
+  import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
 
   let organization: Organization | null = null;
   let error = '';
@@ -108,13 +109,6 @@
   let lastOrganizationDataId: string | null = null;
   let orgaDebugEnabled = false;
 
-  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
-    if (!text) return '';
-    // Keep markdown stable between editor <-> API snapshots.
-    // Only normalize line endings to avoid newline amplification loops.
-    return text.replace(/\r\n?/g, '\n');
-  };
-
   const refreshOrgaDebugFlag = () => {
     if (typeof window === 'undefined') {
       orgaDebugEnabled = false;
@@ -131,7 +125,7 @@
 
   const formatFieldForEditor = (field: OrgField, value: unknown): string => {
     const text = typeof value === 'string' ? value : value == null ? '' : String(value);
-    return MARKDOWN_FIELDS.has(field) ? fixMarkdownLineBreaks(text) : text;
+    return MARKDOWN_FIELDS.has(field) ? normalizeMarkdownLineEndings(text) : text;
   };
 
   const normalizeOrganizationFields = (source: Organization | null | undefined): Record<OrgField, string> => {
@@ -261,9 +255,17 @@
       if (data?.organization) {
         const updated = data.organization;
         const previous = normalizeOrganizationFields(organization as Organization);
-        organization = { ...(organization || ({} as any)), ...updated };
-        const next = normalizeOrganizationFields(organization as Organization);
-        applyOrganizationSnapshot(organization as Organization, 'sse');
+        const nextOrganization = { ...(organization || ({} as any)), ...updated } as Organization;
+        organization = nextOrganization;
+        organizationsStore.update((items) => {
+          const idx = items.findIndex((o) => o.id === currentId);
+          if (idx === -1) return [nextOrganization, ...items];
+          const nextItems = [...items];
+          nextItems[idx] = { ...nextItems[idx], ...updated };
+          return nextItems;
+        });
+        const next = normalizeOrganizationFields(nextOrganization);
+        applyOrganizationSnapshot(nextOrganization, 'sse');
         logOrgaDebug('sse.organization_update', {
           organizationId: currentId,
           changedFields: getChangedOrgFields(previous, next),

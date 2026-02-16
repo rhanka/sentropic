@@ -25,9 +25,8 @@
   export let commentCounts: Record<string, number> | null = null;
   export let onOpenComments: OpenCommentsHandler | null = null;
 
-  const getFieldValue = (field: OrgField): string => {
-    return (organizationData?.[field] ?? organization?.[field] ?? '') as string;
-  };
+  const getFieldValue = (field: OrgField): string =>
+    (organizationData?.[field] ?? organization?.[field] ?? '') as string;
 
   const getOriginalValue = (field: OrgField): string => {
     if (getFieldOriginal) return getFieldOriginal(field);
@@ -45,6 +44,29 @@
     const value = event?.detail?.value ?? getFieldValue(field);
     onFieldSaved?.(field, value);
   };
+
+  const ORG_FIELDS: OrgField[] = [
+    'name',
+    'industry',
+    'size',
+    'technologies',
+    'products',
+    'processes',
+    'challenges',
+    'objectives',
+    'kpis',
+  ];
+
+  const buildFieldValues = (
+    primary: Record<string, any> | null | undefined,
+    fallback: Record<string, any> | null | undefined
+  ): Record<OrgField, string> =>
+    Object.fromEntries(
+      ORG_FIELDS.map((field) => [field, (primary?.[field] ?? fallback?.[field] ?? '') as string])
+    ) as Record<OrgField, string>;
+
+  // Reactive and generic: dependencies stay explicit through parameters.
+  $: fieldValues = buildFieldValues(organizationData, organization);
 </script>
 
 {#if organization}
@@ -54,11 +76,12 @@
         <h1 class="text-3xl font-semibold break-words mb-0">
           <EditableInput
             label={nameLabel}
-            value={getFieldValue('name')}
+            value={fieldValues.name}
             originalValue={getOriginalValue('name')}
             changeId={apiEndpoint ? 'organization-name' : 'new-organization-name'}
             apiEndpoint={apiEndpoint}
             fullData={getPayload('name')}
+            fullDataGetter={() => getPayload('name')}
             markdown={false}
             multiline={true}
             locked={locked}
@@ -71,11 +94,12 @@
         <p class="text-lg text-slate-600 mt-1">
           <span class="font-medium">{$_('organizations.fields.industry')}</span>
           <EditableInput
-            value={getFieldValue('industry')}
+            value={fieldValues.industry}
             originalValue={getOriginalValue('industry')}
             changeId={apiEndpoint ? 'organization-industry' : 'new-organization-industry'}
             apiEndpoint={apiEndpoint}
             fullData={getPayload('industry')}
+            fullDataGetter={() => getPayload('industry')}
             locked={locked}
             placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
@@ -103,11 +127,12 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={getFieldValue('size')}
+            value={fieldValues.size}
             originalValue={getOriginalValue('size')}
             changeId={apiEndpoint ? 'organization-size' : 'new-organization-size'}
             apiEndpoint={apiEndpoint}
             fullData={getPayload('size')}
+            fullDataGetter={() => getPayload('size')}
             markdown={true}
             locked={locked}
             placeholder={$_('common.unspecified')}
@@ -128,11 +153,12 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={getFieldValue('technologies')}
+            value={fieldValues.technologies}
             originalValue={getOriginalValue('technologies')}
             changeId={apiEndpoint ? 'organization-technologies' : 'new-organization-technologies'}
             apiEndpoint={apiEndpoint}
             fullData={getPayload('technologies')}
+            fullDataGetter={() => getPayload('technologies')}
             markdown={true}
             locked={locked}
             placeholder={$_('common.unspecified')}
@@ -154,11 +180,12 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={getFieldValue('products')}
+          value={fieldValues.products}
           originalValue={getOriginalValue('products')}
           changeId={apiEndpoint ? 'organization-products' : 'new-organization-products'}
           apiEndpoint={apiEndpoint}
           fullData={getPayload('products')}
+          fullDataGetter={() => getPayload('products')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
@@ -179,11 +206,12 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={getFieldValue('processes')}
+          value={fieldValues.processes}
           originalValue={getOriginalValue('processes')}
           changeId={apiEndpoint ? 'organization-processes' : 'new-organization-processes'}
           apiEndpoint={apiEndpoint}
           fullData={getPayload('processes')}
+          fullDataGetter={() => getPayload('processes')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
@@ -207,11 +235,12 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={getFieldValue('kpis')}
+            value={fieldValues.kpis}
             originalValue={getOriginalValue('kpis')}
             changeId="organization-kpis"
             apiEndpoint={apiEndpoint}
             fullData={getPayload('kpis')}
+            fullDataGetter={() => getPayload('kpis')}
             markdown={true}
             multiline={true}
             locked={locked}
@@ -234,11 +263,12 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={getFieldValue('challenges')}
+          value={fieldValues.challenges}
           originalValue={getOriginalValue('challenges')}
           changeId={apiEndpoint ? 'organization-challenges' : 'new-organization-challenges'}
           apiEndpoint={apiEndpoint}
           fullData={getPayload('challenges')}
+          fullDataGetter={() => getPayload('challenges')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
@@ -259,11 +289,12 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={getFieldValue('objectives')}
+          value={fieldValues.objectives}
           originalValue={getOriginalValue('objectives')}
           changeId={apiEndpoint ? 'organization-objectives' : 'new-organization-objectives'}
           apiEndpoint={apiEndpoint}
           fullData={getPayload('objectives')}
+          fullDataGetter={() => getPayload('objectives')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
