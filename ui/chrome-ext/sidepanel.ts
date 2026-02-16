@@ -4,6 +4,10 @@ import { mount } from './chatwidget-entry';
 
 const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
 const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
+const SIDEPANEL_STATE_MESSAGE = 'sidepanel_state';
+type ChatTab = 'chat' | 'queue' | 'comments';
+let ownerTabId: number | null = null;
+let closeSignalSent = false;
 
 const readHandoffState = async (): Promise<ChatWidgetHandoffState | null> => {
     try {
@@ -43,7 +47,7 @@ const handleHandoffState = (event: Event) => {
 };
 
 const openOverlayInActiveTab = async (
-    activeTab?: 'chat' | 'queue' | 'comments',
+    activeTab?: ChatTab,
 ): Promise<boolean> => {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -52,6 +56,7 @@ const openOverlayInActiveTab = async (
             console.warn('No active tab found to reopen chat overlay.');
             return false;
         }
+        ownerTabId = targetTabId;
         const sendOpenRequest = async (): Promise<boolean> => {
             try {
                 const response = await chrome.tabs.sendMessage(targetTabId, {
@@ -89,7 +94,7 @@ const openOverlayInActiveTab = async (
 };
 
 const handleOpenOverlayRequest = (event: Event) => {
-    const detail = (event as CustomEvent<{ activeTab?: 'chat' | 'queue' | 'comments' }>).detail;
+    const detail = (event as CustomEvent<{ activeTab?: ChatTab }>).detail;
     void (async () => {
         const opened = await openOverlayInActiveTab(detail?.activeTab);
         if (!opened) return;
@@ -97,9 +102,41 @@ const handleOpenOverlayRequest = (event: Event) => {
     })();
 };
 
+const getActiveTabId = async (): Promise<number | null> => {
+    try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tabId = tabs[0]?.id;
+        return typeof tabId === 'number' ? tabId : null;
+    } catch {
+        return null;
+    }
+};
+
+const notifyContentSidePanelState = async (state: 'open' | 'closed') => {
+    const tabId = ownerTabId ?? (await getActiveTabId());
+    if (typeof tabId !== 'number') return;
+    ownerTabId = tabId;
+    try {
+        await chrome.tabs.sendMessage(tabId, {
+            type: SIDEPANEL_STATE_MESSAGE,
+            state,
+        });
+    } catch (error) {
+        console.warn('Unable to notify content script about side panel state.', error);
+    }
+};
+
+const notifyContentSidePanelClosedOnce = () => {
+    if (closeSignalSent) return;
+    closeSignalSent = true;
+    void notifyContentSidePanelState('closed');
+};
+
 const bootstrap = async () => {
     console.log('Side panel script loaded');
     injectStyles();
+    ownerTabId = await getActiveTabId();
+    closeSignalSent = false;
 
     const mountPoint = document.getElementById('sidepanel-root');
     if (!mountPoint) {
@@ -115,6 +152,13 @@ const bootstrap = async () => {
 
     window.addEventListener(HANDOFF_EVENT, handleHandoffState as EventListener);
     window.addEventListener(OPEN_OVERLAY_EVENT, handleOpenOverlayRequest as EventListener);
+    window.addEventListener('pagehide', notifyContentSidePanelClosedOnce, {
+        once: true,
+    });
+    window.addEventListener('beforeunload', notifyContentSidePanelClosedOnce, {
+        once: true,
+    });
+    void notifyContentSidePanelState('open');
 };
 
 void bootstrap();
