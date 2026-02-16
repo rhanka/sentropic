@@ -187,9 +187,9 @@
     const currentScope = $workspaceScope.selectedId ?? null;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
-      // Reconnect SSE when user/scope changes so workspace-scoped streams
-      // always follow the active scope (prevents stale live updates).
-      streamHub.reset();
+      // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
+      // On nettoie uniquement les caches côté UI.
+      streamHub.clearCaches();
       organizationsStore.set([]);
       currentOrganizationId.set(null);
       foldersStore.set([]);
