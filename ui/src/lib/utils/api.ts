@@ -5,7 +5,7 @@
  */
 
 const _skBrowser = typeof window !== 'undefined';
-import { getApiBrowserFlag } from '$lib/core/api-client';
+import { getApiBaseUrl, getApiBrowserFlag } from '$lib/core/api-client';
 import { API_BASE_URL } from '$lib/config';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
@@ -31,7 +31,8 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const rawUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
+  const rawUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
 
   // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
   const scoped = getScopedWorkspaceIdForUser();

@@ -11,8 +11,9 @@
         "sidePanel"
     ],
     "host_permissions": [
-        "https://top-ai-ideas-api.sent-tech.ca/*",
-        "http://localhost:8787/*"
+        "https://*.sent-tech.ca/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
     ],
     "background": {
         "service_worker": "background.js",

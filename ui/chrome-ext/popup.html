@@ -5,14 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Top AI Ideas Assistant</title>
   <style>
-    body { font-family: sans-serif; padding: 16px; min-width: 300px; }
-    h1 { font-size: 16px; margin-top: 0; }
-    button { padding: 8px 16px; cursor: pointer; }
+    :root {
+      color-scheme: light;
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 14px;
+      min-width: 340px;
+      background: #f7f9fc;
+      color: #0f172a;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 9px;
+    }
+    .field label {
+      font-size: 12px;
+      color: #334155;
+      font-weight: 600;
+    }
+    .field input,
+    .field select {
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      font-size: 12px;
+      padding: 7px 9px;
+      background: #fff;
+      color: #0f172a;
+      outline: none;
+    }
+    .field input:focus,
+    .field select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #0f172a;
+    }
+    button.primary {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #ffffff;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      min-height: 16px;
+    }
+    .status.ok {
+      color: #047857;
+    }
+    .status.error {
+      color: #b91c1c;
+    }
+    .status.info {
+      color: #1e40af;
+    }
   </style>
 </head>
 <body>
   <h1>Top AI Ideas Assistant</h1>
-  <div id="app"></div>
+  <div id="app" class="panel"></div>
   <script type="module" src="./popup.ts"></script>
 </body>
 </html>
