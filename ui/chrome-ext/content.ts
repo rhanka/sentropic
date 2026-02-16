@@ -9,6 +9,7 @@ console.log('Top AI Ideas Content Script loading...');
 
 const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
 const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
+const OPEN_CHAT_EVENT = 'topai:open-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
@@ -55,6 +56,20 @@ const openSidePanel = async () => {
         console.error('Failed to request side panel opening.', error);
     }
 };
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'open_overlay_chat') return;
+    const activeTab = message?.activeTab as 'chat' | 'queue' | 'comments' | undefined;
+    window.dispatchEvent(
+        new CustomEvent(OPEN_CHAT_EVENT, {
+            detail: {
+                activeTab,
+            },
+        }),
+    );
+    sendResponse?.({ ok: true });
+    return true;
+});
 
 function bootstrap() {
     if (isBlockedHost()) {

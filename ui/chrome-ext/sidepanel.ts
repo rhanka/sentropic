@@ -3,6 +3,7 @@ import { CHATWIDGET_HANDOFF_STORAGE_KEY } from '$lib/core/chatwidget-handoff';
 import { mount } from './chatwidget-entry';
 
 const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
+const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
 
 const readHandoffState = async (): Promise<ChatWidgetHandoffState | null> => {
     try {
@@ -41,6 +42,28 @@ const handleHandoffState = (event: Event) => {
     });
 };
 
+const openOverlayInActiveTab = async (activeTab?: 'chat' | 'queue' | 'comments') => {
+    try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const targetTabId = tabs[0]?.id;
+        if (typeof targetTabId !== 'number') {
+            console.warn('No active tab found to reopen chat overlay.');
+            return;
+        }
+        await chrome.tabs.sendMessage(targetTabId, {
+            type: 'open_overlay_chat',
+            activeTab: activeTab ?? 'chat',
+        });
+    } catch (error) {
+        console.warn('Unable to request chat overlay opening from side panel.', error);
+    }
+};
+
+const handleOpenOverlayRequest = (event: Event) => {
+    const detail = (event as CustomEvent<{ activeTab?: 'chat' | 'queue' | 'comments' }>).detail;
+    void openOverlayInActiveTab(detail?.activeTab);
+};
+
 const bootstrap = async () => {
     console.log('Side panel script loaded');
     injectStyles();
@@ -58,6 +81,7 @@ const bootstrap = async () => {
     });
 
     window.addEventListener(HANDOFF_EVENT, handleHandoffState as EventListener);
+    window.addEventListener(OPEN_OVERLAY_EVENT, handleOpenOverlayRequest as EventListener);
 };
 
 void bootstrap();
