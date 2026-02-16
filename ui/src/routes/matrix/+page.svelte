@@ -37,7 +37,6 @@
   let originalConfig = { ...$matrixStore };
   let lastAppliedMatrixSnapshot = '';
   let selectedAxisId: string | null = null;
-  let selectedAxis: MatrixAxis | null = null;
   let isValueAxis = false;
   let showDescriptionsDialog = false;
   let showCreateMatrixDialog = false;
@@ -196,7 +195,11 @@
     return axes.find((axis) => axis.id === axisId) ?? null;
   };
 
-  $: selectedAxis = findAxisById(editedConfig as MatrixConfig, selectedAxisId, isValueAxis);
+  const getSelectedAxis = (): MatrixAxis | null =>
+    findAxisById(editedConfig as MatrixConfig, selectedAxisId, isValueAxis);
+
+  const getSelectedAxisOriginal = (): MatrixAxis | null =>
+    findAxisById(originalConfig as MatrixConfig, selectedAxisId, isValueAxis);
 
   const applyMatrixSnapshotFromFolder = (
     folderData: any,
@@ -887,12 +890,11 @@
   };
 
   const getSelectedLevelDescription = (level: number): string => {
-    return getLevelDescription(selectedAxis, level);
+    return getLevelDescription(getSelectedAxis(), level);
   };
 
   const getSelectedLevelOriginalDescription = (level: number): string => {
-    const originalAxis = findAxisById(originalConfig as MatrixConfig, selectedAxisId, isValueAxis);
-    return getLevelDescription(originalAxis, level);
+    return getLevelDescription(getSelectedAxisOriginal(), level);
   };
 
   const updateLevelDescription = (levelNum: number, description: string) => {
@@ -1436,7 +1438,7 @@
     <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-2">
-          {selectedAxis?.name} - {$_('matrix.levelDescriptionsTitle')}
+          {getSelectedAxis()?.name || ''} - {$_('matrix.levelDescriptionsTitle')}
         </h3>
         <p class="text-gray-600 mb-4">
           {$_('matrix.help.details')}
@@ -1479,7 +1481,7 @@
                     locked={isReadOnly}
                     value={getSelectedLevelDescription(levelNum)}
                     originalValue={getSelectedLevelOriginalDescription(levelNum)}
-                    changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxis?.id ?? selectedAxisId ?? 'unknown'}-level-${levelNum}`}
+                    changeId={`${isValueAxis ? 'value' : 'complexity'}-axis-${selectedAxisId ?? 'unknown'}-level-${levelNum}`}
                     apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
                     fullDataGetter={() => buildMatrixPayload()}
