@@ -177,10 +177,21 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
 }
 
 function hydrateFolderForSse(row: Record<string, unknown>): Record<string, unknown> {
+  const matrixRaw = row.matrixConfig ?? row.matrix_config;
+  const executiveSummaryRaw =
+    row.executiveSummary ?? row.executive_summary ?? row.exec_summary;
+  const organizationId = (row.organizationId ?? row.organization_id ?? null) as string | null;
+  const createdAt = row.createdAt ?? row.created_at ?? null;
+
   return {
-    ...row,
-    matrixConfig: parseJsonObject(row.matrixConfig),
-    executiveSummary: parseJsonObject(row.executiveSummary),
+    id: row.id,
+    name: row.name,
+    description: row.description ?? null,
+    organizationId,
+    matrixConfig: parseJsonObject(matrixRaw),
+    executiveSummary: parseJsonObject(executiveSummaryRaw),
+    status: row.status ?? null,
+    createdAt,
   };
 }
 
