@@ -17,7 +17,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
-  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { normalizeMarkdownLineEndings, renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import {
@@ -104,23 +104,62 @@
     return null;
   };
 
+  const parseOptionalObject = (value: unknown): Record<string, any> | null | undefined => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed === null) return null;
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
   const applyFolderSnapshot = (folderId: string, folderData: any) => {
     if (!folderData || !selectedFolderId || folderId !== selectedFolderId) return;
 
     const normalizedFolder = { ...folderData };
-    if (folderData.matrixConfig !== undefined) {
-      normalizedFolder.matrixConfig =
-        typeof folderData.matrixConfig === 'string'
-          ? parseJsonObject(folderData.matrixConfig)
-          : folderData.matrixConfig;
-      matrix = normalizedFolder.matrixConfig;
+    const rawMatrixConfig = folderData.matrixConfig ?? folderData.matrix_config;
+    if (rawMatrixConfig !== undefined) {
+      const incomingMatrix = parseOptionalObject(rawMatrixConfig);
+      if (incomingMatrix === undefined) {
+        delete (normalizedFolder as any).matrixConfig;
+      } else {
+        normalizedFolder.matrixConfig = incomingMatrix;
+        matrix = incomingMatrix as MatrixConfig | null;
+      }
     }
-    if (folderData.executiveSummary !== undefined) {
-      normalizedFolder.executiveSummary =
-        typeof folderData.executiveSummary === 'string'
-          ? parseJsonObject(folderData.executiveSummary)
-          : folderData.executiveSummary;
-      executiveSummary = normalizedFolder.executiveSummary;
+    const rawExecutiveSummary =
+      folderData.executiveSummary ?? folderData.executive_summary ?? folderData.exec_summary;
+    if (rawExecutiveSummary !== undefined) {
+      const incomingExecutiveSummary = parseOptionalObject(rawExecutiveSummary);
+      if (incomingExecutiveSummary === null) {
+        normalizedFolder.executiveSummary = null;
+        executiveSummary = null;
+        applyExecutiveSummarySnapshot(folderId, null);
+      } else if (incomingExecutiveSummary && typeof incomingExecutiveSummary === 'object') {
+        const previousSummary =
+          executiveSummary && typeof executiveSummary === 'object' ? executiveSummary : {};
+        const mergedExecutiveSummary = {
+          ...previousSummary,
+          ...incomingExecutiveSummary,
+          references:
+            incomingExecutiveSummary.references !== undefined
+              ? incomingExecutiveSummary.references
+              : previousSummary.references || []
+        };
+        normalizedFolder.executiveSummary = mergedExecutiveSummary;
+        executiveSummary = mergedExecutiveSummary;
+        applyExecutiveSummarySnapshot(folderId, mergedExecutiveSummary);
+      } else {
+        // Ignore malformed partial payloads instead of wiping local executive summary state.
+        delete (normalizedFolder as any).executiveSummary;
+      }
     }
     currentFolder = { ...(currentFolder || {}), ...normalizedFolder };
     if (typeof folderData.name === 'string') {
@@ -319,50 +358,67 @@
     }
   }
   
-  // Local state for markdown editing (not persisted)
-  let editedIntroduction = '';
-  let editedAnalyse = '';
-  let editedRecommandation = '';
-  let editedSyntheseExecutive = '';
-  
-  // Initialize edited values from executiveSummary
-  function initializeEditedValues() {
-    if (!executiveSummary) {
-      editedIntroduction = '';
-      editedAnalyse = '';
-      editedRecommandation = '';
-      editedSyntheseExecutive = '';
+  type ExecutiveSummaryField = 'introduction' | 'analyse' | 'recommandation' | 'synthese_executive';
+  const EXECUTIVE_SUMMARY_FIELDS: ExecutiveSummaryField[] = [
+    'introduction',
+    'analyse',
+    'recommandation',
+    'synthese_executive',
+  ];
+  const emptyExecutiveSummaryRecord = (): Record<ExecutiveSummaryField, string> => ({
+    introduction: '',
+    analyse: '',
+    recommandation: '',
+    synthese_executive: '',
+  });
+
+  let executiveSummaryData: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let executiveSummaryBuffers: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let executiveSummaryOriginals: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let lastExecutiveSummaryFolderId: string | null = null;
+
+  const normalizeExecutiveSummaryFields = (
+    summary: Record<string, any> | null | undefined
+  ): Record<ExecutiveSummaryField, string> => {
+    const normalized = emptyExecutiveSummaryRecord();
+    if (!summary) return normalized;
+    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
+      normalized[field] = normalizeMarkdownLineEndings(summary[field]);
+    }
+    return normalized;
+  };
+
+  const applyExecutiveSummarySnapshot = (
+    folderId: string | null | undefined,
+    summary: Record<string, any> | null | undefined
+  ) => {
+    const incoming = normalizeExecutiveSummaryFields(summary);
+    if (!folderId || folderId !== lastExecutiveSummaryFolderId) {
+      lastExecutiveSummaryFolderId = folderId ?? null;
+      executiveSummaryBuffers = { ...incoming };
+      executiveSummaryOriginals = { ...incoming };
+      executiveSummaryData = { ...incoming };
       return;
     }
-    
-    // Parser executiveSummary si c'est une chaîne JSON
-    let parsedSummary: any = executiveSummary;
-    if (typeof executiveSummary === 'string') {
-      try {
-        parsedSummary = JSON.parse(executiveSummary);
-      } catch (e) {
-        console.error('Failed to parse executiveSummary:', e);
-        parsedSummary = null;
+
+    const nextBuffers = { ...executiveSummaryBuffers };
+    const nextOriginals = { ...executiveSummaryOriginals };
+    let changed = false;
+
+    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
+      if (incoming[field] !== executiveSummaryOriginals[field]) {
+        nextBuffers[field] = incoming[field];
+        nextOriginals[field] = incoming[field];
+        changed = true;
       }
     }
-    
-    if (parsedSummary) {
-      editedIntroduction = parsedSummary.introduction || '';
-      editedAnalyse = parsedSummary.analyse || '';
-      editedRecommandation = parsedSummary.recommandation || '';
-      editedSyntheseExecutive = parsedSummary.synthese_executive || '';
-    } else {
-      editedIntroduction = '';
-      editedAnalyse = '';
-      editedRecommandation = '';
-      editedSyntheseExecutive = '';
+
+    if (changed) {
+      executiveSummaryBuffers = nextBuffers;
+      executiveSummaryOriginals = nextOriginals;
     }
-  }
-  
-  // Initialiser les valeurs éditées quand executiveSummary change (réinitialisées à chaque reload)
-  $: if (executiveSummary !== undefined) {
-    initializeEditedValues();
-  }
+    executiveSummaryData = { ...(changed ? nextBuffers : executiveSummaryBuffers) };
+  };
   
   // Numéros de page statiques pour le sommaire
   const basePageNumbers = {
@@ -450,10 +506,14 @@
     // Reload on workspace selection change
     let lastScope = $workspaceScope.selectedId;
     const unsub = workspaceScope.subscribe((s) => {
-      if (s.selectedId !== lastScope) {
+      const nextScope = s.selectedId ?? null;
+      const previousScope = lastScope ?? null;
+      // Ignore transient scope clear while workspace list is reloading.
+      if (s.loading && !nextScope && !!previousScope) {
+        return;
+      }
+      if (nextScope !== previousScope) {
         lastScope = s.selectedId;
-        selectedFolderId = null;
-        currentFolderId.set(null);
         void loadData();
       }
     });
@@ -485,8 +545,10 @@
       const useCases = await fetchUseCases();
       useCasesStore.set(useCases);
       
-      // Sélectionner le dossier actuel ou le premier disponible
-      selectedFolderId = $currentFolderId || (folders.length > 0 ? folders[0].id : null);
+      // Sélectionner le dossier persistant uniquement s'il existe dans le scope courant
+      const persistedFolderId = $currentFolderId;
+      const hasPersistedFolder = !!persistedFolderId && folders.some((f) => f.id === persistedFolderId);
+      selectedFolderId = hasPersistedFolder ? persistedFolderId : (folders.length > 0 ? folders[0].id : null);
       
       if (selectedFolderId) {
         // Ensure global context is set (used by chat context detection)
@@ -507,18 +569,38 @@
   const loadMatrix = async (folderId: string) => {
     try {
       const folder = await apiGet(`/folders/${folderId}`);
-      currentFolder = folder;
-      matrix = folder.matrixConfig;
-      executiveSummary = folder.executiveSummary || null;
+      const normalizedFolder = { ...folder };
+      normalizedFolder.matrixConfig =
+        typeof folder.matrixConfig === 'string'
+          ? parseJsonObject(folder.matrixConfig)
+          : folder.matrixConfig;
+      normalizedFolder.executiveSummary =
+        typeof folder.executiveSummary === 'string'
+          ? parseJsonObject(folder.executiveSummary)
+          : folder.executiveSummary;
+
+      currentFolder = normalizedFolder;
+      matrix = normalizedFolder.matrixConfig;
+      executiveSummary = normalizedFolder.executiveSummary || null;
+      applyExecutiveSummarySnapshot(folderId, executiveSummary as Record<string, any> | null);
       
       // Mettre à jour le folder dans le store pour refléter les changements de statut
-      foldersStore.update(folders => 
-        folders.map(f => f.id === folderId ? { ...f, status: folder.status, executiveSummary: folder.executiveSummary, name: folder.name } : f)
+      foldersStore.update(folders =>
+        folders.map((f) =>
+          f.id === folderId
+            ? {
+                ...f,
+                status: normalizedFolder.status,
+                executiveSummary: normalizedFolder.executiveSummary,
+                name: normalizedFolder.name
+              }
+            : f
+        )
       );
       
       // Mettre à jour le titre édité si c'est le dossier actuel
       if (folderId === selectedFolderId) {
-        editedFolderName = folder.name || '';
+        editedFolderName = normalizedFolder.name || '';
       }
     } catch (error) {
       console.error('Failed to load matrix:', error);
@@ -562,37 +644,40 @@
     }
   };
 
-  // Fonctions helper pour construire fullData pour chaque section de executiveSummary
-  const getExecutiveSummaryUpdateData = (field: string, newValue: string) => {
+  const handleExecutiveSummaryFieldChange = (field: ExecutiveSummaryField, value: string) => {
+    const normalizedValue = normalizeMarkdownLineEndings(value);
+    executiveSummaryBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
+    executiveSummaryData = { ...executiveSummaryBuffers };
+  };
+
+  const getExecutiveSummaryPayload = (field: ExecutiveSummaryField) => {
     if (!executiveSummary || !selectedFolderId) return undefined;
-    
-    // Construire l'objet executiveSummary complet avec le champ mis à jour
+    const value = executiveSummaryBuffers[field] ?? executiveSummaryData[field] ?? '';
+    const fields = { ...executiveSummaryBuffers, [field]: normalizeMarkdownLineEndings(value) };
     return {
       executiveSummary: {
-        introduction: field === 'introduction' ? newValue : (executiveSummary.introduction || ''),
-        analyse: field === 'analyse' ? newValue : (executiveSummary.analyse || ''),
-        recommandation: field === 'recommandation' ? newValue : (executiveSummary.recommandation || ''),
-        synthese_executive: field === 'synthese_executive' ? newValue : (executiveSummary.synthese_executive || ''),
+        ...fields,
         references: executiveSummary.references || []
       }
     };
   };
-  
-  // Variables réactives pour fullData (pour éviter les problèmes de type dans le template)
-  $: syntheseFullData = getExecutiveSummaryUpdateData('synthese_executive', editedSyntheseExecutive) || null;
-  $: introductionFullData = getExecutiveSummaryUpdateData('introduction', editedIntroduction) || null;
-  $: analyseFullData = getExecutiveSummaryUpdateData('analyse', editedAnalyse) || null;
-  $: recommandationFullData = getExecutiveSummaryUpdateData('recommandation', editedRecommandation) || null;
+
+  const getExecutiveSummaryOriginal = (field: ExecutiveSummaryField): string => {
+    return executiveSummaryOriginals[field] || '';
+  };
 
   // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
-  const handleExecutiveSummarySaved = (field: string) => {
+  const handleExecutiveSummarySaved = (field: ExecutiveSummaryField, value: string) => {
     if (!selectedFolderId) return;
+    const normalizedValue = normalizeMarkdownLineEndings(value);
+    const nextBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
+    executiveSummaryBuffers = nextBuffers;
+    executiveSummaryOriginals = { ...executiveSummaryOriginals, [field]: normalizedValue };
+    executiveSummaryData = { ...nextBuffers };
 
     const nextExecutiveSummary = {
-      introduction: editedIntroduction,
-      analyse: editedAnalyse,
-      recommandation: editedRecommandation,
-      synthese_executive: editedSyntheseExecutive,
+      ...(executiveSummary || {}),
+      ...nextBuffers,
       references: executiveSummary?.references || []
     };
 
@@ -1051,12 +1136,12 @@
       <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
     </div>
     
-    {#if editedSyntheseExecutive}
+    {#if executiveSummaryData.synthese_executive}
       <div class="report-cover-summary" bind:this={summaryBox}>
         <h3>{$_('dashboard.execSummary')}</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-            {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
+            {@html renderMarkdownWithRefs(executiveSummaryData.synthese_executive, executiveSummary?.references || [], {
               addListStyles: true,
               addHeadingStyles: true,
               listPadding: 1.5
@@ -1162,19 +1247,25 @@
           <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
         </div>
         
-        {#if editedSyntheseExecutive}
+        {#if executiveSummaryData.synthese_executive}
           <EditableInput
             label=""
-            value={editedSyntheseExecutive}
+            value={executiveSummaryData.synthese_executive}
             markdown={true}
             locked={isDashboardReadOnly}
             apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-            fullData={syntheseFullData}
+            fullData={getExecutiveSummaryPayload('synthese_executive')}
+            fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
             changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
-            originalValue={executiveSummary?.synthese_executive || ''}
+            originalValue={getExecutiveSummaryOriginal('synthese_executive')}
             references={executiveSummary?.references || []}
-            on:change={(e) => editedSyntheseExecutive = e.detail.value}
-            on:saved={() => handleExecutiveSummarySaved('synthese_executive')}
+            on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
+            on:saved={(e) =>
+              handleExecutiveSummarySaved(
+                'synthese_executive',
+                (e as CustomEvent<{ value?: string }>).detail?.value ??
+                  executiveSummaryData.synthese_executive
+              )}
           />
         {/if}
       </div>
@@ -1370,7 +1461,7 @@
         </div>
 
         <!-- Introduction -->
-        {#if editedIntroduction}
+        {#if executiveSummaryData.introduction}
           <div id="section-introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.introduction')}</h2>
@@ -1379,16 +1470,22 @@
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedIntroduction}
+                  value={executiveSummaryData.introduction}
                   markdown={true}
                   locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={introductionFullData}
+                  fullData={getExecutiveSummaryPayload('introduction')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('introduction')}
                   changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.introduction || ''}
+                  originalValue={getExecutiveSummaryOriginal('introduction')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedIntroduction = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('introduction')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('introduction', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'introduction',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.introduction
+                    )}
                 />
               </div>
             </div>
@@ -1448,7 +1545,7 @@
     {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
       <div class="space-y-6">
 
-        {#if editedAnalyse}
+        {#if executiveSummaryData.analyse}
           <div id="section-analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.analysis')}</h2>
@@ -1457,23 +1554,29 @@
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedAnalyse}
+                  value={executiveSummaryData.analyse}
                   markdown={true}
                   locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={analyseFullData}
+                  fullData={getExecutiveSummaryPayload('analyse')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('analyse')}
                   changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.analyse || ''}
+                  originalValue={getExecutiveSummaryOriginal('analyse')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedAnalyse = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('analyse')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('analyse', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'analyse',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.analyse
+                    )}
                 />
               </div>
             </div>
           </div>
         {/if}
 
-        {#if editedRecommandation}
+        {#if executiveSummaryData.recommandation}
           <div id="section-recommandations" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
               <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.recommendations')}</h2>
@@ -1482,16 +1585,22 @@
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedRecommandation}
+                  value={executiveSummaryData.recommandation}
                   markdown={true}
                   locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={recommandationFullData}
+                  fullData={getExecutiveSummaryPayload('recommandation')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('recommandation')}
                   changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.recommandation || ''}
+                  originalValue={getExecutiveSummaryOriginal('recommandation')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedRecommandation = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('recommandation')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('recommandation', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'recommandation',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.recommandation
+                    )}
                 />
               </div>
             </div>
