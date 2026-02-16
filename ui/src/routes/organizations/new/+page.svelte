@@ -20,6 +20,7 @@
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
   import References from '$lib/components/References.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
 
   let organization: Partial<Organization> = {
     name: '',
@@ -77,10 +78,10 @@
     name: organization.name || '',
     industry: organization.industry || '',
     size: organization.size || '',
-    technologies: organization.technologies || '',
-    products: organization.products || '',
-    processes: organization.processes || '',
-    kpis: organization.kpis || '',
+    technologies: normalizeMarkdownLineEndings(organization.technologies),
+    products: normalizeMarkdownLineEndings(organization.products),
+    processes: normalizeMarkdownLineEndings(organization.processes),
+    kpis: normalizeMarkdownLineEndings(organization.kpis),
     challenges: organization.challenges || '',
     objectives: organization.objectives || ''
   };
