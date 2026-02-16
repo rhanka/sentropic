@@ -7,6 +7,7 @@ import '../src/app.css';
 import ChatWidget from '$lib/components/ChatWidget.svelte';
 import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
+import { initializeSession } from '$lib/stores/session';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
 
@@ -33,6 +34,9 @@ export type ChatWidgetMountOptions = {
  * Mounts the ChatWidget into the target element.
  */
 export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
+    // Ensure stores relying on auth state (SSE, queue badges) are hydrated in extension contexts.
+    void initializeSession();
+
     // Use the extension context provider
     const contextProvider = createExtensionContextProvider();
 
