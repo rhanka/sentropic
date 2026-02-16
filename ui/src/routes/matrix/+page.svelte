@@ -24,11 +24,12 @@
   import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X, Lock } from '@lucide/svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
+  import { AUTOSAVE_DEBOUNCE_MS } from '$lib/constants/autosave';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
   const HUB_KEY = 'matrixPage';
-  const MATRIX_SAVE_DELAY_MS = 400;
+  const MATRIX_SAVE_DELAY_MS = AUTOSAVE_DEBOUNCE_MS;
   const MATRIX_UNSAVED_CHANGE_PREFIXES = ['value-axis-', 'complexity-axis-', 'matrix-config-all'];
 
   let isLoading = false;
@@ -562,7 +563,7 @@
       saveFunction: saveMatrix
     });
     
-    // Programmer la sauvegarde après 5 secondes (auto-save)
+    // Programmer la sauvegarde (auto-save)
     scheduleMatrixSave();
     // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
@@ -584,7 +585,7 @@
       saveFunction: saveMatrix
     });
     
-    // Programmer la sauvegarde après 5 secondes (auto-save)
+    // Programmer la sauvegarde (auto-save)
     scheduleMatrixSave();
     // Note: updateCaseCounts() n'est pas appelé ici car il fait un fetch des cas d'usage
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
@@ -608,7 +609,7 @@
           saveFunction: saveMatrix
         });
         
-        // Programmer la sauvegarde après 5 secondes (auto-save)
+        // Programmer la sauvegarde (auto-save)
         scheduleMatrixSave();
         
         // Recalculer les comptages immédiatement (pour feedback visuel)
@@ -630,7 +631,7 @@
           saveFunction: saveMatrix
         });
         
-        // Programmer la sauvegarde après 5 secondes (auto-save)
+        // Programmer la sauvegarde (auto-save)
         scheduleMatrixSave();
         
         // Recalculer les comptages immédiatement
@@ -753,7 +754,7 @@
       saveFunction: saveMatrix // Réutiliser la même fonction de sauvegarde
     });
     
-    // Programmer la sauvegarde après 5 secondes
+    // Programmer la sauvegarde
     scheduleMatrixSave();
     // Note: updateCaseCounts() n'est pas appelé ici car l'ajout d'axe ne change pas les comptages
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
@@ -788,7 +789,7 @@
       saveFunction: saveMatrix
     });
     
-    // Programmer la sauvegarde après 5 secondes
+    // Programmer la sauvegarde
     scheduleMatrixSave();
     // Note: updateCaseCounts() n'est pas appelé ici car la suppression d'axe ne change pas les comptages
     // Les comptages seront mis à jour après sauvegarde ou lors de la modification des seuils
