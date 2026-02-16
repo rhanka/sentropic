@@ -11,7 +11,7 @@
   export let value = ""; // La valeur de l'input
   export let markdown = false;
   export let apiEndpoint = ""; // Endpoint API pour la sauvegarde
-  export let saveDelay = 0; // Save delay in ms (default: immediate)
+  export let saveDelay = 400; // Short debounce to keep UX immediate without request bursts
   export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
   export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)

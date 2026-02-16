@@ -56,6 +56,25 @@
     | null = null;
   const HUB_KEY = 'dashboardPage';
   $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+
+  const applyFolderSnapshot = (folderId: string, folderData: any) => {
+    if (!folderData || !selectedFolderId || folderId !== selectedFolderId) return;
+
+    currentFolder = { ...(currentFolder || {}), ...folderData };
+    if (folderData.matrixConfig !== undefined) {
+      matrix = folderData.matrixConfig;
+    }
+    if (folderData.executiveSummary !== undefined) {
+      executiveSummary = folderData.executiveSummary;
+    }
+    if (typeof folderData.name === 'string') {
+      editedFolderName = folderData.name;
+    }
+
+    foldersStore.update((folders) =>
+      folders.map((f) => (f.id === folderId ? { ...f, ...(folderData as any) } : f))
+    );
+  };
   
   // Local state for markdown editing (not persisted)
   let editedIntroduction = '';
@@ -146,14 +165,18 @@
     await loadData();
     })();
 
-    // SSE: refresh executive summary + folder/matrix data when updated via chat tools (folder_update)
-    // and keep charts/lists synced with usecase_update.
+    // SSE: keep dashboard data synced with optimistic updates and collaborative edits.
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type === 'folder_update') {
         const folderId: string = evt.folderId;
         const data: any = evt.data ?? {};
         if (!folderId || !selectedFolderId || folderId !== selectedFolderId) return;
         if (data?.deleted) return;
+        if (data?.folder) {
+          applyFolderSnapshot(folderId, data.folder);
+          return;
+        }
+        // Fallback only when SSE payload has no folder snapshot.
         void loadMatrix(folderId);
         return;
       }
@@ -306,36 +329,31 @@
   $: analyseFullData = getExecutiveSummaryUpdateData('analyse', editedAnalyse) || null;
   $: recommandationFullData = getExecutiveSummaryUpdateData('recommandation', editedRecommandation) || null;
 
-  // Gérer la sauvegarde réussie - recharger le folder et mettre à jour
-  const handleExecutiveSummarySaved = async (field: string) => {
+  // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
+  const handleExecutiveSummarySaved = (field: string) => {
     if (!selectedFolderId) return;
-    
-    try {
-      // Recharger le folder pour avoir les données à jour
-      await loadMatrix(selectedFolderId);
-      
-      // Mettre à jour le store des dossiers
-      const folders = await fetchFolders();
-      foldersStore.set(folders);
-      
-      // Mettre à jour originalValue pour refléter la nouvelle valeur sauvegardée
-      if (executiveSummary) {
-        const fieldMap: Record<string, keyof typeof executiveSummary> = {
-          'introduction': 'introduction',
-          'analyse': 'analyse',
-          'recommandation': 'recommandation',
-          'synthese_executive': 'synthese_executive'
-        };
-        
-        if (fieldMap[field] && executiveSummary[fieldMap[field]]) {
-          // Les variables edited* seront mises à jour via la réactivité de initializeEditedValues
-        }
-      }
 
-      clearDashboardDocxReadyToast();
+    const nextExecutiveSummary = {
+      introduction: editedIntroduction,
+      analyse: editedAnalyse,
+      recommandation: editedRecommandation,
+      synthese_executive: editedSyntheseExecutive,
+      references: executiveSummary?.references || []
+    };
+
+    executiveSummary = nextExecutiveSummary;
+    if (currentFolder) {
+      currentFolder = { ...currentFolder, executiveSummary: nextExecutiveSummary };
+    }
+    foldersStore.update((folders) =>
+      folders.map((f) =>
+        f.id === selectedFolderId ? { ...f, executiveSummary: nextExecutiveSummary } : f
+      )
+    );
+
+    clearDashboardDocxReadyToast();
+    if (field) {
       applyDashboardDocxEvent({ type: 'content_changed' });
-    } catch (error) {
-      console.error('Failed to reload folder after save:', error);
     }
   };
 
@@ -347,22 +365,18 @@
     editedFolderName = selectedFolderName || '';
   }
 
-  // Gérer la sauvegarde du titre du dossier
-  const handleFolderNameSaved = async () => {
+  // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
+  const handleFolderNameSaved = () => {
     if (!selectedFolderId) return;
-    
-    try {
-      // Recharger le folder pour avoir les données à jour
-      await loadMatrix(selectedFolderId);
-      
-      // Mettre à jour le store des dossiers
-      const folders = await fetchFolders();
-      foldersStore.set(folders);
-      clearDashboardDocxReadyToast();
-      applyDashboardDocxEvent({ type: 'content_changed' });
-    } catch (error) {
-      console.error('Failed to reload folder after name save:', error);
+
+    if (currentFolder) {
+      currentFolder = { ...currentFolder, name: editedFolderName };
     }
+    foldersStore.update((folders) =>
+      folders.map((f) => (f.id === selectedFolderId ? { ...f, name: editedFolderName } : f))
+    );
+    clearDashboardDocxReadyToast();
+    applyDashboardDocxEvent({ type: 'content_changed' });
   };
 
   const clearDashboardDocxReadyToast = () => {

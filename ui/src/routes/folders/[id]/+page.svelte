@@ -195,15 +195,12 @@
     window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
   };
 
-  const handleFolderNameSaved = async () => {
-    try {
-      const folder: Folder = await apiGet(`/folders/${folderId}`);
-      currentFolder = folder;
-      editedFolderName = folder.name || '';
-      foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
-    } catch {
-      // ignore
-    }
+  const handleFolderNameSaved = () => {
+    if (!currentFolder) return;
+    currentFolder = { ...currentFolder, name: editedFolderName };
+    foldersStore.update((items) =>
+      items.map((f) => (f.id === currentFolder?.id ? { ...f, name: editedFolderName } : f))
+    );
   };
 
   const handleUseCaseClick = (useCaseId: string, status: string) => {
