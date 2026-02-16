@@ -22,6 +22,7 @@ const SIDEPANEL_HEARTBEAT_TTL_MS = 2500;
 let hostContainer: HTMLDivElement | null = null;
 let isOverlaySuppressed = false;
 let panelToOverlaySwitchPending = false;
+let ignoreOpenStateUntil = 0;
 let mountReady = false;
 let pendingOpenTab: ChatTab | null = null;
 let invalidContextReloadScheduled = false;
@@ -100,6 +101,7 @@ const syncOverlayVisibility = () => {
 const requestOpenOverlayChat = (activeTab?: ChatTab) => {
     const targetTab = activeTab ?? 'chat';
     panelToOverlaySwitchPending = true;
+    ignoreOpenStateUntil = 0;
     isOverlaySuppressed = false;
     syncOverlayVisibility();
     if (!mountReady) {
@@ -122,6 +124,7 @@ const collapseOverlayToBubble = () => {
 
 const handleSidePanelState = (state: SidePanelState) => {
     if (state === 'open') {
+        if (Date.now() < ignoreOpenStateUntil) return;
         sidePanelLastOpenHeartbeat = Date.now();
         if (panelToOverlaySwitchPending) return;
         isOverlaySuppressed = true;
@@ -135,6 +138,8 @@ const handleSidePanelState = (state: SidePanelState) => {
 
     if (panelToOverlaySwitchPending) {
         panelToOverlaySwitchPending = false;
+        // Ignore stale delayed "open" heartbeats after a deliberate panel -> overlay switch.
+        ignoreOpenStateUntil = Date.now() + SIDEPANEL_HEARTBEAT_TTL_MS;
         return;
     }
 
