@@ -6,12 +6,13 @@
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
   import { apiPut } from "$lib/utils/api";
+  import { AUTOSAVE_DEBOUNCE_MS } from "$lib/constants/autosave";
   
   export let label = ""; // Le label affiché au-dessus
   export let value = ""; // La valeur de l'input
   export let markdown = false;
   export let apiEndpoint = ""; // Endpoint API pour la sauvegarde
-  export let saveDelay = 400; // Short debounce to keep UX immediate without request bursts
+  export let saveDelay = AUTOSAVE_DEBOUNCE_MS; // Shared autosave debounce across views
   export let placeholder = ""; // Placeholder (input/textarea + markdown via TipTap)
   export let disabled = false;
   export let locked = false; // Read-only/locked mode (blocks editing, prevents saves)
