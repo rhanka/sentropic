@@ -20,6 +20,7 @@
   import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
+  import type { OrgField } from '$lib/components/organization-form.types';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
@@ -67,20 +68,130 @@
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   let lastReadOnlyRole = isReadOnlyRole;
   const LOCK_REFRESH_MS = 10 * 1000;
+  const ORGA_DEBUG_STORAGE_KEY = 'topai:debug:orga-loop';
 
-  $: organizationData = organization
-    ? {
-        name: organization.name,
-        industry: organization.industry,
-        size: organization.size,
-        technologies: organization.technologies || '',
-        products: organization.products || '',
-        processes: organization.processes || '',
-        kpis: organization.kpis || '',
-        challenges: organization.challenges || '',
-        objectives: organization.objectives || '',
+  const ORG_FIELDS: OrgField[] = [
+    'name',
+    'industry',
+    'size',
+    'technologies',
+    'products',
+    'processes',
+    'challenges',
+    'objectives',
+    'kpis',
+  ];
+  const MARKDOWN_FIELDS = new Set<OrgField>([
+    'size',
+    'technologies',
+    'products',
+    'processes',
+    'challenges',
+    'objectives',
+    'kpis',
+  ]);
+
+  const emptyFieldRecord = (): Record<OrgField, string> => ({
+    name: '',
+    industry: '',
+    size: '',
+    technologies: '',
+    products: '',
+    processes: '',
+    challenges: '',
+    objectives: '',
+    kpis: '',
+  });
+
+  let organizationData: Record<OrgField, string> = emptyFieldRecord();
+  let fieldBuffers: Record<OrgField, string> = emptyFieldRecord();
+  let fieldOriginals: Record<OrgField, string> = emptyFieldRecord();
+  let lastOrganizationDataId: string | null = null;
+  let orgaDebugEnabled = false;
+
+  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
+    if (!text) return '';
+    const normalized = text.replace(/\r\n?/g, '\n');
+    return normalized
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/([^\n])\n([^\n])/g, '$1\n\n$2');
+  };
+
+  const refreshOrgaDebugFlag = () => {
+    if (typeof window === 'undefined') {
+      orgaDebugEnabled = false;
+      return;
+    }
+    orgaDebugEnabled = window.localStorage.getItem(ORGA_DEBUG_STORAGE_KEY) === '1';
+  };
+
+  const logOrgaDebug = (event: string, details: Record<string, unknown> = {}) => {
+    if (!orgaDebugEnabled) return;
+    const now = new Date().toISOString();
+    console.debug(`[ORGA-LOOP][${now}] ${event}`, details);
+  };
+
+  const formatFieldForEditor = (field: OrgField, value: unknown): string => {
+    const text = typeof value === 'string' ? value : value == null ? '' : String(value);
+    return MARKDOWN_FIELDS.has(field) ? fixMarkdownLineBreaks(text) : text;
+  };
+
+  const normalizeOrganizationFields = (source: Organization | null | undefined): Record<OrgField, string> => {
+    const base = emptyFieldRecord();
+    if (!source) return base;
+    for (const field of ORG_FIELDS) {
+      base[field] = formatFieldForEditor(field, (source as Record<string, unknown>)[field]);
+    }
+    return base;
+  };
+
+  const getChangedOrgFields = (
+    previous: Record<OrgField, string>,
+    next: Record<OrgField, string>
+  ): OrgField[] => {
+    return ORG_FIELDS.filter((field) => previous[field] !== next[field]);
+  };
+
+  const applyOrganizationSnapshot = (
+    source: Organization | null | undefined,
+    origin: 'load' | 'sse' | 'local'
+  ) => {
+    const incoming = normalizeOrganizationFields(source);
+    if (!source?.id || source.id !== lastOrganizationDataId) {
+      lastOrganizationDataId = source?.id ?? null;
+      fieldBuffers = { ...incoming };
+      fieldOriginals = { ...incoming };
+      organizationData = { ...incoming };
+      logOrgaDebug('snapshot.reset', {
+        origin,
+        organizationId: source?.id ?? null,
+      });
+      return;
+    }
+
+    const nextBuffers = { ...fieldBuffers };
+    const nextOriginals = { ...fieldOriginals };
+    const changedByServer: OrgField[] = [];
+
+    for (const field of ORG_FIELDS) {
+      if (incoming[field] !== fieldOriginals[field]) {
+        nextBuffers[field] = incoming[field];
+        nextOriginals[field] = incoming[field];
+        changedByServer.push(field);
       }
-    : {};
+    }
+
+    if (changedByServer.length > 0) {
+      fieldBuffers = nextBuffers;
+      fieldOriginals = nextOriginals;
+    }
+    organizationData = { ...nextBuffers };
+    logOrgaDebug('snapshot.merge', {
+      origin,
+      organizationId: source?.id ?? null,
+      changedByServer,
+    });
+  };
 
   $: organizationId = $page.params.id;
   $: workspaceId = $workspaceScope.selectedId ?? null;
@@ -122,6 +233,7 @@
   };
 
   onMount(async () => {
+    refreshOrgaDebugFlag();
     void loadOrganization();
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handleLeave);
@@ -150,7 +262,15 @@
       if (data?.deleted) return;
       if (data?.organization) {
         const updated = data.organization;
+        const previous = normalizeOrganizationFields(organization as Organization);
         organization = { ...(organization || ({} as any)), ...updated };
+        const next = normalizeOrganizationFields(organization as Organization);
+        applyOrganizationSnapshot(organization as Organization, 'sse');
+        logOrgaDebug('sse.organization_update', {
+          organizationId: currentId,
+          changedFields: getChangedOrgFields(previous, next),
+          payloadKeys: Object.keys(updated || {}),
+        });
       }
       return;
     }
@@ -204,6 +324,10 @@
 
     try {
       organization = await fetchOrganizationById(organizationId);
+      applyOrganizationSnapshot(organization as Organization, 'load');
+      logOrgaDebug('loadOrganization.success', {
+        organizationId,
+      });
       error = '';
       unsavedChangesStore.reset();
       await loadCommentCounts();
@@ -215,6 +339,10 @@
         error = get(_)('organizations.errors.load');
         return;
       }
+      applyOrganizationSnapshot(organization as Organization, 'load');
+      logOrgaDebug('loadOrganization.fallback', {
+        organizationId,
+      });
       error = '';
       unsavedChangesStore.reset();
       await loadCommentCounts();
@@ -423,10 +551,45 @@
     }
   }
 
-  const handleFieldUpdate = (field: string, value: string) => {
-    if (!organization) return;
-    organization = { ...organization, [field]: value };
-    organizationData = { ...organizationData, [field]: value };
+  const handleFieldUpdate = (field: OrgField, value: string) => {
+    fieldBuffers = { ...fieldBuffers, [field]: value };
+    organizationData = { ...fieldBuffers };
+    logOrgaDebug('field.change', {
+      organizationId,
+      field,
+      valueLength: value.length,
+    });
+  };
+
+  const getFieldPayload = (field: OrgField): Record<string, unknown> => {
+    const payload = { [field]: fieldBuffers[field] };
+    logOrgaDebug('field.payload', {
+      organizationId,
+      field,
+      payloadKeys: Object.keys(payload),
+      valueLength: String(payload[field] ?? '').length,
+    });
+    return payload;
+  };
+
+  const getFieldOriginal = (field: OrgField): string => {
+    return fieldOriginals[field] || '';
+  };
+
+  const handleFieldSaved = (field: OrgField, value: string) => {
+    fieldOriginals = { ...fieldOriginals, [field]: value };
+    organizationData = { ...fieldBuffers };
+    if (organization) {
+      organization = { ...organization, [field]: value };
+      organizationsStore.update((items) =>
+        items.map((o) => (o.id === organization?.id ? { ...o, [field]: value } : o))
+      );
+    }
+    logOrgaDebug('field.saved', {
+      organizationId,
+      field,
+      valueLength: value.length,
+    });
   };
 
   const handleDelete = async () => {
@@ -457,7 +620,10 @@
     {organizationData}
     apiEndpoint={`${API_BASE_URL}/organizations/${organization.id}`}
     locked={isLockedByOther || isReadOnlyRole}
-    onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
+    onFieldUpdate={handleFieldUpdate}
+    onFieldSaved={handleFieldSaved}
+    getFieldPayload={getFieldPayload}
+    getFieldOriginal={getFieldOriginal}
     showKpis={true}
     nameLabel=""
     {commentCounts}
