@@ -8,25 +8,29 @@ const toolExecutors: Record<string, (args: any) => Promise<unknown>> = {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'open_side_panel') {
+        const tabId = sender.tab?.id;
         const windowId = sender.tab?.windowId;
 
-        if (typeof windowId !== 'number') {
+        if (typeof tabId !== 'number' && typeof windowId !== 'number') {
             sendResponse({ error: 'Missing sender tab context for side panel opening.' });
             return true;
         }
 
-        void (async () => {
-            try {
-                await chrome.sidePanel.open({
-                    windowId,
-                });
+        // Keep the API call in the direct message handler path to preserve user gesture.
+        const openRequest =
+            typeof tabId === 'number'
+                ? chrome.sidePanel.open({ tabId })
+                : chrome.sidePanel.open({ windowId: windowId as number });
+
+        void openRequest
+            .then(() => {
                 sendResponse({ ok: true });
-            } catch (error) {
+            })
+            .catch((error) => {
                 sendResponse({
                     error: error instanceof Error ? error.message : String(error),
                 });
-            }
-        })();
+            });
 
         return true;
     }
