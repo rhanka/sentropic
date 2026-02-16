@@ -18,7 +18,6 @@
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
-  import { API_BASE_URL } from '$lib/config';
   import References from '$lib/components/References.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
 
@@ -202,7 +201,7 @@
   <OrganizationForm
     {organization}
     {organizationData}
-    apiEndpoint={organization.id ? `${API_BASE_URL}/organizations/${organization.id}` : ''}
+    apiEndpoint={organization.id ? `/organizations/${organization.id}` : ''}
     locked={$workspaceReadOnlyScope}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}

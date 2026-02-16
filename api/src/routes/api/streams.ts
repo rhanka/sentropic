@@ -227,6 +227,29 @@ function hydrateOrganizationForSse(row: Record<string, unknown>): Record<string,
   };
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value == null) return null;
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function hydrateFolderForSse(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    matrixConfig: parseJsonObject(row.matrixConfig),
+    executiveSummary: parseJsonObject(row.executiveSummary),
+  };
+}
+
 async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
   const user = c.get('user') as { userId: string; role?: string; workspaceId: string };
   const requested = url.searchParams.get('workspace_id');
@@ -481,7 +504,7 @@ streamsRouter.get('/sse', async (c) => {
             WHERE id = ${folderId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
           if (!row?.id || typeof row.id !== 'string') return;
-          push(sseFolderEvent(folderId, { folder: row }));
+          push(sseFolderEvent(folderId, { folder: hydrateFolderForSse(row) }));
         } catch {
           // ignore
         }
@@ -811,5 +834,4 @@ streamsRouter.get('/sse', async (c) => {
   c.header('X-Accel-Buffering', 'no');
   return c.newResponse(readable, 200);
 });
-
 

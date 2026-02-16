@@ -90,22 +90,45 @@
   let lastReadOnlyRole = isDashboardReadOnly;
   $: showWorkspaceReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
 
+  const parseJsonObject = (value: unknown): Record<string, any> | null => {
+    if (!value) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
   const applyFolderSnapshot = (folderId: string, folderData: any) => {
     if (!folderData || !selectedFolderId || folderId !== selectedFolderId) return;
 
-    currentFolder = { ...(currentFolder || {}), ...folderData };
+    const normalizedFolder = { ...folderData };
     if (folderData.matrixConfig !== undefined) {
-      matrix = folderData.matrixConfig;
+      normalizedFolder.matrixConfig =
+        typeof folderData.matrixConfig === 'string'
+          ? parseJsonObject(folderData.matrixConfig)
+          : folderData.matrixConfig;
+      matrix = normalizedFolder.matrixConfig;
     }
     if (folderData.executiveSummary !== undefined) {
-      executiveSummary = folderData.executiveSummary;
+      normalizedFolder.executiveSummary =
+        typeof folderData.executiveSummary === 'string'
+          ? parseJsonObject(folderData.executiveSummary)
+          : folderData.executiveSummary;
+      executiveSummary = normalizedFolder.executiveSummary;
     }
+    currentFolder = { ...(currentFolder || {}), ...normalizedFolder };
     if (typeof folderData.name === 'string') {
       editedFolderName = folderData.name;
     }
 
     foldersStore.update((folders) =>
-      folders.map((f) => (f.id === folderId ? { ...f, ...(folderData as any) } : f))
+      folders.map((f) => (f.id === folderId ? { ...f, ...(normalizedFolder as any) } : f))
     );
   };
 
