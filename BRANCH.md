@@ -134,7 +134,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate side panel critical regressions are fixed: overlay/panel switch button visible and functional, streaming works, composer stays at bottom, messages list is scrollable, no empty burger action.
     - [x] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
 
-- [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
+- [x] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
   - [x] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains. (implemented via background proxy + overlay stream polling fallback)
   - [x] Add extension runtime profiles: `UAT`, `PROD` (API base URL mandatory, app base URL, optional WS base URL).
   - [x] Add profile/config UI (popup or options page) with validation and persistence.
@@ -143,13 +143,15 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Add API connectivity test action (`/api/v1/health`) and visible status in extension UI.
   - [x] Wire ChatWidget API client to extension profile config with clear error states when config is invalid.
   - [x] Lot gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] **Partial UAT Lot 4A (root workspace `~/src/top-ai-ideas-fullstack`)**
-    - [ ] Switch profile `UAT`/`PROD` and verify endpoint persistence.
-    - [ ] Validate connectivity status and chat send/streaming in both profiles.
-    - [ ] Validate floating overlay widget can initialize session and chat send/stream without `Failed to initialize session` / `Failed to fetch`.
-    - [ ] Validate failure mode when endpoint is invalid (clear user feedback, no silent failure).
+  - [x] **Partial UAT Lot 4A (root workspace `~/src/top-ai-ideas-fullstack`, validated with accepted 4B follow-ups)**
+    - [x] Switch profile `UAT`/`PROD` and verify endpoint persistence. (execution deferred by decision; covered by dedicated 4B config-menu UAT)
+    - [x] Validate connectivity status and chat send/streaming in both profiles.
+    - [x] Validate floating overlay widget can initialize session and chat send/stream without `Failed to initialize session` / `Failed to fetch`.
+    - [x] Validate failure mode when endpoint is invalid (clear error feedback confirmed; UI placement refinement deferred to 4B)
 
 - [ ] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
+  - [ ] Add an in-app configuration menu for extension endpoint/profile selection (UAT/PROD) and persist it as the primary user-facing config surface.
+  - [ ] Move chat connectivity/runtime errors to the end of the conversation flow (bottom, latest message area), not at top.
   - [ ] Design and implement a dedicated extension auth token flow (access token + renewal strategy).
   - [ ] Ensure auth is started only from explicit extension user action (never passive bootstrap from content script).
   - [ ] Prevent third-party-page WebAuthn side effects (no unexpected local-device permission prompts).
