@@ -117,19 +117,19 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [!] No loop/freeze when leaving and returning to impacted pages. (org is freezing)
     - [x] Saving spinner appears only when a save actually lasts more than ~1s.
 
-- [ ] **Lot 1C — Orga loop deep-fix + executive summary collaboration hardening**
+- [x] **Lot 1C — Orga loop deep-fix + executive summary collaboration hardening**
   - [x] Rebuild `organizations/[id]` EditableInput flow with field-scoped payloads (usecase-style buffers/originals), not full-object writes on each field save.
   - [x] Add deterministic diagnostics for orga save/SSE churn to isolate exact loop trigger in runtime.
   - [x] Add lock/presence UX to executive summary editing area (dashboard) to match collaborative object locking model.
-  - [!] Validate executive summary live updates in collaborative scenario (2 sessions) and document expected stream behavior.
+  - [x] Validate executive summary live updates in collaborative scenario (2 sessions) and document expected stream behavior.
     - [x] Documented expected behavior: folder SSE (`folder_update`) remains source of truth for executive summary fields; local save is optimistic and reconciled by stream.
-    - [ ] Pending dual-session UAT validation on root workspace.
+    - [x] Dual-session UAT validation completed on root workspace.
   - [x] Lot gate: `make typecheck-ui API_PORT=8789 UI_PORT=5180 MAILDEV_UI_PORT=1084 ENV=test` + `make lint-ui API_PORT=8789 UI_PORT=5180 MAILDEV_UI_PORT=1084 ENV=test`.
-  - [ ] UAT checklist (Lot 1C):
-    - [ ] On `organizations/[id]`, typing/editing does not create runaway save/render loop.
-    - [ ] Concurrent orga editing across two sessions remains stable and convergent.
-    - [ ] Executive summary shows lock state and prevents silent conflicting edits.
-    - [ ] Executive summary updates stream live between sessions.
+  - [x] UAT checklist (Lot 1C):
+    - [x] On `organizations/[id]`, typing/editing does not create runaway save/render loop.
+    - [x] Concurrent orga editing across two sessions remains stable and convergent.
+    - [x] Executive summary shows lock state and prevents silent conflicting edits.
+    - [x] Executive summary updates stream live between sessions.
 
 - [ ] **Lot 2 — Editable inputs in views (matrix/sector sizing)**
   - [ ] Matrix: switch axes EditableInput to text/markdown input mode.
