@@ -42,26 +42,38 @@ const handleHandoffState = (event: Event) => {
     });
 };
 
-const openOverlayInActiveTab = async (activeTab?: 'chat' | 'queue' | 'comments') => {
+const openOverlayInActiveTab = async (
+    activeTab?: 'chat' | 'queue' | 'comments',
+): Promise<boolean> => {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         const targetTabId = tabs[0]?.id;
         if (typeof targetTabId !== 'number') {
             console.warn('No active tab found to reopen chat overlay.');
-            return;
+            return false;
         }
-        await chrome.tabs.sendMessage(targetTabId, {
+        const response = await chrome.tabs.sendMessage(targetTabId, {
             type: 'open_overlay_chat',
             activeTab: activeTab ?? 'chat',
         });
+        if (!response?.ok) {
+            console.warn('Overlay open request was not acknowledged by content script.');
+            return false;
+        }
+        return true;
     } catch (error) {
         console.warn('Unable to request chat overlay opening from side panel.', error);
+        return false;
     }
 };
 
 const handleOpenOverlayRequest = (event: Event) => {
     const detail = (event as CustomEvent<{ activeTab?: 'chat' | 'queue' | 'comments' }>).detail;
-    void openOverlayInActiveTab(detail?.activeTab);
+    void (async () => {
+        const opened = await openOverlayInActiveTab(detail?.activeTab);
+        if (!opened) return;
+        window.close();
+    })();
 };
 
 const bootstrap = async () => {
