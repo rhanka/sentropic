@@ -10,12 +10,20 @@ const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
 const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
 const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
 const OPEN_CHAT_EVENT = 'topai:open-chat';
+const CLOSE_CHAT_EVENT = 'topai:close-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
     'top-ai-ideas.sent-tech.ca',
     'app.sent-tech.ca',
 ]);
+type ChatTab = 'chat' | 'queue' | 'comments';
+type SidePanelState = 'open' | 'closed';
+let hostContainer: HTMLDivElement | null = null;
+let isOverlaySuppressed = false;
+let overlayOpenedFromPanelSwitch = false;
+let mountReady = false;
+let pendingOpenTab: ChatTab | null = null;
 
 const isBlockedHost = (): boolean => BLOCKED_HOSTNAMES.has(window.location.hostname);
 
@@ -57,18 +65,72 @@ const openSidePanel = async () => {
     }
 };
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== 'open_overlay_chat') return;
-    const activeTab = message?.activeTab as 'chat' | 'queue' | 'comments' | undefined;
+const syncOverlayVisibility = () => {
+    if (!hostContainer) return;
+    hostContainer.style.display = isOverlaySuppressed ? 'none' : 'block';
+};
+
+const requestOpenOverlayChat = (activeTab?: ChatTab) => {
+    const targetTab = activeTab ?? 'chat';
+    overlayOpenedFromPanelSwitch = true;
+    isOverlaySuppressed = false;
+    syncOverlayVisibility();
+    if (!mountReady) {
+        pendingOpenTab = targetTab;
+        return;
+    }
     window.dispatchEvent(
-        new CustomEvent(OPEN_CHAT_EVENT, {
+        new CustomEvent<{ activeTab: ChatTab }>(OPEN_CHAT_EVENT, {
             detail: {
-                activeTab,
+                activeTab: targetTab,
             },
         }),
     );
-    sendResponse?.({ ok: true });
-    return true;
+};
+
+const collapseOverlayToBubble = () => {
+    if (!mountReady) return;
+    window.dispatchEvent(new CustomEvent(CLOSE_CHAT_EVENT));
+};
+
+const handleSidePanelState = (state: SidePanelState) => {
+    if (state === 'open') {
+        overlayOpenedFromPanelSwitch = false;
+        isOverlaySuppressed = true;
+        syncOverlayVisibility();
+        collapseOverlayToBubble();
+        return;
+    }
+
+    isOverlaySuppressed = false;
+    syncOverlayVisibility();
+
+    if (overlayOpenedFromPanelSwitch) {
+        overlayOpenedFromPanelSwitch = false;
+        return;
+    }
+
+    collapseOverlayToBubble();
+};
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === 'open_overlay_chat') {
+        const activeTab = message?.activeTab as ChatTab | undefined;
+        requestOpenOverlayChat(activeTab);
+        sendResponse?.({ ok: true });
+        return true;
+    }
+
+    if (message?.type === 'sidepanel_state') {
+        const state = message?.state as SidePanelState | undefined;
+        if (state !== 'open' && state !== 'closed') {
+            sendResponse?.({ ok: false, error: 'Invalid side panel state payload' });
+            return true;
+        }
+        handleSidePanelState(state);
+        sendResponse?.({ ok: true });
+        return true;
+    }
 });
 
 function bootstrap() {
@@ -83,6 +145,8 @@ function bootstrap() {
     host.id = 'top-ai-ideas-ext';
     host.style.cssText = 'all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0;';
     document.body.appendChild(host);
+    hostContainer = host;
+    syncOverlayVisibility();
 
     const shadow = host.attachShadow({ mode: 'open' });
 
@@ -125,6 +189,20 @@ function bootstrap() {
                     hostMode: 'overlay',
                     initialState,
                 });
+                mountReady = true;
+                if (pendingOpenTab) {
+                    const activeTab = pendingOpenTab;
+                    pendingOpenTab = null;
+                    window.setTimeout(() => {
+                        window.dispatchEvent(
+                            new CustomEvent<{ activeTab: ChatTab }>(OPEN_CHAT_EVENT, {
+                                detail: {
+                                    activeTab,
+                                },
+                            }),
+                        );
+                    }, 0);
+                }
                 console.log('ChatWidget mounted successfully.');
             } else {
                 console.error('ChatWidget module loaded but mount function not found.');
