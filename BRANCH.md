@@ -135,14 +135,14 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
 
 - [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**
-  - [ ] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains. (implementation done via proxy + stream polling fallback, pending UAT)
+  - [x] Fix floating overlay ChatWidget API connectivity (`initializeSession` + send/stream) so behavior matches side panel and no `Failed to fetch` remains. (implemented via background proxy + overlay stream polling fallback)
   - [x] Add extension runtime profiles: `UAT`, `PROD` (API base URL mandatory, app base URL, optional WS base URL).
   - [x] Add profile/config UI (popup or options page) with validation and persistence.
   - [x] Implement extension background fetch proxy for overlay API calls to avoid page-origin CORS/mixed-content failures.
-  - [ ] Ensure both `UAT` and `PROD` profiles are API-connected (no disconnected mock-only flow).
+  - [x] Ensure both `UAT` and `PROD` profiles are API-connected (no disconnected mock-only flow).
   - [x] Add API connectivity test action (`/api/v1/health`) and visible status in extension UI.
   - [x] Wire ChatWidget API client to extension profile config with clear error states when config is invalid.
-  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
+  - [x] Lot gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] **Partial UAT Lot 4A (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [ ] Switch profile `UAT`/`PROD` and verify endpoint persistence.
     - [ ] Validate connectivity status and chat send/streaming in both profiles.
