@@ -732,6 +732,11 @@
   };
 
   const onExternalCloseChat = () => {
+    if (isExtensionOverlayHost) {
+      if (!isVisible) return;
+      close();
+      return;
+    }
     // Only close automatically when the chat is docked full screen on mobile.
     if (!isDocked || !isMobileViewport) return;
     if (!isVisible) return;

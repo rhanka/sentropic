@@ -116,6 +116,35 @@ const notifyContentSidePanelState = async (state: 'open' | 'closed') => {
     const tabId = ownerTabId ?? (await getActiveTabId());
     if (typeof tabId !== 'number') return;
     ownerTabId = tabId;
+    const sendStateMessage = async (): Promise<boolean> => {
+        try {
+            await chrome.tabs.sendMessage(tabId, {
+                type: SIDEPANEL_STATE_MESSAGE,
+                state,
+            });
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    if (await sendStateMessage()) {
+        return;
+    }
+
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['content.js'],
+        });
+    } catch (injectError) {
+        console.warn(
+            'Unable to inject content script before notifying side panel state.',
+            injectError,
+        );
+        return;
+    }
+
     try {
         await chrome.tabs.sendMessage(tabId, {
             type: SIDEPANEL_STATE_MESSAGE,
