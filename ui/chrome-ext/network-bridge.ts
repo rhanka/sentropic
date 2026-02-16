@@ -19,6 +19,7 @@ type ProxyFetchResult =
     };
 
 let overlayProxyInstalled = false;
+let proxiedApiBaseUrl: URL | null = null;
 
 const normalizeBaseUrl = (baseUrl: string): URL | null => {
     try {
@@ -73,7 +74,6 @@ const requestToPayload = async (request: Request): Promise<ProxyFetchPayload> =>
 };
 
 export const installOverlayFetchProxy = (apiBaseUrlRaw: string) => {
-    if (overlayProxyInstalled) return;
     if (typeof window === 'undefined') return;
     if (!chrome?.runtime?.sendMessage) return;
 
@@ -82,11 +82,15 @@ export const installOverlayFetchProxy = (apiBaseUrlRaw: string) => {
         console.warn('Overlay fetch proxy skipped: invalid API base URL.', apiBaseUrlRaw);
         return;
     }
+    proxiedApiBaseUrl = apiBaseUrl;
+
+    if (overlayProxyInstalled) return;
 
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const request = new Request(input, init);
-        if (!isApiUrl(request.url, apiBaseUrl)) {
+        const activeApiBaseUrl = proxiedApiBaseUrl;
+        if (!activeApiBaseUrl || !isApiUrl(request.url, activeApiBaseUrl)) {
             return originalFetch(request);
         }
 
@@ -110,4 +114,3 @@ export const installOverlayFetchProxy = (apiBaseUrlRaw: string) => {
 
     overlayProxyInstalled = true;
 };
-

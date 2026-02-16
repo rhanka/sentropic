@@ -29,6 +29,7 @@
     Minimize2,
     Menu,
     List,
+    Settings,
     Check,
     FolderOpen,
     Eye,
@@ -133,14 +134,51 @@
   let handleOpenComments: ((_: CustomEvent) => void) | null = null;
 
   type DisplayMode = 'floating' | 'docked';
+  type ExtensionProfile = 'uat' | 'prod';
+  type ExtensionRuntimeConfig = {
+    profile: ExtensionProfile;
+    apiBaseUrl: string;
+    appBaseUrl: string;
+    wsBaseUrl: string;
+    updatedAt?: number;
+  };
+  type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
   const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
   const OPEN_CHAT_EVENT = 'topai:open-chat';
+  const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
+  const DEFAULT_EXTENSION_CONFIGS: Record<
+    ExtensionProfile,
+    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt'>
+  > = {
+    uat: {
+      apiBaseUrl: 'http://localhost:8787/api/v1',
+      appBaseUrl: 'http://localhost:5173',
+      wsBaseUrl: '',
+    },
+    prod: {
+      apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
+      appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
+      wsBaseUrl: '',
+    },
+  };
   let displayMode: DisplayMode = 'floating';
   let isSidePanelHost = false;
   let isExtensionOverlayHost = false;
+  let showExtensionConfigMenu = false;
+  let extensionConfigButtonRef: HTMLButtonElement | null = null;
+  let extensionConfigLoading = false;
+  let extensionConfigSaving = false;
+  let extensionConfigTesting = false;
+  let extensionConfigLoaded = false;
+  let extensionConfigStatus = '';
+  let extensionConfigStatusKind: ExtensionConfigStatusKind = 'info';
+  let extensionConfigForm: ExtensionRuntimeConfig = {
+    profile: 'uat',
+    ...DEFAULT_EXTENSION_CONFIGS.uat,
+  };
   const isExtensionRuntime = () => {
     const ext = globalThis as typeof globalThis & {
       chrome?: { runtime?: { id?: string } };
@@ -316,6 +354,183 @@
     window.dispatchEvent(new CustomEvent(OPEN_SIDEPANEL_EVENT));
     return false;
   };
+
+  type RuntimeWithMessaging = {
+    id?: string;
+    sendMessage?: Function;
+  };
+
+  const getExtensionRuntime = (): RuntimeWithMessaging | undefined => {
+    const ext = globalThis as typeof globalThis & {
+      chrome?: { runtime?: RuntimeWithMessaging };
+    };
+    return ext.chrome?.runtime;
+  };
+
+  const isExtensionConfigAvailable = () => {
+    const runtime = getExtensionRuntime();
+    return Boolean(runtime?.id && runtime?.sendMessage);
+  };
+
+  const setExtensionConfigStatus = (
+    message: string,
+    kind: ExtensionConfigStatusKind = 'info',
+  ) => {
+    extensionConfigStatus = message;
+    extensionConfigStatusKind = kind;
+  };
+
+  const normalizeExtensionConfig = (
+    raw?: Partial<ExtensionRuntimeConfig> | null,
+  ): ExtensionRuntimeConfig => {
+    const profile: ExtensionProfile = raw?.profile === 'prod' ? 'prod' : 'uat';
+    const defaults = DEFAULT_EXTENSION_CONFIGS[profile];
+    const apiBaseUrl = raw?.apiBaseUrl?.trim() || defaults.apiBaseUrl;
+    const appBaseUrl = raw?.appBaseUrl?.trim() || defaults.appBaseUrl;
+    const wsBaseUrl = raw?.wsBaseUrl?.trim() || '';
+    return {
+      profile,
+      apiBaseUrl,
+      appBaseUrl,
+      wsBaseUrl,
+      updatedAt:
+        typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+    };
+  };
+
+  const loadExtensionConfig = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionConfigLoading) return;
+    extensionConfigLoading = true;
+    setExtensionConfigStatus('Loading endpoint config...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_config_get',
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        const reason = response?.error ?? 'Unable to load endpoint config.';
+        setExtensionConfigStatus(reason, 'error');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      extensionConfigLoaded = true;
+      setExtensionConfigStatus(
+        `Config loaded (${extensionConfigForm.profile.toUpperCase()}).`,
+        'info',
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionConfigStatus(`Load failed: ${reason}`, 'error');
+    } finally {
+      extensionConfigLoading = false;
+    }
+  };
+
+  const applyProfileDefaults = () => {
+    const defaults = DEFAULT_EXTENSION_CONFIGS[extensionConfigForm.profile];
+    extensionConfigForm = normalizeExtensionConfig({
+      profile: extensionConfigForm.profile,
+      ...defaults,
+    });
+    setExtensionConfigStatus(
+      `Loaded ${extensionConfigForm.profile.toUpperCase()} defaults.`,
+      'info',
+    );
+  };
+
+  const saveExtensionConfig = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionConfigSaving) return;
+    extensionConfigSaving = true;
+    setExtensionConfigStatus('Saving endpoint config...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_config_set',
+        payload: {
+          profile: extensionConfigForm.profile,
+          apiBaseUrl: extensionConfigForm.apiBaseUrl,
+          appBaseUrl: extensionConfigForm.appBaseUrl,
+          wsBaseUrl: extensionConfigForm.wsBaseUrl,
+        },
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        const reason = response?.error ?? 'Unable to save endpoint config.';
+        setExtensionConfigStatus(reason, 'error');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      extensionConfigLoaded = true;
+      window.dispatchEvent(
+        new CustomEvent<ExtensionRuntimeConfig>(EXTENSION_CONFIG_UPDATED_EVENT, {
+          detail: extensionConfigForm,
+        }),
+      );
+      setExtensionConfigStatus(
+        `Saved ${extensionConfigForm.profile.toUpperCase()} config.`,
+        'ok',
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionConfigStatus(`Save failed: ${reason}`, 'error');
+    } finally {
+      extensionConfigSaving = false;
+    }
+  };
+
+  const testExtensionConfig = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionConfigTesting) return;
+    extensionConfigTesting = true;
+    setExtensionConfigStatus('Testing API connectivity...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_config_test',
+        payload: {
+          apiBaseUrl: extensionConfigForm.apiBaseUrl,
+        },
+      })) as
+        | {
+            ok?: boolean;
+            status?: number;
+            error?: string;
+          }
+        | undefined;
+      if (response?.ok && response.status) {
+        setExtensionConfigStatus(`API reachable (${response.status}).`, 'ok');
+        return;
+      }
+      const reason = response?.error ?? 'API connectivity test failed.';
+      setExtensionConfigStatus(reason, 'error');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionConfigStatus(`API test failed: ${reason}`, 'error');
+    } finally {
+      extensionConfigTesting = false;
+    }
+  };
+
+  $: if (
+    isExtensionConfigAvailable() &&
+    showExtensionConfigMenu &&
+    !extensionConfigLoaded
+  ) {
+    void loadExtensionConfig();
+  }
 
   const requestOpenOverlay = () => {
     if (!isBrowser || !isSidePanelHost) return;
@@ -1327,6 +1542,142 @@
                   <Minus class="w-4 h-4" />
                 </button>
               {/if}
+            {/if}
+            {#if isExtensionConfigAvailable()}
+              <MenuPopover
+                bind:open={showExtensionConfigMenu}
+                bind:triggerRef={extensionConfigButtonRef}
+                widthClass="w-80"
+                align="right"
+                menuClass="space-y-2"
+              >
+                <svelte:fragment slot="trigger" let:toggle>
+                  <button
+                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                    on:click={toggle}
+                    title="Extension endpoint settings"
+                    aria-label="Extension endpoint settings"
+                    type="button"
+                    bind:this={extensionConfigButtonRef}
+                  >
+                    <Settings class="w-4 h-4" />
+                  </button>
+                </svelte:fragment>
+                <svelte:fragment slot="menu">
+                  <div class="text-xs font-semibold text-slate-700">
+                    Endpoint configuration
+                  </div>
+                  <div class="space-y-1">
+                    <label
+                      class="block text-[11px] text-slate-600"
+                      for="extension-config-profile"
+                    >
+                      Profile
+                    </label>
+                    <select
+                      id="extension-config-profile"
+                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 bg-white"
+                      bind:value={extensionConfigForm.profile}
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                      on:change={applyProfileDefaults}
+                    >
+                      <option value="uat">UAT</option>
+                      <option value="prod">PROD</option>
+                    </select>
+                  </div>
+                  <div class="space-y-1">
+                    <label
+                      class="block text-[11px] text-slate-600"
+                      for="extension-config-api-base-url"
+                    >
+                      API Base URL
+                    </label>
+                    <input
+                      id="extension-config-api-base-url"
+                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                      type="text"
+                      bind:value={extensionConfigForm.apiBaseUrl}
+                      placeholder="https://.../api/v1"
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label
+                      class="block text-[11px] text-slate-600"
+                      for="extension-config-app-base-url"
+                    >
+                      App Base URL
+                    </label>
+                    <input
+                      id="extension-config-app-base-url"
+                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                      type="text"
+                      bind:value={extensionConfigForm.appBaseUrl}
+                      placeholder="https://..."
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label
+                      class="block text-[11px] text-slate-600"
+                      for="extension-config-ws-base-url"
+                    >
+                      WS Base URL (optional)
+                    </label>
+                    <input
+                      id="extension-config-ws-base-url"
+                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                      type="text"
+                      bind:value={extensionConfigForm.wsBaseUrl}
+                      placeholder="wss://..."
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                    />
+                  </div>
+                  <div class="flex items-center gap-2 pt-1">
+                    <button
+                      class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      type="button"
+                      on:click={() => void saveExtensionConfig()}
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                    >
+                      Save
+                    </button>
+                    <button
+                      class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      type="button"
+                      on:click={() => void testExtensionConfig()}
+                      disabled={extensionConfigLoading ||
+                        extensionConfigSaving ||
+                        extensionConfigTesting}
+                    >
+                      Test API
+                    </button>
+                  </div>
+                  {#if extensionConfigStatus}
+                    <div
+                      class={`rounded border px-2 py-1 text-[11px] ${
+                        extensionConfigStatusKind === 'ok'
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : extensionConfigStatusKind === 'error'
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : 'border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      {extensionConfigStatus}
+                    </div>
+                  {/if}
+                </svelte:fragment>
+              </MenuPopover>
             {/if}
             <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
             <button
