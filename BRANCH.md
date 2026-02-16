@@ -118,15 +118,20 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Apply the shared font token at ChatWidget root level to avoid host page font override in Shadow DOM.
   - [x] Replace extension in-page docked behavior with official Chrome Side Panel behavior for docked mode.
   - [x] Implement state handoff between floating bubble and side panel (active tab, draft, current session, open/close state).
+  - [x] Re-enable floating/docked switch both ways (bubble overlay ↔ Chrome side panel) from the same existing ChatWidget control.
+  - [x] Hide empty burger action in side panel host (no orphan menu entry).
+  - [x] Fix side panel chat layout parity (`min-h-0` + flex column) to restore bottom composer behavior and internal scroll.
+  - [x] Initialize auth session in extension mount path and allow `chrome-extension://*` CORS origin for API/SSE calls.
   - [x] Add extension activation guard on Top AI Ideas app domains:
     - [x] `manifest.json` `exclude_matches` for localhost/prod app domains.
     - [x] Runtime hostname denylist fallback in `content.ts`.
-  - [x] Lot gate: `make typecheck-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make build-ext API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin`
+  - [x] Lot gate: `make typecheck-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-ui API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make typecheck-api API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make lint-api API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin` + `make build-ext API_PORT=8792 UI_PORT=5177 MAILDEV_UI_PORT=1082 ENV=feat-chrome-plugin`
   - [x] Ready for partial UAT Lot 3C on root workspace (`.`).
   - [ ] **Partial UAT Lot 3C (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [ ] Run `make build-ext`, reload unpacked extension.
     - [ ] Validate font parity between web app widget and extension widget.
     - [ ] Validate side panel mode keeps same component style/behavior as floating mode.
+    - [ ] Validate side panel critical regressions are fixed: overlay/panel switch button visible and functional, streaming works, composer stays at bottom, messages list is scrollable, no empty burger action.
     - [ ] Validate no content-script injection on Top AI Ideas app domains (`localhost`, `127.0.0.1`, prod domain list).
 
 - [ ] **Lot 4A — Extension configuration and mandatory API connectivity (UAT/PROD)**

@@ -136,6 +136,8 @@
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
+  const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
+  const OPEN_CHAT_EVENT = 'topai:open-chat';
   let displayMode: DisplayMode = 'floating';
   let isSidePanelHost = false;
   let isExtensionOverlayHost = false;
@@ -289,6 +291,16 @@
     window.dispatchEvent(new CustomEvent(OPEN_SIDEPANEL_EVENT));
   };
 
+  const requestOpenOverlay = () => {
+    if (!isBrowser || !isSidePanelHost) return;
+    publishHandoffStateIfChanged();
+    window.dispatchEvent(
+      new CustomEvent<{ activeTab: Tab }>(OPEN_OVERLAY_EVENT, {
+        detail: { activeTab },
+      }),
+    );
+  };
+
   const toggleDisplayMode = () => {
     if (isExtensionOverlayHost) {
       requestOpenSidePanel();
@@ -296,8 +308,8 @@
       return;
     }
     if (isSidePanelHost) {
-      publishHandoffStateIfChanged();
-      window.close();
+      requestOpenOverlay();
+      close();
       return;
     }
     setDisplayMode(displayMode === 'docked' ? 'floating' : 'docked');
@@ -651,6 +663,7 @@
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
     window.addEventListener('topai:close-chat', onExternalCloseChat as any);
+    window.addEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     handleCommentSectionClick = (event: MouseEvent) => {
       if (!commentContext?.id || !commentContext?.type) return;
       const target = event.target as HTMLElement | null;
@@ -724,6 +737,18 @@
     if (!isDocked || !isMobileViewport) return;
     if (!isVisible) return;
     close();
+  };
+
+  const onExternalOpenChat = (event: Event) => {
+    const detail = (event as CustomEvent<{ activeTab?: Tab }>).detail;
+    if (
+      detail?.activeTab === 'chat' ||
+      detail?.activeTab === 'queue' ||
+      detail?.activeTab === 'comments'
+    ) {
+      activeTab = detail.activeTab;
+    }
+    void openWidget();
   };
 
   const toggle = async () => {
@@ -878,6 +903,7 @@
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
     window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
+    window.removeEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     if (handleCommentSectionClick)
       document.removeEventListener('click', handleCommentSectionClick, true);
     if (handleOpenComments)
@@ -893,7 +919,7 @@
 
 <div
   class={isSidePanelHost
-    ? 'queue-monitor h-full'
+    ? 'queue-monitor h-full min-h-0 flex flex-col'
     : 'queue-monitor fixed bottom-4 right-4 z-50'}
   style="font-family: var(--chat-font-family, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);"
 >
@@ -984,7 +1010,7 @@
       <div class="px-4 h-14 border-b border-gray-200 flex items-center">
         <div class="flex w-full items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            {#if isDocked && isMobileViewport}
+            {#if isDocked && isMobileViewport && !isSidePanelHost}
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
                 on:click={() =>
@@ -1272,26 +1298,24 @@
                 </button>
               {/if}
             {/if}
-            {#if !isSidePanelHost}
-              <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-              <button
-                class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={toggleDisplayMode}
-                title={isDocked
-                  ? $_('chat.widget.switchToWidget')
-                  : $_('chat.widget.switchToPanel')}
-                aria-label={isDocked
-                  ? $_('chat.widget.switchToWidget')
-                  : $_('chat.widget.switchToPanel')}
-                type="button"
-              >
-                {#if isDocked}
-                  <Minimize2 class="w-4 h-4" aria-hidden="true" />
-                {:else}
-                  <Maximize2 class="w-4 h-4" aria-hidden="true" />
-                {/if}
-              </button>
-            {/if}
+            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
+            <button
+              class={`${isSidePanelHost ? 'inline-flex' : 'hidden lg:inline-flex'} text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded`}
+              on:click={toggleDisplayMode}
+              title={isDocked
+                ? $_('chat.widget.switchToWidget')
+                : $_('chat.widget.switchToPanel')}
+              aria-label={isDocked
+                ? $_('chat.widget.switchToWidget')
+                : $_('chat.widget.switchToPanel')}
+              type="button"
+            >
+              {#if isDocked}
+                <Minimize2 class="w-4 h-4" aria-hidden="true" />
+              {:else}
+                <Maximize2 class="w-4 h-4" aria-hidden="true" />
+              {/if}
+            </button>
             <button
               class="text-gray-400 hover:text-gray-600"
               on:click={close}
@@ -1335,7 +1359,7 @@
             {/if}
           </div>
         {/if}
-        <div class="h-full" class:hidden={activeTab !== 'chat'}>
+        <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
           <ChatPanel
             bind:this={chatPanelRef}
             bind:sessions={chatSessions}
