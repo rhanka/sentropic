@@ -16,8 +16,23 @@
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import {
+    acceptUnlock,
+    acquireLock,
+    fetchLock,
+    forceUnlock,
+    releaseLock,
+    requestUnlock,
+    sendPresence,
+    fetchPresence,
+    leavePresence,
+    type LockSnapshot,
+    type PresenceUser,
+  } from '$lib/utils/object-lock';
   import {
     downloadCompletedDocxJob,
     startDocxGeneration,
@@ -55,7 +70,25 @@
       }
     | null = null;
   const HUB_KEY = 'dashboardPage';
-  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
+  const LOCK_REFRESH_MS = 10 * 1000;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  $: isDashboardReadOnly = $workspaceReadOnlyScope || isLockedByOther;
+  let lastReadOnlyRole = isDashboardReadOnly;
+  $: showWorkspaceReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
 
   const applyFolderSnapshot = (folderId: string, folderData: any) => {
     if (!folderData || !selectedFolderId || folderId !== selectedFolderId) return;
@@ -75,6 +108,193 @@
       folders.map((f) => (f.id === folderId ? { ...f, ...(folderData as any) } : f))
     );
   };
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:dashboard-folder:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if (isDashboardReadOnly) {
+        lock = await fetchLock('folder', lockTargetId);
+      } else {
+        const res = await acquireLock('folder', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? get(_)('locks.lockError');
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('folder', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('folder', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('folder', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('folder', lockTargetId);
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('folder', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('folder', lockTargetId);
+    } else {
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('folder', lockTargetId);
+  };
+
+  $: if (selectedFolderId && selectedFolderId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('folder', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = selectedFolderId;
+    subscribeLock(lockTargetId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if (!selectedFolderId && lockTargetId) {
+    void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = null;
+    lockTargetId = null;
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+  }
+
+  $: if (isDashboardReadOnly !== lastReadOnlyRole) {
+    lastReadOnlyRole = isDashboardReadOnly;
+    if (lastReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
+    }
+  }
   
   // Local state for markdown editing (not persisted)
   let editedIntroduction = '';
@@ -164,6 +384,9 @@
     void (async () => {
     await loadData();
     })();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
 
     // SSE: keep dashboard data synced with optimistic updates and collaborative edits.
     streamHub.set(HUB_KEY, (evt: any) => {
@@ -211,11 +434,20 @@
         void loadData();
       }
     });
-    return () => unsub();
+    return () => {
+      unsub();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pagehide', handleLeave);
+      window.removeEventListener('beforeunload', handleLeave);
+    };
   });
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (lockTargetId) void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
     clearDashboardDocxReadyToast();
   });
 
@@ -272,7 +504,7 @@
 
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
-    if ($workspaceReadOnlyScope) {
+    if (isDashboardReadOnly) {
       addToast({ type: 'warning', message: get(_)('dashboard.readOnlyGenerationDisabled') });
       return;
     }
@@ -818,7 +1050,7 @@
     <div class="grid grid-cols-12 items-start gap-4">
       <div class="col-span-8 min-w-0">
         {#if selectedFolderId}
-          {#if $workspaceReadOnlyScope}
+          {#if isDashboardReadOnly}
             <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
           {:else}
             <h1 class="text-3xl font-semibold mb-0">
@@ -841,6 +1073,25 @@
         {/if}
       </div>
       <div class="col-span-4 flex items-center justify-end gap-2 pt-1">
+        {#if selectedFolderId}
+          <LockPresenceBadge
+            {lock}
+            {lockLoading}
+            {lockError}
+            {lockOwnerLabel}
+            {lockRequestedByMe}
+            isAdmin={isWorkspaceAdmin}
+            {isLockedByMe}
+            {isLockedByOther}
+            avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+            connectedCount={presenceTotal}
+            canRequestUnlock={!$workspaceReadOnlyScope}
+            showHeaderLock={!isLockedByMe}
+            on:requestUnlock={handleRequestUnlock}
+            on:forceUnlock={handleForceUnlock}
+            on:releaseLock={handleReleaseLock}
+          />
+        {/if}
         <FileMenu
           showNew={false}
           showImport={false}
@@ -855,7 +1106,7 @@
           triggerTitle={$_('common.actions')}
           triggerAriaLabel={$_('common.actions')}
         />
-        {#if showReadOnlyLock}
+        {#if showWorkspaceReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
             title={$_('dashboard.readOnlyGenerationDisabled')}
@@ -893,7 +1144,7 @@
             label=""
             value={editedSyntheseExecutive}
             markdown={true}
-            locked={$workspaceReadOnlyScope}
+            locked={isDashboardReadOnly}
             apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
             fullData={syntheseFullData}
             changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
@@ -913,7 +1164,7 @@
           </div>
           <button
             on:click={generateExecutiveSummary}
-            disabled={isGeneratingSummary}
+            disabled={isGeneratingSummary || isDashboardReadOnly}
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isGeneratingSummary ? $_('dashboard.execSummaryGenerating') : $_('dashboard.execSummaryGenerate')}
@@ -1107,7 +1358,7 @@
                   label=""
                   value={editedIntroduction}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={introductionFullData}
                   changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
@@ -1185,7 +1436,7 @@
                   label=""
                   value={editedAnalyse}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={analyseFullData}
                   changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
@@ -1210,7 +1461,7 @@
                   label=""
                   value={editedRecommandation}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
                   fullData={recommandationFullData}
                   changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
@@ -1261,7 +1512,7 @@
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
-              locked={$workspaceReadOnlyScope}
+              locked={isDashboardReadOnly}
             />
         </section>
         {/each}

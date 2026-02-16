@@ -2,19 +2,49 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { OpenCommentsHandler } from '$lib/types/comments';
-  import type { OnFieldUpdate } from '$lib/components/organization-form.types';
+  import type {
+    GetFieldOriginal,
+    GetFieldPayload,
+    OnFieldSaved,
+    OnFieldUpdate,
+    OrgField,
+  } from '$lib/components/organization-form.types';
   import { _ } from 'svelte-i18n';
 
   export let organization: Record<string, any> | null = null;
   export let organizationData: Record<string, any> = {};
   export let apiEndpoint: string = '';
   export let onFieldUpdate: OnFieldUpdate | null = null;
+  export let onFieldSaved: OnFieldSaved | null = null;
+  export let getFieldPayload: GetFieldPayload | null = null;
+  export let getFieldOriginal: GetFieldOriginal | null = null;
   export let showKpis: boolean = false;
   // UX: sur `organisations/new`, afficher un label explicite. Sur `[id]`, pas de label (titre seul).
   export let nameLabel: string = '';
   export let locked: boolean = false;
   export let commentCounts: Record<string, number> | null = null;
   export let onOpenComments: OpenCommentsHandler | null = null;
+
+  const getFieldValue = (field: OrgField): string => {
+    return (organizationData?.[field] ?? organization?.[field] ?? '') as string;
+  };
+
+  const getOriginalValue = (field: OrgField): string => {
+    if (getFieldOriginal) return getFieldOriginal(field);
+    if (!apiEndpoint) return '';
+    return getFieldValue(field);
+  };
+
+  const getPayload = (field: OrgField): Record<string, unknown> => {
+    const payload = getFieldPayload?.(field);
+    if (payload && typeof payload === 'object') return payload;
+    return organizationData;
+  };
+
+  const handleSaved = (field: OrgField, event: CustomEvent<{ value?: string }>) => {
+    const value = event?.detail?.value ?? getFieldValue(field);
+    onFieldSaved?.(field, value);
+  };
 </script>
 
 {#if organization}
@@ -24,32 +54,32 @@
         <h1 class="text-3xl font-semibold break-words mb-0">
           <EditableInput
             label={nameLabel}
-            value={organizationData?.name || organization.name || ''}
-            originalValue={apiEndpoint ? (organizationData?.name || organization.name || '') : ''}
+            value={getFieldValue('name')}
+            originalValue={getOriginalValue('name')}
             changeId={apiEndpoint ? 'organization-name' : 'new-organization-name'}
             apiEndpoint={apiEndpoint}
-            fullData={organizationData}
+            fullData={getPayload('name')}
             markdown={false}
             multiline={true}
             locked={locked}
             placeholder={$_('organizations.form.namePlaceholder')}
             on:change={(e) => onFieldUpdate?.('name', e.detail.value)}
-            on:saved={() => {}}
+            on:saved={(e) => handleSaved('name', e as CustomEvent<{ value?: string }>)}
           />
         </h1>
 
         <p class="text-lg text-slate-600 mt-1">
           <span class="font-medium">{$_('organizations.fields.industry')}</span>
           <EditableInput
-            value={organizationData?.industry || organization.industry || ''}
-            originalValue={apiEndpoint ? (organizationData?.industry || organization.industry || '') : ''}
+            value={getFieldValue('industry')}
+            originalValue={getOriginalValue('industry')}
             changeId={apiEndpoint ? 'organization-industry' : 'new-organization-industry'}
             apiEndpoint={apiEndpoint}
-            fullData={organizationData}
+            fullData={getPayload('industry')}
             locked={locked}
             placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
-            on:saved={() => {}}
+            on:saved={(e) => handleSaved('industry', e as CustomEvent<{ value?: string }>)}
           />
         </p>
       </div>
@@ -73,16 +103,16 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={organizationData?.size || organization.size || ''}
-            originalValue={apiEndpoint ? (organizationData?.size || organization.size || '') : ''}
+            value={getFieldValue('size')}
+            originalValue={getOriginalValue('size')}
             changeId={apiEndpoint ? 'organization-size' : 'new-organization-size'}
             apiEndpoint={apiEndpoint}
-            fullData={organizationData}
+            fullData={getPayload('size')}
             markdown={true}
             locked={locked}
             placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('size', e.detail.value)}
-            on:saved={() => {}}
+            on:saved={(e) => handleSaved('size', e as CustomEvent<{ value?: string }>)}
           />
         </div>
       </div>
@@ -98,16 +128,16 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={organizationData?.technologies || organization.technologies || ''}
-            originalValue={apiEndpoint ? (organizationData?.technologies || organization.technologies || '') : ''}
+            value={getFieldValue('technologies')}
+            originalValue={getOriginalValue('technologies')}
             changeId={apiEndpoint ? 'organization-technologies' : 'new-organization-technologies'}
             apiEndpoint={apiEndpoint}
-            fullData={organizationData}
+            fullData={getPayload('technologies')}
             markdown={true}
             locked={locked}
             placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('technologies', e.detail.value)}
-            on:saved={() => {}}
+            on:saved={(e) => handleSaved('technologies', e as CustomEvent<{ value?: string }>)}
           />
         </div>
       </div>
@@ -124,16 +154,16 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={organizationData?.products || organization.products || ''}
-          originalValue={apiEndpoint ? (organizationData?.products || organization.products || '') : ''}
+          value={getFieldValue('products')}
+          originalValue={getOriginalValue('products')}
           changeId={apiEndpoint ? 'organization-products' : 'new-organization-products'}
           apiEndpoint={apiEndpoint}
-          fullData={organizationData}
+          fullData={getPayload('products')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('products', e.detail.value)}
-          on:saved={() => {}}
+          on:saved={(e) => handleSaved('products', e as CustomEvent<{ value?: string }>)}
         />
       </div>
     </div>
@@ -149,16 +179,16 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={organizationData?.processes || organization.processes || ''}
-          originalValue={apiEndpoint ? (organizationData?.processes || organization.processes || '') : ''}
+          value={getFieldValue('processes')}
+          originalValue={getOriginalValue('processes')}
           changeId={apiEndpoint ? 'organization-processes' : 'new-organization-processes'}
           apiEndpoint={apiEndpoint}
-          fullData={organizationData}
+          fullData={getPayload('processes')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('processes', e.detail.value)}
-          on:saved={() => {}}
+          on:saved={(e) => handleSaved('processes', e as CustomEvent<{ value?: string }>)}
         />
       </div>
     </div>
@@ -177,17 +207,17 @@
       </h3>
         <div class="text-slate-600">
           <EditableInput
-            value={organizationData?.kpis || organization.kpis || ''}
-            originalValue={apiEndpoint ? (organizationData?.kpis || organization.kpis || '') : ''}
+            value={getFieldValue('kpis')}
+            originalValue={getOriginalValue('kpis')}
             changeId="organization-kpis"
             apiEndpoint={apiEndpoint}
-            fullData={organizationData}
+            fullData={getPayload('kpis')}
             markdown={true}
             multiline={true}
             locked={locked}
             placeholder={$_('common.unspecified')}
             on:change={(e) => onFieldUpdate?.('kpis', e.detail.value)}
-            on:saved={() => {}}
+            on:saved={(e) => handleSaved('kpis', e as CustomEvent<{ value?: string }>)}
           />
         </div>
       </div>
@@ -204,16 +234,16 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={organizationData?.challenges || organization.challenges || ''}
-          originalValue={apiEndpoint ? (organizationData?.challenges || organization.challenges || '') : ''}
+          value={getFieldValue('challenges')}
+          originalValue={getOriginalValue('challenges')}
           changeId={apiEndpoint ? 'organization-challenges' : 'new-organization-challenges'}
           apiEndpoint={apiEndpoint}
-          fullData={organizationData}
+          fullData={getPayload('challenges')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('challenges', e.detail.value)}
-          on:saved={() => {}}
+          on:saved={(e) => handleSaved('challenges', e as CustomEvent<{ value?: string }>)}
         />
       </div>
     </div>
@@ -229,16 +259,16 @@
     </h3>
       <div class="text-slate-600">
         <EditableInput
-          value={organizationData?.objectives || organization.objectives || ''}
-          originalValue={apiEndpoint ? (organizationData?.objectives || organization.objectives || '') : ''}
+          value={getFieldValue('objectives')}
+          originalValue={getOriginalValue('objectives')}
           changeId={apiEndpoint ? 'organization-objectives' : 'new-organization-objectives'}
           apiEndpoint={apiEndpoint}
-          fullData={organizationData}
+          fullData={getPayload('objectives')}
           markdown={true}
           locked={locked}
           placeholder={$_('common.unspecified')}
           on:change={(e) => onFieldUpdate?.('objectives', e.detail.value)}
-          on:saved={() => {}}
+          on:saved={(e) => handleSaved('objectives', e as CustomEvent<{ value?: string }>)}
         />
       </div>
     </div>
@@ -246,4 +276,3 @@
     <slot name="bottom" />
   </div>
 {/if}
-
