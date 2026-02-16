@@ -6,9 +6,24 @@
   import { CheckCircle2, XCircle, AlertTriangle, Info, Download, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
 
+  const CHAT_BUTTON_RIGHT_CSS = '1rem';
+  const CHAT_BUTTON_SIZE_CSS = '3rem';
+  const CHAT_PANEL_WIDTH_CSS = 'min(28rem, calc(100vw - 2rem))';
+  const TOAST_CHAT_GAP_CSS = '0.5rem';
+  const TOAST_BOTTOM_CSS = '1rem';
+
   $: isDockedOpen = $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen;
-  $: shiftLeftForDock = isDockedOpen && $chatWidgetLayout.dockWidthCss !== '100vw';
-  $: rightOffset = shiftLeftForDock ? `calc(${$chatWidgetLayout.dockWidthCss} + 1rem)` : '1rem';
+  $: isFloatingOpen = $chatWidgetLayout.mode === 'floating' && $chatWidgetLayout.isOpen;
+  $: rightOffset = (() => {
+    if (isDockedOpen) {
+      if ($chatWidgetLayout.dockWidthCss === '100vw') return '1rem';
+      return `calc(${$chatWidgetLayout.dockWidthCss} + ${TOAST_CHAT_GAP_CSS})`;
+    }
+    if (isFloatingOpen) {
+      return `calc(${CHAT_PANEL_WIDTH_CSS} + ${CHAT_BUTTON_RIGHT_CSS} + ${TOAST_CHAT_GAP_CSS})`;
+    }
+    return `calc(${CHAT_BUTTON_RIGHT_CSS} + ${CHAT_BUTTON_SIZE_CSS} + ${TOAST_CHAT_GAP_CSS})`;
+  })();
 
   const getToastClasses = (type: string) => {
     const baseClasses = 'rounded-lg p-4 shadow-lg border max-w-sm w-full';
@@ -44,7 +59,8 @@
 </script>
 
 <div
-  class="toast-container fixed bottom-20 z-[70] space-y-2 max-w-[calc(100vw-2rem)] transition-[right] duration-200"
+  class="toast-container fixed z-[70] space-y-2 max-w-[calc(100vw-2rem)] transition-[right,bottom] duration-200"
+  style:bottom={TOAST_BOTTOM_CSS}
   style:right={rightOffset}
 >
   {#each $toasts as toast (toast.id)}

@@ -509,6 +509,7 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
     .from(useCases)
     .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   const hydrated = await hydrateUseCase(updated);
+  await notifyUseCaseEvent(id);
   return c.json(hydrated);
 });
 

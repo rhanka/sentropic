@@ -68,22 +68,17 @@
   let lastReadOnlyRole = isReadOnlyRole;
   const LOCK_REFRESH_MS = 10 * 1000;
 
-  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
-    if (!text) return '';
-    return text.replace(/\n/g, '\n\n');
-  };
-
   $: organizationData = organization
     ? {
         name: organization.name,
         industry: organization.industry,
         size: organization.size,
-        technologies: fixMarkdownLineBreaks(organization.technologies),
-        products: fixMarkdownLineBreaks(organization.products),
-        processes: fixMarkdownLineBreaks(organization.processes),
-        kpis: fixMarkdownLineBreaks(organization.kpis),
-        challenges: fixMarkdownLineBreaks(organization.challenges),
-        objectives: fixMarkdownLineBreaks(organization.objectives),
+        technologies: organization.technologies || '',
+        products: organization.products || '',
+        processes: organization.processes || '',
+        kpis: organization.kpis || '',
+        challenges: organization.challenges || '',
+        objectives: organization.objectives || '',
       }
     : {};
 
