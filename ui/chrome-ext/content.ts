@@ -10,7 +10,6 @@ const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
 const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
 const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
 const OPEN_CHAT_EVENT = 'topai:open-chat';
-const CLOSE_CHAT_EVENT = 'topai:close-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
@@ -24,6 +23,7 @@ let isOverlaySuppressed = false;
 let overlayOpenedFromPanelSwitch = false;
 let mountReady = false;
 let pendingOpenTab: ChatTab | null = null;
+let invalidContextReloadScheduled = false;
 
 const isBlockedHost = (): boolean => BLOCKED_HOSTNAMES.has(window.location.hostname);
 
@@ -62,7 +62,22 @@ const openSidePanel = async () => {
         await chrome.runtime.sendMessage({ type: 'open_side_panel' });
     } catch (error) {
         console.error('Failed to request side panel opening.', error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('Extension context invalidated')) {
+            scheduleInvalidContextRecovery();
+        }
     }
+};
+
+const scheduleInvalidContextRecovery = () => {
+    if (invalidContextReloadScheduled) return;
+    invalidContextReloadScheduled = true;
+    console.warn(
+        'Extension context invalidated. Reloading page to recover content script context.',
+    );
+    window.setTimeout(() => {
+        window.location.reload();
+    }, 50);
 };
 
 const syncOverlayVisibility = () => {
@@ -90,7 +105,7 @@ const requestOpenOverlayChat = (activeTab?: ChatTab) => {
 
 const collapseOverlayToBubble = () => {
     if (!mountReady) return;
-    window.dispatchEvent(new CustomEvent(CLOSE_CHAT_EVENT));
+    window.dispatchEvent(new CustomEvent('topai:close-chat'));
 };
 
 const handleSidePanelState = (state: SidePanelState) => {
@@ -165,6 +180,19 @@ function bootstrap() {
     window.addEventListener(OPEN_SIDEPANEL_EVENT, () => {
         void openSidePanel();
     });
+
+    // Dev/UAT safety: after extension reload, old content-script contexts become invalid.
+    // Detect and self-recover instead of keeping a half-broken widget on the page.
+    window.setInterval(() => {
+        try {
+            void chrome.runtime.getURL('');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('Extension context invalidated')) {
+                scheduleInvalidContextRecovery();
+            }
+        }
+    }, 2000);
 
     // Load the Svelte app
     // We use dynamic import to load the module which contains the Svelte component
