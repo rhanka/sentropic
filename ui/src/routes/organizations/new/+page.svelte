@@ -74,19 +74,14 @@
     }
   }
 
-  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
-    if (!text) return '';
-    return text.replace(/\n/g, '\n\n');
-  };
-
   $: organizationData = {
     name: organization.name || '',
     industry: organization.industry || '',
     size: organization.size || '',
-    technologies: fixMarkdownLineBreaks(organization.technologies),
-    products: fixMarkdownLineBreaks(organization.products),
-    processes: fixMarkdownLineBreaks(organization.processes),
-    kpis: fixMarkdownLineBreaks(organization.kpis),
+    technologies: organization.technologies || '',
+    products: organization.products || '',
+    processes: organization.processes || '',
+    kpis: organization.kpis || '',
     challenges: organization.challenges || '',
     objectives: organization.objectives || ''
   };

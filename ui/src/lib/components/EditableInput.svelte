@@ -38,6 +38,9 @@
   let saveTimeout = null;
   let isSaving = false;
   let saveRequestedWhileSaving = false;
+  let showSavingIndicator = false;
+  let savingIndicatorTimer = null;
+  const SAVING_INDICATOR_DELAY_MS = 1000;
   
   // Référence pour le span, l'input et le textarea
   let span;
@@ -107,6 +110,23 @@
       await performSave();
     }, delay);
   };
+
+  const resetSavingIndicator = () => {
+    if (savingIndicatorTimer) {
+      clearTimeout(savingIndicatorTimer);
+      savingIndicatorTimer = null;
+    }
+    showSavingIndicator = false;
+  };
+
+  const scheduleSavingIndicator = () => {
+    resetSavingIndicator();
+    savingIndicatorTimer = setTimeout(() => {
+      if (isSaving) {
+        showSavingIndicator = true;
+      }
+    }, SAVING_INDICATOR_DELAY_MS);
+  };
   
   // Effectuer la sauvegarde réelle
   const performSave = async () => {
@@ -114,6 +134,7 @@
     if (!apiEndpoint || !hasUnsavedChanges || isSaving) return;
     
     isSaving = true;
+    scheduleSavingIndicator();
     const saveValue = value;
     try {
       // Extract endpoint path from full URL if needed
@@ -150,6 +171,7 @@
       dispatch('saveError', { error, value });
     } finally {
       isSaving = false;
+      resetSavingIndicator();
       if (saveRequestedWhileSaving && hasUnsavedChanges) {
         saveRequestedWhileSaving = false;
         await saveWithBuffer();
@@ -370,6 +392,7 @@
       if (saveTimeout) {
         clearTimeout(saveTimeout);
       }
+      resetSavingIndicator();
       // Nettoyer le listener des références
       removeReferenceClickListener();
     };
@@ -599,7 +622,7 @@
           class="editable-textarea"
           class:full-width={fullWidth}
           class:has-unsaved-changes={hasUnsavedChanges}
-          class:is-saving={isSaving}
+          class:is-saving={showSavingIndicator}
           disabled={isLocked}
           rows="1"
           aria-label={label || undefined}
@@ -619,7 +642,7 @@
               class="editable-input"
               class:full-width={fullWidth}
               class:has-unsaved-changes={hasUnsavedChanges}
-              class:is-saving={isSaving}
+              class:is-saving={showSavingIndicator}
               disabled={isLocked}
               aria-label={label || undefined}
               placeholder={placeholder || undefined}
@@ -636,7 +659,7 @@
             class="editable-input"
             class:full-width={fullWidth}
             class:has-unsaved-changes={hasUnsavedChanges}
-            class:is-saving={isSaving}
+            class:is-saving={showSavingIndicator}
             disabled={isLocked}
             aria-label={label || undefined}
             placeholder={placeholder || undefined}
@@ -648,7 +671,7 @@
       {#if hasUnsavedChanges}
         <span class="unsaved-indicator" title={$_('common.unsavedChanges')}>●</span>
       {/if}
-      {#if isSaving}
+      {#if showSavingIndicator}
         <span class="saving-indicator" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
@@ -659,7 +682,7 @@
           <TipTap bind:value={value} on:change={handleTipTapChange} forceList={forceList} placeholder={placeholder} disabled={isLocked}/>
         </div>
       </div>
-      {#if isSaving}
+      {#if showSavingIndicator}
         <span class="saving-indicator-markdown" title={$_('common.saving')}>⟳</span>
       {/if}
     </div>
