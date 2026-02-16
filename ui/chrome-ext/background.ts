@@ -1,4 +1,9 @@
 // Service Worker for Top AI Ideas Extension
+import {
+    loadExtensionConfig,
+    saveExtensionConfig,
+    type ExtensionProfile,
+} from './extension-config';
 
 // Tool executor registry placeholder
 const toolExecutors: Record<string, (args: any) => Promise<unknown>> = {
@@ -17,6 +22,13 @@ type ProxyFetchPayload = {
     method?: string;
     headers?: Record<string, string>;
     bodyText?: string;
+};
+
+type ExtensionConfigPayload = {
+    profile?: ExtensionProfile;
+    apiBaseUrl?: string;
+    appBaseUrl?: string;
+    wsBaseUrl?: string;
 };
 
 const isAllowedProxyUrl = (rawUrl: string): boolean => {
@@ -43,6 +55,84 @@ const sanitizeHeaders = (
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'extension_config_get') {
+        void (async () => {
+            try {
+                const config = await loadExtensionConfig();
+                sendResponse({
+                    ok: true,
+                    config,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_config_set') {
+        const payload = message?.payload as ExtensionConfigPayload | undefined;
+        void (async () => {
+            try {
+                const profile: ExtensionProfile = payload?.profile === 'prod' ? 'prod' : 'uat';
+                const config = await saveExtensionConfig({
+                    profile,
+                    apiBaseUrl: payload?.apiBaseUrl ?? '',
+                    appBaseUrl: payload?.appBaseUrl ?? '',
+                    wsBaseUrl: payload?.wsBaseUrl ?? '',
+                });
+                sendResponse({
+                    ok: true,
+                    config,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_config_test') {
+        const payload = message?.payload as ExtensionConfigPayload | undefined;
+        const apiBaseUrl = (payload?.apiBaseUrl ?? '').trim();
+        const healthUrl = `${apiBaseUrl.replace(/\/$/, '')}/health`;
+        if (!isAllowedProxyUrl(healthUrl)) {
+            sendResponse({
+                ok: false,
+                error: `Blocked proxy URL: ${healthUrl}`,
+            });
+            return true;
+        }
+
+        void (async () => {
+            try {
+                const response = await fetch(healthUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                });
+                sendResponse({
+                    ok: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+
+        return true;
+    }
+
     if (message?.type === 'open_side_panel') {
         const tabId = sender.tab?.id;
         const windowId = sender.tab?.windowId;

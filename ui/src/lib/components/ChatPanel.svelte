@@ -416,6 +416,7 @@
   let sending = false;
   let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
+  let lastShownErrorMsg: string | null = null;
   let input = draft;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
@@ -893,6 +894,16 @@
   const onListScroll = () => {
     followBottom = isNearBottom();
   };
+
+  $: if (mode === 'ai' && errorMsg && errorMsg !== lastShownErrorMsg) {
+    lastShownErrorMsg = errorMsg;
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+  }
+
+  $: if (!errorMsg) {
+    lastShownErrorMsg = null;
+  }
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -2166,13 +2177,6 @@
           </div>
         {/if}
       {:else}
-        {#if errorMsg}
-          <div
-            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
-          >
-            {errorMsg}
-          </div>
-        {/if}
         {#if loadingMessages}
           <div class="text-xs text-slate-500">{$_('common.loading')}</div>
         {:else if messages.length === 0}
@@ -2341,6 +2345,13 @@
               </div>
             {/if}
           {/each}
+        {/if}
+        {#if errorMsg}
+          <div
+            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
+          >
+            {errorMsg}
+          </div>
         {/if}
       {/if}
     </div>

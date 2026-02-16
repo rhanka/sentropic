@@ -150,15 +150,18 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate failure mode when endpoint is invalid (clear error feedback confirmed; UI placement refinement deferred to 4B)
 
 - [ ] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
-  - [ ] Add an in-app configuration menu for extension endpoint/profile selection (UAT/PROD) and persist it as the primary user-facing config surface.
-  - [ ] Move chat connectivity/runtime errors to the end of the conversation flow (bottom, latest message area), not at top.
+  - [x] Add an in-app configuration menu for extension endpoint/profile selection (UAT/PROD) and persist it as the primary user-facing config surface. (implemented in ChatWidget header, pending UAT)
+  - [x] Move chat connectivity/runtime errors to the end of the conversation flow (bottom, latest message area), not at top. (implemented, pending UAT)
   - [ ] Design and implement a dedicated extension auth token flow (access token + renewal strategy).
   - [ ] Ensure auth is started only from explicit extension user action (never passive bootstrap from content script).
   - [ ] Prevent third-party-page WebAuthn side effects (no unexpected local-device permission prompts).
   - [ ] Add secure token storage and logout/revoke path in extension context.
   - [ ] Document compatibility path with future local/remote WS delegation.
+  - [x] Sub-lot gate (4B config + error UX): `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`
   - [ ] **Partial UAT Lot 4B (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [ ] Validate in-chat endpoint configuration menu (overlay + side panel): profile switch (`UAT`/`PROD`), endpoint save, API health test, persistence after extension reload.
+    - [ ] Validate chat API failure feedback appears at the bottom/latest message area (not at the top of conversation).
     - [ ] Validate extension login without unexpected local-network/WebAuthn prompts.
     - [ ] Validate token renewal and expired-session recovery path.
     - [ ] Validate logout/revoke and blocked access after logout.
