@@ -12,6 +12,14 @@ function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => voi
   return value;
 }
 
+const isExtensionOverlayHost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const runtime = (globalThis as typeof globalThis & {
+    chrome?: { runtime?: { id?: string } };
+  }).chrome?.runtime;
+  return Boolean(runtime?.id) && window.location.protocol !== 'chrome-extension:';
+};
+
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
   | { type: 'organization_update'; organizationId: string; data: any }
@@ -58,6 +66,7 @@ const EVENT_TYPES = [
 class StreamHub {
   private subs = new Map<string, Subscription>();
   private es: EventSource | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private currentUrl: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
@@ -168,7 +177,60 @@ class StreamHub {
       this.es.close();
       this.es = null;
     }
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     this.currentUrl = null;
+  }
+
+  private async pollOverlayStreams(baseUrl: string) {
+    const streamIds = Array.from(this.subs.values())
+      .map((sub) => sub.streamId)
+      .filter((id): id is string => Boolean(id));
+
+    if (streamIds.length === 0) return;
+
+    for (const streamId of streamIds) {
+      const prev = this.streamHistoryById.get(streamId) ?? [];
+      const last = prev.length > 0 ? (prev[prev.length - 1] as any) : null;
+      const sinceSequence = Number.isFinite(last?.sequence)
+        ? Number(last.sequence)
+        : undefined;
+
+      const endpoint =
+        `/streams/events/${encodeURIComponent(streamId)}` +
+        `?limit=200${sinceSequence !== undefined ? `&sinceSequence=${sinceSequence}` : ''}`;
+      const url = new URL(`${baseUrl}${endpoint}`, window.location.origin);
+      const scoped = getScopedWorkspaceIdForUser();
+      if (scoped) url.searchParams.set('workspace_id', scoped);
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) continue;
+        const payload = await response.json() as {
+          streamId?: string;
+          events?: Array<{ eventType: string; sequence: number; data: any }>;
+        };
+        const events = Array.isArray(payload?.events) ? payload.events : [];
+        for (const evt of events) {
+          if (!evt?.eventType) continue;
+          if (!Number.isFinite(evt?.sequence)) continue;
+          this.dispatch({
+            type: evt.eventType,
+            streamId,
+            sequence: evt.sequence,
+            data: evt.data,
+          });
+        }
+      } catch {
+        // noop: best effort fallback transport in overlay mode
+      }
+    }
   }
 
   private dispatch(event: StreamHubEvent) {
@@ -290,6 +352,18 @@ class StreamHub {
     // and proxies `/api/v1/*` to the API). `new URL('/api/v1/...')` throws in browsers unless a base is provided.
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
     const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
+
+    if (isExtensionOverlayHost()) {
+      this.close();
+      await this.pollOverlayStreams(baseUrl);
+      if (!this.pollTimer) {
+        this.pollTimer = setInterval(() => {
+          void this.pollOverlayStreams(baseUrl);
+        }, 1200);
+      }
+      return;
+    }
+
     const urlObj = new URL(`${baseUrl}/streams/sse`, window.location.origin);
     const scoped = getScopedWorkspaceIdForUser();
     if (scoped) urlObj.searchParams.set('workspace_id', scoped);
@@ -369,5 +443,4 @@ class StreamHub {
 }
 
 export const streamHub = new StreamHub();
-
 
