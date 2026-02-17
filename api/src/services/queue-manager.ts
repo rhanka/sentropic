@@ -126,6 +126,15 @@ export interface ChatMessageJobData {
   model?: string;
   contexts?: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary'; contextId: string }>;
   tools?: string[];
+  localToolDefinitions?: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+  resumeFrom?: {
+    previousResponseId: string;
+    toolOutputs: Array<{ callId: string; output: string }>;
+  };
 }
 
 export interface DocumentSummaryJobData {
@@ -1886,7 +1895,16 @@ export class QueueManager {
    * NOTE: on réutilise la table job_queue (type = chat_message) pour préparer le scaling via workers dédiés.
    */
   private async processChatMessage(data: ChatMessageJobData, signal?: AbortSignal): Promise<void> {
-    const { userId, sessionId, assistantMessageId, model, contexts, tools } = data;
+    const {
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+      contexts,
+      tools,
+      localToolDefinitions,
+      resumeFrom,
+    } = data;
     await chatService.runAssistantGeneration({
       userId,
       sessionId,
@@ -1894,6 +1912,8 @@ export class QueueManager {
       model: model ?? null,
       contexts,
       tools,
+      localToolDefinitions,
+      resumeFrom,
       signal
     });
   }
