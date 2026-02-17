@@ -138,12 +138,12 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Applied `fullWidth` and markdown editing to matrix axis fields (table + level-description modal) to avoid narrow inline inputs.
     - [x] Expanded organization industry field layout in header area to avoid compressed inline rendering.
   - [x] Lot gate: `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
-  - [ ] UAT checklist (UI):
-    - [ ] In matrix view, edit both axes with text/markdown mode and verify save behavior + rendering.
-    - [ ] Confirm axis fields keep expected width/height and no clipping while editing.
-    - [ ] Validate sector-related field now has readable size (no compressed input).
-    - [ ] Spot-check at least two other similar inputs to confirm no remaining tiny-field regression.
-    - [ ] Validate desktop and mobile viewport behavior for edited inputs.
+  - [x] UAT checklist (UI):
+    - [x] In matrix view, edit both axes with text/markdown mode and verify save behavior + rendering.
+    - [x] Confirm axis fields keep expected width/height and no clipping while editing.
+    - [x] Validate sector-related field now has readable size (no compressed input).
+    - [x] Spot-check at least two other similar inputs to confirm no remaining tiny-field regression.
+    - [x] Validate desktop and mobile viewport behavior for edited inputs.
 
 - [ ] **Lot 3 — Automatic comments behavior**
   - [ ] Generation agents: create a default comment.
