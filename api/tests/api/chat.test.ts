@@ -10,6 +10,7 @@ import { db } from '../../src/db/client';
 import { chatSessions, chatMessages, jobQueue } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
+import { chatService } from '../../src/services/chat-service';
 
 describe('Chat API Endpoints', () => {
   let user: any;
@@ -182,6 +183,111 @@ describe('Chat API Endpoints', () => {
       });
 
       expect(response.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/v1/chat/messages/:id/tool-results', () => {
+    it('should enqueue a resume job when all local tool results are ready', async () => {
+      const create = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        { content: 'hello local tools' }
+      );
+      const created = await create.json();
+
+      const acceptSpy = vi
+        .spyOn(chatService, 'acceptLocalToolResult')
+        .mockResolvedValue({
+          readyToResume: true,
+          waitingForToolCallIds: [],
+          localToolDefinitions: [
+            {
+              name: 'tab_info',
+              description: 'Read active tab metadata',
+              parameters: { type: 'object', properties: {}, required: [] }
+            }
+          ],
+          resumeFrom: {
+            previousResponseId: 'resp_local_1',
+            toolOutputs: [{ callId: 'call_local_1', output: '{"ok":true}' }]
+          }
+        });
+
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'POST',
+          `/api/v1/chat/messages/${created.assistantMessageId}/tool-results`,
+          user.sessionToken!,
+          { toolCallId: 'call_local_1', result: { ok: true } }
+        );
+
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.ok).toBe(true);
+        expect(body.resumed).toBe(true);
+        expect(body.jobId).toBeDefined();
+
+        const jobs = await db
+          .select()
+          .from(jobQueue)
+          .where(eq(jobQueue.id, body.jobId));
+        expect(jobs).toHaveLength(1);
+        expect(jobs[0].type).toBe('chat_message');
+
+        const rawData = jobs[0].data as unknown;
+        const data =
+          typeof rawData === 'string' ? JSON.parse(rawData) : (rawData as Record<string, unknown>);
+        expect(data.resumeFrom).toBeTruthy();
+        expect((data.resumeFrom as any).previousResponseId).toBe('resp_local_1');
+        expect(Array.isArray((data.resumeFrom as any).toolOutputs)).toBe(true);
+      } finally {
+        acceptSpy.mockRestore();
+      }
+    });
+
+    it('should acknowledge partial local results without enqueueing a new job', async () => {
+      const create = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        { content: 'partial local tool result' }
+      );
+      const created = await create.json();
+
+      const before = await db.select({ id: jobQueue.id }).from(jobQueue);
+
+      const acceptSpy = vi
+        .spyOn(chatService, 'acceptLocalToolResult')
+        .mockResolvedValue({
+          readyToResume: false,
+          waitingForToolCallIds: ['call_local_2'],
+          localToolDefinitions: []
+        });
+
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'POST',
+          `/api/v1/chat/messages/${created.assistantMessageId}/tool-results`,
+          user.sessionToken!,
+          { toolCallId: 'call_local_1', result: { ok: true } }
+        );
+
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.ok).toBe(true);
+        expect(body.resumed).toBe(false);
+        expect(body.waitingForToolCallIds).toEqual(['call_local_2']);
+
+        const after = await db.select({ id: jobQueue.id }).from(jobQueue);
+        expect(after.length).toBe(before.length);
+      } finally {
+        acceptSpy.mockRestore();
+      }
     });
   });
 
@@ -499,4 +605,3 @@ describe('Chat API Endpoints', () => {
     });
   });
 });
-

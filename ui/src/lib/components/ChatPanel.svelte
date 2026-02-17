@@ -40,6 +40,7 @@
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
     executeLocalTool,
+    getLocalToolDefinitions,
     isLocalToolName,
     isLocalToolRuntimeAvailable,
     type LocalToolName,
@@ -530,17 +531,35 @@
     localToolInFlight.add(toolCallId);
 
     try {
-      await executeLocalTool(
+      const localResult = await executeLocalTool(
         toolCallId,
         localToolState.name,
         parsed.value,
         { streamId: localToolState.streamId },
+      );
+      await apiPost(
+        `/chat/messages/${encodeURIComponent(localToolState.streamId)}/tool-results`,
+        { toolCallId, result: localResult },
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       console.warn(
         `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
       );
+      try {
+        await apiPost(
+          `/chat/messages/${encodeURIComponent(localToolState.streamId)}/tool-results`,
+          { toolCallId, result: { status: 'error', error: reason } },
+        );
+      } catch (forwardError) {
+        const forwardReason =
+          forwardError instanceof Error
+            ? forwardError.message
+            : String(forwardError);
+        console.warn(
+          `Failed to forward local tool error for ${localToolState.name} (${toolCallId}): ${forwardReason}`,
+        );
+      }
     } finally {
       localToolInFlight.delete(toolCallId);
     }
@@ -1836,6 +1855,11 @@
         primaryContextId?: string;
         contexts?: Array<{ contextType: string; contextId: string }>;
         tools?: string[];
+        localToolDefinitions?: Array<{
+          name: string;
+          description: string;
+          parameters: Record<string, unknown>;
+        }>;
         workspace_id?: string;
       } = {
         content: text,
@@ -1861,6 +1885,10 @@
 
       const enabledTools = getEnabledToolIds();
       if (enabledTools.length > 0) payload.tools = enabledTools;
+
+      if (isLocalToolRuntimeAvailable()) {
+        payload.localToolDefinitions = getLocalToolDefinitions();
+      }
 
       const res = await apiPost<{
         sessionId: string;
