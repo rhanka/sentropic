@@ -13,13 +13,6 @@ if (!app) {
 
 app.innerHTML = `
   <div class="field">
-    <label for="profile">Profile</label>
-    <select id="profile">
-      <option value="uat">UAT</option>
-      <option value="prod">PROD</option>
-    </select>
-  </div>
-  <div class="field">
     <label for="apiBaseUrl">API Base URL</label>
     <input id="apiBaseUrl" type="text" placeholder="https://.../api/v1" />
   </div>
@@ -39,7 +32,6 @@ app.innerHTML = `
   <div class="status info" id="status"></div>
 `;
 
-const profileEl = document.getElementById('profile') as HTMLSelectElement;
 const apiBaseUrlEl = document.getElementById('apiBaseUrl') as HTMLInputElement;
 const appBaseUrlEl = document.getElementById('appBaseUrl') as HTMLInputElement;
 const wsBaseUrlEl = document.getElementById('wsBaseUrl') as HTMLInputElement;
@@ -47,6 +39,7 @@ const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const testBtn = document.getElementById('test') as HTMLButtonElement;
 const defaultsBtn = document.getElementById('defaults') as HTMLButtonElement;
 const statusEl = document.getElementById('status') as HTMLDivElement;
+let currentProfile: ExtensionProfile = 'uat';
 
 const setStatus = (message: string, kind: 'ok' | 'error' | 'info' = 'info') => {
     statusEl.className = `status ${kind}`;
@@ -55,25 +48,24 @@ const setStatus = (message: string, kind: 'ok' | 'error' | 'info' = 'info') => {
 
 const loadIntoForm = async () => {
     const config = await loadExtensionConfig();
-    profileEl.value = config.profile;
+    currentProfile = config.profile;
     apiBaseUrlEl.value = config.apiBaseUrl;
     appBaseUrlEl.value = config.appBaseUrl;
     wsBaseUrlEl.value = config.wsBaseUrl;
 };
 
 const saveForm = async () => {
-    const profile = (profileEl.value === 'prod' ? 'prod' : 'uat') as ExtensionProfile;
     const config = await saveExtensionConfig({
-        profile,
+        profile: currentProfile,
         apiBaseUrl: apiBaseUrlEl.value,
         appBaseUrl: appBaseUrlEl.value,
         wsBaseUrl: wsBaseUrlEl.value,
     });
-    profileEl.value = config.profile;
+    currentProfile = config.profile;
     apiBaseUrlEl.value = config.apiBaseUrl;
     appBaseUrlEl.value = config.appBaseUrl;
     wsBaseUrlEl.value = config.wsBaseUrl;
-    setStatus(`Saved ${config.profile.toUpperCase()} config.`, 'ok');
+    setStatus('Saved endpoint config.', 'ok');
 };
 
 const testApi = async () => {
@@ -102,15 +94,6 @@ const testApi = async () => {
     }
 };
 
-profileEl.addEventListener('change', () => {
-    const profile = (profileEl.value === 'prod' ? 'prod' : 'uat') as ExtensionProfile;
-    const defaults = getDefaultConfig(profile);
-    apiBaseUrlEl.value = defaults.apiBaseUrl;
-    appBaseUrlEl.value = defaults.appBaseUrl;
-    wsBaseUrlEl.value = defaults.wsBaseUrl;
-    setStatus(`Loaded ${profile.toUpperCase()} defaults in form.`, 'info');
-});
-
 saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     try {
@@ -133,12 +116,11 @@ testBtn.addEventListener('click', async () => {
 });
 
 defaultsBtn.addEventListener('click', () => {
-    const profile = (profileEl.value === 'prod' ? 'prod' : 'uat') as ExtensionProfile;
-    const defaults = getDefaultConfig(profile);
+    const defaults = getDefaultConfig(currentProfile);
     apiBaseUrlEl.value = defaults.apiBaseUrl;
     appBaseUrlEl.value = defaults.appBaseUrl;
     wsBaseUrlEl.value = defaults.wsBaseUrl;
-    setStatus(`Reset form to ${profile.toUpperCase()} defaults.`, 'info');
+    setStatus('Reset form to default endpoints.', 'info');
 });
 
 void loadIntoForm()

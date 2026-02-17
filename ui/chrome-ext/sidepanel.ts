@@ -10,6 +10,19 @@ let ownerTabId: number | null = null;
 let closeSignalSent = false;
 let openHeartbeatTimer: number | null = null;
 let overlaySwitchInProgress = false;
+const NON_INJECTABLE_URL_PREFIXES = [
+    'chrome://',
+    'chrome-extension://',
+    'edge://',
+    'about:',
+    'devtools://',
+    'view-source:',
+];
+
+const canInjectContentScript = (url?: string | null): boolean => {
+    if (!url) return false;
+    return !NON_INJECTABLE_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
+};
 
 const readHandoffState = async (): Promise<ChatWidgetHandoffState | null> => {
     try {
@@ -53,12 +66,14 @@ const openOverlayInActiveTab = async (
 ): Promise<boolean> => {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        const targetTabId = tabs[0]?.id;
+        const targetTab = tabs[0];
+        const targetTabId = targetTab?.id;
         if (typeof targetTabId !== 'number') {
             console.warn('No active tab found to reopen chat overlay.');
             return false;
         }
         ownerTabId = targetTabId;
+        const tabUrl = targetTab?.url ?? null;
         const sendOpenRequest = async (): Promise<boolean> => {
             try {
                 const response = await chrome.tabs.sendMessage(targetTabId, {
@@ -76,6 +91,13 @@ const openOverlayInActiveTab = async (
         }
 
         // Fallback: content script may not yet be present (new tab / delayed injection).
+        if (!canInjectContentScript(tabUrl)) {
+            console.info(
+                'Skipping content script injection for non-injectable tab URL while reopening overlay.',
+                tabUrl,
+            );
+            return false;
+        }
         try {
             await chrome.scripting.executeScript({
                 target: { tabId: targetTabId },
@@ -144,6 +166,11 @@ const notifyContentSidePanelState = async (state: 'open' | 'closed') => {
     };
 
     if (await sendStateMessage()) {
+        return;
+    }
+
+    const targetTab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!canInjectContentScript(targetTab?.url)) {
         return;
     }
 

@@ -180,6 +180,7 @@
   let extensionConfigSaving = false;
   let extensionConfigTesting = false;
   let extensionConfigLoaded = false;
+  let extensionAuthRequired = false;
   let extensionConfigStatus = '';
   let extensionConfigStatusKind: ExtensionConfigStatusKind = 'info';
   let extensionAuthStatus = '';
@@ -405,6 +406,11 @@
     extensionAuthStatusKind = kind;
   };
 
+  const openExtensionSettingsMenu = (event?: Event) => {
+    event?.stopPropagation();
+    showExtensionConfigMenu = true;
+  };
+
   const toSessionUser = (payload: {
     id: string;
     email: string | null;
@@ -439,7 +445,7 @@
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigLoading) return;
     extensionConfigLoading = true;
-    setExtensionConfigStatus('Loading endpoint config...', 'info');
+    setExtensionConfigStatus($_('chat.extension.status.loadingConfig'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
@@ -452,41 +458,30 @@
           }
         | undefined;
       if (!response?.ok || !response?.config) {
-        const reason = response?.error ?? 'Unable to load endpoint config.';
+        const reason =
+          response?.error ?? $_('chat.extension.status.loadConfigFailed');
         setExtensionConfigStatus(reason, 'error');
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
       extensionConfigLoaded = true;
-      setExtensionConfigStatus(
-        `Config loaded (${extensionConfigForm.profile.toUpperCase()}).`,
-        'info',
-      );
+      setExtensionConfigStatus($_('chat.extension.status.configLoaded'), 'info');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionConfigStatus(`Load failed: ${reason}`, 'error');
+      setExtensionConfigStatus(
+        $_('chat.extension.status.loadFailed', { values: { reason } }),
+        'error',
+      );
     } finally {
       extensionConfigLoading = false;
     }
-  };
-
-  const applyProfileDefaults = () => {
-    const defaults = DEFAULT_EXTENSION_CONFIGS[extensionConfigForm.profile];
-    extensionConfigForm = normalizeExtensionConfig({
-      profile: extensionConfigForm.profile,
-      ...defaults,
-    });
-    setExtensionConfigStatus(
-      `Loaded ${extensionConfigForm.profile.toUpperCase()} defaults.`,
-      'info',
-    );
   };
 
   const saveExtensionConfig = async () => {
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigSaving) return;
     extensionConfigSaving = true;
-    setExtensionConfigStatus('Saving endpoint config...', 'info');
+    setExtensionConfigStatus($_('chat.extension.status.savingConfig'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
@@ -505,7 +500,8 @@
           }
         | undefined;
       if (!response?.ok || !response?.config) {
-        const reason = response?.error ?? 'Unable to save endpoint config.';
+        const reason =
+          response?.error ?? $_('chat.extension.status.saveConfigFailed');
         setExtensionConfigStatus(reason, 'error');
         return;
       }
@@ -520,13 +516,13 @@
           detail: extensionConfigForm,
         }),
       );
-      setExtensionConfigStatus(
-        `Saved ${extensionConfigForm.profile.toUpperCase()} config.`,
-        'ok',
-      );
+      setExtensionConfigStatus($_('chat.extension.status.configSaved'), 'ok');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionConfigStatus(`Save failed: ${reason}`, 'error');
+      setExtensionConfigStatus(
+        $_('chat.extension.status.saveFailed', { values: { reason } }),
+        'error',
+      );
     } finally {
       extensionConfigSaving = false;
     }
@@ -536,7 +532,7 @@
     if (!isExtensionConfigAvailable()) return;
     if (extensionAuthLoading) return;
     extensionAuthLoading = true;
-    setExtensionAuthStatus('Checking extension session...', 'info');
+    setExtensionAuthStatus($_('chat.extension.status.checkingSession'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
@@ -558,7 +554,8 @@
           }
         | undefined;
       if (!response?.ok || !response.status) {
-        const reason = response?.error ?? 'Failed to read extension auth status.';
+        const reason =
+          response?.error ?? $_('chat.extension.status.readAuthFailed');
         setExtensionAuthStatus(reason, 'error');
         extensionAuthConnected = false;
         extensionAuthUser = null;
@@ -575,7 +572,7 @@
         extensionAuthLoginUrl = null;
         clearUser();
         setExtensionAuthStatus(
-          status.reason || 'Extension is not connected.',
+          status.reason || $_('chat.extension.auth.notConnected'),
           'info',
         );
         extensionAuthStatusLoaded = true;
@@ -587,11 +584,14 @@
       extensionAuthUser = user;
       extensionAuthLoginUrl = null;
       setUser(user);
-      setExtensionAuthStatus('Extension connected.', 'ok');
+      setExtensionAuthStatus($_('chat.extension.status.connected'), 'ok');
       extensionAuthStatusLoaded = true;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionAuthStatus(`Status check failed: ${reason}`, 'error');
+      setExtensionAuthStatus(
+        $_('chat.extension.status.statusCheckFailed', { values: { reason } }),
+        'error',
+      );
       extensionAuthConnected = false;
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
@@ -607,7 +607,7 @@
     if (extensionAuthConnecting) return;
     extensionAuthConnecting = true;
     extensionAuthLoginUrl = null;
-    setExtensionAuthStatus('Connecting extension session...', 'info');
+    setExtensionAuthStatus($_('chat.extension.status.connecting'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
@@ -627,7 +627,8 @@
           }
         | undefined;
       if (!response?.ok || !response.user) {
-        const reason = response?.error ?? 'Failed to connect extension session.';
+        const reason =
+          response?.error ?? $_('chat.extension.status.connectFailed');
         extensionAuthConnected = false;
         extensionAuthUser = null;
         extensionAuthLoginUrl = response?.loginUrl ?? null;
@@ -642,7 +643,7 @@
       extensionAuthUser = user;
       extensionAuthLoginUrl = null;
       setUser(user);
-      setExtensionAuthStatus('Extension connected successfully.', 'ok');
+      setExtensionAuthStatus($_('chat.extension.status.connectedSuccess'), 'ok');
       extensionAuthStatusLoaded = true;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -650,7 +651,10 @@
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
       clearUser();
-      setExtensionAuthStatus(`Connection failed: ${reason}`, 'error');
+      setExtensionAuthStatus(
+        $_('chat.extension.status.connectionFailed', { values: { reason } }),
+        'error',
+      );
       extensionAuthStatusLoaded = true;
     } finally {
       extensionAuthConnecting = false;
@@ -661,7 +665,7 @@
     if (!isExtensionConfigAvailable()) return;
     if (extensionAuthLoggingOut) return;
     extensionAuthLoggingOut = true;
-    setExtensionAuthStatus('Logging out extension session...', 'info');
+    setExtensionAuthStatus($_('chat.extension.status.loggingOut'), 'info');
     try {
       const runtime = getExtensionRuntime();
       await runtime?.sendMessage?.({
@@ -671,11 +675,14 @@
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
       clearUser();
-      setExtensionAuthStatus('Extension session logged out.', 'ok');
+      setExtensionAuthStatus($_('chat.extension.status.loggedOut'), 'ok');
       extensionAuthStatusLoaded = true;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionAuthStatus(`Logout failed: ${reason}`, 'error');
+      setExtensionAuthStatus(
+        $_('chat.extension.status.logoutFailed', { values: { reason } }),
+        'error',
+      );
     } finally {
       extensionAuthLoggingOut = false;
     }
@@ -689,12 +696,15 @@
         type: 'extension_auth_open_login',
       });
       setExtensionAuthStatus(
-        'Login page opened. Complete sign-in, then click Connect.',
+        $_('chat.extension.status.loginOpened'),
         'info',
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionAuthStatus(`Unable to open login page: ${reason}`, 'error');
+      setExtensionAuthStatus(
+        $_('chat.extension.status.openLoginFailed', { values: { reason } }),
+        'error',
+      );
     }
   };
 
@@ -702,7 +712,7 @@
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigTesting) return;
     extensionConfigTesting = true;
-    setExtensionConfigStatus('Testing API connectivity...', 'info');
+    setExtensionConfigStatus($_('chat.extension.status.testingApi'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
@@ -718,14 +728,25 @@
           }
         | undefined;
       if (response?.ok && response.status) {
-        setExtensionConfigStatus(`API reachable (${response.status}).`, 'ok');
+        setExtensionConfigStatus(
+          $_('chat.extension.status.apiReachable', {
+            values: { status: response.status },
+          }),
+          'ok',
+        );
         return;
       }
-      const reason = response?.error ?? 'API connectivity test failed.';
+      const reason =
+        response?.error ?? $_('chat.extension.status.apiTestFailed');
       setExtensionConfigStatus(reason, 'error');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      setExtensionConfigStatus(`API test failed: ${reason}`, 'error');
+      setExtensionConfigStatus(
+        $_('chat.extension.status.apiTestFailedWithReason', {
+          values: { reason },
+        }),
+        'error',
+      );
     } finally {
       extensionConfigTesting = false;
     }
@@ -754,6 +775,9 @@
   ) {
     void loadExtensionAuthStatus();
   }
+
+  $: extensionAuthRequired =
+    isExtensionConfigAvailable() && !extensionAuthConnected;
 
   $: {
     if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
@@ -1785,8 +1809,8 @@
                   <button
                     class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                     on:click={toggle}
-                    title="Extension endpoint settings"
-                    aria-label="Extension endpoint settings"
+                    title={$_('chat.extension.settingsTitle')}
+                    aria-label={$_('chat.extension.settingsTitle')}
                     type="button"
                     bind:this={extensionConfigButtonRef}
                   >
@@ -1795,34 +1819,14 @@
                 </svelte:fragment>
                 <svelte:fragment slot="menu">
                   <div class="text-xs font-semibold text-slate-700">
-                    Endpoint configuration
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      class="block text-[11px] text-slate-600"
-                      for="extension-config-profile"
-                    >
-                      Profile
-                    </label>
-                    <select
-                      id="extension-config-profile"
-                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 bg-white"
-                      bind:value={extensionConfigForm.profile}
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
-                      on:change={applyProfileDefaults}
-                    >
-                      <option value="uat">UAT</option>
-                      <option value="prod">PROD</option>
-                    </select>
+                    {$_('chat.extension.endpointConfiguration')}
                   </div>
                   <div class="space-y-1">
                     <label
                       class="block text-[11px] text-slate-600"
                       for="extension-config-api-base-url"
                     >
-                      API Base URL
+                      {$_('chat.extension.apiBaseUrl')}
                     </label>
                     <input
                       id="extension-config-api-base-url"
@@ -1840,7 +1844,7 @@
                       class="block text-[11px] text-slate-600"
                       for="extension-config-app-base-url"
                     >
-                      App Base URL
+                      {$_('chat.extension.appBaseUrl')}
                     </label>
                     <input
                       id="extension-config-app-base-url"
@@ -1858,7 +1862,7 @@
                       class="block text-[11px] text-slate-600"
                       for="extension-config-ws-base-url"
                     >
-                      WS Base URL (optional)
+                      {$_('chat.extension.wsBaseUrlOptional')}
                     </label>
                     <input
                       id="extension-config-ws-base-url"
@@ -1880,7 +1884,7 @@
                         extensionConfigSaving ||
                         extensionConfigTesting}
                     >
-                      Save
+                      {$_('common.save')}
                     </button>
                     <button
                       class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -1890,7 +1894,7 @@
                         extensionConfigSaving ||
                         extensionConfigTesting}
                     >
-                      Test API
+                      {$_('chat.extension.testApi')}
                     </button>
                   </div>
                   {#if extensionConfigStatus}
@@ -1908,15 +1912,15 @@
                   {/if}
                   <div class="border-t border-slate-200 pt-2 space-y-2">
                     <div class="text-xs font-semibold text-slate-700">
-                      Extension auth
+                      {$_('chat.extension.auth.title')}
                     </div>
                     <div class="text-[11px] text-slate-600">
                       {#if extensionAuthConnected && extensionAuthUser}
-                        Connected as {extensionAuthUser.displayName ||
+                        {$_('chat.extension.auth.connectedAs')} {extensionAuthUser.displayName ||
                           extensionAuthUser.email ||
                           extensionAuthUser.id}
                       {:else}
-                        Not connected
+                        {$_('chat.extension.auth.notConnected')}
                       {/if}
                     </div>
                     <div class="flex items-center gap-2">
@@ -1931,7 +1935,7 @@
                             extensionConfigSaving ||
                             extensionConfigTesting}
                         >
-                          Logout
+                          {$_('chat.extension.auth.logout')}
                         </button>
                       {:else}
                         <button
@@ -1944,7 +1948,7 @@
                             extensionConfigSaving ||
                             extensionConfigTesting}
                         >
-                          Connect
+                          {$_('chat.extension.auth.connect')}
                         </button>
                       {/if}
                       {#if extensionAuthLoginUrl && !extensionAuthConnected}
@@ -1953,7 +1957,7 @@
                           type="button"
                           on:click={() => void openExtensionLoginPage()}
                         >
-                          Open Login
+                          {$_('chat.extension.auth.openLogin')}
                         </button>
                       {/if}
                     </div>
@@ -2007,56 +2011,55 @@
 
       <!-- Contenu (QueueMonitor inchangé hors header) -->
       <div class="flex-1 min-h-0">
-        {#if activeTab === 'queue'}
-          <div class="h-full min-h-0">
-            <QueueMonitor />
-          </div>
-        {/if}
-        {#if activeTab === 'comments'}
-          <div class="h-full min-h-0">
-            {#if commentContext?.id}
-              <ChatPanel
-                mode="comments"
-                bind:commentThreads
-                bind:commentThreadId
-                bind:commentLoading
-                {commentSectionKey}
-                {commentSectionLabel}
-                commentContextType={commentContext.type}
-                commentContextId={commentContext.id}
-                {contextStore}
-              />
-            {:else}
-              <div
-                class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500"
-              >
-                {$_('chat.comments.noContext')}
-              </div>
-            {/if}
-          </div>
-        {/if}
-        <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
-          {#if isExtensionConfigAvailable() && !extensionAuthConnected}
+        {#if extensionAuthRequired}
+          <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
             <div
-              class="m-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2"
+              class="w-full max-w-md rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3"
             >
-              <div>
-                Extension auth is required before using chat on external pages.
-              </div>
-              <div class="text-[11px] text-slate-500">
-                Open settings, then click Connect. If needed, open app login first.
+              <div>{$_('chat.extension.authRequired.title')}</div>
+              <div class="text-xs text-slate-500">
+                {$_('chat.extension.authRequired.description')}
               </div>
               <button
-                class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                class="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                 type="button"
-                on:click={() => {
-                  showExtensionConfigMenu = true;
-                }}
+                on:mousedown|stopPropagation={openExtensionSettingsMenu}
+                on:click|stopPropagation={openExtensionSettingsMenu}
               >
-                Open Settings
+                {$_('chat.extension.authRequired.openSettings')}
               </button>
             </div>
-          {:else}
+          </div>
+        {:else}
+          {#if activeTab === 'queue'}
+            <div class="h-full min-h-0">
+              <QueueMonitor />
+            </div>
+          {/if}
+          {#if activeTab === 'comments'}
+            <div class="h-full min-h-0">
+              {#if commentContext?.id}
+                <ChatPanel
+                  mode="comments"
+                  bind:commentThreads
+                  bind:commentThreadId
+                  bind:commentLoading
+                  {commentSectionKey}
+                  {commentSectionLabel}
+                  commentContextType={commentContext.type}
+                  commentContextId={commentContext.id}
+                  {contextStore}
+                />
+              {:else}
+                <div
+                  class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500"
+                >
+                  {$_('chat.comments.noContext')}
+                </div>
+              {/if}
+            </div>
+          {/if}
+          <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
             <ChatPanel
               bind:this={chatPanelRef}
               bind:sessions={chatSessions}
@@ -2065,8 +2068,8 @@
               bind:loadingSessions={chatLoadingSessions}
               {contextStore}
             />
-          {/if}
-        </div>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}
