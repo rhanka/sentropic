@@ -26,15 +26,28 @@
   };
 
   onMount(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (!open) return;
+    const isWithinPopover = (event: Event) => {
+      const path =
+        typeof (event as Event & { composedPath?: () => EventTarget[] })
+          .composedPath === 'function'
+          ? (event as Event & { composedPath: () => EventTarget[] }).composedPath()
+          : [];
+      if (menuRef && path.includes(menuRef)) return true;
+      if (triggerRef && path.includes(triggerRef)) return true;
       const target = event.target as Node | null;
-      if (target && (menuRef?.contains(target) || triggerRef?.contains(target))) return;
+      if (target && (menuRef?.contains(target) || triggerRef?.contains(target)))
+        return true;
+      return false;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!open) return;
+      if (isWithinPopover(event)) return;
       close();
     };
 
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
   });
 
   $: positionClass = placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2';
