@@ -1146,8 +1146,8 @@
                             };
                           })
                         }
-                        multiline={true}
-                        markdown={false}
+                        markdown={true}
+                        fullWidth={true}
                         on:change={(e) => updateAxisName(true, index, e.detail.value)}
                         on:saved={() => {
                           originalConfig = { ...editedConfig };
@@ -1249,8 +1249,8 @@
                             };
                           })
                         }
-                        multiline={true}
-                        markdown={false}
+                        markdown={true}
+                        fullWidth={true}
                         on:change={(e) => updateAxisName(false, index, e.detail.value)}
                         on:saved={() => {
                           originalConfig = { ...editedConfig };
@@ -1479,6 +1479,8 @@
                     apiEndpoint={`${API_BASE_URL}/folders/${$currentFolderId}/matrix`}
                     fullData={editedConfig}
                     fullDataGetter={() => buildMatrixPayload()}
+                    markdown={true}
+                    fullWidth={true}
                     on:change={(e) => updateLevelDescription(levelNum, e.detail.value)}
                     on:saved={() => {
                       originalConfig = { ...editedConfig };

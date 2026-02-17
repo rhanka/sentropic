@@ -91,21 +91,24 @@
           />
         </h1>
 
-        <p class="text-lg text-slate-600 mt-1">
-          <span class="font-medium">{$_('organizations.fields.industry')}</span>
-          <EditableInput
-            value={fieldValues.industry}
-            originalValue={getOriginalValue('industry')}
-            changeId={apiEndpoint ? 'organization-industry' : 'new-organization-industry'}
-            apiEndpoint={apiEndpoint}
-            fullData={getPayload('industry')}
-            fullDataGetter={() => getPayload('industry')}
-            locked={locked}
-            placeholder={$_('common.unspecified')}
-            on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
-            on:saved={(e) => handleSaved('industry', e as CustomEvent<{ value?: string }>)}
-          />
-        </p>
+        <div class="mt-2 space-y-1 max-w-2xl">
+          <div class="text-sm font-medium text-slate-600">{$_('organizations.fields.industry')}</div>
+          <div class="text-lg text-slate-600">
+            <EditableInput
+              value={fieldValues.industry}
+              originalValue={getOriginalValue('industry')}
+              changeId={apiEndpoint ? 'organization-industry' : 'new-organization-industry'}
+              apiEndpoint={apiEndpoint}
+              fullData={getPayload('industry')}
+              fullDataGetter={() => getPayload('industry')}
+              fullWidth={true}
+              locked={locked}
+              placeholder={$_('common.unspecified')}
+              on:change={(e) => onFieldUpdate?.('industry', e.detail.value)}
+              on:saved={(e) => handleSaved('industry', e as CustomEvent<{ value?: string }>)}
+            />
+          </div>
+        </div>
       </div>
 
       <div class="col-span-6 flex items-center justify-end gap-2">
