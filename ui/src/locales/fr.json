@@ -920,6 +920,8 @@
         "loadError": "Erreur de chargement",
         "none": "Aucun membre"
       },
+      "showResolved": "Afficher les commentaires résolus",
+      "hideResolved": "Masquer les commentaires résolus",
       "resolve": "Résoudre",
       "reopen": "Réouvrir"
     },
