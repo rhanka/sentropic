@@ -39,6 +39,12 @@
   } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
+    executeLocalTool,
+    isLocalToolName,
+    isLocalToolRuntimeAvailable,
+    type LocalToolName,
+  } from '$lib/stores/localTools';
+  import {
     Send,
     ThumbsUp,
     ThumbsDown,
@@ -93,6 +99,13 @@
     data: any;
     sequence: number;
     createdAt?: string;
+  };
+  type LocalToolStreamState = {
+    streamId: string;
+    name: LocalToolName;
+    argsText: string;
+    lastSequence: number;
+    executed: boolean;
   };
   type IconComponent = typeof FileText;
   type ChatContextEntry = {
@@ -470,6 +483,134 @@
           ) ?? null)
       : null;
 
+  const getProcessingAssistantStreamIds = () =>
+    new Set(
+      messages
+        .filter(
+          (message) =>
+            message.role === 'assistant' && getMessageStatus(message) === 'processing',
+        )
+        .map((message) => message._streamId ?? message.id),
+    );
+
+  const resetLocalToolInterceptionState = () => {
+    localToolStatesById.clear();
+    localToolInFlight.clear();
+  };
+
+  const parseBufferedToolArgs = (
+    rawArgs: string,
+  ): { ready: boolean; value: unknown } => {
+    const trimmed = rawArgs.trim();
+    if (!trimmed) return { ready: true, value: {} };
+    try {
+      return {
+        ready: true,
+        value: JSON.parse(trimmed),
+      };
+    } catch {
+      return {
+        ready: false,
+        value: null,
+      };
+    }
+  };
+
+  const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
+    const localToolState = localToolStatesById.get(toolCallId);
+    if (!localToolState || localToolState.executed) return;
+    if (localToolInFlight.has(toolCallId)) return;
+    if (!isLocalToolRuntimeAvailable()) return;
+
+    const parsed = parseBufferedToolArgs(localToolState.argsText);
+    if (!parsed.ready) return;
+
+    localToolState.executed = true;
+    localToolStatesById.set(toolCallId, localToolState);
+    localToolInFlight.add(toolCallId);
+
+    try {
+      await executeLocalTool(
+        toolCallId,
+        localToolState.name,
+        parsed.value,
+        { streamId: localToolState.streamId },
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
+      );
+    } finally {
+      localToolInFlight.delete(toolCallId);
+    }
+  };
+
+  const handleLocalToolCallStart = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
+    const toolNameRaw = String((event as any)?.data?.name ?? '').trim();
+    const argsChunk =
+      typeof (event as any)?.data?.args === 'string'
+        ? (event as any).data.args
+        : '';
+    const sequenceRaw = Number((event as any)?.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (!streamId || !toolCallId || !isLocalToolName(toolNameRaw)) return;
+
+    const previous = localToolStatesById.get(toolCallId);
+    if (previous && sequence <= previous.lastSequence) return;
+
+    localToolStatesById.set(toolCallId, {
+      streamId,
+      name: toolNameRaw,
+      argsText: previous ? `${previous.argsText}${argsChunk}` : argsChunk,
+      lastSequence: sequence,
+      executed: previous?.executed ?? false,
+    });
+    void tryExecuteBufferedLocalTool(toolCallId);
+  };
+
+  const handleLocalToolCallDelta = (event: StreamHubEvent) => {
+    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
+    if (!toolCallId) return;
+    const previous = localToolStatesById.get(toolCallId);
+    if (!previous) return;
+
+    const sequenceRaw = Number((event as any)?.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : previous.lastSequence;
+    if (sequence <= previous.lastSequence) return;
+
+    const deltaChunk =
+      typeof (event as any)?.data?.delta === 'string'
+        ? (event as any).data.delta
+        : '';
+    localToolStatesById.set(toolCallId, {
+      ...previous,
+      argsText: `${previous.argsText}${deltaChunk}`,
+      lastSequence: sequence,
+    });
+    void tryExecuteBufferedLocalTool(toolCallId);
+  };
+
+  const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
+    if (event.type !== 'tool_call_start' && event.type !== 'tool_call_delta')
+      return;
+    if (!isLocalToolRuntimeAvailable()) return;
+
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId) return;
+    const activeAssistantStreamIds = getProcessingAssistantStreamIds();
+    if (!activeAssistantStreamIds.has(streamId)) return;
+
+    if (event.type === 'tool_call_start') {
+      handleLocalToolCallStart(event);
+      return;
+    }
+    handleLocalToolCallDelta(event);
+  };
+
   $: commentPlaceholder = !$workspaceCanComment
     ? $_('chat.comments.placeholder.disabledViewer')
     : commentThreadResolved
@@ -508,6 +649,9 @@
   let streamDetailsLoading = false;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
+  let localToolsHubKey = '';
+  const localToolStatesById = new Map<string, LocalToolStreamState>();
+  const localToolInFlight = new Set<string>();
 
   let lastDraftApplied = draft;
   $: if (draft !== lastDraftApplied && draft !== input) {
@@ -1564,6 +1708,7 @@
 
   export const selectSession = async (id: string) => {
     sessionId = id;
+    resetLocalToolInterceptionState();
     await loadMessages(id, { scrollToBottom: true });
   };
 
@@ -1578,6 +1723,7 @@
     sessionId = null;
     messages = [];
     initialEventsByMessageId = new Map();
+    resetLocalToolInterceptionState();
     errorMsg = null;
     scheduleScrollToBottom({ force: true });
   };
@@ -1591,6 +1737,7 @@
       sessionId = null;
       messages = [];
       initialEventsByMessageId = new Map();
+      resetLocalToolInterceptionState();
       await loadSessions();
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.deleteSession'));
@@ -1864,6 +2011,10 @@
         handleMentionRefresh,
       );
     }
+    localToolsHubKey = `chat-local-tools:${Math.random().toString(36).slice(2)}`;
+    streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
+      handleLocalToolStreamEvent(event);
+    });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
@@ -1936,6 +2087,9 @@
     commentReloadTimer = null;
     if (commentHubKey) streamHub.delete(commentHubKey);
     commentHubKey = '';
+    if (localToolsHubKey) streamHub.delete(localToolsHubKey);
+    localToolsHubKey = '';
+    resetLocalToolInterceptionState();
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
     }

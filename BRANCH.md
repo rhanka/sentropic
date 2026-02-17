@@ -167,16 +167,17 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate chat streaming
 
 - [ ] **Lot 5 — Local Chrome tools (service worker)**
-  - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
-    - [ ] `tab_read_dom` (extract DOM text via `chrome.scripting.executeScript`)
-    - [ ] `tab_screenshot` (capture via `chrome.tabs.captureVisibleTab`)
-    - [ ] `tab_click` (click by selector or coordinates)
-    - [ ] `tab_type` (type text into input element)
-    - [ ] `tab_scroll` (scroll page by direction/pixels)
-    - [ ] `tab_info` (page metadata: URL, title, headings, links)
-  - [ ] Create `ui/src/lib/stores/localTools.ts` (LocalToolStore + execution bridge)
-  - [ ] Wire service worker message listener to tool executor
-  - [ ] Wire ChatPanel to intercept local tool calls from SSE stream
+  - [x] Create `ui/chrome-ext/tool-executor.ts` with implementations:
+    - [x] `tab_read_dom` (extract DOM text via `chrome.scripting.executeScript`)
+    - [x] `tab_screenshot` (capture via `chrome.tabs.captureVisibleTab`)
+    - [x] `tab_click` (click by selector or coordinates)
+    - [x] `tab_type` (type text into input element)
+    - [x] `tab_scroll` (scroll page by direction/pixels)
+    - [x] `tab_info` (page metadata: URL, title, headings, links)
+  - [x] Create `ui/src/lib/stores/localTools.ts` (LocalToolStore + execution bridge)
+  - [x] Wire service worker message listener to tool executor
+  - [x] Wire ChatPanel to intercept local tool calls from SSE stream
+  - [x] Quality gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] Lot gate: tools execute correctly from the extension context
 
 - [ ] **Lot 6 — API evolution for local tools**
