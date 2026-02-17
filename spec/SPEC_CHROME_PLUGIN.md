@@ -11,7 +11,7 @@ The extension also exposes **local Chrome tools** (tab reading via DOM or screen
 - **Manifest V3** — no remotely hosted code; the full UI bundle is packaged inside the extension.
 - **Docker-first** — build pipeline uses `make build-ext`, no npm on the host.
 - **Shadow DOM** — CSS isolation from the host page.
-- **Shared authentication** — cookies from the API domain are shared via `host_permissions`.
+- **Dedicated extension authentication** — extension uses its own token pair (access + refresh), stored in extension storage and injected by the background proxy.
 
 ---
 
@@ -40,7 +40,7 @@ flowchart TB
         CTX[ContextProvider<br/>replaces $app/stores page]
         API[ApiClient<br/>configurable baseUrl]
         SH[StreamHub adapter<br/>SSE to API]
-        AUTH[AuthBridge<br/>cookie-based]
+        AUTH[AuthBridge<br/>extension token-based]
         NAV[NavigationAdapter<br/>replaces goto]
     end
 
@@ -159,6 +159,44 @@ export interface AuthBridge {
   initialize(): Promise<void>;
 }
 ```
+
+### 3.5 Extension Token Auth Flow (Lot 4B)
+
+The extension does not start WebAuthn or login ceremonies from content script bootstrap.
+Authentication starts only from an explicit user action (`Connect`) in extension UI.
+
+Flow:
+
+1. User clicks `Connect` in extension settings.
+2. Background calls `POST /auth/session/extension-token` with `credentials: include`.
+3. API validates current app session (cookie or bearer) and issues a dedicated extension session pair.
+4. Background stores:
+   - refresh token + user profile in `chrome.storage.local`
+   - access token + expiry + user profile in `chrome.storage.session`
+5. All API calls from overlay/sidepanel are proxied through background, with `Authorization: Bearer <access-token>`.
+6. On expiry, background refreshes with `/auth/session/refresh` using stored refresh token.
+7. `Logout` calls `DELETE /auth/session` with bearer token, then clears extension auth storage.
+
+Security goals:
+
+- No passive WebAuthn prompts on third-party pages.
+- No dependency on host page localStorage/cookies for runtime API calls.
+- Explicit revoke path for extension session.
+
+### 3.6 WS Delegation Compatibility (forward path)
+
+Future local/remote tool delegation over WS must reuse the same extension auth context:
+
+- WS handshake carries the same extension bearer token used by REST proxy.
+- Token refresh remains centralized in background (single authority).
+- Overlay/sidepanel never keep independent auth implementations.
+- When WS is unavailable, REST proxy remains the fallback transport.
+
+This keeps auth semantics identical across:
+
+- local tool execution (`chrome.runtime` / service worker)
+- remote API calls
+- future delegated WS channels.
 
 ### 3.4 NavigationAdapter
 

@@ -257,9 +257,34 @@ export async function refreshSession(
       return null;
     }
     
-    // Get user role (would need to join with users table)
-    // For now, decode from existing session or default to 'guest'
-    const role = 'guest'; // TODO: Get from users table
+    const [userAuth] = await db
+      .select({
+        role: users.role,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
+      })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
+    if (!userAuth) {
+      logger.warn({ userId: session.userId }, 'Refresh failed: user not found');
+      return null;
+    }
+
+    const status = userAuth.accountStatus ?? 'active';
+    const now = new Date();
+
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      logger.warn({ userId: session.userId, status }, 'Refresh failed: account disabled');
+      return null;
+    }
+
+    let role = userAuth.role as string;
+    if (status === 'approval_expired_readonly') role = 'guest';
+    if (status === 'pending_admin_approval' && userAuth.approvalDueAt && now > userAuth.approvalDueAt) {
+      role = 'guest';
+    }
     
     // Generate new tokens
     const newSessionToken = await new SignJWT({ 
@@ -356,4 +381,3 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }
-

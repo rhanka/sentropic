@@ -36,6 +36,13 @@ class SessionApiError extends Error {
   }
 }
 
+const isExtensionRuntime = (): boolean => {
+  const ext = globalThis as typeof globalThis & {
+    chrome?: { runtime?: { id?: string } };
+  };
+  return Boolean(ext.chrome?.runtime?.id);
+};
+
 async function authRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
   const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
@@ -85,6 +92,27 @@ export const isLoadingSession = derived(
  * Call this on app startup
  */
 export async function initializeSession(): Promise<void> {
+  if (isExtensionRuntime()) {
+    try {
+      const data = await authRequest<{ userId: string; email?: string; displayName?: string; role: string }>('/auth/session', {
+        method: 'GET'
+      });
+
+      const user: User = {
+        id: data.userId,
+        email: data.email ?? null,
+        displayName: data.displayName ?? null,
+        role: data.role as User['role'],
+      };
+
+      sessionStore.set({ user, loading: false });
+    } catch (error) {
+      console.warn('Extension session init failed:', error);
+      sessionStore.set({ user: null, loading: false });
+    }
+    return;
+  }
+
   try {
     const stored = localStorage.getItem('userSession');
 
@@ -278,6 +306,8 @@ export function setUser(user: User): void {
   console.log('💾 Saving user to store and localStorage:', user);
   sessionStore.update(state => ({ ...state, user }));
 
+  if (isExtensionRuntime()) return;
+
   // Persist user data in localStorage
   const sessionData = {
     user,
@@ -308,6 +338,9 @@ export async function retrySessionInit(): Promise<void> {
 export function clearUser(): void {
   console.log('🗑️ clearUser() called - clearing session and localStorage');
   sessionStore.set({ user: null, loading: false });
+
+  if (isExtensionRuntime()) return;
+
   // Clear localStorage data
   localStorage.removeItem('userSession');
 }
@@ -356,6 +389,8 @@ export async function logout(): Promise<void> {
   // Always clear local state regardless of API response
   clearUser();
 
+  if (isExtensionRuntime()) return;
+
   // Clear session storage
   sessionStorage.removeItem('sessionToken');
   sessionStorage.removeItem('refreshToken');
@@ -383,6 +418,8 @@ export async function logoutAll(): Promise<void> {
 
   // Always clear local state regardless of API response
   clearUser();
+
+  if (isExtensionRuntime()) return;
 
   // Clear session storage
   sessionStorage.removeItem('sessionToken');

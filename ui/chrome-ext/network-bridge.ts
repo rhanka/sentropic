@@ -3,6 +3,7 @@ type ProxyFetchPayload = {
     method: string;
     headers: Record<string, string>;
     bodyText?: string;
+    authMode?: 'extension' | 'cookie' | 'none';
 };
 
 type ProxyFetchResult =
@@ -55,6 +56,7 @@ const requestToPayload = async (request: Request): Promise<ProxyFetchPayload> =>
             url: request.url,
             method,
             headers,
+            authMode: 'extension',
         };
     }
 
@@ -69,6 +71,7 @@ const requestToPayload = async (request: Request): Promise<ProxyFetchPayload> =>
         url: request.url,
         method,
         headers,
+        authMode: 'extension',
         bodyText,
     };
 };
