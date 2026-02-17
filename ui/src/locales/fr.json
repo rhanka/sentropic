@@ -388,7 +388,7 @@
     "delete": "Supprimer l'organisation",
     "deleteSuccess": "Organisation supprimée avec succès !",
     "deleteError": "Erreur lors de la suppression",
-    "industry": "Secteur: {value}",
+    "industry": "Secteur {value}",
     "sizeLabel": "Taille",
     "clickForDetails": "Cliquez pour voir les détails",
     "form": {
@@ -397,7 +397,7 @@
       "namePlaceholder": "Saisir le nom de l'organisation"
     },
     "fields": {
-      "industry": "Secteur:",
+      "industry": "Secteur",
       "size": "Taille",
       "technologies": "Technologies",
       "products": "Produits et Services",
