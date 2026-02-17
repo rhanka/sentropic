@@ -10,7 +10,7 @@ export interface ExtensionRuntimeConfig {
 
 export const EXTENSION_CONFIG_STORAGE_KEY = 'topAiIdeas:extensionConfig:v1';
 
-const DEFAULT_CONFIGS: Record<
+const BASE_DEFAULT_CONFIGS: Record<
     ExtensionProfile,
     Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt'>
 > = {
@@ -25,6 +25,9 @@ const DEFAULT_CONFIGS: Record<
         wsBaseUrl: '',
     },
 };
+
+const BUILD_DEFAULT_PROFILE: ExtensionProfile =
+    import.meta.env.VITE_EXTENSION_PROFILE === 'prod' ? 'prod' : 'uat';
 
 const trimSlash = (value: string): string => {
     if (!value) return '';
@@ -44,6 +47,36 @@ const normalizeHttpUrl = (value: string): string | null => {
         return null;
     }
 };
+
+const buildDefaultApiBaseUrl =
+    normalizeHttpUrl(import.meta.env.VITE_EXTENSION_API_BASE_URL ?? '') ?? null;
+const buildDefaultAppBaseUrl =
+    normalizeHttpUrl(import.meta.env.VITE_EXTENSION_APP_BASE_URL ?? '') ?? null;
+const buildDefaultWsBaseUrl = (import.meta.env.VITE_EXTENSION_WS_BASE_URL ?? '').trim();
+
+const DEFAULT_CONFIGS: Record<
+    ExtensionProfile,
+    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt'>
+> = {
+    uat: {
+        ...BASE_DEFAULT_CONFIGS.uat,
+    },
+    prod: {
+        ...BASE_DEFAULT_CONFIGS.prod,
+    },
+};
+
+if (buildDefaultApiBaseUrl) {
+    DEFAULT_CONFIGS[BUILD_DEFAULT_PROFILE].apiBaseUrl = buildDefaultApiBaseUrl;
+}
+
+if (buildDefaultAppBaseUrl) {
+    DEFAULT_CONFIGS[BUILD_DEFAULT_PROFILE].appBaseUrl = buildDefaultAppBaseUrl;
+}
+
+if (buildDefaultWsBaseUrl) {
+    DEFAULT_CONFIGS[BUILD_DEFAULT_PROFILE].wsBaseUrl = buildDefaultWsBaseUrl;
+}
 
 const normalizeConfig = (
     profile: ExtensionProfile,
@@ -72,8 +105,8 @@ const normalizeConfig = (
 const parseStoredConfig = (payload: unknown): ExtensionRuntimeConfig | null => {
     if (!payload || typeof payload !== 'object') return null;
     const raw = payload as Partial<ExtensionRuntimeConfig>;
-    const profile = raw.profile === 'prod' ? 'prod' : raw.profile === 'uat' ? 'uat' : null;
-    if (!profile) return null;
+    const profile: ExtensionProfile =
+        raw.profile === 'prod' ? 'prod' : raw.profile === 'uat' ? 'uat' : BUILD_DEFAULT_PROFILE;
     return normalizeConfig(profile, raw);
 };
 
@@ -86,7 +119,7 @@ export async function loadExtensionConfig(): Promise<ExtensionRuntimeConfig> {
         console.warn('Unable to read extension runtime config from storage.', error);
     }
 
-    const fallback = normalizeConfig('uat');
+    const fallback = normalizeConfig(BUILD_DEFAULT_PROFILE);
     try {
         await chrome.storage.local.set({
             [EXTENSION_CONFIG_STORAGE_KEY]: fallback,
@@ -98,9 +131,13 @@ export async function loadExtensionConfig(): Promise<ExtensionRuntimeConfig> {
 }
 
 export async function saveExtensionConfig(
-    input: Pick<ExtensionRuntimeConfig, 'profile' | 'apiBaseUrl' | 'appBaseUrl' | 'wsBaseUrl'>,
+    input: Pick<ExtensionRuntimeConfig, 'apiBaseUrl' | 'appBaseUrl' | 'wsBaseUrl'> & {
+        profile?: ExtensionProfile;
+    },
 ): Promise<ExtensionRuntimeConfig> {
-    const normalized = normalizeConfig(input.profile, input);
+    const profile: ExtensionProfile =
+        input.profile === 'prod' ? 'prod' : input.profile === 'uat' ? 'uat' : BUILD_DEFAULT_PROFILE;
+    const normalized = normalizeConfig(profile, input);
     await chrome.storage.local.set({
         [EXTENSION_CONFIG_STORAGE_KEY]: normalized,
     });
@@ -110,4 +147,3 @@ export async function saveExtensionConfig(
 export function getDefaultConfig(profile: ExtensionProfile): ExtensionRuntimeConfig {
     return normalizeConfig(profile);
 }
-

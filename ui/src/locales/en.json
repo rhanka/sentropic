@@ -739,6 +739,54 @@
       "switchToWidget": "Switch to widget",
       "switchToPanel": "Switch to panel"
     },
+    "extension": {
+      "settingsTitle": "Extension settings",
+      "endpointConfiguration": "Endpoint configuration",
+      "apiBaseUrl": "API Base URL",
+      "appBaseUrl": "App Base URL",
+      "wsBaseUrlOptional": "WS Base URL (optional)",
+      "testApi": "Test API",
+      "authRequired": {
+        "title": "Extension auth is required before using this area.",
+        "description": "Open settings, then click Connect. If needed, open app login first.",
+        "openSettings": "Open settings"
+      },
+      "auth": {
+        "title": "Extension auth",
+        "connectedAs": "Connected as",
+        "notConnected": "Not connected",
+        "connect": "Connect",
+        "logout": "Logout",
+        "openLogin": "Open login"
+      },
+      "status": {
+        "loadingConfig": "Loading endpoint configuration…",
+        "loadConfigFailed": "Unable to load endpoint configuration.",
+        "configLoaded": "Configuration loaded.",
+        "loadFailed": "Load failed: {reason}",
+        "savingConfig": "Saving endpoint configuration…",
+        "saveConfigFailed": "Unable to save endpoint configuration.",
+        "configSaved": "Configuration saved.",
+        "saveFailed": "Save failed: {reason}",
+        "checkingSession": "Checking extension session…",
+        "readAuthFailed": "Unable to read extension auth status.",
+        "connected": "Extension connected.",
+        "statusCheckFailed": "Status check failed: {reason}",
+        "connecting": "Connecting extension session…",
+        "connectFailed": "Unable to connect extension session.",
+        "connectedSuccess": "Extension session connected.",
+        "connectionFailed": "Connection failed: {reason}",
+        "loggingOut": "Logging out extension session…",
+        "loggedOut": "Extension session logged out.",
+        "logoutFailed": "Logout failed: {reason}",
+        "loginOpened": "Login page opened. Complete sign-in, then click Connect.",
+        "openLoginFailed": "Unable to open login page: {reason}",
+        "testingApi": "Testing API connectivity…",
+        "apiReachable": "API reachable ({status}).",
+        "apiTestFailed": "API connectivity test failed.",
+        "apiTestFailedWithReason": "API test failed: {reason}"
+      }
+    },
     "queue": {
       "badge": {
         "active": "{count} active job(s)",
