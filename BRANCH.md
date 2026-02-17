@@ -183,15 +183,16 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Vérifier exécution locale des tools (`tab_info`, `tab_read_dom`, `tab_scroll`, `tab_click`, `tab_type`, `tab_screenshot`) et garde-fous URL non injectables.
   - [!] **UAT utilisateur Lot 5A**
     - [x] Aucun script manuel requis côté utilisateur pour Lot 5A.
-    - [!] Deferred: real user-facing local-tool UAT is performed in Lot 6/7 after API resume flow (`localToolDefinitions` + `tool-results`) is implemented.
+    - [!] Deferred: real user-facing local-tool UAT is performed in Lot 7 integrated flow (Lot 6 API resume flow is now implemented).
   - [x] Lot gate: tools execute correctly from the extension context (validated via scoped `make test-ui` suites + `make typecheck-ui` + `make lint-ui` + `make build-ext` on `ENV=test-chrome-plugin`)
 
-- [ ] **Lot 6 — API evolution for local tools**
-  - [ ] Add `localToolDefinitions` optional field to `POST /chat/messages` input
-  - [ ] Merge local tool definitions with server tools in `chat-service.ts`
-  - [ ] Add `POST /api/v1/chat/messages/:id/tool-results` endpoint
-  - [ ] Implement generation resume after receiving local tool result
-  - [ ] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test`
+- [x] **Lot 6 — API evolution for local tools**
+  - [x] Add `localToolDefinitions` optional field to `POST /chat/messages` input
+  - [x] Merge local tool definitions with server tools in `chat-service.ts`
+  - [x] Add `POST /api/v1/chat/messages/:id/tool-results` endpoint
+  - [x] Implement generation resume after receiving local tool result
+  - [x] Lot gate: `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [x] Validation technique: `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make test-api SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
 
 - [ ] **Lot 7 — Integration & i18n**
   - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read_dom` → extension executes → result sent to API → LLM continues

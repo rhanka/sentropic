@@ -72,6 +72,32 @@ export type CreateChatMessageInput = {
   sessionTitle?: string | null;
 };
 
+export type LocalToolDefinitionInput = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+export type ChatResumeFromToolOutputs = {
+  previousResponseId: string;
+  toolOutputs: Array<{ callId: string; output: string }>;
+};
+
+type AwaitingLocalToolState = {
+  sequence: number;
+  previousResponseId: string;
+  pendingToolCallIds: string[];
+  baseToolOutputs: Array<{ callId: string; output: string }>;
+  localToolDefinitions: LocalToolDefinitionInput[];
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
 export class ChatService {
   private normalizeMessageContexts(
     input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
@@ -121,6 +147,226 @@ export class ChatService {
       if (parts.join('\n\n').length > maxTotal) break;
     }
     return this.safeTruncate(parts.join('\n\n'), maxTotal);
+  }
+
+  private serializeToolOutput(value: unknown): string {
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return JSON.stringify({ value: String(value) });
+    }
+  }
+
+  private normalizeLocalToolDefinitions(
+    definitions?: LocalToolDefinitionInput[],
+  ): OpenAI.Chat.Completions.ChatCompletionTool[] {
+    const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
+    const seen = new Set<string>();
+
+    for (const item of definitions ?? []) {
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      if (!name || !isValidToolName(name) || seen.has(name)) continue;
+
+      const description =
+        typeof item?.description === 'string' && item.description.trim()
+          ? item.description.trim()
+          : `Local tool ${name}`;
+      const parameters =
+        asRecord(item?.parameters) ?? ({ type: 'object', properties: {}, required: [] } as Record<string, unknown>);
+
+      tools.push({
+        type: 'function',
+        function: {
+          name,
+          description,
+          parameters: parameters as OpenAI.FunctionParameters
+        }
+      });
+      seen.add(name);
+    }
+
+    return tools;
+  }
+
+  private extractAwaitingLocalToolState(
+    events: Array<{
+      eventType: string;
+      data: unknown;
+      sequence: number;
+    }>
+  ): AwaitingLocalToolState | null {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const event = events[i];
+      if (event.eventType !== 'status') continue;
+      const data = asRecord(event.data);
+      if (!data || data.state !== 'awaiting_local_tool_results') continue;
+
+      const previousResponseId =
+        typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
+      if (!previousResponseId) return null;
+
+      const pendingToolCallIds: string[] = [];
+      const pendingRaw = Array.isArray(data.pending_local_tool_calls)
+        ? data.pending_local_tool_calls
+        : [];
+      for (const item of pendingRaw) {
+        const rec = asRecord(item);
+        const toolCallId =
+          rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
+        if (!toolCallId || pendingToolCallIds.includes(toolCallId)) continue;
+        pendingToolCallIds.push(toolCallId);
+      }
+
+      const baseToolOutputs: Array<{ callId: string; output: string }> = [];
+      const outputsRaw = Array.isArray(data.base_tool_outputs)
+        ? data.base_tool_outputs
+        : [];
+      for (const item of outputsRaw) {
+        const rec = asRecord(item);
+        const callId =
+          rec && typeof rec.call_id === 'string' ? rec.call_id.trim() : '';
+        const output =
+          rec && typeof rec.output === 'string' ? rec.output : '';
+        if (!callId) continue;
+        baseToolOutputs.push({ callId, output });
+      }
+
+      const localToolDefinitions: LocalToolDefinitionInput[] = [];
+      const localDefsRaw = Array.isArray(data.local_tool_definitions)
+        ? data.local_tool_definitions
+        : [];
+      for (const item of localDefsRaw) {
+        const rec = asRecord(item);
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        const description =
+          rec && typeof rec.description === 'string'
+            ? rec.description.trim()
+            : '';
+        const parameters =
+          rec && asRecord(rec.parameters)
+            ? (rec.parameters as Record<string, unknown>)
+            : null;
+        if (!name || !description || !parameters || !isValidToolName(name))
+          continue;
+        localToolDefinitions.push({ name, description, parameters });
+      }
+
+      if (pendingToolCallIds.length === 0) return null;
+
+      return {
+        sequence: event.sequence,
+        previousResponseId,
+        pendingToolCallIds,
+        baseToolOutputs,
+        localToolDefinitions
+      };
+    }
+
+    return null;
+  }
+
+  async acceptLocalToolResult(options: {
+    assistantMessageId: string;
+    toolCallId: string;
+    result: unknown;
+  }): Promise<{
+    readyToResume: boolean;
+    waitingForToolCallIds: string[];
+    localToolDefinitions: LocalToolDefinitionInput[];
+    resumeFrom?: ChatResumeFromToolOutputs;
+  }> {
+    const toolCallId = String(options.toolCallId ?? '').trim();
+    if (!toolCallId) {
+      throw new Error('toolCallId is required');
+    }
+
+    const events = await readStreamEvents(options.assistantMessageId);
+    const awaitingState = this.extractAwaitingLocalToolState(events);
+    if (!awaitingState) {
+      throw new Error('No pending local tool call found for this assistant message');
+    }
+    if (!awaitingState.pendingToolCallIds.includes(toolCallId)) {
+      throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
+    }
+
+    const rawResult = options.result;
+    const resultObj = asRecord(rawResult);
+    const normalizedResult = resultObj
+      ? {
+          ...(typeof resultObj.status === 'string' ? {} : { status: 'completed' }),
+          ...resultObj
+        }
+      : { status: 'completed', value: rawResult };
+
+    let streamSeq = await getNextSequence(options.assistantMessageId);
+    await writeStreamEvent(
+      options.assistantMessageId,
+      'tool_call_result',
+      { tool_call_id: toolCallId, result: normalizedResult },
+      streamSeq,
+      options.assistantMessageId
+    );
+    streamSeq += 1;
+
+    await writeStreamEvent(
+      options.assistantMessageId,
+      'status',
+      { state: 'local_tool_result_received', tool_call_id: toolCallId },
+      streamSeq,
+      options.assistantMessageId
+    );
+
+    const followupEvents = await readStreamEvents(options.assistantMessageId, awaitingState.sequence);
+    const pendingSet = new Set(awaitingState.pendingToolCallIds);
+    const collectedByToolCallId = new Map<string, string>();
+    for (const event of followupEvents) {
+      if (event.eventType !== 'tool_call_result') continue;
+      const data = asRecord(event.data);
+      if (!data) continue;
+      const id =
+        typeof data.tool_call_id === 'string' ? data.tool_call_id.trim() : '';
+      if (!id || !pendingSet.has(id)) continue;
+      const output = this.serializeToolOutput(data.result);
+      collectedByToolCallId.set(id, output);
+    }
+
+    const waitingForToolCallIds = awaitingState.pendingToolCallIds.filter(
+      (id) => !collectedByToolCallId.has(id)
+    );
+    if (waitingForToolCallIds.length > 0) {
+      return {
+        readyToResume: false,
+        waitingForToolCallIds,
+        localToolDefinitions: awaitingState.localToolDefinitions
+      };
+    }
+
+    const dedupedOutputs = new Map<string, string>();
+    for (const item of awaitingState.baseToolOutputs) {
+      if (!item.callId) continue;
+      dedupedOutputs.set(item.callId, item.output);
+    }
+    for (const id of awaitingState.pendingToolCallIds) {
+      const output = collectedByToolCallId.get(id);
+      if (!output) continue;
+      dedupedOutputs.set(id, output);
+    }
+    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => ({
+      callId,
+      output
+    }));
+
+    return {
+      readyToResume: true,
+      waitingForToolCallIds: [],
+      localToolDefinitions: awaitingState.localToolDefinitions,
+      resumeFrom: {
+        previousResponseId: awaitingState.previousResponseId,
+        toolOutputs
+      }
+    };
   }
 
   private getPromptTemplate(id: string): string {
@@ -682,6 +928,8 @@ export class ChatService {
     model?: string | null;
     contexts?: Array<{ contextType: string; contextId: string }>;
     tools?: string[];
+    localToolDefinitions?: LocalToolDefinitionInput[];
+    resumeFrom?: ChatResumeFromToolOutputs;
     signal?: AbortSignal;
   }): Promise<void> {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
@@ -906,7 +1154,19 @@ export class ChatService {
     if (hasCommentContexts) {
       addTools([commentAssistantTool]);
     }
+    const localTools = this.normalizeLocalToolDefinitions(
+      options.localToolDefinitions
+    );
+    addTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
+
+    const localToolNames = new Set(
+      localTools
+        .map((t) =>
+          t.type === 'function' && t.function?.name ? t.function.name : ''
+        )
+        .filter((name): name is string => Boolean(name))
+    );
 
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
       const allowed = new Set(options.tools);
@@ -1093,8 +1353,17 @@ Règles :
     > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
     const maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
     let iteration = 0;
-    let previousResponseId: string | null = null;
-    let pendingResponsesRawInput: unknown[] | null = null;
+    let previousResponseId: string | null =
+      options.resumeFrom?.previousResponseId ?? null;
+    let pendingResponsesRawInput: unknown[] | null = Array.isArray(
+      options.resumeFrom?.toolOutputs
+    )
+      ? options.resumeFrom!.toolOutputs.map((item) => ({
+          type: 'function_call_output',
+          call_id: item.callId,
+          output: item.output
+        }))
+      : null;
 
     // If the selected model is gpt-5*, dynamically evaluate the reasoning effort needed for the last user question
     // using gpt-5-nano (cheap classifier). This value (low/medium/high) is then passed as `reasoning.effort`.
@@ -1327,6 +1596,7 @@ Règles :
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
       const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
+      const pendingLocalToolCalls: Array<{ id: string; name: string }> = [];
       const orgByFolderId = new Map<string, string | null>();
       const getOrganizationIdForFolder = async (folderId: string): Promise<string | null> => {
         if (orgByFolderId.has(folderId)) return orgByFolderId.get(folderId) ?? null;
@@ -1367,6 +1637,19 @@ Règles :
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
+        const toolName = String(toolCall.name || '').trim();
+        if (toolName && localToolNames.has(toolName)) {
+          pendingLocalToolCalls.push({ id: toolCall.id, name: toolName });
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: { status: 'awaiting_external_result' } },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+          continue;
+        }
         
         try {
           const args = JSON.parse(toolCall.args || '{}');
@@ -1920,6 +2203,43 @@ Règles :
         meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
       });
 
+      if (pendingLocalToolCalls.length > 0) {
+        if (!previousResponseId) {
+          throw new Error(
+            'Unable to pause generation for local tools: missing previous_response_id'
+          );
+        }
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'awaiting_local_tool_results',
+            previous_response_id: previousResponseId,
+            pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
+              tool_call_id: item.id,
+              name: item.name
+            })),
+            local_tool_definitions: localTools.map((tool) => ({
+              name: tool.type === 'function' ? tool.function.name : '',
+              description:
+                tool.type === 'function' ? tool.function.description ?? '' : '',
+              parameters:
+                tool.type === 'function'
+                  ? ((tool.function.parameters ?? {}) as Record<string, unknown>)
+                  : {}
+            })),
+            base_tool_outputs: responseToolOutputs.map((item) => ({
+              call_id: item.call_id,
+              output: item.output
+            }))
+          },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        return;
+      }
+
       // OPTION 1 (Responses API): on CONTINUE via previous_response_id + function_call_output
       // -> pas d'injection tool->user JSON, pas de "role:tool" dans messages.
       // On laisse `previousResponseId` alimenter l'appel suivant.
@@ -2144,5 +2464,3 @@ Règles :
 }
 
 export const chatService = new ChatService();
-
-

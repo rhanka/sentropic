@@ -243,6 +243,73 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     // Cleanup extra folder (avoid leaking across tests)
     await db.delete(folders).where(and(eq(folders.id, otherFolderId), eq(folders.workspaceId, workspaceId)));
   });
-});
 
+  it('should merge local tool definitions, pause on local tool call, and prepare resume payload', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    let seenToolNames: string[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      seenToolNames = toolNames(opts?.tools);
+      return stream([
+        { type: 'status', data: { response_id: 'resp_local_pause_1' } },
+        {
+          type: 'tool_call_start',
+          data: { tool_call_id: 'call_local_tab_info_1', name: 'tab_info', args: '{}' }
+        },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'inspect active tab',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      model: 'gpt-4.1-nano'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      localToolDefinitions: [
+        {
+          name: 'tab_info',
+          description: 'Return metadata for the active tab',
+          parameters: { type: 'object', properties: {}, required: [] }
+        }
+      ]
+    });
+
+    expect(seenToolNames).toContain('tab_info');
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const hasAwaitingState = events.some(
+      (e) =>
+        e.eventType === 'status' &&
+        (e.data as any)?.state === 'awaiting_local_tool_results'
+    );
+    const hasDone = events.some((e) => e.eventType === 'done');
+    expect(hasAwaitingState).toBe(true);
+    expect(hasDone).toBe(false);
+
+    const accepted = await chatService.acceptLocalToolResult({
+      assistantMessageId: msg.assistantMessageId,
+      toolCallId: 'call_local_tab_info_1',
+      result: { title: 'Example', url: 'https://example.com' }
+    });
+
+    expect(accepted.readyToResume).toBe(true);
+    expect(accepted.waitingForToolCallIds).toEqual([]);
+    expect(accepted.resumeFrom?.previousResponseId).toBe('resp_local_pause_1');
+    expect(accepted.resumeFrom?.toolOutputs).toEqual([
+      expect.objectContaining({ callId: 'call_local_tab_info_1' })
+    ]);
+  });
+});
 

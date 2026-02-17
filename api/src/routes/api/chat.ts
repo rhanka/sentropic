@@ -15,6 +15,16 @@ const chatContextInput = z.object({
   contextId: z.string().min(1)
 });
 
+const localToolDefinitionInput = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  description: z.string().min(1).max(1000),
+  parameters: z.record(z.string(), z.unknown())
+});
+
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
@@ -24,7 +34,8 @@ const createMessageInput = z.object({
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
-  tools: z.array(z.string()).optional()
+  tools: z.array(z.string()).optional(),
+  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional()
 });
 
 const feedbackInput = z.object({
@@ -39,6 +50,11 @@ const createSessionInput = z.object({
   primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
+});
+
+const toolResultInput = z.object({
+  toolCallId: z.string().min(1),
+  result: z.unknown()
 });
 
 chatRouter.get('/sessions', async (c) => {
@@ -274,7 +290,8 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     assistantMessageId: created.assistantMessageId,
     model: created.model,
     contexts: body.contexts ?? undefined,
-    tools: body.tools ?? undefined
+    tools: body.tools ?? undefined,
+    localToolDefinitions: body.localToolDefinitions ?? undefined
   }, { workspaceId: user.workspaceId });
 
   return c.json({
@@ -286,4 +303,63 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
   });
 });
 
+/**
+ * POST /api/v1/chat/messages/:id/tool-results
+ * Push a local-tool result for an assistant message and resume generation when ready.
+ */
+chatRouter.post(
+  '/messages/:id/tool-results',
+  requireWorkspaceAccessRole(),
+  zValidator('json', toolResultInput),
+  async (c) => {
+    const user = c.get('user');
+    const messageId = c.req.param('id');
+    const body = c.req.valid('json');
 
+    const msg = await chatService.getMessageForUser(messageId, user.userId);
+    if (!msg) return c.json({ error: 'Message not found' }, 404);
+    if (msg.role !== 'assistant') {
+      return c.json({ error: 'Only assistant messages accept tool results' }, 400);
+    }
+
+    try {
+      const accepted = await chatService.acceptLocalToolResult({
+        assistantMessageId: messageId,
+        toolCallId: body.toolCallId,
+        result: body.result
+      });
+
+      if (!accepted.readyToResume) {
+        return c.json({
+          ok: true,
+          accepted: true,
+          resumed: false,
+          waitingForToolCallIds: accepted.waitingForToolCallIds
+        });
+      }
+
+      const jobId = await queueManager.addJob(
+        'chat_message',
+        {
+          userId: user.userId,
+          sessionId: msg.sessionId,
+          assistantMessageId: messageId,
+          localToolDefinitions: accepted.localToolDefinitions,
+          resumeFrom: accepted.resumeFrom
+        },
+        { workspaceId: user.workspaceId }
+      );
+
+      return c.json({
+        ok: true,
+        accepted: true,
+        resumed: true,
+        jobId
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to accept tool result';
+      return c.json({ error: message }, 400);
+    }
+  }
+);
