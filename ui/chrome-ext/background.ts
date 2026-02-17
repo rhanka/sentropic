@@ -10,12 +10,12 @@ import {
     getValidAccessToken,
     logoutExtensionAuth,
 } from './extension-auth';
+import {
+    createToolExecutors,
+    type ToolExecutionContext,
+} from './tool-executor';
 
-// Tool executor registry placeholder
-const toolExecutors: Record<string, (args: any) => Promise<unknown>> = {
-    // 'tab_read_dom': executeTabReadDom,
-    // ...
-};
+const toolExecutors = createToolExecutors();
 
 const ALLOWED_PROXY_HOSTS = new Set([
     'localhost',
@@ -554,15 +554,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'tool_execute') {
-        console.log('Received tool execution request:', message);
-        const executor = toolExecutors[message.name];
+        const toolName = String(message?.name ?? '').trim();
+        const executor = toolExecutors[toolName];
         if (!executor) {
-            sendResponse({ error: `Unknown local tool: ${message.name}` });
+            sendResponse({ ok: false, error: `Unknown local tool: ${toolName}` });
             return true;
         }
-        executor(message.args)
-            .then(result => sendResponse({ result }))
-            .catch(err => sendResponse({ error: err.message }));
+        const context: ToolExecutionContext = {
+            senderTabId: sender.tab?.id,
+            senderWindowId: sender.tab?.windowId,
+        };
+        executor((message?.args ?? {}) as Record<string, unknown>, context)
+            .then((result) => sendResponse({ ok: true, result }))
+            .catch((err) =>
+                sendResponse({
+                    ok: false,
+                    error: err instanceof Error ? err.message : String(err),
+                }),
+            );
         return true; // async response
     }
 });
