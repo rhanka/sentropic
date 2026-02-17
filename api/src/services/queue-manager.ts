@@ -304,7 +304,17 @@ export class QueueManager {
     if (!workspaceId || !contextId || !createdBy) return;
 
     const uniqueSectionKeys = Array.from(
-      new Set(opts.sectionKeys.map((s) => String(s ?? '').trim()).filter(Boolean))
+      new Set(
+        opts.sectionKeys
+          .map((s) => {
+            const sectionKey = String(s ?? '').trim();
+            if (!sectionKey) return '';
+            return opts.contextType === 'usecase' && sectionKey.startsWith('data.')
+              ? sectionKey.slice('data.'.length)
+              : sectionKey;
+          })
+          .filter(Boolean)
+      )
     );
     for (const sectionKey of uniqueSectionKeys) {
       const now = new Date();
