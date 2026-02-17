@@ -132,10 +132,12 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Executive summary updates stream live between sessions.
 
 - [ ] **Lot 2 — Editable inputs in views (matrix/sector sizing)**
-  - [ ] Matrix: switch axes EditableInput to text/markdown input mode.
-  - [ ] Fix sector view/input sizing issue (currently too small).
-  - [ ] Inspect and fix similar sizing issues on related views.
-  - [ ] Lot gate: `make typecheck-ui ENV=test` + `make lint-ui ENV=test`.
+  - [x] Matrix: switch axes EditableInput to text/markdown input mode.
+  - [x] Fix sector view/input sizing issue (currently too small).
+  - [x] Inspect and fix similar sizing issues on related views.
+    - [x] Applied `fullWidth` and markdown editing to matrix axis fields (table + level-description modal) to avoid narrow inline inputs.
+    - [x] Expanded organization industry field layout in header area to avoid compressed inline rendering.
+  - [x] Lot gate: `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
   - [ ] UAT checklist (UI):
     - [ ] In matrix view, edit both axes with text/markdown mode and verify save behavior + rendering.
     - [ ] Confirm axis fields keep expected width/height and no clipping while editing.
