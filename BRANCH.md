@@ -159,11 +159,12 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Document compatibility path with future local/remote WS delegation. (`spec/SPEC_CHROME_PLUGIN.md` sections 3.5 and 3.6)
   - [x] Lot gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] **Partial UAT Lot 4B (root workspace `~/src/top-ai-ideas-fullstack`)**
-    - [ ] Validate in-chat endpoint configuration menu (overlay + side panel): profile switch (`UAT`/`PROD`), endpoint save, API health test, persistence after extension reload.
-    - [ ] Validate chat API failure feedback appears at the bottom/latest message area (not at the top of conversation).
-    - [ ] Validate extension login without unexpected local-network/WebAuthn prompts.
-    - [ ] Validate token renewal and expired-session recovery path.
-    - [ ] Validate logout/revoke and blocked access after logout.
+    - [x] Validate in-chat endpoint configuration menu (overlay + side panel): endpoint save, API health test, persistence after extension reload.
+    - [x] Validate chat API failure feedback appears at the bottom/latest message area (not at the top of conversation).
+    - [x] Validate extension login without unexpected local-network/WebAuthn prompts.
+    - [x] Validate token renewal and expired-session recovery path.
+    - [x] Validate logout/revoke and blocked access after logout.
+    - [x] Validate chat streaming
 
 - [ ] **Lot 5 — Local Chrome tools (service worker)**
   - [ ] Create `ui/chrome-ext/tool-executor.ts` with implementations:
