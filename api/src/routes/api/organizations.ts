@@ -11,6 +11,7 @@ import { settingsService } from '../../services/settings';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 type OrganizationData = {
   industry?: string;
@@ -222,6 +223,10 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
+  const requestLocale = resolveLocaleFromHeaders({
+    appLocaleHeader: c.req.header('x-app-locale'),
+    acceptLanguageHeader: c.req.header('accept-language')
+  });
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -245,6 +250,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
       organizationName: org.name,
       model: selectedModel,
       initiatedByUserId: userId,
+      locale: requestLocale
     },
     { workspaceId }
   );

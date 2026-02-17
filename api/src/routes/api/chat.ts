@@ -9,6 +9,7 @@ import { db } from '../../db/client';
 import { extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { createId } from '../../utils/id';
+import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 export const chatRouter = new Hono();
 
@@ -427,6 +428,10 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
 chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
   const messageId = c.req.param('id');
+  const requestLocale = resolveLocaleFromHeaders({
+    appLocaleHeader: c.req.header('x-app-locale'),
+    acceptLanguageHeader: c.req.header('accept-language')
+  });
 
   try {
     const created = await chatService.retryUserMessage({ messageId, userId: user.userId });
@@ -436,7 +441,8 @@ chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) =
         userId: user.userId,
         sessionId: created.sessionId,
         assistantMessageId: created.assistantMessageId,
-        model: created.model
+        model: created.model,
+        locale: requestLocale
       },
       { workspaceId: user.workspaceId }
     );
@@ -463,6 +469,10 @@ chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) =
 chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', createMessageInput), async (c) => {
   const user = c.get('user');
   const body = c.req.valid('json');
+  const requestLocale = resolveLocaleFromHeaders({
+    appLocaleHeader: c.req.header('x-app-locale'),
+    acceptLanguageHeader: c.req.header('accept-language')
+  });
 
   // Workspace scope for chat: user.workspaceId is already resolved by requireAuth middleware
   const targetWorkspaceId = user.workspaceId as string;
@@ -486,7 +496,8 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     model: created.model,
     contexts: body.contexts ?? undefined,
     tools: body.tools ?? undefined,
-    localToolDefinitions: body.localToolDefinitions ?? undefined
+    localToolDefinitions: body.localToolDefinitions ?? undefined,
+    locale: requestLocale
   }, { workspaceId: user.workspaceId });
 
   return c.json({
@@ -510,6 +521,10 @@ chatRouter.post(
     const user = c.get('user');
     const messageId = c.req.param('id');
     const body = c.req.valid('json');
+    const requestLocale = resolveLocaleFromHeaders({
+      appLocaleHeader: c.req.header('x-app-locale'),
+      acceptLanguageHeader: c.req.header('accept-language')
+    });
 
     const msg = await chatService.getMessageForUser(messageId, user.userId);
     if (!msg) return c.json({ error: 'Message not found' }, 404);
@@ -540,7 +555,8 @@ chatRouter.post(
           sessionId: msg.sessionId,
           assistantMessageId: messageId,
           localToolDefinitions: accepted.localToolDefinitions,
-          resumeFrom: accepted.resumeFrom
+          resumeFrom: accepted.resumeFrom,
+          locale: requestLocale
         },
         { workspaceId: user.workspaceId }
       );
