@@ -178,7 +178,13 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Wire service worker message listener to tool executor
   - [x] Wire ChatPanel to intercept local tool calls from SSE stream
   - [x] Quality gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] Lot gate: tools execute correctly from the extension context
+  - [x] **Validation technique Lot 5A — interne dev (hors UAT utilisateur)**
+    - [x] Réalisée par l’agent sur environnement dev/test (service worker + resolver d’onglet + exécuteurs locaux).
+    - [x] Vérifier exécution locale des tools (`tab_info`, `tab_read_dom`, `tab_scroll`, `tab_click`, `tab_type`, `tab_screenshot`) et garde-fous URL non injectables.
+  - [!] **UAT utilisateur Lot 5A**
+    - [x] Aucun script manuel requis côté utilisateur pour Lot 5A.
+    - [!] Deferred: real user-facing local-tool UAT is performed in Lot 6/7 after API resume flow (`localToolDefinitions` + `tool-results`) is implemented.
+  - [x] Lot gate: tools execute correctly from the extension context (validated via scoped `make test-ui` suites + `make typecheck-ui` + `make lint-ui` + `make build-ext` on `ENV=test-chrome-plugin`)
 
 - [ ] **Lot 6 — API evolution for local tools**
   - [ ] Add `localToolDefinitions` optional field to `POST /chat/messages` input
