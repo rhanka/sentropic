@@ -19,6 +19,7 @@ import { callOpenAI } from './openai';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';
+import { type AppLocale, normalizeLocale } from '../utils/locale';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -345,6 +346,7 @@ export class ToolService {
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ organizationId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.organizationId) throw new Error('organizationId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -479,7 +481,8 @@ export class ToolService {
         sectionKeys: applied.map((item) => item.field),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
-        toolCallId
+        toolCallId,
+        locale: input.locale
       });
     }
 
@@ -537,7 +540,7 @@ export class ToolService {
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
    * Cible principale: `use_cases.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null }): Promise<{
+  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
     useCaseId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
@@ -674,7 +677,8 @@ export class ToolService {
         sectionKeys: applied.map((item) => item.path),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
-        toolCallId
+        toolCallId,
+        locale: input.locale
       });
     }
 
@@ -756,6 +760,7 @@ export class ToolService {
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -872,7 +877,8 @@ export class ToolService {
         sectionKeys: applied.map((item) => item.field),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
-        toolCallId
+        toolCallId,
+        locale: input.locale
       });
     }
 
@@ -906,6 +912,7 @@ export class ToolService {
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (input.matrixConfig == null || typeof input.matrixConfig !== 'object') throw new Error('matrixConfig is required');
@@ -989,7 +996,8 @@ export class ToolService {
         sectionKeys: applied.map((item) => item.field),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
-        toolCallId
+        toolCallId,
+        locale: input.locale
       });
     }
 
@@ -1028,6 +1036,7 @@ export class ToolService {
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -1119,7 +1128,8 @@ export class ToolService {
         sectionKeys: applied.map((item) => item.field),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
-        toolCallId
+        toolCallId,
+        locale: input.locale
       });
     }
 
@@ -1444,8 +1454,11 @@ export class ToolService {
     }
   }
 
-  private formatAutoFieldComment(sectionKey: string): string {
-    return `Field "${sectionKey}" was updated by AI assistant. Please review and adjust if needed.`;
+  private formatAutoFieldComment(sectionKey: string, locale: AppLocale): string {
+    if (locale === 'en') {
+      return `Field "${sectionKey}" was updated by AI assistant. Please review and adjust if needed.`;
+    }
+    return `Le champ "${sectionKey}" a ete modifie par l'assistant IA. Merci de le verifier et de l'ajuster si necessaire.`;
   }
 
   private async resolveCommentAuthorId(opts: {
@@ -1476,6 +1489,7 @@ export class ToolService {
     createdBy: string;
     assignedTo?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<void> {
     const workspaceId = (opts.workspaceId ?? '').trim();
     const contextId = (opts.contextId ?? '').trim();
@@ -1483,6 +1497,7 @@ export class ToolService {
     if (!workspaceId || !contextId || !createdBy) return;
 
     const assignedTo = (opts.assignedTo ?? '').trim() || createdBy;
+    const locale = normalizeLocale(opts.locale) ?? 'fr';
     const uniqueSectionKeys = Array.from(
       new Set(
         opts.sectionKeys
@@ -1509,7 +1524,7 @@ export class ToolService {
         assignedTo,
         status: 'open',
         threadId: createId(),
-        content: this.formatAutoFieldComment(sectionKey),
+        content: this.formatAutoFieldComment(sectionKey, locale),
         toolCallId: opts.toolCallId ?? null,
         createdAt: now,
         updatedAt: now

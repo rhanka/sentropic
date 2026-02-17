@@ -148,6 +148,24 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
 - [ ] **Lot 3 — Automatic comments behavior**
   - [x] Generation agents: create a default comment.
   - [x] Modification tool: add a comment on modified fields.
+  - [x] Fix usecase auto-comment `section_key` normalization (`data.*` -> canonical key) for generated and tool-updated comments. (`4abeae5`)
+  - [x] Fix missing FR/EN labels in comment menu for resolved threads toggle. (`1298ec8`)
+  - [ ] **Lot 3A — Locale-aware auto comments (Option 2.1, explicit app locale)**
+    - [x] Add backend locale resolver utility (priority: `X-App-Locale` -> `Accept-Language` -> `fr` fallback).
+    - [x] UI API client: send `X-App-Locale` from application-selected locale (`localStorage` app setting), not browser default locale.
+    - [x] Propagate locale from API routes to queued generation jobs:
+      - [x] `POST /use-cases/generate`
+      - [x] `POST /use-cases/:id/detail`
+      - [x] `POST /organizations/:id/enrich`
+      - [x] `POST /analytics/executive-summary`
+      - [x] `POST /chat/messages` and `POST /chat/messages/:id/retry`
+    - [x] Extend queue job payload types and propagation chain so locale is preserved across nested jobs (e.g. `usecase_list` -> `usecase_detail` -> `executive_summary`).
+    - [x] Localize auto-comment content at write time in:
+      - [x] `ToolService.createAutoFieldComments` (tool updates)
+      - [x] `QueueManager.createAutoGenerationFieldComments` (generation jobs)
+    - [x] Keep usecase `section_key` normalization behavior intact while localizing message text.
+    - [x] Lot gate: `make typecheck-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
+    - [x] UI gate for header injection changes: `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
   - [x] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test` (+ UI gates if needed).
   - [ ] UAT checklist:
     - [ ] Trigger a generation flow and verify comments are created for each generated field.
@@ -155,6 +173,10 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [ ] Trigger a tool-based update changing multiple fields.
     - [ ] Verify one comment is created per modified field (not one global comment).
     - [ ] Verify comment linkage (object/section/field context) is correct for each created comment.
+    - [ ] With app locale explicitly set to `fr`, trigger one generation and one tool update; verify created auto-comments are in French.
+    - [ ] With app locale explicitly set to `en`, trigger one generation and one tool update; verify created auto-comments are in English.
+    - [ ] Locale source validation: keep browser locale opposite to app locale and verify auto-comment language follows app locale (`X-App-Locale`), not browser default.
+    - [ ] Usecase header bubble validation: generated/updated comments on usecase fields appear on canonical section keys (no new `data.*` keys created).
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update impacted specs/docs if behavior contracts changed.
