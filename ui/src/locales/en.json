@@ -388,7 +388,7 @@
     "delete": "Delete organization",
     "deleteSuccess": "Organization deleted successfully!",
     "deleteError": "Error while deleting",
-    "industry": "Industry: {value}",
+    "industry": "Industry {value}",
     "sizeLabel": "Size",
     "clickForDetails": "Click to view details",
     "form": {
@@ -397,7 +397,7 @@
       "namePlaceholder": "Enter the organization name"
     },
     "fields": {
-      "industry": "Industry:",
+      "industry": "Industry",
       "size": "Size",
       "technologies": "Technologies",
       "products": "Products and services",
