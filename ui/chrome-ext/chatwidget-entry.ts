@@ -8,7 +8,7 @@ import ChatWidget from '$lib/components/ChatWidget.svelte';
 import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { initApiClient } from '$lib/core/api-client';
 import { createExtensionContextProvider } from '$lib/core/context-provider';
-import { initializeSession } from '$lib/stores/session';
+import { clearUser } from '$lib/stores/session';
 import { loadExtensionConfig, type ExtensionRuntimeConfig } from './extension-config';
 import { installOverlayFetchProxy } from './network-bridge';
 import { init as initI18n, register } from 'svelte-i18n';
@@ -49,9 +49,9 @@ export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
                 isBrowser: true,
             });
 
-            if (hostMode === 'overlay') {
-                installOverlayFetchProxy(config.apiBaseUrl);
-            }
+            // Route extension API calls through the background proxy in both overlay and sidepanel
+            // to attach dedicated extension auth tokens consistently.
+            installOverlayFetchProxy(config.apiBaseUrl);
         };
 
         applyRuntimeConfig(runtimeConfig);
@@ -74,12 +74,12 @@ export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
             applyRuntimeConfig({
                 apiBaseUrl: detail.apiBaseUrl,
             });
-            void initializeSession();
         };
         window.addEventListener(EXTENSION_CONFIG_UPDATED_EVENT, onConfigUpdated);
 
-        // Ensure stores relying on auth state (SSE, queue badges) are hydrated in extension contexts.
-        void initializeSession();
+        // In extension context, authentication starts from explicit user action.
+        // Keep the store out of loading state until user connects.
+        clearUser();
     })();
 }
 
