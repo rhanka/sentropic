@@ -24,6 +24,56 @@ const canInjectTabUrl = (url: string | undefined): boolean => {
     return !NON_INJECTABLE_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
 };
 
+const dedupeTabsById = (tabs: chrome.tabs.Tab[]): chrome.tabs.Tab[] => {
+    const byId = new Map<number, chrome.tabs.Tab>();
+    for (const tab of tabs) {
+        if (typeof tab.id !== 'number') continue;
+        if (!byId.has(tab.id)) byId.set(tab.id, tab);
+    }
+    return Array.from(byId.values());
+};
+
+const findFallbackTargetTab = async (
+    context: ToolExecutionContext,
+): Promise<chrome.tabs.Tab | null> => {
+    const candidates: chrome.tabs.Tab[] = [];
+
+    if (typeof context.senderWindowId === 'number') {
+        candidates.push(
+            ...(await chrome.tabs.query({
+                active: true,
+                windowId: context.senderWindowId,
+            })),
+        );
+    }
+
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+            lastFocusedWindow: true,
+        })),
+    );
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        })),
+    );
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+        })),
+    );
+
+    for (const tab of dedupeTabsById(candidates)) {
+        if (!canInjectTabUrl(tab.url)) continue;
+        if (typeof tab.id !== 'number') continue;
+        return tab;
+    }
+
+    return null;
+};
+
 const resolveTargetTab = async (
     args: Record<string, unknown>,
     context: ToolExecutionContext,
@@ -48,20 +98,14 @@ const resolveTargetTab = async (
         return tab;
     }
 
-    const tabs = await chrome.tabs.query({
-        active: true,
-        ...(typeof context.senderWindowId === 'number'
-            ? { windowId: context.senderWindowId }
-            : { currentWindow: true }),
-    });
-    const tab = tabs[0];
-    if (!tab?.id) {
-        throw new Error('No active tab found for local tool execution.');
+    const fallbackTab = await findFallbackTargetTab(context);
+    if (!fallbackTab?.id) {
+        throw new Error(
+            'No active injectable tab found for local tool execution. ' +
+            'Select a normal web page tab or pass args.tabId explicitly.',
+        );
     }
-    if (!canInjectTabUrl(tab.url)) {
-        throw new Error(`Unsupported active tab URL for automation: ${tab.url ?? 'unknown'}`);
-    }
-    return tab;
+    return fallbackTab;
 };
 
 const resolveTargetTabId = async (
