@@ -930,6 +930,7 @@ export class ChatService {
     tools?: string[];
     localToolDefinitions?: LocalToolDefinitionInput[];
     resumeFrom?: ChatResumeFromToolOutputs;
+    locale?: string;
     signal?: AbortSignal;
   }): Promise<void> {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
@@ -1719,6 +1720,7 @@ Règles :
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1787,6 +1789,7 @@ Règles :
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1855,6 +1858,7 @@ Règles :
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1922,6 +1926,7 @@ Règles :
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1965,6 +1970,7 @@ Règles :
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
