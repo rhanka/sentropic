@@ -12,12 +12,12 @@ function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => voi
   return value;
 }
 
-const isExtensionOverlayHost = (): boolean => {
+const isExtensionHost = (): boolean => {
   if (typeof window === 'undefined') return false;
   const runtime = (globalThis as typeof globalThis & {
     chrome?: { runtime?: { id?: string } };
   }).chrome?.runtime;
-  return Boolean(runtime?.id) && window.location.protocol !== 'chrome-extension:';
+  return Boolean(runtime?.id);
 };
 
 export type StreamHubEvent =
@@ -353,7 +353,7 @@ class StreamHub {
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
     const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
 
-    if (isExtensionOverlayHost()) {
+    if (isExtensionHost()) {
       this.close();
       await this.pollOverlayStreams(baseUrl);
       if (!this.pollTimer) {
@@ -443,4 +443,3 @@ class StreamHub {
 }
 
 export const streamHub = new StreamHub();
-

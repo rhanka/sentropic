@@ -85,6 +85,7 @@ const testApi = async () => {
             payload: {
                 url: healthUrl,
                 method: 'GET',
+                authMode: 'none',
             },
         }) as { ok?: boolean; status?: number; error?: string } | undefined;
 

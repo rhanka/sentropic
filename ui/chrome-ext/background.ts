@@ -4,6 +4,12 @@ import {
     saveExtensionConfig,
     type ExtensionProfile,
 } from './extension-config';
+import {
+    connectExtensionAuth,
+    getExtensionAuthStatus,
+    getValidAccessToken,
+    logoutExtensionAuth,
+} from './extension-auth';
 
 // Tool executor registry placeholder
 const toolExecutors: Record<string, (args: any) => Promise<unknown>> = {
@@ -22,6 +28,7 @@ type ProxyFetchPayload = {
     method?: string;
     headers?: Record<string, string>;
     bodyText?: string;
+    authMode?: 'extension' | 'cookie' | 'none';
 };
 
 type ExtensionConfigPayload = {
@@ -55,6 +62,85 @@ const sanitizeHeaders = (
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'extension_auth_status') {
+        void (async () => {
+            try {
+                const config = await loadExtensionConfig();
+                const status = await getExtensionAuthStatus(config, {
+                    allowRefresh: true,
+                });
+                sendResponse({
+                    ok: true,
+                    status,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_auth_connect') {
+        void (async () => {
+            try {
+                const config = await loadExtensionConfig();
+                const result = await connectExtensionAuth(config);
+                sendResponse({
+                    ok: result.ok,
+                    ...result,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    code: 'CONNECT_FAILED',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_auth_logout') {
+        void (async () => {
+            try {
+                const config = await loadExtensionConfig();
+                await logoutExtensionAuth(config);
+                sendResponse({
+                    ok: true,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_auth_open_login') {
+        void (async () => {
+            try {
+                const config = await loadExtensionConfig();
+                const loginUrl = `${config.appBaseUrl.replace(/\/$/, '')}/auth/login`;
+                await chrome.tabs.create({ url: loginUrl });
+                sendResponse({
+                    ok: true,
+                    loginUrl,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
     if (message?.type === 'extension_config_get') {
         void (async () => {
             try {
@@ -174,11 +260,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         void (async () => {
             try {
+                const authMode = payload?.authMode ?? 'extension';
+                const config = await loadExtensionConfig();
+                const headers = sanitizeHeaders(payload?.headers);
+                const isHealthEndpoint = rawUrl.endsWith('/health');
+                if (authMode === 'extension' && !isHealthEndpoint) {
+                    const token = await getValidAccessToken(config, {
+                        allowRefresh: true,
+                    });
+                    if (!token) {
+                        sendResponse({
+                            ok: false,
+                            error: 'Extension is not authenticated. Use Connect in extension settings.',
+                        });
+                        return;
+                    }
+                    headers.Authorization = `Bearer ${token}`;
+                }
                 const response = await fetch(rawUrl, {
                     method: payload?.method ?? 'GET',
-                    headers: sanitizeHeaders(payload?.headers),
+                    headers,
                     body: payload?.bodyText,
-                    credentials: 'include',
+                    credentials: authMode === 'cookie' ? 'include' : 'omit',
                 });
                 const bodyText = await response.text();
                 const responseHeaders: Record<string, string> = {};

@@ -5,7 +5,13 @@
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
-  import { isAuthenticated, session } from '$lib/stores/session';
+  import {
+    isAuthenticated,
+    session,
+    setUser,
+    clearUser,
+    type User,
+  } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
   import { currentFolderId } from '$lib/stores/folders';
   import {
@@ -143,6 +149,7 @@
     updatedAt?: number;
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
+  type ExtensionAuthStatusKind = 'info' | 'ok' | 'error';
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
@@ -175,6 +182,16 @@
   let extensionConfigLoaded = false;
   let extensionConfigStatus = '';
   let extensionConfigStatusKind: ExtensionConfigStatusKind = 'info';
+  let extensionAuthStatus = '';
+  let extensionAuthStatusKind: ExtensionAuthStatusKind = 'info';
+  let extensionAuthStatusLoaded = false;
+  let extensionAuthLoading = false;
+  let extensionAuthConnecting = false;
+  let extensionAuthLoggingOut = false;
+  let extensionAuthConnected = false;
+  let extensionAuthUser: User | null = null;
+  let extensionAuthLoginUrl: string | null = null;
+  let extensionConfigMenuWasOpen = false;
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
@@ -380,6 +397,26 @@
     extensionConfigStatusKind = kind;
   };
 
+  const setExtensionAuthStatus = (
+    message: string,
+    kind: ExtensionAuthStatusKind = 'info',
+  ) => {
+    extensionAuthStatus = message;
+    extensionAuthStatusKind = kind;
+  };
+
+  const toSessionUser = (payload: {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+    role: string;
+  }): User => ({
+    id: payload.id,
+    email: payload.email,
+    displayName: payload.displayName,
+    role: payload.role as User['role'],
+  });
+
   const normalizeExtensionConfig = (
     raw?: Partial<ExtensionRuntimeConfig> | null,
   ): ExtensionRuntimeConfig => {
@@ -474,6 +511,10 @@
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
       extensionConfigLoaded = true;
+      extensionAuthStatusLoaded = false;
+      extensionAuthConnected = false;
+      extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
       window.dispatchEvent(
         new CustomEvent<ExtensionRuntimeConfig>(EXTENSION_CONFIG_UPDATED_EVENT, {
           detail: extensionConfigForm,
@@ -488,6 +529,172 @@
       setExtensionConfigStatus(`Save failed: ${reason}`, 'error');
     } finally {
       extensionConfigSaving = false;
+    }
+  };
+
+  const loadExtensionAuthStatus = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionAuthLoading) return;
+    extensionAuthLoading = true;
+    setExtensionAuthStatus('Checking extension session...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_auth_status',
+      })) as
+        | {
+            ok?: boolean;
+            status?: {
+              connected?: boolean;
+              reason?: string;
+              user?: {
+                id: string;
+                email: string | null;
+                displayName: string | null;
+                role: string;
+              };
+            };
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response.status) {
+        const reason = response?.error ?? 'Failed to read extension auth status.';
+        setExtensionAuthStatus(reason, 'error');
+        extensionAuthConnected = false;
+        extensionAuthUser = null;
+        extensionAuthLoginUrl = null;
+        clearUser();
+        extensionAuthStatusLoaded = true;
+        return;
+      }
+
+      const status = response.status;
+      if (!status.connected || !status.user) {
+        extensionAuthConnected = false;
+        extensionAuthUser = null;
+        extensionAuthLoginUrl = null;
+        clearUser();
+        setExtensionAuthStatus(
+          status.reason || 'Extension is not connected.',
+          'info',
+        );
+        extensionAuthStatusLoaded = true;
+        return;
+      }
+
+      const user = toSessionUser(status.user);
+      extensionAuthConnected = true;
+      extensionAuthUser = user;
+      extensionAuthLoginUrl = null;
+      setUser(user);
+      setExtensionAuthStatus('Extension connected.', 'ok');
+      extensionAuthStatusLoaded = true;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionAuthStatus(`Status check failed: ${reason}`, 'error');
+      extensionAuthConnected = false;
+      extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
+      clearUser();
+      extensionAuthStatusLoaded = true;
+    } finally {
+      extensionAuthLoading = false;
+    }
+  };
+
+  const connectExtensionAuthAction = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionAuthConnecting) return;
+    extensionAuthConnecting = true;
+    extensionAuthLoginUrl = null;
+    setExtensionAuthStatus('Connecting extension session...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_auth_connect',
+      })) as
+        | {
+            ok?: boolean;
+            user?: {
+              id: string;
+              email: string | null;
+              displayName: string | null;
+              role: string;
+            };
+            error?: string;
+            code?: 'APP_SESSION_REQUIRED' | 'CONFIG_INVALID' | 'CONNECT_FAILED';
+            loginUrl?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response.user) {
+        const reason = response?.error ?? 'Failed to connect extension session.';
+        extensionAuthConnected = false;
+        extensionAuthUser = null;
+        extensionAuthLoginUrl = response?.loginUrl ?? null;
+        clearUser();
+        setExtensionAuthStatus(reason, 'error');
+        extensionAuthStatusLoaded = true;
+        return;
+      }
+
+      const user = toSessionUser(response.user);
+      extensionAuthConnected = true;
+      extensionAuthUser = user;
+      extensionAuthLoginUrl = null;
+      setUser(user);
+      setExtensionAuthStatus('Extension connected successfully.', 'ok');
+      extensionAuthStatusLoaded = true;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      extensionAuthConnected = false;
+      extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
+      clearUser();
+      setExtensionAuthStatus(`Connection failed: ${reason}`, 'error');
+      extensionAuthStatusLoaded = true;
+    } finally {
+      extensionAuthConnecting = false;
+    }
+  };
+
+  const logoutExtensionAuthAction = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionAuthLoggingOut) return;
+    extensionAuthLoggingOut = true;
+    setExtensionAuthStatus('Logging out extension session...', 'info');
+    try {
+      const runtime = getExtensionRuntime();
+      await runtime?.sendMessage?.({
+        type: 'extension_auth_logout',
+      });
+      extensionAuthConnected = false;
+      extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
+      clearUser();
+      setExtensionAuthStatus('Extension session logged out.', 'ok');
+      extensionAuthStatusLoaded = true;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionAuthStatus(`Logout failed: ${reason}`, 'error');
+    } finally {
+      extensionAuthLoggingOut = false;
+    }
+  };
+
+  const openExtensionLoginPage = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    try {
+      const runtime = getExtensionRuntime();
+      await runtime?.sendMessage?.({
+        type: 'extension_auth_open_login',
+      });
+      setExtensionAuthStatus(
+        'Login page opened. Complete sign-in, then click Connect.',
+        'info',
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionAuthStatus(`Unable to open login page: ${reason}`, 'error');
     }
   };
 
@@ -530,6 +737,29 @@
     !extensionConfigLoaded
   ) {
     void loadExtensionConfig();
+  }
+
+  $: if (
+    isExtensionConfigAvailable() &&
+    showExtensionConfigMenu &&
+    !extensionAuthStatusLoaded
+  ) {
+    void loadExtensionAuthStatus();
+  }
+
+  $: if (
+    isExtensionConfigAvailable() &&
+    isVisible &&
+    !extensionAuthStatusLoaded
+  ) {
+    void loadExtensionAuthStatus();
+  }
+
+  $: {
+    if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
+      extensionAuthStatusLoaded = false;
+    }
+    extensionConfigMenuWasOpen = showExtensionConfigMenu;
   }
 
   const requestOpenOverlay = () => {
@@ -1676,6 +1906,71 @@
                       {extensionConfigStatus}
                     </div>
                   {/if}
+                  <div class="border-t border-slate-200 pt-2 space-y-2">
+                    <div class="text-xs font-semibold text-slate-700">
+                      Extension auth
+                    </div>
+                    <div class="text-[11px] text-slate-600">
+                      {#if extensionAuthConnected && extensionAuthUser}
+                        Connected as {extensionAuthUser.displayName ||
+                          extensionAuthUser.email ||
+                          extensionAuthUser.id}
+                      {:else}
+                        Not connected
+                      {/if}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      {#if extensionAuthConnected}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          type="button"
+                          on:click={() => void logoutExtensionAuthAction()}
+                          disabled={extensionAuthLoggingOut ||
+                            extensionAuthLoading ||
+                            extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        >
+                          Logout
+                        </button>
+                      {:else}
+                        <button
+                          class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                          type="button"
+                          on:click={() => void connectExtensionAuthAction()}
+                          disabled={extensionAuthConnecting ||
+                            extensionAuthLoading ||
+                            extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        >
+                          Connect
+                        </button>
+                      {/if}
+                      {#if extensionAuthLoginUrl && !extensionAuthConnected}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                          type="button"
+                          on:click={() => void openExtensionLoginPage()}
+                        >
+                          Open Login
+                        </button>
+                      {/if}
+                    </div>
+                    {#if extensionAuthStatus}
+                      <div
+                        class={`rounded border px-2 py-1 text-[11px] ${
+                          extensionAuthStatusKind === 'ok'
+                            ? 'border-green-200 bg-green-50 text-green-700'
+                            : extensionAuthStatusKind === 'error'
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        {extensionAuthStatus}
+                      </div>
+                    {/if}
+                  </div>
                 </svelte:fragment>
               </MenuPopover>
             {/if}
@@ -1741,14 +2036,36 @@
           </div>
         {/if}
         <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
-          <ChatPanel
-            bind:this={chatPanelRef}
-            bind:sessions={chatSessions}
-            bind:sessionId={chatSessionId}
-            bind:draft={chatDraft}
-            bind:loadingSessions={chatLoadingSessions}
-            {contextStore}
-          />
+          {#if isExtensionConfigAvailable() && !extensionAuthConnected}
+            <div
+              class="m-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2"
+            >
+              <div>
+                Extension auth is required before using chat on external pages.
+              </div>
+              <div class="text-[11px] text-slate-500">
+                Open settings, then click Connect. If needed, open app login first.
+              </div>
+              <button
+                class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                type="button"
+                on:click={() => {
+                  showExtensionConfigMenu = true;
+                }}
+              >
+                Open Settings
+              </button>
+            </div>
+          {:else}
+            <ChatPanel
+              bind:this={chatPanelRef}
+              bind:sessions={chatSessions}
+              bind:sessionId={chatSessionId}
+              bind:draft={chatDraft}
+              bind:loadingSessions={chatLoadingSessions}
+              {contextStore}
+            />
+          {/if}
         </div>
       </div>
     </div>
