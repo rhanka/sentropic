@@ -920,6 +920,8 @@
         "loadError": "Loading error",
         "none": "No member"
       },
+      "showResolved": "Show resolved comments",
+      "hideResolved": "Hide resolved comments",
       "resolve": "Resolve",
       "reopen": "Reopen"
     },
