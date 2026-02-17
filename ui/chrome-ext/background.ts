@@ -163,7 +163,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const payload = message?.payload as ExtensionConfigPayload | undefined;
         void (async () => {
             try {
-                const profile: ExtensionProfile = payload?.profile === 'prod' ? 'prod' : 'uat';
+                const currentConfig = await loadExtensionConfig();
+                const profile: ExtensionProfile =
+                    payload?.profile === 'prod'
+                        ? 'prod'
+                        : payload?.profile === 'uat'
+                            ? 'uat'
+                            : currentConfig.profile;
                 const config = await saveExtensionConfig({
                     profile,
                     apiBaseUrl: payload?.apiBaseUrl ?? '',

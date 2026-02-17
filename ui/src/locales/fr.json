@@ -739,6 +739,54 @@
       "switchToWidget": "Basculer en widget",
       "switchToPanel": "Basculer en panneau"
     },
+    "extension": {
+      "settingsTitle": "Paramètres de l’extension",
+      "endpointConfiguration": "Configuration du endpoint",
+      "apiBaseUrl": "URL API",
+      "appBaseUrl": "URL app",
+      "wsBaseUrlOptional": "URL WS (optionnel)",
+      "testApi": "Tester l’API",
+      "authRequired": {
+        "title": "Connexion extension requise avant d’utiliser cette zone.",
+        "description": "Ouvre les paramètres, puis clique sur « Connecter ». Si nécessaire, ouvre d’abord la page de connexion de l’application.",
+        "openSettings": "Ouvrir les paramètres"
+      },
+      "auth": {
+        "title": "Authentification extension",
+        "connectedAs": "Connecté en tant que",
+        "notConnected": "Non connecté",
+        "connect": "Connecter",
+        "logout": "Déconnecter",
+        "openLogin": "Ouvrir la connexion"
+      },
+      "status": {
+        "loadingConfig": "Chargement de la configuration endpoint…",
+        "loadConfigFailed": "Impossible de charger la configuration endpoint.",
+        "configLoaded": "Configuration chargée.",
+        "loadFailed": "Échec du chargement : {reason}",
+        "savingConfig": "Enregistrement de la configuration endpoint…",
+        "saveConfigFailed": "Impossible d’enregistrer la configuration endpoint.",
+        "configSaved": "Configuration enregistrée.",
+        "saveFailed": "Échec de l’enregistrement : {reason}",
+        "checkingSession": "Vérification de la session extension…",
+        "readAuthFailed": "Impossible de lire l’état de session extension.",
+        "connected": "Extension connectée.",
+        "statusCheckFailed": "Échec de vérification : {reason}",
+        "connecting": "Connexion de la session extension…",
+        "connectFailed": "Impossible de connecter la session extension.",
+        "connectedSuccess": "Session extension connectée.",
+        "connectionFailed": "Échec de connexion : {reason}",
+        "loggingOut": "Déconnexion de la session extension…",
+        "loggedOut": "Session extension déconnectée.",
+        "logoutFailed": "Échec de déconnexion : {reason}",
+        "loginOpened": "Page de connexion ouverte. Termine la connexion puis clique sur « Connecter ».",
+        "openLoginFailed": "Impossible d’ouvrir la page de connexion : {reason}",
+        "testingApi": "Test de connectivité API…",
+        "apiReachable": "API joignable ({status}).",
+        "apiTestFailed": "Le test de connectivité API a échoué.",
+        "apiTestFailedWithReason": "Échec du test API : {reason}"
+      }
+    },
     "queue": {
       "badge": {
         "active": "{count} job(s) en cours",
