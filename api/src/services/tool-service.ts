@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import {
+  chatSessions,
   chatContexts,
   comments,
   contextDocuments,
@@ -35,6 +36,7 @@ export type UpdateUseCaseFieldsInput = {
   useCaseId: string;
   updates: UseCaseFieldUpdate[];
   /** Contexte chat (optionnel) */
+  userId?: string | null;
   sessionId?: string | null;
   messageId?: string | null;
   toolCallId?: string | null;
@@ -338,6 +340,7 @@ export class ToolService {
   async updateOrganizationFields(input: {
     organizationId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
@@ -457,6 +460,27 @@ export class ToolService {
         createdAt: new Date()
       });
       seq += 1;
+    }
+
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const updatedWorkspaceId = (() => {
+      const candidate = (updated[0] as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'organization',
+        contextId: input.organizationId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId
+      });
     }
 
     return { organizationId: input.organizationId, applied };
@@ -629,6 +653,31 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (row as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const updatedWorkspaceId = (() => {
+      const candidate = (updatedRow as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'usecase',
+        contextId: input.useCaseId,
+        sectionKeys: applied.map((item) => item.path),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId
+      });
+    }
+
     return { useCaseId: input.useCaseId, applied };
   }
 
@@ -702,6 +751,7 @@ export class ToolService {
   async updateFolderFields(input: {
     folderId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
@@ -805,6 +855,27 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const updatedWorkspaceId = (() => {
+      const candidate = (updated[0] as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'folder',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId
+      });
+    }
+
     return { folderId: input.folderId, applied };
   }
 
@@ -830,6 +901,7 @@ export class ToolService {
   async updateMatrix(input: {
     folderId: string;
     matrixConfig: unknown;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
@@ -900,6 +972,27 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (row as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'matrix',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId
+      });
+    }
+
     return { folderId: input.folderId, applied };
   }
 
@@ -930,6 +1023,7 @@ export class ToolService {
   async updateExecutiveSummaryFields(input: {
     folderId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
@@ -1006,6 +1100,27 @@ export class ToolService {
         createdAt: new Date()
       });
       seq += 1;
+    }
+
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (folderRow as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'executive_summary',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId
+      });
     }
 
     return { folderId: input.folderId, applied };
@@ -1326,6 +1441,70 @@ export class ToolService {
       await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
+    }
+  }
+
+  private formatAutoFieldComment(sectionKey: string): string {
+    return `Field "${sectionKey}" was updated by AI assistant. Please review and adjust if needed.`;
+  }
+
+  private async resolveCommentAuthorId(opts: {
+    explicitUserId?: string | null;
+    sessionId?: string | null;
+  }): Promise<string | null> {
+    const explicit = (opts.explicitUserId ?? '').trim();
+    if (explicit) return explicit;
+
+    const sessionId = (opts.sessionId ?? '').trim();
+    if (!sessionId) return null;
+
+    const [sessionRow] = await db
+      .select({ userId: chatSessions.userId })
+      .from(chatSessions)
+      .where(eq(chatSessions.id, sessionId))
+      .limit(1);
+
+    const userId = (sessionRow?.userId ?? '').trim();
+    return userId || null;
+  }
+
+  private async createAutoFieldComments(opts: {
+    workspaceId: string;
+    contextType: CommentContextType;
+    contextId: string;
+    sectionKeys: string[];
+    createdBy: string;
+    assignedTo?: string | null;
+    toolCallId?: string | null;
+  }): Promise<void> {
+    const workspaceId = (opts.workspaceId ?? '').trim();
+    const contextId = (opts.contextId ?? '').trim();
+    const createdBy = (opts.createdBy ?? '').trim();
+    if (!workspaceId || !contextId || !createdBy) return;
+
+    const assignedTo = (opts.assignedTo ?? '').trim() || createdBy;
+    const uniqueSectionKeys = Array.from(
+      new Set(opts.sectionKeys.map((s) => String(s ?? '').trim()).filter(Boolean))
+    );
+    for (const sectionKey of uniqueSectionKeys) {
+      const now = new Date();
+      const commentId = createId();
+      await db.insert(comments).values({
+        id: commentId,
+        workspaceId,
+        contextType: opts.contextType,
+        contextId,
+        sectionKey,
+        createdBy,
+        assignedTo,
+        status: 'open',
+        threadId: createId(),
+        content: this.formatAutoFieldComment(sectionKey),
+        toolCallId: opts.toolCallId ?? null,
+        createdAt: now,
+        updatedAt: now
+      });
+      await this.notifyCommentEvent(workspaceId, opts.contextType, contextId, { action: 'created', comment_id: commentId });
     }
   }
 
@@ -1806,5 +1985,3 @@ export class ToolService {
 }
 
 export const toolService = new ToolService();
-
-
