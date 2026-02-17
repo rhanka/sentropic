@@ -89,7 +89,7 @@ const executiveSummarySchema = z.object({
 
 analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', executiveSummarySchema), async (c) => {
   try {
-    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
     const { folder_id, value_threshold, complexity_threshold, model } = c.req.valid('json');
 
     // Vérifier que le dossier existe
@@ -115,7 +115,8 @@ analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', exe
       folderId: folder_id,
       valueThreshold: value_threshold,
       complexityThreshold: complexity_threshold,
-      model: selectedModel
+      model: selectedModel,
+      initiatedByUserId: userId,
     }, { workspaceId });
 
     return c.json({

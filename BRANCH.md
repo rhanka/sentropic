@@ -146,9 +146,9 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Validate desktop and mobile viewport behavior for edited inputs.
 
 - [ ] **Lot 3 — Automatic comments behavior**
-  - [ ] Generation agents: create a default comment.
-  - [ ] Modification tool: add a comment on modified fields.
-  - [ ] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test` (+ UI gates if needed).
+  - [x] Generation agents: create a default comment.
+  - [x] Modification tool: add a comment on modified fields.
+  - [x] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test` (+ UI gates if needed).
   - [ ] UAT checklist:
     - [ ] Trigger a generation flow and verify one default comment is automatically created.
     - [ ] Verify generated default comment text matches expected template exactly.

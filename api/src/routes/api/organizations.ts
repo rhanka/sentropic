@@ -219,7 +219,7 @@ organizationsRouter.post(
 
 // POST /api/v1/organizations/:id/enrich - Start enrichment (async via queue)
 organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
 
@@ -244,6 +244,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
       organizationId: id,
       organizationName: org.name,
       model: selectedModel,
+      initiatedByUserId: userId,
     },
     { workspaceId }
   );

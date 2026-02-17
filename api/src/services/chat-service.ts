@@ -1715,6 +1715,7 @@ Règles :
             const updateResult = await toolService.updateUseCaseFields({
               useCaseId: args.useCaseId,
               updates: args.updates || [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
@@ -1782,6 +1783,7 @@ Règles :
             const updateResult = await toolService.updateOrganizationFields({
               organizationId: args.organizationId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
@@ -1849,6 +1851,7 @@ Règles :
             const updateResult = await toolService.updateFolderFields({
               folderId: args.folderId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
@@ -1915,6 +1918,7 @@ Règles :
             const updateResult = await toolService.updateExecutiveSummaryFields({
               folderId: args.folderId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
@@ -1957,6 +1961,7 @@ Règles :
             const updateResult = await toolService.updateMatrix({
               folderId: args.folderId,
               matrixConfig: args.matrixConfig,
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
