@@ -61,6 +61,247 @@ const sanitizeHeaders = (
     return safe;
 };
 
+type StreamProxyStartPayload = {
+    baseUrl: string;
+    workspaceId: string | null;
+    streamIds: string[];
+};
+
+const STREAM_PROXY_PORT_NAME = 'topai-stream-proxy';
+
+const normalizeStreamProxyPayload = (
+    raw: any,
+): StreamProxyStartPayload | null => {
+    const baseUrlRaw = String(raw?.baseUrl ?? '').trim().replace(/\/$/, '');
+    if (!baseUrlRaw || !isAllowedProxyUrl(`${baseUrlRaw}/health`)) return null;
+
+    const workspaceIdRaw = raw?.workspaceId;
+    const workspaceId =
+        typeof workspaceIdRaw === 'string' && workspaceIdRaw.trim().length > 0
+            ? workspaceIdRaw.trim()
+            : null;
+
+    const streamIds = Array.isArray(raw?.streamIds)
+        ? Array.from(
+            new Set(
+                raw.streamIds
+                    .map((id: unknown) => (typeof id === 'string' ? id.trim() : ''))
+                    .filter((id: string) => id.length > 0 && id.length <= 255),
+            ),
+        )
+        : [];
+
+    return {
+        baseUrl: baseUrlRaw,
+        workspaceId,
+        streamIds,
+    };
+};
+
+const streamProxyStates = new WeakMap<
+    chrome.runtime.Port,
+    {
+        abortController: AbortController | null;
+        closed: boolean;
+        restartTimer: ReturnType<typeof setTimeout> | null;
+        lastPayload: StreamProxyStartPayload | null;
+    }
+>();
+
+const stopStreamProxy = (port: chrome.runtime.Port) => {
+    const state = streamProxyStates.get(port);
+    if (!state) return;
+    if (state.restartTimer) {
+        clearTimeout(state.restartTimer);
+        state.restartTimer = null;
+    }
+    state.abortController?.abort();
+    state.abortController = null;
+};
+
+const postToStreamPort = (
+    port: chrome.runtime.Port,
+    message: unknown,
+) => {
+    try {
+        port.postMessage(message);
+    } catch {
+        // Port may already be disconnected.
+    }
+};
+
+const runStreamProxy = async (
+    port: chrome.runtime.Port,
+    payload: StreamProxyStartPayload,
+): Promise<void> => {
+    const state = streamProxyStates.get(port);
+    if (!state || state.closed) return;
+    stopStreamProxy(port);
+
+    const controller = new AbortController();
+    state.abortController = controller;
+    state.lastPayload = payload;
+
+    try {
+        const config = await loadExtensionConfig();
+        const token = await getValidAccessToken(config, {
+            allowRefresh: true,
+        });
+        if (!token) {
+            postToStreamPort(port, {
+                type: 'sse_error',
+                error: 'Extension is not authenticated.',
+            });
+            return;
+        }
+
+        const url = new URL(`${payload.baseUrl}/streams/sse`);
+        if (payload.workspaceId) {
+            url.searchParams.set('workspace_id', payload.workspaceId);
+        }
+        for (const streamId of payload.streamIds) {
+            url.searchParams.append('streamIds', streamId);
+        }
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'text/event-stream',
+                'Cache-Control': 'no-cache',
+            },
+            credentials: 'omit',
+            cache: 'no-store',
+            signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+            postToStreamPort(port, {
+                type: 'sse_error',
+                error: `SSE proxy failed: HTTP ${response.status}`,
+            });
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventType = 'message';
+        let dataLines: string[] = [];
+
+        const flushEvent = () => {
+            if (dataLines.length === 0) return;
+            const dataText = dataLines.join('\n');
+            dataLines = [];
+            const finalEventType = eventType || 'message';
+            eventType = 'message';
+            try {
+                const payloadValue = JSON.parse(dataText);
+                postToStreamPort(port, {
+                    type: 'sse_event',
+                    eventType: finalEventType,
+                    payload: payloadValue,
+                });
+            } catch {
+                postToStreamPort(port, {
+                    type: 'sse_event',
+                    eventType: finalEventType,
+                    payload: { data: dataText },
+                });
+            }
+        };
+
+        const processLine = (line: string) => {
+            if (line === '') {
+                flushEvent();
+                return;
+            }
+            if (line.startsWith(':')) return;
+            if (line.startsWith('event:')) {
+                eventType = line.slice(6).trim() || 'message';
+                return;
+            }
+            if (line.startsWith('data:')) {
+                dataLines.push(line.slice(5).trimStart());
+            }
+        };
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value) continue;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+                processLine(line);
+            }
+        }
+
+        buffer += decoder.decode();
+        if (buffer) {
+            const tailLines = buffer.split(/\r?\n/);
+            for (const line of tailLines) {
+                processLine(line);
+            }
+        }
+        flushEvent();
+
+        if (!controller.signal.aborted) {
+            postToStreamPort(port, { type: 'sse_closed' });
+        }
+    } catch (error) {
+        if (controller.signal.aborted) return;
+        postToStreamPort(port, {
+            type: 'sse_error',
+            error: error instanceof Error ? error.message : String(error),
+        });
+    } finally {
+        const latest = streamProxyStates.get(port);
+        if (!latest) return;
+        if (latest.abortController === controller) {
+            latest.abortController = null;
+        }
+    }
+};
+
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== STREAM_PROXY_PORT_NAME) return;
+
+    streamProxyStates.set(port, {
+        abortController: null,
+        closed: false,
+        restartTimer: null,
+        lastPayload: null,
+    });
+
+    port.onMessage.addListener((message) => {
+        if (message?.type === 'stream_proxy_stop') {
+            stopStreamProxy(port);
+            return;
+        }
+        if (message?.type !== 'stream_proxy_start') return;
+        const payload = normalizeStreamProxyPayload(message?.payload);
+        if (!payload) {
+            postToStreamPort(port, {
+                type: 'sse_error',
+                error: 'Invalid SSE proxy start payload.',
+            });
+            return;
+        }
+        void runStreamProxy(port, payload);
+    });
+
+    port.onDisconnect.addListener(() => {
+        const state = streamProxyStates.get(port);
+        if (state) {
+            state.closed = true;
+        }
+        stopStreamProxy(port);
+        streamProxyStates.delete(port);
+    });
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'extension_auth_status') {
         void (async () => {
