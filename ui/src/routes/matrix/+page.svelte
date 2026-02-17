@@ -1441,15 +1441,15 @@
         <table class="w-full">
           <thead>
             <tr class="border-b">
-              <th class="text-left py-2 pr-2 w-36">{$_('matrix.level')}</th>
-              <th class="text-left py-2 pl-2">{$_('matrix.description')}</th>
+              <th class="text-left py-2 pr-1 w-36">{$_('matrix.level')}</th>
+              <th class="text-left py-2 pl-1">{$_('matrix.description')}</th>
             </tr>
           </thead>
           <tbody>
             {#each range(5) as level}
               {@const levelNum = level + 1}
               <tr class="border-b">
-                <td class="py-3 pr-2 align-top">
+                <td class="py-3 pr-1 align-top">
                   {#if isValueAxis}
                     <div class="flex items-center gap-1">
                       {#each range(levelNum) as i (i)}
@@ -1470,7 +1470,7 @@
                     </div>
                   {/if}
                 </td>
-                <td class="py-3 pl-2">
+                <td class="py-3 pl-1">
                   <EditableInput
                     locked={isReadOnly}
                     value={getLevelDescription(selectedAxisLive, levelNum)}
