@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
 import { db } from '../../db/client';
+import { extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { createId } from '../../utils/id';
 
 export const chatRouter = new Hono();
 
@@ -56,6 +58,143 @@ const toolResultInput = z.object({
   toolCallId: z.string().min(1),
   result: z.unknown()
 });
+
+const extensionToolPermissionInput = z.object({
+  toolName: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9:_-]+$/),
+  origin: z.string().min(1),
+  policy: z.enum(['allow', 'deny']),
+});
+
+const extensionToolPermissionDeleteInput = z.object({
+  toolName: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9:_-]+$/),
+  origin: z.string().min(1),
+});
+
+const normalizeOrigin = (raw: string): string | null => {
+  const value = raw.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+};
+
+chatRouter.get('/tool-permissions', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user');
+  const rows = await db
+    .select({
+      toolName: extensionToolPermissions.toolName,
+      origin: extensionToolPermissions.origin,
+      policy: extensionToolPermissions.policy,
+      updatedAt: extensionToolPermissions.updatedAt,
+    })
+    .from(extensionToolPermissions)
+    .where(
+      and(
+        eq(extensionToolPermissions.userId, user.userId),
+        eq(extensionToolPermissions.workspaceId, user.workspaceId),
+      ),
+    )
+    .orderBy(desc(extensionToolPermissions.updatedAt));
+
+  return c.json({
+    items: rows.map((row) => ({
+      toolName: row.toolName,
+      origin: row.origin,
+      policy: row.policy,
+      updatedAt:
+        row.updatedAt instanceof Date
+          ? row.updatedAt.toISOString()
+          : new Date(row.updatedAt as unknown as string).toISOString(),
+    })),
+  });
+});
+
+chatRouter.put(
+  '/tool-permissions',
+  requireWorkspaceAccessRole(),
+  zValidator('json', extensionToolPermissionInput),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const origin = normalizeOrigin(body.origin);
+    if (!origin) {
+      return c.json({ error: 'Invalid origin URL' }, 400);
+    }
+
+    const now = new Date();
+    await db
+      .insert(extensionToolPermissions)
+      .values({
+        id: createId(),
+        userId: user.userId,
+        workspaceId: user.workspaceId,
+        toolName: body.toolName,
+        origin,
+        policy: body.policy,
+        updatedAt: now,
+        createdAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          extensionToolPermissions.userId,
+          extensionToolPermissions.workspaceId,
+          extensionToolPermissions.toolName,
+          extensionToolPermissions.origin,
+        ],
+        set: {
+          policy: body.policy,
+          updatedAt: now,
+        },
+      });
+
+    return c.json({
+      ok: true,
+      item: {
+        toolName: body.toolName,
+        origin,
+        policy: body.policy,
+        updatedAt: now.toISOString(),
+      },
+    });
+  },
+);
+
+chatRouter.delete(
+  '/tool-permissions',
+  requireWorkspaceAccessRole(),
+  zValidator('json', extensionToolPermissionDeleteInput),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const origin = normalizeOrigin(body.origin);
+    if (!origin) {
+      return c.json({ error: 'Invalid origin URL' }, 400);
+    }
+
+    await db.delete(extensionToolPermissions).where(
+      and(
+        eq(extensionToolPermissions.userId, user.userId),
+        eq(extensionToolPermissions.workspaceId, user.workspaceId),
+        eq(extensionToolPermissions.toolName, body.toolName),
+        eq(extensionToolPermissions.origin, origin),
+      ),
+    );
+
+    return c.json({ ok: true });
+  },
+);
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');

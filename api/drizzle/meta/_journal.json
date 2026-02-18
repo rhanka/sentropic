@@ -148,6 +148,13 @@
       "when": 1769697708240,
       "tag": "0020_add_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1771459200000,
+      "tag": "0021_extension_tool_permissions",
+      "breakpoints": true
     }
   ]
 }

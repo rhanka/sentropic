@@ -43,6 +43,12 @@
   } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+  import {
+    deleteLocalToolPermissionPolicy,
+    listLocalToolPermissionPolicies,
+    upsertLocalToolPermissionPolicy,
+    type LocalToolPermissionPolicyEntry,
+  } from '$lib/stores/localTools';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -193,10 +199,25 @@
   let extensionAuthUser: User | null = null;
   let extensionAuthLoginUrl: string | null = null;
   let extensionConfigMenuWasOpen = false;
+  let extensionSettingsTab: 'endpoint' | 'permissions' = 'endpoint';
+  let extensionToolPermissionsLoading = false;
+  let extensionToolPermissionsError = '';
+  let extensionToolPermissions: LocalToolPermissionPolicyEntry[] = [];
+  const EXTENSION_PERMISSION_TOOL_OPTIONS = [
+    'tab_read:info',
+    'tab_read:dom',
+    'tab_read:screenshot',
+    'tab_read:elements',
+    'tab_action',
+  ];
+  let extensionPermissionDraftToolName = 'tab_action';
+  let extensionPermissionDraftOrigin = '';
+  let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
   };
+  let isPluginMode = false;
   const isExtensionRuntime = () => {
     const ext = globalThis as typeof globalThis & {
       chrome?: { runtime?: { id?: string } };
@@ -205,6 +226,8 @@
   };
   $: isSidePanelHost = hostMode === 'sidepanel';
   $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
+  $: isPluginMode = isExtensionRuntime();
+  $: if (isPluginMode && activeTab === 'comments') activeTab = 'chat';
   $: if (isBrowser) {
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
     if (saved === 'docked' && !isExtensionOverlayHost) displayMode = 'docked';
@@ -304,11 +327,10 @@
 
   const applyInitialState = (state: ChatWidgetHandoffState | null) => {
     if (!state) return;
-    if (
-      state.activeTab === 'chat' ||
-      state.activeTab === 'queue' ||
-      state.activeTab === 'comments'
-    ) {
+    const canUseComments = !isPluginMode;
+    if (state.activeTab === 'chat' || state.activeTab === 'queue') {
+      activeTab = state.activeTab;
+    } else if (state.activeTab === 'comments' && canUseComments) {
       activeTab = state.activeTab;
     }
     chatSessionId = state.chatSessionId ?? null;
@@ -408,6 +430,7 @@
 
   const openExtensionSettingsMenu = (event?: Event) => {
     event?.stopPropagation();
+    extensionSettingsTab = 'endpoint';
     showExtensionConfigMenu = true;
   };
 
@@ -752,6 +775,80 @@
     }
   };
 
+  const loadExtensionToolPermissions = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionToolPermissionsLoading) return;
+    extensionToolPermissionsLoading = true;
+    extensionToolPermissionsError = '';
+    try {
+      extensionToolPermissions = await listLocalToolPermissionPolicies();
+    } catch (error) {
+      extensionToolPermissionsError =
+        error instanceof Error
+          ? error.message
+          : $_('chat.extension.permissions.loadError');
+    } finally {
+      extensionToolPermissionsLoading = false;
+    }
+  };
+
+  const upsertExtensionToolPermission = async (
+    toolName: string,
+    origin: string,
+    policy: 'allow' | 'deny',
+  ) => {
+    extensionToolPermissionsError = '';
+    try {
+      await upsertLocalToolPermissionPolicy({
+        toolName,
+        origin,
+        policy,
+      });
+      await loadExtensionToolPermissions();
+    } catch (error) {
+      extensionToolPermissionsError =
+        error instanceof Error
+          ? error.message
+          : $_('chat.extension.permissions.updateError');
+    }
+  };
+
+  const deleteExtensionToolPermission = async (
+    toolName: string,
+    origin: string,
+  ) => {
+    extensionToolPermissionsError = '';
+    try {
+      await deleteLocalToolPermissionPolicy({
+        toolName,
+        origin,
+      });
+      await loadExtensionToolPermissions();
+    } catch (error) {
+      extensionToolPermissionsError =
+        error instanceof Error
+          ? error.message
+          : $_('chat.extension.permissions.deleteError');
+    }
+  };
+
+  const addExtensionToolPermissionFromDraft = async () => {
+    const toolName = extensionPermissionDraftToolName.trim();
+    const origin = extensionPermissionDraftOrigin.trim();
+    if (!toolName || !origin) {
+      extensionToolPermissionsError = $_(
+        'chat.extension.permissions.missingDraftFields',
+      );
+      return;
+    }
+    await upsertExtensionToolPermission(
+      toolName,
+      origin,
+      extensionPermissionDraftPolicy,
+    );
+    extensionPermissionDraftOrigin = '';
+  };
+
   $: if (
     isExtensionConfigAvailable() &&
     showExtensionConfigMenu &&
@@ -770,6 +867,14 @@
 
   $: if (
     isExtensionConfigAvailable() &&
+    showExtensionConfigMenu &&
+    extensionSettingsTab === 'permissions'
+  ) {
+    void loadExtensionToolPermissions();
+  }
+
+  $: if (
+    isExtensionConfigAvailable() &&
     isVisible &&
     !extensionAuthStatusLoaded
   ) {
@@ -782,6 +887,7 @@
   $: {
     if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
       extensionAuthStatusLoaded = false;
+      extensionSettingsTab = 'endpoint';
     }
     extensionConfigMenuWasOpen = showExtensionConfigMenu;
   }
@@ -1174,6 +1280,7 @@
     };
     document.addEventListener('click', handleCommentSectionClick, true);
     handleOpenComments = (event: CustomEvent) => {
+      if (isPluginMode) return;
       const detail = event?.detail as {
         contextType?: string;
         contextId?: string;
@@ -1243,7 +1350,7 @@
     if (
       detail?.activeTab === 'chat' ||
       detail?.activeTab === 'queue' ||
-      detail?.activeTab === 'comments'
+      (detail?.activeTab === 'comments' && !isPluginMode)
     ) {
       activeTab = detail.activeTab;
     }
@@ -1525,16 +1632,18 @@
 
             <div class="flex items-center gap-2">
               <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
-                <button
-                  class="rounded px-2 py-1 text-xs transition {activeTab ===
-                  'comments'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'}"
-                  type="button"
-                  on:click={() => (activeTab = 'comments')}
-                >
-                  {$_('chat.tabs.comments')}
-                </button>
+                {#if !isPluginMode}
+                  <button
+                    class="rounded px-2 py-1 text-xs transition {activeTab ===
+                    'comments'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'}"
+                    type="button"
+                    on:click={() => (activeTab = 'comments')}
+                  >
+                    {$_('chat.tabs.comments')}
+                  </button>
+                {/if}
                 <button
                   class="rounded px-2 py-1 text-xs transition {activeTab ===
                   'chat'
@@ -1639,7 +1748,7 @@
                 <Trash2 class="w-4 h-4" />
               </button>
             {/if}
-            {#if activeTab === 'comments'}
+            {#if !isPluginMode && activeTab === 'comments'}
               <MenuPopover
                 bind:open={showCommentMenu}
                 bind:triggerRef={commentMenuButtonRef}
@@ -1818,163 +1927,300 @@
                   </button>
                 </svelte:fragment>
                 <svelte:fragment slot="menu">
-                  <div class="text-xs font-semibold text-slate-700">
-                    {$_('chat.extension.endpointConfiguration')}
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      class="block text-[11px] text-slate-600"
-                      for="extension-config-api-base-url"
-                    >
-                      {$_('chat.extension.apiBaseUrl')}
-                    </label>
-                    <input
-                      id="extension-config-api-base-url"
-                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
-                      type="text"
-                      bind:value={extensionConfigForm.apiBaseUrl}
-                      placeholder="https://.../api/v1"
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      class="block text-[11px] text-slate-600"
-                      for="extension-config-app-base-url"
-                    >
-                      {$_('chat.extension.appBaseUrl')}
-                    </label>
-                    <input
-                      id="extension-config-app-base-url"
-                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
-                      type="text"
-                      bind:value={extensionConfigForm.appBaseUrl}
-                      placeholder="https://..."
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      class="block text-[11px] text-slate-600"
-                      for="extension-config-ws-base-url"
-                    >
-                      {$_('chat.extension.wsBaseUrlOptional')}
-                    </label>
-                    <input
-                      id="extension-config-ws-base-url"
-                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
-                      type="text"
-                      bind:value={extensionConfigForm.wsBaseUrl}
-                      placeholder="wss://..."
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
-                    />
-                  </div>
-                  <div class="flex items-center gap-2 pt-1">
+                  <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
                     <button
-                      class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                      'endpoint'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'}"
                       type="button"
-                      on:click={() => void saveExtensionConfig()}
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
+                      on:click={() => (extensionSettingsTab = 'endpoint')}
                     >
-                      {$_('common.save')}
+                      {$_('chat.extension.settingsTabs.endpoint')}
                     </button>
                     <button
-                      class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                      'permissions'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'}"
                       type="button"
-                      on:click={() => void testExtensionConfig()}
-                      disabled={extensionConfigLoading ||
-                        extensionConfigSaving ||
-                        extensionConfigTesting}
+                      on:click={() => (extensionSettingsTab = 'permissions')}
                     >
-                      {$_('chat.extension.testApi')}
+                      {$_('chat.extension.settingsTabs.permissions')}
                     </button>
                   </div>
-                  {#if extensionConfigStatus}
-                    <div
-                      class={`rounded border px-2 py-1 text-[11px] ${
-                        extensionConfigStatusKind === 'ok'
-                          ? 'border-green-200 bg-green-50 text-green-700'
-                          : extensionConfigStatusKind === 'error'
-                            ? 'border-red-200 bg-red-50 text-red-700'
-                            : 'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}
-                    >
-                      {extensionConfigStatus}
-                    </div>
-                  {/if}
-                  <div class="border-t border-slate-200 pt-2 space-y-2">
+
+                  {#if extensionSettingsTab === 'endpoint'}
                     <div class="text-xs font-semibold text-slate-700">
-                      {$_('chat.extension.auth.title')}
+                      {$_('chat.extension.endpointConfiguration')}
                     </div>
-                    <div class="text-[11px] text-slate-600">
-                      {#if extensionAuthConnected && extensionAuthUser}
-                        {$_('chat.extension.auth.connectedAs')} {extensionAuthUser.displayName ||
-                          extensionAuthUser.email ||
-                          extensionAuthUser.id}
-                      {:else}
-                        {$_('chat.extension.auth.notConnected')}
-                      {/if}
+                    <div class="space-y-1">
+                      <label
+                        class="block text-[11px] text-slate-600"
+                        for="extension-config-api-base-url"
+                      >
+                        {$_('chat.extension.apiBaseUrl')}
+                      </label>
+                      <input
+                        id="extension-config-api-base-url"
+                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        type="text"
+                        bind:value={extensionConfigForm.apiBaseUrl}
+                        placeholder="https://.../api/v1"
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      />
                     </div>
-                    <div class="flex items-center gap-2">
-                      {#if extensionAuthConnected}
-                        <button
-                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                          type="button"
-                          on:click={() => void logoutExtensionAuthAction()}
-                          disabled={extensionAuthLoggingOut ||
-                            extensionAuthLoading ||
-                            extensionConfigLoading ||
-                            extensionConfigSaving ||
-                            extensionConfigTesting}
-                        >
-                          {$_('chat.extension.auth.logout')}
-                        </button>
-                      {:else}
-                        <button
-                          class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                          type="button"
-                          on:click={() => void connectExtensionAuthAction()}
-                          disabled={extensionAuthConnecting ||
-                            extensionAuthLoading ||
-                            extensionConfigLoading ||
-                            extensionConfigSaving ||
-                            extensionConfigTesting}
-                        >
-                          {$_('chat.extension.auth.connect')}
-                        </button>
-                      {/if}
-                      {#if extensionAuthLoginUrl && !extensionAuthConnected}
-                        <button
-                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                          type="button"
-                          on:click={() => void openExtensionLoginPage()}
-                        >
-                          {$_('chat.extension.auth.openLogin')}
-                        </button>
-                      {/if}
+                    <div class="space-y-1">
+                      <label
+                        class="block text-[11px] text-slate-600"
+                        for="extension-config-app-base-url"
+                      >
+                        {$_('chat.extension.appBaseUrl')}
+                      </label>
+                      <input
+                        id="extension-config-app-base-url"
+                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        type="text"
+                        bind:value={extensionConfigForm.appBaseUrl}
+                        placeholder="https://..."
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      />
                     </div>
-                    {#if extensionAuthStatus}
+                    <div class="space-y-1">
+                      <label
+                        class="block text-[11px] text-slate-600"
+                        for="extension-config-ws-base-url"
+                      >
+                        {$_('chat.extension.wsBaseUrlOptional')}
+                      </label>
+                      <input
+                        id="extension-config-ws-base-url"
+                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        type="text"
+                        bind:value={extensionConfigForm.wsBaseUrl}
+                        placeholder="wss://..."
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      />
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                      <button
+                        class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        type="button"
+                        on:click={() => void saveExtensionConfig()}
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      >
+                        {$_('common.save')}
+                      </button>
+                      <button
+                        class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        type="button"
+                        on:click={() => void testExtensionConfig()}
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      >
+                        {$_('chat.extension.testApi')}
+                      </button>
+                    </div>
+                    {#if extensionConfigStatus}
                       <div
                         class={`rounded border px-2 py-1 text-[11px] ${
-                          extensionAuthStatusKind === 'ok'
+                          extensionConfigStatusKind === 'ok'
                             ? 'border-green-200 bg-green-50 text-green-700'
-                            : extensionAuthStatusKind === 'error'
+                            : extensionConfigStatusKind === 'error'
                               ? 'border-red-200 bg-red-50 text-red-700'
                               : 'border-slate-200 bg-slate-50 text-slate-600'
                         }`}
                       >
-                        {extensionAuthStatus}
+                        {extensionConfigStatus}
                       </div>
                     {/if}
-                  </div>
+                    <div class="border-t border-slate-200 pt-2 space-y-2">
+                      <div class="text-xs font-semibold text-slate-700">
+                        {$_('chat.extension.auth.title')}
+                      </div>
+                      <div class="text-[11px] text-slate-600">
+                        {#if extensionAuthConnected && extensionAuthUser}
+                          {$_('chat.extension.auth.connectedAs')} {extensionAuthUser.displayName ||
+                            extensionAuthUser.email ||
+                            extensionAuthUser.id}
+                        {:else}
+                          {$_('chat.extension.auth.notConnected')}
+                        {/if}
+                      </div>
+                      <div class="flex items-center gap-2">
+                        {#if extensionAuthConnected}
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            type="button"
+                            on:click={() => void logoutExtensionAuthAction()}
+                            disabled={extensionAuthLoggingOut ||
+                              extensionAuthLoading ||
+                              extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting}
+                          >
+                            {$_('chat.extension.auth.logout')}
+                          </button>
+                        {:else}
+                          <button
+                            class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            type="button"
+                            on:click={() => void connectExtensionAuthAction()}
+                            disabled={extensionAuthConnecting ||
+                              extensionAuthLoading ||
+                              extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting}
+                          >
+                            {$_('chat.extension.auth.connect')}
+                          </button>
+                        {/if}
+                        {#if extensionAuthLoginUrl && !extensionAuthConnected}
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                            type="button"
+                            on:click={() => void openExtensionLoginPage()}
+                          >
+                            {$_('chat.extension.auth.openLogin')}
+                          </button>
+                        {/if}
+                      </div>
+                      {#if extensionAuthStatus}
+                        <div
+                          class={`rounded border px-2 py-1 text-[11px] ${
+                            extensionAuthStatusKind === 'ok'
+                              ? 'border-green-200 bg-green-50 text-green-700'
+                              : extensionAuthStatusKind === 'error'
+                                ? 'border-red-200 bg-red-50 text-red-700'
+                                : 'border-slate-200 bg-slate-50 text-slate-600'
+                          }`}
+                        >
+                          {extensionAuthStatus}
+                        </div>
+                      {/if}
+                    </div>
+                  {:else}
+                    <div class="text-xs font-semibold text-slate-700">
+                      {$_('chat.extension.permissions.title')}
+                    </div>
+                    <div class="text-[11px] text-slate-500">
+                      {$_('chat.extension.permissions.description')}
+                    </div>
+                    <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                      <div class="text-[11px] font-semibold text-slate-600">
+                        {$_('chat.extension.permissions.addTitle')}
+                      </div>
+                      <div class="grid grid-cols-1 gap-2">
+                        <select
+                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          bind:value={extensionPermissionDraftToolName}
+                        >
+                          {#each EXTENSION_PERMISSION_TOOL_OPTIONS as option}
+                            <option value={option}>{option}</option>
+                          {/each}
+                        </select>
+                        <input
+                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          type="text"
+                          bind:value={extensionPermissionDraftOrigin}
+                          placeholder="https://example.com"
+                        />
+                        <select
+                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          bind:value={extensionPermissionDraftPolicy}
+                        >
+                          <option value="allow">
+                            {$_('chat.extension.permissions.allowLabel')}
+                          </option>
+                          <option value="deny">
+                            {$_('chat.extension.permissions.denyLabel')}
+                          </option>
+                        </select>
+                        <button
+                          class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                          type="button"
+                          on:click={() =>
+                            void addExtensionToolPermissionFromDraft()}
+                        >
+                          {$_('chat.extension.permissions.addCta')}
+                        </button>
+                      </div>
+                    </div>
+
+                    {#if extensionToolPermissionsLoading}
+                      <div class="text-[11px] text-slate-500">
+                        {$_('common.loading')}
+                      </div>
+                    {:else if extensionToolPermissions.length === 0}
+                      <div class="text-[11px] text-slate-500">
+                        {$_('chat.extension.permissions.empty')}
+                      </div>
+                    {:else}
+                      <div class="max-h-56 overflow-auto slim-scroll space-y-2">
+                        {#each extensionToolPermissions as entry (
+                          `${entry.toolName}:${entry.origin}`
+                        )}
+                          <div class="rounded border border-slate-200 p-2 space-y-2">
+                            <div class="text-[11px] font-semibold text-slate-700 break-all">
+                              {entry.toolName}
+                            </div>
+                            <div class="text-[11px] text-slate-500 break-all">
+                              {entry.origin}
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <select
+                                class="flex-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                                value={entry.policy}
+                                on:change={(event) =>
+                                  void upsertExtensionToolPermission(
+                                    entry.toolName,
+                                    entry.origin,
+                                    (
+                                      event.currentTarget as HTMLSelectElement
+                                    ).value as 'allow' | 'deny',
+                                  )}
+                              >
+                                <option value="allow">
+                                  {$_('chat.extension.permissions.allowLabel')}
+                                </option>
+                                <option value="deny">
+                                  {$_('chat.extension.permissions.denyLabel')}
+                                </option>
+                              </select>
+                              <button
+                                type="button"
+                                class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                                on:click={() =>
+                                  void deleteExtensionToolPermission(
+                                    entry.toolName,
+                                    entry.origin,
+                                  )}
+                              >
+                                {$_('common.delete')}
+                              </button>
+                            </div>
+                          </div>
+                        {/each}
+                      </div>
+                    {/if}
+
+                    {#if extensionToolPermissionsError}
+                      <div
+                        class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                      >
+                        {extensionToolPermissionsError}
+                      </div>
+                    {/if}
+                  {/if}
                 </svelte:fragment>
               </MenuPopover>
             {/if}
@@ -2036,7 +2282,7 @@
               <QueueMonitor />
             </div>
           {/if}
-          {#if activeTab === 'comments'}
+          {#if !isPluginMode && activeTab === 'comments'}
             <div class="h-full min-h-0">
               {#if commentContext?.id}
                 <ChatPanel
