@@ -73,7 +73,7 @@
     }, 500);
   };
 
-const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'deadline'] as const;
+const TEXT_FIELDS = ['description', 'problem', 'solution', 'contact', 'domain', 'deadline'] as const;
 const LIST_FIELDS = ['benefits', 'risks', 'constraints', 'metrics', 'nextSteps', 'technologies', 'dataSources', 'dataObjects'] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type ListField = (typeof LIST_FIELDS)[number];
@@ -93,6 +93,7 @@ let textBuffers: Record<TextField, string> = {
   problem: '',
   solution: '',
   contact: '',
+  domain: '',
   deadline: '',
 };
 let textOriginals: Record<TextField, string> = {
@@ -100,6 +101,7 @@ let textOriginals: Record<TextField, string> = {
   problem: '',
   solution: '',
   contact: '',
+  domain: '',
   deadline: '',
 };
 let listBuffers: Record<ListField, string[]> = {
@@ -504,22 +506,29 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             {nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
           </h1>
         {:else}
-          <h1 class="text-3xl font-semibold break-words mb-0">
-            <EditableInput
-              locked={locked}
-              label=""
-              value={nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
-              markdown={false}
-              multiline={true}
-              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
-              fullData={getNameFullData()}
-              fullDataGetter={getNameFullData as any}
-              changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
-              originalValue={nameOriginal || ''}
-              on:change={(e) => {
-                nameBuffer = e.detail.value;
-              }}
-              on:saved={handleFieldSaved}
+          <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+            <span class="min-w-0 flex-1 break-words">
+              <EditableInput
+                locked={locked}
+                label=""
+                value={nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
+                markdown={false}
+                multiline={true}
+                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                fullData={getNameFullData()}
+                fullDataGetter={getNameFullData as any}
+                changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
+                originalValue={nameOriginal || ''}
+                on:change={(e) => {
+                  nameBuffer = e.detail.value;
+                }}
+                on:saved={handleFieldSaved}
+              />
+            </span>
+            <CommentBadge
+              count={commentCounts?.name ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('name')}
             />
           </h1>
         {/if}
@@ -953,27 +962,29 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       <!-- COL B 1/3 Col -->
       <div class="lg:col-span-1 column-b">
       <!-- Informations -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="contact">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-	          <h3 class="font-semibold flex items-center gap-2 group">
-	            <Info class="w-5 h-5 text-slate-500" />
-	            {$_('usecase.info.title')}
-            <CommentBadge
-              count={commentCounts?.contact ?? 0}
-              disabled={!onOpenComments}
-              on:click={() => openComments('contact')}
-            />
+          <h3 class="font-semibold flex items-center gap-2">
+            <Info class="w-5 h-5 text-slate-500" />
+            {$_('usecase.info.title')}
           </h3>
         </div>
         <div class="space-y-3">
-	          <div class="flex items-start gap-2">
-	            <span class="font-medium text-slate-700 mt-1">{$_('usecase.info.contact')}</span>
+          <div class="space-y-1" data-comment-section="contact">
+            <div class="flex items-center gap-2 group">
+              <span class="font-medium text-slate-700">{$_('usecase.info.contact')}</span>
+              <CommentBadge
+                count={commentCounts?.contact ?? 0}
+                disabled={!onOpenComments}
+                on:click={() => openComments('contact')}
+              />
+            </div>
             {#if isPrinting}
               <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
                 {@html (useCase?.data?.contact || useCase?.contact) ? renderMarkdownWithRefs(useCase?.data?.contact || useCase?.contact || '', references) : ''}
               </div>
             {:else}
-              <span class="flex-1 text-slate-600 text-sm">
+              <div class="text-slate-600 text-sm">
                 <EditableInput
                   locked={locked}
                   label=""
@@ -986,12 +997,46 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   originalValue={textOriginals.contact || ''}
                   references={references}
                   on:change={(e) => setTextBuffer('contact', e.detail.value)}
-              on:saved={handleFieldSaved}
+                  on:saved={handleFieldSaved}
                 />
-              </span>
+              </div>
             {/if}
           </div>
-          <!-- Domaine affichage désactivé tant que non supporté par le prompt -->
+
+          {#if !isPrinting || textBuffers.domain || useCase?.data?.domain || useCase?.domain}
+            <div class="space-y-1" data-comment-section="domain">
+              <div class="flex items-center gap-2 group">
+                <span class="font-medium text-slate-700">{$_('usecase.info.domain')}</span>
+                <CommentBadge
+                  count={commentCounts?.domain ?? 0}
+                  disabled={!onOpenComments}
+                  on:click={() => openComments('domain')}
+                />
+              </div>
+              {#if isPrinting}
+                <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+                  {@html (useCase?.data?.domain || useCase?.domain) ? renderMarkdownWithRefs(useCase?.data?.domain || useCase?.domain || '', references) : ''}
+                </div>
+              {:else}
+                <div class="text-slate-600 text-sm">
+                  <EditableInput
+                    locked={locked}
+                    label=""
+                    value={textBuffers.domain || ''}
+                    markdown={true}
+                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    fullData={getTextFullData('domain')}
+                    fullDataGetter={(() => getTextFullData('domain')) as any}
+                    changeId={useCase?.id ? `usecase-domain-${useCase.id}` : ''}
+                    originalValue={textOriginals.domain || ''}
+                    references={references}
+                    on:change={(e) => setTextBuffer('domain', e.detail.value)}
+                    on:saved={handleFieldSaved}
+                  />
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
 

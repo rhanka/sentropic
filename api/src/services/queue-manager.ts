@@ -283,6 +283,7 @@ export class QueueManager {
         dataSources: { fr: 'Sources des donnees', en: 'Data sources' },
         dataObjects: { fr: 'Donnees', en: 'Data' },
         contact: { fr: 'Contact', en: 'Contact' },
+        domain: { fr: 'Domaine', en: 'Domain' },
         deadline: { fr: 'Delai', en: 'Deadline' },
         valueScores: { fr: 'Axes de valeur', en: 'Value axes' },
         complexityScores: { fr: 'Axes de complexite', en: 'Complexity axes' },
@@ -401,7 +402,7 @@ export class QueueManager {
         status: 'open',
         threadId: createId(),
         content: this.formatAutoGenerationFieldComment(opts.contextType, sectionKey, locale),
-        toolCallId: null,
+        toolCallId: `auto_generation:${commentId}`,
         createdAt: now,
         updatedAt: now
       });
@@ -1771,7 +1772,6 @@ export class QueueManager {
       const useCaseData: UseCaseData = {
         name: title, // Stocker name dans data
         description: useCaseItem.description || '', // Stocker description dans data
-        process: '',
         technologies: [],
         deadline: '',
         contact: '',
@@ -2012,10 +2012,8 @@ export class QueueManager {
       description: existingData.description || useCaseDetail.description, // Préserver description existante ou utiliser celle du détail
       problem: useCaseDetail.problem,
       solution: useCaseDetail.solution,
-      process: useCaseDetail.domain, // domain du prompt -> process en DB
       domain: useCaseDetail.domain,
       technologies: useCaseDetail.technologies,
-      prerequisites: useCaseDetail.prerequisites,
       deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
       contact: useCaseDetail.contact,
       benefits: useCaseDetail.benefits,
@@ -2038,11 +2036,11 @@ export class QueueManager {
       .map((field) => `data.${field}`);
     
     // Mettre à jour le cas d'usage
-    // Note: Toutes les colonnes métier (prerequisites, deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
+    // Note: Toutes les colonnes métier (deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
     // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(useCases)
       .set({
-        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })

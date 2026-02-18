@@ -1103,6 +1103,7 @@
       complexityScores: 'chat.sections.usecase.complexityScores',
       references: 'chat.sections.usecase.references',
       contact: 'chat.sections.usecase.contact',
+      domain: 'chat.sections.usecase.domain',
       deadline: 'chat.sections.usecase.deadline',
     },
     organization: {

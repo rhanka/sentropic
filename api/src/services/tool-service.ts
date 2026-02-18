@@ -1472,6 +1472,7 @@ export class ToolService {
         dataSources: { fr: 'Sources des donnees', en: 'Data sources' },
         dataObjects: { fr: 'Donnees', en: 'Data' },
         contact: { fr: 'Contact', en: 'Contact' },
+        domain: { fr: 'Domaine', en: 'Domain' },
         deadline: { fr: 'Delai', en: 'Deadline' },
         valueScores: { fr: 'Axes de valeur', en: 'Value axes' },
         complexityScores: { fr: 'Axes de complexite', en: 'Complexity axes' },
