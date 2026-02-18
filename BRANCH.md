@@ -314,9 +314,20 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
   - [ ] Priority retouches to execute first before final validation:
     - [ ] Fix final `lint-ui` gate scope pollution from generated `ui/chrome-ext/dist/*` artifacts (exclude from lint scope or remove generated bundle from workspace before gate run).
     - [ ] Add/adjust targeted API/UI tests for the new contracts:
-      - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
-      - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
-      - [ ] comment badge count visibility on section headers
+      - [x] Impacted tests identified:
+        - [x] `api/tests/api/comments.test.ts`
+        - [x] `api/tests/api/use-cases-generate-matrix.test.ts`
+        - [x] `api/tests/unit/context-usecase-detail-contract.test.ts`
+        - [x] `ui/tests/utils/comments.test.ts`
+        - [x] `ui/tests/utils/api.test.ts`
+      - [x] Scoped validation runs executed:
+        - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+        - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/api/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+        - [x] Note: scoped `vitest` suites passed; the aggregate `make test-api` wrapper hit a transient post-run `up-api` unhealthy state, then API recovered healthy.
+      - [ ] Remaining assertions to add/update:
+        - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
+        - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
+        - [ ] comment badge count visibility on section headers
     - [x] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
       - [x] Added in `spec/SPEC.md` section `12.1`.
 
