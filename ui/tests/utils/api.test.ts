@@ -57,6 +57,30 @@ describe('API Utils', () => {
   });
 
   describe('apiRequest - workspace scoping', () => {
+    it('sends X-App-Locale from the app locale selection', async () => {
+      localStorage.setItem('locale', 'en-US');
+      mockFetchJsonOnce({ items: [] });
+
+      await apiRequest('/comments');
+
+      const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['X-App-Locale']).toBe('en');
+    });
+
+    it('falls back to fr locale when localStorage locale is unknown', async () => {
+      localStorage.setItem('locale', 'de-DE');
+      mockFetchJsonOnce({ items: [] });
+
+      await apiRequest('/comments');
+
+      const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['X-App-Locale']).toBe('fr');
+    });
+
     it('appends workspace_id for non-auth endpoints', async () => {
       setUser({ id: 'user-1', email: 'user@example.com', displayName: 'User', role: 'editor' });
       setWorkspaceScope('ws-1');
