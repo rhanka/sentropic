@@ -223,6 +223,23 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] `chat.comments.resolve` ("Résoudre le commentaire" / "Resolve comment")
     - [x] `chat.comments.previous` + `chat.comments.next`
     - [x] Add missing `chat.sections.usecase.*` keys for constraints + score groups.
+  - [x] Lot 4E — Field coverage alignment (name/domain) + generation payload sanitization:
+    - [x] Prompt cleanup committed separately: remove `prerequisites` from `use_case_detail` default prompt schema.
+    - [x] Add missing `name/title` comment badges in UI headers:
+      - [x] `/folders/[id]` folder title
+      - [x] `/usecase/[id]` usecase title
+      - [x] `/dashboard` folder title
+    - [x] Usecase information block realigned to field labels + per-field badges:
+      - [x] `Contact` as label + `EditableInput` + `CommentBadge`
+      - [x] `Domaine/Domain` as label + `EditableInput` + `CommentBadge`
+    - [x] Domain localization alignment:
+      - [x] `chat.sections.usecase.domain` added in FR/EN locales
+      - [x] `usecase.info.domain` added in FR/EN locales
+      - [x] Chat section label maps updated (`ChatWidget`, `ChatPanel`)
+      - [x] Auto-comment label maps updated (`QueueManager`, `ToolService`)
+    - [x] Filter unsupported generated detail fields before persistence in `use_cases.data`:
+      - [x] Remove `process` mapping from queue detail generation writes.
+      - [x] Remove `prerequisites` mapping from queue detail generation writes.
   - [x] Lot gate:
     - [x] `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
@@ -268,6 +285,11 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [ ] Resolve one open comment and verify automatic selection jumps to next open comment.
     - [ ] Previous/next arrow buttons navigate between available comment threads.
     - [ ] Auto-generated comments use localized field labels in FR and EN.
+    - [ ] AI marker parity: comments created by generation and by tool-based updates both display the AI marker (brain icon / Assistant IA) in comment threads.
+    - [ ] Name/title comment badges appear (with count when comments exist) on `/folders/[id]`, `/usecase/[id]`, and `/dashboard`.
+    - [ ] Clicking each `name/title` badge opens the matching comments context and `sectionKey=name`.
+    - [ ] In usecase "Informations", `Contact` and `Domaine/Domain` are displayed as label + editable field, each with its own comment badge next to the label.
+    - [ ] After usecase detail generation, `data.domain` is persisted when generated, and unsupported fields (`data.process`, `data.prerequisites`) are not written by queue generation.
     - [ ] On `/dashboard`, each executive summary header shows the comment badge with count.
     - [ ] On `/dashboard`, clicking each badge opens comments in `executive_summary` context with the expected section preselected.
     - [ ] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
