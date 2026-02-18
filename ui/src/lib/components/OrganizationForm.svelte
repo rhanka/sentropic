@@ -73,26 +73,40 @@
   <div class="space-y-6">
     <div class="grid grid-cols-12 gap-4 items-center">
       <div class="col-span-6 min-w-0">
-        <h1 class="text-3xl font-semibold break-words mb-0">
-          <EditableInput
-            label={nameLabel}
-            value={fieldValues.name}
-            originalValue={getOriginalValue('name')}
-            changeId={apiEndpoint ? 'organization-name' : 'new-organization-name'}
-            apiEndpoint={apiEndpoint}
-            fullData={getPayload('name')}
-            fullDataGetter={() => getPayload('name')}
-            markdown={false}
-            multiline={true}
-            locked={locked}
-            placeholder={$_('organizations.form.namePlaceholder')}
-            on:change={(e) => onFieldUpdate?.('name', e.detail.value)}
-            on:saved={(e) => handleSaved('name', e as CustomEvent<{ value?: string }>)}
+        <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group" data-comment-section="name">
+          <span class="min-w-0 flex-1 break-words">
+            <EditableInput
+              label={nameLabel}
+              value={fieldValues.name}
+              originalValue={getOriginalValue('name')}
+              changeId={apiEndpoint ? 'organization-name' : 'new-organization-name'}
+              apiEndpoint={apiEndpoint}
+              fullData={getPayload('name')}
+              fullDataGetter={() => getPayload('name')}
+              markdown={false}
+              multiline={true}
+              locked={locked}
+              placeholder={$_('organizations.form.namePlaceholder')}
+              on:change={(e) => onFieldUpdate?.('name', e.detail.value)}
+              on:saved={(e) => handleSaved('name', e as CustomEvent<{ value?: string }>)}
+            />
+          </span>
+          <CommentBadge
+            count={commentCounts?.name ?? 0}
+            disabled={!onOpenComments}
+            on:click={() => onOpenComments?.('name')}
           />
         </h1>
 
-        <div class="mt-2 space-y-1 max-w-2xl">
-          <div class="text-sm font-medium text-slate-600">{$_('organizations.fields.industry')}</div>
+        <div class="mt-2 space-y-1 max-w-2xl" data-comment-section="industry">
+          <div class="text-sm font-medium text-slate-600 flex items-center gap-2 group">
+            {$_('organizations.fields.industry')}
+            <CommentBadge
+              count={commentCounts?.industry ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => onOpenComments?.('industry')}
+            />
+          </div>
           <div class="text-lg text-slate-600">
             <EditableInput
               value={fieldValues.industry}
