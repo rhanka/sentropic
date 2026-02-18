@@ -1441,7 +1441,7 @@
   <!-- Bulle unique (commune Chat/Queue) -->
   {#if !isSidePanelHost}
     <button
-      class="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
+      class="relative bg-primary hover:bg-primary/90 text-white rounded-full p-3 shadow-lg transition-colors"
       class:opacity-0={isVisible}
       class:pointer-events-none={isVisible}
       on:click={toggle}
@@ -1496,7 +1496,7 @@
         <!-- Mobile backdrop (click to close) -->
         <button
           type="button"
-          class="absolute inset-0 h-full w-full bg-slate-900/40"
+          class="absolute inset-0 h-full w-full bg-black bg-opacity-40"
           on:click={close}
           tabindex="-1"
           aria-hidden="true"
@@ -1780,7 +1780,7 @@
                     </div>
                     <div class="flex items-center gap-2 pt-1">
                       <button
-                        class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                         type="button"
                         on:click={() => void saveExtensionConfig()}
                         disabled={extensionConfigLoading ||
@@ -1842,7 +1842,7 @@
                           </button>
                         {:else}
                           <button
-                            class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                             type="button"
                             on:click={() => void connectExtensionAuthAction()}
                             disabled={extensionAuthConnecting ||
@@ -1916,7 +1916,7 @@
                           </option>
                         </select>
                         <button
-                          class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                          class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
                           type="button"
                           on:click={() =>
                             void addExtensionToolPermissionFromDraft()}
@@ -2039,7 +2039,7 @@
                 {$_('chat.extension.authRequired.description')}
               </div>
               <button
-                class="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                class="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90"
                 type="button"
                 on:mousedown|stopPropagation={openExtensionSettingsMenu}
                 on:click|stopPropagation={openExtensionSettingsMenu}

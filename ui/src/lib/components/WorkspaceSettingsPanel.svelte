@@ -394,7 +394,7 @@
               <option value="admin">{$_('roles.admin')}</option>
             </select>
           </label>
-          <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50" on:click={addMember} disabled={!addMemberEmail.trim()}>
+          <button class="rounded bg-primary px-3 py-2 text-sm text-white disabled:opacity-50" on:click={addMember} disabled={!addMemberEmail.trim()}>
             {$_('common.add')}
           </button>
         </div>
@@ -510,7 +510,7 @@
             {$_('common.cancel')}
           </button>
           <button
-            class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+            class="px-3 py-2 rounded bg-primary text-white disabled:opacity-50"
             type="button"
             on:click={createWorkspace}
             disabled={creatingWorkspace || !newWorkspaceName.trim()}

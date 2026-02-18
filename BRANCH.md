@@ -240,11 +240,11 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [x] `hover:bg-indigo-700`: `8`
       - [x] `bg-slate-900`: `6`
       - [x] `bg-slate-900/40`: `1`
-    - [ ] Pending execution strategy (to validate before coding):
-      - [ ] Replace all `bg-blue-600` + `bg-indigo-600` + `bg-slate-900` by `bg-primary`.
-      - [ ] Replace all hover variants `hover:bg-blue-700` + `hover:bg-indigo-700` by a primary hover (`hover:bg-primary/90` unless a stricter DS token is chosen).
-      - [ ] Decide explicit handling of `bg-slate-900/40` overlay (`bg-primary/40` vs keep overlay-neutral if readability/regression risk).
-      - [ ] Run post-change grep gate to ensure zero remaining matches for targeted tokens in `.svelte`.
+    - [x] Execution applied:
+      - [x] Replaced all `bg-blue-600` + `bg-indigo-600` + `bg-slate-900` by `bg-primary` (buttons/badges/messages).
+      - [x] Replaced all hover variants `hover:bg-blue-700` + `hover:bg-indigo-700` by `hover:bg-primary/90`.
+      - [x] Kept `bg-slate-900/40` mobile backdrop unchanged (overlay semantics), and aligned explicit chat `close` button styling with existing header action buttons.
+      - [x] Post-change grep gate: only `bg-slate-900/40` remains (expected backdrop exception).
   - [ ] UAT checklist:
     - [ ] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
     - [ ] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.

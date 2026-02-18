@@ -588,7 +588,7 @@
           {$_('common.cancel')}
         </button>
         <button
-          class="px-3 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+          class="px-3 py-2 rounded bg-primary text-white disabled:opacity-50"
           type="button"
           on:click={mode === 'export' ? handleExport : handleImport}
           disabled={isBusy}

@@ -1086,7 +1086,7 @@
       <p class="text-gray-600 mb-4">{$_('matrix.empty')}</p>
 	      <button 
 	        on:click={openCreateMatrixDialog}
-	        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+	        class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg"
 	      >
 	        {$_('matrix.createNew')}
 	      </button>
@@ -1596,7 +1596,7 @@
           <button 
             on:click={createNewMatrix}
             disabled={createMatrixType === 'copy' && !selectedFolderToCopy}
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {$_('common.create')}
           </button>
@@ -1636,7 +1636,7 @@
         </button>
         <button 
           on:click={handleCloseWarningSave}
-          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          class="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
         >
           {$_('unsavedChanges.actions.saveAndClose')}
         </button>
