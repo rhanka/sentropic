@@ -60,34 +60,82 @@ const toolResultInput = z.object({
 });
 
 const extensionToolPermissionInput = z.object({
-  toolName: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[a-zA-Z0-9:_-]+$/),
+  toolName: z.string().min(1).max(96),
   origin: z.string().min(1),
   policy: z.enum(['allow', 'deny']),
 });
 
 const extensionToolPermissionDeleteInput = z.object({
-  toolName: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[a-zA-Z0-9:_-]+$/),
+  toolName: z.string().min(1).max(96),
   origin: z.string().min(1),
 });
 
-const normalizeOrigin = (raw: string): string | null => {
+const TOOL_PATTERN_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
+const HOSTNAME_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const IPV4_REGEX =
+  /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const normalizeToolPattern = (raw: string): string | null => {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (!TOOL_PATTERN_REGEX.test(value)) return null;
+  if (value.includes('**')) return null;
+  return value;
+};
+
+const isValidHostname = (host: string): boolean => {
+  const value = host.trim().toLowerCase();
+  if (!value) return false;
+  if (value === 'localhost') return true;
+  if (IPV4_REGEX.test(value)) return true;
+  const labels = value.split('.');
+  if (labels.length < 2) return false;
+  return labels.every((label) => HOSTNAME_LABEL_REGEX.test(label));
+};
+
+const normalizeRuntimeOrigin = (raw: string): string | null => {
   const value = raw.trim();
   if (!value) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.origin;
+    const hostname = url.hostname.toLowerCase();
+    const port = url.port ? `:${url.port}` : '';
+    return `${url.protocol}//${hostname}${port}`;
   } catch {
     return null;
   }
+};
+
+const normalizeOriginPattern = (raw: string): string | null => {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value === '*') return '*';
+
+  const schemeAnyHostMatch = value.match(/^(https?:)\/\/\*$/);
+  if (schemeAnyHostMatch) {
+    return `${schemeAnyHostMatch[1]}//*`;
+  }
+
+  if (value.startsWith('*.')) {
+    const suffix = value.slice(2);
+    if (!isValidHostname(suffix)) return null;
+    return `*.${suffix}`;
+  }
+
+  const wildcardSchemeMatch = value.match(/^(https?:)\/\/\*\.(.+)$/);
+  if (wildcardSchemeMatch) {
+    const scheme = wildcardSchemeMatch[1];
+    const suffix = wildcardSchemeMatch[2];
+    if (!isValidHostname(suffix)) return null;
+    return `${scheme}//*.${suffix}`;
+  }
+
+  if (isValidHostname(value)) {
+    return value;
+  }
+
+  return normalizeRuntimeOrigin(value);
 };
 
 chatRouter.get('/tool-permissions', requireWorkspaceAccessRole(), async (c) => {
@@ -128,9 +176,13 @@ chatRouter.put(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
-    const origin = normalizeOrigin(body.origin);
+    const toolName = normalizeToolPattern(body.toolName);
+    if (!toolName) {
+      return c.json({ error: 'Invalid tool pattern' }, 400);
+    }
+    const origin = normalizeOriginPattern(body.origin);
     if (!origin) {
-      return c.json({ error: 'Invalid origin URL' }, 400);
+      return c.json({ error: 'Invalid origin pattern' }, 400);
     }
 
     const now = new Date();
@@ -140,7 +192,7 @@ chatRouter.put(
         id: createId(),
         userId: user.userId,
         workspaceId: user.workspaceId,
-        toolName: body.toolName,
+        toolName,
         origin,
         policy: body.policy,
         updatedAt: now,
@@ -162,7 +214,7 @@ chatRouter.put(
     return c.json({
       ok: true,
       item: {
-        toolName: body.toolName,
+        toolName,
         origin,
         policy: body.policy,
         updatedAt: now.toISOString(),
@@ -178,16 +230,20 @@ chatRouter.delete(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
-    const origin = normalizeOrigin(body.origin);
+    const toolName = normalizeToolPattern(body.toolName);
+    if (!toolName) {
+      return c.json({ error: 'Invalid tool pattern' }, 400);
+    }
+    const origin = normalizeOriginPattern(body.origin);
     if (!origin) {
-      return c.json({ error: 'Invalid origin URL' }, 400);
+      return c.json({ error: 'Invalid origin pattern' }, 400);
     }
 
     await db.delete(extensionToolPermissions).where(
       and(
         eq(extensionToolPermissions.userId, user.userId),
         eq(extensionToolPermissions.workspaceId, user.workspaceId),
-        eq(extensionToolPermissions.toolName, body.toolName),
+        eq(extensionToolPermissions.toolName, toolName),
         eq(extensionToolPermissions.origin, origin),
       ),
     );

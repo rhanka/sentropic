@@ -30,7 +30,6 @@
     X,
     Plus,
     Trash2,
-    Minus,
     Maximize2,
     Minimize2,
     Menu,
@@ -200,17 +199,23 @@
   let extensionAuthLoginUrl: string | null = null;
   let extensionConfigMenuWasOpen = false;
   let extensionSettingsTab: 'endpoint' | 'permissions' = 'endpoint';
+  let extensionConfigMenuMaxHeightPx = 360;
   let extensionToolPermissionsLoading = false;
   let extensionToolPermissionsError = '';
   let extensionToolPermissions: LocalToolPermissionPolicyEntry[] = [];
   const EXTENSION_PERMISSION_TOOL_OPTIONS = [
+    'tab_read:*',
     'tab_read:info',
     'tab_read:dom',
     'tab_read:screenshot',
     'tab_read:elements',
-    'tab_action',
+    'tab_action:*',
+    'tab_action:click',
+    'tab_action:input',
+    'tab_action:scroll',
+    'tab_action:wait',
   ];
-  let extensionPermissionDraftToolName = 'tab_action';
+  let extensionPermissionDraftToolName = 'tab_action:*';
   let extensionPermissionDraftOrigin = '';
   let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
   let extensionConfigForm: ExtensionRuntimeConfig = {
@@ -273,6 +278,47 @@
         ? 'docked'
         : displayMode;
   $: isDocked = effectiveMode === 'docked';
+
+  const updateExtensionConfigMenuMaxHeight = () => {
+    if (typeof window === 'undefined') return;
+    const triggerRect = extensionConfigButtonRef?.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || 0;
+    const menuOffsetPx = 8; // matches MenuPopover mt-2
+    const viewportMarginPx = 16;
+    const fallbackPx = 360;
+
+    if (!triggerRect || viewportHeight <= 0) {
+      extensionConfigMenuMaxHeightPx = fallbackPx;
+      return;
+    }
+
+    const viewportAvailablePx = Math.max(
+      0,
+      Math.floor(viewportHeight - triggerRect.bottom - menuOffsetPx - viewportMarginPx),
+    );
+
+    if (!isDocked && dialogEl) {
+      const dialogRect = dialogEl.getBoundingClientRect();
+      // Floating mode: exact fit to the widget bottom.
+      const exactWidgetAvailablePx = Math.max(
+        0,
+        Math.floor(dialogRect.bottom - triggerRect.bottom - menuOffsetPx),
+      );
+      extensionConfigMenuMaxHeightPx = Math.min(
+        viewportAvailablePx || exactWidgetAvailablePx,
+        exactWidgetAvailablePx,
+      );
+      return;
+    }
+
+    extensionConfigMenuMaxHeightPx = viewportAvailablePx;
+  };
+
+  $: if (showExtensionConfigMenu) {
+    void tick().then(() => {
+      updateExtensionConfigMenuMaxHeight();
+    });
+  }
 
   const computeDockWidthCss = (): string => {
     if (!isBrowser) return '0px';
@@ -1259,6 +1305,7 @@
     resizeHandler = () => {
       dockWidthCss = computeDockWidthCss();
       publishLayout();
+      if (showExtensionConfigMenu) updateExtensionConfigMenuMaxHeight();
     };
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
@@ -1479,24 +1526,6 @@
     }
   };
 
-  const handlePurgeAllJobsGlobal = async () => {
-    if (!confirm($_('chat.queue.confirmPurgeAllGlobal'))) {
-      return;
-    }
-    try {
-      // Admin-only: purge across ALL workspaces
-      const result = await apiPost('/queue/purge-global', { status: 'all' });
-      addToast({ type: 'success', message: result.message });
-      await loadJobs();
-    } catch (error) {
-      console.error('Failed to purge ALL jobs (global):', error);
-      addToast({
-        type: 'error',
-        message: $_('chat.queue.errors.purgeAllGlobal'),
-      });
-    }
-  };
-
   onDestroy(() => {
     try {
       if (mobileMqlChangeHandler)
@@ -1605,12 +1634,14 @@
       bind:this={dialogEl}
       on:keydown={onDialogKeyDown}
       class={isSidePanelHost
-        ? 'h-full w-full bg-white overflow-hidden flex flex-col'
+        ? 'h-full w-full bg-white flex flex-col'
         : isDocked
-        ? 'fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 overflow-hidden flex flex-col'
-        : 'fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
+        ? 'fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
+        : 'fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
       style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
+      class:overflow-hidden={!showExtensionConfigMenu}
+      class:overflow-visible={showExtensionConfigMenu}
     >
       <!-- Header commun (tabs) -->
       <div class="px-4 h-14 border-b border-gray-200 flex items-center">
@@ -1894,17 +1925,6 @@
               >
                 <Trash2 class="w-4 h-4" />
               </button>
-              {#if $session.user?.role === 'admin_app'}
-                <button
-                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                  on:click={handlePurgeAllJobsGlobal}
-                  title={$_('chat.queue.purgeAllGlobal')}
-                  aria-label={$_('chat.queue.purgeAllGlobal')}
-                  type="button"
-                >
-                  <Minus class="w-4 h-4" />
-                </button>
-              {/if}
             {/if}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
@@ -1912,7 +1932,9 @@
                 bind:triggerRef={extensionConfigButtonRef}
                 widthClass="w-80"
                 align="right"
-                menuClass="space-y-2"
+                menuPaddingClass="p-0"
+                menuClass="overflow-hidden"
+                menuStyle={`height: ${extensionConfigMenuMaxHeightPx}px; max-height: ${extensionConfigMenuMaxHeightPx}px;`}
               >
                 <svelte:fragment slot="trigger" let:toggle>
                   <button
@@ -1927,28 +1949,32 @@
                   </button>
                 </svelte:fragment>
                 <svelte:fragment slot="menu">
-                  <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
-                    <button
-                      class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                      'endpoint'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'}"
-                      type="button"
-                      on:click={() => (extensionSettingsTab = 'endpoint')}
-                    >
-                      {$_('chat.extension.settingsTabs.endpoint')}
-                    </button>
-                    <button
-                      class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                      'permissions'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'}"
-                      type="button"
-                      on:click={() => (extensionSettingsTab = 'permissions')}
-                    >
-                      {$_('chat.extension.settingsTabs.permissions')}
-                    </button>
-                  </div>
+                  <div class="flex h-full min-h-0 flex-col">
+                    <div class="border-b border-slate-200 p-2">
+                      <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+                        <button
+                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          'endpoint'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'}"
+                          type="button"
+                          on:click={() => (extensionSettingsTab = 'endpoint')}
+                        >
+                          {$_('chat.extension.settingsTabs.endpoint')}
+                        </button>
+                        <button
+                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          'permissions'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'}"
+                          type="button"
+                          on:click={() => (extensionSettingsTab = 'permissions')}
+                        >
+                          {$_('chat.extension.settingsTabs.permissions')}
+                        </button>
+                      </div>
+                    </div>
+                    <div class="flex-1 min-h-0 overflow-auto slim-scroll space-y-2 p-2">
 
                   {#if extensionSettingsTab === 'endpoint'}
                     <div class="text-xs font-semibold text-slate-700">
@@ -2132,7 +2158,7 @@
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
                           type="text"
                           bind:value={extensionPermissionDraftOrigin}
-                          placeholder="https://example.com"
+                          placeholder="https://example.com | https://* | *.example.com | *"
                         />
                         <select
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
@@ -2165,7 +2191,7 @@
                         {$_('chat.extension.permissions.empty')}
                       </div>
                     {:else}
-                      <div class="max-h-56 overflow-auto slim-scroll space-y-2">
+                      <div class="space-y-2">
                         {#each extensionToolPermissions as entry (
                           `${entry.toolName}:${entry.origin}`
                         )}
@@ -2221,6 +2247,8 @@
                       </div>
                     {/if}
                   {/if}
+                    </div>
+                  </div>
                 </svelte:fragment>
               </MenuPopover>
             {/if}
