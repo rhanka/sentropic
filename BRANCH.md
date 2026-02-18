@@ -301,7 +301,7 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] On `/dashboard`, clicking each badge opens comments in `executive_summary` context with the expected section preselected.
     - [x] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
 
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-1 — Docs consolidation**
   - [x] Branch-wide implementation inventory completed (Lots 1 -> 4):
     - [x] Save/live-update stabilization aligned across `organizations/[id]`, `usecase/[id]`, `folder/[id]`, `dashboard`, and matrix main/modals.
     - [x] Matrix/Lot 2 UI refinements delivered (axis editing UX + modal spacing + sector label copy update).
@@ -310,39 +310,37 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Executive summary parity delivered (`dashboard` badges + section routing + SSE refresh).
     - [x] Field coverage completed for comment badges: `name/title` (folder/usecase/dashboard/organization), `industry`, `domain`.
     - [x] Generation payload hardening delivered: unsupported detail fields (`process`, `prerequisites`) filtered before persistence.
-  - [x] `TODO.md` synchronized with backlog additions captured during the lot.
-  - [ ] Priority retouches to execute first before final validation:
-    - [ ] Fix final `lint-ui` gate scope pollution from generated `ui/chrome-ext/dist/*` artifacts (exclude from lint scope or remove generated bundle from workspace before gate run).
-    - [ ] Add/adjust targeted API/UI tests for the new contracts:
-      - [x] Impacted tests identified:
-        - [x] `api/tests/api/comments.test.ts`
-        - [x] `api/tests/api/use-cases-generate-matrix.test.ts`
-        - [x] `api/tests/unit/context-usecase-detail-contract.test.ts`
-        - [x] `ui/tests/utils/comments.test.ts`
-        - [x] `ui/tests/utils/api.test.ts`
-      - [x] Scoped validation runs executed:
-        - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
-        - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/api/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
-        - [x] Note: scoped `vitest` suites passed; the aggregate `make test-api` wrapper hit a transient post-run `up-api` unhealthy state, then API recovered healthy.
-      - [ ] Remaining assertions to add/update:
-        - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
-        - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
-        - [ ] comment badge count visibility on section headers
-    - [x] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
+  - [x] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
       - [x] Added in `spec/SPEC.md` section `12.1`.
 
 - [ ] **Lot N — Final validation**
   - [ ] **API tests**
-    - [ ] Identify and update impacted API tests (exact files listed after Lot 0 scan).
-    - [ ] Scoped runs while evolving: `make test-api SCOPE=tests/your-file.spec.ts ENV=test`.
+    - [x] Identify/update impacted API tests:
+      - [x] `api/tests/api/comments.test.ts`
+      - [ ] `api/tests/api/use-cases-generate-matrix.test.ts`
+      - [ ] `api/tests/unit/context-usecase-detail-contract.test.ts`
+    - [x] Scoped runs while evolving:
+      - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/api/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] Note: scoped `vitest` suites passed; `make test-api` wrapper had one transient post-run `up-api` unhealthy event, then API recovered healthy.
+    - [ ] Remaining API assertions:
+      - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
+      - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
     - [ ] Sub-lot gate: `make test-api ENV=test`.
   - [ ] **UI tests (TypeScript only)**
-    - [ ] Identify and update impacted UI tests (exact files listed after Lot 0 scan).
-    - [ ] Scoped runs while evolving: `make test-ui SCOPE=tests/your-file.spec.ts ENV=test`.
+    - [x] Identify/update impacted UI tests:
+      - [x] `ui/tests/utils/comments.test.ts`
+      - [ ] `ui/tests/utils/api.test.ts`
+      - [ ] add/adjust component-level coverage for comment badge count visibility on section headers
+    - [x] Scoped runs while evolving:
+      - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [ ] Remaining UI assertions:
+      - [ ] comment badge count visibility on section headers
     - [ ] Sub-lot gate: `make test-ui ENV=test`.
   - [ ] **E2E tests**
     - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
-    - [ ] Identify and update impacted E2E tests (exact files listed after Lot 0 scan).
+    - [ ] Identify/update impacted E2E tests:
+      - [ ] comment badge counters visible and clickable on headers (`/usecase/[id]`, `/organizations/[id]`, `/dashboard`).
+      - [ ] generated usecase detail persists `domain` and excludes unsupported fields (`process`, `prerequisites`) in effective payload.
     - [ ] Scoped runs while evolving: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
     - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
   - [ ] Final gate: create PR with `BRANCH.md` content as initial message and verify CI for the branch.
