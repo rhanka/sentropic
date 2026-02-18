@@ -302,8 +302,22 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update impacted specs/docs if behavior contracts changed.
-  - [ ] Update `TODO.md` status for this item when feature is complete.
+  - [x] Branch-wide implementation inventory completed (Lots 1 -> 4):
+    - [x] Save/live-update stabilization aligned across `organizations/[id]`, `usecase/[id]`, `folder/[id]`, `dashboard`, and matrix main/modals.
+    - [x] Matrix/Lot 2 UI refinements delivered (axis editing UX + modal spacing + sector label copy update).
+    - [x] Auto-comment engine delivered for generation/tool updates with app-locale sourcing (`X-App-Locale`) and AI marker parity.
+    - [x] Comment review UX delivered (sub-headers, localized labels, next/previous navigation, auto-jump after resolve).
+    - [x] Executive summary parity delivered (`dashboard` badges + section routing + SSE refresh).
+    - [x] Field coverage completed for comment badges: `name/title` (folder/usecase/dashboard/organization), `industry`, `domain`.
+    - [x] Generation payload hardening delivered: unsupported detail fields (`process`, `prerequisites`) filtered before persistence.
+  - [x] `TODO.md` synchronized with backlog additions captured during the lot.
+  - [ ] Priority retouches to execute first before final validation:
+    - [ ] Fix final `lint-ui` gate scope pollution from generated `ui/chrome-ext/dist/*` artifacts (exclude from lint scope or remove generated bundle from workspace before gate run).
+    - [ ] Add/adjust targeted API/UI tests for the new contracts:
+      - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
+      - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
+      - [ ] comment badge count visibility on section headers
+    - [ ] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
 
 - [ ] **Lot N — Final validation**
   - [ ] **API tests**
