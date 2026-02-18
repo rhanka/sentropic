@@ -18,6 +18,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import { listComments } from '$lib/utils/comments';
+  import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { normalizeMarkdownLineEndings, renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
@@ -400,31 +401,6 @@
     window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
   };
 
-  const buildCommentCounts = (items: Array<any>): Record<string, number> => {
-    const counts: Record<string, number> = {};
-    const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
-    for (const item of items) {
-      const threadId = item.thread_id;
-      if (!threadId) continue;
-      const existing = threads.get(threadId);
-      if (!existing) {
-        threads.set(threadId, {
-          status: item.status,
-          count: 1,
-          sectionKey: item.section_key || null,
-        });
-      } else {
-        threads.set(threadId, { ...existing, count: existing.count + 1 });
-      }
-    }
-    for (const thread of threads.values()) {
-      if (thread.status === 'closed') continue;
-      const key = thread.sectionKey || 'root';
-      counts[key] = (counts[key] || 0) + thread.count;
-    }
-    return counts;
-  };
-
   const canLoadCommentCounts = () =>
     Boolean(selectedFolderId && workspaceId && commentUserId && !$session.loading);
 
@@ -447,8 +423,8 @@
         listComments({ contextType: 'executive_summary', contextId: selectedFolderId }),
         listComments({ contextType: 'folder', contextId: selectedFolderId }),
       ]);
-      commentCounts = buildCommentCounts(executiveSummaryComments.items || []);
-      folderCommentCounts = buildCommentCounts(folderComments.items || []);
+      commentCounts = buildOpenCommentCounts(executiveSummaryComments.items || []);
+      folderCommentCounts = buildOpenCommentCounts(folderComments.items || []);
       commentCountsRetryAttempts = 0;
     } catch {
       commentCountsRetryAttempts += 1;

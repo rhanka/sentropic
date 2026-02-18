@@ -2,7 +2,12 @@ import { db, pool } from '../db/client';
 import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
-import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
+import {
+  generateUseCaseList,
+  generateUseCaseDetail,
+  type UseCaseDetail,
+  type UseCaseListItem,
+} from './context-usecase';
 import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
 import { defaultMatrixConfig } from '../config/default-matrix';
@@ -78,6 +83,60 @@ function sanitizeJobResultForPublic(result: unknown): unknown {
 
 function isSameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function normalizeAutoGenerationSectionKeys(
+  contextType: CommentContextType,
+  sectionKeys: string[]
+): string[] {
+  return Array.from(
+    new Set(
+      sectionKeys
+        .map((s) => {
+          const sectionKey = String(s ?? '').trim();
+          if (!sectionKey) return '';
+          return contextType === 'usecase' && sectionKey.startsWith('data.')
+            ? sectionKey.slice('data.'.length)
+            : sectionKey;
+        })
+        .filter(Boolean)
+    )
+  );
+}
+
+export function buildGeneratedUseCasePayloadForPersistence(
+  existingData: Partial<UseCaseData>,
+  useCaseDetail: UseCaseDetail
+): { useCaseData: UseCaseData; generatedUseCaseFields: string[] } {
+  const useCaseData: UseCaseData = {
+    name: existingData.name || useCaseDetail.name,
+    description: existingData.description || useCaseDetail.description,
+    problem: useCaseDetail.problem,
+    solution: useCaseDetail.solution,
+    domain: useCaseDetail.domain,
+    technologies: useCaseDetail.technologies,
+    deadline: useCaseDetail.leadtime,
+    contact: useCaseDetail.contact,
+    benefits: useCaseDetail.benefits,
+    constraints: useCaseDetail.constraints,
+    metrics: useCaseDetail.metrics,
+    risks: useCaseDetail.risks,
+    nextSteps: useCaseDetail.nextSteps,
+    dataSources: useCaseDetail.dataSources,
+    dataObjects: useCaseDetail.dataObjects,
+    references: useCaseDetail.references || [],
+    valueScores: useCaseDetail.valueScores,
+    complexityScores: useCaseDetail.complexityScores
+  };
+  const generatedUseCaseFields = Object.keys(useCaseData)
+    .filter((field) => {
+      const beforeValue = (existingData as Record<string, unknown>)[field];
+      const afterValue = (useCaseData as unknown as Record<string, unknown>)[field];
+      return !isSameValue(beforeValue, afterValue);
+    })
+    .map((field) => `data.${field}`);
+
+  return { useCaseData, generatedUseCaseFields };
 }
 
 export type JobType =
@@ -375,19 +434,7 @@ export class QueueManager {
     if (!workspaceId || !contextId || !createdBy) return;
     const locale = normalizeLocale(opts.locale) ?? 'fr';
 
-    const uniqueSectionKeys = Array.from(
-      new Set(
-        opts.sectionKeys
-          .map((s) => {
-            const sectionKey = String(s ?? '').trim();
-            if (!sectionKey) return '';
-            return opts.contextType === 'usecase' && sectionKey.startsWith('data.')
-              ? sectionKey.slice('data.'.length)
-              : sectionKey;
-          })
-          .filter(Boolean)
-      )
-    );
+    const uniqueSectionKeys = normalizeAutoGenerationSectionKeys(opts.contextType, opts.sectionKeys);
     for (const sectionKey of uniqueSectionKeys) {
       const now = new Date();
       const commentId = createId();
@@ -2006,34 +2053,10 @@ export class QueueManager {
       }
     }
     
-    // Construire l'objet data JSONB (préserver name et description existants, ou utiliser ceux du détail)
-    const useCaseData: UseCaseData = {
-      name: existingData.name || useCaseDetail.name, // Préserver name existant ou utiliser celui du détail
-      description: existingData.description || useCaseDetail.description, // Préserver description existante ou utiliser celle du détail
-      problem: useCaseDetail.problem,
-      solution: useCaseDetail.solution,
-      domain: useCaseDetail.domain,
-      technologies: useCaseDetail.technologies,
-      deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
-      contact: useCaseDetail.contact,
-      benefits: useCaseDetail.benefits,
-      constraints: useCaseDetail.constraints,
-      metrics: useCaseDetail.metrics,
-      risks: useCaseDetail.risks,
-      nextSteps: useCaseDetail.nextSteps,
-      dataSources: useCaseDetail.dataSources,
-      dataObjects: useCaseDetail.dataObjects,
-      references: useCaseDetail.references || [],
-      valueScores: useCaseDetail.valueScores,
-      complexityScores: useCaseDetail.complexityScores
-    };
-    const generatedUseCaseFields = Object.keys(useCaseData)
-      .filter((field) => {
-        const beforeValue = (existingData as Record<string, unknown>)[field];
-        const afterValue = (useCaseData as unknown as Record<string, unknown>)[field];
-        return !isSameValue(beforeValue, afterValue);
-      })
-      .map((field) => `data.${field}`);
+    const { useCaseData, generatedUseCaseFields } = buildGeneratedUseCasePayloadForPersistence(
+      existingData,
+      useCaseDetail
+    );
     
     // Mettre à jour le cas d'usage
     // Note: Toutes les colonnes métier (deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
