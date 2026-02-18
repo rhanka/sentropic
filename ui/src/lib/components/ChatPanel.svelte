@@ -1161,6 +1161,7 @@
     const defaults = getToolToggleDefaults();
     if (Object.keys(toolEnabledById).length === 0) {
       toolEnabledById = defaults;
+      savePrefs();
       return;
     }
     const next = { ...toolEnabledById };
@@ -1179,7 +1180,10 @@
         }
       }
     }
-    if (changed) toolEnabledById = next;
+    if (changed) {
+      toolEnabledById = next;
+      savePrefs();
+    }
   };
 
   const updateContextFromRoute = () => {
