@@ -194,7 +194,7 @@
             class="flex items-center gap-2 rounded px-3 py-1 text-sm font-medium hover:bg-slate-100 transition"
             class:active-link={$isIdentityRoute}
           >
-            <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
+            <div class="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-medium">
               {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
             </div>
             <span class="text-slate-700">{$session.user.displayName || $session.user.email || 'User'}</span>
@@ -239,7 +239,7 @@
           {/if}
         </div>
       {:else}
-        <a href="/auth/login" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700 transition">
+        <a href="/auth/login" class="rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary/90 transition">
           {$_('header.login')}
         </a>
       {/if}
@@ -342,7 +342,7 @@
             type="button"
             class:active-link={$isIdentityRoute}
           >
-              <div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
+              <div class="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-medium">
                 {($session.user.displayName || $session.user.email || 'U')[0].toUpperCase()}
               </div>
             <div class="min-w-0 flex-1 text-left">
@@ -394,7 +394,7 @@
         {:else}
           <a
             href="/auth/login"
-            class="block rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 transition"
+            class="block rounded bg-primary px-3 py-2 text-sm text-white hover:bg-primary/90 transition"
             on:click={() => { closeDockedChatIfMobileFullScreen(); closeAllMenus(); }}
           >
             {$_('header.login')}
