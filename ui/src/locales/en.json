@@ -634,7 +634,8 @@
     },
     "info": {
       "title": "Information",
-      "contact": "Contact:",
+      "contact": "Contact",
+      "domain": "Domain",
       "technologies": "Technologies",
       "dataSources": "Data sources",
       "dataObjects": "Data"
@@ -715,6 +716,7 @@
         "complexityScores": "Complexity axes",
         "references": "References",
         "contact": "Contact",
+        "domain": "Domain",
         "deadline": "Deadline"
       },
       "organization": {

@@ -496,20 +496,34 @@
     <div class="grid grid-cols-12 gap-4 items-start">
       <div class="col-span-8 min-w-0">
         {#if isReadOnly || isLockedByOther}
-          <h1 class="text-3xl font-semibold mb-0 break-words">{currentFolder.name || $_('folders.detail.defaultTitle')}</h1>
+          <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+            <span class="min-w-0 break-words">{currentFolder.name || $_('folders.detail.defaultTitle')}</span>
+            <CommentBadge
+              count={commentCounts?.name ?? 0}
+              disabled={!openCommentsFor}
+              on:click={() => openCommentsFor('name')}
+            />
+          </h1>
         {:else}
-          <h1 class="text-3xl font-semibold mb-0 break-words">
-            <EditableInput
-              label=""
-              value={editedFolderName}
-              markdown={false}
-              multiline={true}
-              apiEndpoint={`/folders/${currentFolder.id}`}
-              fullData={{ name: editedFolderName }}
-              changeId={`folder-name-${currentFolder.id}`}
-              originalValue={currentFolder.name || ''}
-              on:change={(e) => (editedFolderName = e.detail.value)}
-              on:saved={handleFolderNameSaved}
+          <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+            <span class="min-w-0 flex-1 break-words">
+              <EditableInput
+                label=""
+                value={editedFolderName}
+                markdown={false}
+                multiline={true}
+                apiEndpoint={`/folders/${currentFolder.id}`}
+                fullData={{ name: editedFolderName }}
+                changeId={`folder-name-${currentFolder.id}`}
+                originalValue={currentFolder.name || ''}
+                on:change={(e) => (editedFolderName = e.detail.value)}
+                on:saved={handleFolderNameSaved}
+              />
+            </span>
+            <CommentBadge
+              count={commentCounts?.name ?? 0}
+              disabled={!openCommentsFor}
+              on:click={() => openCommentsFor('name')}
             />
           </h1>
         {/if}

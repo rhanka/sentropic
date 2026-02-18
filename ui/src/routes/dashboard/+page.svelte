@@ -82,6 +82,9 @@
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   let commentCounts: Record<string, number> = {};
+  let folderCommentCounts: Record<string, number> = {};
+  let workspaceId: string | null = null;
+  let commentUserId: string | null = null;
   let lastCommentCountsKey = '';
   let commentCountsLoading = false;
   let commentCountsRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -384,16 +387,6 @@
   let executiveSummaryBuffers: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
   let executiveSummaryOriginals: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
   let lastExecutiveSummaryFolderId: string | null = null;
-  const EXEC_SUMMARY_COMMENT_ALIASES: Record<ExecutiveSummaryField | 'references', string[]> = {
-    introduction: ['introduction'],
-    analyse: ['analyse', 'analysis'],
-    recommandation: ['recommandation', 'recommendations'],
-    synthese_executive: ['synthese_executive', 'synthese', 'summary'],
-    references: ['references'],
-  };
-
-  const getExecutiveSummaryCommentCount = (sectionKey: ExecutiveSummaryField | 'references'): number =>
-    (EXEC_SUMMARY_COMMENT_ALIASES[sectionKey] || []).reduce((sum, key) => sum + (commentCounts[key] || 0), 0);
 
   const openExecutiveSummaryComments = (sectionKey: ExecutiveSummaryField | 'references') => {
     if (!selectedFolderId) return;
@@ -401,8 +394,39 @@
     window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
   };
 
+  const openFolderComments = (sectionKey: 'name') => {
+    if (!selectedFolderId) return;
+    const detail = { contextType: 'folder', contextId: selectedFolderId, sectionKey };
+    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+  };
+
+  const buildCommentCounts = (items: Array<any>): Record<string, number> => {
+    const counts: Record<string, number> = {};
+    const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
+    for (const item of items) {
+      const threadId = item.thread_id;
+      if (!threadId) continue;
+      const existing = threads.get(threadId);
+      if (!existing) {
+        threads.set(threadId, {
+          status: item.status,
+          count: 1,
+          sectionKey: item.section_key || null,
+        });
+      } else {
+        threads.set(threadId, { ...existing, count: existing.count + 1 });
+      }
+    }
+    for (const thread of threads.values()) {
+      if (thread.status === 'closed') continue;
+      const key = thread.sectionKey || 'root';
+      counts[key] = (counts[key] || 0) + thread.count;
+    }
+    return counts;
+  };
+
   const canLoadCommentCounts = () =>
-    Boolean(selectedFolderId && !$session.loading);
+    Boolean(selectedFolderId && workspaceId && commentUserId && !$session.loading);
 
   const scheduleCommentCountsRetry = () => {
     if (commentCountsRetryTimer) return;
@@ -419,29 +443,12 @@
     if (commentCountsLoading) return;
     commentCountsLoading = true;
     try {
-      const res = await listComments({ contextType: 'executive_summary', contextId: selectedFolderId });
-      const counts: Record<string, number> = {};
-      const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
-      for (const item of res.items || []) {
-        const threadId = item.thread_id;
-        if (!threadId) continue;
-        const existing = threads.get(threadId);
-        if (!existing) {
-          threads.set(threadId, {
-            status: item.status,
-            count: 1,
-            sectionKey: item.section_key || null,
-          });
-        } else {
-          threads.set(threadId, { ...existing, count: existing.count + 1 });
-        }
-      }
-      for (const thread of threads.values()) {
-        if (thread.status === 'closed') continue;
-        const key = thread.sectionKey || 'root';
-        counts[key] = (counts[key] || 0) + thread.count;
-      }
-      commentCounts = counts;
+      const [executiveSummaryComments, folderComments] = await Promise.all([
+        listComments({ contextType: 'executive_summary', contextId: selectedFolderId }),
+        listComments({ contextType: 'folder', contextId: selectedFolderId }),
+      ]);
+      commentCounts = buildCommentCounts(executiveSummaryComments.items || []);
+      folderCommentCounts = buildCommentCounts(folderComments.items || []);
       commentCountsRetryAttempts = 0;
     } catch {
       commentCountsRetryAttempts += 1;
@@ -584,7 +591,7 @@
         }
       }
       if (evt?.type === 'comment_update') {
-        if (evt.contextType !== 'executive_summary') return;
+        if (evt.contextType !== 'executive_summary' && evt.contextType !== 'folder') return;
         const contextId = String(evt.contextId ?? '');
         if (!selectedFolderId || contextId !== selectedFolderId) return;
         scheduleCommentReload();
@@ -624,8 +631,8 @@
     clearDashboardDocxReadyToast();
   });
 
-  $: if (selectedFolderId && !$session.loading) {
-    const key = `${selectedFolderId}`;
+  $: if (selectedFolderId && workspaceId && commentUserId && !$session.loading) {
+    const key = `${selectedFolderId}:${workspaceId}:${commentUserId}`;
     if (key !== lastCommentCountsKey) {
       lastCommentCountsKey = key;
       void loadCommentCounts();
@@ -634,6 +641,7 @@
 
   $: if (!selectedFolderId && Object.keys(commentCounts).length) {
     commentCounts = {};
+    folderCommentCounts = {};
     lastCommentCountsKey = '';
   }
 
@@ -1050,6 +1058,8 @@
   $: filteredUseCases = selectedFolderId 
     ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
     : $useCasesStore;
+  $: workspaceId = $workspaceScope.selectedId ?? null;
+  $: commentUserId = $session.user?.id ?? null;
 
   // Scatter plot: n'afficher que les cas finalisés
   $: completedUseCases = filteredUseCases.filter((uc) => uc.status === 'completed');
@@ -1191,7 +1201,6 @@
     const scaleFactor = finalFontSize / 8;
     content.style.setProperty('font-size', `${finalFontSize}pt`, 'important');
     content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
-    console.log('content.style', content.style);
     // Appliquer les marges réduites aux paragraphes
     const paragraphs = content.querySelectorAll('p');
     paragraphs.forEach((p, index) => {
@@ -1259,23 +1268,35 @@
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="w-full print-hidden">
     <div class="grid grid-cols-12 items-start gap-4">
-      <div class="col-span-8 min-w-0">
+      <div class="col-span-8 min-w-0" data-comment-section="name">
         {#if selectedFolderId}
           {#if isDashboardReadOnly}
-            <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
+            <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+              <span class="min-w-0 break-words">{selectedFolderName || 'Dashboard'}</span>
+              <CommentBadge
+                count={folderCommentCounts?.name ?? 0}
+                on:click={() => openFolderComments('name')}
+              />
+            </h1>
           {:else}
-            <h1 class="text-3xl font-semibold mb-0">
-              <EditableInput
-                label=""
-                value={editedFolderName}
-                markdown={false}
-                multiline={true}
-                apiEndpoint={`/folders/${selectedFolderId}`}
-                fullData={{ name: editedFolderName }}
-                changeId={`folder-name-${selectedFolderId}`}
-                originalValue={selectedFolderName || ''}
-                on:change={(e) => editedFolderName = e.detail.value}
-                on:saved={handleFolderNameSaved}
+            <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+              <span class="min-w-0 flex-1 break-words">
+                <EditableInput
+                  label=""
+                  value={editedFolderName}
+                  markdown={false}
+                  multiline={true}
+                  apiEndpoint={`/folders/${selectedFolderId}`}
+                  fullData={{ name: editedFolderName }}
+                  changeId={`folder-name-${selectedFolderId}`}
+                  originalValue={selectedFolderName || ''}
+                  on:change={(e) => editedFolderName = e.detail.value}
+                  on:saved={handleFolderNameSaved}
+                />
+              </span>
+              <CommentBadge
+                count={folderCommentCounts?.name ?? 0}
+                on:click={() => openFolderComments('name')}
               />
             </h1>
           {/if}
@@ -1346,13 +1367,15 @@
       </div>
     {:else if executiveSummary}
       <div data-comment-section="synthese_executive" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
-        <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
-          <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
-          <CommentBadge
-            count={getExecutiveSummaryCommentCount('synthese_executive')}
-            title={`${$_('chat.tabs.comments')} - ${$_('dashboard.execSummary')}`}
-            on:click={() => openExecutiveSummaryComments('synthese_executive')}
-          />
+        <div class="border-b border-slate-200 pb-4">
+          <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+            {$_('dashboard.execSummary')}
+            <CommentBadge
+              count={commentCounts?.synthese_executive ?? 0}
+              title={`${$_('chat.tabs.comments')} - ${$_('dashboard.execSummary')}`}
+              on:click={() => openExecutiveSummaryComments('synthese_executive')}
+            />
+          </h2>
         </div>
         
         {#if executiveSummaryData.synthese_executive}
@@ -1571,13 +1594,15 @@
         <!-- Introduction -->
         {#if executiveSummaryData.introduction}
           <div id="section-introduction" data-comment-section="introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4 flex items-center justify-between gap-2">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.introduction')}</h2>
-              <CommentBadge
-                count={getExecutiveSummaryCommentCount('introduction')}
-                title={`${$_('chat.tabs.comments')} - ${$_('dashboard.introduction')}`}
-                on:click={() => openExecutiveSummaryComments('introduction')}
-              />
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.introduction')}
+                <CommentBadge
+                  count={commentCounts?.introduction ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.introduction')}`}
+                  on:click={() => openExecutiveSummaryComments('introduction')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -1660,13 +1685,15 @@
 
         {#if executiveSummaryData.analyse}
           <div id="section-analyse" data-comment-section="analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4 flex items-center justify-between gap-2">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.analysis')}</h2>
-              <CommentBadge
-                count={getExecutiveSummaryCommentCount('analyse')}
-                title={`${$_('chat.tabs.comments')} - ${$_('dashboard.analysis')}`}
-                on:click={() => openExecutiveSummaryComments('analyse')}
-              />
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.analysis')}
+                <CommentBadge
+                  count={commentCounts?.analyse ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.analysis')}`}
+                  on:click={() => openExecutiveSummaryComments('analyse')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -1696,13 +1723,15 @@
 
         {#if executiveSummaryData.recommandation}
           <div id="section-recommandations" data-comment-section="recommandation" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4 flex items-center justify-between gap-2">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.recommendations')}</h2>
-              <CommentBadge
-                count={getExecutiveSummaryCommentCount('recommandation')}
-                title={`${$_('chat.tabs.comments')} - ${$_('dashboard.recommendations')}`}
-                on:click={() => openExecutiveSummaryComments('recommandation')}
-              />
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.recommendations')}
+                <CommentBadge
+                  count={commentCounts?.recommandation ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.recommendations')}`}
+                  on:click={() => openExecutiveSummaryComments('recommandation')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
@@ -1732,13 +1761,15 @@
 
         {#if executiveSummary.references && executiveSummary.references.length > 0}
           <div id="section-references" data-comment-section="references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
-            <div class="border-b border-slate-200 pb-4 mb-4 flex items-center justify-between gap-2">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.references')}</h2>
-              <CommentBadge
-                count={getExecutiveSummaryCommentCount('references')}
-                title={`${$_('chat.tabs.comments')} - ${$_('dashboard.references')}`}
-                on:click={() => openExecutiveSummaryComments('references')}
-              />
+            <div class="border-b border-slate-200 pb-4 mb-4">
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.references')}
+                <CommentBadge
+                  count={commentCounts?.references ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.references')}`}
+                  on:click={() => openExecutiveSummaryComments('references')}
+                />
+              </h2>
             </div>
             <References references={executiveSummary.references} />
           </div>
