@@ -73,9 +73,17 @@ app.use('*', async (c, next) => {
   // Handle preflight OPTIONS requests
   if (method === 'OPTIONS') {
     if (origin && isOriginAllowed(origin, allowedOrigins)) {
+      const requestedHeaders = c.req.header('Access-Control-Request-Headers');
+      const allowHeaders = requestedHeaders
+        ? requestedHeaders
+            .split(',')
+            .map((h) => h.trim())
+            .filter(Boolean)
+            .join(',')
+        : 'Content-Type,Authorization,X-App-Locale';
       c.header('Access-Control-Allow-Origin', origin);
       c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-      c.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      c.header('Access-Control-Allow-Headers', allowHeaders);
       c.header('Access-Control-Allow-Credentials', 'true');
       c.header('Access-Control-Max-Age', '86400');
     }

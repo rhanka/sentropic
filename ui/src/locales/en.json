@@ -699,16 +699,20 @@
     },
     "sections": {
       "usecase": {
+        "name": "Name",
         "description": "Description",
         "problem": "Problem",
         "solution": "Solution",
         "benefits": "Target benefits",
+        "constraints": "Constraints",
         "risks": "Risks",
         "metrics": "Success metrics",
         "nextSteps": "Next steps",
         "technologies": "Technologies",
         "dataSources": "Data sources",
         "dataObjects": "Data",
+        "valueScores": "Value axes",
+        "complexityScores": "Complexity axes",
         "references": "References",
         "contact": "Contact",
         "deadline": "Deadline"
@@ -897,8 +901,8 @@
       "executiveSummary": { "label": "Executive summary" }
     },
     "comments": {
-      "chooseThread": "Choose a conversation",
-      "newThread": "New conversation",
+      "chooseThread": "Comments list",
+      "newThread": "New comment",
       "none": "No conversation",
       "deleteThread": "Delete conversation",
       "confirmDeleteThread": "Delete this comment conversation?",
@@ -922,7 +926,9 @@
       },
       "showResolved": "Show resolved comments",
       "hideResolved": "Hide resolved comments",
-      "resolve": "Resolve",
+      "resolve": "Resolve comment",
+      "previous": "Previous comment",
+      "next": "Next comment",
       "reopen": "Reopen"
     },
     "chat": {
