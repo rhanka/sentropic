@@ -1046,7 +1046,7 @@
       return { type: 'folder', id: folderId };
     }
     if (routeId === '/dashboard' && folderId) {
-      return { type: 'folder', id: folderId };
+      return { type: 'executive_summary', id: folderId };
     }
     if (routeId === '/matrix' && folderId) {
       return { type: 'folder', id: folderId };
@@ -1127,8 +1127,10 @@
       analysis: 'chat.sections.executiveSummary.analysis',
       recommandation: 'chat.sections.executiveSummary.recommendations',
       recommendations: 'chat.sections.executiveSummary.recommendations',
+      synthese_executive: 'chat.sections.executiveSummary.summary',
       synthese: 'chat.sections.executiveSummary.summary',
       summary: 'chat.sections.executiveSummary.summary',
+      references: 'chat.sections.executiveSummary.references',
     },
   };
 
