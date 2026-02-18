@@ -202,6 +202,21 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Add `Jobs` sub-header and move jobs actions there.
     - [x] Remove duplicated jobs minus action (`-`) and keep single clear purge action in jobs sub-header.
     - [x] Keep top header contextual actions hidden for comments mode; top header remains global controls (tabs + panel/close).
+  - [x] Executive summary comments parity (4D):
+    - [x] Dashboard now loads comment counts for `context_type=executive_summary` (folder-scoped id).
+    - [x] Add comment badges on executive summary section headers:
+      - [x] `Synthèse exécutive` (`synthese_executive`)
+      - [x] `Introduction`
+      - [x] `Analyse`
+      - [x] `Recommandations`
+      - [x] `Références`
+    - [x] Clicking a badge opens comment panel on `executive_summary` context + matching `sectionKey`.
+    - [x] Dashboard SSE listener now refreshes counts on `comment_update` for `executive_summary`.
+    - [x] Route-level comments context alignment: `/dashboard` defaults to `executive_summary` in chat widget.
+    - [x] Normalize executive summary section-key mappings (`synthese_executive`, `analysis`, `recommendations`, `references`) in:
+      - [x] UI section-label maps (`ChatWidget`, `ChatPanel`)
+      - [x] Auto-comment field label localization (`QueueManager`, `ToolService`)
+      - [x] i18n labels (`chat.sections.executiveSummary.references`)
   - [x] Update FR/EN labels:
     - [x] `chat.comments.chooseThread` ("Liste des commentaires" / "Comments list")
     - [x] `chat.comments.newThread` ("Nouveau commentaire" / "New comment")
@@ -253,6 +268,9 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [ ] Resolve one open comment and verify automatic selection jumps to next open comment.
     - [ ] Previous/next arrow buttons navigate between available comment threads.
     - [ ] Auto-generated comments use localized field labels in FR and EN.
+    - [ ] On `/dashboard`, each executive summary header shows the comment badge with count.
+    - [ ] On `/dashboard`, clicking each badge opens comments in `executive_summary` context with the expected section preselected.
+    - [ ] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update impacted specs/docs if behavior contracts changed.
