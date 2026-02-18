@@ -294,6 +294,13 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Github
         - [ ] Issues
         - [ ] PR
+      - [ ] Messageries (en plus de Google Chat et Teams)
+        - [ ] Unification des messageries côté UI
+        - [ ] Whatsapp
+        - [ ] Telegram
+        - [ ] Signal
+        - [ ] Dischord
+        - [ ] Slack
     - [ ] Pilotage API pour accélération
       - [ ] Capacité local / délégation remote (via Auth appli)
       - [ ] Google workspace
@@ -309,6 +316,15 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
         - [ ] Sharepoint / Excel
         - [ ] Sharepoint / Word
         - [ ] Sharepoint / Powerpoint
+      - [ ] Messageries
+        - [ ] Whatsapp
+        - [ ] Telegram
+        - [ ] Signal
+        - [ ] Dischord
+        - [ ] Slack
+      - [ ] Github
+        - [ ] Issues
+        - [ ] PR
 - [ ] Créer une capacité d'agentique en worker (cluster kube) (approfondir)
 - [ ] Agent de code (vs code + remote) (approfondir)
   - [ ] Vs code
