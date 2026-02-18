@@ -312,7 +312,6 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     ...
   ],
   "leadtime": "Estimation du délai de mise en œuvre relativement à la complexité du cas d'usage (ex: 3 mois, 6 mois, 36 mois...)",
-  "prerequisites": "Prérequis pour la mise en œuvre du cas d'usage (ex: Datalake, Historien IoT, Senseurs, etc.)",
   "contact": "Nom du responsable suggéré (rôle ex responsable opérations)",
   "benefits": [ // 60-90 mots pour l'ensemble des bénéfices
     "Bénéfice 1",
@@ -331,7 +330,7 @@ La réponse doit impérativement contenir tous les éléments suivants au format
     "Risque 2",
     "Risque 3"
   ],
-  "constraints": [ // 60-90 mots pour l'ensemble des contraintes (techniques, business, réglementaires, etc.). IMPORTANT: chaque item doit etre une phrase non vide, sans puce/marker ("-", "—", "•") et sans texte placeholder.
+  "constraints": [ // 60-90 mots pour l'ensemble des contraintes et prérequis (techniques, business, réglementaires, etc.). IMPORTANT: chaque item doit etre une phrase non vide, sans puce/marker ("-", "—", "•") et sans texte placeholder.
     "Contrainte 1",
     "Contrainte 2",
     "Contrainte 3"
