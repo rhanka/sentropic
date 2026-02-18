@@ -6,6 +6,8 @@
   export let align: 'left' | 'right' = 'right';
   export let widthClass = 'w-60';
   export let menuClass = '';
+  export let menuPaddingClass = 'p-2';
+  export let menuStyle = '';
   export let disabled = false;
   export let triggerRef: HTMLElement | null = null;
 
@@ -58,7 +60,8 @@
   <slot name="trigger" {toggle} {open} {disabled} />
   {#if open}
     <div
-      class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg p-2 z-20 ${menuClass}`}
+      class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-20 ${menuPaddingClass} ${menuClass}`}
+      style={menuStyle}
       bind:this={menuRef}
     >
       <slot name="menu" {close} />

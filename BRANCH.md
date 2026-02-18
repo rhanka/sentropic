@@ -226,6 +226,19 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Settings split in extension UI (same visual style as `Commentaires/Chat IA/Jobs`):
     - [x] `Endpoint serveur`
     - [x] `Permissions outils` (allow/deny entries by tool + origin)
+  - [x] Permissions rule engine hardening (tool + origin patterns):
+    - [x] Tool patterns: `tab_read:*`, `tab_action:*`, `tab_action:click|input|scroll|wait`.
+    - [x] Origin patterns: `*`, `https://*`, `*.domain.tld`, `https://*.domain.tld`, exact host, exact URL origin.
+    - [x] Matching precedence: most specific pattern wins, then most recent update.
+    - [x] Keep runtime-origin normalization separate from stored pattern normalization (fixes wildcard inputs in settings).
+  - [x] Screenshot readability improvement:
+    - [x] `tab_read(mode=screenshot)` / `tab_screenshot` default to `png` capture (text readability first).
+    - [x] Keep optional `jpeg` capture with stronger default quality (`95`).
+  - [x] Extension settings menu UX fixes (floating chatwidget):
+    - [x] Compute exact menu height to align menu bottom with chatwidget bottom.
+    - [x] Remove double scroll: keep single scroll region under settings tabs.
+  - [x] Queue header cleanup:
+    - [x] Remove duplicate admin purge icon (`-`) and keep single trash action in Jobs tab header.
   - [x] Tool visibility/context UX:
     - [x] For new extension sessions, hide non-activable business tools when relevant folder/org/usecase context is absent.
     - [x] Add explicit active tab context entry.
@@ -239,9 +252,22 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] **UAT utilisateur Lot 6B (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [ ] Validate `tab_read` modes (`info|dom|screenshot|elements`) on external page.
+    - [ ] Validate screenshot readability with default capture (`tab_read` screenshot mode, default PNG) on small-text UI.
+    - [ ] Validate optional JPEG path (`tab_read` screenshot mode + `format=jpeg`) remains functional.
     - [ ] Validate `tab_action` single-step and multi-step chains with delays.
-    - [ ] Validate runtime permission prompt decisions (once/always/never) and persistence after reload.
+    - [ ] Validate runtime permission prompt decisions:
+      - [ ] `Oui (une fois)`: one execution allowed, next execution prompts again.
+      - [ ] `Toujours`: execution allowed and policy persists after extension reload.
+      - [ ] `Jamais`: execution denied and policy persists after extension reload.
+    - [ ] Validate permissions settings wildcard inputs are accepted and stored as expected:
+      - [ ] `*` accepted (no validation error).
+      - [ ] `https://*` accepted and stored without `%2a` encoding artifact.
+      - [ ] `*.example.com` and `https://*.example.com` accepted and applied.
+    - [ ] Validate permission precedence behavior:
+      - [ ] Specific allow rule can override broader deny rule when specificity is higher.
+      - [ ] Tie-break for same specificity follows latest update.
     - [ ] Validate settings tabs (`Endpoint serveur` / `Permissions outils`) and policy edit.
+    - [x] Validate floating chatwidget settings menu no longer clips/truncates and uses single content scroll area.
     - [ ] Validate tool visibility rules for no-context new sessions.
     - [ ] Validate `Commentaires` tab is hidden in plugin mode and web app behavior is unchanged.
 

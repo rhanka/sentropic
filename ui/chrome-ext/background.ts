@@ -20,6 +20,7 @@ import {
     evaluateToolPermission,
     listToolPermissionPolicies,
     normalizePermissionOrigin,
+    normalizeRuntimePermissionOrigin,
     upsertToolPermissionPolicy,
     deleteToolPermissionPolicy,
 } from './tool-permissions';
@@ -122,6 +123,42 @@ const derivePermissionToolName = (
     toolName: string,
     args: Record<string, unknown>,
 ): string => {
+    const normalizeTabActionPermission = (
+        action: unknown,
+    ): 'click' | 'input' | 'scroll' | 'wait' | null => {
+        const value = String(action ?? '').trim().toLowerCase();
+        if (value === 'type' || value === 'input') return 'input';
+        if (
+            value === 'click' ||
+            value === 'scroll' ||
+            value === 'wait'
+        ) {
+            return value;
+        }
+        return null;
+    };
+
+    const deriveTabActionPermission = (): string => {
+        const steps = Array.isArray(args.actions)
+            ? args.actions
+            : typeof args.action === 'string'
+                ? [args]
+                : [];
+        if (!Array.isArray(steps) || steps.length === 0) {
+            return 'tab_action:*';
+        }
+        const actionKinds = new Set<'click' | 'input' | 'scroll' | 'wait'>();
+        for (const step of steps) {
+            if (!step || typeof step !== 'object') continue;
+            const normalized = normalizeTabActionPermission(
+                (step as Record<string, unknown>).action,
+            );
+            if (normalized) actionKinds.add(normalized);
+        }
+        if (actionKinds.size !== 1) return 'tab_action:*';
+        return `tab_action:${Array.from(actionKinds)[0]}`;
+    };
+
     if (toolName === 'tab_read') {
         const modeRaw = String(args.mode ?? '').trim();
         const mode =
@@ -136,14 +173,10 @@ const derivePermissionToolName = (
     if (toolName === 'tab_info') return 'tab_read:info';
     if (toolName === 'tab_read_dom') return 'tab_read:dom';
     if (toolName === 'tab_screenshot') return 'tab_read:screenshot';
-    if (
-        toolName === 'tab_action' ||
-        toolName === 'tab_click' ||
-        toolName === 'tab_type' ||
-        toolName === 'tab_scroll'
-    ) {
-        return 'tab_action';
-    }
+    if (toolName === 'tab_action') return deriveTabActionPermission();
+    if (toolName === 'tab_click') return 'tab_action:click';
+    if (toolName === 'tab_type') return 'tab_action:input';
+    if (toolName === 'tab_scroll') return 'tab_action:scroll';
     return toolName;
 };
 
@@ -526,7 +559,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (!origin) {
                     sendResponse({
                         ok: false,
-                        error: 'origin must be a valid http(s) URL.',
+                        error:
+                            'origin must be a valid origin pattern (*, https://*, *.example.com, https://*.example.com) or exact URL.',
                     });
                     return;
                 }
@@ -573,7 +607,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (!origin) {
                     sendResponse({
                         ok: false,
-                        error: 'origin must be a valid http(s) URL.',
+                        error:
+                            'origin must be a valid origin pattern (*, https://*, *.example.com, https://*.example.com) or exact URL.',
                     });
                     return;
                 }
@@ -647,7 +682,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     });
                     return;
                 }
-                const origin = normalizePermissionOrigin(tab.url);
+                const origin = normalizeRuntimePermissionOrigin(tab.url);
                 sendResponse({
                     ok: true,
                     tab: {
@@ -866,7 +901,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     });
                     return;
                 }
-                const origin = normalizePermissionOrigin(targetTab.url);
+                const origin = normalizeRuntimePermissionOrigin(targetTab.url);
                 if (!origin) {
                     sendResponse({
                         ok: false,
