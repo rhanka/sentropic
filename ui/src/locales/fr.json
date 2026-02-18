@@ -741,11 +741,28 @@
     },
     "extension": {
       "settingsTitle": "Paramètres de l’extension",
+      "settingsTabs": {
+        "endpoint": "Endpoint serveur",
+        "permissions": "Permissions outils"
+      },
       "endpointConfiguration": "Configuration du endpoint",
       "apiBaseUrl": "URL API",
       "appBaseUrl": "URL app",
       "wsBaseUrlOptional": "URL WS (optionnel)",
       "testApi": "Tester l’API",
+      "permissions": {
+        "title": "Permissions des outils",
+        "description": "Gérer les autorisations/refus par outil et origine.",
+        "addTitle": "Ajouter une règle",
+        "addCta": "Ajouter",
+        "empty": "Aucune règle enregistrée.",
+        "allowLabel": "Autoriser",
+        "denyLabel": "Refuser",
+        "loadError": "Impossible de charger les permissions outils.",
+        "updateError": "Impossible de mettre à jour la permission outil.",
+        "deleteError": "Impossible de supprimer la permission outil.",
+        "missingDraftFields": "Renseigne un outil et une origine valide."
+      },
       "authRequired": {
         "title": "Connexion extension requise avant d’utiliser cette zone.",
         "description": "Ouvre les paramètres, puis clique sur « Connecter ». Si nécessaire, ouvre d’abord la page de connexion de l’application.",
@@ -833,10 +850,19 @@
       "none": "Aucun contexte actif."
     },
     "context": {
-      "executiveSummaryPrefix": "Synthèse: {name}"
+      "executiveSummaryPrefix": "Synthèse: {name}",
+      "activeTabPrefix": "Onglet actif: {title}"
     },
     "tools": {
       "title": "Outils",
+      "permissions": {
+        "promptTitle": "Autorisation requise",
+        "promptDescription": "Autoriser l’outil {tool} pour {origin} ?",
+        "allowOnce": "Oui (une fois)",
+        "denyOnce": "Non (une fois)",
+        "allowAlways": "Toujours",
+        "denyAlways": "Jamais"
+      },
       "documents": {
         "label": "Documents",
         "description": "Lister / analyser les documents"

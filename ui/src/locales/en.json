@@ -741,11 +741,28 @@
     },
     "extension": {
       "settingsTitle": "Extension settings",
+      "settingsTabs": {
+        "endpoint": "Server endpoint",
+        "permissions": "Tool permissions"
+      },
       "endpointConfiguration": "Endpoint configuration",
       "apiBaseUrl": "API Base URL",
       "appBaseUrl": "App Base URL",
       "wsBaseUrlOptional": "WS Base URL (optional)",
       "testApi": "Test API",
+      "permissions": {
+        "title": "Tool permissions",
+        "description": "Manage allow/deny policies by tool and origin.",
+        "addTitle": "Add rule",
+        "addCta": "Add",
+        "empty": "No tool permission policy yet.",
+        "allowLabel": "Allow",
+        "denyLabel": "Deny",
+        "loadError": "Unable to load tool permissions.",
+        "updateError": "Unable to update tool permission.",
+        "deleteError": "Unable to delete tool permission.",
+        "missingDraftFields": "Provide a tool and a valid origin."
+      },
       "authRequired": {
         "title": "Extension auth is required before using this area.",
         "description": "Open settings, then click Connect. If needed, open app login first.",
@@ -833,10 +850,19 @@
       "none": "No active context."
     },
     "context": {
-      "executiveSummaryPrefix": "Summary: {name}"
+      "executiveSummaryPrefix": "Summary: {name}",
+      "activeTabPrefix": "Active tab: {title}"
     },
     "tools": {
       "title": "Tools",
+      "permissions": {
+        "promptTitle": "Permission required",
+        "promptDescription": "Allow tool {tool} for {origin}?",
+        "allowOnce": "Yes (once)",
+        "denyOnce": "No (once)",
+        "allowAlways": "Always",
+        "denyAlways": "Never"
+      },
       "documents": {
         "label": "Documents",
         "description": "List / analyze documents"
