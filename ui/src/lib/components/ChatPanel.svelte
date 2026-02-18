@@ -2855,7 +2855,7 @@
                 {#if isAiComment(c)}
                   <div class="mb-1 flex items-center justify-end">
                     <div
-                      class="relative h-7 w-7 rounded-full bg-slate-900 text-white border border-slate-800 flex items-center justify-center text-[11px]"
+                      class="relative h-7 w-7 rounded-full bg-primary text-white border border-primary/80 flex items-center justify-center text-[11px]"
                     >
                       {getInitials(commentAuthorLabel(c))}
                       <span

@@ -213,6 +213,38 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] `make typecheck-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] `make lint-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+  - [ ] **Lot 4C — Primary color harmonization (analysis only, no code change yet)**
+    - [x] Exhaustive inventory completed for `.svelte` occurrences of:
+      - [x] `bg-slate-900` / `bg-slate-900/40`
+      - [x] `bg-indigo-600` + `hover:bg-indigo-700`
+      - [x] `bg-blue-600` + `hover:bg-blue-700`
+    - [x] Inventory summary: `28` occurrences across `14` `.svelte` files:
+      - [x] `ui/src/lib/components/AdminUsersPanel.svelte`
+      - [x] `ui/src/lib/components/ChatPanel.svelte`
+      - [x] `ui/src/lib/components/ChatWidget.svelte`
+      - [x] `ui/src/lib/components/Header.svelte`
+      - [x] `ui/src/lib/components/ImportExportDialog.svelte`
+      - [x] `ui/src/lib/components/NavigationGuard.svelte`
+      - [x] `ui/src/lib/components/QueueMonitor.svelte`
+      - [x] `ui/src/lib/components/WorkspaceSettingsPanel.svelte`
+      - [x] `ui/src/routes/auth/devices/+page.svelte`
+      - [x] `ui/src/routes/auth/login/+page.svelte`
+      - [x] `ui/src/routes/auth/register/+page.svelte`
+      - [x] `ui/src/routes/dashboard/+page.svelte`
+      - [x] `ui/src/routes/matrix/+page.svelte`
+      - [x] `ui/src/routes/settings/+page.svelte`
+    - [x] Token counts (global):
+      - [x] `bg-blue-600`: `11`
+      - [x] `hover:bg-blue-700`: `9`
+      - [x] `bg-indigo-600`: `10`
+      - [x] `hover:bg-indigo-700`: `8`
+      - [x] `bg-slate-900`: `6`
+      - [x] `bg-slate-900/40`: `1`
+    - [ ] Pending execution strategy (to validate before coding):
+      - [ ] Replace all `bg-blue-600` + `bg-indigo-600` + `bg-slate-900` by `bg-primary`.
+      - [ ] Replace all hover variants `hover:bg-blue-700` + `hover:bg-indigo-700` by a primary hover (`hover:bg-primary/90` unless a stricter DS token is chosen).
+      - [ ] Decide explicit handling of `bg-slate-900/40` overlay (`bg-primary/40` vs keep overlay-neutral if readability/regression risk).
+      - [ ] Run post-change grep gate to ensure zero remaining matches for targeted tokens in `.svelte`.
   - [ ] UAT checklist:
     - [ ] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
     - [ ] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.
