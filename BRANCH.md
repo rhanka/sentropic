@@ -145,7 +145,7 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Spot-check at least two other similar inputs to confirm no remaining tiny-field regression.
     - [x] Validate desktop and mobile viewport behavior for edited inputs.
 
-- [ ] **Lot 3 — Automatic comments behavior**
+- [x] **Lot 3 — Automatic comments behavior**
   - [x] Generation agents: create a default comment.
   - [x] Modification tool: add a comment on modified fields.
   - [x] Fix usecase auto-comment `section_key` normalization (`data.*` -> canonical key) for generated and tool-updated comments. (`4abeae5`)
@@ -167,16 +167,52 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Lot gate: `make typecheck-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
     - [x] UI gate for header injection changes: `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui` + `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`.
   - [x] Lot gate: `make typecheck-api ENV=test` + `make lint-api ENV=test` (+ UI gates if needed).
+  - [x] UAT checklist:
+    - [x] Trigger a generation flow and verify comments are created for each generated field.
+    - [x] Verify generated comment text matches expected field-level template.
+    - [x] Trigger a tool-based update changing multiple fields.
+    - [x] Verify one comment is created per modified field (not one global comment).
+    - [x] Verify comment linkage (object/section/field context) is correct for each created comment.
+    - [x] With app locale explicitly set to `fr`, trigger one generation and one tool update; verify created auto-comments are in French.
+    - [x] With app locale explicitly set to `en`, trigger one generation and one tool update; verify created auto-comments are in English.
+    - [x] Locale source validation: keep browser locale opposite to app locale and verify auto-comment language follows app locale (`X-App-Locale`), not browser default.
+    - [x] Usecase header bubble validation: generated/updated comments on usecase fields appear on canonical section keys (no new `data.*` keys created).
+
+- [ ] **Lot 4 — Comment review UX and field label localization**
+  - [x] Switch comment badge visual to design-system primary color (icon + count pill).
+  - [x] Add missing comment bubbles on usecase score headers:
+    - [x] `valueScores`
+    - [x] `complexityScores`
+  - [x] Localize field labels in auto-generated/auto-modified comments (backend write-time):
+    - [x] QueueManager generation comments
+    - [x] ToolService field-modification comments
+  - [x] Move comment review actions from chat top header into comment sub-header:
+    - [x] `chat.comments.chooseThread` => comments list action in sub-header
+    - [x] `chat.comments.newThread` => new comment action in sub-header
+    - [x] `chat.comments.resolve` => resolve/reopen action in sub-header
+  - [x] Localize sub-header section target labels (avoid technical keys like `constraints`).
+  - [x] Add review flow helpers in sub-header:
+    - [x] Auto-switch to next open comment after resolving current one.
+    - [x] Add previous/next comment navigation buttons with arrows.
+  - [x] Update FR/EN labels:
+    - [x] `chat.comments.chooseThread` ("Liste des commentaires" / "Comments list")
+    - [x] `chat.comments.newThread` ("Nouveau commentaire" / "New comment")
+    - [x] `chat.comments.resolve` ("Résoudre le commentaire" / "Resolve comment")
+    - [x] `chat.comments.previous` + `chat.comments.next`
+    - [x] Add missing `chat.sections.usecase.*` keys for constraints + score groups.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [x] `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [x] `make typecheck-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [x] `make lint-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
   - [ ] UAT checklist:
-    - [ ] Trigger a generation flow and verify comments are created for each generated field.
-    - [ ] Verify generated comment text matches expected field-level template.
-    - [ ] Trigger a tool-based update changing multiple fields.
-    - [ ] Verify one comment is created per modified field (not one global comment).
-    - [ ] Verify comment linkage (object/section/field context) is correct for each created comment.
-    - [ ] With app locale explicitly set to `fr`, trigger one generation and one tool update; verify created auto-comments are in French.
-    - [ ] With app locale explicitly set to `en`, trigger one generation and one tool update; verify created auto-comments are in English.
-    - [ ] Locale source validation: keep browser locale opposite to app locale and verify auto-comment language follows app locale (`X-App-Locale`), not browser default.
-    - [ ] Usecase header bubble validation: generated/updated comments on usecase fields appear on canonical section keys (no new `data.*` keys created).
+    - [ ] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
+    - [ ] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.
+    - [ ] In comments tab sub-header, actions appear there (not in top widget header): list, new comment, resolve/reopen.
+    - [ ] Sub-header shows localized section name (e.g. `Contraintes` / `Constraints`), never technical key.
+    - [ ] Resolve one open comment and verify automatic selection jumps to next open comment.
+    - [ ] Previous/next arrow buttons navigate between available comment threads.
+    - [ ] Auto-generated comments use localized field labels in FR and EN.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update impacted specs/docs if behavior contracts changed.

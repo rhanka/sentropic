@@ -699,16 +699,20 @@
     },
     "sections": {
       "usecase": {
+        "name": "Nom",
         "description": "Description",
         "problem": "Problème",
         "solution": "Solution",
         "benefits": "Bénéfices recherchés",
+        "constraints": "Contraintes",
         "risks": "Risques",
         "metrics": "Mesures du succès",
         "nextSteps": "Prochaines étapes",
         "technologies": "Technologies",
         "dataSources": "Sources des données",
         "dataObjects": "Données",
+        "valueScores": "Axes de Valeur",
+        "complexityScores": "Axes de Complexité",
         "references": "Références",
         "contact": "Contact",
         "deadline": "Délai"
@@ -897,8 +901,8 @@
       "executiveSummary": { "label": "Synthèse exécutive" }
     },
     "comments": {
-      "chooseThread": "Choisir une conversation",
-      "newThread": "Nouvelle conversation",
+      "chooseThread": "Liste des commentaires",
+      "newThread": "Nouveau commentaire",
       "none": "Aucune conversation",
       "deleteThread": "Supprimer la conversation",
       "confirmDeleteThread": "Supprimer cette conversation de commentaires ?",
@@ -922,7 +926,9 @@
       },
       "showResolved": "Afficher les commentaires résolus",
       "hideResolved": "Masquer les commentaires résolus",
-      "resolve": "Résoudre",
+      "resolve": "Résoudre le commentaire",
+      "previous": "Commentaire précédent",
+      "next": "Commentaire suivant",
       "reopen": "Réouvrir"
     },
     "chat": {

@@ -1207,11 +1207,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
 
     {#if matrix && (useCase?.data?.valueScores || useCase?.valueScores) && (useCase?.data?.complexityScores || useCase?.complexityScores) && !isEditing}
       <!-- Axes de Valeur -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="valueScores">
         <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             <CheckCircle2 class="w-5 h-5" />
             {$_('matrix.valueAxes')}
+            <CommentBadge
+              count={commentCounts?.valueScores ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('valueScores')}
+            />
           </h3>
         </div>
         <div class="space-y-4">
@@ -1262,11 +1267,16 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       </div>
 
       <!-- Axes de Complexité -->
-      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="complexityScores">
         <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-          <h3 class="font-semibold flex items-center gap-2">
+          <h3 class="font-semibold flex items-center gap-2 group">
             <AlertTriangle class="w-5 h-5" />
             {$_('matrix.complexityAxes')}
+            <CommentBadge
+              count={commentCounts?.complexityScores ?? 0}
+              disabled={!onOpenComments}
+              on:click={() => openComments('complexityScores')}
+            />
           </h3>
         </div>
         <div class="space-y-4">

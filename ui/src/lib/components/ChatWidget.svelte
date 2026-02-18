@@ -15,15 +15,6 @@
   import { streamHub } from '$lib/stores/streamHub';
   import { currentFolderId } from '$lib/stores/folders';
   import {
-    workspaceCanComment,
-    selectedWorkspaceRole,
-  } from '$lib/stores/workspaceScope';
-  import {
-    closeComment,
-    reopenComment,
-    deleteComment,
-  } from '$lib/utils/comments';
-  import {
     MessageCircle,
     Loader2,
     Clock,
@@ -35,10 +26,6 @@
     Menu,
     List,
     Settings,
-    Check,
-    FolderOpen,
-    Eye,
-    EyeOff,
   } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
@@ -107,38 +94,8 @@
   let pendingCommentAutoSelectReady = false;
   let lastCommentContextKey = '';
   let lastCommentRouteKey = '';
-  let showResolvedComments = false;
-  let currentCommentThread: {
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  } | null = null;
-  let visibleCommentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-  }> = [];
-  let resolvedThreads: typeof visibleCommentThreads = [];
-  let resolvedCount = 0;
-  let isCurrentResolved = false;
-  let canResolveCurrent = false;
   let showSessionMenu = false;
   let sessionMenuButtonRef: HTMLButtonElement | null = null;
-  let showCommentMenu = false;
-  let commentMenuButtonRef: HTMLButtonElement | null = null;
   // eslint-disable-next-line no-unused-vars
   let handleCommentSectionClick: ((_: MouseEvent) => void) | null = null;
   // eslint-disable-next-line no-unused-vars
@@ -1111,7 +1068,6 @@
       $currentFolderId,
     );
   $: if (activeTab !== 'chat' && showSessionMenu) showSessionMenu = false;
-  $: if (activeTab !== 'comments' && showCommentMenu) showCommentMenu = false;
 
   $: {
     const detected = detectCommentContextFromRoute(
@@ -1131,21 +1087,27 @@
 
   const SECTION_LABEL_KEYS: Record<string, Record<string, string>> = {
     usecase: {
+      name: 'common.name',
       description: 'chat.sections.usecase.description',
       problem: 'chat.sections.usecase.problem',
       solution: 'chat.sections.usecase.solution',
       benefits: 'chat.sections.usecase.benefits',
+      constraints: 'chat.sections.usecase.constraints',
       risks: 'chat.sections.usecase.risks',
       metrics: 'chat.sections.usecase.metrics',
       nextSteps: 'chat.sections.usecase.nextSteps',
       technologies: 'chat.sections.usecase.technologies',
       dataSources: 'chat.sections.usecase.dataSources',
       dataObjects: 'chat.sections.usecase.dataObjects',
+      valueScores: 'chat.sections.usecase.valueScores',
+      complexityScores: 'chat.sections.usecase.complexityScores',
       references: 'chat.sections.usecase.references',
       contact: 'chat.sections.usecase.contact',
       deadline: 'chat.sections.usecase.deadline',
     },
     organization: {
+      name: 'common.name',
+      industry: 'organization.fields.industry',
       size: 'chat.sections.organization.size',
       technologies: 'chat.sections.organization.technologies',
       products: 'chat.sections.organization.products',
@@ -1162,8 +1124,11 @@
     executive_summary: {
       introduction: 'chat.sections.executiveSummary.introduction',
       analyse: 'chat.sections.executiveSummary.analysis',
+      analysis: 'chat.sections.executiveSummary.analysis',
       recommandation: 'chat.sections.executiveSummary.recommendations',
+      recommendations: 'chat.sections.executiveSummary.recommendations',
       synthese: 'chat.sections.executiveSummary.summary',
+      summary: 'chat.sections.executiveSummary.summary',
     },
   };
 
@@ -1224,27 +1189,7 @@
     }
   }
 
-  $: currentCommentThread = commentThreadId
-    ? (commentThreads.find((t) => t.id === commentThreadId) ?? null)
-    : null;
-  $: isCurrentResolved = currentCommentThread?.status === 'closed';
-  $: canResolveCurrent =
-    Boolean(currentCommentThread) &&
-    (currentCommentThread?.createdBy === $session.user?.id ||
-      $selectedWorkspaceRole === 'admin') &&
-    $workspaceCanComment;
-  $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
-  $: resolvedCount = resolvedThreads.length;
-  $: visibleCommentThreads = showResolvedComments
-    ? commentThreads
-    : commentThreads.filter((t) => t.status !== 'closed');
-
-  $: if (
-    activeTab === 'comments' &&
-    commentThreadId &&
-    commentThreads.length > 0 &&
-    !commentLoading
-  ) {
+  $: if (activeTab === 'comments' && commentThreadId && commentThreads.length > 0 && !commentLoading) {
     const exists = commentThreads.some((t) => t.id === commentThreadId);
     if (!exists) commentThreadId = null;
   }
@@ -1425,71 +1370,6 @@
     syncScrollLock();
     publishLayout();
     await focusFirstFocusable();
-  };
-
-  const handleNewCommentThread = () => {
-    commentThreadId = null;
-    pendingCommentAutoSelect = false;
-  };
-
-  const handleDeleteCommentThread = async () => {
-    if (!commentThreadId || !currentCommentThread) return;
-    if (!confirm($_('chat.comments.confirmDeleteThread'))) return;
-    try {
-      await deleteComment(currentCommentThread.rootId);
-      commentThreadId = null;
-      pendingCommentAutoSelect = false;
-    } catch {
-      // ignore for now
-    }
-  };
-
-  const selectNextOpenThreadAfterResolve = (
-    current: typeof currentCommentThread,
-  ) => {
-    const openThreads = commentThreads.filter(
-      (t) => t.status !== 'closed' && t.id !== current?.id,
-    );
-    if (openThreads.length === 0) {
-      commentThreadId = null;
-      return;
-    }
-    if (commentSectionKey) {
-      const nextSameSection = openThreads.find(
-        (t) => t.sectionKey === commentSectionKey,
-      );
-      if (nextSameSection) {
-        commentThreadId = nextSameSection.id;
-        return;
-      }
-      commentThreadId = null;
-      return;
-    }
-    const nextSectionThread =
-      openThreads.find(
-        (t) => t.sectionKey && t.sectionKey !== current?.sectionKey,
-      ) ?? openThreads[0];
-    commentThreadId = nextSectionThread?.id ?? null;
-    if (nextSectionThread?.sectionKey) {
-      commentSectionKey = nextSectionThread.sectionKey;
-    }
-  };
-
-  const handleResolveCommentThread = async () => {
-    if (!currentCommentThread || !canResolveCurrent) return;
-    try {
-      if (currentCommentThread.status === 'closed') {
-        await reopenComment(currentCommentThread.rootId);
-      } else {
-        await closeComment(currentCommentThread.rootId);
-      }
-      await chatPanelRef?.refreshCommentThreads?.();
-      if (currentCommentThread.status !== 'closed') {
-        selectNextOpenThreadAfterResolve(currentCommentThread);
-      }
-    } catch {
-      // ignore for now
-    }
   };
 
   const close = () => {
@@ -1775,142 +1655,6 @@
                 aria-label={$_('chat.sessions.delete')}
                 type="button"
                 disabled={!chatSessionId}
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
-            {#if !isPluginMode && activeTab === 'comments'}
-              <MenuPopover
-                bind:open={showCommentMenu}
-                bind:triggerRef={commentMenuButtonRef}
-                widthClass="w-64"
-              >
-                <svelte:fragment slot="trigger" let:toggle>
-                  <button
-                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                    on:click={toggle}
-                    title={$_('chat.comments.chooseThread')}
-                    aria-label={$_('chat.comments.chooseThread')}
-                    type="button"
-                    bind:this={commentMenuButtonRef}
-                  >
-                    <List class="w-4 h-4" />
-                  </button>
-                </svelte:fragment>
-                <svelte:fragment slot="menu" let:close>
-                  {#if resolvedCount > 0}
-                    <button
-                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
-                      type="button"
-                      on:click|stopPropagation={() => {
-                        showResolvedComments = !showResolvedComments;
-                        showCommentMenu = true;
-                      }}
-                    >
-                      {#if showResolvedComments}
-                        <Eye class="w-3.5 h-3.5" />
-                        <span>{$_('chat.comments.hideResolved')}</span>
-                      {:else}
-                        <EyeOff class="w-3.5 h-3.5" />
-                        <span>{$_('chat.comments.showResolved')}</span>
-                      {/if}
-                    </button>
-                    <div class="border-t border-slate-100 my-1"></div>
-                  {/if}
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => {
-                      close();
-                      commentThreadId = null;
-                    }}
-                  >
-                    {$_('chat.comments.newThread')}
-                    {commentSectionLabel ? ` — ${commentSectionLabel}` : ''}
-                  </button>
-                  <div class="border-t border-slate-100 my-1"></div>
-                  {#if visibleCommentThreads.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('chat.comments.none')}
-                    </div>
-                  {:else}
-                    <div class="max-h-56 overflow-auto slim-scroll space-y-1">
-                      {#each visibleCommentThreads as t (t.id)}
-                        <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId ===
-                          t.id
-                            ? 'text-slate-900 font-semibold'
-                            : 'text-slate-600'} {t.status === 'closed'
-                            ? 'line-through text-slate-400'
-                            : ''}"
-                          type="button"
-                          on:click={() => {
-                            close();
-                            commentThreadId = t.id;
-                            commentSectionKey = t.sectionKey;
-                            commentSectionLabel = getSectionLabel(
-                              commentContext?.type ?? null,
-                              t.sectionKey,
-                            );
-                          }}
-                        >
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="truncate">
-                              {getSectionLabel(
-                                commentContext?.type ?? null,
-                                t.sectionKey,
-                              ) || $_('chat.tabs.comments')}
-                            </span>
-                            <span
-                              class="inline-flex items-center gap-1 text-[10px] text-slate-400"
-                            >
-                              <MessageCircle class="w-3 h-3" />
-                              {t.count}
-                            </span>
-                          </div>
-                          <div class="text-[10px] text-slate-400 truncate">
-                            {t.authorLabel} — {t.preview}
-                          </div>
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </svelte:fragment>
-              </MenuPopover>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={handleNewCommentThread}
-                title={$_('chat.comments.newThread')}
-                aria-label={$_('chat.comments.newThread')}
-                type="button"
-              >
-                <Plus class="w-4 h-4" />
-              </button>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-                on:click={() => void handleResolveCommentThread()}
-                title={isCurrentResolved
-                  ? $_('chat.comments.reopen')
-                  : $_('chat.comments.resolve')}
-                aria-label={isCurrentResolved
-                  ? $_('chat.comments.reopen')
-                  : $_('chat.comments.resolve')}
-                type="button"
-                disabled={!currentCommentThread || !canResolveCurrent}
-              >
-                {#if isCurrentResolved}
-                  <FolderOpen class="w-4 h-4" />
-                {:else}
-                  <Check class="w-4 h-4" />
-                {/if}
-              </button>
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                on:click={() => void handleDeleteCommentThread()}
-                title={$_('chat.comments.deleteThread')}
-                aria-label={$_('chat.comments.deleteThread')}
-                type="button"
-                disabled={!commentThreadId}
               >
                 <Trash2 class="w-4 h-4" />
               </button>
