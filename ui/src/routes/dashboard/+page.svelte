@@ -82,8 +82,6 @@
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   let commentCounts: Record<string, number> = {};
-  let workspaceId: string | null = null;
-  let commentUserId: string | null = null;
   let lastCommentCountsKey = '';
   let commentCountsLoading = false;
   let commentCountsRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,8 +89,6 @@
   let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
   const LOCK_REFRESH_MS = 10 * 1000;
   $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
-  $: workspaceId = $workspaceScope.selectedId ?? null;
-  $: commentUserId = $session.user?.id ?? null;
   $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
   $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
   $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
@@ -406,7 +402,7 @@
   };
 
   const canLoadCommentCounts = () =>
-    Boolean(selectedFolderId && workspaceId && commentUserId && !$session.loading);
+    Boolean(selectedFolderId && !$session.loading);
 
   const scheduleCommentCountsRetry = () => {
     if (commentCountsRetryTimer) return;
@@ -628,8 +624,8 @@
     clearDashboardDocxReadyToast();
   });
 
-  $: if (selectedFolderId && workspaceId && commentUserId && !$session.loading) {
-    const key = `${selectedFolderId}:${workspaceId}:${commentUserId}`;
+  $: if (selectedFolderId && !$session.loading) {
+    const key = `${selectedFolderId}`;
     if (key !== lastCommentCountsKey) {
       lastCommentCountsKey = key;
       void loadCommentCounts();
