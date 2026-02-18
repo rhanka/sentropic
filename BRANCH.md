@@ -317,7 +317,8 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
       - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
       - [ ] comment badge count visibility on section headers
-    - [ ] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
+    - [x] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
+      - [x] Added in `spec/SPEC.md` section `12.1`.
 
 - [ ] **Lot N — Final validation**
   - [ ] **API tests**
