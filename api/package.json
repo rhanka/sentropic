@@ -4,7 +4,7 @@
   "type": "module",
   "overrides": {
     "glob": "^11.1.0",
-    "fast-xml-parser": "5.3.4"
+    "fast-xml-parser": "^5.3.6"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
