@@ -73,6 +73,13 @@
     Square,
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import {
+    EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    computeEnabledToolIds,
+    computeToolToggleDefaults,
+    computeVisibleToolToggleIds,
+    isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
+  } from '$lib/utils/chat-tool-scope';
 
   type ChatSession = {
     id: string;
@@ -837,6 +844,7 @@
   let contextEntries: ChatContextEntry[] = [];
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
+  let extensionRestrictedToolset = false;
   let prefsKey = '';
   let lastRouteContextKey: string | null = null;
 
@@ -1028,6 +1036,8 @@
     if (typeof localStorage === 'undefined') return;
     const key = getPrefsKey(id);
     prefsKey = key;
+    extensionRestrictedToolset =
+      mode === 'ai' && isLocalToolRuntimeAvailable() && !id;
     try {
       if (id && !localStorage.getItem(key)) {
         const draft = localStorage.getItem(getPrefsKey(null));
@@ -1040,6 +1050,7 @@
       const parsed = JSON.parse(raw) as {
         contexts?: ChatContextEntry[];
         toolEnabledById?: Record<string, boolean>;
+        extensionRestrictedToolset?: boolean;
       };
       if (Array.isArray(parsed.contexts)) {
         contextEntries = parsed.contexts
@@ -1055,6 +1066,9 @@
       ) {
         toolEnabledById = parsed.toolEnabledById;
       }
+      if (typeof parsed.extensionRestrictedToolset === 'boolean') {
+        extensionRestrictedToolset = parsed.extensionRestrictedToolset;
+      }
     } catch {
       // ignore
     }
@@ -1065,6 +1079,7 @@
     const payload = {
       contexts: contextEntries,
       toolEnabledById,
+      extensionRestrictedToolset,
     };
     try {
       localStorage.setItem(prefsKey, JSON.stringify(payload));
@@ -1073,38 +1088,44 @@
     }
   };
 
-  const EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS = new Set([
-    'web_search',
-    'web_extract',
-  ]);
-
   const isExtensionNewSessionMode = () =>
     mode === 'ai' && isLocalToolRuntimeAvailable() && !sessionId;
 
+  const isExtensionRestrictedToolsetMode = () =>
+    computeIsExtensionRestrictedToolsetMode({
+      mode,
+      hasExtensionRuntime: isLocalToolRuntimeAvailable(),
+      sessionId,
+      extensionRestrictedToolset,
+    });
+
+  const getToolScopeToggles = () =>
+    TOOL_TOGGLES.map((toggle) => ({
+      id: toggle.id,
+      toolIds: toggle.toolIds,
+    }));
+
   const getToolToggleDefaults = () => {
-    const restricted = isExtensionNewSessionMode();
-    const defaults: Record<string, boolean> = {};
-    for (const t of TOOL_TOGGLES) {
-      defaults[t.id] = restricted
-        ? t.toolIds.some((id) =>
-            EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
-          )
-        : true;
-    }
-    return defaults;
+    return computeToolToggleDefaults({
+      toolToggles: getToolScopeToggles(),
+      restrictedMode: isExtensionRestrictedToolsetMode(),
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    });
   };
 
   const getVisibleToolToggles = () => {
-    if (!isExtensionNewSessionMode()) return TOOL_TOGGLES;
-    return TOOL_TOGGLES.filter((toggle) =>
-      toggle.toolIds.some((id) =>
-        EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
-      ),
+    const visibleIds = new Set(
+      computeVisibleToolToggleIds({
+        toolToggles: getToolScopeToggles(),
+        restrictedMode: isExtensionRestrictedToolsetMode(),
+        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      }),
     );
+    return TOOL_TOGGLES.filter((toggle) => visibleIds.has(toggle.id));
   };
 
   const getVisibleLocalTools = () => {
-    if (!isExtensionNewSessionMode()) return [];
+    if (!isExtensionRestrictedToolsetMode()) return [];
     return getLocalToolDefinitions();
   };
 
@@ -1158,6 +1179,12 @@
   };
 
   const ensureDefaultToolToggles = () => {
+    if (!isLocalToolRuntimeAvailable()) {
+      extensionRestrictedToolset = false;
+    } else if (isExtensionNewSessionMode()) {
+      extensionRestrictedToolset = true;
+    }
+
     const defaults = getToolToggleDefaults();
     if (Object.keys(toolEnabledById).length === 0) {
       toolEnabledById = defaults;
@@ -1289,18 +1316,12 @@
       .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
 
   const getEnabledToolIds = () => {
-    const enabled = new Set<string>();
-    for (const t of TOOL_TOGGLES) {
-      if (toolEnabledById[t.id] !== false) {
-        t.toolIds.forEach((id) => enabled.add(id));
-      }
-    }
-    if (!isExtensionNewSessionMode()) {
-      return Array.from(enabled);
-    }
-    return Array.from(enabled).filter((id) =>
-      EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
-    );
+    return computeEnabledToolIds({
+      toolToggles: getToolScopeToggles(),
+      toolEnabledById,
+      restrictedMode: isExtensionRestrictedToolsetMode(),
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    });
   };
 
   const toggleContextActive = (entry: ChatContextEntry) => {
