@@ -2867,7 +2867,7 @@
                   </div>
                 {/if}
                 <div
-                  class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingCommentId === c.id}
                     <div class="space-y-2">
@@ -3012,7 +3012,7 @@
             {#if m.role === 'user'}
               <div class="flex flex-col items-end group">
                 <div
-                  class="max-w-[85%] rounded bg-slate-900 text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingMessageId === m.id}
                     <div class="space-y-2">
@@ -3189,7 +3189,7 @@
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                  class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3523,7 +3523,7 @@
           </button>
         {/if}
         <button
-          class="rounded bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
+          class="rounded bg-primary hover:bg-primary/90 text-white w-10 h-10 flex items-center justify-center disabled:opacity-60"
           on:click={() =>
             mode === 'comments'
               ? void sendCommentMessage()
