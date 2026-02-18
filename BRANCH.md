@@ -243,8 +243,8 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Execution applied:
       - [x] Replaced all `bg-blue-600` + `bg-indigo-600` + `bg-slate-900` by `bg-primary` (buttons/badges/messages).
       - [x] Replaced all hover variants `hover:bg-blue-700` + `hover:bg-indigo-700` by `hover:bg-primary/90`.
-      - [x] Kept `bg-slate-900/40` mobile backdrop unchanged (overlay semantics), and aligned explicit chat `close` button styling with existing header action buttons.
-      - [x] Post-change grep gate: only `bg-slate-900/40` remains (expected backdrop exception).
+      - [x] Normalized mobile widget backdrop to the modal pattern `bg-black bg-opacity-40` (overlay semantics), and aligned explicit chat `close` button styling with existing header action buttons.
+      - [x] Post-change grep gate: no remaining targeted tokens (`bg-blue-600`, `bg-indigo-600`, `bg-slate-900`, hover variants) in `.svelte`.
   - [ ] UAT checklist:
     - [ ] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
     - [ ] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.
