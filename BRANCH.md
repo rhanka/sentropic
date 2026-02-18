@@ -240,6 +240,11 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Filter unsupported generated detail fields before persistence in `use_cases.data`:
       - [x] Remove `process` mapping from queue detail generation writes.
       - [x] Remove `prerequisites` mapping from queue detail generation writes.
+    - [x] Organization detail parity:
+      - [x] Add comment badge on organization title (`name`) in `/organizations/[id]`.
+      - [x] Add comment badge on sector field (`industry`) in `/organizations/[id]`.
+    - [x] Template update:
+      - [x] `api/templates/usecase-onepage.docx` amended to include `domain`.
   - [x] Lot gate:
     - [x] `make typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] `make lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
@@ -288,6 +293,8 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [ ] AI marker parity: comments created by generation and by tool-based updates both display the AI marker (brain icon / Assistant IA) in comment threads.
     - [ ] Name/title comment badges appear (with count when comments exist) on `/folders/[id]`, `/usecase/[id]`, and `/dashboard`.
     - [ ] Clicking each `name/title` badge opens the matching comments context and `sectionKey=name`.
+    - [ ] On `/organizations/[id]`, title (`name`) and sector (`industry`) show comment badges with counts and open their exact section keys when clicked.
+    - [ ] Export/render path using `api/templates/usecase-onepage.docx` includes `domain` where expected.
     - [ ] In usecase "Informations", `Contact` and `Domaine/Domain` are displayed as label + editable field, each with its own comment badge next to the label.
     - [ ] After usecase detail generation, `data.domain` is persisted when generated, and unsupported fields (`data.process`, `data.prerequisites`) are not written by queue generation.
     - [ ] On `/dashboard`, each executive summary header shows the comment badge with count.
