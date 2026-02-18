@@ -311,5 +311,50 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       expect.objectContaining({ callId: 'call_local_tab_info_1' })
     ]);
   });
-});
 
+  it('should keep local tools available when server tool filter is provided', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    let seenToolNames: string[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      seenToolNames = toolNames(opts?.tools);
+      return stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'read current tab',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      model: 'gpt-4.1-nano'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['web_search', 'web_extract'],
+      localToolDefinitions: [
+        {
+          name: 'tab_read',
+          description: 'Read active tab data',
+          parameters: {
+            type: 'object',
+            properties: {
+              mode: { type: 'string' }
+            },
+            required: ['mode']
+          }
+        }
+      ]
+    });
+
+    expect(seenToolNames).toContain('tab_read');
+    expect(seenToolNames).toContain('web_search');
+  });
+});
