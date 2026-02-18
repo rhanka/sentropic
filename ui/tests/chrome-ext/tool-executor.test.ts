@@ -71,8 +71,10 @@ describe('tool-executor', () => {
   it('exposes the expected local tool executors', () => {
     const executors = createToolExecutors();
     expect(Object.keys(executors).sort()).toEqual([
+      'tab_action',
       'tab_click',
       'tab_info',
+      'tab_read',
       'tab_read_dom',
       'tab_screenshot',
       'tab_scroll',
@@ -98,7 +100,7 @@ describe('tool-executor', () => {
     });
 
     const executors = createToolExecutors();
-    const result = await executors.tab_info({}, {});
+    const result = await executors.tab_read({ mode: 'info' }, {});
 
     expect((result as any).tabId).toBe(42);
     expect((result as any).title).toBe('Fallback doc');
@@ -119,6 +121,22 @@ describe('tool-executor', () => {
     const button = document.querySelector('#click-me') as HTMLButtonElement;
     const input = document.querySelector('#name-input') as HTMLInputElement;
     const scrollBox = document.querySelector('#scroll-box') as HTMLElement;
+    const visibleRect = {
+      x: 10,
+      y: 10,
+      left: 10,
+      top: 10,
+      right: 130,
+      bottom: 42,
+      width: 120,
+      height: 32,
+      toJSON: () => ({}),
+    } as DOMRect;
+    Object.defineProperty(button, 'getBoundingClientRect', {
+      value: () => visibleRect,
+      configurable: true,
+    });
+    (button as any).scrollIntoView = vi.fn();
     const clickSpy = vi.fn();
     button.addEventListener('click', clickSpy);
     (scrollBox as any).scrollBy = vi.fn();
@@ -141,40 +159,37 @@ describe('tool-executor', () => {
 
     const executors = createToolExecutors();
 
-    const info = await executors.tab_info({ tabId: 77 }, {});
+    const info = await executors.tab_read({ tabId: 77, mode: 'info' }, {});
     expect((info as any).title).toBe(document.title);
     expect((info as any).headings?.[0]?.text).toBe('Main title');
 
-    const readDom = await executors.tab_read_dom({ tabId: 77 }, {});
+    const readDom = await executors.tab_read({ tabId: 77, mode: 'dom' }, {});
     expect((readDom as any).found).toBe(true);
     expect((readDom as any).text).toContain('Hello local tools');
 
-    const click = await executors.tab_click({
+    const elements = await executors.tab_read({
       tabId: 77,
-      selector: '#click-me',
+      mode: 'elements',
     }, {});
-    expect((click as any).clicked).toBe(true);
+    expect(Array.isArray((elements as any).clickable)).toBe(true);
+    expect(Array.isArray((elements as any).inputs)).toBe(true);
+
+    const action = await executors.tab_action({
+      tabId: 77,
+      actions: [
+        { action: 'click', selector: '#click-me' },
+        { action: 'type', selector: '#name-input', text: 'hello', clear: true },
+        { action: 'scroll', selector: '#scroll-box', direction: 'down', pixels: 400 },
+      ],
+    }, {});
+    expect((action as any).ok).toBe(true);
     expect(clickSpy).toHaveBeenCalledTimes(1);
-
-    const type = await executors.tab_type({
-      tabId: 77,
-      selector: '#name-input',
-      text: 'hello',
-    }, {});
-    expect((type as any).typed).toBe(true);
     expect(input.value).toBe('hello');
-
-    const scroll = await executors.tab_scroll({
-      tabId: 77,
-      selector: '#scroll-box',
-      direction: 'down',
-      pixels: 400,
-    }, {});
-    expect((scroll as any).scrolled).toBe(true);
     expect((scrollBox as any).scrollBy).toHaveBeenCalled();
 
-    const screenshot = await executors.tab_screenshot({
+    const screenshot = await executors.tab_read({
       tabId: 77,
+      mode: 'screenshot',
       quality: 70,
     }, {});
     expect((screenshot as any).imageDataUrl).toMatch(/^data:image\/jpeg/);
@@ -196,7 +211,7 @@ describe('tool-executor', () => {
     const executors = createToolExecutors();
 
     await expect(
-      executors.tab_read_dom({ tabId: 5 }, {})
+      executors.tab_read({ tabId: 5, mode: 'dom' }, {})
     ).rejects.toThrow(/Unsupported tab URL/);
   });
 
@@ -207,7 +222,7 @@ describe('tool-executor', () => {
     const executors = createToolExecutors();
 
     await expect(
-      executors.tab_info({}, {})
+      executors.tab_read({ mode: 'info' }, {})
     ).rejects.toThrow(/No active injectable tab found/);
   });
 });

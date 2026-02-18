@@ -14,6 +14,15 @@ import {
     createToolExecutors,
     type ToolExecutionContext,
 } from './tool-executor';
+import {
+    applyToolPermissionDecision,
+    bootstrapToolPermissionSync,
+    evaluateToolPermission,
+    listToolPermissionPolicies,
+    normalizePermissionOrigin,
+    upsertToolPermissionPolicy,
+    deleteToolPermissionPolicy,
+} from './tool-permissions';
 
 const toolExecutors = createToolExecutors();
 
@@ -22,6 +31,15 @@ const ALLOWED_PROXY_HOSTS = new Set([
     '127.0.0.1',
     'top-ai-ideas-api.sent-tech.ca',
 ]);
+
+const NON_INJECTABLE_URL_PREFIXES = [
+    'chrome://',
+    'chrome-extension://',
+    'edge://',
+    'about:',
+    'devtools://',
+    'view-source:',
+];
 
 type ProxyFetchPayload = {
     url: string;
@@ -36,6 +54,97 @@ type ExtensionConfigPayload = {
     apiBaseUrl?: string;
     appBaseUrl?: string;
     wsBaseUrl?: string;
+};
+
+const canInjectTabUrl = (url: string | undefined | null): boolean => {
+    if (!url) return false;
+    return !NON_INJECTABLE_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
+};
+
+const resolveTargetTabForPermission = async (
+    args: Record<string, unknown>,
+    sender: chrome.runtime.MessageSender,
+): Promise<chrome.tabs.Tab | null> => {
+    const tabIdFromArgs =
+        typeof args.tabId === 'number' && Number.isFinite(args.tabId)
+            ? args.tabId
+            : null;
+
+    if (tabIdFromArgs !== null) {
+        const tab = await chrome.tabs.get(tabIdFromArgs).catch(() => null);
+        if (tab && canInjectTabUrl(tab.url)) return tab;
+    }
+
+    if (typeof sender.tab?.id === 'number') {
+        const tab = await chrome.tabs.get(sender.tab.id).catch(() => null);
+        if (tab && canInjectTabUrl(tab.url)) return tab;
+    }
+
+    const candidates: chrome.tabs.Tab[] = [];
+    if (typeof sender.tab?.windowId === 'number') {
+        candidates.push(
+            ...(await chrome.tabs.query({
+                active: true,
+                windowId: sender.tab.windowId,
+            })),
+        );
+    }
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+            lastFocusedWindow: true,
+        })),
+    );
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        })),
+    );
+    candidates.push(
+        ...(await chrome.tabs.query({
+            active: true,
+        })),
+    );
+
+    const seen = new Set<number>();
+    for (const tab of candidates) {
+        if (typeof tab.id !== 'number' || seen.has(tab.id)) continue;
+        seen.add(tab.id);
+        if (!canInjectTabUrl(tab.url)) continue;
+        return tab;
+    }
+
+    return null;
+};
+
+const derivePermissionToolName = (
+    toolName: string,
+    args: Record<string, unknown>,
+): string => {
+    if (toolName === 'tab_read') {
+        const modeRaw = String(args.mode ?? '').trim();
+        const mode =
+            modeRaw === 'dom' ||
+            modeRaw === 'screenshot' ||
+            modeRaw === 'elements' ||
+            modeRaw === 'info'
+                ? modeRaw
+                : 'info';
+        return `tab_read:${mode}`;
+    }
+    if (toolName === 'tab_info') return 'tab_read:info';
+    if (toolName === 'tab_read_dom') return 'tab_read:dom';
+    if (toolName === 'tab_screenshot') return 'tab_read:screenshot';
+    if (
+        toolName === 'tab_action' ||
+        toolName === 'tab_click' ||
+        toolName === 'tab_type' ||
+        toolName === 'tab_scroll'
+    ) {
+        return 'tab_action';
+    }
+    return toolName;
 };
 
 const isAllowedProxyUrl = (rawUrl: string): boolean => {
@@ -382,6 +491,182 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message?.type === 'extension_tool_permissions_list') {
+        void (async () => {
+            try {
+                const items = await listToolPermissionPolicies();
+                sendResponse({
+                    ok: true,
+                    items,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_tool_permissions_upsert') {
+        void (async () => {
+            try {
+                const rawToolName = String(message?.payload?.toolName ?? '').trim();
+                const rawOrigin = String(message?.payload?.origin ?? '').trim();
+                const rawPolicy = String(message?.payload?.policy ?? '').trim();
+                if (!rawToolName) {
+                    sendResponse({
+                        ok: false,
+                        error: 'toolName is required.',
+                    });
+                    return;
+                }
+                const origin = normalizePermissionOrigin(rawOrigin);
+                if (!origin) {
+                    sendResponse({
+                        ok: false,
+                        error: 'origin must be a valid http(s) URL.',
+                    });
+                    return;
+                }
+                if (rawPolicy !== 'allow' && rawPolicy !== 'deny') {
+                    sendResponse({
+                        ok: false,
+                        error: 'policy must be allow or deny.',
+                    });
+                    return;
+                }
+
+                const item = await upsertToolPermissionPolicy({
+                    toolName: rawToolName,
+                    origin,
+                    policy: rawPolicy,
+                });
+                sendResponse({
+                    ok: true,
+                    item,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_tool_permissions_delete') {
+        void (async () => {
+            try {
+                const rawToolName = String(message?.payload?.toolName ?? '').trim();
+                const rawOrigin = String(message?.payload?.origin ?? '').trim();
+                if (!rawToolName) {
+                    sendResponse({
+                        ok: false,
+                        error: 'toolName is required.',
+                    });
+                    return;
+                }
+                const origin = normalizePermissionOrigin(rawOrigin);
+                if (!origin) {
+                    sendResponse({
+                        ok: false,
+                        error: 'origin must be a valid http(s) URL.',
+                    });
+                    return;
+                }
+                await deleteToolPermissionPolicy({
+                    toolName: rawToolName,
+                    origin,
+                });
+                sendResponse({
+                    ok: true,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'tool_permission_decide') {
+        void (async () => {
+            try {
+                const requestId = String(message?.payload?.requestId ?? '').trim();
+                const decision = String(message?.payload?.decision ?? '').trim();
+                if (!requestId) {
+                    sendResponse({
+                        ok: false,
+                        error: 'requestId is required.',
+                    });
+                    return;
+                }
+                if (
+                    decision !== 'allow_once' &&
+                    decision !== 'deny_once' &&
+                    decision !== 'allow_always' &&
+                    decision !== 'deny_always'
+                ) {
+                    sendResponse({
+                        ok: false,
+                        error: 'Invalid tool permission decision.',
+                    });
+                    return;
+                }
+                await applyToolPermissionDecision({
+                    requestId,
+                    decision,
+                });
+                sendResponse({
+                    ok: true,
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message?.type === 'extension_active_tab_context_get') {
+        void (async () => {
+            try {
+                const args = (message?.payload ?? {}) as Record<string, unknown>;
+                const tab = await resolveTargetTabForPermission(args, sender);
+                if (!tab?.url || typeof tab.id !== 'number') {
+                    sendResponse({
+                        ok: false,
+                        error: 'No active tab found.',
+                    });
+                    return;
+                }
+                const origin = normalizePermissionOrigin(tab.url);
+                sendResponse({
+                    ok: true,
+                    tab: {
+                        tabId: tab.id,
+                        url: tab.url,
+                        origin,
+                        title: tab.title ?? null,
+                    },
+                });
+            } catch (error) {
+                sendResponse({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return true;
+    }
+
     if (message?.type === 'extension_config_get') {
         void (async () => {
             try {
@@ -553,28 +838,105 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'tool_execute') {
+    if (message?.type === 'tool_execute') {
         const toolName = String(message?.name ?? '').trim();
         const executor = toolExecutors[toolName];
         if (!executor) {
             sendResponse({ ok: false, error: `Unknown local tool: ${toolName}` });
             return true;
         }
-        const context: ToolExecutionContext = {
-            senderTabId: sender.tab?.id,
-            senderWindowId: sender.tab?.windowId,
-        };
-        executor((message?.args ?? {}) as Record<string, unknown>, context)
-            .then((result) => sendResponse({ ok: true, result }))
-            .catch((err) =>
+
+        void (async () => {
+            try {
+                const args = (message?.args ?? {}) as Record<string, unknown>;
+                const targetTab = await resolveTargetTabForPermission(args, sender);
+                if (!targetTab?.url || typeof targetTab.id !== 'number') {
+                    sendResponse({
+                        ok: false,
+                        error:
+                            'No active injectable tab found for local tool execution. ' +
+                            'Select a normal web page tab or pass args.tabId explicitly.',
+                    });
+                    return;
+                }
+                if (!canInjectTabUrl(targetTab.url)) {
+                    sendResponse({
+                        ok: false,
+                        error: `Unsupported tab URL for automation: ${targetTab.url}`,
+                    });
+                    return;
+                }
+                const origin = normalizePermissionOrigin(targetTab.url);
+                if (!origin) {
+                    sendResponse({
+                        ok: false,
+                        error: `Unable to determine origin from tab URL: ${targetTab.url}`,
+                    });
+                    return;
+                }
+
+                const permissionToolName = derivePermissionToolName(toolName, args);
+                const permissionCheck = await evaluateToolPermission({
+                    toolName: permissionToolName,
+                    origin,
+                    tabId: targetTab.id,
+                    tabUrl: targetTab.url,
+                    tabTitle: targetTab.title ?? undefined,
+                    details:
+                        toolName === 'tab_read'
+                            ? { mode: String(args.mode ?? 'info') }
+                            : toolName === 'tab_action'
+                                ? {
+                                    actionCount: Array.isArray(args.actions)
+                                        ? args.actions.length
+                                        : 1,
+                                }
+                                : undefined,
+                });
+
+                if (!permissionCheck.allowed) {
+                    if ('request' in permissionCheck) {
+                        sendResponse({
+                            ok: false,
+                            error: 'permission_required',
+                            permissionRequest: permissionCheck.request,
+                        });
+                        return;
+                    }
+                    sendResponse({
+                        ok: false,
+                        error: permissionCheck.reason,
+                    });
+                    return;
+                }
+
+                const context: ToolExecutionContext = {
+                    senderTabId: sender.tab?.id,
+                    senderWindowId: sender.tab?.windowId,
+                };
+                const result = await executor(
+                    {
+                        ...args,
+                        tabId:
+                            typeof args.tabId === 'number' && Number.isFinite(args.tabId)
+                                ? args.tabId
+                                : targetTab.id,
+                    },
+                    context,
+                );
+                sendResponse({ ok: true, result });
+            } catch (err) {
                 sendResponse({
                     ok: false,
                     error: err instanceof Error ? err.message : String(err),
-                }),
-            );
+                });
+            }
+        })();
         return true; // async response
     }
 });
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error(error));
+
+void bootstrapToolPermissionSync();

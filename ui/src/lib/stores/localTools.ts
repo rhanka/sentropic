@@ -1,6 +1,8 @@
 import { writable } from 'svelte/store';
 
 export type LocalToolName =
+  | 'tab_read'
+  | 'tab_action'
   | 'tab_read_dom'
   | 'tab_screenshot'
   | 'tab_click'
@@ -11,8 +13,27 @@ export type LocalToolName =
 export type LocalToolExecutionStatus =
   | 'pending'
   | 'executing'
+  | 'awaiting_permission'
   | 'completed'
   | 'failed';
+
+export type LocalToolPermissionDecision =
+  | 'allow_once'
+  | 'deny_once'
+  | 'allow_always'
+  | 'deny_always';
+
+export type LocalToolPermissionPolicy = 'allow' | 'deny';
+
+export type LocalToolPermissionRequest = {
+  requestId: string;
+  toolName: string;
+  origin: string;
+  tabId?: number;
+  tabUrl?: string;
+  tabTitle?: string;
+  details?: Record<string, unknown>;
+};
 
 export type LocalToolDefinition = {
   name: LocalToolName;
@@ -28,8 +49,26 @@ export type LocalToolExecution = {
   status: LocalToolExecutionStatus;
   result?: unknown;
   error?: string;
+  permissionRequest?: LocalToolPermissionRequest;
   updatedAt: number;
 };
+
+export type LocalToolPermissionPolicyEntry = {
+  toolName: string;
+  origin: string;
+  policy: LocalToolPermissionPolicy;
+  updatedAt: string;
+};
+
+export class LocalToolPermissionRequiredError extends Error {
+  request: LocalToolPermissionRequest;
+
+  constructor(request: LocalToolPermissionRequest) {
+    super('Local tool execution requires explicit user permission.');
+    this.name = 'LocalToolPermissionRequiredError';
+    this.request = request;
+  }
+}
 
 type LocalToolsState = {
   available: boolean;
@@ -39,82 +78,78 @@ type LocalToolsState = {
 
 const LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
   {
-    name: 'tab_read_dom',
+    name: 'tab_read',
     description:
-      'Read the text content of the active tab, optionally constrained by CSS selector.',
+      'Read active-tab data with mode=info|dom|screenshot|elements.',
     parameters: {
       type: 'object',
       properties: {
+        mode: {
+          type: 'string',
+          enum: ['info', 'dom', 'screenshot', 'elements'],
+        },
         selector: { type: 'string' },
         includeHtml: { type: 'boolean' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'tab_screenshot',
-    description: 'Capture the visible area of the active tab as a JPEG image.',
-    parameters: {
-      type: 'object',
-      properties: {
         quality: { type: 'integer', minimum: 1, maximum: 100 },
+        maxElements: { type: 'integer', minimum: 1, maximum: 500 },
       },
-      required: [],
+      required: ['mode'],
     },
   },
   {
-    name: 'tab_click',
-    description:
-      'Click an element in the active tab by selector or coordinates.',
+    name: 'tab_action',
+    description: 'Execute one or multiple tab actions (scroll|click|type|wait).',
     parameters: {
       type: 'object',
       properties: {
-        selector: { type: 'string' },
-        x: { type: 'number' },
-        y: { type: 'number' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'tab_type',
-    description:
-      'Type text into an input or textarea element selected with a CSS selector.',
-    parameters: {
-      type: 'object',
-      properties: {
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 120000 },
+        action: {
+          type: 'string',
+          enum: ['scroll', 'click', 'type', 'wait'],
+        },
+        waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
+        direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
+        pixels: { type: 'integer', minimum: 1, maximum: 20000 },
         selector: { type: 'string' },
         text: { type: 'string' },
+        exact: { type: 'boolean' },
         clear: { type: 'boolean' },
+        x: { type: 'number' },
+        y: { type: 'number' },
+        actions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['scroll', 'click', 'type', 'wait'],
+              },
+              waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
+              direction: {
+                type: 'string',
+                enum: ['up', 'down', 'top', 'bottom'],
+              },
+              pixels: { type: 'integer', minimum: 1, maximum: 20000 },
+              selector: { type: 'string' },
+              text: { type: 'string' },
+              exact: { type: 'boolean' },
+              clear: { type: 'boolean' },
+              x: { type: 'number' },
+              y: { type: 'number' },
+            },
+            required: ['action'],
+          },
+        },
       },
-      required: ['selector', 'text'],
-    },
-  },
-  {
-    name: 'tab_scroll',
-    description: 'Scroll the active page or a specific scrollable container.',
-    parameters: {
-      type: 'object',
-      properties: {
-        direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
-        pixels: { type: 'integer' },
-        selector: { type: 'string' },
-      },
-      required: ['direction'],
-    },
-  },
-  {
-    name: 'tab_info',
-    description: 'Return metadata about the active page (URL/title/headings).',
-    parameters: {
-      type: 'object',
-      properties: {},
       required: [],
     },
   },
 ];
 
 const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set([
+  'tab_read',
+  'tab_action',
   'tab_read_dom',
   'tab_screenshot',
   'tab_click',
@@ -127,7 +162,14 @@ type RuntimeLike = {
   id?: string;
   sendMessage?: (
     message: unknown,
-  ) => Promise<{ ok?: boolean; result?: unknown; error?: string }>;
+  ) => Promise<{
+    ok?: boolean;
+    result?: unknown;
+    error?: string;
+    permissionRequest?: LocalToolPermissionRequest;
+    items?: LocalToolPermissionPolicyEntry[];
+    item?: LocalToolPermissionPolicyEntry;
+  }>;
 };
 
 const getRuntime = (): RuntimeLike | null => {
@@ -171,6 +213,7 @@ const upsertExecution = (
       status: patch.status ?? current?.status ?? 'pending',
       result: patch.result ?? current?.result,
       error: patch.error ?? current?.error,
+      permissionRequest: patch.permissionRequest ?? current?.permissionRequest,
       streamId: patch.streamId ?? current?.streamId,
       updatedAt: now(),
     };
@@ -189,12 +232,7 @@ type ExecuteLocalToolOptions = {
   streamId?: string;
 };
 
-export async function executeLocalTool(
-  toolCallId: string,
-  name: LocalToolName,
-  args: unknown,
-  options?: ExecuteLocalToolOptions,
-): Promise<unknown> {
+const getRuntimeWithMessaging = (): RuntimeLike => {
   const ext = globalThis as typeof globalThis & {
     chrome?: { runtime?: RuntimeLike };
   };
@@ -203,6 +241,17 @@ export async function executeLocalTool(
   if (!runtime?.id || !sendMessage) {
     throw new Error('Local tool runtime is unavailable outside extension context.');
   }
+  return runtime;
+};
+
+export async function executeLocalTool(
+  toolCallId: string,
+  name: LocalToolName,
+  args: unknown,
+  options?: ExecuteLocalToolOptions,
+): Promise<unknown> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
 
   upsertExecution(toolCallId, {
     name,
@@ -219,6 +268,20 @@ export async function executeLocalTool(
       name,
       args,
     });
+
+    if (response?.permissionRequest) {
+      const request = response.permissionRequest;
+      upsertExecution(toolCallId, {
+        name,
+        args,
+        streamId: options?.streamId,
+        status: 'awaiting_permission',
+        permissionRequest: request,
+        error: undefined,
+      });
+      throw new LocalToolPermissionRequiredError(request);
+    }
+
     if (!response?.ok) {
       const reason = response?.error ?? 'Local tool execution failed.';
       upsertExecution(toolCallId, {
@@ -237,18 +300,87 @@ export async function executeLocalTool(
       streamId: options?.streamId,
       status: 'completed',
       result: response.result,
+      permissionRequest: undefined,
       error: undefined,
     });
     return response.result;
   } catch (error) {
+    if (error instanceof LocalToolPermissionRequiredError) {
+      throw error;
+    }
     const reason = error instanceof Error ? error.message : String(error);
     upsertExecution(toolCallId, {
       name,
       args,
       streamId: options?.streamId,
       status: 'failed',
+      permissionRequest: undefined,
       error: reason,
     });
     throw error;
+  }
+}
+
+export async function decideLocalToolPermission(
+  requestId: string,
+  decision: LocalToolPermissionDecision,
+): Promise<void> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const response = await sendMessage({
+    type: 'tool_permission_decide',
+    payload: {
+      requestId,
+      decision,
+    },
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error ?? 'Unable to save local tool permission decision.');
+  }
+}
+
+export async function listLocalToolPermissionPolicies(): Promise<
+  LocalToolPermissionPolicyEntry[]
+> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_list',
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error ?? 'Unable to load extension tool permissions.');
+  }
+  return Array.isArray(response.items) ? response.items : [];
+}
+
+export async function upsertLocalToolPermissionPolicy(input: {
+  toolName: string;
+  origin: string;
+  policy: LocalToolPermissionPolicy;
+}): Promise<LocalToolPermissionPolicyEntry> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_upsert',
+    payload: input,
+  });
+  if (!response?.ok || !response.item) {
+    throw new Error(response?.error ?? 'Unable to update extension tool permission.');
+  }
+  return response.item;
+}
+
+export async function deleteLocalToolPermissionPolicy(input: {
+  toolName: string;
+  origin: string;
+}): Promise<void> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_delete',
+    payload: input,
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error ?? 'Unable to delete extension tool permission.');
   }
 }

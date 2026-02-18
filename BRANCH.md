@@ -183,7 +183,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Vérifier exécution locale des tools (`tab_info`, `tab_read_dom`, `tab_scroll`, `tab_click`, `tab_type`, `tab_screenshot`) et garde-fous URL non injectables.
   - [!] **UAT utilisateur Lot 5A**
     - [x] Aucun script manuel requis côté utilisateur pour Lot 5A.
-    - [!] Deferred: real user-facing local-tool UAT is performed in Lot 7 integrated flow (Lot 6 API resume flow is now implemented).
+    - [x] Covered by Lot 6A UAT (local-tool execution + API resume validated in side panel and floating widget).
   - [x] Lot gate: tools execute correctly from the extension context (validated via scoped `make test-ui` suites + `make typecheck-ui` + `make lint-ui` + `make build-ext` on `ENV=test-chrome-plugin`)
 
 - [x] **Lot 6 — API evolution for local tools**
@@ -193,9 +193,60 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Implement generation resume after receiving local tool result
   - [x] Lot gate: `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [x] Validation technique: `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make test-api SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [x] Temporary UAT unblock: set extension `host_permissions` to `<all_urls>` so Lot 6A local-tool UAT can run on arbitrary domains.
+  - [x] **UAT utilisateur Lot 6A (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [x] Build extension from root: `make build-ext`.
+    - [x] Reload unpacked extension from root `ui/chrome-ext/dist`.
+    - [x] Side panel: local-tool roundtrip (`tab_info`/`tab_read_dom`/`tab_scroll`/`tab_click`/`tab_type`) resumes assistant automatically in same stream.
+    - [x] Floating widget: same local-tool roundtrip parity as side panel.
+    - [x] No manual refresh/re-send required after tool execution.
+    - [x] Failure path remains conversational (tool error surfaced, generation not stuck).
+    - [x] Stability fixes integrated from UAT feedback: local-tool argument buffering (`tool_call_start`/`tool_call_delta`), `tab_type` fallback targeting, `tab_click` text-based targeting, and reasoning-effort navigation heuristic (`chat_reasoning_effort_eval` context enrichment + medium floor).
+
+- [ ] **Lot 6B — Runtime permissions + unified local tools (`tab_read` / `tab_action`)**
+  - [x] Replace current `tab_*` surface by 2 unified tools:
+    - [x] `tab_read`:
+      - [x] `mode=info|dom|screenshot|elements`
+      - [x] `info`: url/title/meta/headings
+      - [x] `dom`: text/html extract (selector optional)
+      - [x] `screenshot`: visible capture
+      - [x] `elements`: pre-parsed list of clickable elements and editable inputs (selector/label/role/bounds/index hints)
+    - [x] `tab_action`:
+      - [x] Execute one or multiple actions in sequence (`scroll|click|type|wait`)
+      - [x] Support chain payload with per-step delays (`waitMs`) and global timeout
+      - [x] Return per-step status + final summary result
+  - [x] Runtime permission UX in chat (localized decision card):
+    - [x] `Oui (une fois)` / `Non (une fois)` / `Toujours` / `Jamais`
+    - [x] Prompt appears only when needed by tool + origin.
+  - [x] Persist `Toujours/Jamais` policies in backend DB (user/workspace/tool/origin), with extension sync:
+    - [x] bootstrap fetch
+    - [x] push updates on decision
+    - [x] conflict-safe reconciliation (timestamp/version)
+    - [x] offline queue replay
+  - [x] Settings split in extension UI (same visual style as `Commentaires/Chat IA/Jobs`):
+    - [x] `Endpoint serveur`
+    - [x] `Permissions outils` (allow/deny entries by tool + origin)
+  - [x] Tool visibility/context UX:
+    - [x] For new extension sessions, hide non-activable business tools when relevant folder/org/usecase context is absent.
+    - [x] Add explicit active tab context entry.
+    - [x] Disable `Commentaires` tab in plugin mode (side panel + floating widget) until dedicated plugin comment flow is delivered.
+  - [ ] Lot gate:
+    - [x] `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [x] `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [x] `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [x] `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [!] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (scoped tests pass via `make test-api-unit ...`; aggregate wrapper is flaky in this env due transient `up-api-test` health timeout).
+    - [x] `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [ ] **UAT utilisateur Lot 6B (root workspace `~/src/top-ai-ideas-fullstack`)**
+    - [ ] Validate `tab_read` modes (`info|dom|screenshot|elements`) on external page.
+    - [ ] Validate `tab_action` single-step and multi-step chains with delays.
+    - [ ] Validate runtime permission prompt decisions (once/always/never) and persistence after reload.
+    - [ ] Validate settings tabs (`Endpoint serveur` / `Permissions outils`) and policy edit.
+    - [ ] Validate tool visibility rules for no-context new sessions.
+    - [ ] Validate `Commentaires` tab is hidden in plugin mode and web app behavior is unchanged.
 
 - [ ] **Lot 7 — Integration & i18n**
-  - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read_dom` → extension executes → result sent to API → LLM continues
+  - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read` (`mode=dom`) → extension executes → result sent to API → LLM continues
   - [ ] i18n initialization from `chrome.i18n.getUILanguage()`
   - [ ] Verify all UI modes: floating bubble, popup, side panel placeholder
   - [ ] Lot gate: full flow works manually

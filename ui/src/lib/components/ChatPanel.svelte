@@ -39,10 +39,14 @@
   } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
+    decideLocalToolPermission,
     executeLocalTool,
     getLocalToolDefinitions,
     isLocalToolName,
     isLocalToolRuntimeAvailable,
+    LocalToolPermissionRequiredError,
+    type LocalToolPermissionDecision,
+    type LocalToolPermissionRequest,
     type LocalToolName,
   } from '$lib/stores/localTools';
   import {
@@ -106,7 +110,16 @@
     name: LocalToolName;
     argsText: string;
     lastSequence: number;
+    firstSeenAt: number;
     executed: boolean;
+  };
+  type LocalToolPermissionPrompt = {
+    toolCallId: string;
+    streamId: string;
+    name: LocalToolName;
+    args: unknown;
+    request: LocalToolPermissionRequest;
+    createdAt: number;
   };
   type IconComponent = typeof FileText;
   type ChatContextEntry = {
@@ -484,19 +497,29 @@
           ) ?? null)
       : null;
 
-  const getProcessingAssistantStreamIds = () =>
+  const hasAssistantContent = (message: LocalMessage): boolean =>
+    typeof message.content === 'string' && message.content.trim().length > 0;
+
+  const getLocalToolEligibleStreamIds = () =>
     new Set(
       messages
-        .filter(
-          (message) =>
-            message.role === 'assistant' && getMessageStatus(message) === 'processing',
-        )
+        .filter((message) => {
+          if (message.role !== 'assistant') return false;
+          const status = getMessageStatus(message);
+          if (status === 'failed') return false;
+          if (status === 'processing') return true;
+          return !hasAssistantContent(message);
+        })
         .map((message) => message._streamId ?? message.id),
     );
 
   const resetLocalToolInterceptionState = () => {
+    localToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
+    localToolExecutionTimersById.clear();
     localToolStatesById.clear();
     localToolInFlight.clear();
+    localToolPermissionRetriesInFlight.clear();
+    pendingLocalToolPermissionPrompts = [];
   };
 
   const parseBufferedToolArgs = (
@@ -517,11 +540,67 @@
     }
   };
 
+  const postLocalToolResultWithRetry = async (
+    streamId: string,
+    toolCallId: string,
+    result: unknown,
+  ) => {
+    const maxAttempts = 12;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await apiPost(
+          `/chat/messages/${encodeURIComponent(streamId)}/tool-results`,
+          { toolCallId, result },
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        const isRetryableRace =
+          error instanceof ApiError &&
+          error.status === 400 &&
+          /No pending local tool call found|not pending/i.test(error.message);
+        if (!isRetryableRace || attempt === maxAttempts) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Unknown local tool result forwarding error');
+  };
+
   const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
     const localToolState = localToolStatesById.get(toolCallId);
     if (!localToolState || localToolState.executed) return;
     if (localToolInFlight.has(toolCallId)) return;
     if (!isLocalToolRuntimeAvailable()) return;
+
+    if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
+      const elapsed = Date.now() - localToolState.firstSeenAt;
+      if (elapsed < 1500) return;
+      localToolState.executed = true;
+      localToolStatesById.set(toolCallId, localToolState);
+      try {
+        await postLocalToolResultWithRetry(localToolState.streamId, toolCallId, {
+          status: 'error',
+          error:
+            'tab_type arguments are missing (expected at least text, and optionally selector/x/y).',
+        });
+      } catch (forwardError) {
+        const reason =
+          forwardError instanceof Error
+            ? forwardError.message
+            : String(forwardError);
+        console.warn(
+          `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
+        );
+      }
+      return;
+    }
 
     const parsed = parseBufferedToolArgs(localToolState.argsText);
     if (!parsed.ready) return;
@@ -537,19 +616,37 @@
         parsed.value,
         { streamId: localToolState.streamId },
       );
-      await apiPost(
-        `/chat/messages/${encodeURIComponent(localToolState.streamId)}/tool-results`,
-        { toolCallId, result: localResult },
+      await postLocalToolResultWithRetry(
+        localToolState.streamId,
+        toolCallId,
+        localResult,
       );
     } catch (error) {
+      if (error instanceof LocalToolPermissionRequiredError) {
+        const prompt: LocalToolPermissionPrompt = {
+          toolCallId,
+          streamId: localToolState.streamId,
+          name: localToolState.name,
+          args: parsed.value,
+          request: error.request,
+          createdAt: Date.now(),
+        };
+        const next = pendingLocalToolPermissionPrompts.filter(
+          (item) => item.toolCallId !== toolCallId,
+        );
+        pendingLocalToolPermissionPrompts = [...next, prompt];
+        return;
+      }
+
       const reason = error instanceof Error ? error.message : String(error);
       console.warn(
         `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
       );
       try {
-        await apiPost(
-          `/chat/messages/${encodeURIComponent(localToolState.streamId)}/tool-results`,
-          { toolCallId, result: { status: 'error', error: reason } },
+        await postLocalToolResultWithRetry(
+          localToolState.streamId,
+          toolCallId,
+          { status: 'error', error: reason },
         );
       } catch (forwardError) {
         const forwardReason =
@@ -563,6 +660,85 @@
     } finally {
       localToolInFlight.delete(toolCallId);
     }
+  };
+
+  const handleLocalToolPermissionDecision = async (
+    prompt: LocalToolPermissionPrompt,
+    decision: LocalToolPermissionDecision,
+  ) => {
+    if (localToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
+    localToolPermissionRetriesInFlight.add(prompt.toolCallId);
+    try {
+      await decideLocalToolPermission(prompt.request.requestId, decision);
+      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+        (item) => item.toolCallId !== prompt.toolCallId,
+      );
+
+      if (decision === 'deny_once' || decision === 'deny_always') {
+        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: `Permission denied for ${prompt.request.toolName} on ${prompt.request.origin}.`,
+        });
+        return;
+      }
+
+      const localResult = await executeLocalTool(
+        prompt.toolCallId,
+        prompt.name,
+        prompt.args,
+        { streamId: prompt.streamId },
+      );
+      await postLocalToolResultWithRetry(
+        prompt.streamId,
+        prompt.toolCallId,
+        localResult,
+      );
+    } catch (error) {
+      if (error instanceof LocalToolPermissionRequiredError) {
+        const nextPrompt: LocalToolPermissionPrompt = {
+          ...prompt,
+          request: error.request,
+          createdAt: Date.now(),
+        };
+        pendingLocalToolPermissionPrompts = [
+          ...pendingLocalToolPermissionPrompts.filter(
+            (item) => item.toolCallId !== prompt.toolCallId,
+          ),
+          nextPrompt,
+        ];
+        return;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: reason,
+        });
+      } catch (forwardError) {
+        const forwardReason =
+          forwardError instanceof Error
+            ? forwardError.message
+            : String(forwardError);
+        console.warn(
+          `Failed to forward permission decision error for ${prompt.name} (${prompt.toolCallId}): ${forwardReason}`,
+        );
+      }
+    } finally {
+      localToolPermissionRetriesInFlight.delete(prompt.toolCallId);
+    }
+  };
+
+  const scheduleBufferedLocalToolExecution = (
+    toolCallId: string,
+    delayMs = 120,
+  ) => {
+    const existingTimer = localToolExecutionTimersById.get(toolCallId);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timerId = setTimeout(() => {
+      localToolExecutionTimersById.delete(toolCallId);
+      void tryExecuteBufferedLocalTool(toolCallId);
+    }, delayMs);
+    localToolExecutionTimersById.set(toolCallId, timerId);
   };
 
   const handleLocalToolCallStart = (event: StreamHubEvent) => {
@@ -586,9 +762,10 @@
       name: toolNameRaw,
       argsText: previous ? `${previous.argsText}${argsChunk}` : argsChunk,
       lastSequence: sequence,
+      firstSeenAt: previous?.firstSeenAt ?? Date.now(),
       executed: previous?.executed ?? false,
     });
-    void tryExecuteBufferedLocalTool(toolCallId);
+    scheduleBufferedLocalToolExecution(toolCallId);
   };
 
   const handleLocalToolCallDelta = (event: StreamHubEvent) => {
@@ -610,7 +787,7 @@
       argsText: `${previous.argsText}${deltaChunk}`,
       lastSequence: sequence,
     });
-    void tryExecuteBufferedLocalTool(toolCallId);
+    scheduleBufferedLocalToolExecution(toolCallId);
   };
 
   const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
@@ -620,8 +797,8 @@
 
     const streamId = String((event as any)?.streamId ?? '').trim();
     if (!streamId) return;
-    const activeAssistantStreamIds = getProcessingAssistantStreamIds();
-    if (!activeAssistantStreamIds.has(streamId)) return;
+    const localToolEligibleStreamIds = getLocalToolEligibleStreamIds();
+    if (!localToolEligibleStreamIds.has(streamId)) return;
 
     if (event.type === 'tool_call_start') {
       handleLocalToolCallStart(event);
@@ -671,6 +848,18 @@
   let localToolsHubKey = '';
   const localToolStatesById = new Map<string, LocalToolStreamState>();
   const localToolInFlight = new Set<string>();
+  const localToolExecutionTimersById = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
+  let pendingLocalToolPermissionPrompts: LocalToolPermissionPrompt[] = [];
+  const localToolPermissionRetriesInFlight = new Set<string>();
+  let extensionActiveTabContext: {
+    tabId: number;
+    url: string;
+    origin: string;
+    title: string | null;
+  } | null = null;
 
   let lastDraftApplied = draft;
   $: if (draft !== lastDraftApplied && draft !== input) {
@@ -884,9 +1073,92 @@
     }
   };
 
-  const ensureDefaultToolToggles = () => {
+  const EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS = new Set([
+    'web_search',
+    'web_extract',
+  ]);
+
+  const isExtensionNewSessionMode = () =>
+    mode === 'ai' && isLocalToolRuntimeAvailable() && !sessionId;
+
+  const getToolToggleDefaults = () => {
+    const restricted = isExtensionNewSessionMode();
     const defaults: Record<string, boolean> = {};
-    for (const t of TOOL_TOGGLES) defaults[t.id] = true;
+    for (const t of TOOL_TOGGLES) {
+      defaults[t.id] = restricted
+        ? t.toolIds.some((id) =>
+            EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
+          )
+        : true;
+    }
+    return defaults;
+  };
+
+  const getVisibleToolToggles = () => {
+    if (!isExtensionNewSessionMode()) return TOOL_TOGGLES;
+    return TOOL_TOGGLES.filter((toggle) =>
+      toggle.toolIds.some((id) =>
+        EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
+      ),
+    );
+  };
+
+  const getVisibleLocalTools = () => {
+    if (!isExtensionNewSessionMode()) return [];
+    return getLocalToolDefinitions();
+  };
+
+  const loadExtensionActiveTabContext = async () => {
+    if (!isLocalToolRuntimeAvailable()) {
+      extensionActiveTabContext = null;
+      return;
+    }
+    const runtime = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string; sendMessage?: Function } };
+    }).chrome?.runtime;
+    if (!runtime?.id || !runtime?.sendMessage) {
+      extensionActiveTabContext = null;
+      return;
+    }
+    try {
+      const response = (await runtime.sendMessage({
+        type: 'extension_active_tab_context_get',
+      })) as
+        | {
+            ok?: boolean;
+            tab?: {
+              tabId?: number;
+              url?: string;
+              origin?: string;
+              title?: string | null;
+            };
+          }
+        | undefined;
+      if (!response?.ok || !response.tab) {
+        extensionActiveTabContext = null;
+        return;
+      }
+      const tabId = Number(response.tab.tabId);
+      const url = String(response.tab.url ?? '').trim();
+      const origin = String(response.tab.origin ?? '').trim();
+      if (!Number.isFinite(tabId) || !url || !origin) {
+        extensionActiveTabContext = null;
+        return;
+      }
+      extensionActiveTabContext = {
+        tabId,
+        url,
+        origin,
+        title:
+          typeof response.tab.title === 'string' ? response.tab.title : null,
+      };
+    } catch {
+      extensionActiveTabContext = null;
+    }
+  };
+
+  const ensureDefaultToolToggles = () => {
+    const defaults = getToolToggleDefaults();
     if (Object.keys(toolEnabledById).length === 0) {
       toolEnabledById = defaults;
       return;
@@ -897,6 +1169,14 @@
       if (!(key in next)) {
         next[key] = value;
         changed = true;
+      }
+    }
+    if (isExtensionNewSessionMode()) {
+      for (const [key, value] of Object.entries(defaults)) {
+        if (next[key] !== value) {
+          next[key] = value;
+          changed = true;
+        }
       }
     }
     if (changed) toolEnabledById = next;
@@ -1011,7 +1291,12 @@
         t.toolIds.forEach((id) => enabled.add(id));
       }
     }
-    return Array.from(enabled);
+    if (!isExtensionNewSessionMode()) {
+      return Array.from(enabled);
+    }
+    return Array.from(enabled).filter((id) =>
+      EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS.has(id),
+    );
   };
 
   const toggleContextActive = (entry: ChatContextEntry) => {
@@ -2007,6 +2292,7 @@
       loadPrefs(sessionId);
       ensureDefaultToolToggles();
       updateContextFromRoute();
+      void loadExtensionActiveTabContext();
     }
     handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -2084,6 +2370,10 @@
     loadPrefs(null);
     ensureDefaultToolToggles();
     refreshContextLabels();
+  }
+
+  $: if (mode === 'ai' && showComposerMenu) {
+    void loadExtensionActiveTabContext();
   }
 
   let lastPath = '';
@@ -2528,6 +2818,69 @@
             {/if}
           {/each}
         {/if}
+        {#if pendingLocalToolPermissionPrompts.length > 0}
+          {#each pendingLocalToolPermissionPrompts as prompt (prompt.toolCallId)}
+            <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+              <div class="text-xs font-semibold text-slate-700">
+                {$_('chat.tools.permissions.promptTitle')}
+              </div>
+              <div class="text-[11px] text-slate-600">
+                {$_('chat.tools.permissions.promptDescription', {
+                  values: {
+                    tool: prompt.request.toolName,
+                    origin: prompt.request.origin,
+                  },
+                })}
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                  on:click={() =>
+                    void handleLocalToolPermissionDecision(
+                      prompt,
+                      'allow_once',
+                    )}
+                >
+                  {$_('chat.tools.permissions.allowOnce')}
+                </button>
+                <button
+                  type="button"
+                  class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                  on:click={() =>
+                    void handleLocalToolPermissionDecision(
+                      prompt,
+                      'deny_once',
+                    )}
+                >
+                  {$_('chat.tools.permissions.denyOnce')}
+                </button>
+                <button
+                  type="button"
+                  class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                  on:click={() =>
+                    void handleLocalToolPermissionDecision(
+                      prompt,
+                      'allow_always',
+                    )}
+                >
+                  {$_('chat.tools.permissions.allowAlways')}
+                </button>
+                <button
+                  type="button"
+                  class="rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
+                  on:click={() =>
+                    void handleLocalToolPermissionDecision(
+                      prompt,
+                      'deny_always',
+                    )}
+                >
+                  {$_('chat.tools.permissions.denyAlways')}
+                </button>
+              </div>
+            </div>
+          {/each}
+        {/if}
         {#if errorMsg}
           <div
             class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
@@ -2583,12 +2936,29 @@
             <div class="text-xs font-semibold text-slate-600">
               {$_('chat.contexts.title')}
             </div>
-            {#if contextEntries.length === 0}
+            {#if contextEntries.length === 0 && !extensionActiveTabContext}
               <div class="text-[11px] text-slate-500">
                 {$_('chat.contexts.none')}
               </div>
             {:else}
               <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
+                {#if extensionActiveTabContext}
+                  <div
+                    class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 bg-slate-50"
+                    title={extensionActiveTabContext.url}
+                  >
+                    <Globe class="w-4 h-4 text-slate-500" />
+                    <span class="truncate max-w-[220px]">
+                      {$_('chat.context.activeTabPrefix', {
+                        values: {
+                          title:
+                            extensionActiveTabContext.title ||
+                            extensionActiveTabContext.origin,
+                        },
+                      })}
+                    </span>
+                  </div>
+                {/if}
                 {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
                   <button
                     class={`flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] hover:bg-slate-50 ${
@@ -2612,7 +2982,7 @@
                 {$_('chat.tools.title')}
               </div>
               <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
-                {#each TOOL_TOGGLES as t (t.id)}
+                {#each getVisibleToolToggles() as t (t.id)}
                   <button
                     class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                     type="button"
@@ -2625,6 +2995,23 @@
                     <span class="truncate">{t.label}</span>
                   </button>
                 {/each}
+                {#if getVisibleLocalTools().length > 0}
+                  <div class="pt-1 mt-1 border-t border-slate-100">
+                    <div class="px-1 py-1 text-[10px] uppercase tracking-wide text-slate-500">
+                      Outils locaux
+                    </div>
+                    {#each getVisibleLocalTools() as localTool (localTool.name)}
+                      <div
+                        class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700"
+                      >
+                        <span class="inline-flex h-4 min-w-[20px] items-center justify-center rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">
+                          EXT
+                        </span>
+                        <span class="truncate">{localTool.name}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               </div>
             </div>
           </svelte:fragment>
