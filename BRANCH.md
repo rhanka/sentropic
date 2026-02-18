@@ -317,31 +317,46 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
   - [ ] **API tests**
     - [x] Identify/update impacted API tests:
       - [x] `api/tests/api/comments.test.ts`
-      - [ ] `api/tests/api/use-cases-generate-matrix.test.ts`
-      - [ ] `api/tests/unit/context-usecase-detail-contract.test.ts`
+      - [x] `api/tests/api/use-cases-generate-matrix.test.ts`
+      - [x] `api/tests/unit/context-usecase-detail-contract.test.ts`
+      - [x] `api/tests/unit/queue-manager-contract.test.ts`
     - [x] Scoped runs while evolving:
       - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/api/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
-      - [x] Note: scoped `vitest` suites passed; `make test-api` wrapper had one transient post-run `up-api` unhealthy event, then API recovered healthy.
-    - [ ] Remaining API assertions:
-      - [ ] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
-      - [ ] generation payload sanitization (`process`/`prerequisites` not persisted)
-    - [ ] Sub-lot gate: `make test-api ENV=test`.
+      - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/unit/context-usecase-detail-contract.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-api SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-api-endpoints SCOPE=tests/api/auth/session.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-api-endpoints SCOPE=tests/api/locks.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [x] Remaining API assertions:
+      - [x] auto-comment section-key mapping (`name`, `industry`, `domain`, `executive_summary.*`)
+      - [x] generation payload sanitization (`process`/`prerequisites` not persisted)
+    - [x] Sub-lot gate: `make test-api ENV=test`.
+      - [x] `make -C tmp/feat-minor-evols-ui test-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui DISABLE_RATE_LIMIT=true`
   - [ ] **UI tests (TypeScript only)**
     - [x] Identify/update impacted UI tests:
       - [x] `ui/tests/utils/comments.test.ts`
-      - [ ] `ui/tests/utils/api.test.ts`
-      - [ ] add/adjust component-level coverage for comment badge count visibility on section headers
+      - [x] `ui/tests/utils/api.test.ts`
+      - [x] `ui/tests/utils/comment-counts.test.ts`
     - [x] Scoped runs while evolving:
       - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/comments.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
-    - [ ] Remaining UI assertions:
-      - [ ] comment badge count visibility on section headers
-    - [ ] Sub-lot gate: `make test-ui ENV=test`.
+      - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/api.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-ui SCOPE=tests/utils/comment-counts.test.ts API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+    - [x] Remaining UI assertions:
+      - [x] comment badge count visibility logic on section headers
+    - [x] Sub-lot gate: `make test-ui ENV=test`.
+      - [x] `make -C tmp/feat-minor-evols-ui test-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
   - [ ] **E2E tests**
     - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
+      - [ ] Attempted: `make -C tmp/feat-minor-evols-ui build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui` -> blocked in `build-api` by production `npm audit --audit-level=high --omit=dev` (high vulnerabilities in transitive AWS SDK chain / `fast-xml-parser`).
     - [ ] Identify/update impacted E2E tests:
+      - [x] `e2e/tests/05-usecase-detail.spec.ts` (header badges / comments flow)
+      - [x] `e2e/tests/01-organizations-detail.spec.ts` (organization detail comments/header)
+      - [x] `e2e/tests/03-dashboard.spec.ts` (executive summary/dashboard flows)
+      - [x] `e2e/tests/07_comment_assistant.spec.ts` (AI comment badge behavior)
       - [ ] comment badge counters visible and clickable on headers (`/usecase/[id]`, `/organizations/[id]`, `/dashboard`).
       - [ ] generated usecase detail persists `domain` and excludes unsupported fields (`process`, `prerequisites`) in effective payload.
     - [ ] Scoped runs while evolving: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
+      - [ ] Attempted: `make -C tmp/feat-minor-evols-ui test-e2e E2E_SPEC=tests/07_comment_assistant.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui` -> blocked at `db-seed-test` (`/app/dist/tests/utils/seed-test-data.js` missing) because E2E stack runs production API image that was not rebuilt successfully.
     - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
   - [ ] Final gate: create PR with `BRANCH.md` content as initial message and verify CI for the branch.
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`.

@@ -21,6 +21,7 @@
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { listComments } from '$lib/utils/comments';
+  import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import { Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
@@ -507,28 +508,7 @@
     commentCountsLoading = true;
     try {
       const res = await listComments({ contextType: 'usecase', contextId: useCaseId });
-      const counts: Record<string, number> = {};
-      const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
-      for (const item of res.items || []) {
-        const threadId = item.thread_id;
-        if (!threadId) continue;
-        const existing = threads.get(threadId);
-        if (!existing) {
-          threads.set(threadId, {
-            status: item.status,
-            count: 1,
-            sectionKey: item.section_key || null,
-          });
-        } else {
-          threads.set(threadId, { ...existing, count: existing.count + 1 });
-        }
-      }
-      for (const thread of threads.values()) {
-        if (thread.status === 'closed') continue;
-        const key = thread.sectionKey || 'root';
-        counts[key] = (counts[key] || 0) + thread.count;
-      }
-      commentCounts = counts;
+      commentCounts = buildOpenCommentCounts(res.items || []);
       commentCountsRetryAttempts = 0;
     } catch {
       // ignore; badges are optional
