@@ -1347,6 +1347,19 @@ Règles :
       contextBlock += `\n\nComment resolution tool:\n- \`comment_assistant\` (mode=suggest) to analyze comment threads and propose actions.\n- Always present the proposal as French markdown with a clear confirmation question.\n- Require an explicit user confirmation ("Confirmer" or "Annuler").\n- Only after confirmation, call \`comment_assistant\` with mode=resolve, include the same actions, and pass confirmation="yes".\n- If the user response is not an explicit confirmation, ask again with the fixed options.`;
     }
 
+    const activeToolNames = (tools ?? [])
+      .map((tool) =>
+        tool.type === 'function' && tool.function?.name
+          ? tool.function.name
+          : ''
+      )
+      .filter((name): name is string => Boolean(name));
+    const activeToolsBlock =
+      activeToolNames.length > 0
+        ? `OUTILS ACTIFS POUR CETTE REPONSE :\n${activeToolNames.map((name) => `- \`${name}\``).join('\n')}\n\nRègle : si l'utilisateur demande les outils disponibles, répondre uniquement à partir de cette liste.`
+        : `OUTILS ACTIFS POUR CETTE REPONSE :\n- Aucun outil actif.`;
+    contextBlock += `\n\n${activeToolsBlock}`;
+
     const basePrompt = this.getPromptTemplate('chat_system_base')
       || "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
     const automationBlock = this.getPromptTemplate('chat_conversation_auto');
