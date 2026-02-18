@@ -194,6 +194,14 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
   - [x] Add review flow helpers in sub-header:
     - [x] Auto-switch to next open comment after resolving current one.
     - [x] Add previous/next comment navigation buttons with arrows.
+  - [x] UAT-driven header refinements (4B):
+    - [x] Comments hint text now depends on thread availability:
+      - [x] FR/EN copy for "select existing comment or write one" when threads exist.
+      - [x] FR/EN copy for "no comment yet, you can write one" when no thread exists.
+    - [x] Add `Chat IA` sub-header with session title and move session actions there (`list` / `new` / `delete`).
+    - [x] Add `Jobs` sub-header and move jobs actions there.
+    - [x] Remove duplicated jobs minus action (`-`) and keep single clear purge action in jobs sub-header.
+    - [x] Keep top header contextual actions hidden for comments mode; top header remains global controls (tabs + panel/close).
   - [x] Update FR/EN labels:
     - [x] `chat.comments.chooseThread` ("Liste des commentaires" / "Comments list")
     - [x] `chat.comments.newThread` ("Nouveau commentaire" / "New comment")

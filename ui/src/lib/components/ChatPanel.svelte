@@ -2645,34 +2645,34 @@
     {@const assignedUser = currentCommentRoot?.assigned_to_user ?? null}
     {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}
     <div class="border-b border-slate-100 px-3 py-2 space-y-2">
-      <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2">
-        <span>{activeCommentSectionLabel}</span>
-        {#if currentCommentRoot?.status === 'closed' && commentThreadResolvedAt}
-          <span class="text-slate-400">•</span>
-          <span>
-            {$_('chat.comments.resolvedAt', {
-              values: { at: formatCommentTimestamp(commentThreadResolvedAt) },
-            })}
-          </span>
-        {:else if assignedUser}
-          <span class="text-slate-400">•</span>
-          <span>
-            {#if isAssignedToMe}
-              {$_('chat.comments.assignedToMe')}
-            {:else}
-              {$_('chat.comments.assignedTo', {
-                values: {
-                  label:
-                    assignedUser.displayName ||
-                    assignedUser.email ||
-                    assignedUser.id,
-                },
-              })}
-            {/if}
-          </span>
-        {/if}
-      </div>
       <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="min-w-0 text-xs text-slate-500 flex flex-wrap items-center gap-2">
+          <span>{activeCommentSectionLabel}</span>
+          {#if currentCommentRoot?.status === 'closed' && commentThreadResolvedAt}
+            <span class="text-slate-400">•</span>
+            <span>
+              {$_('chat.comments.resolvedAt', {
+                values: { at: formatCommentTimestamp(commentThreadResolvedAt) },
+              })}
+            </span>
+          {:else if assignedUser}
+            <span class="text-slate-400">•</span>
+            <span>
+              {#if isAssignedToMe}
+                {$_('chat.comments.assignedToMe')}
+              {:else}
+                {$_('chat.comments.assignedTo', {
+                  values: {
+                    label:
+                      assignedUser.displayName ||
+                      assignedUser.email ||
+                      assignedUser.id,
+                  },
+                })}
+              {/if}
+            </span>
+          {/if}
+        </div>
         <div class="flex flex-wrap items-center gap-1">
           <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-72">
             <svelte:fragment slot="trigger" let:toggle>
@@ -2832,9 +2832,15 @@
         {#if commentLoading && commentMessages.length === 0}
           <div class="text-xs text-slate-500">{$_('common.loading')}</div>
         {:else if !commentThreadId}
-          <div class="text-xs text-slate-500">
-            {$_('chat.comments.selectThreadHint')}
-          </div>
+          {#if commentThreads.length > 0}
+            <div class="text-xs text-slate-500">
+              {$_('chat.comments.selectThreadHint')}
+            </div>
+          {:else}
+            <div class="text-xs text-slate-500">
+              {$_('chat.comments.emptyHint')}
+            </div>
+          {/if}
         {:else if commentMessages.length === 0}
           <div class="text-xs text-slate-500">
             {$_('chat.comments.noMessagesThread')}
