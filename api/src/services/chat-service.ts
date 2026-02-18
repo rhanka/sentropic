@@ -1169,10 +1169,21 @@ export class ChatService {
     );
 
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
-      const allowed = new Set(options.tools);
+      const allowed = new Set<string>([
+        ...options.tools,
+        ...Array.from(localToolNames)
+      ]);
       tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
       if (tools.length === 0) tools = undefined;
     }
+
+    const documentsToolName =
+      documentsTool.type === 'function' ? documentsTool.function.name : 'documents';
+    const hasDocumentsToolAvailable = Boolean(
+      tools?.some(
+        (t) => t.type === 'function' && t.function?.name === documentsToolName
+      )
+    );
 
     const contextLabel = (type: string, id: string) => {
       if (type === 'chat_session') return `Session de chat (${id})`;
@@ -1180,6 +1191,14 @@ export class ChatService {
     };
 
     const documentsBlock = await (async () => {
+      if (!hasDocumentsToolAvailable) {
+        return [
+          'DOCUMENTS DISPONIBLES :',
+          '- Aucun document exploitable dans ce contexte.',
+          '- Ne pas utiliser documents.list / documents.get_summary / documents.get_content / documents.analyze.'
+        ].join('\n');
+      }
+
       const contexts = allowedDocContexts;
       if (contexts.length === 0) {
         return 'DOCUMENTS DISPONIBLES :\n- Aucun document disponible pour les contextes autorisés.';
