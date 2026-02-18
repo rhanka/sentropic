@@ -282,24 +282,24 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [x] Replaced all hover variants `hover:bg-blue-700` + `hover:bg-indigo-700` by `hover:bg-primary/90`.
       - [x] Normalized mobile widget backdrop to the modal pattern `bg-black bg-opacity-40` (overlay semantics), and aligned explicit chat `close` button styling with existing header action buttons.
       - [x] Post-change grep gate: no remaining targeted tokens (`bg-blue-600`, `bg-indigo-600`, `bg-slate-900`, hover variants) in `.svelte`.
-  - [ ] UAT checklist:
-    - [ ] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
-    - [ ] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.
-    - [ ] In comments tab sub-header, actions appear there (not in top widget header): list, new comment, resolve/reopen.
-    - [ ] Sub-header shows localized section name (e.g. `Contraintes` / `Constraints`), never technical key.
-    - [ ] Resolve one open comment and verify automatic selection jumps to next open comment.
-    - [ ] Previous/next arrow buttons navigate between available comment threads.
-    - [ ] Auto-generated comments use localized field labels in FR and EN.
-    - [ ] AI marker parity: comments created by generation and by tool-based updates both display the AI marker (brain icon / Assistant IA) in comment threads.
-    - [ ] Name/title comment badges appear (with count when comments exist) on `/folders/[id]`, `/usecase/[id]`, and `/dashboard`.
-    - [ ] Clicking each `name/title` badge opens the matching comments context and `sectionKey=name`.
-    - [ ] On `/organizations/[id]`, title (`name`) and sector (`industry`) show comment badges with counts and open their exact section keys when clicked.
-    - [ ] Export/render path using `api/templates/usecase-onepage.docx` includes `domain` where expected.
-    - [ ] In usecase "Informations", `Contact` and `Domaine/Domain` are displayed as label + editable field, each with its own comment badge next to the label.
-    - [ ] After usecase detail generation, `data.domain` is persisted when generated, and unsupported fields (`data.process`, `data.prerequisites`) are not written by queue generation.
-    - [ ] On `/dashboard`, each executive summary header shows the comment badge with count.
-    - [ ] On `/dashboard`, clicking each badge opens comments in `executive_summary` context with the expected section preselected.
-    - [ ] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
+  - [x] UAT checklist:
+    - [x] In usecase view, comment bubble is primary-colored (not black) on cards and score headers.
+    - [x] Bubbles are visible/clickable on `Axes de Valeur` and `Axes de Complexité` headers.
+    - [x] In comments tab sub-header, actions appear there (not in top widget header): list, new comment, resolve/reopen.
+    - [x] Sub-header shows localized section name (e.g. `Contraintes` / `Constraints`), never technical key.
+    - [x] Resolve one open comment and verify automatic selection jumps to next open comment.
+    - [x] Previous/next arrow buttons navigate between available comment threads.
+    - [x] Auto-generated comments use localized field labels in FR and EN.
+    - [x] AI marker parity: comments created by generation and by tool-based updates both display the AI marker (brain icon / Assistant IA) in comment threads.
+    - [x] Name/title comment badges appear (with count when comments exist) on `/folders/[id]`, `/usecase/[id]`, and `/dashboard`.
+    - [x] Clicking each `name/title` badge opens the matching comments context and `sectionKey=name`.
+    - [x] On `/organizations/[id]`, title (`name`) and sector (`industry`) show comment badges with counts and open their exact section keys when clicked.
+    - [x] Export/render path using `api/templates/usecase-onepage.docx` includes `domain` where expected.
+    - [x] In usecase "Informations", `Contact` and `Domaine/Domain` are displayed as label + editable field, each with its own comment badge next to the label.
+    - [x] After usecase detail generation, `data.domain` is persisted when generated, and unsupported fields (`data.process`, `data.prerequisites`) are not written by queue generation.
+    - [x] On `/dashboard`, each executive summary header shows the comment badge with count.
+    - [x] On `/dashboard`, clicking each badge opens comments in `executive_summary` context with the expected section preselected.
+    - [x] After generating executive summary, auto-comments appear for generated fields (`introduction`, `analyse`, `recommandation`, `synthese_executive`) and badges update without full refresh.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update impacted specs/docs if behavior contracts changed.
