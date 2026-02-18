@@ -752,7 +752,7 @@
       "testApi": "Test API",
       "permissions": {
         "title": "Tool permissions",
-        "description": "Manage allow/deny policies by tool and origin.",
+        "description": "Manage allow/deny policies by tool and origin (URL, domain, or wildcard).",
         "addTitle": "Add rule",
         "addCta": "Add",
         "empty": "No tool permission policy yet.",
@@ -761,7 +761,7 @@
         "loadError": "Unable to load tool permissions.",
         "updateError": "Unable to update tool permission.",
         "deleteError": "Unable to delete tool permission.",
-        "missingDraftFields": "Provide a tool and a valid origin."
+        "missingDraftFields": "Provide a tool and a valid origin/pattern (e.g. https://site.com, *.site.com, *)."
       },
       "authRequired": {
         "title": "Extension auth is required before using this area.",

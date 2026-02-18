@@ -752,7 +752,7 @@
       "testApi": "Tester l’API",
       "permissions": {
         "title": "Permissions des outils",
-        "description": "Gérer les autorisations/refus par outil et origine.",
+        "description": "Gérer les autorisations/refus par outil et origine (URL, domaine ou wildcard).",
         "addTitle": "Ajouter une règle",
         "addCta": "Ajouter",
         "empty": "Aucune règle enregistrée.",
@@ -761,7 +761,7 @@
         "loadError": "Impossible de charger les permissions outils.",
         "updateError": "Impossible de mettre à jour la permission outil.",
         "deleteError": "Impossible de supprimer la permission outil.",
-        "missingDraftFields": "Renseigne un outil et une origine valide."
+        "missingDraftFields": "Renseigne un outil et une origine/pattern valide (ex: https://site.com, *.site.com, *)."
       },
       "authRequired": {
         "title": "Connexion extension requise avant d’utiliser cette zone.",

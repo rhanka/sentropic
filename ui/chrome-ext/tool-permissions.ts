@@ -73,16 +73,173 @@ let lastSyncAt = 0;
 
 const policyKey = (toolName: string, origin: string) => `${toolName}::${origin}`;
 
-const normalizeOrigin = (raw: string): string | null => {
+const TOOL_PATTERN_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
+const HOSTNAME_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const IPV4_REGEX =
+    /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const normalizeToolNamePattern = (raw: string): string | null => {
+    const value = raw.trim().toLowerCase();
+    if (!value) return null;
+    if (!TOOL_PATTERN_REGEX.test(value)) return null;
+    if (value.includes('**')) return null;
+    return value;
+};
+
+const isValidHostname = (host: string): boolean => {
+    const value = host.trim().toLowerCase();
+    if (!value) return false;
+    if (value === 'localhost') return true;
+    if (IPV4_REGEX.test(value)) return true;
+    const labels = value.split('.');
+    if (labels.length < 2) return false;
+    return labels.every((label) => HOSTNAME_LABEL_REGEX.test(label));
+};
+
+const normalizeRuntimeOrigin = (raw: string): string | null => {
     const value = raw.trim();
     if (!value) return null;
     try {
         const parsed = new URL(value);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-        return parsed.origin;
+        const hostname = parsed.hostname.toLowerCase();
+        const port = parsed.port ? `:${parsed.port}` : '';
+        return `${parsed.protocol}//${hostname}${port}`;
     } catch {
         return null;
     }
+};
+
+const normalizeOriginPattern = (raw: string): string | null => {
+    const value = raw.trim().toLowerCase();
+    if (!value) return null;
+    if (value === '*') return '*';
+
+    // all hosts with explicit scheme
+    const schemeAnyHostMatch = value.match(/^(https?:)\/\/\*$/);
+    if (schemeAnyHostMatch) {
+        return `${schemeAnyHostMatch[1]}//*`;
+    }
+
+    // host wildcard (all schemes)
+    if (value.startsWith('*.')) {
+        const suffix = value.slice(2);
+        if (!isValidHostname(suffix)) return null;
+        return `*.${suffix}`;
+    }
+
+    // host wildcard with explicit scheme (http/https only)
+    const wildcardSchemeMatch = value.match(/^(https?:)\/\/\*\.(.+)$/);
+    if (wildcardSchemeMatch) {
+        const scheme = wildcardSchemeMatch[1];
+        const suffix = wildcardSchemeMatch[2];
+        if (!isValidHostname(suffix)) return null;
+        return `${scheme}//*.${suffix}`;
+    }
+
+    // exact host pattern (all schemes)
+    if (isValidHostname(value)) {
+        return value;
+    }
+
+    // exact URL origin (with scheme)
+    return normalizeRuntimeOrigin(value);
+};
+
+const wildcardPatternToRegExp = (pattern: string): RegExp => {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escaped.replace(/\\\*/g, '.*')}$`);
+};
+
+const matchesToolPattern = (pattern: string, toolName: string): boolean => {
+    if (pattern === '*') return true;
+    if (pattern === toolName) return true;
+    // Backward-compat: legacy `tab_action` matches `tab_action:*`.
+    if (!pattern.includes('*') && !pattern.includes(':')) {
+        return toolName.startsWith(`${pattern}:`);
+    }
+    if (!pattern.includes('*')) return false;
+    return wildcardPatternToRegExp(pattern).test(toolName);
+};
+
+const matchesOriginPattern = (
+    pattern: string,
+    runtimeOrigin: string,
+): boolean => {
+    if (pattern === '*') return true;
+    const parsed = new URL(runtimeOrigin);
+    const hostname = parsed.hostname.toLowerCase();
+
+    const schemeAnyHostMatch = pattern.match(/^(https?:)\/\/\*$/);
+    if (schemeAnyHostMatch) {
+        return parsed.protocol === schemeAnyHostMatch[1];
+    }
+
+    if (pattern.startsWith('*.')) {
+        const suffix = pattern.slice(2);
+        return hostname === suffix || hostname.endsWith(`.${suffix}`);
+    }
+
+    const wildcardSchemeMatch = pattern.match(/^(https?:)\/\/\*\.(.+)$/);
+    if (wildcardSchemeMatch) {
+        const requiredScheme = wildcardSchemeMatch[1];
+        const suffix = wildcardSchemeMatch[2];
+        if (parsed.protocol !== requiredScheme) return false;
+        return hostname === suffix || hostname.endsWith(`.${suffix}`);
+    }
+
+    if (pattern.includes('://')) {
+        return pattern === runtimeOrigin;
+    }
+
+    // exact hostname rule (all schemes)
+    return hostname === pattern;
+};
+
+const getToolPatternScore = (pattern: string): number => {
+    if (pattern === '*') return 0;
+    const literalChars = pattern.replace(/\*/g, '').length;
+    if (!pattern.includes('*')) {
+        return (pattern.includes(':') ? 3000 : 2500) + literalChars;
+    }
+    return 1500 + literalChars;
+};
+
+const getOriginPatternScore = (pattern: string): number => {
+    if (pattern === '*') return 0;
+    if (pattern.includes('://') && !pattern.includes('*')) return 4000 + pattern.length;
+    if (pattern.includes('://*.')) return 3000 + pattern.length;
+    if (pattern.startsWith('*.')) return 2000 + pattern.length;
+    if (pattern.endsWith('://*')) return 1000 + pattern.length;
+    return 3500 + pattern.length; // exact hostname
+};
+
+const resolveMatchingPolicy = (
+    toolName: string,
+    runtimeOrigin: string,
+): ToolPermissionEntry | null => {
+    const matches = Array.from(policiesByKey.values()).filter(
+        (entry) =>
+            matchesToolPattern(entry.toolName, toolName) &&
+            matchesOriginPattern(entry.origin, runtimeOrigin),
+    );
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => {
+        const scoreA =
+            getOriginPatternScore(a.origin) * 10_000 +
+            getToolPatternScore(a.toolName);
+        const scoreB =
+            getOriginPatternScore(b.origin) * 10_000 +
+            getToolPatternScore(b.toolName);
+        if (scoreA !== scoreB) return scoreB - scoreA;
+        const updatedA = Date.parse(a.updatedAt);
+        const updatedB = Date.parse(b.updatedAt);
+        if (Number.isFinite(updatedA) && Number.isFinite(updatedB)) {
+            return updatedB - updatedA;
+        }
+        return 0;
+    });
+    return matches[0] ?? null;
 };
 
 const normalizePolicy = (value: string): ToolPermissionPolicy | null => {
@@ -96,8 +253,8 @@ const normalizeEntry = (raw: {
     policy?: string;
     updatedAt?: string;
 }): ToolPermissionEntry | null => {
-    const toolName = String(raw.toolName ?? '').trim();
-    const origin = normalizeOrigin(String(raw.origin ?? ''));
+    const toolName = normalizeToolNamePattern(String(raw.toolName ?? ''));
+    const origin = normalizeOriginPattern(String(raw.origin ?? ''));
     const policy = normalizePolicy(String(raw.policy ?? ''));
     const updatedAtRaw = String(raw.updatedAt ?? '').trim();
     const updatedAt =
@@ -133,8 +290,8 @@ const parseStoredQueue = (payload: unknown): QueueOperation[] => {
             continue;
         }
         if (raw.type === 'delete') {
-            const toolName = String(raw.toolName ?? '').trim();
-            const origin = normalizeOrigin(String(raw.origin ?? ''));
+            const toolName = normalizeToolNamePattern(String(raw.toolName ?? ''));
+            const origin = normalizeOriginPattern(String(raw.origin ?? ''));
             if (!toolName || !origin) continue;
             parsed.push({ type: 'delete', toolName, origin });
         }
@@ -338,8 +495,18 @@ export async function evaluateToolPermission(
     await ensureLoaded();
     await syncWithBackendIfNeeded(false);
 
-    const key = policyKey(input.toolName, input.origin);
-    const persisted = policiesByKey.get(key);
+    const toolName = normalizeToolNamePattern(input.toolName);
+    const origin = normalizeRuntimeOrigin(input.origin);
+    if (!toolName || !origin) {
+        return {
+            allowed: false,
+            denied: true,
+            reason: 'Invalid tool/origin permission context.',
+        };
+    }
+
+    const key = policyKey(toolName, origin);
+    const persisted = resolveMatchingPolicy(toolName, origin);
     if (persisted?.policy === 'allow') {
         return { allowed: true };
     }
@@ -347,7 +514,7 @@ export async function evaluateToolPermission(
         return {
             allowed: false,
             denied: true,
-            reason: `Permission denied for ${input.toolName} on ${input.origin}.`,
+            reason: `Permission denied for ${toolName} on ${origin}.`,
         };
     }
 
@@ -364,6 +531,8 @@ export async function evaluateToolPermission(
     const requestId = crypto.randomUUID();
     pendingRequestsById.set(requestId, {
         ...input,
+        toolName,
+        origin,
         requestId,
         createdAt: Date.now(),
     });
@@ -371,8 +540,8 @@ export async function evaluateToolPermission(
         allowed: false,
         request: {
             requestId,
-            toolName: input.toolName,
-            origin: input.origin,
+            toolName,
+            origin,
             tabId: input.tabId,
             tabUrl: input.tabUrl,
             tabTitle: input.tabTitle,
@@ -432,8 +601,8 @@ export async function upsertToolPermissionPolicy(input: {
     policy: ToolPermissionPolicy;
 }): Promise<ToolPermissionEntry> {
     await ensureLoaded();
-    const toolName = String(input.toolName ?? '').trim();
-    const origin = normalizeOrigin(String(input.origin ?? ''));
+    const toolName = normalizeToolNamePattern(String(input.toolName ?? ''));
+    const origin = normalizeOriginPattern(String(input.origin ?? ''));
     if (!toolName || !origin) {
         throw new Error('Invalid tool permission payload.');
     }
@@ -462,8 +631,8 @@ export async function deleteToolPermissionPolicy(input: {
     origin: string;
 }): Promise<void> {
     await ensureLoaded();
-    const toolName = String(input.toolName ?? '').trim();
-    const origin = normalizeOrigin(String(input.origin ?? ''));
+    const toolName = normalizeToolNamePattern(String(input.toolName ?? ''));
+    const origin = normalizeOriginPattern(String(input.origin ?? ''));
     if (!toolName || !origin) {
         throw new Error('Invalid tool permission payload.');
     }
@@ -482,4 +651,5 @@ export async function bootstrapToolPermissionSync(): Promise<void> {
     await syncWithBackendIfNeeded(true);
 }
 
-export const normalizePermissionOrigin = normalizeOrigin;
+export const normalizePermissionOrigin = normalizeOriginPattern;
+export const normalizeRuntimePermissionOrigin = normalizeRuntimeOrigin;

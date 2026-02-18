@@ -175,17 +175,28 @@ const executeTabReadDom: ToolExecutor = async (args, context) => {
 
 const executeTabScreenshot: ToolExecutor = async (args, context) => {
     const tab = await resolveTargetTab(args, context);
+    const formatRaw =
+        typeof args.format === 'string' ? args.format.trim().toLowerCase() : '';
+    const format: 'png' | 'jpeg' =
+        formatRaw === 'jpeg' || formatRaw === 'jpg' ? 'jpeg' : 'png';
     const quality =
         typeof args.quality === 'number' && Number.isFinite(args.quality)
             ? Math.min(100, Math.max(1, Math.round(args.quality)))
-            : 80;
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
-        format: 'jpeg',
-        quality,
-    });
+            : 95;
+    const captureOptions: chrome.tabs.CaptureVisibleTabOptions = {
+        format,
+    };
+    if (format === 'jpeg') {
+        captureOptions.quality = quality;
+    }
+    const dataUrl = await chrome.tabs.captureVisibleTab(
+        tab.windowId,
+        captureOptions,
+    );
     return {
-        format: 'jpeg',
-        quality,
+        format,
+        quality: format === 'jpeg' ? quality : null,
+        mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
         imageDataUrl: dataUrl,
         url: tab.url ?? null,
         title: tab.title ?? null,

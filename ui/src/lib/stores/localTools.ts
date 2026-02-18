@@ -80,13 +80,17 @@ const LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
   {
     name: 'tab_read',
     description:
-      'Read active-tab data with mode=info|dom|screenshot|elements.',
+      'Read active-tab data with mode=info|dom|screenshot|elements (screenshot defaults to PNG for readability).',
     parameters: {
       type: 'object',
       properties: {
         mode: {
           type: 'string',
           enum: ['info', 'dom', 'screenshot', 'elements'],
+        },
+        format: {
+          type: 'string',
+          enum: ['png', 'jpeg'],
         },
         selector: { type: 'string' },
         includeHtml: { type: 'boolean' },
