@@ -735,7 +735,8 @@
         "introduction": "Introduction",
         "analysis": "Analyse",
         "recommendations": "Recommandations",
-        "summary": "Synthèse"
+        "summary": "Synthèse",
+        "references": "Références"
       }
     },
     "widget": {

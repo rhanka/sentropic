@@ -312,8 +312,10 @@
       analysis: 'chat.sections.executiveSummary.analysis',
       recommandation: 'chat.sections.executiveSummary.recommendations',
       recommendations: 'chat.sections.executiveSummary.recommendations',
+      synthese_executive: 'chat.sections.executiveSummary.summary',
       synthese: 'chat.sections.executiveSummary.summary',
       summary: 'chat.sections.executiveSummary.summary',
+      references: 'chat.sections.executiveSummary.references',
     },
   };
 

@@ -1495,8 +1495,13 @@ export class ToolService {
       executive_summary: {
         introduction: { fr: 'Introduction', en: 'Introduction' },
         analyse: { fr: 'Analyse', en: 'Analysis' },
+        analysis: { fr: 'Analyse', en: 'Analysis' },
         recommandation: { fr: 'Recommandations', en: 'Recommendations' },
+        recommendations: { fr: 'Recommandations', en: 'Recommendations' },
+        synthese_executive: { fr: 'Synthese executive', en: 'Executive summary' },
         synthese: { fr: 'Synthese', en: 'Summary' },
+        summary: { fr: 'Synthese', en: 'Summary' },
+        references: { fr: 'References', en: 'References' },
       },
       matrix: {
         matrixConfig: { fr: 'Configuration de la matrice', en: 'Matrix configuration' },
