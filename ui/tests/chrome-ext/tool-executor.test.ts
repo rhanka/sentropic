@@ -190,6 +190,7 @@ describe('tool-executor', () => {
     const screenshot = await executors.tab_read({
       tabId: 77,
       mode: 'screenshot',
+      format: 'jpeg',
       quality: 70,
     }, {});
     expect((screenshot as any).imageDataUrl).toMatch(/^data:image\/jpeg/);

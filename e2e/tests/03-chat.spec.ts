@@ -273,6 +273,37 @@ test.describe.serial('Chat', () => {
     await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 5000 });
   });
 
+  test('non-régression app web: menu outils standard sans outils locaux extension', async ({ page }) => {
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await chatButton.click();
+
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 5000 });
+
+    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
+    await expect(menuButton).toBeVisible({ timeout: 5000 });
+    await menuButton.click();
+
+    const menu = page.locator('div.absolute').filter({ hasText: 'Outils' }).first();
+    await expect(menu).toBeVisible({ timeout: 5000 });
+    await expect(menu.locator('button', { hasText: 'Documents' })).toBeVisible({ timeout: 5000 });
+    await expect(menu.locator('button', { hasText: 'Web search' })).toBeVisible({ timeout: 5000 });
+    await expect(menu.locator('button', { hasText: 'tab_read' })).toHaveCount(0);
+    await expect(menu.locator('button', { hasText: 'tab_action' })).toHaveCount(0);
+
+    const requestData = await sendMessageAndWaitApi(
+      page,
+      composer,
+      'Réponds uniquement avec OK_APP_WEB',
+    );
+    expect(requestData.requestBody?.localToolDefinitions ?? null).toBeNull();
+  });
+
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
     // Aller sur une page simple
     await page.goto('/folders');

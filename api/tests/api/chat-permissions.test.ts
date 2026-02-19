@@ -123,6 +123,79 @@ describe('Chat tool permissions API', () => {
     expect(listBody.items).toEqual([]);
   });
 
+  it('normalizes wildcard origin patterns and tool wildcards', async () => {
+    const cases: Array<{
+      toolName: string;
+      origin: string;
+      expectedToolName: string;
+      expectedOrigin: string;
+    }> = [
+      {
+        toolName: 'TAB_ACTION:*',
+        origin: '*',
+        expectedToolName: 'tab_action:*',
+        expectedOrigin: '*',
+      },
+      {
+        toolName: 'tab_read:*',
+        origin: 'https://*',
+        expectedToolName: 'tab_read:*',
+        expectedOrigin: 'https://*',
+      },
+      {
+        toolName: 'tab_read:dom',
+        origin: '*.matchid.io',
+        expectedToolName: 'tab_read:dom',
+        expectedOrigin: '*.matchid.io',
+      },
+      {
+        toolName: 'tab_action:click',
+        origin: 'deces.matchid.io',
+        expectedToolName: 'tab_action:click',
+        expectedOrigin: 'deces.matchid.io',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await authenticatedRequest(
+        app,
+        'PUT',
+        '/api/v1/chat/tool-permissions',
+        user.sessionToken!,
+        {
+          toolName: testCase.toolName,
+          origin: testCase.origin,
+          policy: 'allow',
+        },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.item.toolName).toBe(testCase.expectedToolName);
+      expect(body.item.origin).toBe(testCase.expectedOrigin);
+      expect(body.item.policy).toBe('allow');
+    }
+
+    const list = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/chat/tool-permissions',
+      user.sessionToken!,
+    );
+    expect(list.status).toBe(200);
+    const listBody = await list.json();
+    const entries = Array.isArray(listBody.items) ? listBody.items : [];
+
+    for (const testCase of cases) {
+      expect(entries).toContainEqual(
+        expect.objectContaining({
+          toolName: testCase.expectedToolName,
+          origin: testCase.expectedOrigin,
+          policy: 'allow',
+        }),
+      );
+    }
+  });
+
   it('rejects invalid origins', async () => {
     const response = await authenticatedRequest(
       app,
@@ -138,6 +211,28 @@ describe('Chat tool permissions API', () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(String(body.error || '')).toContain('Invalid origin');
+  });
+
+  it('rejects invalid tool patterns and invalid wildcard-origin payloads', async () => {
+    const invalidPayloads = [
+      { toolName: 'tab action', origin: 'https://example.com', policy: 'allow' },
+      { toolName: 'tab_action:**', origin: 'https://example.com', policy: 'allow' },
+      { toolName: 'tab_read:dom', origin: 'https://*.bad/path', policy: 'allow' },
+      { toolName: 'tab_read:dom', origin: '*.bad_host.com', policy: 'allow' },
+    ] as const;
+
+    for (const payload of invalidPayloads) {
+      const response = await authenticatedRequest(
+        app,
+        'PUT',
+        '/api/v1/chat/tool-permissions',
+        user.sessionToken!,
+        payload,
+      );
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(String(body.error || '')).toMatch(/Invalid tool pattern|Invalid origin pattern/);
+    }
   });
 
   it('requires authentication', async () => {

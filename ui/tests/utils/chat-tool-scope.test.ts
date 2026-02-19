@@ -11,6 +11,8 @@ const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'documents', toolIds: ['documents'] },
   { id: 'web_search', toolIds: ['web_search'] },
   { id: 'web_extract', toolIds: ['web_extract'] },
+  { id: 'tab_read', toolIds: ['tab_read'] },
+  { id: 'tab_action', toolIds: ['tab_action'] },
   { id: 'organization_read', toolIds: ['organizations_list', 'organization_get'] },
 ];
 
@@ -28,7 +30,12 @@ describe('chat-tool-scope', () => {
       toolToggles: TOGGLES,
       restrictedMode: restricted,
     });
-    expect(visibleIds).toEqual(['web_search', 'web_extract']);
+    expect(visibleIds).toEqual([
+      'web_search',
+      'web_extract',
+      'tab_read',
+      'tab_action',
+    ]);
 
     const enabledIds = computeEnabledToolIds({
       toolToggles: TOGGLES,
@@ -37,10 +44,17 @@ describe('chat-tool-scope', () => {
         documents: true,
         web_search: true,
         web_extract: true,
+        tab_read: true,
+        tab_action: true,
         organization_read: true,
       },
     });
-    expect(enabledIds).toEqual(['web_search', 'web_extract']);
+    expect(enabledIds).toEqual([
+      'web_search',
+      'web_extract',
+      'tab_read',
+      'tab_action',
+    ]);
   });
 
   it('uses restricted defaults for extension new sessions', () => {
@@ -52,6 +66,8 @@ describe('chat-tool-scope', () => {
     expect(defaults.documents).toBe(false);
     expect(defaults.web_search).toBe(true);
     expect(defaults.web_extract).toBe(true);
+    expect(defaults.tab_read).toBe(true);
+    expect(defaults.tab_action).toBe(true);
     expect(defaults.organization_read).toBe(false);
   });
 
@@ -72,7 +88,28 @@ describe('chat-tool-scope', () => {
       'documents',
       'web_search',
       'web_extract',
+      'tab_read',
+      'tab_action',
       'organization_read',
     ]);
+  });
+
+  it('filters out local tools when explicitly disabled in restricted mode', () => {
+    const enabledIds = computeEnabledToolIds({
+      toolToggles: TOGGLES,
+      restrictedMode: true,
+      toolEnabledById: {
+        documents: false,
+        web_search: true,
+        web_extract: true,
+        tab_read: false,
+        tab_action: true,
+        organization_read: false,
+      },
+    });
+
+    expect(enabledIds).toEqual(['web_search', 'web_extract', 'tab_action']);
+    expect(enabledIds).not.toContain('documents');
+    expect(enabledIds).not.toContain('organizations_list');
   });
 });
