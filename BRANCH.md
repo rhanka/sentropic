@@ -279,15 +279,15 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate extension restricted toolset persistence:
       - [x] In extension runtime, after tab switch and reopening an existing chat session, business tools (`documents`, `organisation`, `dossier`, etc.) do not reappear in composer list.
 
-- [ ] **Lot 7 — Integration & i18n**
-  - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read` (`mode=dom`) → extension executes → result sent to API → LLM continues
-  - [ ] i18n initialization from `chrome.i18n.getUILanguage()`
-  - [ ] Verify all UI modes: floating bubble, popup, side panel placeholder
-  - [ ] Lot gate: full flow works manually
-
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Refactor and integrate `spec/SPEC_CHROME_PLUGIN.md` into existing specs (if not a new standalone spec).
-  - [ ] Update `TODO.md` to reflect completed items.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Identify impacted specs to update:
+    - [x] `spec/SPEC.md` (global functional map + extension runtime behavior).
+    - [x] `spec/DATA_MODEL.md` (tenancy/chat model + extension tool-permission persistence).
+    - [x] `spec/SPEC_CHROME_PLUGIN.md` (current architecture, unified local tools, auth/permission model).
+  - [x] Update `spec/SPEC.md` with current Chrome extension behavior (`tab_read`/`tab_action`, runtime permission gate, plugin UX scope).
+  - [x] Update `spec/DATA_MODEL.md` with `extension_tool_permissions` and local-tool chat runtime notes.
+  - [x] Refactor `spec/SPEC_CHROME_PLUGIN.md` to remove legacy `tab_*` split contract and document current `tab_read`/`tab_action` + `/chat/tool-permissions`.
+  - [x] Update `TODO.md` to reflect completed Chrome extension 6B delivery.
 
 - [ ] **Lot N — Final validation**
   - [ ] **API tests**
