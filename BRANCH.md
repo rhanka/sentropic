@@ -272,12 +272,12 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate floating chatwidget settings menu no longer clips/truncates and uses single content scroll area.
     - [x] Validate tool visibility rules for no-context new sessions.
     - [x] Validate `Commentaires` tab is hidden in plugin mode and web app behavior is unchanged.
-    - [ ] Validate local tool toggles in composer menu:
-      - [ ] `tab_read` and `tab_action` are visible with standard tool row style (icon + label, no `EXT` badge).
-      - [ ] Disabling `tab_read` prevents it from being sent in `localToolDefinitions` for new chat requests.
-      - [ ] Disabling `tab_action` prevents it from being sent in `localToolDefinitions` for new chat requests.
-    - [ ] Validate extension restricted toolset persistence:
-      - [ ] In extension runtime, after tab switch and reopening an existing chat session, business tools (`documents`, `organisation`, `dossier`, etc.) do not reappear in composer list.
+    - [x] Validate local tool toggles in composer menu:
+      - [x] `tab_read` and `tab_action` are visible with standard tool row style (icon + label, no `EXT` badge).
+      - [x] Disabling `tab_read` prevents it from being sent in `localToolDefinitions` for new chat requests.
+      - [x] Disabling `tab_action` prevents it from being sent in `localToolDefinitions` for new chat requests.
+    - [x] Validate extension restricted toolset persistence:
+      - [x] In extension runtime, after tab switch and reopening an existing chat session, business tools (`documents`, `organisation`, `dossier`, etc.) do not reappear in composer list.
 
 - [ ] **Lot 7 — Integration & i18n**
   - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read` (`mode=dom`) → extension executes → result sent to API → LLM continues
