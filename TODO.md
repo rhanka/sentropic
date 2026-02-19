@@ -262,18 +262,18 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Gemini
       - [ ] Claude
       - [ ] Mistral
-- [ ] Concevoir le plugin chrome
-  - [ ] SDLC
+- [x] Concevoir le plugin chrome (socle livré jusqu'au lot 6B)
+  - [x] SDLC
     - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
-    - [ ] isoler correctement le chatwidget et ses stores pour permettre ce mode
-    - [ ] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
-  - [ ] UI
-    - [ ] mode bulle + flottant
-    - [ ] mode docker/side panel
-    - [ ] toasters également
-  - [ ] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
-    - [ ] Lecture d'un tab
-    - [ ] Automation d'un tab (cliquer ...)
+    - [x] isoler correctement le chatwidget et ses stores pour permettre ce mode
+    - [x] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
+  - [x] UI
+    - [x] mode bulle + flottant
+    - [x] mode docker/side panel
+    - [x] toasters également
+  - [x] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+    - [x] Lecture d'un tab
+    - [x] Automation d'un tab (cliquer ...)
     - [ ] Collaboration local / remote (outils d'un workspace)
   - Tools spécialisés
     - [ ] Interaction avec applications via UI
