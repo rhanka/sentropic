@@ -167,6 +167,61 @@ describe('Chat API Endpoints', () => {
       ]);
     });
 
+    it('should enqueue tools and localToolDefinitions payload in chat_message job data', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        {
+          content: 'Message with local tools',
+          tools: ['web_search', 'web_extract'],
+          localToolDefinitions: [
+            {
+              name: 'tab_read',
+              description: 'Read active tab data',
+              parameters: {
+                type: 'object',
+                properties: { mode: { type: 'string' } },
+                required: ['mode'],
+              },
+            },
+            {
+              name: 'tab_action',
+              description: 'Run tab actions',
+              parameters: {
+                type: 'object',
+                properties: { action: { type: 'string' } },
+                required: [],
+              },
+            },
+          ],
+        },
+      );
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.jobId).toBeDefined();
+
+      const jobs = await db
+        .select()
+        .from(jobQueue)
+        .where(eq(jobQueue.id, body.jobId));
+      expect(jobs).toHaveLength(1);
+
+      const rawData = jobs[0].data as unknown;
+      const data =
+        typeof rawData === 'string'
+          ? JSON.parse(rawData)
+          : (rawData as Record<string, unknown>);
+
+      expect(data.tools).toEqual(['web_search', 'web_extract']);
+      expect(data.localToolDefinitions).toEqual([
+        expect.objectContaining({ name: 'tab_read' }),
+        expect.objectContaining({ name: 'tab_action' }),
+      ]);
+    });
+
     it('should return 401 without authentication', async () => {
       const response = await app.request('/api/v1/chat/messages', {
         method: 'POST',
@@ -288,6 +343,45 @@ describe('Chat API Endpoints', () => {
       } finally {
         acceptSpy.mockRestore();
       }
+    });
+
+    it('should return 404 when assistant message does not exist', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages/does-not-exist/tool-results',
+        user.sessionToken!,
+        { toolCallId: 'call_missing', result: { ok: true } },
+      );
+
+      expect(response.status).toBe(404);
+      const body = await response.json();
+      expect(String(body.error ?? '')).toContain('Message not found');
+    });
+
+    it('should return 400 when pushing tool result on a user message id', async () => {
+      const create = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        { content: 'tool results on user message should fail' },
+      );
+      const created = await create.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/chat/messages/${created.userMessageId}/tool-results`,
+        user.sessionToken!,
+        { toolCallId: 'call_local_1', result: { ok: true } },
+      );
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(String(body.error ?? '')).toContain(
+        'Only assistant messages accept tool results',
+      );
     });
   });
 
