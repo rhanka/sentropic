@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '$lib/config';
+import { getApiBaseUrl } from '$lib/core/api-client';
 import { isAuthenticated } from '$lib/stores/session';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
@@ -10,6 +11,14 @@ function getStoreValue<T>(store: { subscribe: (run: (v: T) => void) => () => voi
   unsub();
   return value;
 }
+
+const isExtensionHost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const runtime = (globalThis as typeof globalThis & {
+    chrome?: { runtime?: { id?: string } };
+  }).chrome?.runtime;
+  return Boolean(runtime?.id);
+};
 
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
@@ -54,9 +63,27 @@ const EVENT_TYPES = [
   'ping'
 ] as const;
 
+type RuntimePortLike = {
+  postMessage: (message: unknown) => void;
+  disconnect: () => void;
+  onMessage: {
+    addListener: (listener: (message: any) => void) => void;
+    removeListener: (listener: (message: any) => void) => void;
+  };
+  onDisconnect: {
+    addListener: (listener: () => void) => void;
+    removeListener: (listener: () => void) => void;
+  };
+};
+
 class StreamHub {
   private subs = new Map<string, Subscription>();
   private es: EventSource | null = null;
+  private extensionPort: RuntimePortLike | null = null;
+  private extensionPortOnMessage: ((message: any) => void) | null = null;
+  private extensionPortOnDisconnect: (() => void) | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollInFlight = false;
   private currentUrl: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
@@ -167,7 +194,284 @@ class StreamHub {
       this.es.close();
       this.es = null;
     }
+    if (this.extensionPort) {
+      if (this.extensionPortOnMessage) {
+        this.extensionPort.onMessage.removeListener(this.extensionPortOnMessage);
+        this.extensionPortOnMessage = null;
+      }
+      if (this.extensionPortOnDisconnect) {
+        this.extensionPort.onDisconnect.removeListener(this.extensionPortOnDisconnect);
+        this.extensionPortOnDisconnect = null;
+      }
+      try {
+        this.extensionPort.disconnect();
+      } catch {
+        // noop
+      }
+      this.extensionPort = null;
+    }
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    this.pollInFlight = false;
     this.currentUrl = null;
+  }
+
+  private scheduleOverlayPoll(baseUrl: string, delayMs: number) {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = null;
+      void this.runOverlayPoll(baseUrl);
+    }, delayMs);
+  }
+
+  private async runOverlayPoll(baseUrl: string) {
+    if (this.pollInFlight) return;
+    this.pollInFlight = true;
+    const { streamCount, eventCount, hadError } =
+      await this.pollOverlayStreams(baseUrl);
+    this.pollInFlight = false;
+
+    // Keep polling only while extension polling mode is still active.
+    if (!this.currentUrl?.startsWith('ext-poll:')) return;
+    if (!getStoreValue(isAuthenticated) || this.subs.size === 0) return;
+
+    let nextDelayMs = 1000;
+    if (streamCount > 0) {
+      // Near-real-time while active stream subscriptions exist.
+      if (hadError) nextDelayMs = 600;
+      else if (eventCount > 0) nextDelayMs = 120;
+      else nextDelayMs = 180;
+    }
+    this.scheduleOverlayPoll(baseUrl, nextDelayMs);
+  }
+
+  private async pollOverlayStreams(
+    baseUrl: string
+  ): Promise<{ streamCount: number; eventCount: number; hadError: boolean }> {
+    const streamIds = this.getTrackedStreamIds();
+
+    if (streamIds.length === 0) {
+      return { streamCount: 0, eventCount: 0, hadError: false };
+    }
+
+    const scoped = getScopedWorkspaceIdForUser();
+    let eventCount = 0;
+    let hadError = false;
+
+    await Promise.all(
+      streamIds.map(async (streamId) => {
+        const prev = this.streamHistoryById.get(streamId) ?? [];
+        const last = prev.length > 0 ? (prev[prev.length - 1] as any) : null;
+        const sinceSequence = Number.isFinite(last?.sequence)
+          ? Number(last.sequence)
+          : undefined;
+
+        const endpoint =
+          `/streams/events/${encodeURIComponent(streamId)}` +
+          `?limit=400${sinceSequence !== undefined ? `&sinceSequence=${sinceSequence}` : ''}`;
+        const url = new URL(`${baseUrl}${endpoint}`, window.location.origin);
+        if (scoped) url.searchParams.set('workspace_id', scoped);
+
+        try {
+          const payload = await this.fetchJsonThroughBestEffort(url.toString());
+          if (!payload) {
+            hadError = true;
+            return;
+          }
+          const events = Array.isArray(payload?.events) ? payload.events : [];
+          for (const evt of events) {
+            if (!evt?.eventType) continue;
+            if (!Number.isFinite(evt?.sequence)) continue;
+            this.dispatch({
+              type: evt.eventType,
+              streamId,
+              sequence: evt.sequence,
+              data: evt.data,
+            });
+            eventCount += 1;
+          }
+        } catch {
+          hadError = true;
+        }
+      })
+    );
+
+    return { streamCount: streamIds.length, eventCount, hadError };
+  }
+
+  private async fetchJsonThroughBestEffort(url: string): Promise<any | null> {
+    if (isExtensionHost()) {
+      const runtime = (globalThis as typeof globalThis & {
+        chrome?: {
+          runtime?: {
+            sendMessage?: (message: unknown) => Promise<any>;
+          };
+        };
+      }).chrome?.runtime;
+
+      if (runtime?.sendMessage) {
+        try {
+          const response = await runtime.sendMessage({
+            type: 'proxy_api_fetch',
+            payload: {
+              url,
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              authMode: 'extension',
+            },
+          });
+          if (!response?.ok) return null;
+          const status = Number(response?.status ?? 0);
+          if (!Number.isFinite(status) || status < 200 || status >= 300) return null;
+          const bodyText = String(response?.bodyText ?? '');
+          return JSON.parse(bodyText);
+        } catch {
+          return null;
+        }
+      }
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  private getTrackedStreamIds(): string[] {
+    return Array.from(
+      new Set(
+        Array.from(this.subs.values())
+          .map((sub) => sub.streamId)
+          .filter((id): id is string => Boolean(id))
+      )
+    ).sort();
+  }
+
+  private handleSseEvent(type: string, parsed: any) {
+    if (type === 'job_update') {
+      this.dispatch({ type, jobId: parsed.jobId, data: parsed.data });
+      return;
+    }
+    if (type === 'organization_update') {
+      this.dispatch({ type, organizationId: parsed.organizationId, data: parsed.data });
+      return;
+    }
+    if (type === 'folder_update') {
+      this.dispatch({ type, folderId: parsed.folderId, data: parsed.data });
+      return;
+    }
+    if (type === 'usecase_update') {
+      this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
+      return;
+    }
+    if (type === 'comment_update') {
+      this.dispatch({ type, contextType: parsed.contextType, contextId: parsed.contextId, data: parsed.data });
+      return;
+    }
+    if (type === 'lock_update') {
+      this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
+      return;
+    }
+    if (type === 'presence_update') {
+      this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
+      return;
+    }
+    if (type === 'workspace_update') {
+      this.dispatch({ type, workspaceId: parsed.workspaceId, data: parsed.data });
+      return;
+    }
+    if (type === 'workspace_membership_update') {
+      this.dispatch({ type, workspaceId: parsed.workspaceId, userId: parsed.userId, data: parsed.data });
+      return;
+    }
+    if (type === 'ping') {
+      this.dispatch({ type, data: parsed });
+      return;
+    }
+
+    const streamId: string = parsed?.streamId;
+    const sequence: number = parsed?.sequence;
+    const data: any = parsed?.data ?? {};
+    if (streamId && Number.isFinite(sequence)) {
+      this.dispatch({ type, streamId, sequence, data });
+    }
+  }
+
+  private connectExtensionProxySse(
+    baseUrl: string,
+    workspaceId: string | null,
+    streamIds: string[]
+  ): boolean {
+    const runtime = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: { connect?: (options: { name: string }) => RuntimePortLike } };
+    }).chrome?.runtime;
+
+    if (!runtime?.connect) return false;
+
+    let port: RuntimePortLike;
+    try {
+      port = runtime.connect({ name: 'topai-stream-proxy' });
+    } catch {
+      return false;
+    }
+
+    this.extensionPort = port;
+    this.extensionPortOnMessage = (message: any) => {
+      if (message?.type === 'sse_event' && typeof message?.eventType === 'string') {
+        this.handleSseEvent(message.eventType, message.payload ?? {});
+        return;
+      }
+      if (message?.type === 'sse_error' || message?.type === 'sse_closed') {
+        this.scheduleReconnect();
+      }
+    };
+    this.extensionPortOnDisconnect = () => {
+      if (this.extensionPort !== port) return;
+      this.extensionPort = null;
+      this.extensionPortOnMessage = null;
+      this.extensionPortOnDisconnect = null;
+      this.scheduleReconnect();
+    };
+
+    port.onMessage.addListener(this.extensionPortOnMessage);
+    port.onDisconnect.addListener(this.extensionPortOnDisconnect);
+
+    try {
+      port.postMessage({
+        type: 'stream_proxy_start',
+        payload: {
+          baseUrl,
+          workspaceId,
+          streamIds,
+        },
+      });
+      return true;
+    } catch {
+      try {
+        port.disconnect();
+      } catch {
+        // noop
+      }
+      this.extensionPort = null;
+      this.extensionPortOnMessage = null;
+      this.extensionPortOnDisconnect = null;
+      return false;
+    }
   }
 
   private dispatch(event: StreamHubEvent) {
@@ -288,9 +592,44 @@ class StreamHub {
     // `API_BASE_URL` can be relative in production (e.g. `/api/v1` when the UI is served by Nginx
     // and proxies `/api/v1/*` to the API). `new URL('/api/v1/...')` throws in browsers unless a base is provided.
     // Using `window.location.origin` as base aligns SSE URL resolution with how `fetch()` handles relative URLs.
-    const urlObj = new URL(`${API_BASE_URL}/streams/sse`, window.location.origin);
-    const scoped = getScopedWorkspaceIdForUser();
-    if (scoped) urlObj.searchParams.set('workspace_id', scoped);
+    const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
+    const scopedWorkspaceId = getScopedWorkspaceIdForUser();
+    const streamIds = this.getTrackedStreamIds();
+
+    if (isExtensionHost()) {
+      const connectionKey = JSON.stringify({
+        baseUrl,
+        workspaceId: scopedWorkspaceId ?? null,
+        streamIds,
+      });
+      const extensionUrl = `ext-sse:${connectionKey}`;
+      if (this.currentUrl === extensionUrl && this.extensionPort) return;
+
+      this.close();
+
+      const connected = this.connectExtensionProxySse(
+        baseUrl,
+        scopedWorkspaceId ?? null,
+        streamIds
+      );
+      if (connected) {
+        this.currentUrl = extensionUrl;
+        return;
+      }
+
+      const pollUrl = `ext-poll:${connectionKey}`;
+      if (this.currentUrl !== pollUrl) {
+        this.close();
+        this.currentUrl = pollUrl;
+      }
+      if (!this.pollTimer && !this.pollInFlight) {
+        void this.runOverlayPoll(baseUrl);
+      }
+      return;
+    }
+
+    const urlObj = new URL(`${baseUrl}/streams/sse`, window.location.origin);
+    if (scopedWorkspaceId) urlObj.searchParams.set('workspace_id', scopedWorkspaceId);
     const url = urlObj.toString();
     if (this.es && this.currentUrl === url) return;
 
@@ -301,55 +640,7 @@ class StreamHub {
     const handle = (type: string, raw: MessageEvent) => {
       try {
         const parsed = JSON.parse(raw.data);
-
-        if (type === 'job_update') {
-          this.dispatch({ type, jobId: parsed.jobId, data: parsed.data });
-          return;
-        }
-        if (type === 'organization_update') {
-          this.dispatch({ type, organizationId: parsed.organizationId, data: parsed.data });
-          return;
-        }
-        if (type === 'folder_update') {
-          this.dispatch({ type, folderId: parsed.folderId, data: parsed.data });
-          return;
-        }
-        if (type === 'usecase_update') {
-          this.dispatch({ type, useCaseId: parsed.useCaseId, data: parsed.data });
-          return;
-        }
-        if (type === 'comment_update') {
-          this.dispatch({ type, contextType: parsed.contextType, contextId: parsed.contextId, data: parsed.data });
-          return;
-        }
-        if (type === 'lock_update') {
-          this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
-          return;
-        }
-        if (type === 'presence_update') {
-          this.dispatch({ type, objectType: parsed.objectType, objectId: parsed.objectId, data: parsed.data });
-          return;
-        }
-        if (type === 'workspace_update') {
-          this.dispatch({ type, workspaceId: parsed.workspaceId, data: parsed.data });
-          return;
-        }
-        if (type === 'workspace_membership_update') {
-          this.dispatch({ type, workspaceId: parsed.workspaceId, userId: parsed.userId, data: parsed.data });
-          return;
-        }
-        if (type === 'ping') {
-          this.dispatch({ type, data: parsed });
-          return;
-        }
-
-        // stream event normalisé
-        const streamId: string = parsed.streamId;
-        const sequence: number = parsed.sequence;
-        const data: any = parsed.data ?? {};
-        if (streamId && Number.isFinite(sequence)) {
-          this.dispatch({ type, streamId, sequence, data });
-        }
+        this.handleSseEvent(type, parsed);
       } catch {
         // ignore
       }
@@ -367,5 +658,3 @@ class StreamHub {
 }
 
 export const streamHub = new StreamHub();
-
-

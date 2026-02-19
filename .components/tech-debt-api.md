@@ -9,6 +9,7 @@
 | vitest | 1.6.1 | (check) | no | (check) | (check) | To be audited |
 | typescript | 5.4.5 | (check) | no | (check) | (check) | To be audited |
 | node | 24 | 24 | no | no | none | LTS version |
+| npm (bundled in image) | 11.10.0 | (check) | no | (check) | 1w | Temporary accepted risk: `CVE-2026-26996_api_minimatch_10.1.2` (build/tooling scope), upgrade tracked in TODO |
 
 ## Base Images
 | Component | Current | Latest | EOL | Breaking Change | Priority | Notes |
@@ -48,4 +49,3 @@ make audit-api COMPONENT=drizzle-orm
 # API-specific security audit
 make test-api-security-sca
 ```
-

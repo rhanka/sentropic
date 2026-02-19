@@ -12,6 +12,10 @@ export API_PORT ?= 8787
 export UI_PORT ?= 5173
 export MAILDEV_UI_PORT ?= 1080
 export VITE_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
+export VITE_EXTENSION_PROFILE ?= uat
+export VITE_EXTENSION_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
+export VITE_EXTENSION_APP_BASE_URL ?= http://localhost:$(UI_PORT)
+export VITE_EXTENSION_WS_BASE_URL ?=
 export API_BASE_URL ?= http://localhost:$(API_PORT)
 export UI_BASE_URL ?= http://localhost:$(UI_PORT)
 export MAILDEV_API_URL ?= http://localhost:$(MAILDEV_UI_PORT)
@@ -139,6 +143,21 @@ build-ui-image: ## Build the UI Docker image for production
 .PHONY: build-ui
 build-ui: ## Build the SvelteKit UI (static)
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
+
+.PHONY: build-ext
+build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
+	@echo "📦 Syncing UI dependencies in container..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
+	@echo "🧩 Building Chrome Extension..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run build:ext
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/chrome-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'test -f /app/chrome-ext/dist/manifest.json && test -f /app/chrome-ext/dist/content.js && test -f /app/chrome-ext/dist/chrome-ext/popup.html && test -f /app/chrome-ext/dist/chrome-ext/sidepanel.html'
+	@echo "✅ Extension built in ui/chrome-ext/dist"
+
+.PHONY: dev-ext
+dev-ext: up-ui ## Watch build Chrome extension
+	@echo "👀 Watching Chrome Extension..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:ext
 
 update-%:
 	@echo "🔒 Updating $* ..."
