@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
+import { initNavigation, createSvelteKitNavigation } from '../../src/lib/core/navigation-adapter';
 
 // Import mocked goto from $app/navigation
 import { goto as mockGoto } from '$app/navigation';
@@ -28,6 +29,11 @@ describe('Session Store', () => {
     clearUser();
     vi.clearAllMocks();
     mockGoto.mockClear();
+    initNavigation(
+      createSvelteKitNavigation(
+        mockGoto as unknown as (url: string) => Promise<void>
+      )
+    );
   });
 
   describe('isAuthenticated', () => {
@@ -306,4 +312,3 @@ describe('Session Store', () => {
     });
   });
 });
-
