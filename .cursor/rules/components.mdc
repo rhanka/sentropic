@@ -181,6 +181,12 @@ make audit-infra COMPONENT=alpine
 - **Breaking change assessment**: Must be updated for major version upgrades
 - **Test validation**: All tests must pass after upgrade and tech-debt update
 
+### Temporary Security Exception Lifecycle
+- If a HIGH/CRITICAL vulnerability is accepted temporarily on a component, you must:
+  1. Document it in `.security/vulnerability-register.yaml` with clear scope, justification, and review date.
+  2. Add a concrete upgrade/remediation task in `TODO.md` and `.components/tech-debt-<service>.md`.
+  3. Remove the exception once the upgrade is done and `make test-<service>-security-container` passes.
+
 ### Quality Gates for Component Upgrades
 - **Before upgrade**: Tech-debt must reflect current component state
 - **During upgrade**: Tech-debt must be updated with new version information

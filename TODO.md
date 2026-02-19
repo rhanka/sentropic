@@ -148,6 +148,10 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
 - [x] Specs mdc: consolidate multi-branch isolation mode (root `dev` preserved for user UAT, branch dev in `tmp/feat-<slug>`, tests on dedicated ENV, `ENV` always last in make commands)
 
 **⏳ À faire :**
+- [ ] Sécurité tooling API — exception temporaire minimatch (CVE-2026-26996)
+  - [ ] Exception enregistrée dans `.security/vulnerability-register.yaml` (composant npm embarqué image API, chemin build/tooling)
+  - [ ] Planifier l'upgrade npm/base image vers une version embarquant minimatch corrigé (sans patch manuel fragile)
+  - [ ] Retirer l'exception après validation `make test-api-security-container`
 - [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
   - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
   - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
