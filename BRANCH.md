@@ -241,8 +241,10 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Remove duplicate admin purge icon (`-`) and keep single trash action in Jobs tab header.
   - [x] Tool visibility/context UX:
     - [x] For new extension sessions, hide non-activable business tools when relevant folder/org/usecase context is absent.
+    - [x] Keep extension restricted toolset enforced for extension runtime (including existing sessions with persisted prefs), so business tools do not reappear after tab/session switches.
     - [x] Add explicit active tab context entry.
     - [x] Disable `Commentaires` tab in plugin mode (side panel + floating widget) until dedicated plugin comment flow is delivered.
+    - [x] Show local tools (`tab_read`, `tab_action`) with the same visual style/behavior as remote tool toggles (no dedicated `EXT` badge), including per-tool enable/disable toggles in composer menu.
   - [ ] Lot gate:
     - [x] `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
     - [x] `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
@@ -251,25 +253,31 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [!] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (scoped tests pass via `make test-api-unit ...`; aggregate wrapper is flaky in this env due transient `up-api-test` health timeout).
     - [x] `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
   - [ ] **UAT utilisateur Lot 6B (root workspace `~/src/top-ai-ideas-fullstack`)**
-    - [ ] Validate `tab_read` modes (`info|dom|screenshot|elements`) on external page.
-    - [ ] Validate screenshot readability with default capture (`tab_read` screenshot mode, default PNG) on small-text UI.
-    - [ ] Validate optional JPEG path (`tab_read` screenshot mode + `format=jpeg`) remains functional.
-    - [ ] Validate `tab_action` single-step and multi-step chains with delays.
-    - [ ] Validate runtime permission prompt decisions:
-      - [ ] `Oui (une fois)`: one execution allowed, next execution prompts again.
-      - [ ] `Toujours`: execution allowed and policy persists after extension reload.
-      - [ ] `Jamais`: execution denied and policy persists after extension reload.
-    - [ ] Validate permissions settings wildcard inputs are accepted and stored as expected:
-      - [ ] `*` accepted (no validation error).
-      - [ ] `https://*` accepted and stored without `%2a` encoding artifact.
-      - [ ] `*.example.com` and `https://*.example.com` accepted and applied.
-    - [ ] Validate permission precedence behavior:
-      - [ ] Specific allow rule can override broader deny rule when specificity is higher.
-      - [ ] Tie-break for same specificity follows latest update.
-    - [ ] Validate settings tabs (`Endpoint serveur` / `Permissions outils`) and policy edit.
+    - [x] Validate `tab_read` modes (`info|dom|screenshot|elements`) on external page.
+    - [x] Validate screenshot readability with default capture (`tab_read` screenshot mode, default PNG) on small-text UI.
+    - [x] Validate optional JPEG path (`tab_read` screenshot mode + `format=jpeg`) remains functional.
+    - [x] Validate `tab_action` single-step and multi-step chains with delays.
+    - [x] Validate runtime permission prompt decisions:
+      - [x] `Oui (une fois)`: one execution allowed, next execution prompts again.
+      - [x] `Toujours`: execution allowed and policy persists after extension reload.
+      - [x] `Jamais`: execution denied and policy persists after extension reload.
+    - [x] Validate permissions settings wildcard inputs are accepted and stored as expected:
+      - [x] `*` accepted (no validation error).
+      - [x] `https://*` accepted and stored without `%2a` encoding artifact.
+      - [x] `*.example.com` and `https://*.example.com` accepted and applied.
+    - [x] Validate permission precedence behavior:
+      - [x] Specific allow rule can override broader deny rule when specificity is higher.
+      - [x] Tie-break for same specificity follows latest update.
+    - [x] Validate settings tabs (`Endpoint serveur` / `Permissions outils`) and policy edit.
     - [x] Validate floating chatwidget settings menu no longer clips/truncates and uses single content scroll area.
-    - [ ] Validate tool visibility rules for no-context new sessions.
-    - [ ] Validate `Commentaires` tab is hidden in plugin mode and web app behavior is unchanged.
+    - [x] Validate tool visibility rules for no-context new sessions.
+    - [x] Validate `Commentaires` tab is hidden in plugin mode and web app behavior is unchanged.
+    - [ ] Validate local tool toggles in composer menu:
+      - [ ] `tab_read` and `tab_action` are visible with standard tool row style (icon + label, no `EXT` badge).
+      - [ ] Disabling `tab_read` prevents it from being sent in `localToolDefinitions` for new chat requests.
+      - [ ] Disabling `tab_action` prevents it from being sent in `localToolDefinitions` for new chat requests.
+    - [ ] Validate extension restricted toolset persistence:
+      - [ ] In extension runtime, after tab switch and reopening an existing chat session, business tools (`documents`, `organisation`, `dossier`, etc.) do not reappear in composer list.
 
 - [ ] **Lot 7 — Integration & i18n**
   - [ ] Wire end-to-end: user asks to read page → LLM calls `tab_read` (`mode=dom`) → extension executes → result sent to API → LLM continues

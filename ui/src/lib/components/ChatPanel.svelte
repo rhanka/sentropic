@@ -71,6 +71,8 @@
     Brain,
     MessageCircle,
     Square,
+    Clapperboard,
+    ChevronsLeftRightEllipsis,
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
@@ -1027,7 +1029,23 @@
       toolIds: ['executive_summary_get', 'executive_summary_update'],
       icon: ScrollText,
     },
+    {
+      id: 'tab_read',
+      label: $_('chat.tools.localTabRead.label'),
+      description: $_('chat.tools.localTabRead.description'),
+      toolIds: ['tab_read'],
+      icon: ChevronsLeftRightEllipsis,
+    },
+    {
+      id: 'tab_action',
+      label: $_('chat.tools.localTabAction.label'),
+      description: $_('chat.tools.localTabAction.description'),
+      toolIds: ['tab_action'],
+      icon: Clapperboard,
+    },
   ];
+
+  const LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
 
   const getPrefsKey = (id: string | null) =>
     `chat_session_prefs:${id || 'new'}`;
@@ -1036,8 +1054,8 @@
     if (typeof localStorage === 'undefined') return;
     const key = getPrefsKey(id);
     prefsKey = key;
-    extensionRestrictedToolset =
-      mode === 'ai' && isLocalToolRuntimeAvailable() && !id;
+    const hasExtensionRuntime = isLocalToolRuntimeAvailable();
+    extensionRestrictedToolset = mode === 'ai' && hasExtensionRuntime;
     try {
       if (id && !localStorage.getItem(key)) {
         const draft = localStorage.getItem(getPrefsKey(null));
@@ -1067,7 +1085,9 @@
         toolEnabledById = parsed.toolEnabledById;
       }
       if (typeof parsed.extensionRestrictedToolset === 'boolean') {
-        extensionRestrictedToolset = parsed.extensionRestrictedToolset;
+        extensionRestrictedToolset = hasExtensionRuntime
+          ? true
+          : parsed.extensionRestrictedToolset;
       }
     } catch {
       // ignore
@@ -1100,7 +1120,10 @@
     });
 
   const getToolScopeToggles = () =>
-    TOOL_TOGGLES.map((toggle) => ({
+    TOOL_TOGGLES.filter(
+      (toggle) =>
+        !LOCAL_TOOL_TOGGLE_IDS.has(toggle.id) || isLocalToolRuntimeAvailable(),
+    ).map((toggle) => ({
       id: toggle.id,
       toolIds: toggle.toolIds,
     }));
@@ -1121,12 +1144,25 @@
         allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
       }),
     );
-    return TOOL_TOGGLES.filter((toggle) => visibleIds.has(toggle.id));
+    return TOOL_TOGGLES.filter(
+      (toggle) =>
+        visibleIds.has(toggle.id) && !LOCAL_TOOL_TOGGLE_IDS.has(toggle.id),
+    );
   };
 
-  const getVisibleLocalTools = () => {
+  const getVisibleLocalToolToggles = () => {
     if (!isExtensionRestrictedToolsetMode()) return [];
-    return getLocalToolDefinitions();
+    const visibleIds = new Set(
+      computeVisibleToolToggleIds({
+        toolToggles: getToolScopeToggles(),
+        restrictedMode: isExtensionRestrictedToolsetMode(),
+        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      }),
+    );
+    return TOOL_TOGGLES.filter(
+      (toggle) =>
+        LOCAL_TOOL_TOGGLE_IDS.has(toggle.id) && visibleIds.has(toggle.id),
+    );
   };
 
   const loadExtensionActiveTabContext = async () => {
@@ -1181,7 +1217,7 @@
   const ensureDefaultToolToggles = () => {
     if (!isLocalToolRuntimeAvailable()) {
       extensionRestrictedToolset = false;
-    } else if (isExtensionNewSessionMode()) {
+    } else {
       extensionRestrictedToolset = true;
     }
 
@@ -2197,7 +2233,15 @@
       if (enabledTools.length > 0) payload.tools = enabledTools;
 
       if (isLocalToolRuntimeAvailable()) {
-        payload.localToolDefinitions = getLocalToolDefinitions();
+        const enabledLocalToolIds = new Set(
+          enabledTools.filter((id) => LOCAL_TOOL_TOGGLE_IDS.has(id)),
+        );
+        const enabledLocalTools = getLocalToolDefinitions().filter((tool) =>
+          enabledLocalToolIds.has(tool.name),
+        );
+        if (enabledLocalTools.length > 0) {
+          payload.localToolDefinitions = enabledLocalTools;
+        }
       }
 
       const res = await apiPost<{
@@ -3020,20 +3064,23 @@
                     <span class="truncate">{t.label}</span>
                   </button>
                 {/each}
-                {#if getVisibleLocalTools().length > 0}
+                {#if getVisibleLocalToolToggles().length > 0}
                   <div class="pt-1 mt-1 border-t border-slate-100">
-                    <div class="px-1 py-1 text-[10px] uppercase tracking-wide text-slate-500">
+                    <div class="px-1 py-1 text-xs font-semibold text-slate-600">
                       Outils locaux
                     </div>
-                    {#each getVisibleLocalTools() as localTool (localTool.name)}
-                      <div
-                        class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700"
+                    {#each getVisibleLocalToolToggles() as localToolToggle (localToolToggle.id)}
+                      <button
+                        class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                        type="button"
+                        on:click={() => toggleTool(localToolToggle.id)}
                       >
-                        <span class="inline-flex h-4 min-w-[20px] items-center justify-center rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">
-                          EXT
-                        </span>
-                        <span class="truncate">{localTool.name}</span>
-                      </div>
+                        <svelte:component
+                          this={localToolToggle.icon}
+                          class={`w-4 h-4 ${toolEnabledById[localToolToggle.id] !== false ? 'text-slate-900' : 'text-slate-400'}`}
+                        />
+                        <span class="truncate">{localToolToggle.label}</span>
+                      </button>
                     {/each}
                   </div>
                 {/if}

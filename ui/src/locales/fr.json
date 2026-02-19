@@ -879,6 +879,14 @@
         "label": "Web extract",
         "description": "Extraire le contenu des URLs"
       },
+      "localTabRead": {
+        "label": "Onglet (lecture)",
+        "description": "Lire l’onglet actif (info, DOM, screenshot, éléments)"
+      },
+      "localTabAction": {
+        "label": "Onglet (actions)",
+        "description": "Agir sur l’onglet actif (scroll, clic, saisie, attente)"
+      },
       "organizationRead": { "label": "Organisation (lecture)" },
       "organizationUpdate": { "label": "Organisation (édition)" },
       "folderRead": { "label": "Dossier (lecture)" },
