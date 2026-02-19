@@ -149,7 +149,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate floating overlay widget can initialize session and chat send/stream without `Failed to initialize session` / `Failed to fetch`.
     - [x] Validate failure mode when endpoint is invalid (clear error feedback confirmed; UI placement refinement deferred to 4B)
 
-- [ ] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
+- [x] **Lot 4B — Extension auth model (dedicated token, no passive WebAuthn prompts)**
   - [x] Add an in-app configuration menu for extension endpoint/profile selection (UAT/PROD) and persist it as the primary user-facing config surface. (implemented in ChatWidget header)
   - [x] Move chat connectivity/runtime errors to the end of the conversation flow (bottom, latest message area), not at top. (implemented in ChatPanel flow)
   - [x] Design and implement a dedicated extension auth token flow (access token + renewal strategy). (new `/auth/session/extension-token` issue + background token refresh strategy)
@@ -158,7 +158,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Add secure token storage and logout/revoke path in extension context. (`chrome.storage.local/session` + revoke on logout)
   - [x] Document compatibility path with future local/remote WS delegation. (`spec/SPEC_CHROME_PLUGIN.md` sections 3.5 and 3.6)
   - [x] Lot gate: `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` + `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] **Partial UAT Lot 4B (root workspace `~/src/top-ai-ideas-fullstack`)**
+  - [x] **Partial UAT Lot 4B (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [x] Validate in-chat endpoint configuration menu (overlay + side panel): endpoint save, API health test, persistence after extension reload.
     - [x] Validate chat API failure feedback appears at the bottom/latest message area (not at the top of conversation).
     - [x] Validate extension login without unexpected local-network/WebAuthn prompts.
@@ -166,7 +166,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Validate logout/revoke and blocked access after logout.
     - [x] Validate chat streaming
 
-- [ ] **Lot 5 — Local Chrome tools (service worker)**
+- [x] **Lot 5 — Local Chrome tools (service worker)**
   - [x] Create `ui/chrome-ext/tool-executor.ts` with implementations:
     - [x] `tab_read_dom` (extract DOM text via `chrome.scripting.executeScript`)
     - [x] `tab_screenshot` (capture via `chrome.tabs.captureVisibleTab`)
@@ -181,7 +181,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] **Validation technique Lot 5A — interne dev (hors UAT utilisateur)**
     - [x] Réalisée par l’agent sur environnement dev/test (service worker + resolver d’onglet + exécuteurs locaux).
     - [x] Vérifier exécution locale des tools (`tab_info`, `tab_read_dom`, `tab_scroll`, `tab_click`, `tab_type`, `tab_screenshot`) et garde-fous URL non injectables.
-  - [!] **UAT utilisateur Lot 5A**
+  - [x] **UAT utilisateur Lot 5A**
     - [x] Aucun script manuel requis côté utilisateur pour Lot 5A.
     - [x] Covered by Lot 6A UAT (local-tool execution + API resume validated in side panel and floating widget).
   - [x] Lot gate: tools execute correctly from the extension context (validated via scoped `make test-ui` suites + `make typecheck-ui` + `make lint-ui` + `make build-ext` on `ENV=test-chrome-plugin`)
@@ -203,7 +203,7 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Failure path remains conversational (tool error surfaced, generation not stuck).
     - [x] Stability fixes integrated from UAT feedback: local-tool argument buffering (`tool_call_start`/`tool_call_delta`), `tab_type` fallback targeting, `tab_click` text-based targeting, and reasoning-effort navigation heuristic (`chat_reasoning_effort_eval` context enrichment + medium floor).
 
-- [ ] **Lot 6B — Runtime permissions + unified local tools (`tab_read` / `tab_action`)**
+- [x] **Lot 6B — Runtime permissions + unified local tools (`tab_read` / `tab_action`)**
   - [x] Replace current `tab_*` surface by 2 unified tools:
     - [x] `tab_read`:
       - [x] `mode=info|dom|screenshot|elements`
@@ -245,14 +245,14 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] Add explicit active tab context entry.
     - [x] Disable `Commentaires` tab in plugin mode (side panel + floating widget) until dedicated plugin comment flow is delivered.
     - [x] Show local tools (`tab_read`, `tab_action`) with the same visual style/behavior as remote tool toggles (no dedicated `EXT` badge), including per-tool enable/disable toggles in composer menu.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
     - [x] `make lint-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
     - [x] `make typecheck-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
     - [x] `make lint-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-    - [!] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (scoped tests pass via `make test-api-unit ...`; aggregate wrapper is flaky in this env due transient `up-api-test` health timeout).
+    - [x] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
     - [x] `make build-ext API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] **UAT utilisateur Lot 6B (root workspace `~/src/top-ai-ideas-fullstack`)**
+  - [x] **UAT utilisateur Lot 6B (root workspace `~/src/top-ai-ideas-fullstack`)**
     - [x] Validate `tab_read` modes (`info|dom|screenshot|elements`) on external page.
     - [x] Validate screenshot readability with default capture (`tab_read` screenshot mode, default PNG) on small-text UI.
     - [x] Validate optional JPEG path (`tab_read` screenshot mode + `format=jpeg`) remains functional.
@@ -312,11 +312,13 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
       - [x] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
       - [x] `make test-ui SCOPE=tests/chrome-ext/tool-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
       - [x] `make test-ui SCOPE=tests/chrome-ext/tool-executor.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [x] **E2E tests (non-régression)**
-    - [x] `e2e/tests/03-chat.spec.ts`: ajouter scénario de non-régression menu outils (ouverture widget, affichage outil, envoi message) sans dépendance plugin runtime.
-    - [!] Scoped run bloqué par infra:
-      - [!] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin` (port `8788` déjà occupé).
-      - [!] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8898 UI_PORT=5194 MAILDEV_UI_PORT=1094 ENV=e2e-chrome-plugin` (`db-seed-test`: `dist/tests/utils/seed-test-data.js` introuvable).
+  - [x] **E2E tests (non-régression + évolution)**
+    - [x] `e2e/tests/03-chat.spec.ts`: scénario de non-régression menu outils web app (ouverture widget, affichage outil, envoi message) sans dépendance plugin runtime.
+    - [x] `e2e/tests/03-chat-chrome-extension.spec.ts`: ajouter scénario d'évolution "runtime extension mocké" pour vérifier qu'une nouvelle session limite bien les outils au scope web + local (`tab_read`/`tab_action`) et masque les outils métier.
+    - [x] `e2e/tests/03-chat-chrome-extension.spec.ts`: ajouter scénario d'évolution pour valider que `localToolDefinitions` suit les toggles locaux (`tab_read`/`tab_action`) dans le payload `POST /chat/messages`.
+    - [x] Scoped runs passed after explicit rebuild sequence (`make clean` + `make build-ui-image` + `make build-api` before `make test-e2e`):
+      - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 RETRIES=0 API_PORT=8898 UI_PORT=5194 MAILDEV_UI_PORT=1094 ENV=e2e-chrome-plugin`
+      - [x] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts WORKERS=1 RETRIES=0 API_PORT=8898 UI_PORT=5194 MAILDEV_UI_PORT=1094 ENV=e2e-chrome-plugin`
   - [ ] **Lot gate final (technique)**
     - [!] `make test-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (`up-api-test`: container API unhealthy sur cet environnement).
     - [!] `make test-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (échecs préexistants `tests/stores/session.test.ts` liés à `window.location` jsdom).

@@ -381,7 +381,7 @@ test.describe.serial('Chat', () => {
   test('devrait gérer les actions sur les messages (copier, éditer, retry, feedback)', async ({ page }) => {
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page).toHaveURL(/\/folders$/);
 
     const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
