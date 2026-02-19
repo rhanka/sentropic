@@ -16,6 +16,7 @@ erDiagram
     workspaces ||--o{ use_cases : "workspace_id"
     workspaces ||--o{ job_queue : "workspace_id"
     workspaces ||--o{ comments : "workspace_id"
+    workspaces ||--o{ extension_tool_permissions : "workspace_id"
 
     organizations ||--o{ folders : "organization_id (optional)"
     folders ||--o{ use_cases : "folder_id"
@@ -23,6 +24,7 @@ erDiagram
     users ||--o{ comments : "created_by"
     users ||--o{ comments : "assigned_to (optional)"
     comments ||--o{ comments : "thread_id"
+    users ||--o{ extension_tool_permissions : "user_id"
 
     workspaces {
         text id PK
@@ -131,6 +133,17 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
+
+    extension_tool_permissions {
+        text id PK
+        text user_id FK
+        text workspace_id FK
+        text tool_name
+        text origin
+        text policy
+        timestamp updated_at
+        timestamp created_at
+    }
 ```
 
 Notes:
@@ -141,6 +154,7 @@ Notes:
 - `workspace_memberships` is the source of truth for roles (`viewer` | `commenter` | `editor` | `admin`).
 - `comments` stores comments in flat threads (`thread_id`), scoped by workspace.
 - `comments.tool_call_id` traces AI tool-driven notes/comments.
+- `extension_tool_permissions` persists extension local-tool authorization policies (`allow` / `deny`) per user/workspace/tool/origin.
 
 ## Prompts (current vs target)
 
@@ -375,6 +389,25 @@ Notes:
 - `chat_stream_events.message_id` is nullable: structured calls use deterministic `stream_id` (`folder_<id>`, `usecase_<useCaseId>`, etc.).
 - `context_documents.context_type/context_id` are **logical references** (no DB FK) to `organizations/folders/use_cases`.
 - `chat_message_feedback` stores per-user feedback on assistant messages (unique by `message_id` + `user_id`).
+
+Chat runtime notes (extension local tools):
+
+- `POST /api/v1/chat/messages` can include `localToolDefinitions` (merged with server-side tools before generation).
+- `POST /api/v1/chat/messages/:id/tool-results` injects local tool outputs and resumes generation.
+- Local tool call state is tracked in stream events (`chat_stream_events`) and resumed in the same assistant message stream.
+
+## Extension local-tool permissions
+
+Table: `extension_tool_permissions` (`api/src/db/schema.ts`)
+
+- Primary role: persist `allow` / `deny` decisions for extension runtime permission prompts.
+- Scope key: unique (`user_id`, `workspace_id`, `tool_name`, `origin`).
+- Indices:
+  - `extension_tool_permissions_user_workspace_idx`
+  - `extension_tool_permissions_tool_origin_idx`
+- Patterns are normalized at API layer (`/api/v1/chat/tool-permissions`) before persistence:
+  - tool patterns: e.g. `tab_read:*`, `tab_action:click`
+  - origin patterns: `*`, `https://*`, `*.example.com`, `https://*.example.com`, exact origins
 # Data model (PostgreSQL 17 / Drizzle)
 
 Source of truth: `api/src/db/schema.ts` (Drizzle).  
@@ -2259,5 +2292,4 @@ Notes :
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 - `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
-
 

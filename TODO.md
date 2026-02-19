@@ -138,6 +138,7 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [x] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [x] Streamline des directives mdc
   - [x] analyse des meilleurs pratique (conductor model, model testing Bmad)
+- [x] Chrome extension lot 6B (tools locaux unifiés `tab_read`/`tab_action`, permissions runtime par origine, settings endpoint/permissions, parité sidepanel/widget)
   - [x] inclusion make lint typecheck avant passage de main à l'utilisateur
   - [x] création d'un template de branche, incluant les UAT partiels à chaque lot
   - [x] tout-make: clarifier les obligation d'usage de make

@@ -277,6 +277,25 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - Target workspace selection with "create new workspace".
   - Folder target selection for folder-scoped imports (existing / create new / from imported metadata).
 
+14) Chrome Extension plugin (overlay + side panel)
+- Runtime contexts:
+  - Overlay ChatWidget injected on external pages.
+  - Chrome side panel ChatWidget (docked mode).
+- Local tools (extension-only):
+  - `tab_read` (`info|dom|screenshot|elements`)
+  - `tab_action` (`scroll|click|type|wait`, supports multi-step chains)
+- Chat flow integration:
+  - UI sends `localToolDefinitions` in `POST /api/v1/chat/messages`.
+  - Tool result returns through `POST /api/v1/chat/messages/:id/tool-results`.
+  - Assistant generation resumes in the same stream.
+- Permissions and safety:
+  - Runtime decision gate (`allow_once`, `deny_once`, `allow_always`, `deny_always`) per tool+origin.
+  - Persistent allow/deny policies synced with backend (`/api/v1/chat/tool-permissions`).
+  - Content script injection excluded on Top AI Ideas app domains and localhost app pages.
+- Plugin UX scope:
+  - Plugin mode hides `Commentaires` tab for now.
+  - New extension sessions use restricted toolset (web tools + local tab tools).
+
 Key backend/API variables:
 - Entity management: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, weights, thresholds, descriptions), `BusinessConfig` (sectors, processes).
 - Generation context: `currentOrganizationId`, folder→organization association, prompts/configs.
@@ -310,6 +329,7 @@ Streaming/chat:
 - `chat_messages`
 - `chat_stream_events`
 - `chat_generation_traces` (debug)
+- `extension_tool_permissions` (règles allow/deny par `user_id` + `workspace_id` + `tool_name` + `origin`)
 
 ### 2.1) Score computation method (server)
 
