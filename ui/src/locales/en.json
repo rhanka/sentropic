@@ -879,6 +879,14 @@
         "label": "Web extract",
         "description": "Extract content from URLs"
       },
+      "localTabRead": {
+        "label": "Tab (read)",
+        "description": "Read active tab (info, DOM, screenshot, elements)"
+      },
+      "localTabAction": {
+        "label": "Tab (actions)",
+        "description": "Act on active tab (scroll, click, type, wait)"
+      },
       "organizationRead": { "label": "Organization (read)" },
       "organizationUpdate": { "label": "Organization (edit)" },
       "folderRead": { "label": "Folder (read)" },
