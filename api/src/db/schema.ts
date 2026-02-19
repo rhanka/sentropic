@@ -495,3 +495,27 @@ export const comments = pgTable('comments', {
 }));
 
 export type CommentRow = typeof comments.$inferSelect;
+
+// Chrome extension local-tool permissions (per user/workspace/tool/origin).
+export const extensionToolPermissions = pgTable('extension_tool_permissions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  toolName: text('tool_name').notNull(),
+  origin: text('origin').notNull(),
+  policy: text('policy').notNull().default('allow'), // 'allow' | 'deny'
+  updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  userWorkspaceIdx: index('extension_tool_permissions_user_workspace_idx').on(table.userId, table.workspaceId),
+  toolOriginIdx: index('extension_tool_permissions_tool_origin_idx').on(table.toolName, table.origin),
+  userWorkspaceToolOriginUnique: uniqueIndex(
+    'extension_tool_permissions_user_workspace_tool_origin_unique',
+  ).on(table.userId, table.workspaceId, table.toolName, table.origin),
+}));
+
+export type ExtensionToolPermissionRow = typeof extensionToolPermissions.$inferSelect;

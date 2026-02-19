@@ -12,6 +12,8 @@
     "format:check": "prettier --check .",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
+    "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js",
+    "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",
     "client:generate": "echo 'Client generation placeholder'"
   },
   "devDependencies": {
@@ -56,5 +58,8 @@
     "marked": "^12.0.0",
     "svelte-streamdown": "^3.0.1",
     "tiptap-markdown": "^0.9.0"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
   }
 }

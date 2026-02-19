@@ -138,6 +138,7 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [x] Générations: ajouter une génération pour adapter la matrice en fonction de l'entreprise, lors de la génération d'un dossier. Une matrice sera instanciée pour l'entreprise. Lorsque la génération a lieu, la matrice est stockée en template par défaut pour l'entreprise. Si un nouveau dossier est généré pour l'entreprise, par défaut il reprendra cette matrice sans nouvelle génération. Une option à la génération du dossier sera proposée pour générer une matrice spécifique au dossier (ex quand on regarde un processus spécifique comme le marketing pour l'entreprise). Les matrices seront alors attachées à l'organisation et sélectionnables lors de la génération du dossier.
 - [x] Streamline des directives mdc
   - [x] analyse des meilleurs pratique (conductor model, model testing Bmad)
+- [x] Chrome extension lot 6B (tools locaux unifiés `tab_read`/`tab_action`, permissions runtime par origine, settings endpoint/permissions, parité sidepanel/widget)
   - [x] inclusion make lint typecheck avant passage de main à l'utilisateur
   - [x] création d'un template de branche, incluant les UAT partiels à chaque lot
   - [x] tout-make: clarifier les obligation d'usage de make
@@ -147,6 +148,10 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
 - [x] Specs mdc: consolidate multi-branch isolation mode (root `dev` preserved for user UAT, branch dev in `tmp/feat-<slug>`, tests on dedicated ENV, `ENV` always last in make commands)
 
 **⏳ À faire :**
+- [ ] Sécurité tooling API — exception temporaire minimatch (CVE-2026-26996)
+  - [ ] Exception enregistrée dans `.security/vulnerability-register.yaml` (composant npm embarqué image API, chemin build/tooling)
+  - [ ] Planifier l'upgrade npm/base image vers une version embarquant minimatch corrigé (sans patch manuel fragile)
+  - [ ] Retirer l'exception après validation `make test-api-security-container`
 - [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
   - [ ] Extraire l’exécution des jobs IA (`usecase_list`, `usecase_detail`, `executive_summary`, `chat_message`) hors thread API principal
   - [ ] Garder la séparation des classes de queue (`publishing` vs `ai`) et valider la non-régression SSE/annulation
@@ -257,17 +262,18 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Gemini
       - [ ] Claude
       - [ ] Mistral
-- [ ] Concevoir le plugin chrome
-  - [ ] SDLC
+- [x] Concevoir le plugin chrome (socle livré jusqu'au lot 6B)
+  - [x] SDLC
     - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
-    - [ ] isoler correctement le chatwidget et ses stores pour permettre ce mode
-  - [ ] UI
-    - [ ] mode bulle + flottant
-    - [ ] mode docker/side panel
-    - [ ] toasters également
-  - [ ] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
-    - [ ] Lecture d'un tab
-    - [ ] Automation d'un tab (cliquer ...)
+    - [x] isoler correctement le chatwidget et ses stores pour permettre ce mode
+    - [x] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
+  - [x] UI
+    - [x] mode bulle + flottant
+    - [x] mode docker/side panel
+    - [x] toasters également
+  - [x] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+    - [x] Lecture d'un tab
+    - [x] Automation d'un tab (cliquer ...)
     - [ ] Collaboration local / remote (outils d'un workspace)
   - Tools spécialisés
     - [ ] Interaction avec applications via UI

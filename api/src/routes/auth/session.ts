@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { logger } from '../../logger';
 import {
   validateSession,
+  createSession,
   refreshSession,
   revokeSession,
   revokeAllSessions,
@@ -27,6 +28,10 @@ export const sessionRouter = new Hono();
 // Request schemas
 const refreshSessionSchema = z.object({
   refreshToken: z.string(),
+});
+
+const extensionIssueSchema = z.object({
+  deviceName: z.string().min(1).max(100).optional(),
 });
 
 /**
@@ -105,6 +110,66 @@ sessionRouter.post('/refresh', async (c) => {
     
     logger.error({ err: error }, 'Error refreshing session');
     return c.json({ error: 'Failed to refresh session' }, 500);
+  }
+});
+
+/**
+ * POST /auth/session/extension-token
+ * Exchange an authenticated app session (cookie or bearer) for a dedicated extension session token pair.
+ */
+sessionRouter.post('/extension-token', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { deviceName } = extensionIssueSchema.parse(body);
+
+    const sessionToken =
+      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
+      c.req.header('authorization')?.replace('Bearer ', '');
+
+    if (!sessionToken) {
+      return c.json({ error: 'No session token provided' }, 401);
+    }
+
+    const currentSession = await validateSession(sessionToken);
+
+    if (!currentSession) {
+      return c.json({ error: 'Invalid or expired session' }, 401);
+    }
+
+    const [userRecord] = await db
+      .select({
+        email: users.email,
+        displayName: users.displayName,
+      })
+      .from(users)
+      .where(eq(users.id, currentSession.userId))
+      .limit(1);
+
+    const issued = await createSession(currentSession.userId, currentSession.role, {
+      name: deviceName || 'Top AI Ideas Extension',
+      ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || undefined,
+      userAgent: c.req.header('user-agent') || undefined,
+    });
+
+    return c.json({
+      success: true,
+      user: {
+        id: currentSession.userId,
+        email: userRecord?.email ?? null,
+        displayName: userRecord?.displayName ?? null,
+        role: currentSession.role,
+      },
+      sessionToken: issued.sessionToken,
+      refreshToken: issued.refreshToken,
+      expiresAt: issued.expiresAt.toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+    }
+
+    logger.error({ err: error }, 'Error issuing extension session token');
+    return c.json({ error: 'Failed to issue extension session token' }, 500);
   }
 });
 
@@ -217,4 +282,3 @@ sessionRouter.get('/list', async (c) => {
     return c.json({ error: 'Failed to list sessions' }, 500);
   }
 });
-

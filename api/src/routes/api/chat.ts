@@ -1,18 +1,30 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
 import { readStreamEvents } from '../../services/stream-service';
 import { db } from '../../db/client';
+import { extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { createId } from '../../utils/id';
 
 export const chatRouter = new Hono();
 
 const chatContextInput = z.object({
   contextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']),
   contextId: z.string().min(1)
+});
+
+const localToolDefinitionInput = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  description: z.string().min(1).max(1000),
+  parameters: z.record(z.string(), z.unknown())
 });
 
 const createMessageInput = z.object({
@@ -24,7 +36,8 @@ const createMessageInput = z.object({
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
-  tools: z.array(z.string()).optional()
+  tools: z.array(z.string()).optional(),
+  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional()
 });
 
 const feedbackInput = z.object({
@@ -40,6 +53,204 @@ const createSessionInput = z.object({
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
 });
+
+const toolResultInput = z.object({
+  toolCallId: z.string().min(1),
+  result: z.unknown()
+});
+
+const extensionToolPermissionInput = z.object({
+  toolName: z.string().min(1).max(96),
+  origin: z.string().min(1),
+  policy: z.enum(['allow', 'deny']),
+});
+
+const extensionToolPermissionDeleteInput = z.object({
+  toolName: z.string().min(1).max(96),
+  origin: z.string().min(1),
+});
+
+const TOOL_PATTERN_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
+const HOSTNAME_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const IPV4_REGEX =
+  /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const normalizeToolPattern = (raw: string): string | null => {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (!TOOL_PATTERN_REGEX.test(value)) return null;
+  if (value.includes('**')) return null;
+  return value;
+};
+
+const isValidHostname = (host: string): boolean => {
+  const value = host.trim().toLowerCase();
+  if (!value) return false;
+  if (value === 'localhost') return true;
+  if (IPV4_REGEX.test(value)) return true;
+  const labels = value.split('.');
+  if (labels.length < 2) return false;
+  return labels.every((label) => HOSTNAME_LABEL_REGEX.test(label));
+};
+
+const normalizeRuntimeOrigin = (raw: string): string | null => {
+  const value = raw.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    const hostname = url.hostname.toLowerCase();
+    const port = url.port ? `:${url.port}` : '';
+    return `${url.protocol}//${hostname}${port}`;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeOriginPattern = (raw: string): string | null => {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value === '*') return '*';
+
+  const schemeAnyHostMatch = value.match(/^(https?:)\/\/\*$/);
+  if (schemeAnyHostMatch) {
+    return `${schemeAnyHostMatch[1]}//*`;
+  }
+
+  if (value.startsWith('*.')) {
+    const suffix = value.slice(2);
+    if (!isValidHostname(suffix)) return null;
+    return `*.${suffix}`;
+  }
+
+  const wildcardSchemeMatch = value.match(/^(https?:)\/\/\*\.(.+)$/);
+  if (wildcardSchemeMatch) {
+    const scheme = wildcardSchemeMatch[1];
+    const suffix = wildcardSchemeMatch[2];
+    if (!isValidHostname(suffix)) return null;
+    return `${scheme}//*.${suffix}`;
+  }
+
+  if (isValidHostname(value)) {
+    return value;
+  }
+
+  return normalizeRuntimeOrigin(value);
+};
+
+chatRouter.get('/tool-permissions', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user');
+  const rows = await db
+    .select({
+      toolName: extensionToolPermissions.toolName,
+      origin: extensionToolPermissions.origin,
+      policy: extensionToolPermissions.policy,
+      updatedAt: extensionToolPermissions.updatedAt,
+    })
+    .from(extensionToolPermissions)
+    .where(
+      and(
+        eq(extensionToolPermissions.userId, user.userId),
+        eq(extensionToolPermissions.workspaceId, user.workspaceId),
+      ),
+    )
+    .orderBy(desc(extensionToolPermissions.updatedAt));
+
+  return c.json({
+    items: rows.map((row) => ({
+      toolName: row.toolName,
+      origin: row.origin,
+      policy: row.policy,
+      updatedAt:
+        row.updatedAt instanceof Date
+          ? row.updatedAt.toISOString()
+          : new Date(row.updatedAt as unknown as string).toISOString(),
+    })),
+  });
+});
+
+chatRouter.put(
+  '/tool-permissions',
+  requireWorkspaceAccessRole(),
+  zValidator('json', extensionToolPermissionInput),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const toolName = normalizeToolPattern(body.toolName);
+    if (!toolName) {
+      return c.json({ error: 'Invalid tool pattern' }, 400);
+    }
+    const origin = normalizeOriginPattern(body.origin);
+    if (!origin) {
+      return c.json({ error: 'Invalid origin pattern' }, 400);
+    }
+
+    const now = new Date();
+    await db
+      .insert(extensionToolPermissions)
+      .values({
+        id: createId(),
+        userId: user.userId,
+        workspaceId: user.workspaceId,
+        toolName,
+        origin,
+        policy: body.policy,
+        updatedAt: now,
+        createdAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          extensionToolPermissions.userId,
+          extensionToolPermissions.workspaceId,
+          extensionToolPermissions.toolName,
+          extensionToolPermissions.origin,
+        ],
+        set: {
+          policy: body.policy,
+          updatedAt: now,
+        },
+      });
+
+    return c.json({
+      ok: true,
+      item: {
+        toolName,
+        origin,
+        policy: body.policy,
+        updatedAt: now.toISOString(),
+      },
+    });
+  },
+);
+
+chatRouter.delete(
+  '/tool-permissions',
+  requireWorkspaceAccessRole(),
+  zValidator('json', extensionToolPermissionDeleteInput),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const toolName = normalizeToolPattern(body.toolName);
+    if (!toolName) {
+      return c.json({ error: 'Invalid tool pattern' }, 400);
+    }
+    const origin = normalizeOriginPattern(body.origin);
+    if (!origin) {
+      return c.json({ error: 'Invalid origin pattern' }, 400);
+    }
+
+    await db.delete(extensionToolPermissions).where(
+      and(
+        eq(extensionToolPermissions.userId, user.userId),
+        eq(extensionToolPermissions.workspaceId, user.workspaceId),
+        eq(extensionToolPermissions.toolName, toolName),
+        eq(extensionToolPermissions.origin, origin),
+      ),
+    );
+
+    return c.json({ ok: true });
+  },
+);
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
@@ -274,7 +485,8 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     assistantMessageId: created.assistantMessageId,
     model: created.model,
     contexts: body.contexts ?? undefined,
-    tools: body.tools ?? undefined
+    tools: body.tools ?? undefined,
+    localToolDefinitions: body.localToolDefinitions ?? undefined
   }, { workspaceId: user.workspaceId });
 
   return c.json({
@@ -286,4 +498,63 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
   });
 });
 
+/**
+ * POST /api/v1/chat/messages/:id/tool-results
+ * Push a local-tool result for an assistant message and resume generation when ready.
+ */
+chatRouter.post(
+  '/messages/:id/tool-results',
+  requireWorkspaceAccessRole(),
+  zValidator('json', toolResultInput),
+  async (c) => {
+    const user = c.get('user');
+    const messageId = c.req.param('id');
+    const body = c.req.valid('json');
 
+    const msg = await chatService.getMessageForUser(messageId, user.userId);
+    if (!msg) return c.json({ error: 'Message not found' }, 404);
+    if (msg.role !== 'assistant') {
+      return c.json({ error: 'Only assistant messages accept tool results' }, 400);
+    }
+
+    try {
+      const accepted = await chatService.acceptLocalToolResult({
+        assistantMessageId: messageId,
+        toolCallId: body.toolCallId,
+        result: body.result
+      });
+
+      if (!accepted.readyToResume) {
+        return c.json({
+          ok: true,
+          accepted: true,
+          resumed: false,
+          waitingForToolCallIds: accepted.waitingForToolCallIds
+        });
+      }
+
+      const jobId = await queueManager.addJob(
+        'chat_message',
+        {
+          userId: user.userId,
+          sessionId: msg.sessionId,
+          assistantMessageId: messageId,
+          localToolDefinitions: accepted.localToolDefinitions,
+          resumeFrom: accepted.resumeFrom
+        },
+        { workspaceId: user.workspaceId }
+      );
+
+      return c.json({
+        ok: true,
+        accepted: true,
+        resumed: true,
+        jobId
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to accept tool result';
+      return c.json({ error: message }, 400);
+    }
+  }
+);

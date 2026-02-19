@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { browser } from '$app/environment';
+const browser = typeof window !== 'undefined';
 
 export type Folder = {
   id: string;
@@ -40,7 +40,7 @@ const STORAGE_KEY = 'currentFolderId';
 
 function createPersistentFolderIdStore() {
   // Initialize from localStorage if available
-  const initialValue = browser 
+  const initialValue = browser
     ? (localStorage.getItem(STORAGE_KEY) || null)
     : null;
 

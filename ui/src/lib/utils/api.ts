@@ -4,7 +4,8 @@
  * Centralized API calling utilities with authentication support.
  */
 
-import { browser } from '$app/environment';
+const _skBrowser = typeof window !== 'undefined';
+import { getApiBaseUrl, getApiBrowserFlag } from '$lib/core/api-client';
 import { API_BASE_URL } from '$lib/config';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
@@ -27,10 +28,11 @@ export class ApiError extends Error {
  * Automatically includes credentials (cookies) for authentication
  */
 export async function apiRequest<T = any>(
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const rawUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
+  const rawUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
 
   // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
   const scoped = getScopedWorkspaceIdForUser();
@@ -40,12 +42,13 @@ export async function apiRequest<T = any>(
     if (endpoint.startsWith('/auth') || rawUrl.includes('/auth/')) return rawUrl;
     // Never scope workspace bootstrap endpoints, otherwise a stale localStorage workspace_id can block /workspaces itself
     if (endpoint === '/workspaces' || endpoint.startsWith('/workspaces/')) return rawUrl;
-    if (!browser) return rawUrl;
+    const isBrowser = getApiBrowserFlag() ?? _skBrowser;
+    if (!isBrowser) return rawUrl;
     const u = new URL(rawUrl, window.location.origin);
     if (!u.searchParams.has('workspace_id')) u.searchParams.set('workspace_id', scoped);
     return u.toString();
   })();
-  
+
   const response = await fetch(url, {
     ...options,
     credentials: 'include', // Always include cookies for authentication
@@ -56,24 +59,24 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ 
-      error: 'Unknown error', 
-      message: 'Unknown error' 
+    const errorData = await response.json().catch(() => ({
+      error: 'Unknown error',
+      message: 'Unknown error'
     }));
-    
+
     // Use message field first (REST API standard), fallback to error field
     const rawMessage = (errorData as any)?.message ?? (errorData as any)?.error ?? `HTTP ${response.status}: ${response.statusText}`;
     const errorMessage =
       typeof rawMessage === 'string'
         ? rawMessage
         : (() => {
-            try {
-              return JSON.stringify(rawMessage);
-            } catch {
-              return String(rawMessage);
-            }
-          })();
-    
+          try {
+            return JSON.stringify(rawMessage);
+          } catch {
+            return String(rawMessage);
+          }
+        })();
+
     throw new ApiError(errorMessage, response.status, errorData);
   }
 

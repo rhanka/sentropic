@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { userSessions, users } from '../db/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { env } from '../config/env';
@@ -37,6 +37,12 @@ interface SessionPayload {
   displayName?: string | null;
 }
 
+type SessionTokenClaims = JWTPayload & {
+  userId: string;
+  sessionId: string;
+  role: string;
+};
+
 // JWT secret key (from environment or generate random for dev)
 const JWT_SECRET = new TextEncoder().encode(
   env.JWT_SECRET || 'dev-secret-key-change-in-production-please'
@@ -53,6 +59,18 @@ const REFRESH_DURATION = 30 * 24 * 60 * 60; // 30 days in seconds
  */
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+async function signSessionToken(
+  claims: SessionTokenClaims,
+  expiresAt: Date
+): Promise<string> {
+  return await new SignJWT(claims)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setJti(crypto.randomUUID())
+    .setIssuedAt()
+    .setExpirationTime(expiresAt)
+    .sign(JWT_SECRET);
 }
 
 /**
@@ -75,11 +93,7 @@ export async function createSession(
   // const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
   
   // Generate JWT session token
-  const sessionToken = await new SignJWT({ userId, sessionId, role })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(expiresAt)
-    .sign(JWT_SECRET);
+  const sessionToken = await signSessionToken({ userId, sessionId, role }, expiresAt);
   
   // Generate refresh token (random UUID)
   const refreshToken = crypto.randomUUID();
@@ -257,23 +271,46 @@ export async function refreshSession(
       return null;
     }
     
-    // Get user role (would need to join with users table)
-    // For now, decode from existing session or default to 'guest'
-    const role = 'guest'; // TODO: Get from users table
+    const [userAuth] = await db
+      .select({
+        role: users.role,
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
+      })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
+    if (!userAuth) {
+      logger.warn({ userId: session.userId }, 'Refresh failed: user not found');
+      return null;
+    }
+
+    const status = userAuth.accountStatus ?? 'active';
+    const now = new Date();
+
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      logger.warn({ userId: session.userId, status }, 'Refresh failed: account disabled');
+      return null;
+    }
+
+    let role = userAuth.role as string;
+    if (status === 'approval_expired_readonly') role = 'guest';
+    if (status === 'pending_admin_approval' && userAuth.approvalDueAt && now > userAuth.approvalDueAt) {
+      role = 'guest';
+    }
     
     // Generate new tokens
-    const newSessionToken = await new SignJWT({ 
-      userId: session.userId, 
-      sessionId: session.id, 
-      role 
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime(new Date(Date.now() + SESSION_DURATION * 1000))
-      .sign(JWT_SECRET);
-    
     const newRefreshToken = crypto.randomUUID();
     const newExpiresAt = new Date(Date.now() + SESSION_DURATION * 1000);
+    const newSessionToken = await signSessionToken(
+      {
+        userId: session.userId,
+        sessionId: session.id,
+        role,
+      },
+      newExpiresAt
+    );
     
     // Update session with new tokens
     await db
@@ -356,4 +393,3 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }
-
