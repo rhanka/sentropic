@@ -58,5 +58,8 @@
     "marked": "^12.0.0",
     "svelte-streamdown": "^3.0.1",
     "tiptap-markdown": "^0.9.0"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
   }
 }
