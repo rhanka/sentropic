@@ -6,6 +6,8 @@ export type ChatToolScopeToggle = {
 export const EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
   'web_search',
   'web_extract',
+  'tab_read',
+  'tab_action',
 ]);
 
 export const isExtensionRestrictedToolsetMode = (input: {
