@@ -739,6 +739,71 @@
       "switchToWidget": "Switch to widget",
       "switchToPanel": "Switch to panel"
     },
+    "extension": {
+      "settingsTitle": "Extension settings",
+      "settingsTabs": {
+        "endpoint": "Server endpoint",
+        "permissions": "Tool permissions"
+      },
+      "endpointConfiguration": "Endpoint configuration",
+      "apiBaseUrl": "API Base URL",
+      "appBaseUrl": "App Base URL",
+      "wsBaseUrlOptional": "WS Base URL (optional)",
+      "testApi": "Test API",
+      "permissions": {
+        "title": "Tool permissions",
+        "description": "Manage allow/deny policies by tool and origin (URL, domain, or wildcard).",
+        "addTitle": "Add rule",
+        "addCta": "Add",
+        "empty": "No tool permission policy yet.",
+        "allowLabel": "Allow",
+        "denyLabel": "Deny",
+        "loadError": "Unable to load tool permissions.",
+        "updateError": "Unable to update tool permission.",
+        "deleteError": "Unable to delete tool permission.",
+        "missingDraftFields": "Provide a tool and a valid origin/pattern (e.g. https://site.com, *.site.com, *)."
+      },
+      "authRequired": {
+        "title": "Extension auth is required before using this area.",
+        "description": "Open settings, then click Connect. If needed, open app login first.",
+        "openSettings": "Open settings"
+      },
+      "auth": {
+        "title": "Extension auth",
+        "connectedAs": "Connected as",
+        "notConnected": "Not connected",
+        "connect": "Connect",
+        "logout": "Logout",
+        "openLogin": "Open login"
+      },
+      "status": {
+        "loadingConfig": "Loading endpoint configuration…",
+        "loadConfigFailed": "Unable to load endpoint configuration.",
+        "configLoaded": "Configuration loaded.",
+        "loadFailed": "Load failed: {reason}",
+        "savingConfig": "Saving endpoint configuration…",
+        "saveConfigFailed": "Unable to save endpoint configuration.",
+        "configSaved": "Configuration saved.",
+        "saveFailed": "Save failed: {reason}",
+        "checkingSession": "Checking extension session…",
+        "readAuthFailed": "Unable to read extension auth status.",
+        "connected": "Extension connected.",
+        "statusCheckFailed": "Status check failed: {reason}",
+        "connecting": "Connecting extension session…",
+        "connectFailed": "Unable to connect extension session.",
+        "connectedSuccess": "Extension session connected.",
+        "connectionFailed": "Connection failed: {reason}",
+        "loggingOut": "Logging out extension session…",
+        "loggedOut": "Extension session logged out.",
+        "logoutFailed": "Logout failed: {reason}",
+        "loginOpened": "Login page opened. Complete sign-in, then click Connect.",
+        "openLoginFailed": "Unable to open login page: {reason}",
+        "testingApi": "Testing API connectivity…",
+        "apiReachable": "API reachable ({status}).",
+        "apiTestFailed": "API connectivity test failed.",
+        "apiTestFailedWithReason": "API test failed: {reason}"
+      }
+    },
     "queue": {
       "badge": {
         "active": "{count} active job(s)",
@@ -785,10 +850,19 @@
       "none": "No active context."
     },
     "context": {
-      "executiveSummaryPrefix": "Summary: {name}"
+      "executiveSummaryPrefix": "Summary: {name}",
+      "activeTabPrefix": "Active tab: {title}"
     },
     "tools": {
       "title": "Tools",
+      "permissions": {
+        "promptTitle": "Permission required",
+        "promptDescription": "Allow tool {tool} for {origin}?",
+        "allowOnce": "Yes (once)",
+        "denyOnce": "No (once)",
+        "allowAlways": "Always",
+        "denyAlways": "Never"
+      },
       "documents": {
         "label": "Documents",
         "description": "List / analyze documents"
@@ -804,6 +878,14 @@
       "webExtract": {
         "label": "Web extract",
         "description": "Extract content from URLs"
+      },
+      "localTabRead": {
+        "label": "Tab (read)",
+        "description": "Read active tab (info, DOM, screenshot, elements)"
+      },
+      "localTabAction": {
+        "label": "Tab (actions)",
+        "description": "Act on active tab (scroll, click, type, wait)"
       },
       "organizationRead": { "label": "Organization (read)" },
       "organizationUpdate": { "label": "Organization (edit)" },

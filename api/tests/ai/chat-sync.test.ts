@@ -104,10 +104,10 @@ describe('Chat AI - Complete Integration', () => {
       // Attendre la complétion du job
       let jobCompleted = false;
       let attempts = 0;
-      const maxAttempts = 30;
+      const maxAttempts = 5;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(10000);
+        await sleep(5000);
 
         const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
         expect(jobRes.status).toBe(200);
@@ -153,10 +153,10 @@ describe('Chat AI - Complete Integration', () => {
       // Attendre la complétion du job
       let jobCompleted = false;
       let attempts = 0;
-      const maxAttempts = 30;
+      const maxAttempts = 5;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(10000);
+        await sleep(5000);
 
         const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
         expect(jobRes.status).toBe(200);
@@ -257,4 +257,3 @@ describe('Chat AI - Complete Integration', () => {
     }, 30000); // 30 seconds timeout (2 générations)
   });
 });
-
