@@ -290,20 +290,31 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
   - [x] Update `TODO.md` to reflect completed Chrome extension 6B delivery.
 
 - [ ] **Lot N — Final validation**
-  - [ ] **API tests**
-    - [ ] Add tests for `localToolDefinitions` merge in chat-service
-    - [ ] Add tests for `tool-results` endpoint
-    - [ ] Scoped runs: `make test-api SCOPE=tests/your-file.spec.ts ENV=test`
-    - [ ] Sub-lot gate: `make test-api ENV=test`
-  - [ ] **UI tests (TypeScript only)**
-    - [ ] Add unit tests for `core/` abstractions (context-provider, api-client, auth-bridge, navigation-adapter)
-    - [ ] Add unit tests for `localTools.ts` store
-    - [ ] Scoped runs: `make test-ui SCOPE=tests/your-file.spec.ts ENV=test`
-    - [ ] Sub-lot gate: `make test-ui ENV=test`
-  - [ ] **E2E tests**
-    - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
-    - [ ] Non-regression on existing chat E2E tests
-    - [ ] Scoped runs: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
-    - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`
+  - [x] **Revue exhaustive de couverture (régression + évolution)**
+    - [x] API: audit des suites existantes (`chat-service-tools`, `chat`, `chat-permissions`) et identification des trous sur wildcards/patterns + garde-fous `tool-results`.
+    - [x] UI: audit des suites existantes (`localTools`, `chat-tool-scope`, `tool-executor`) et identification des trous sur filtrage extension + matching permission runtime.
+    - [x] E2E: audit des specs chat existantes et définition d’un scénario non-régression ciblé/rapide.
+  - [ ] **API tests (régression + évolution)**
+    - [ ] `api/tests/api/chat-permissions.test.ts`: couvrir normalisation et validation des patterns `toolName`/`origin` (`*`, `https://*`, `*.domain`, host, invalides).
+    - [ ] `api/tests/api/chat.test.ts`: couvrir forwarding de `localToolDefinitions` dans le job `chat_message`.
+    - [ ] `api/tests/api/chat.test.ts`: couvrir garde-fous `POST /chat/messages/:id/tool-results` (`404` message inconnu, `400` si message non assistant).
+    - [ ] Scoped runs:
+      - [ ] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [ ] **UI tests (TypeScript, régression + évolution)**
+    - [ ] `ui/tests/utils/chat-tool-scope.test.ts`: couvrir explicitement visibilité/activation `tab_read` + `tab_action` en mode extension restreint.
+    - [ ] `ui/tests/chrome-ext/tool-permissions.test.ts`: ajouter tests de normalisation/matching/priorité (wildcards tool+origin, tie-break `updatedAt`).
+    - [ ] Scoped runs:
+      - [ ] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [ ] `make test-ui SCOPE=tests/chrome-ext/tool-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [ ] `make test-ui SCOPE=tests/chrome-ext/tool-executor.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [ ] **E2E tests (non-régression)**
+    - [ ] `e2e/tests/03-chat.spec.ts`: ajouter scénario de non-régression menu outils (ouverture widget, affichage outil, envoi message) sans dépendance plugin runtime.
+    - [ ] Scoped run:
+      - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin`
+  - [ ] **Lot gate final (technique)**
+    - [ ] `make test-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [ ] `make test-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [ ] `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin`
   - [ ] Final gate: Create PR with BRANCH.md content as initial message & Verify CI for the branch
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
