@@ -294,27 +294,32 @@ Build a Chrome extension (Manifest V3) that embeds the ChatWidget into any web p
     - [x] API: audit des suites existantes (`chat-service-tools`, `chat`, `chat-permissions`) et identification des trous sur wildcards/patterns + garde-fous `tool-results`.
     - [x] UI: audit des suites existantes (`localTools`, `chat-tool-scope`, `tool-executor`) et identification des trous sur filtrage extension + matching permission runtime.
     - [x] E2E: audit des specs chat existantes et définition d’un scénario non-régression ciblé/rapide.
-  - [ ] **API tests (régression + évolution)**
-    - [ ] `api/tests/api/chat-permissions.test.ts`: couvrir normalisation et validation des patterns `toolName`/`origin` (`*`, `https://*`, `*.domain`, host, invalides).
-    - [ ] `api/tests/api/chat.test.ts`: couvrir forwarding de `localToolDefinitions` dans le job `chat_message`.
-    - [ ] `api/tests/api/chat.test.ts`: couvrir garde-fous `POST /chat/messages/:id/tool-results` (`404` message inconnu, `400` si message non assistant).
-    - [ ] Scoped runs:
-      - [ ] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-      - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] **UI tests (TypeScript, régression + évolution)**
-    - [ ] `ui/tests/utils/chat-tool-scope.test.ts`: couvrir explicitement visibilité/activation `tab_read` + `tab_action` en mode extension restreint.
-    - [ ] `ui/tests/chrome-ext/tool-permissions.test.ts`: ajouter tests de normalisation/matching/priorité (wildcards tool+origin, tie-break `updatedAt`).
-    - [ ] Scoped runs:
-      - [ ] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-      - [ ] `make test-ui SCOPE=tests/chrome-ext/tool-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-      - [ ] `make test-ui SCOPE=tests/chrome-ext/tool-executor.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-  - [ ] **E2E tests (non-régression)**
-    - [ ] `e2e/tests/03-chat.spec.ts`: ajouter scénario de non-régression menu outils (ouverture widget, affichage outil, envoi message) sans dépendance plugin runtime.
-    - [ ] Scoped run:
-      - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin`
+  - [x] **API tests (régression + évolution)**
+    - [x] `api/tests/api/chat-permissions.test.ts`: couvrir normalisation et validation des patterns `toolName`/`origin` (`*`, `https://*`, `*.domain`, host, invalides).
+    - [x] `api/tests/api/chat.test.ts`: couvrir forwarding de `localToolDefinitions` dans le job `chat_message`.
+    - [x] `api/tests/api/chat.test.ts`: couvrir garde-fous `POST /chat/messages/:id/tool-results` (`404` message inconnu, `400` si message non assistant).
+    - [x] Scoped runs (commandes stables):
+      - [x] `make test-api-endpoints SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+    - [!] Wrapper ciblé flaky sur cet environnement:
+      - [!] `make test-api SCOPE=tests/api/chat-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (`up-api`/`up-api-test`: container API unhealthy).
+      - [!] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (même cause infra).
+  - [x] **UI tests (TypeScript, régression + évolution)**
+    - [x] `ui/tests/utils/chat-tool-scope.test.ts`: couvrir explicitement visibilité/activation `tab_read` + `tab_action` en mode extension restreint.
+    - [x] `ui/tests/chrome-ext/tool-permissions.test.ts`: ajouter tests de normalisation/matching/priorité (wildcards tool+origin, tie-break `updatedAt`).
+    - [x] `ui/tests/chrome-ext/tool-executor.test.ts`: aligner l’assertion screenshot sur le contrat courant (`format: jpeg`).
+    - [x] Scoped runs:
+      - [x] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [x] `make test-ui SCOPE=tests/chrome-ext/tool-permissions.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+      - [x] `make test-ui SCOPE=tests/chrome-ext/tool-executor.test.ts API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
+  - [x] **E2E tests (non-régression)**
+    - [x] `e2e/tests/03-chat.spec.ts`: ajouter scénario de non-régression menu outils (ouverture widget, affichage outil, envoi message) sans dépendance plugin runtime.
+    - [!] Scoped run bloqué par infra:
+      - [!] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin` (port `8788` déjà occupé).
+      - [!] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8898 UI_PORT=5194 MAILDEV_UI_PORT=1094 ENV=e2e-chrome-plugin` (`db-seed-test`: `dist/tests/utils/seed-test-data.js` introuvable).
   - [ ] **Lot gate final (technique)**
-    - [ ] `make test-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-    - [ ] `make test-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin`
-    - [ ] `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin`
+    - [!] `make test-api API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (`up-api-test`: container API unhealthy sur cet environnement).
+    - [!] `make test-ui API_PORT=8892 UI_PORT=5187 MAILDEV_UI_PORT=1092 ENV=test-chrome-plugin` (échecs préexistants `tests/stores/session.test.ts` liés à `window.location` jsdom).
+    - [!] `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-chrome-plugin` (port `8788` occupé; avec ports alternatifs, blocage `db-seed-test`).
   - [ ] Final gate: Create PR with BRANCH.md content as initial message & Verify CI for the branch
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
