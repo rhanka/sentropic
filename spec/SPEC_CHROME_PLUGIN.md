@@ -230,350 +230,114 @@ sequenceDiagram
 
     User->>ChatWidget: "Read this page and summarize"
     ChatWidget->>API: POST /chat/messages
-    API->>API: LLM generates tool_call: tab_read_dom
-    API-->>ChatWidget: SSE: tool_call_start {name: "tab_read_dom"}
+    API->>API: LLM generates tool_call: tab_read {mode: "dom"}
+    API-->>ChatWidget: SSE: tool_call_start {name: "tab_read"}
     
-    Note over ChatWidget: Detects local tool → intercept
-    ChatWidget->>SW: chrome.runtime.sendMessage({tool: "tab_read_dom"})
+    Note over ChatWidget: Detects local tool -> intercept
+    ChatWidget->>SW: chrome.runtime.sendMessage({tool: "tab_read"})
     SW->>Tab: chrome.scripting.executeScript (extract DOM text)
     Tab-->>SW: {text: "...", url: "...", title: "..."}
     SW-->>ChatWidget: Tool result
-    ChatWidget->>API: POST /chat/messages/tool-result {tool_call_id, result}
+    ChatWidget->>API: POST /chat/messages/:id/tool-results {toolCallId, result}
     API->>API: LLM continues with result
     API-->>ChatWidget: SSE: content_delta (summary)
     ChatWidget-->>User: Displays summary
 ```
 
-### 4.2 Two-Phase Tool Declaration
+### 4.2 Local Tool Declaration and Resume Loop
 
-**Phase 1 — Client-declared tools**: When the extension is active, the ChatWidget includes extra tool definitions in the chat message request. The API passes them to the LLM alongside server-side tools. When the LLM calls a local tool, the client intercepts the `tool_call_start` SSE event and executes it locally.
+When the extension runtime is available, ChatPanel includes `localToolDefinitions` in `POST /api/v1/chat/messages`.
+The API merges these local definitions with server-side tools for model generation.
 
-This requires a small API evolution: the `POST /chat/messages` endpoint accepts an optional `localTools` array of tool definitions. These are merged with server tools before calling the LLM. The tool execution loop in `chat-service.ts` must recognize that some tool_calls have no server-side handler and emit a `tool_call_pending_local` event instead of executing them. The client then sends results back.
+If the model emits a local tool call:
 
-**Phase 2 (future)** — Collaboration local/remote: tools registered in a workspace can be flagged as local or remote. The API knows which tools delegate to the client.
+1. ChatPanel intercepts the tool event.
+2. The extension executes the tool in service worker context (`tool_execute`).
+3. ChatPanel sends result back through `POST /api/v1/chat/messages/:id/tool-results`.
+4. API resumes generation in the same assistant stream.
 
-### 4.3 Tool Definitions
+### 4.3 Unified Local Tools (Lot 6B)
 
-#### `tab_read_dom` — Read active tab DOM
+Current contract uses two canonical local tools:
 
-Extracts text content from the current active tab. Uses `chrome.scripting.executeScript` to run a content extraction function in the target tab.
+- `tab_read`
+  - modes: `info | dom | screenshot | elements`
+  - `screenshot` defaults to `png` for readability, optional `jpeg` + quality
+  - `elements` returns pre-parsed clickable/editable candidates with selector hints
+- `tab_action`
+  - actions: `scroll | click | type | wait`
+  - accepts single-step args or multi-step `actions[]`
+  - supports `waitMs` per step + global `timeoutMs`
 
-```typescript
-{
-  name: "tab_read_dom",
-  description: "Read the text content of the currently active browser tab. Returns the page URL, title, and extracted text content. Use this to understand what the user is looking at.",
-  parameters: {
-    type: "object",
-    properties: {
-      selector: {
-        type: "string",
-        description: "Optional CSS selector to limit extraction to a specific part of the page. If omitted, extracts the full page body text."
-      },
-      includeHtml: {
-        type: "boolean",
-        description: "If true, return raw HTML instead of text-only. Default false."
-      }
-    },
-    required: []
-  }
-}
-```
+Backwards-compat aliases remain accepted in runtime (`tab_info`, `tab_read_dom`, `tab_screenshot`, `tab_click`, `tab_type`, `tab_scroll`) and are mapped to `tab_read:*` / `tab_action:*` permission namespaces.
 
-**Implementation** (`tool-executor.ts`):
-```typescript
-async function executeTabReadDom(params: { selector?: string; includeHtml?: boolean }) {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error('No active tab');
+### 4.4 Runtime Permission Model
 
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (selector, includeHtml) => {
-      const el = selector ? document.querySelector(selector) : document.body;
-      if (!el) return { text: '', html: '' };
-      return {
-        text: el.innerText?.slice(0, 50000) || '',
-        html: includeHtml ? el.innerHTML?.slice(0, 100000) || '' : undefined
-      };
-    },
-    args: [params.selector || null, params.includeHtml || false]
-  });
+Local tools are guarded by a runtime decision gate:
 
-  return {
-    url: tab.url,
-    title: tab.title,
-    ...results[0]?.result
-  };
-}
-```
+- decisions: `allow_once`, `deny_once`, `allow_always`, `deny_always`
+- scope key: `{ toolPattern, originPattern }`
+- persistent policies (`allow_always` / `deny_always`) are synced with backend per user/workspace
 
-#### `tab_screenshot` — Capture visible tab
+Policy patterns:
 
-Takes a screenshot of the currently visible tab area.
+- tools: `tab_read:*`, `tab_action:*`, `tab_action:click`, `tab_action:input`, etc.
+- origins: `*`, `https://*`, `*.example.com`, `https://*.example.com`, exact origin
 
-```typescript
-{
-  name: "tab_screenshot",
-  description: "Capture a screenshot of the currently visible browser tab. Returns a base64-encoded PNG image. Use this when visual context is needed (layouts, charts, UI state).",
-  parameters: {
-    type: "object",
-    properties: {
-      quality: {
-        type: "integer",
-        description: "JPEG quality (1-100). Lower = smaller payload. Default 80."
-      }
-    },
-    required: []
-  }
-}
-```
+Precedence:
 
-**Implementation**:
-```typescript
-async function executeTabScreenshot(params: { quality?: number }) {
-  const dataUrl = await chrome.tabs.captureVisibleTab(undefined, {
-    format: 'jpeg',
-    quality: params.quality ?? 80
-  });
-  return { imageDataUrl: dataUrl, format: 'jpeg' };
-}
-```
+1. Most specific match wins
+2. Tie-break by latest `updatedAt`
 
-#### `tab_click` — Click an element
+### 4.5 Local Tool Runtime Components
 
-Click on a DOM element identified by CSS selector or coordinates.
-
-```typescript
-{
-  name: "tab_click",
-  description: "Click on an element in the active tab. Specify a CSS selector to identify the element, or x/y coordinates for pixel-precise clicking. Use this for button clicks, link navigation, form interactions.",
-  parameters: {
-    type: "object",
-    properties: {
-      selector: {
-        type: "string",
-        description: "CSS selector for the element to click."
-      },
-      x: { type: "number", description: "X coordinate (viewport-relative). Used if no selector." },
-      y: { type: "number", description: "Y coordinate (viewport-relative). Used if no selector." },
-      waitForNavigation: {
-        type: "boolean",
-        description: "If true, wait up to 5s for the page to navigate after clicking. Default false."
-      }
-    },
-    required: []
-  }
-}
-```
-
-**Implementation**:
-```typescript
-async function executeTabClick(params: { selector?: string; x?: number; y?: number; waitForNavigation?: boolean }) {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error('No active tab');
-
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (selector, x, y) => {
-      let el: Element | null = null;
-      if (selector) {
-        el = document.querySelector(selector);
-      } else if (typeof x === 'number' && typeof y === 'number') {
-        el = document.elementFromPoint(x, y);
-      }
-      if (!el) throw new Error(`Element not found: ${selector || `(${x},${y})`}`);
-      (el as HTMLElement).click();
-      return { clicked: true, tag: el.tagName, text: (el as HTMLElement).innerText?.slice(0, 200) };
-    },
-    args: [params.selector || null, params.x ?? null, params.y ?? null]
-  });
-
-  if (params.waitForNavigation) {
-    await new Promise(r => setTimeout(r, 2000));
-  }
-
-  return { success: true };
-}
-```
-
-#### `tab_type` — Type text into an element
-
-```typescript
-{
-  name: "tab_type",
-  description: "Type text into an input/textarea element in the active tab. The element is identified by CSS selector.",
-  parameters: {
-    type: "object",
-    properties: {
-      selector: { type: "string", description: "CSS selector of the input element" },
-      text: { type: "string", description: "Text to type" },
-      clear: { type: "boolean", description: "If true, clear the field before typing. Default true." }
-    },
-    required: ["selector", "text"]
-  }
-}
-```
-
-#### `tab_scroll` — Scroll the page
-
-```typescript
-{
-  name: "tab_scroll",
-  description: "Scroll the active tab page. Use to reveal content below/above the fold.",
-  parameters: {
-    type: "object",
-    properties: {
-      direction: { type: "string", enum: ["up", "down", "top", "bottom"], description: "Scroll direction" },
-      pixels: { type: "integer", description: "Number of pixels to scroll (for up/down). Default 500." },
-      selector: { type: "string", description: "Optional: scroll within a specific scrollable container." }
-    },
-    required: ["direction"]
-  }
-}
-```
-
-#### `tab_info` — Get page metadata
-
-```typescript
-{
-  name: "tab_info",
-  description: "Get metadata about the currently active tab: URL, title, favicon, and basic page structure (headings, links count, form count).",
-  parameters: { type: "object", properties: {}, required: [] }
-}
-```
-
-### 4.4 LocalToolStore
-
-A Svelte store that manages communication between the ChatWidget and the Chrome extension service worker.
-
-```typescript
-// ui/src/lib/stores/localTools.ts
-import { writable, derived } from 'svelte/store';
-
-export interface LocalToolDefinition {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-}
-
-export interface LocalToolExecution {
-  toolCallId: string;
-  name: string;
-  args: unknown;
-  status: 'pending' | 'executing' | 'completed' | 'failed';
-  result?: unknown;
-  error?: string;
-}
-
-interface LocalToolsState {
-  available: boolean;            // true if Chrome extension APIs are accessible
-  tools: LocalToolDefinition[];  // registered local tools
-  executions: Map<string, LocalToolExecution>; // in-flight tool executions
-}
-
-export const localToolsStore = writable<LocalToolsState>({
-  available: false,
-  tools: [],
-  executions: new Map()
-});
-
-// Called by content script during bootstrap to register tools
-export function registerLocalTools(tools: LocalToolDefinition[]) { /* ... */ }
-
-// Called by ChatPanel when it intercepts a local tool_call
-export async function executeLocalTool(
-  toolCallId: string, name: string, args: unknown
-): Promise<unknown> {
-  // Send message to service worker
-  const result = await chrome.runtime.sendMessage({
-    type: 'tool_execute',
-    toolCallId,
-    name,
-    args
-  });
-  return result;
-}
-```
-
-### 4.5 Service Worker (background.ts)
-
-```typescript
-// ui/chrome-ext/background.ts
-
-// Tool executor registry
-const toolExecutors: Record<string, (args: any) => Promise<unknown>> = {
-  tab_read_dom: executeTabReadDom,
-  tab_screenshot: executeTabScreenshot,
-  tab_click: executeTabClick,
-  tab_type: executeTabType,
-  tab_scroll: executeTabScroll,
-  tab_info: executeTabInfo,
-};
-
-// Listen for tool execution requests from content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'tool_execute') {
-    const executor = toolExecutors[message.name];
-    if (!executor) {
-      sendResponse({ error: `Unknown local tool: ${message.name}` });
-      return true;
-    }
-    executor(message.args)
-      .then(result => sendResponse({ result }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true; // async response
-  }
-});
-
-// Side panel management
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
-```
+- `ui/src/lib/stores/localTools.ts`
+  - local tool definitions
+  - execution lifecycle (`pending`, `executing`, `awaiting_permission`, `completed`, `failed`)
+  - permission request/decision bridge
+- `ui/chrome-ext/background.ts`
+  - message router (`tool_execute`, `tool_permission_decide`, permissions CRUD sync)
+  - side panel/open-overlay coordination
+- `ui/chrome-ext/tool-executor.ts`
+  - robust active-tab resolution (sender tab + fallback queries)
+  - non-injectable URL guardrails (`chrome://`, `chrome-extension://`, etc.)
 
 ---
 
-## 5. API Evolution (Minimal)
+## 5. API Evolution (Current)
 
-### 5.1 Local Tool Declaration in Chat Request
+### 5.1 Chat Message Input
 
-The `POST /api/v1/chat/messages` endpoint gains an optional field:
+`POST /api/v1/chat/messages` accepts:
 
-```typescript
-interface ChatMessageInput {
-  // ... existing fields
-  localToolDefinitions?: Array<{
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  }>;
-}
-```
+- `localToolDefinitions?: Array<{ name; description; parameters }>`
 
-The `chat-service.ts` merges these with server-side tools before calling the LLM.
+The server merges these with remote tools before calling the model.
 
 ### 5.2 Local Tool Result Submission
 
-New endpoint or extension of existing flow:
+Endpoint:
 
-```
-POST /api/v1/chat/messages/:messageId/tool-results
-```
+- `POST /api/v1/chat/messages/:id/tool-results`
 
-```typescript
-interface ToolResultInput {
-  toolCallId: string;
-  result: unknown;
-}
-```
+Payload:
 
-The server stores the tool result and resumes the LLM generation loop (pass N+1) with the tool result added to the conversation.
+- `{ toolCallId: string; result: unknown }`
 
-### 5.3 Tool Execution Loop Change
+Behavior:
 
-In `chat-service.ts` `runAssistantGeneration`, after detecting tool calls:
-1. Check if the tool is in the `localToolDefinitions` list.
-2. If **server-side**: execute as today.
-3. If **local**: emit a `tool_call_pending_local` SSE event and pause. Wait for the client to submit the result via the new endpoint. Then continue the loop.
+- stores/accepts the local tool result
+- resumes assistant generation when all pending local tool calls are resolved
 
-The pause mechanism can use a polling approach (the resumed endpoint triggers a new pass) or a deferred promise (WebSocket/long-poll). For Lot 1, the simplest is to **split the generation into two server calls**: the client receives the tool call, executes locally, then POSTs the result which triggers a new `runAssistantGeneration` pass.
+### 5.3 Tool Permission API
+
+Endpoints:
+
+- `GET /api/v1/chat/tool-permissions`
+- `PUT /api/v1/chat/tool-permissions`
+- `DELETE /api/v1/chat/tool-permissions`
+
+Server normalizes/safeguards tool/origin patterns and persists to `extension_tool_permissions`.
 
 ---
 
@@ -593,8 +357,7 @@ The pause mechanism can use a polling approach (the resumed endpoint triggers a 
     "sidePanel"
   ],
   "host_permissions": [
-    "https://top-ai-ideas-api.sent-tech.ca/*",
-    "http://localhost:8787/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
@@ -602,32 +365,40 @@ The pause mechanism can use a polling approach (the resumed endpoint triggers a 
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://top-ai-ideas.sent-tech.ca/*",
+        "https://app.sent-tech.ca/*"
+      ],
       "js": ["content.js"],
-      "css": [],
       "run_at": "document_idle"
     }
   ],
   "side_panel": {
-    "default_path": "sidepanel.html"
+    "default_path": "chrome-ext/sidepanel.html"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon-16.png",
-      "32": "icons/icon-32.png",
-      "48": "icons/icon-48.png",
-      "128": "icons/icon-128.png"
-    }
+    "default_popup": "chrome-ext/popup.html",
+    "default_title": "Top AI Ideas Assistant"
   },
-  "icons": {
-    "16": "icons/icon-16.png",
-    "32": "icons/icon-32.png",
-    "48": "icons/icon-48.png",
-    "128": "icons/icon-128.png"
-  }
+  "web_accessible_resources": [
+    {
+      "resources": ["chatwidget.js", "chatwidget.css", "chunks/*", "assets/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
 ```
+
+Notes:
+
+- `<all_urls>` is currently used for UAT/development flexibility.
+- `exclude_matches` prevents content-script injection on Top AI Ideas app domains and localhost app pages.
+- Side panel and popup are hosted in `chrome-ext/*` output paths.
 
 ---
 
@@ -636,7 +407,6 @@ The pause mechanism can use a polling approach (the resumed endpoint triggers a 
 ```typescript
 // ui/chrome-ext/content.ts
 
-// Create Shadow DOM container
 const host = document.createElement('div');
 host.id = 'top-ai-ideas-ext';
 host.style.cssText = 'all: initial; position: fixed; z-index: 2147483647;';
@@ -644,26 +414,23 @@ document.body.appendChild(host);
 
 const shadow = host.attachShadow({ mode: 'open' });
 
-// Inject compiled CSS
 const style = document.createElement('link');
 style.rel = 'stylesheet';
 style.href = chrome.runtime.getURL('chatwidget.css');
 shadow.appendChild(style);
 
-// Mount Svelte ChatWidget into Shadow DOM
 const mountPoint = document.createElement('div');
 mountPoint.id = 'chat-mount';
 shadow.appendChild(mountPoint);
 
-// Import and mount the compiled Svelte bundle
-import('./chatwidget.js').then(({ mount }) => {
-  mount(mountPoint, {
-    apiBaseUrl: 'stored-or-default',
-    contextProvider: createExtensionContextProvider(),
-    localTools: true
-  });
+const { mount } = await import(chrome.runtime.getURL('chatwidget.js'));
+mount(mountPoint, {
+  hostMode: 'overlay',
+  initialState: null
 });
 ```
+
+The side panel uses the same ChatWidget bundle with `hostMode: 'sidepanel'` in `ui/chrome-ext/sidepanel.ts`.
 
 ---
 
@@ -678,6 +445,7 @@ ui/chrome-ext/vite.config.ext.ts
 ```
 
 Entry points:
+
 - `content.ts` → `content.js` (content script)
 - `background.ts` → `background.js` (service worker)
 - `popup.ts` → `popup.js` (popup)
@@ -724,63 +492,52 @@ ui/chrome-ext/dist/
 
 ## 9. i18n
 
-The extension locale follows **browser locale** (`navigator.language` / `chrome.i18n.getUILanguage()`), with fallback to `fr`.
+The extension locale follows browser locale (`chrome.i18n.getUILanguage()`), with fallback to `fr`.
 
-The existing `svelte-i18n` setup is reused inside the compiled bundle. The locale is initialized during bootstrap in `content.ts`:
+Locale initialization is done in `ui/chrome-ext/chatwidget-entry.ts`:
 
 ```typescript
-import { init, register } from 'svelte-i18n';
+import { init as initI18n, register } from 'svelte-i18n';
+import en from '../src/locales/en.json';
+import fr from '../src/locales/fr.json';
 
-register('fr', () => import('./locales/fr.json'));
-register('en', () => import('./locales/en.json'));
+register('en', () => Promise.resolve(en));
+register('fr', () => Promise.resolve(fr));
 
 const browserLocale = chrome.i18n.getUILanguage().split('-')[0];
-init({ fallbackLocale: 'fr', initialLocale: browserLocale === 'en' ? 'en' : 'fr' });
+initI18n({
+  fallbackLocale: 'fr',
+  initialLocale: browserLocale === 'en' ? 'en' : 'fr'
+});
 ```
 
 ---
 
 ## 10. Security Considerations
 
-- **Host permissions**: The extension requests access to the API domain only. `<all_urls>` is needed for content script injection (to show the chat bubble on any page).
-- **CSP in content scripts**: Content scripts run in an isolated world. The Shadow DOM prevents CSS leakage. Scripts cannot access the page's JS context (only DOM).
-- **Authentication**: Relies on shared HTTPOnly cookies from the API domain. No tokens stored in `chrome.storage` for Lot 1.
-- **Local tools**: `chrome.scripting.executeScript` runs in the target tab's main world. The injected functions are minimal and self-contained (no eval, no dynamic code).
-- **Data flow**: Local tool results are sent to the server (API) as tool results in the chat conversation. Sensitive page content should be handled with care (the LLM processes it server-side).
+- **Host permissions**: `<all_urls>` is currently enabled for UAT; content-script injection is still restricted by `exclude_matches`.
+- **CSP / isolation**: content scripts run in isolated world; UI is mounted in Shadow DOM.
+- **Authentication**: extension uses dedicated token flow:
+  - issue token from explicit user action (`Connect`)
+  - access token in `chrome.storage.session`
+  - refresh token in `chrome.storage.local`
+  - API requests proxied through background with bearer injection
+- **WebAuthn side-effects**: no passive WebAuthn bootstrap from content script on third-party pages.
+- **Runtime permissions for local tools**: per tool+origin allow/deny decisions are enforced before execution.
+- **Data flow**: local tool outputs are sent to API through `/chat/messages/:id/tool-results` and can contain page content.
 
 ---
 
-## 11. Lot Plan
+## 11. Delivery Status (current branch)
 
-### Lot 1 — MVP Chrome Extension (this branch: `feat/chrome-plugin`)
-
-| # | Task | Scope |
-|---|---|---|
-| 1 | Create `ui/src/lib/core/` abstraction layer | `context-provider.ts`, `api-client.ts`, `auth-bridge.ts`, `navigation-adapter.ts` |
-| 2 | Refactor ChatWidget + ChatPanel to use abstractions | Replace `$app/*` imports with injected providers. Non-breaking for web app. |
-| 3 | Create `ui/src/lib/stores/localTools.ts` | Local tool store + execution bridge |
-| 4 | Create `ui/chrome-ext/` skeleton | `manifest.json`, `content.ts`, `background.ts`, `popup.html`, `sidepanel.html` |
-| 5 | Implement service worker tool executor | `tab_read_dom`, `tab_screenshot`, `tab_click`, `tab_type`, `tab_scroll`, `tab_info` |
-| 6 | Implement content script bootstrap | Shadow DOM, Svelte mount, i18n init |
-| 7 | API: `localToolDefinitions` in chat request | Merge local tools with server tools |
-| 8 | API: tool result submission endpoint | `POST /chat/messages/:id/tool-results` + resume generation |
-| 9 | Vite build config for extension | `vite.config.ext.ts`, entry points |
-| 10 | Makefile targets | `build-ext`, `dev-ext`, `package-ext` |
-| 11 | Non-regression tests | `make test-ui`, `make test-e2e` — verify existing flows |
-| 12 | Manual verification | Load unpacked, test chat + local tools on a sample page |
-
-### Lot 2 — Side Panel + UI Modes
-
-- Chrome side panel as docked mode
-- Toasters in extension context
-- Bubble positioning persistence
-
-### Lot 3 — Specialized Tools
-
-- Google Workspace tools (Gmail, Sheets, Docs, Slides, Chat, Gemini)
-- Microsoft tools (Outlook, Teams, SharePoint)
-- GitHub tools (Issues, PR)
-- API piloting for acceleration (local/remote delegation via app auth)
+- Delivered:
+  - Abstraction layer + extension packaging + side panel/overlay handoff
+  - Unified local tools (`tab_read`, `tab_action`)
+  - Runtime tool permissions (`once/always/never`) with backend sync
+  - Extension auth token flow and API proxying
+  - Tool scope UX in extension sessions (restricted toolset, local toggles, plugin tab behavior)
+- Remaining:
+  - Cross-spec consolidation and final test/doc gates tracked in `BRANCH.md`
 
 ---
 
