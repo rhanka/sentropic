@@ -468,5 +468,6 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [ ] Minor Fix (already there before merge)
         - [x] Enable web_search and web_extract in chrome plugin
         - [x] In dashboard view (webapp) comments on "name" (folder) are not localized and comment can't be closed
-  - [ ] Push & gh CI
+        - [x] Include sent-tech favico (web app)
+  - [x] Push & gh CI
   - [ ] rm BRANCH.md then merge
