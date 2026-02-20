@@ -426,42 +426,47 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
     - [x] Targeted reruns for merged-selector regressions:
       - [x] `make test-e2e E2E_SPEC=tests/00-access-control.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
       - [x] `make test-e2e E2E_SPEC=tests/04-tenancy-workspaces.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
-  - [ ] Single UAT (root workspace `~/src/top-ai-ideas-fullstack`, one pass, conflict-focused)
-    - [ ] UAT Web app
-      - [ ] `api/src/services/queue-manager.ts`: run one generation (`usecase detail`) and verify persisted payload keeps `domain` and excludes `process`/`prerequisites`.
-      - [ ] `ui/src/lib/utils/api.ts`: switch app locale (`FR`/`EN`) and verify auto-comments language follows app locale (not browser locale).
-      - [ ] `ui/src/lib/components/ChatPanel.svelte`: in Comments tab, verify sub-header actions (list/new/resolve/prev/next), and confirm those actions are no longer duplicated in top chat header while on comments tab.
-      - [ ] `ui/src/lib/components/ChatWidget.svelte`: in web app mode, verify `Chat IA` and `Jobs` actions are in their own sub-headers (not in top header), with regular icon spacing.
-      - [ ] `ui/src/lib/components/Toast.svelte`: verify toast placement in all three states:
-        - [ ] chat closed: toast bottom-aligned, just left of bubble button (not above).
-        - [ ] chat docked open: toast bottom-aligned, left of docked panel.
-        - [ ] chat floating open: toast bottom-aligned, left of floating widget, no overlap.
-      - [ ] `ui/src/lib/components/ChatPanel.svelte`: verify localized comment hint text:
-        - [ ] when at least one thread exists: "Sélectionne un commentaire ou écris un commentaire" / "Select a comment or write a comment".
-        - [ ] when no thread exists: "Il n'y a pas de commentaire, tu peux en écrire un" / "There are no comments yet, you can write one".
-      - [ ] `ui/src/lib/components/ChatPanel.svelte`: verify localized section label in comment sub-header (no technical key like `constraints`/`data.constraints`).
-      - [ ] `ui/src/lib/components/ChatPanel.svelte`: resolve one open comment and verify auto-jump to next comment works; verify previous/next navigation buttons work.
-      - [ ] `ui/src/lib/components/CommentBadge.svelte` + route headers: verify badge icon and counter use primary token (no black/slate badge), and counters are visible without hover when comments exist.
-      - [ ] Header badge parity checks:
-        - [ ] `/usecase/[id]`: badges visible/clickable on title, constraints, value/complexity score headers.
-        - [ ] `/organizations/[id]`: badges visible/clickable on name and industry.
-        - [ ] `/dashboard`: badges visible/clickable on folder title and executive summary section headers (`synthese_executive`, `introduction`, `analysis`, `recommendations`, `references`).
-      - [ ] `ui/src/lib/components/EditableInput.svelte`: type on `/organizations/[id]`, `/usecase/[id]`, `/dashboard`, `/matrix` with no full reload/flicker and immediate save feedback.
-      - [ ] `ui/src/lib/components/EditableInput.svelte`: verify saving indicator does not flash at each keystroke; it should only appear on slower saves (>~1s).
-      - [ ] Collaboration non-reg:
-        - [ ] `/usecase/[id]` and `/organizations/[id]`: second user sees live update without manual refresh.
-        - [ ] `/dashboard` and `/matrix` (main + modal edited fields): second user sees live update without manual refresh.
+  - [x] Single UAT (root workspace `~/src/top-ai-ideas-fullstack`, one pass, conflict-focused)
+    - [x] UAT Web app
+      - [x] `api/src/services/queue-manager.ts`: run one generation (`usecase detail`) and verify persisted payload keeps `domain` and excludes `process`/`prerequisites`.
+      - [x] `ui/src/lib/utils/api.ts`: switch app locale (`FR`/`EN`) and verify auto-comments language follows app locale (not browser locale).
+      - [x] `ui/src/lib/components/ChatPanel.svelte`: in Comments tab, verify sub-header actions (list/new/resolve/prev/next), and confirm those actions are no longer duplicated in top chat header while on comments tab.
+      - [x] `ui/src/lib/components/ChatWidget.svelte`: in web app mode, verify `Chat IA` and `Jobs` actions are in their own sub-headers (not in top header), with regular icon spacing.
+      - [x] `ui/src/lib/components/Toast.svelte`: verify toast placement in all three states:
+        - [x] chat closed: toast bottom-aligned, just left of bubble button (not above).
+        - [x] chat docked open: toast bottom-aligned, left of docked panel.
+        - [x] chat floating open: toast bottom-aligned, left of floating widget, no overlap.
+      - [x] `ui/src/lib/components/ChatPanel.svelte`: verify localized comment hint text:
+        - [x] when at least one thread exists: "Sélectionne un commentaire ou écris un commentaire" / "Select a comment or write a comment".
+        - [x] when no thread exists: "Il n'y a pas de commentaire, tu peux en écrire un" / "There are no comments yet, you can write one".
+      - [x] `ui/src/lib/components/ChatPanel.svelte`: verify localized section label in comment sub-header (no technical key like `constraints`/`data.constraints`).
+      - [x] `ui/src/lib/components/ChatPanel.svelte`: resolve one open comment and verify auto-jump to next comment works; verify previous/next navigation buttons work.
+      - [x] `ui/src/lib/components/CommentBadge.svelte` + route headers: verify badge icon and counter use primary token (no black/slate badge), and counters are visible without hover when comments exist.
+      - [x] Header badge parity checks:
+        - [x] `/usecase/[id]`: badges visible/clickable on title, constraints, value/complexity score headers.
+        - [x] `/organizations/[id]`: badges visible/clickable on name and industry.
+        - [x] `/dashboard`: badges visible/clickable on folder title and executive summary section headers (`synthese_executive`, `introduction`, `analysis`, `recommendations`, `references`).
+      - [x] `ui/src/lib/components/EditableInput.svelte`: type on `/organizations/[id]`, `/usecase/[id]`, `/dashboard`, `/matrix` with no full reload/flicker and immediate save feedback.
+      - [x] `ui/src/lib/components/EditableInput.svelte`: verify saving indicator does not flash at each keystroke; it should only appear on slower saves (>~1s).
+      - [x] Collaboration non-reg:
+        - [x] `/usecase/[id]` and `/organizations/[id]`: second user sees live update without manual refresh.
+        - [x] `/dashboard` and `/matrix` (main + modal edited fields): second user sees live update without manual refresh.
     - [ ] UAT Plugin Chrome
-      - [ ] `api/src/routes/api/chat.ts`: send one chat message with local tools enabled and verify `tool-results` resume keeps same conversation stream.
-      - [ ] `api/src/services/chat-service.ts`: run one `tab_read` + one `tab_action` from extension and verify assistant resumes without manual retry.
-      - [ ] `ui/src/lib/components/ChatWidget.svelte`: extension non-reg (floating + side panel, explicit auth/connect, endpoint health menu, permission cards).
-      - [ ] `ui/src/lib/components/ChatWidget.svelte`: verify comments tab remains hidden/disabled in plugin mode as specified, while Chat IA / Jobs stay functional.
-      - [ ] `ui/src/lib/components/ChatPanel.svelte`: verify chat/jobs actions are in sub-header (not duplicated in top header) and spacing/layout remain aligned with main style.
-      - [ ] `ui/src/lib/components/Toast.svelte`: extension overlay/docked parity for toast placement (left of bubble/panel, bottom aligned, no overlap in floating mode).
-      - [ ] Local tools permission flow:
-        - [ ] one-time allow prompts again next call.
-        - [ ] always allow persists after extension reload.
-        - [ ] never allow persists after extension reload and blocks execution.
-      - [ ] Local tools toggles:
-        - [ ] disabling `tab_read` removes it from `localToolDefinitions`.
-        - [ ] disabling `tab_action` removes it from `localToolDefinitions`.
+      - [x] `api/src/routes/api/chat.ts`: send one chat message with local tools enabled and verify `tool-results` resume keeps same conversation stream.
+      - [x] `api/src/services/chat-service.ts`: run one `tab_read` + one `tab_action` from extension and verify assistant resumes without manual retry.
+      - [x] `ui/src/lib/components/ChatWidget.svelte`: extension non-reg (floating + side panel, explicit auth/connect, endpoint health menu, permission cards).
+      - [x] `ui/src/lib/components/ChatWidget.svelte`: verify comments tab remains hidden/disabled in plugin mode as specified, while Chat IA / Jobs stay functional.
+      - [x] `ui/src/lib/components/ChatPanel.svelte`: verify chat/jobs actions are in sub-header (not duplicated in top header) and spacing/layout remain aligned with main style.
+      - [x] `ui/src/lib/components/Toast.svelte`: extension overlay/docked parity for toast placement (left of bubble/panel, bottom aligned, no overlap in floating mode).
+      - [x] Local tools permission flow:
+        - [x] one-time allow prompts again next call.
+        - [x] always allow persists after extension reload.
+        - [x] never allow persists after extension reload and blocks execution.
+      - [x] Local tools toggles:
+        - [x] disabling `tab_read` removes it from `localToolDefinitions`.
+        - [x] disabling `tab_action` removes it from `localToolDefinitions`.
+      - [ ] Minor Fix (already there before merge)
+        - [x] Enable web_search and web_extract in chrome plugin
+        - [x] In dashboard view (webapp) comments on "name" (folder) are not localized and comment can't be closed
+  - [ ] Push & gh CI
+  - [ ] rm BRANCH.md then merge
