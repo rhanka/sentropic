@@ -1149,6 +1149,13 @@ export class ChatService {
         webExtractTool
       ]);
     }
+    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
+    if (requestedTools.has('web_search')) {
+      addTools([webSearchTool]);
+    }
+    if (requestedTools.has('web_extract')) {
+      addTools([webExtractTool]);
+    }
     if (hasDocuments) {
       addTools([documentsTool]);
     }
