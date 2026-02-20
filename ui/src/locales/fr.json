@@ -388,7 +388,7 @@
     "delete": "Supprimer l'organisation",
     "deleteSuccess": "Organisation supprimée avec succès !",
     "deleteError": "Erreur lors de la suppression",
-    "industry": "Secteur: {value}",
+    "industry": "Secteur {value}",
     "sizeLabel": "Taille",
     "clickForDetails": "Cliquez pour voir les détails",
     "form": {
@@ -397,7 +397,7 @@
       "namePlaceholder": "Saisir le nom de l'organisation"
     },
     "fields": {
-      "industry": "Secteur:",
+      "industry": "Secteur",
       "size": "Taille",
       "technologies": "Technologies",
       "products": "Produits et Services",
@@ -634,7 +634,8 @@
     },
     "info": {
       "title": "Informations",
-      "contact": "Contact:",
+      "contact": "Contact",
+      "domain": "Domaine",
       "technologies": "Technologies",
       "dataSources": "Sources des données",
       "dataObjects": "Données"
@@ -699,18 +700,23 @@
     },
     "sections": {
       "usecase": {
+        "name": "Nom",
         "description": "Description",
         "problem": "Problème",
         "solution": "Solution",
         "benefits": "Bénéfices recherchés",
+        "constraints": "Contraintes",
         "risks": "Risques",
         "metrics": "Mesures du succès",
         "nextSteps": "Prochaines étapes",
         "technologies": "Technologies",
         "dataSources": "Sources des données",
         "dataObjects": "Données",
+        "valueScores": "Axes de Valeur",
+        "complexityScores": "Axes de Complexité",
         "references": "Références",
         "contact": "Contact",
+        "domain": "Domaine",
         "deadline": "Délai"
       },
       "organization": {
@@ -731,7 +737,8 @@
         "introduction": "Introduction",
         "analysis": "Analyse",
         "recommendations": "Recommandations",
-        "summary": "Synthèse"
+        "summary": "Synthèse",
+        "references": "Références"
       }
     },
     "widget": {
@@ -897,8 +904,8 @@
       "executiveSummary": { "label": "Synthèse exécutive" }
     },
     "comments": {
-      "chooseThread": "Choisir une conversation",
-      "newThread": "Nouvelle conversation",
+      "chooseThread": "Liste des commentaires",
+      "newThread": "Nouveau commentaire",
       "none": "Aucune conversation",
       "deleteThread": "Supprimer la conversation",
       "confirmDeleteThread": "Supprimer cette conversation de commentaires ?",
@@ -911,7 +918,8 @@
       "resolvedAt": "Résolu {at}",
       "assignedToMe": "Vous est assigné",
       "assignedTo": "Assigné à @{label}",
-      "selectThreadHint": "Sélectionne une conversation pour commencer ou écris un commentaire.",
+      "selectThreadHint": "Sélectionne un commentaire ou écris un commentaire.",
+      "emptyHint": "Il n'y a pas de commentaire, tu peux en écrire un.",
       "noMessagesThread": "Aucun message dans cette conversation.",
       "updating": "Mise à jour…",
       "assignedToLabel": "Assigné à @{label}",
@@ -920,7 +928,11 @@
         "loadError": "Erreur de chargement",
         "none": "Aucun membre"
       },
-      "resolve": "Résoudre",
+      "showResolved": "Afficher les commentaires résolus",
+      "hideResolved": "Masquer les commentaires résolus",
+      "resolve": "Résoudre le commentaire",
+      "previous": "Commentaire précédent",
+      "next": "Commentaire suivant",
       "reopen": "Réouvrir"
     },
     "chat": {

@@ -153,7 +153,7 @@
         </button>
         <button 
           on:click={handleSaveAndContinue}
-          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          class="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
         >
           {$_('unsavedChanges.actions.saveAndContinue')}
         </button>

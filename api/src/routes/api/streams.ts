@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
 import { hydrateUseCase } from './use-cases';
+import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
 import { getWorkspaceRole } from '../../services/workspace-access';
@@ -160,70 +161,37 @@ function sseCommentEvent(contextType: string, contextId: string, data: unknown):
   return `event: comment_update\nid: comment:${contextType}:${contextId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
-function parseOrgData(value: unknown): Record<string, unknown> {
-  if (!value) return {};
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value == null) return null;
   if (typeof value === 'object') return value as Record<string, unknown>;
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value) as unknown;
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+      return null;
     } catch {
-      return {};
+      return null;
     }
   }
-  return {};
+  return null;
 }
 
-function coerceMarkdownString(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) {
-    const items = value
-      .map((v) => (typeof v === 'string' ? v : v == null ? '' : String(v)))
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!items.length) return undefined;
-    return items.map((s) => `- ${s}`).join('\n');
-  }
-  return undefined;
-}
-
-function coerceReferences(value: unknown): Array<{ title: string; url: string; excerpt?: string }> {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
-    .filter((v): v is Record<string, unknown> => !!v)
-    .map((r) => ({
-      title: typeof r.title === 'string' ? r.title : String(r.title ?? ''),
-      url: typeof r.url === 'string' ? r.url : String(r.url ?? ''),
-      excerpt: typeof r.excerpt === 'string' ? r.excerpt : undefined,
-    }))
-    .filter((r) => r.title.trim() && r.url.trim());
-}
-
-function hydrateOrganizationForSse(row: Record<string, unknown>): Record<string, unknown> {
-  const data = parseOrgData(row.data);
-  const legacyKpisCombined = (() => {
-    const sector = coerceMarkdownString(data.kpis_sector);
-    const org = coerceMarkdownString(data.kpis_org);
-    const parts = [sector, org].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
-    if (!parts.length) return undefined;
-    return parts.join('\n\n');
-  })();
+function hydrateFolderForSse(row: Record<string, unknown>): Record<string, unknown> {
+  const matrixRaw = row.matrixConfig ?? row.matrix_config;
+  const executiveSummaryRaw =
+    row.executiveSummary ?? row.executive_summary ?? row.exec_summary;
+  const organizationId = (row.organizationId ?? row.organization_id ?? null) as string | null;
+  const createdAt = row.createdAt ?? row.created_at ?? null;
 
   return {
-    id: typeof row.id === 'string' ? row.id : String(row.id ?? ''),
-    name: typeof row.name === 'string' ? row.name : String(row.name ?? ''),
+    id: row.id,
+    name: row.name,
+    description: row.description ?? null,
+    organizationId,
+    matrixConfig: parseJsonObject(matrixRaw),
+    executiveSummary: parseJsonObject(executiveSummaryRaw),
     status: row.status ?? null,
-    industry: typeof data.industry === 'string' ? data.industry : undefined,
-    size: typeof data.size === 'string' ? data.size : undefined,
-    products: coerceMarkdownString(data.products),
-    processes: coerceMarkdownString(data.processes),
-    kpis: coerceMarkdownString(data.kpis) ?? legacyKpisCombined,
-    challenges: coerceMarkdownString(data.challenges),
-    objectives: coerceMarkdownString(data.objectives),
-    technologies: coerceMarkdownString(data.technologies),
-    references: coerceReferences(data.references),
+    createdAt,
   };
 }
 
@@ -461,13 +429,13 @@ streamsRouter.get('/sse', async (c) => {
 
       const emitOrganizationSnapshot = async (organizationId: string) => {
         try {
-          const row = (await db.get(sql`
-            SELECT *
-            FROM organizations
-            WHERE id = ${organizationId} AND workspace_id = ${targetWorkspaceId}
-          `)) as unknown as Record<string, unknown> | undefined;
+          const [row] = await db
+            .select()
+            .from(organizations)
+            .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, targetWorkspaceId)));
           if (!row?.id || typeof row.id !== 'string') return;
-          push(sseOrganizationEvent(organizationId, { organization: hydrateOrganizationForSse(row) }));
+          // Same payload contract as GET /organizations/:id
+          push(sseOrganizationEvent(organizationId, { organization: hydrateOrganization(row) }));
         } catch {
           // ignore
         }
@@ -481,7 +449,7 @@ streamsRouter.get('/sse', async (c) => {
             WHERE id = ${folderId} AND workspace_id = ${targetWorkspaceId}
           `)) as unknown as Record<string, unknown> | undefined;
           if (!row?.id || typeof row.id !== 'string') return;
-          push(sseFolderEvent(folderId, { folder: row }));
+          push(sseFolderEvent(folderId, { folder: hydrateFolderForSse(row) }));
         } catch {
           // ignore
         }
@@ -811,5 +779,3 @@ streamsRouter.get('/sse', async (c) => {
   c.header('X-Accel-Buffering', 'no');
   return c.newResponse(readable, 200);
 });
-
-

@@ -388,7 +388,7 @@
     "delete": "Delete organization",
     "deleteSuccess": "Organization deleted successfully!",
     "deleteError": "Error while deleting",
-    "industry": "Industry: {value}",
+    "industry": "Industry {value}",
     "sizeLabel": "Size",
     "clickForDetails": "Click to view details",
     "form": {
@@ -397,7 +397,7 @@
       "namePlaceholder": "Enter the organization name"
     },
     "fields": {
-      "industry": "Industry:",
+      "industry": "Industry",
       "size": "Size",
       "technologies": "Technologies",
       "products": "Products and services",
@@ -634,7 +634,8 @@
     },
     "info": {
       "title": "Information",
-      "contact": "Contact:",
+      "contact": "Contact",
+      "domain": "Domain",
       "technologies": "Technologies",
       "dataSources": "Data sources",
       "dataObjects": "Data"
@@ -699,18 +700,23 @@
     },
     "sections": {
       "usecase": {
+        "name": "Name",
         "description": "Description",
         "problem": "Problem",
         "solution": "Solution",
         "benefits": "Target benefits",
+        "constraints": "Constraints",
         "risks": "Risks",
         "metrics": "Success metrics",
         "nextSteps": "Next steps",
         "technologies": "Technologies",
         "dataSources": "Data sources",
         "dataObjects": "Data",
+        "valueScores": "Value axes",
+        "complexityScores": "Complexity axes",
         "references": "References",
         "contact": "Contact",
+        "domain": "Domain",
         "deadline": "Deadline"
       },
       "organization": {
@@ -731,7 +737,8 @@
         "introduction": "Introduction",
         "analysis": "Analysis",
         "recommendations": "Recommendations",
-        "summary": "Summary"
+        "summary": "Summary",
+        "references": "References"
       }
     },
     "widget": {
@@ -897,8 +904,8 @@
       "executiveSummary": { "label": "Executive summary" }
     },
     "comments": {
-      "chooseThread": "Choose a conversation",
-      "newThread": "New conversation",
+      "chooseThread": "Comments list",
+      "newThread": "New comment",
       "none": "No conversation",
       "deleteThread": "Delete conversation",
       "confirmDeleteThread": "Delete this comment conversation?",
@@ -911,7 +918,8 @@
       "resolvedAt": "Resolved {at}",
       "assignedToMe": "Assigned to you",
       "assignedTo": "Assigned to @{label}",
-      "selectThreadHint": "Select a conversation to start or write a comment.",
+      "selectThreadHint": "Select a comment or write a comment.",
+      "emptyHint": "There are no comments yet, you can write one.",
       "noMessagesThread": "No messages in this conversation.",
       "updating": "Updating…",
       "assignedToLabel": "Assigned to @{label}",
@@ -920,7 +928,11 @@
         "loadError": "Loading error",
         "none": "No member"
       },
-      "resolve": "Resolve",
+      "showResolved": "Show resolved comments",
+      "hideResolved": "Hide resolved comments",
+      "resolve": "Resolve comment",
+      "previous": "Previous comment",
+      "next": "Next comment",
       "reopen": "Reopen"
     },
     "chat": {

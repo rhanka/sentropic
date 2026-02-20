@@ -5,10 +5,8 @@ export type UseCaseData = {
   description?: string;
   problem?: string;
   solution?: string;
-  process?: string;
   domain?: string;
   technologies?: string[];
-  prerequisites?: string;
   deadline?: string;
   contact?: string;
   benefits?: string[];
@@ -36,7 +34,6 @@ export type UseCase = {
   // Rétrocompatibilité : garder les propriétés directes pour l'ancien code
   name?: string;
   description?: string;
-  process?: string;
   technology?: string;
   deadline?: string;
   contact?: string;

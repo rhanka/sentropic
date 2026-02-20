@@ -105,7 +105,7 @@
       <p class="text-gray-600">{$_('auth.devices.empty')}</p>
       <a
         href="/auth/register"
-        class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+        class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90"
       >
         {$_('auth.devices.register')}
       </a>
@@ -130,7 +130,7 @@
                     />
                     <button
                       on:click={() => saveDeviceName(credential.id)}
-                      class="px-3 py-1 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                      class="px-3 py-1 bg-primary text-white text-sm rounded-md hover:bg-primary/90"
                     >
                       {$_('common.save')}
                     </button>

@@ -53,7 +53,7 @@ test.describe('Dashboard DOCX flow', () => {
     await page.keyboard.press('Escape').catch(() => undefined);
 
     const trigger = getActionsTrigger(page);
-    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    await expect(trigger).toBeVisible({ timeout: 2_000 });
     await trigger.click();
     await expect
       .poll(async () => hasAnyDocxMenuButtonVisible(page), { timeout: 5_000, intervals: [200, 400, 600] })
@@ -248,11 +248,26 @@ test.describe('Dashboard DOCX flow', () => {
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
 
-      const lockButton = page.locator(
+      const readOnlyLockButton = page.locator(
         'button.print-hidden[aria-label*="lecture seule"], button.print-hidden[aria-label*="read-only"]'
       );
-      await expect(lockButton).toBeVisible({ timeout: 15_000 });
-      await expect(lockButton).toHaveClass(/print-hidden/);
+      const presenceLockGroup = page.locator(
+        'div[role="group"][aria-label*="Verrou"], div[role="group"][aria-label*="Lock"]'
+      );
+
+      await expect
+        .poll(
+          async () => (await readOnlyLockButton.count()) + (await presenceLockGroup.count()),
+          { timeout: 2_000 }
+        )
+        .toBeGreaterThan(0);
+
+      if ((await readOnlyLockButton.count()) > 0) {
+        await expect(readOnlyLockButton.first()).toBeVisible({ timeout: 2_000 });
+        await expect(readOnlyLockButton.first()).toHaveClass(/print-hidden/);
+      } else {
+        await expect(presenceLockGroup.first()).toBeVisible({ timeout: 2_000 });
+      }
     } finally {
       await context.close().catch(() => undefined);
     }
@@ -276,7 +291,7 @@ test.describe('Dashboard DOCX flow', () => {
       );
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
-      await expect(page.getByRole('heading', { level: 1, name: folderName })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { level: 1, name: folderName })).toBeVisible({ timeout: 2_000 });
 
       summaryVersion += 1;
       await updateExecutiveSummary(page, `prepare-${summaryVersion}`);

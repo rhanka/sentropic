@@ -11,13 +11,31 @@
   import { streamHub } from '$lib/stores/streamHub';
   import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
   import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
+  import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
   import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
-  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope } from '$lib/stores/workspaceScope';
+  import { listComments } from '$lib/utils/comments';
+  import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
+  import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
+  import { normalizeMarkdownLineEndings, renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { session } from '$lib/stores/session';
+  import {
+    acceptUnlock,
+    acquireLock,
+    fetchLock,
+    forceUnlock,
+    releaseLock,
+    requestUnlock,
+    sendPresence,
+    fetchPresence,
+    leavePresence,
+    type LockSnapshot,
+    type PresenceUser,
+  } from '$lib/utils/object-lock';
   import {
     downloadCompletedDocxJob,
     startDocxGeneration,
@@ -55,52 +73,417 @@
       }
     | null = null;
   const HUB_KEY = 'dashboardPage';
-  $: showReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
-  
-  // Local state for markdown editing (not persisted)
-  let editedIntroduction = '';
-  let editedAnalyse = '';
-  let editedRecommandation = '';
-  let editedSyntheseExecutive = '';
-  
-  // Initialize edited values from executiveSummary
-  function initializeEditedValues() {
-    if (!executiveSummary) {
-      editedIntroduction = '';
-      editedAnalyse = '';
-      editedRecommandation = '';
-      editedSyntheseExecutive = '';
-      return;
-    }
-    
-    // Parser executiveSummary si c'est une chaîne JSON
-    let parsedSummary: any = executiveSummary;
-    if (typeof executiveSummary === 'string') {
+  let lockHubKey: string | null = null;
+  let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let lockTargetId: string | null = null;
+  let lock: LockSnapshot | null = null;
+  let lockLoading = false;
+  let lockError: string | null = null;
+  let suppressAutoLock = false;
+  let presenceUsers: PresenceUser[] = [];
+  let presenceTotal = 0;
+  let commentCounts: Record<string, number> = {};
+  let folderCommentCounts: Record<string, number> = {};
+  let workspaceId: string | null = null;
+  let commentUserId: string | null = null;
+  let lastCommentCountsKey = '';
+  let commentCountsLoading = false;
+  let commentCountsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let commentCountsRetryAttempts = 0;
+  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  const LOCK_REFRESH_MS = 10 * 1000;
+  $: isWorkspaceAdmin = $selectedWorkspaceRole === 'admin';
+  $: isLockedByMe = !!lock && lock.lockedBy.userId === $session.user?.id;
+  $: isLockedByOther = !!lock && lock.lockedBy.userId !== $session.user?.id;
+  $: lockOwnerLabel = lock?.lockedBy?.displayName || lock?.lockedBy?.email || 'Utilisateur';
+  $: lockRequestedByMe = !!lock && lock.unlockRequestedByUserId === $session.user?.id;
+  $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
+  $: isDashboardReadOnly = $workspaceReadOnlyScope || isLockedByOther;
+  let lastReadOnlyRole = isDashboardReadOnly;
+  $: showWorkspaceReadOnlyLock = $workspaceScopeHydrated && $workspaceReadOnlyScope;
+
+  const parseJsonObject = (value: unknown): Record<string, any> | null => {
+    if (!value) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value === 'string') {
       try {
-        parsedSummary = JSON.parse(executiveSummary);
-      } catch (e) {
-        console.error('Failed to parse executiveSummary:', e);
-        parsedSummary = null;
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+      } catch {
+        return null;
       }
     }
-    
-    if (parsedSummary) {
-      editedIntroduction = parsedSummary.introduction || '';
-      editedAnalyse = parsedSummary.analyse || '';
-      editedRecommandation = parsedSummary.recommandation || '';
-      editedSyntheseExecutive = parsedSummary.synthese_executive || '';
+    return null;
+  };
+
+  const parseOptionalObject = (value: unknown): Record<string, any> | null | undefined => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed === null) return null;
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
+  const applyFolderSnapshot = (folderId: string, folderData: any) => {
+    if (!folderData || !selectedFolderId || folderId !== selectedFolderId) return;
+
+    const normalizedFolder = { ...folderData };
+    const rawMatrixConfig = folderData.matrixConfig ?? folderData.matrix_config;
+    if (rawMatrixConfig !== undefined) {
+      const incomingMatrix = parseOptionalObject(rawMatrixConfig);
+      if (incomingMatrix === undefined) {
+        delete (normalizedFolder as any).matrixConfig;
+      } else {
+        normalizedFolder.matrixConfig = incomingMatrix;
+        matrix = incomingMatrix as MatrixConfig | null;
+      }
+    }
+    const rawExecutiveSummary =
+      folderData.executiveSummary ?? folderData.executive_summary ?? folderData.exec_summary;
+    if (rawExecutiveSummary !== undefined) {
+      const incomingExecutiveSummary = parseOptionalObject(rawExecutiveSummary);
+      if (incomingExecutiveSummary === null) {
+        normalizedFolder.executiveSummary = null;
+        executiveSummary = null;
+        applyExecutiveSummarySnapshot(folderId, null);
+      } else if (incomingExecutiveSummary && typeof incomingExecutiveSummary === 'object') {
+        const previousSummary =
+          executiveSummary && typeof executiveSummary === 'object' ? executiveSummary : {};
+        const mergedExecutiveSummary = {
+          ...previousSummary,
+          ...incomingExecutiveSummary,
+          references:
+            incomingExecutiveSummary.references !== undefined
+              ? incomingExecutiveSummary.references
+              : previousSummary.references || []
+        };
+        normalizedFolder.executiveSummary = mergedExecutiveSummary;
+        executiveSummary = mergedExecutiveSummary;
+        applyExecutiveSummarySnapshot(folderId, mergedExecutiveSummary);
+      } else {
+        // Ignore malformed partial payloads instead of wiping local executive summary state.
+        delete (normalizedFolder as any).executiveSummary;
+      }
+    }
+    currentFolder = { ...(currentFolder || {}), ...normalizedFolder };
+    if (typeof folderData.name === 'string') {
+      editedFolderName = folderData.name;
+    }
+
+    foldersStore.update((folders) =>
+      folders.map((f) => (f.id === folderId ? { ...f, ...(normalizedFolder as any) } : f))
+    );
+  };
+
+  const subscribeLock = (targetId: string) => {
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = `lock:dashboard-folder:${targetId}`;
+    streamHub.set(lockHubKey, (evt: any) => {
+      if (evt?.type === 'lock_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        lock = evt?.data?.lock ?? null;
+        if (!lock && !$workspaceReadOnlyScope) {
+          if (suppressAutoLock) {
+            suppressAutoLock = false;
+            return;
+          }
+          void syncLock();
+        }
+        return;
+      }
+      if (evt?.type === 'presence_update') {
+        if (evt.objectType !== 'folder') return;
+        if (evt.objectId !== targetId) return;
+        presenceTotal = Number(evt?.data?.total ?? 0);
+        presenceUsers = Array.isArray(evt?.data?.users)
+          ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
+          : [];
+        return;
+      }
+      if (evt?.type === 'ping') {
+        void updatePresence();
+      }
+    });
+  };
+
+  const syncLock = async () => {
+    if (!lockTargetId) return;
+    lockLoading = true;
+    lockError = null;
+    try {
+      if (isDashboardReadOnly) {
+        lock = await fetchLock('folder', lockTargetId);
+      } else {
+        const res = await acquireLock('folder', lockTargetId);
+        lock = res.lock;
+      }
+      scheduleLockRefresh();
+    } catch (e: any) {
+      lockError = e?.message ?? get(_)('locks.lockError');
+    } finally {
+      lockLoading = false;
+    }
+  };
+
+  const scheduleLockRefresh = () => {
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (!lock || !isLockedByMe) return;
+    lockRefreshTimer = setInterval(() => {
+      void refreshLock();
+    }, LOCK_REFRESH_MS);
+  };
+
+  $: if (lock && isLockedByMe) {
+    scheduleLockRefresh();
+  }
+
+  const refreshLock = async () => {
+    if (!lockTargetId || !$session.user) return;
+    if (!isLockedByMe) return;
+    try {
+      const res = await acquireLock('folder', lockTargetId);
+      lock = res.lock;
+    } catch {
+      // ignore refresh errors
+    }
+  };
+
+  const releaseCurrentLock = async () => {
+    if (!lockTargetId || !isLockedByMe) return;
+    try {
+      await releaseLock('folder', lockTargetId);
+    } catch {
+      // ignore release errors
+    }
+  };
+
+  const handleRequestUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await requestUnlock('folder', lockTargetId);
+      lock = res.lock;
+      addToast({ type: 'success', message: get(_)('locks.unlockRequestSent') });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.unlockRequestError') });
+    }
+  };
+
+  const handleForceUnlock = async () => {
+    if (!lockTargetId) return;
+    try {
+      await forceUnlock('folder', lockTargetId);
+      addToast({ type: 'success', message: get(_)('locks.lockForced') });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message ?? get(_)('locks.lockForceError') });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!lockTargetId) return;
+    if (lock?.unlockRequestedByUserId) {
+      suppressAutoLock = true;
+      await acceptUnlock('folder', lockTargetId);
+      return;
+    }
+    suppressAutoLock = true;
+    await releaseCurrentLock();
+  };
+
+  const hydratePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await fetchPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const updatePresence = async () => {
+    if (!lockTargetId) return;
+    try {
+      const res = await sendPresence('folder', lockTargetId);
+      presenceTotal = res.total;
+      presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleVisibility = () => {
+    if (!lockTargetId) return;
+    if (document.hidden) {
+      void leavePresence('folder', lockTargetId);
     } else {
-      editedIntroduction = '';
-      editedAnalyse = '';
-      editedRecommandation = '';
-      editedSyntheseExecutive = '';
+      void updatePresence();
+    }
+  };
+
+  const handleLeave = () => {
+    if (!lockTargetId) return;
+    void leavePresence('folder', lockTargetId);
+  };
+
+  $: if (selectedFolderId && selectedFolderId !== lockTargetId) {
+    if (lockTargetId) {
+      void leavePresence('folder', lockTargetId);
+      void releaseCurrentLock();
+    }
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+    lockTargetId = selectedFolderId;
+    subscribeLock(lockTargetId);
+    void syncLock();
+    void hydratePresence();
+    void updatePresence();
+  }
+
+  $: if (!selectedFolderId && lockTargetId) {
+    void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    lockHubKey = null;
+    lockTargetId = null;
+    lock = null;
+    presenceUsers = [];
+    presenceTotal = 0;
+  }
+
+  $: if (isDashboardReadOnly !== lastReadOnlyRole) {
+    lastReadOnlyRole = isDashboardReadOnly;
+    if (lastReadOnlyRole) {
+      void releaseCurrentLock();
+      void syncLock();
+    } else {
+      void syncLock();
     }
   }
   
-  // Initialiser les valeurs éditées quand executiveSummary change (réinitialisées à chaque reload)
-  $: if (executiveSummary !== undefined) {
-    initializeEditedValues();
-  }
+  type ExecutiveSummaryField = 'introduction' | 'analyse' | 'recommandation' | 'synthese_executive';
+  const EXECUTIVE_SUMMARY_FIELDS: ExecutiveSummaryField[] = [
+    'introduction',
+    'analyse',
+    'recommandation',
+    'synthese_executive',
+  ];
+  const emptyExecutiveSummaryRecord = (): Record<ExecutiveSummaryField, string> => ({
+    introduction: '',
+    analyse: '',
+    recommandation: '',
+    synthese_executive: '',
+  });
+
+  let executiveSummaryData: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let executiveSummaryBuffers: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let executiveSummaryOriginals: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
+  let lastExecutiveSummaryFolderId: string | null = null;
+
+  const openExecutiveSummaryComments = (sectionKey: ExecutiveSummaryField | 'references') => {
+    if (!selectedFolderId) return;
+    const detail = { contextType: 'executive_summary', contextId: selectedFolderId, sectionKey };
+    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+  };
+
+  const openFolderComments = (sectionKey: 'name') => {
+    if (!selectedFolderId) return;
+    const detail = { contextType: 'folder', contextId: selectedFolderId, sectionKey };
+    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+  };
+
+  const canLoadCommentCounts = () =>
+    Boolean(selectedFolderId && workspaceId && commentUserId && !$session.loading);
+
+  const scheduleCommentCountsRetry = () => {
+    if (commentCountsRetryTimer) return;
+    commentCountsRetryTimer = setTimeout(() => {
+      commentCountsRetryTimer = null;
+      if (canLoadCommentCounts() && commentCountsRetryAttempts < 3) {
+        void loadCommentCounts();
+      }
+    }, 600);
+  };
+
+  const loadCommentCounts = async () => {
+    if (!canLoadCommentCounts() || !selectedFolderId) return;
+    if (commentCountsLoading) return;
+    commentCountsLoading = true;
+    try {
+      const [executiveSummaryComments, folderComments] = await Promise.all([
+        listComments({ contextType: 'executive_summary', contextId: selectedFolderId }),
+        listComments({ contextType: 'folder', contextId: selectedFolderId }),
+      ]);
+      commentCounts = buildOpenCommentCounts(executiveSummaryComments.items || []);
+      folderCommentCounts = buildOpenCommentCounts(folderComments.items || []);
+      commentCountsRetryAttempts = 0;
+    } catch {
+      commentCountsRetryAttempts += 1;
+      scheduleCommentCountsRetry();
+    } finally {
+      commentCountsLoading = false;
+    }
+  };
+
+  const scheduleCommentReload = () => {
+    if (commentReloadTimer) return;
+    commentReloadTimer = setTimeout(() => {
+      commentReloadTimer = null;
+      void loadCommentCounts();
+    }, 150);
+  };
+
+  const normalizeExecutiveSummaryFields = (
+    summary: Record<string, any> | null | undefined
+  ): Record<ExecutiveSummaryField, string> => {
+    const normalized = emptyExecutiveSummaryRecord();
+    if (!summary) return normalized;
+    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
+      normalized[field] = normalizeMarkdownLineEndings(summary[field]);
+    }
+    return normalized;
+  };
+
+  const applyExecutiveSummarySnapshot = (
+    folderId: string | null | undefined,
+    summary: Record<string, any> | null | undefined
+  ) => {
+    const incoming = normalizeExecutiveSummaryFields(summary);
+    if (!folderId || folderId !== lastExecutiveSummaryFolderId) {
+      lastExecutiveSummaryFolderId = folderId ?? null;
+      executiveSummaryBuffers = { ...incoming };
+      executiveSummaryOriginals = { ...incoming };
+      executiveSummaryData = { ...incoming };
+      return;
+    }
+
+    const nextBuffers = { ...executiveSummaryBuffers };
+    const nextOriginals = { ...executiveSummaryOriginals };
+    let changed = false;
+
+    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
+      if (incoming[field] !== executiveSummaryOriginals[field]) {
+        nextBuffers[field] = incoming[field];
+        nextOriginals[field] = incoming[field];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      executiveSummaryBuffers = nextBuffers;
+      executiveSummaryOriginals = nextOriginals;
+    }
+    executiveSummaryData = { ...(changed ? nextBuffers : executiveSummaryBuffers) };
+  };
   
   // Numéros de page statiques pour le sommaire
   const basePageNumbers = {
@@ -145,15 +528,22 @@
     void (async () => {
     await loadData();
     })();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('beforeunload', handleLeave);
 
-    // SSE: refresh executive summary + folder/matrix data when updated via chat tools (folder_update)
-    // and keep charts/lists synced with usecase_update.
+    // SSE: keep dashboard data synced with optimistic updates and collaborative edits.
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type === 'folder_update') {
         const folderId: string = evt.folderId;
         const data: any = evt.data ?? {};
         if (!folderId || !selectedFolderId || folderId !== selectedFolderId) return;
         if (data?.deleted) return;
+        if (data?.folder) {
+          applyFolderSnapshot(folderId, data.folder);
+          return;
+        }
+        // Fallback only when SSE payload has no folder snapshot.
         void loadMatrix(folderId);
         return;
       }
@@ -176,25 +566,60 @@
           });
         }
       }
+      if (evt?.type === 'comment_update') {
+        if (evt.contextType !== 'executive_summary' && evt.contextType !== 'folder') return;
+        const contextId = String(evt.contextId ?? '');
+        if (!selectedFolderId || contextId !== selectedFolderId) return;
+        scheduleCommentReload();
+      }
     });
 
     // Reload on workspace selection change
     let lastScope = $workspaceScope.selectedId;
     const unsub = workspaceScope.subscribe((s) => {
-      if (s.selectedId !== lastScope) {
+      const nextScope = s.selectedId ?? null;
+      const previousScope = lastScope ?? null;
+      // Ignore transient scope clear while workspace list is reloading.
+      if (s.loading && !nextScope && !!previousScope) {
+        return;
+      }
+      if (nextScope !== previousScope) {
         lastScope = s.selectedId;
-        selectedFolderId = null;
-        currentFolderId.set(null);
         void loadData();
       }
     });
-    return () => unsub();
+    return () => {
+      unsub();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pagehide', handleLeave);
+      window.removeEventListener('beforeunload', handleLeave);
+    };
   });
 
   onDestroy(() => {
     streamHub.delete(HUB_KEY);
+    if (lockHubKey) streamHub.delete(lockHubKey);
+    if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+    if (commentCountsRetryTimer) clearTimeout(commentCountsRetryTimer);
+    if (commentReloadTimer) clearTimeout(commentReloadTimer);
+    if (lockTargetId) void leavePresence('folder', lockTargetId);
+    void releaseCurrentLock();
     clearDashboardDocxReadyToast();
   });
+
+  $: if (selectedFolderId && workspaceId && commentUserId && !$session.loading) {
+    const key = `${selectedFolderId}:${workspaceId}:${commentUserId}`;
+    if (key !== lastCommentCountsKey) {
+      lastCommentCountsKey = key;
+      void loadCommentCounts();
+    }
+  }
+
+  $: if (!selectedFolderId && Object.keys(commentCounts).length) {
+    commentCounts = {};
+    folderCommentCounts = {};
+    lastCommentCountsKey = '';
+  }
 
   const loadData = async () => {
     isLoading = true;
@@ -207,8 +632,10 @@
       const useCases = await fetchUseCases();
       useCasesStore.set(useCases);
       
-      // Sélectionner le dossier actuel ou le premier disponible
-      selectedFolderId = $currentFolderId || (folders.length > 0 ? folders[0].id : null);
+      // Sélectionner le dossier persistant uniquement s'il existe dans le scope courant
+      const persistedFolderId = $currentFolderId;
+      const hasPersistedFolder = !!persistedFolderId && folders.some((f) => f.id === persistedFolderId);
+      selectedFolderId = hasPersistedFolder ? persistedFolderId : (folders.length > 0 ? folders[0].id : null);
       
       if (selectedFolderId) {
         // Ensure global context is set (used by chat context detection)
@@ -229,18 +656,38 @@
   const loadMatrix = async (folderId: string) => {
     try {
       const folder = await apiGet(`/folders/${folderId}`);
-      currentFolder = folder;
-      matrix = folder.matrixConfig;
-      executiveSummary = folder.executiveSummary || null;
+      const normalizedFolder = { ...folder };
+      normalizedFolder.matrixConfig =
+        typeof folder.matrixConfig === 'string'
+          ? parseJsonObject(folder.matrixConfig)
+          : folder.matrixConfig;
+      normalizedFolder.executiveSummary =
+        typeof folder.executiveSummary === 'string'
+          ? parseJsonObject(folder.executiveSummary)
+          : folder.executiveSummary;
+
+      currentFolder = normalizedFolder;
+      matrix = normalizedFolder.matrixConfig;
+      executiveSummary = normalizedFolder.executiveSummary || null;
+      applyExecutiveSummarySnapshot(folderId, executiveSummary as Record<string, any> | null);
       
       // Mettre à jour le folder dans le store pour refléter les changements de statut
-      foldersStore.update(folders => 
-        folders.map(f => f.id === folderId ? { ...f, status: folder.status, executiveSummary: folder.executiveSummary, name: folder.name } : f)
+      foldersStore.update(folders =>
+        folders.map((f) =>
+          f.id === folderId
+            ? {
+                ...f,
+                status: normalizedFolder.status,
+                executiveSummary: normalizedFolder.executiveSummary,
+                name: normalizedFolder.name
+              }
+            : f
+        )
       );
       
       // Mettre à jour le titre édité si c'est le dossier actuel
       if (folderId === selectedFolderId) {
-        editedFolderName = folder.name || '';
+        editedFolderName = normalizedFolder.name || '';
       }
     } catch (error) {
       console.error('Failed to load matrix:', error);
@@ -249,7 +696,7 @@
 
   const generateExecutiveSummary = async () => {
     if (!selectedFolderId) return;
-    if ($workspaceReadOnlyScope) {
+    if (isDashboardReadOnly) {
       addToast({ type: 'warning', message: get(_)('dashboard.readOnlyGenerationDisabled') });
       return;
     }
@@ -284,58 +731,56 @@
     }
   };
 
-  // Fonctions helper pour construire fullData pour chaque section de executiveSummary
-  const getExecutiveSummaryUpdateData = (field: string, newValue: string) => {
+  const handleExecutiveSummaryFieldChange = (field: ExecutiveSummaryField, value: string) => {
+    const normalizedValue = normalizeMarkdownLineEndings(value);
+    executiveSummaryBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
+    executiveSummaryData = { ...executiveSummaryBuffers };
+  };
+
+  const getExecutiveSummaryPayload = (field: ExecutiveSummaryField) => {
     if (!executiveSummary || !selectedFolderId) return undefined;
-    
-    // Construire l'objet executiveSummary complet avec le champ mis à jour
+    const value = executiveSummaryBuffers[field] ?? executiveSummaryData[field] ?? '';
+    const fields = { ...executiveSummaryBuffers, [field]: normalizeMarkdownLineEndings(value) };
     return {
       executiveSummary: {
-        introduction: field === 'introduction' ? newValue : (executiveSummary.introduction || ''),
-        analyse: field === 'analyse' ? newValue : (executiveSummary.analyse || ''),
-        recommandation: field === 'recommandation' ? newValue : (executiveSummary.recommandation || ''),
-        synthese_executive: field === 'synthese_executive' ? newValue : (executiveSummary.synthese_executive || ''),
+        ...fields,
         references: executiveSummary.references || []
       }
     };
   };
-  
-  // Variables réactives pour fullData (pour éviter les problèmes de type dans le template)
-  $: syntheseFullData = getExecutiveSummaryUpdateData('synthese_executive', editedSyntheseExecutive) || null;
-  $: introductionFullData = getExecutiveSummaryUpdateData('introduction', editedIntroduction) || null;
-  $: analyseFullData = getExecutiveSummaryUpdateData('analyse', editedAnalyse) || null;
-  $: recommandationFullData = getExecutiveSummaryUpdateData('recommandation', editedRecommandation) || null;
 
-  // Gérer la sauvegarde réussie - recharger le folder et mettre à jour
-  const handleExecutiveSummarySaved = async (field: string) => {
+  const getExecutiveSummaryOriginal = (field: ExecutiveSummaryField): string => {
+    return executiveSummaryOriginals[field] || '';
+  };
+
+  // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
+  const handleExecutiveSummarySaved = (field: ExecutiveSummaryField, value: string) => {
     if (!selectedFolderId) return;
-    
-    try {
-      // Recharger le folder pour avoir les données à jour
-      await loadMatrix(selectedFolderId);
-      
-      // Mettre à jour le store des dossiers
-      const folders = await fetchFolders();
-      foldersStore.set(folders);
-      
-      // Mettre à jour originalValue pour refléter la nouvelle valeur sauvegardée
-      if (executiveSummary) {
-        const fieldMap: Record<string, keyof typeof executiveSummary> = {
-          'introduction': 'introduction',
-          'analyse': 'analyse',
-          'recommandation': 'recommandation',
-          'synthese_executive': 'synthese_executive'
-        };
-        
-        if (fieldMap[field] && executiveSummary[fieldMap[field]]) {
-          // Les variables edited* seront mises à jour via la réactivité de initializeEditedValues
-        }
-      }
+    const normalizedValue = normalizeMarkdownLineEndings(value);
+    const nextBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
+    executiveSummaryBuffers = nextBuffers;
+    executiveSummaryOriginals = { ...executiveSummaryOriginals, [field]: normalizedValue };
+    executiveSummaryData = { ...nextBuffers };
 
-      clearDashboardDocxReadyToast();
+    const nextExecutiveSummary = {
+      ...(executiveSummary || {}),
+      ...nextBuffers,
+      references: executiveSummary?.references || []
+    };
+
+    executiveSummary = nextExecutiveSummary;
+    if (currentFolder) {
+      currentFolder = { ...currentFolder, executiveSummary: nextExecutiveSummary };
+    }
+    foldersStore.update((folders) =>
+      folders.map((f) =>
+        f.id === selectedFolderId ? { ...f, executiveSummary: nextExecutiveSummary } : f
+      )
+    );
+
+    clearDashboardDocxReadyToast();
+    if (field) {
       applyDashboardDocxEvent({ type: 'content_changed' });
-    } catch (error) {
-      console.error('Failed to reload folder after save:', error);
     }
   };
 
@@ -347,22 +792,18 @@
     editedFolderName = selectedFolderName || '';
   }
 
-  // Gérer la sauvegarde du titre du dossier
-  const handleFolderNameSaved = async () => {
+  // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
+  const handleFolderNameSaved = () => {
     if (!selectedFolderId) return;
-    
-    try {
-      // Recharger le folder pour avoir les données à jour
-      await loadMatrix(selectedFolderId);
-      
-      // Mettre à jour le store des dossiers
-      const folders = await fetchFolders();
-      foldersStore.set(folders);
-      clearDashboardDocxReadyToast();
-      applyDashboardDocxEvent({ type: 'content_changed' });
-    } catch (error) {
-      console.error('Failed to reload folder after name save:', error);
+
+    if (currentFolder) {
+      currentFolder = { ...currentFolder, name: editedFolderName };
     }
+    foldersStore.update((folders) =>
+      folders.map((f) => (f.id === selectedFolderId ? { ...f, name: editedFolderName } : f))
+    );
+    clearDashboardDocxReadyToast();
+    applyDashboardDocxEvent({ type: 'content_changed' });
   };
 
   const clearDashboardDocxReadyToast = () => {
@@ -593,6 +1034,8 @@
   $: filteredUseCases = selectedFolderId 
     ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
     : $useCasesStore;
+  $: workspaceId = $workspaceScope.selectedId ?? null;
+  $: commentUserId = $session.user?.id ?? null;
 
   // Scatter plot: n'afficher que les cas finalisés
   $: completedUseCases = filteredUseCases.filter((uc) => uc.status === 'completed');
@@ -734,7 +1177,6 @@
     const scaleFactor = finalFontSize / 8;
     content.style.setProperty('font-size', `${finalFontSize}pt`, 'important');
     content.style.setProperty('line-height', `${baseLineHeight * scaleFactor}`, 'important');
-    console.log('content.style', content.style);
     // Appliquer les marges réduites aux paragraphes
     const paragraphs = content.querySelectorAll('p');
     paragraphs.forEach((p, index) => {
@@ -782,12 +1224,12 @@
       <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
     </div>
     
-    {#if editedSyntheseExecutive}
+    {#if executiveSummaryData.synthese_executive}
       <div class="report-cover-summary" bind:this={summaryBox}>
         <h3>{$_('dashboard.execSummary')}</h3>
         <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
           <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-            {@html renderMarkdownWithRefs(editedSyntheseExecutive, executiveSummary?.references || [], {
+            {@html renderMarkdownWithRefs(executiveSummaryData.synthese_executive, executiveSummary?.references || [], {
               addListStyles: true,
               addHeadingStyles: true,
               listPadding: 1.5
@@ -802,23 +1244,35 @@
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="w-full print-hidden">
     <div class="grid grid-cols-12 items-start gap-4">
-      <div class="col-span-8 min-w-0">
+      <div class="col-span-8 min-w-0" data-comment-section="name">
         {#if selectedFolderId}
-          {#if $workspaceReadOnlyScope}
-            <h1 class="text-3xl font-semibold mb-0">{selectedFolderName || 'Dashboard'}</h1>
+          {#if isDashboardReadOnly}
+            <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+              <span class="min-w-0 break-words">{selectedFolderName || 'Dashboard'}</span>
+              <CommentBadge
+                count={folderCommentCounts?.name ?? 0}
+                on:click={() => openFolderComments('name')}
+              />
+            </h1>
           {:else}
-            <h1 class="text-3xl font-semibold mb-0">
-              <EditableInput
-                label=""
-                value={editedFolderName}
-                markdown={false}
-                multiline={true}
-                apiEndpoint={`/folders/${selectedFolderId}`}
-                fullData={{ name: editedFolderName }}
-                changeId={`folder-name-${selectedFolderId}`}
-                originalValue={selectedFolderName || ''}
-                on:change={(e) => editedFolderName = e.detail.value}
-                on:saved={handleFolderNameSaved}
+            <h1 class="text-3xl font-semibold mb-0 flex items-center gap-2 group">
+              <span class="min-w-0 flex-1 break-words">
+                <EditableInput
+                  label=""
+                  value={editedFolderName}
+                  markdown={false}
+                  multiline={true}
+                  apiEndpoint={`/folders/${selectedFolderId}`}
+                  fullData={{ name: editedFolderName }}
+                  changeId={`folder-name-${selectedFolderId}`}
+                  originalValue={selectedFolderName || ''}
+                  on:change={(e) => editedFolderName = e.detail.value}
+                  on:saved={handleFolderNameSaved}
+                />
+              </span>
+              <CommentBadge
+                count={folderCommentCounts?.name ?? 0}
+                on:click={() => openFolderComments('name')}
               />
             </h1>
           {/if}
@@ -827,6 +1281,25 @@
         {/if}
       </div>
       <div class="col-span-4 flex items-center justify-end gap-2 pt-1">
+        {#if selectedFolderId}
+          <LockPresenceBadge
+            {lock}
+            {lockLoading}
+            {lockError}
+            {lockOwnerLabel}
+            {lockRequestedByMe}
+            isAdmin={isWorkspaceAdmin}
+            {isLockedByMe}
+            {isLockedByOther}
+            avatars={presenceUsers.map((u) => ({ userId: u.userId, label: u.displayName || u.email || u.userId }))}
+            connectedCount={presenceTotal}
+            canRequestUnlock={!$workspaceReadOnlyScope}
+            showHeaderLock={!isLockedByMe}
+            on:requestUnlock={handleRequestUnlock}
+            on:forceUnlock={handleForceUnlock}
+            on:releaseLock={handleReleaseLock}
+          />
+        {/if}
         <FileMenu
           showNew={false}
           showImport={false}
@@ -841,7 +1314,7 @@
           triggerTitle={$_('common.actions')}
           triggerAriaLabel={$_('common.actions')}
         />
-        {#if showReadOnlyLock}
+        {#if showWorkspaceReadOnlyLock && !showPresenceBadge}
           <button
             class="rounded p-2 transition text-slate-400 cursor-not-allowed print-hidden"
             title={$_('dashboard.readOnlyGenerationDisabled')}
@@ -869,24 +1342,37 @@
         </div>
       </div>
     {:else if executiveSummary}
-      <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
-        <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
-          <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.execSummary')}</h2>
+      <div data-comment-section="synthese_executive" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
+        <div class="border-b border-slate-200 pb-4">
+          <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+            {$_('dashboard.execSummary')}
+            <CommentBadge
+              count={commentCounts?.synthese_executive ?? 0}
+              title={`${$_('chat.tabs.comments')} - ${$_('dashboard.execSummary')}`}
+              on:click={() => openExecutiveSummaryComments('synthese_executive')}
+            />
+          </h2>
         </div>
         
-        {#if editedSyntheseExecutive}
+        {#if executiveSummaryData.synthese_executive}
           <EditableInput
             label=""
-            value={editedSyntheseExecutive}
+            value={executiveSummaryData.synthese_executive}
             markdown={true}
-            locked={$workspaceReadOnlyScope}
+            locked={isDashboardReadOnly}
             apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-            fullData={syntheseFullData}
+            fullData={getExecutiveSummaryPayload('synthese_executive')}
+            fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
             changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
-            originalValue={executiveSummary?.synthese_executive || ''}
+            originalValue={getExecutiveSummaryOriginal('synthese_executive')}
             references={executiveSummary?.references || []}
-            on:change={(e) => editedSyntheseExecutive = e.detail.value}
-            on:saved={() => handleExecutiveSummarySaved('synthese_executive')}
+            on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
+            on:saved={(e) =>
+              handleExecutiveSummarySaved(
+                'synthese_executive',
+                (e as CustomEvent<{ value?: string }>).detail?.value ??
+                  executiveSummaryData.synthese_executive
+              )}
           />
         {/if}
       </div>
@@ -899,8 +1385,8 @@
           </div>
           <button
             on:click={generateExecutiveSummary}
-            disabled={isGeneratingSummary}
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={isGeneratingSummary || isDashboardReadOnly}
+            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isGeneratingSummary ? $_('dashboard.execSummaryGenerating') : $_('dashboard.execSummaryGenerate')}
           </button>
@@ -967,7 +1453,7 @@
               >
                 <Settings class="w-5 h-5 text-slate-500" />
                 {#if valueThreshold !== null || complexityThreshold !== null}
-                  <span class="ml-1 w-2 h-2 bg-blue-600 rounded-full"></span>
+                  <span class="ml-1 w-2 h-2 bg-primary rounded-full"></span>
                 {/if}
               </button>
               
@@ -1082,25 +1568,38 @@
         </div>
 
         <!-- Introduction -->
-        {#if editedIntroduction}
-          <div id="section-introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
+        {#if executiveSummaryData.introduction}
+          <div id="section-introduction" data-comment-section="introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.introduction')}</h2>
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.introduction')}
+                <CommentBadge
+                  count={commentCounts?.introduction ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.introduction')}`}
+                  on:click={() => openExecutiveSummaryComments('introduction')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedIntroduction}
+                  value={executiveSummaryData.introduction}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={introductionFullData}
+                  fullData={getExecutiveSummaryPayload('introduction')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('introduction')}
                   changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.introduction || ''}
+                  originalValue={getExecutiveSummaryOriginal('introduction')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedIntroduction = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('introduction')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('introduction', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'introduction',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.introduction
+                    )}
                 />
               </div>
             </div>
@@ -1160,50 +1659,76 @@
     {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
       <div class="space-y-6">
 
-        {#if editedAnalyse}
-          <div id="section-analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
+        {#if executiveSummaryData.analyse}
+          <div id="section-analyse" data-comment-section="analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.analysis')}</h2>
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.analysis')}
+                <CommentBadge
+                  count={commentCounts?.analyse ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.analysis')}`}
+                  on:click={() => openExecutiveSummaryComments('analyse')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedAnalyse}
+                  value={executiveSummaryData.analyse}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={analyseFullData}
+                  fullData={getExecutiveSummaryPayload('analyse')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('analyse')}
                   changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.analyse || ''}
+                  originalValue={getExecutiveSummaryOriginal('analyse')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedAnalyse = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('analyse')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('analyse', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'analyse',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.analyse
+                    )}
                 />
               </div>
             </div>
           </div>
         {/if}
 
-        {#if editedRecommandation}
-          <div id="section-recommandations" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
+        {#if executiveSummaryData.recommandation}
+          <div id="section-recommandations" data-comment-section="recommandation" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.recommendations')}</h2>
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.recommendations')}
+                <CommentBadge
+                  count={commentCounts?.recommandation ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.recommendations')}`}
+                  on:click={() => openExecutiveSummaryComments('recommandation')}
+                />
+              </h2>
             </div>
             <div class="prose prose-slate max-w-none">
               <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                 <EditableInput
                   label=""
-                  value={editedRecommandation}
+                  value={executiveSummaryData.recommandation}
                   markdown={true}
-                  locked={$workspaceReadOnlyScope}
+                  locked={isDashboardReadOnly}
                   apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={recommandationFullData}
+                  fullData={getExecutiveSummaryPayload('recommandation')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('recommandation')}
                   changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
-                  originalValue={executiveSummary?.recommandation || ''}
+                  originalValue={getExecutiveSummaryOriginal('recommandation')}
                   references={executiveSummary?.references || []}
-                  on:change={(e) => editedRecommandation = e.detail.value}
-                  on:saved={() => handleExecutiveSummarySaved('recommandation')}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('recommandation', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'recommandation',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.recommandation
+                    )}
                 />
               </div>
             </div>
@@ -1211,9 +1736,16 @@
         {/if}
 
         {#if executiveSummary.references && executiveSummary.references.length > 0}
-          <div id="section-references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
+          <div id="section-references" data-comment-section="references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
             <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900">{$_('dashboard.references')}</h2>
+              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
+                {$_('dashboard.references')}
+                <CommentBadge
+                  count={commentCounts?.references ?? 0}
+                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.references')}`}
+                  on:click={() => openExecutiveSummaryComments('references')}
+                />
+              </h2>
             </div>
             <References references={executiveSummary.references} />
           </div>
@@ -1247,7 +1779,7 @@
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
-              locked={$workspaceReadOnlyScope}
+              locked={isDashboardReadOnly}
             />
         </section>
         {/each}

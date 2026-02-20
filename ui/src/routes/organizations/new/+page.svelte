@@ -18,9 +18,9 @@
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
-  import { API_BASE_URL } from '$lib/config';
   import References from '$lib/components/References.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
+  import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
 
   let organization: Partial<Organization> = {
     name: '',
@@ -74,19 +74,14 @@
     }
   }
 
-  const fixMarkdownLineBreaks = (text: string | null | undefined): string => {
-    if (!text) return '';
-    return text.replace(/\n/g, '\n\n');
-  };
-
   $: organizationData = {
     name: organization.name || '',
     industry: organization.industry || '',
     size: organization.size || '',
-    technologies: fixMarkdownLineBreaks(organization.technologies),
-    products: fixMarkdownLineBreaks(organization.products),
-    processes: fixMarkdownLineBreaks(organization.processes),
-    kpis: fixMarkdownLineBreaks(organization.kpis),
+    technologies: normalizeMarkdownLineEndings(organization.technologies),
+    products: normalizeMarkdownLineEndings(organization.products),
+    processes: normalizeMarkdownLineEndings(organization.processes),
+    kpis: normalizeMarkdownLineEndings(organization.kpis),
     challenges: organization.challenges || '',
     objectives: organization.objectives || ''
   };
@@ -207,7 +202,7 @@
   <OrganizationForm
     {organization}
     {organizationData}
-    apiEndpoint={organization.id ? `${API_BASE_URL}/organizations/${organization.id}` : ''}
+    apiEndpoint={organization.id ? `/organizations/${organization.id}` : ''}
     locked={$workspaceReadOnlyScope}
     onFieldUpdate={(field, value) => handleFieldUpdate(field, value)}
     showKpis={true}

@@ -11,6 +11,7 @@ import { settingsService } from '../../services/settings';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
+import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 type OrganizationData = {
   industry?: string;
@@ -78,7 +79,7 @@ function parseOrganizationData(value: unknown): OrganizationData {
   return {};
 }
 
-function hydrateOrganization(row: typeof organizations.$inferSelect): {
+export function hydrateOrganization(row: typeof organizations.$inferSelect): {
   id: string;
   name: string;
   status: 'draft' | 'enriching' | 'completed' | null;
@@ -219,9 +220,13 @@ organizationsRouter.post(
 
 // POST /api/v1/organizations/:id/enrich - Start enrichment (async via queue)
 organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
-  const { workspaceId } = c.get('user') as { workspaceId: string };
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id');
   const { model } = await c.req.json().catch(() => ({}));
+  const requestLocale = resolveLocaleFromHeaders({
+    appLocaleHeader: c.req.header('x-app-locale'),
+    acceptLanguageHeader: c.req.header('accept-language')
+  });
 
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
@@ -244,6 +249,8 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
       organizationId: id,
       organizationName: org.name,
       model: selectedModel,
+      initiatedByUserId: userId,
+      locale: requestLocale
     },
     { workspaceId }
   );
@@ -383,4 +390,3 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
   await notifyOrganizationEvent(id);
   return c.body(null, 204);
 });
-

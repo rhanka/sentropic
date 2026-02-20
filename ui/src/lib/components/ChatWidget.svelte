@@ -7,22 +7,12 @@
   import { addToast } from '$lib/stores/toast';
   import {
     isAuthenticated,
-    session,
     setUser,
     clearUser,
     type User,
   } from '$lib/stores/session';
   import { streamHub } from '$lib/stores/streamHub';
   import { currentFolderId } from '$lib/stores/folders';
-  import {
-    workspaceCanComment,
-    selectedWorkspaceRole,
-  } from '$lib/stores/workspaceScope';
-  import {
-    closeComment,
-    reopenComment,
-    deleteComment,
-  } from '$lib/utils/comments';
   import {
     MessageCircle,
     Loader2,
@@ -35,10 +25,6 @@
     Menu,
     List,
     Settings,
-    Check,
-    FolderOpen,
-    Eye,
-    EyeOff,
   } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
@@ -70,6 +56,7 @@
   let chatSessions: ChatSession[] = [];
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
+  let activeChatSession: ChatSession | null = null;
   let commentContext: {
     type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
     id?: string;
@@ -107,38 +94,8 @@
   let pendingCommentAutoSelectReady = false;
   let lastCommentContextKey = '';
   let lastCommentRouteKey = '';
-  let showResolvedComments = false;
-  let currentCommentThread: {
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  } | null = null;
-  let visibleCommentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-  }> = [];
-  let resolvedThreads: typeof visibleCommentThreads = [];
-  let resolvedCount = 0;
-  let isCurrentResolved = false;
-  let canResolveCurrent = false;
   let showSessionMenu = false;
   let sessionMenuButtonRef: HTMLButtonElement | null = null;
-  let showCommentMenu = false;
-  let commentMenuButtonRef: HTMLButtonElement | null = null;
   // eslint-disable-next-line no-unused-vars
   let handleCommentSectionClick: ((_: MouseEvent) => void) | null = null;
   // eslint-disable-next-line no-unused-vars
@@ -346,7 +303,7 @@
           : displayMode;
     chatWidgetLayout.set({
       mode: modeNow,
-      isOpen: isVisible && modeNow === 'docked',
+      isOpen: isVisible,
       dockWidthCss,
     });
   };
@@ -1064,6 +1021,9 @@
       values: { id: s.id.slice(0, 6) },
     });
   };
+  $: activeChatSession = chatSessionId
+    ? chatSessions.find((s) => s.id === chatSessionId) ?? null
+    : null;
 
   $: activeJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'pending' || job.status === 'processing',
@@ -1089,7 +1049,7 @@
       return { type: 'folder', id: folderId };
     }
     if (routeId === '/dashboard' && folderId) {
-      return { type: 'folder', id: folderId };
+      return { type: 'executive_summary', id: folderId };
     }
     if (routeId === '/matrix' && folderId) {
       return { type: 'folder', id: folderId };
@@ -1111,7 +1071,6 @@
       $currentFolderId,
     );
   $: if (activeTab !== 'chat' && showSessionMenu) showSessionMenu = false;
-  $: if (activeTab !== 'comments' && showCommentMenu) showCommentMenu = false;
 
   $: {
     const detected = detectCommentContextFromRoute(
@@ -1119,8 +1078,14 @@
       $contextStore.params,
       $currentFolderId,
     );
+    const preserveDashboardFolderOverride =
+      $contextStore.route.id === '/dashboard' &&
+      commentContextOverride?.type === 'folder' &&
+      detected?.type === 'executive_summary' &&
+      detected?.id === commentContextOverride?.id;
     if (
       commentContextOverride &&
+      !preserveDashboardFolderOverride &&
       (!detected ||
         detected.type !== commentContextOverride.type ||
         detected.id !== commentContextOverride.id)
@@ -1131,21 +1096,28 @@
 
   const SECTION_LABEL_KEYS: Record<string, Record<string, string>> = {
     usecase: {
+      name: 'common.name',
       description: 'chat.sections.usecase.description',
       problem: 'chat.sections.usecase.problem',
       solution: 'chat.sections.usecase.solution',
       benefits: 'chat.sections.usecase.benefits',
+      constraints: 'chat.sections.usecase.constraints',
       risks: 'chat.sections.usecase.risks',
       metrics: 'chat.sections.usecase.metrics',
       nextSteps: 'chat.sections.usecase.nextSteps',
       technologies: 'chat.sections.usecase.technologies',
       dataSources: 'chat.sections.usecase.dataSources',
       dataObjects: 'chat.sections.usecase.dataObjects',
+      valueScores: 'chat.sections.usecase.valueScores',
+      complexityScores: 'chat.sections.usecase.complexityScores',
       references: 'chat.sections.usecase.references',
       contact: 'chat.sections.usecase.contact',
+      domain: 'chat.sections.usecase.domain',
       deadline: 'chat.sections.usecase.deadline',
     },
     organization: {
+      name: 'common.name',
+      industry: 'organization.fields.industry',
       size: 'chat.sections.organization.size',
       technologies: 'chat.sections.organization.technologies',
       products: 'chat.sections.organization.products',
@@ -1160,10 +1132,16 @@
       name: 'chat.sections.folder.name',
     },
     executive_summary: {
+      name: 'chat.sections.folder.name',
       introduction: 'chat.sections.executiveSummary.introduction',
       analyse: 'chat.sections.executiveSummary.analysis',
+      analysis: 'chat.sections.executiveSummary.analysis',
       recommandation: 'chat.sections.executiveSummary.recommendations',
+      recommendations: 'chat.sections.executiveSummary.recommendations',
+      synthese_executive: 'chat.sections.executiveSummary.summary',
       synthese: 'chat.sections.executiveSummary.summary',
+      summary: 'chat.sections.executiveSummary.summary',
+      references: 'chat.sections.executiveSummary.references',
     },
   };
 
@@ -1224,27 +1202,7 @@
     }
   }
 
-  $: currentCommentThread = commentThreadId
-    ? (commentThreads.find((t) => t.id === commentThreadId) ?? null)
-    : null;
-  $: isCurrentResolved = currentCommentThread?.status === 'closed';
-  $: canResolveCurrent =
-    Boolean(currentCommentThread) &&
-    (currentCommentThread?.createdBy === $session.user?.id ||
-      $selectedWorkspaceRole === 'admin') &&
-    $workspaceCanComment;
-  $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
-  $: resolvedCount = resolvedThreads.length;
-  $: visibleCommentThreads = showResolvedComments
-    ? commentThreads
-    : commentThreads.filter((t) => t.status !== 'closed');
-
-  $: if (
-    activeTab === 'comments' &&
-    commentThreadId &&
-    commentThreads.length > 0 &&
-    !commentLoading
-  ) {
+  $: if (activeTab === 'comments' && commentThreadId && commentThreads.length > 0 && !commentLoading) {
     const exists = commentThreads.some((t) => t.id === commentThreadId);
     if (!exists) commentThreadId = null;
   }
@@ -1427,71 +1385,6 @@
     await focusFirstFocusable();
   };
 
-  const handleNewCommentThread = () => {
-    commentThreadId = null;
-    pendingCommentAutoSelect = false;
-  };
-
-  const handleDeleteCommentThread = async () => {
-    if (!commentThreadId || !currentCommentThread) return;
-    if (!confirm($_('chat.comments.confirmDeleteThread'))) return;
-    try {
-      await deleteComment(currentCommentThread.rootId);
-      commentThreadId = null;
-      pendingCommentAutoSelect = false;
-    } catch {
-      // ignore for now
-    }
-  };
-
-  const selectNextOpenThreadAfterResolve = (
-    current: typeof currentCommentThread,
-  ) => {
-    const openThreads = commentThreads.filter(
-      (t) => t.status !== 'closed' && t.id !== current?.id,
-    );
-    if (openThreads.length === 0) {
-      commentThreadId = null;
-      return;
-    }
-    if (commentSectionKey) {
-      const nextSameSection = openThreads.find(
-        (t) => t.sectionKey === commentSectionKey,
-      );
-      if (nextSameSection) {
-        commentThreadId = nextSameSection.id;
-        return;
-      }
-      commentThreadId = null;
-      return;
-    }
-    const nextSectionThread =
-      openThreads.find(
-        (t) => t.sectionKey && t.sectionKey !== current?.sectionKey,
-      ) ?? openThreads[0];
-    commentThreadId = nextSectionThread?.id ?? null;
-    if (nextSectionThread?.sectionKey) {
-      commentSectionKey = nextSectionThread.sectionKey;
-    }
-  };
-
-  const handleResolveCommentThread = async () => {
-    if (!currentCommentThread || !canResolveCurrent) return;
-    try {
-      if (currentCommentThread.status === 'closed') {
-        await reopenComment(currentCommentThread.rootId);
-      } else {
-        await closeComment(currentCommentThread.rootId);
-      }
-      await chatPanelRef?.refreshCommentThreads?.();
-      if (currentCommentThread.status !== 'closed') {
-        selectNextOpenThreadAfterResolve(currentCommentThread);
-      }
-    } catch {
-      // ignore for now
-    }
-  };
-
   const close = () => {
     if (isSidePanelHost) {
       publishHandoffStateIfChanged();
@@ -1561,7 +1454,7 @@
   <!-- Bulle unique (commune Chat/Queue) -->
   {#if !isSidePanelHost}
     <button
-      class="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-colors"
+      class="relative bg-primary hover:bg-primary/90 text-white rounded-full p-3 shadow-lg transition-colors"
       class:opacity-0={isVisible}
       class:pointer-events-none={isVisible}
       on:click={toggle}
@@ -1616,7 +1509,7 @@
         <!-- Mobile backdrop (click to close) -->
         <button
           type="button"
-          class="absolute inset-0 h-full w-full bg-slate-900/40"
+          class="absolute inset-0 h-full w-full bg-black bg-opacity-40"
           on:click={close}
           tabindex="-1"
           aria-hidden="true"
@@ -1700,232 +1593,6 @@
           </div>
 
           <div class="flex items-center gap-2">
-            {#if activeTab === 'chat'}
-              <MenuPopover
-                bind:open={showSessionMenu}
-                bind:triggerRef={sessionMenuButtonRef}
-              >
-                <svelte:fragment slot="trigger" let:toggle>
-                  <button
-                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                    on:click={toggle}
-                    title={$_('chat.sessions.choose')}
-                    aria-label={$_('chat.sessions.choose')}
-                    type="button"
-                    bind:this={sessionMenuButtonRef}
-                  >
-                    <List class="w-4 h-4" />
-                  </button>
-                </svelte:fragment>
-                <svelte:fragment slot="menu" let:close>
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => {
-                      close();
-                      handleNewSession();
-                    }}
-                  >
-                    {$_('chat.sessions.new')}
-                  </button>
-                  <div class="border-t border-slate-100 my-1"></div>
-                  {#if chatLoadingSessions}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('common.loading')}
-                    </div>
-                  {:else if chatSessions.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('chat.sessions.none')}
-                    </div>
-                  {:else}
-                    <div class="max-h-48 overflow-auto slim-scroll">
-                      {#each chatSessions as s (s.id)}
-                        <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId ===
-                          s.id
-                            ? 'text-slate-900 font-semibold'
-                            : 'text-slate-600'}"
-                          type="button"
-                          on:click={() => {
-                            close();
-                            void handleSelectSession(s.id);
-                          }}
-                        >
-                          {formatSessionLabel(s)}
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </svelte:fragment>
-              </MenuPopover>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={() => chatPanelRef?.newSession?.()}
-                title={$_('chat.sessions.new')}
-                aria-label={$_('chat.sessions.new')}
-                type="button"
-              >
-                <Plus class="w-4 h-4" />
-              </button>
-
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                on:click={() => chatPanelRef?.deleteCurrentSession?.()}
-                title={$_('chat.sessions.delete')}
-                aria-label={$_('chat.sessions.delete')}
-                type="button"
-                disabled={!chatSessionId}
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
-            {#if !isPluginMode && activeTab === 'comments'}
-              <MenuPopover
-                bind:open={showCommentMenu}
-                bind:triggerRef={commentMenuButtonRef}
-                widthClass="w-64"
-              >
-                <svelte:fragment slot="trigger" let:toggle>
-                  <button
-                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                    on:click={toggle}
-                    title={$_('chat.comments.chooseThread')}
-                    aria-label={$_('chat.comments.chooseThread')}
-                    type="button"
-                    bind:this={commentMenuButtonRef}
-                  >
-                    <List class="w-4 h-4" />
-                  </button>
-                </svelte:fragment>
-                <svelte:fragment slot="menu" let:close>
-                  {#if resolvedCount > 0}
-                    <button
-                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
-                      type="button"
-                      on:click|stopPropagation={() => {
-                        showResolvedComments = !showResolvedComments;
-                        showCommentMenu = true;
-                      }}
-                    >
-                      {#if showResolvedComments}
-                        <Eye class="w-3.5 h-3.5" />
-                        <span>{$_('chat.comments.hideResolved')}</span>
-                      {:else}
-                        <EyeOff class="w-3.5 h-3.5" />
-                        <span>{$_('chat.comments.showResolved')}</span>
-                      {/if}
-                    </button>
-                    <div class="border-t border-slate-100 my-1"></div>
-                  {/if}
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => {
-                      close();
-                      commentThreadId = null;
-                    }}
-                  >
-                    {$_('chat.comments.newThread')}
-                    {commentSectionLabel ? ` — ${commentSectionLabel}` : ''}
-                  </button>
-                  <div class="border-t border-slate-100 my-1"></div>
-                  {#if visibleCommentThreads.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('chat.comments.none')}
-                    </div>
-                  {:else}
-                    <div class="max-h-56 overflow-auto slim-scroll space-y-1">
-                      {#each visibleCommentThreads as t (t.id)}
-                        <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId ===
-                          t.id
-                            ? 'text-slate-900 font-semibold'
-                            : 'text-slate-600'} {t.status === 'closed'
-                            ? 'line-through text-slate-400'
-                            : ''}"
-                          type="button"
-                          on:click={() => {
-                            close();
-                            commentThreadId = t.id;
-                            commentSectionKey = t.sectionKey;
-                            commentSectionLabel = getSectionLabel(
-                              commentContext?.type ?? null,
-                              t.sectionKey,
-                            );
-                          }}
-                        >
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="truncate">
-                              {getSectionLabel(
-                                commentContext?.type ?? null,
-                                t.sectionKey,
-                              ) || $_('chat.tabs.comments')}
-                            </span>
-                            <span
-                              class="inline-flex items-center gap-1 text-[10px] text-slate-400"
-                            >
-                              <MessageCircle class="w-3 h-3" />
-                              {t.count}
-                            </span>
-                          </div>
-                          <div class="text-[10px] text-slate-400 truncate">
-                            {t.authorLabel} — {t.preview}
-                          </div>
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </svelte:fragment>
-              </MenuPopover>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={handleNewCommentThread}
-                title={$_('chat.comments.newThread')}
-                aria-label={$_('chat.comments.newThread')}
-                type="button"
-              >
-                <Plus class="w-4 h-4" />
-              </button>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-                on:click={() => void handleResolveCommentThread()}
-                title={isCurrentResolved
-                  ? $_('chat.comments.reopen')
-                  : $_('chat.comments.resolve')}
-                aria-label={isCurrentResolved
-                  ? $_('chat.comments.reopen')
-                  : $_('chat.comments.resolve')}
-                type="button"
-                disabled={!currentCommentThread || !canResolveCurrent}
-              >
-                {#if isCurrentResolved}
-                  <FolderOpen class="w-4 h-4" />
-                {:else}
-                  <Check class="w-4 h-4" />
-                {/if}
-              </button>
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                on:click={() => void handleDeleteCommentThread()}
-                title={$_('chat.comments.deleteThread')}
-                aria-label={$_('chat.comments.deleteThread')}
-                type="button"
-                disabled={!commentThreadId}
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
-            {#if activeTab === 'queue'}
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                on:click={handlePurgeMyJobs}
-                title={$_('chat.queue.purgeMine')}
-                aria-label={$_('chat.queue.purgeMine')}
-                type="button"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
                 bind:open={showExtensionConfigMenu}
@@ -2036,7 +1703,7 @@
                     </div>
                     <div class="flex items-center gap-2 pt-1">
                       <button
-                        class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                         type="button"
                         on:click={() => void saveExtensionConfig()}
                         disabled={extensionConfigLoading ||
@@ -2098,7 +1765,7 @@
                           </button>
                         {:else}
                           <button
-                            class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                             type="button"
                             on:click={() => void connectExtensionAuthAction()}
                             disabled={extensionAuthConnecting ||
@@ -2172,7 +1839,7 @@
                           </option>
                         </select>
                         <button
-                          class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                          class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
                           type="button"
                           on:click={() =>
                             void addExtensionToolPermissionFromDraft()}
@@ -2295,7 +1962,7 @@
                 {$_('chat.extension.authRequired.description')}
               </div>
               <button
-                class="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                class="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90"
                 type="button"
                 on:mousedown|stopPropagation={openExtensionSettingsMenu}
                 on:click|stopPropagation={openExtensionSettingsMenu}
@@ -2306,8 +1973,22 @@
           </div>
         {:else}
           {#if activeTab === 'queue'}
-            <div class="h-full min-h-0">
-              <QueueMonitor />
+            <div class="h-full min-h-0 flex flex-col">
+              <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+                <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
+                <button
+                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  on:click={handlePurgeMyJobs}
+                  title={$_('chat.queue.purgeMine')}
+                  aria-label={$_('chat.queue.purgeMine')}
+                  type="button"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+              <div class="flex-1 min-h-0">
+                <QueueMonitor />
+              </div>
             </div>
           {/if}
           {#if !isPluginMode && activeTab === 'comments'}
@@ -2334,14 +2015,95 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
-            <ChatPanel
-              bind:this={chatPanelRef}
-              bind:sessions={chatSessions}
-              bind:sessionId={chatSessionId}
-              bind:draft={chatDraft}
-              bind:loadingSessions={chatLoadingSessions}
-              {contextStore}
-            />
+            <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+              <div class="min-w-0 text-xs text-slate-500 truncate" title={activeChatSession ? formatSessionLabel(activeChatSession) : $_('chat.sessions.none')}>
+                {#if chatLoadingSessions}
+                  {$_('common.loading')}
+                {:else if activeChatSession}
+                  {formatSessionLabel(activeChatSession)}
+                {:else}
+                  {$_('chat.sessions.none')}
+                {/if}
+              </div>
+              <div class="flex items-center gap-1">
+                <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
+                  <svelte:fragment slot="trigger" let:toggle>
+                    <button
+                      class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                      on:click={toggle}
+                      title={$_('chat.sessions.choose')}
+                      aria-label={$_('chat.sessions.choose')}
+                      type="button"
+                      bind:this={sessionMenuButtonRef}
+                    >
+                      <List class="w-4 h-4" />
+                    </button>
+                  </svelte:fragment>
+                  <svelte:fragment slot="menu" let:close>
+                    <button
+                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                      type="button"
+                      on:click={() => {
+                        close();
+                        handleNewSession();
+                      }}
+                    >
+                      {$_('chat.sessions.new')}
+                    </button>
+                    <div class="border-t border-slate-100 my-1"></div>
+                    {#if chatLoadingSessions}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
+                    {:else if chatSessions.length === 0}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
+                    {:else}
+                      <div class="max-h-48 overflow-auto slim-scroll">
+                        {#each chatSessions as s (s.id)}
+                          <button
+                            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
+                            type="button"
+                            on:click={() => {
+                              close();
+                              void handleSelectSession(s.id);
+                            }}
+                          >
+                            {formatSessionLabel(s)}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </svelte:fragment>
+                </MenuPopover>
+                <button
+                  class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                  on:click={() => chatPanelRef?.newSession?.()}
+                  title={$_('chat.sessions.new')}
+                  aria-label={$_('chat.sessions.new')}
+                  type="button"
+                >
+                  <Plus class="w-4 h-4" />
+                </button>
+                <button
+                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                  on:click={() => chatPanelRef?.deleteCurrentSession?.()}
+                  title={$_('chat.sessions.delete')}
+                  aria-label={$_('chat.sessions.delete')}
+                  type="button"
+                  disabled={!chatSessionId}
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 min-h-0">
+              <ChatPanel
+                bind:this={chatPanelRef}
+                bind:sessions={chatSessions}
+                bind:sessionId={chatSessionId}
+                bind:draft={chatDraft}
+                bind:loadingSessions={chatLoadingSessions}
+                {contextStore}
+              />
+            </div>
           </div>
         {/if}
       </div>

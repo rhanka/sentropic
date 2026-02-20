@@ -930,6 +930,7 @@ export class ChatService {
     tools?: string[];
     localToolDefinitions?: LocalToolDefinitionInput[];
     resumeFrom?: ChatResumeFromToolOutputs;
+    locale?: string;
     signal?: AbortSignal;
   }): Promise<void> {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
@@ -1147,6 +1148,13 @@ export class ChatService {
         webSearchTool,
         webExtractTool
       ]);
+    }
+    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
+    if (requestedTools.has('web_search')) {
+      addTools([webSearchTool]);
+    }
+    if (requestedTools.has('web_extract')) {
+      addTools([webExtractTool]);
     }
     if (hasDocuments) {
       addTools([documentsTool]);
@@ -1715,9 +1723,11 @@ Règles :
             const updateResult = await toolService.updateUseCaseFields({
               useCaseId: args.useCaseId,
               updates: args.updates || [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1782,9 +1792,11 @@ Règles :
             const updateResult = await toolService.updateOrganizationFields({
               organizationId: args.organizationId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1849,9 +1861,11 @@ Règles :
             const updateResult = await toolService.updateFolderFields({
               folderId: args.folderId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1915,9 +1929,11 @@ Règles :
             const updateResult = await toolService.updateExecutiveSummaryFields({
               folderId: args.folderId,
               updates: Array.isArray(args.updates) ? args.updates : [],
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
@@ -1957,9 +1973,11 @@ Règles :
             const updateResult = await toolService.updateMatrix({
               folderId: args.folderId,
               matrixConfig: args.matrixConfig,
+              userId: options.userId,
               sessionId: options.sessionId,
               messageId: options.assistantMessageId,
               toolCallId: toolCall.id,
+              locale: options.locale,
               workspaceId: sessionWorkspaceId
             });
             result = updateResult;
