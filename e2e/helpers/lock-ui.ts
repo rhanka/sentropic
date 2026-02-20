@@ -5,6 +5,16 @@ function getDefaultEditableLocator(page: Page) {
 }
 
 export async function waitForLockedByOther(page: Page, editableLocator?: Locator) {
+  const requireDisabled = true;
+  return waitForLockedByOtherWithOptions(page, editableLocator, { requireDisabled });
+}
+
+export async function waitForLockedByOtherWithOptions(
+  page: Page,
+  editableLocator?: Locator,
+  options?: { requireDisabled?: boolean }
+) {
+  const requireDisabled = options?.requireDisabled ?? true;
   const badge = page.locator('div[role="group"][aria-label="Verrou du document"]');
   const requestButton = page.locator('button[aria-label="Demander le déverrouillage"]');
   const headerLockButton = page.locator('button[aria-label="Verrou du document"]');
@@ -35,7 +45,7 @@ export async function waitForLockedByOther(page: Page, editableLocator?: Locator
   if ((await requestButton.count()) > 0) {
     await expect(requestButton).toBeVisible({ timeout: 2_000 });
   }
-  if ((await editableField.count()) > 0) {
+  if (requireDisabled && (await editableField.count()) > 0) {
     await expect(editableField).toBeVisible({ timeout: 2_000 });
     await expect(editableField).toBeDisabled({ timeout: 2_000 });
   }

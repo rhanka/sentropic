@@ -148,7 +148,7 @@
             <option value="admin_app">{$_('adminUsers.role.admin_app')}</option>
           </select>
         </label>
-        <button class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white" on:click={load} disabled={loading}>
+        <button class="rounded bg-primary px-3 py-1.5 text-sm text-white" on:click={load} disabled={loading}>
           {$_('common.refresh')}
         </button>
       </div>

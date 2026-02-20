@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import {
+  chatSessions,
   chatContexts,
   comments,
   contextDocuments,
@@ -18,6 +19,7 @@ import { callOpenAI } from './openai';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';
+import { type AppLocale, normalizeLocale } from '../utils/locale';
 
 export type UseCaseFieldUpdate = {
   /**
@@ -35,6 +37,7 @@ export type UpdateUseCaseFieldsInput = {
   useCaseId: string;
   updates: UseCaseFieldUpdate[];
   /** Contexte chat (optionnel) */
+  userId?: string | null;
   sessionId?: string | null;
   messageId?: string | null;
   toolCallId?: string | null;
@@ -338,10 +341,12 @@ export class ToolService {
   async updateOrganizationFields(input: {
     organizationId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ organizationId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.organizationId) throw new Error('organizationId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -459,6 +464,28 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const updatedWorkspaceId = (() => {
+      const candidate = (updated[0] as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'organization',
+        contextId: input.organizationId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId,
+        locale: input.locale
+      });
+    }
+
     return { organizationId: input.organizationId, applied };
   }
 
@@ -513,7 +540,7 @@ export class ToolService {
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
    * Cible principale: `use_cases.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null }): Promise<{
+  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
     useCaseId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
@@ -629,6 +656,32 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (row as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const updatedWorkspaceId = (() => {
+      const candidate = (updatedRow as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'usecase',
+        contextId: input.useCaseId,
+        sectionKeys: applied.map((item) => item.path),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId,
+        locale: input.locale
+      });
+    }
+
     return { useCaseId: input.useCaseId, applied };
   }
 
@@ -702,10 +755,12 @@ export class ToolService {
   async updateFolderFields(input: {
     folderId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -805,6 +860,28 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const updatedWorkspaceId = (() => {
+      const candidate = (updated[0] as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || updatedWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'folder',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId,
+        locale: input.locale
+      });
+    }
+
     return { folderId: input.folderId, applied };
   }
 
@@ -830,10 +907,12 @@ export class ToolService {
   async updateMatrix(input: {
     folderId: string;
     matrixConfig: unknown;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (input.matrixConfig == null || typeof input.matrixConfig !== 'object') throw new Error('matrixConfig is required');
@@ -900,6 +979,28 @@ export class ToolService {
       seq += 1;
     }
 
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (row as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'matrix',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId,
+        locale: input.locale
+      });
+    }
+
     return { folderId: input.folderId, applied };
   }
 
@@ -930,10 +1031,12 @@ export class ToolService {
   async updateExecutiveSummaryFields(input: {
     folderId: string;
     updates: Array<{ field: string; value: unknown }>;
+    userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
     messageId?: string | null;
     toolCallId?: string | null;
+    locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
@@ -1006,6 +1109,28 @@ export class ToolService {
         createdAt: new Date()
       });
       seq += 1;
+    }
+
+    const commentAuthorId = await this.resolveCommentAuthorId({
+      explicitUserId: input.userId,
+      sessionId
+    });
+    const rowWorkspaceId = (() => {
+      const candidate = (folderRow as unknown as Record<string, unknown>)?.workspaceId;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })();
+    const commentWorkspaceId = workspaceId || rowWorkspaceId;
+    if (commentAuthorId && commentWorkspaceId) {
+      await this.createAutoFieldComments({
+        workspaceId: commentWorkspaceId,
+        contextType: 'executive_summary',
+        contextId: input.folderId,
+        sectionKeys: applied.map((item) => item.field),
+        createdBy: commentAuthorId,
+        assignedTo: commentAuthorId,
+        toolCallId,
+        locale: input.locale
+      });
     }
 
     return { folderId: input.folderId, applied };
@@ -1326,6 +1451,145 @@ export class ToolService {
       await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
+    }
+  }
+
+  private getAutoFieldLabel(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
+    const key = String(sectionKey ?? '').trim();
+    if (!key) return locale === 'en' ? 'General' : 'General';
+    const labelByContext: Record<string, Record<string, { fr: string; en: string }>> = {
+      usecase: {
+        name: { fr: 'Nom', en: 'Name' },
+        description: { fr: 'Description', en: 'Description' },
+        problem: { fr: 'Probleme', en: 'Problem' },
+        solution: { fr: 'Solution', en: 'Solution' },
+        benefits: { fr: 'Benefices recherches', en: 'Target benefits' },
+        constraints: { fr: 'Contraintes', en: 'Constraints' },
+        metrics: { fr: 'Mesures du succes', en: 'Success metrics' },
+        risks: { fr: 'Risques', en: 'Risks' },
+        nextSteps: { fr: 'Prochaines etapes', en: 'Next steps' },
+        technologies: { fr: 'Technologies', en: 'Technologies' },
+        dataSources: { fr: 'Sources des donnees', en: 'Data sources' },
+        dataObjects: { fr: 'Donnees', en: 'Data' },
+        contact: { fr: 'Contact', en: 'Contact' },
+        domain: { fr: 'Domaine', en: 'Domain' },
+        deadline: { fr: 'Delai', en: 'Deadline' },
+        valueScores: { fr: 'Axes de valeur', en: 'Value axes' },
+        complexityScores: { fr: 'Axes de complexite', en: 'Complexity axes' },
+      },
+      organization: {
+        name: { fr: 'Nom', en: 'Name' },
+        industry: { fr: 'Secteur', en: 'Industry' },
+        size: { fr: 'Taille', en: 'Size' },
+        technologies: { fr: 'Technologies', en: 'Technologies' },
+        products: { fr: 'Produits et Services', en: 'Products and services' },
+        processes: { fr: 'Processus Metier', en: 'Business processes' },
+        kpis: { fr: 'Indicateurs de performance', en: 'Performance indicators' },
+        challenges: { fr: 'Defis Principaux', en: 'Key challenges' },
+        objectives: { fr: 'Objectifs Strategiques', en: 'Strategic objectives' },
+        references: { fr: 'References', en: 'References' },
+      },
+      folder: {
+        name: { fr: 'Nom du dossier', en: 'Folder name' },
+        description: { fr: 'Contexte', en: 'Context' },
+      },
+      executive_summary: {
+        introduction: { fr: 'Introduction', en: 'Introduction' },
+        analyse: { fr: 'Analyse', en: 'Analysis' },
+        analysis: { fr: 'Analyse', en: 'Analysis' },
+        recommandation: { fr: 'Recommandations', en: 'Recommendations' },
+        recommendations: { fr: 'Recommandations', en: 'Recommendations' },
+        synthese_executive: { fr: 'Synthese executive', en: 'Executive summary' },
+        synthese: { fr: 'Synthese', en: 'Summary' },
+        summary: { fr: 'Synthese', en: 'Summary' },
+        references: { fr: 'References', en: 'References' },
+      },
+      matrix: {
+        matrixConfig: { fr: 'Configuration de la matrice', en: 'Matrix configuration' },
+        matrixTemplate: { fr: 'Modele de matrice', en: 'Matrix template' },
+      },
+    };
+    const localized = labelByContext[contextType]?.[key];
+    return localized ? (locale === 'en' ? localized.en : localized.fr) : key;
+  }
+
+  private formatAutoFieldComment(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
+    const localizedField = this.getAutoFieldLabel(contextType, sectionKey, locale);
+    if (locale === 'en') {
+      return `Field "${localizedField}" was updated by AI assistant. Please review and adjust if needed.`;
+    }
+    return `Le champ "${localizedField}" a ete modifie par l'assistant IA. Merci de le verifier et de l'ajuster si necessaire.`;
+  }
+
+  private async resolveCommentAuthorId(opts: {
+    explicitUserId?: string | null;
+    sessionId?: string | null;
+  }): Promise<string | null> {
+    const explicit = (opts.explicitUserId ?? '').trim();
+    if (explicit) return explicit;
+
+    const sessionId = (opts.sessionId ?? '').trim();
+    if (!sessionId) return null;
+
+    const [sessionRow] = await db
+      .select({ userId: chatSessions.userId })
+      .from(chatSessions)
+      .where(eq(chatSessions.id, sessionId))
+      .limit(1);
+
+    const userId = (sessionRow?.userId ?? '').trim();
+    return userId || null;
+  }
+
+  private async createAutoFieldComments(opts: {
+    workspaceId: string;
+    contextType: CommentContextType;
+    contextId: string;
+    sectionKeys: string[];
+    createdBy: string;
+    assignedTo?: string | null;
+    toolCallId?: string | null;
+    locale?: string;
+  }): Promise<void> {
+    const workspaceId = (opts.workspaceId ?? '').trim();
+    const contextId = (opts.contextId ?? '').trim();
+    const createdBy = (opts.createdBy ?? '').trim();
+    if (!workspaceId || !contextId || !createdBy) return;
+
+    const assignedTo = (opts.assignedTo ?? '').trim() || createdBy;
+    const locale = normalizeLocale(opts.locale) ?? 'fr';
+    const uniqueSectionKeys = Array.from(
+      new Set(
+        opts.sectionKeys
+          .map((s) => {
+            const sectionKey = String(s ?? '').trim();
+            if (!sectionKey) return '';
+            return opts.contextType === 'usecase' && sectionKey.startsWith('data.')
+              ? sectionKey.slice('data.'.length)
+              : sectionKey;
+          })
+          .filter(Boolean)
+      )
+    );
+    for (const sectionKey of uniqueSectionKeys) {
+      const now = new Date();
+      const commentId = createId();
+      await db.insert(comments).values({
+        id: commentId,
+        workspaceId,
+        contextType: opts.contextType,
+        contextId,
+        sectionKey,
+        createdBy,
+        assignedTo,
+        status: 'open',
+        threadId: createId(),
+        content: this.formatAutoFieldComment(opts.contextType, sectionKey, locale),
+        toolCallId: opts.toolCallId ?? null,
+        createdAt: now,
+        updatedAt: now
+      });
+      await this.notifyCommentEvent(workspaceId, opts.contextType, contextId, { action: 'created', comment_id: commentId });
     }
   }
 
@@ -1806,5 +2070,3 @@ export class ToolService {
 }
 
 export const toolService = new ToolService();
-
-

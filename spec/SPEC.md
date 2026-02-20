@@ -254,6 +254,24 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - Proposes actions (close/reassign/note) and requires explicit confirmation before applying.
   - Context scoping follows existing tool expansion rules (usecase strict; folder/org expand).
 
+12.1) Comment section-key conventions and route/context mapping
+- Canonical section keys (no `data.*` prefixes) are used end-to-end for badge counts, auto-comments, and `topai:open-comments` routing.
+- `usecase` canonical keys:
+  - `name`, `description`, `problem`, `solution`, `benefits`, `constraints`, `metrics`, `risks`, `nextSteps`, `technologies`, `dataSources`, `dataObjects`, `valueScores`, `complexityScores`, `references`, `contact`, `domain`, `deadline`.
+- `organization` canonical keys:
+  - `name`, `industry`, `size`, `technologies`, `products`, `processes`, `kpis`, `challenges`, `objectives`, `references`.
+- `folder` canonical keys:
+  - `name`, `description`, `matrixConfig`, `matrixTemplate`.
+- `executive_summary` canonical keys:
+  - `introduction`, `analyse`, `recommandation`, `synthese_executive`, `references`.
+  - Legacy aliases accepted for display compatibility: `analysis`, `recommendations`, `summary`.
+- Route/context routing:
+  - `/usecase/[id]` -> `contextType=usecase`, `contextId=<useCaseId>`.
+  - `/organizations/[id]` -> `contextType=organization`, `contextId=<organizationId>`.
+  - `/folders/[id]` -> `contextType=folder`, `contextId=<folderId>`.
+  - `/matrix` -> `contextType=folder`, `contextId=<currentFolderId>`.
+  - `/dashboard` -> default `contextType=executive_summary`, `contextId=<selectedFolderId>`; folder title badge uses `contextType=folder`, `sectionKey=name`.
+
 13) Collaboration — Import/Export (permissions)
 - Workspace export: **admin only**.
 - Object export (folder/usecase/organization/matrix): **admin + editor**.
