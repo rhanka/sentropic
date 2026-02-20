@@ -1,8 +1,6 @@
 <script>
   import { onMount, afterUpdate, createEventDispatcher, tick } from "svelte";
   import { _ } from "svelte-i18n";
-  import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
   import { unsavedChangesStore } from "$lib/stores/unsavedChanges";
   import TipTap from "./TipTap.svelte";
   import { apiPut } from "$lib/utils/api";
@@ -288,26 +286,20 @@
     const targetElement = document.getElementById(refId);
     if (!targetElement) return false;
     
-    // Utiliser goto de SvelteKit pour mettre à jour l'URL
-    const currentUrl = $page.url;
-    const newUrl = `${currentUrl.pathname}${currentUrl.search}#${refId}`;
-    
+    // Use history API to update URL without reload
+    const currentUrl = new URL(window.location.href);
+    currentUrl.hash = refId;
+
     try {
-      await goto(newUrl, {
-        noScroll: true,
-        keepFocus: true,
-        invalidateAll: false,
-        replaceState: false,
-      });
-      
-      // Scroll vers la référence après un petit délai
+      window.history.pushState(null, '', currentUrl.toString());
+
+      // Scroll to reference
       setTimeout(() => {
-        targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 10);
     } catch (error) {
-      // Fallback: scroll simple + update URL manuel
-      targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
-      window.history.pushState(null, '', `#${refId}`);
+      // Fallback
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     
     return false;
@@ -344,30 +336,20 @@
     const targetElement = document.getElementById(refId);
     if (!targetElement) return;
     
-    // Utiliser goto de SvelteKit pour mettre à jour l'URL avec le hash
-    // Cela ajoute le #ref-X à l'URL sans recharger la page
-    // Utiliser $page.url pour obtenir le path et search params actuels
-    const currentUrl = $page.url;
-    const newUrl = `${currentUrl.pathname}${currentUrl.search}#${refId}`;
-    
+    // Use history API to update URL
+    const currentUrl = new URL(window.location.href);
+    currentUrl.hash = refId;
+
     try {
-      await goto(newUrl, {
-        noScroll: true, // On gère le scroll manuellement
-        keepFocus: true, // Garder le focus sur l'élément actuel
-        invalidateAll: false, // Ne pas recharger les données
-        replaceState: false, // Garder dans l'historique pour pouvoir faire back
-      });
-      
-      // Scroll vers la référence après un petit délai pour s'assurer que la navigation est terminée
+      window.history.pushState(null, '', currentUrl.toString());
+
+      // Scroll to reference
       setTimeout(() => {
-        targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 10);
     } catch (error) {
-      // En cas d'erreur avec goto, fallback sur scroll simple
-      console.warn('Failed to navigate with goto, using direct scroll:', error);
-      targetElement.scrollIntoView({behavior: 'smooth', block: 'center'});
-      // Mettre à jour l'URL manuellement en dernier recours
-      window.history.pushState(null, '', `#${refId}`);
+      console.warn('Failed to update URL:', error);
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     
     return false;
