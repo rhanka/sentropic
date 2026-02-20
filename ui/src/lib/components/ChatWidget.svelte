@@ -7,7 +7,6 @@
   import { addToast } from '$lib/stores/toast';
   import {
     isAuthenticated,
-    session,
     setUser,
     clearUser,
     type User,
@@ -57,6 +56,7 @@
   let chatSessions: ChatSession[] = [];
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
+  let activeChatSession: ChatSession | null = null;
   let commentContext: {
     type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
     id?: string;
@@ -303,7 +303,7 @@
           : displayMode;
     chatWidgetLayout.set({
       mode: modeNow,
-      isOpen: isVisible && modeNow === 'docked',
+      isOpen: isVisible,
       dockWidthCss,
     });
   };
@@ -1021,6 +1021,9 @@
       values: { id: s.id.slice(0, 6) },
     });
   };
+  $: activeChatSession = chatSessionId
+    ? chatSessions.find((s) => s.id === chatSessionId) ?? null
+    : null;
 
   $: activeJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'pending' || job.status === 'processing',
@@ -1583,96 +1586,6 @@
           </div>
 
           <div class="flex items-center gap-2">
-            {#if activeTab === 'chat'}
-              <MenuPopover
-                bind:open={showSessionMenu}
-                bind:triggerRef={sessionMenuButtonRef}
-              >
-                <svelte:fragment slot="trigger" let:toggle>
-                  <button
-                    class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                    on:click={toggle}
-                    title={$_('chat.sessions.choose')}
-                    aria-label={$_('chat.sessions.choose')}
-                    type="button"
-                    bind:this={sessionMenuButtonRef}
-                  >
-                    <List class="w-4 h-4" />
-                  </button>
-                </svelte:fragment>
-                <svelte:fragment slot="menu" let:close>
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => {
-                      close();
-                      handleNewSession();
-                    }}
-                  >
-                    {$_('chat.sessions.new')}
-                  </button>
-                  <div class="border-t border-slate-100 my-1"></div>
-                  {#if chatLoadingSessions}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('common.loading')}
-                    </div>
-                  {:else if chatSessions.length === 0}
-                    <div class="px-2 py-1 text-[11px] text-slate-500">
-                      {$_('chat.sessions.none')}
-                    </div>
-                  {:else}
-                    <div class="max-h-48 overflow-auto slim-scroll">
-                      {#each chatSessions as s (s.id)}
-                        <button
-                          class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId ===
-                          s.id
-                            ? 'text-slate-900 font-semibold'
-                            : 'text-slate-600'}"
-                          type="button"
-                          on:click={() => {
-                            close();
-                            void handleSelectSession(s.id);
-                          }}
-                        >
-                          {formatSessionLabel(s)}
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </svelte:fragment>
-              </MenuPopover>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={() => chatPanelRef?.newSession?.()}
-                title={$_('chat.sessions.new')}
-                aria-label={$_('chat.sessions.new')}
-                type="button"
-              >
-                <Plus class="w-4 h-4" />
-              </button>
-
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                on:click={() => chatPanelRef?.deleteCurrentSession?.()}
-                title={$_('chat.sessions.delete')}
-                aria-label={$_('chat.sessions.delete')}
-                type="button"
-                disabled={!chatSessionId}
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
-            {#if activeTab === 'queue'}
-              <button
-                class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                on:click={handlePurgeMyJobs}
-                title={$_('chat.queue.purgeMine')}
-                aria-label={$_('chat.queue.purgeMine')}
-                type="button"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            {/if}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
                 bind:open={showExtensionConfigMenu}
@@ -2053,8 +1966,22 @@
           </div>
         {:else}
           {#if activeTab === 'queue'}
-            <div class="h-full min-h-0">
-              <QueueMonitor />
+            <div class="h-full min-h-0 flex flex-col">
+              <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+                <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
+                <button
+                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  on:click={handlePurgeMyJobs}
+                  title={$_('chat.queue.purgeMine')}
+                  aria-label={$_('chat.queue.purgeMine')}
+                  type="button"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+              <div class="flex-1 min-h-0">
+                <QueueMonitor />
+              </div>
             </div>
           {/if}
           {#if !isPluginMode && activeTab === 'comments'}
@@ -2081,14 +2008,95 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
-            <ChatPanel
-              bind:this={chatPanelRef}
-              bind:sessions={chatSessions}
-              bind:sessionId={chatSessionId}
-              bind:draft={chatDraft}
-              bind:loadingSessions={chatLoadingSessions}
-              {contextStore}
-            />
+            <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+              <div class="min-w-0 text-xs text-slate-500 truncate" title={activeChatSession ? formatSessionLabel(activeChatSession) : $_('chat.sessions.none')}>
+                {#if chatLoadingSessions}
+                  {$_('common.loading')}
+                {:else if activeChatSession}
+                  {formatSessionLabel(activeChatSession)}
+                {:else}
+                  {$_('chat.sessions.none')}
+                {/if}
+              </div>
+              <div class="flex items-center gap-1">
+                <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
+                  <svelte:fragment slot="trigger" let:toggle>
+                    <button
+                      class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                      on:click={toggle}
+                      title={$_('chat.sessions.choose')}
+                      aria-label={$_('chat.sessions.choose')}
+                      type="button"
+                      bind:this={sessionMenuButtonRef}
+                    >
+                      <List class="w-4 h-4" />
+                    </button>
+                  </svelte:fragment>
+                  <svelte:fragment slot="menu" let:close>
+                    <button
+                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                      type="button"
+                      on:click={() => {
+                        close();
+                        handleNewSession();
+                      }}
+                    >
+                      {$_('chat.sessions.new')}
+                    </button>
+                    <div class="border-t border-slate-100 my-1"></div>
+                    {#if chatLoadingSessions}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
+                    {:else if chatSessions.length === 0}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
+                    {:else}
+                      <div class="max-h-48 overflow-auto slim-scroll">
+                        {#each chatSessions as s (s.id)}
+                          <button
+                            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
+                            type="button"
+                            on:click={() => {
+                              close();
+                              void handleSelectSession(s.id);
+                            }}
+                          >
+                            {formatSessionLabel(s)}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </svelte:fragment>
+                </MenuPopover>
+                <button
+                  class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                  on:click={() => chatPanelRef?.newSession?.()}
+                  title={$_('chat.sessions.new')}
+                  aria-label={$_('chat.sessions.new')}
+                  type="button"
+                >
+                  <Plus class="w-4 h-4" />
+                </button>
+                <button
+                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                  on:click={() => chatPanelRef?.deleteCurrentSession?.()}
+                  title={$_('chat.sessions.delete')}
+                  aria-label={$_('chat.sessions.delete')}
+                  type="button"
+                  disabled={!chatSessionId}
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 min-h-0">
+              <ChatPanel
+                bind:this={chatPanelRef}
+                bind:sessions={chatSessions}
+                bind:sessionId={chatSessionId}
+                bind:draft={chatDraft}
+                bind:loadingSessions={chatLoadingSessions}
+                {contextStore}
+              />
+            </div>
           </div>
         {/if}
       </div>
