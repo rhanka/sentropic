@@ -2680,7 +2680,7 @@
           <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-72">
             <svelte:fragment slot="trigger" let:toggle>
               <button
-                class="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 on:click={toggle}
                 title={$_('chat.comments.chooseThread')}
                 aria-label={$_('chat.comments.chooseThread')}
@@ -2688,7 +2688,6 @@
                 bind:this={commentMenuButtonRef}
               >
                 <List class="w-3.5 h-3.5" />
-                <span>{$_('chat.comments.chooseThread')}</span>
               </button>
             </svelte:fragment>
             <svelte:fragment slot="menu">
@@ -2746,17 +2745,16 @@
             </svelte:fragment>
           </MenuPopover>
           <button
-            class="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
             on:click={handleNewCommentThread}
             title={$_('chat.comments.newThread')}
             aria-label={$_('chat.comments.newThread')}
             type="button"
           >
-            <Plus class="w-3.5 h-3.5" />
-            <span>{$_('chat.comments.newThread')}</span>
+            <Plus class="w-4 h-4" />
           </button>
           <button
-            class="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
             on:click={() => void handleResolveCommentThread()}
             title={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
             aria-label={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
@@ -2764,46 +2762,40 @@
             disabled={!currentCommentRoot || !canResolveCurrent}
           >
             {#if commentThreadResolved}
-              <FolderOpen class="w-3.5 h-3.5" />
-              <span>{$_('chat.comments.reopen')}</span>
+              <FolderOpen class="w-4 h-4" />
             {:else}
-              <Check class="w-3.5 h-3.5" />
-              <span>{$_('chat.comments.resolve')}</span>
+              <Check class="w-4 h-4" />
             {/if}
           </button>
           <button
-            class="inline-flex items-center gap-1 rounded border border-red-200 px-2 py-1 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50"
-            on:click={() => void handleDeleteCommentThread()}
-            title={$_('chat.comments.deleteThread')}
-            aria-label={$_('chat.comments.deleteThread')}
-            type="button"
-            disabled={!currentCommentRoot}
-          >
-            <Trash2 class="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <div class="flex items-center gap-1">
-          <button
-            class="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
             type="button"
             disabled={!hasPreviousThread}
             on:click={() => goToRelativeCommentThread(-1)}
             title={$_('chat.comments.previous')}
             aria-label={$_('chat.comments.previous')}
           >
-            <ChevronLeft class="w-3.5 h-3.5" />
-            <span>{$_('chat.comments.previous')}</span>
+            <ChevronLeft class="w-4 h-4" />
           </button>
           <button
-            class="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
             type="button"
             disabled={!hasNextThread}
             on:click={() => goToRelativeCommentThread(1)}
             title={$_('chat.comments.next')}
             aria-label={$_('chat.comments.next')}
           >
-            <span>{$_('chat.comments.next')}</span>
-            <ChevronRight class="w-3.5 h-3.5" />
+            <ChevronRight class="w-4 h-4" />
+          </button>
+          <button
+            class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+            on:click={() => void handleDeleteCommentThread()}
+            title={$_('chat.comments.deleteThread')}
+            aria-label={$_('chat.comments.deleteThread')}
+            type="button"
+            disabled={!currentCommentRoot}
+          >
+            <Trash2 class="w-4 h-4" />
           </button>
         </div>
       </div>
