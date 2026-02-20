@@ -308,6 +308,7 @@
       name: 'chat.sections.folder.name',
     },
     executive_summary: {
+      name: 'chat.sections.folder.name',
       introduction: 'chat.sections.executiveSummary.introduction',
       analyse: 'chat.sections.executiveSummary.analysis',
       analysis: 'chat.sections.executiveSummary.analysis',

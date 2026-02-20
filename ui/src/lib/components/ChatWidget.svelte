@@ -1078,8 +1078,14 @@
       $contextStore.params,
       $currentFolderId,
     );
+    const preserveDashboardFolderOverride =
+      $contextStore.route.id === '/dashboard' &&
+      commentContextOverride?.type === 'folder' &&
+      detected?.type === 'executive_summary' &&
+      detected?.id === commentContextOverride?.id;
     if (
       commentContextOverride &&
+      !preserveDashboardFolderOverride &&
       (!detected ||
         detected.type !== commentContextOverride.type ||
         detected.id !== commentContextOverride.id)
@@ -1126,6 +1132,7 @@
       name: 'chat.sections.folder.name',
     },
     executive_summary: {
+      name: 'chat.sections.folder.name',
       introduction: 'chat.sections.executiveSummary.introduction',
       analyse: 'chat.sections.executiveSummary.analysis',
       analysis: 'chat.sections.executiveSummary.analysis',
