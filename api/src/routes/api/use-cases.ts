@@ -16,6 +16,7 @@ import { settingsService } from '../../services/settings';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
+import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
@@ -509,6 +510,7 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
     .from(useCases)
     .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
   const hydrated = await hydrateUseCase(updated);
+  await notifyUseCaseEvent(id);
   return c.json(hydrated);
 });
 
@@ -541,7 +543,11 @@ const generateInput = z.object({
 
 useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
   try {
-    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
+    const requestLocale = resolveLocaleFromHeaders({
+      appLocaleHeader: c.req.header('x-app-locale'),
+      acceptLanguageHeader: c.req.header('accept-language')
+    });
     const { input, folder_id, use_case_count, organization_id, matrix_mode, model } = c.req.valid('json');
     const organizationId = organization_id;
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
@@ -647,6 +653,8 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
           folderId: folderId!,
           organizationId,
           model: selectedModel,
+          initiatedByUserId: userId,
+          locale: requestLocale
         },
         { workspaceId, maxRetries: 1 }
       );
@@ -659,7 +667,9 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       organizationId,
       matrixMode: resolvedMatrixMode,
       model: selectedModel,
-      useCaseCount: use_case_count
+      useCaseCount: use_case_count,
+      initiatedByUserId: userId,
+      locale: requestLocale
     }, { workspaceId, maxRetries: 1 });
     
     return c.json({
@@ -696,7 +706,11 @@ const detailInput = z.object({
 
 useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), zValidator('json', detailInput), async (c) => {
   try {
-    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
+    const requestLocale = resolveLocaleFromHeaders({
+      appLocaleHeader: c.req.header('x-app-locale'),
+      acceptLanguageHeader: c.req.header('accept-language')
+    });
     const id = c.req.param('id');
     const { model } = c.req.valid('json');
     
@@ -743,7 +757,9 @@ useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), 
       useCaseId: id,
       useCaseName,
       folderId: useCase.folderId,
-      model: selectedModel
+      model: selectedModel,
+      initiatedByUserId: userId,
+      locale: requestLocale
     }, { workspaceId, maxRetries: 1 });
     
     return c.json({

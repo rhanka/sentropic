@@ -21,6 +21,7 @@
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { listComments } from '$lib/utils/comments';
+  import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import { Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
 
@@ -125,6 +126,32 @@
     };
   });
 
+  const recalculateScoresFromCurrentUseCase = () => {
+    const valueScores = useCase?.data?.valueScores || useCase?.valueScores || [];
+    const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || [];
+
+    if (matrix && valueScores.length > 0 && complexityScores.length > 0) {
+      calculatedScores = calculateUseCaseScores(matrix, valueScores, complexityScores);
+      return;
+    }
+
+    const totalValueScore = useCase?.data?.totalValueScore ?? useCase?.totalValueScore;
+    const totalComplexityScore = useCase?.data?.totalComplexityScore ?? useCase?.totalComplexityScore;
+    if (totalValueScore !== undefined || totalComplexityScore !== undefined) {
+      const finalValue = Number(totalValueScore ?? 0);
+      const finalComplexity = Number(totalComplexityScore ?? 0);
+      calculatedScores = {
+        finalValueScore: finalValue,
+        finalComplexityScore: finalComplexity,
+        valueStars: Math.round(finalValue / 20),
+        complexityStars: Math.round(finalComplexity / 20)
+      };
+      return;
+    }
+
+    calculatedScores = null;
+  };
+
   const handleUseCaseHubEvent = (evt: any, currentId: string) => {
     if (evt?.type === 'usecase_update') {
       const id: string = evt.useCaseId;
@@ -134,7 +161,10 @@
       if (data?.useCase) {
         useCase = { ...(useCase || {}), ...data.useCase };
         useCasesStore.update(items => items.map(uc => uc.id === currentId ? useCase : uc));
-        void loadMatrixAndCalculateScores();
+        recalculateScoresFromCurrentUseCase();
+        if (!matrix) {
+          void loadMatrixAndCalculateScores();
+        }
       }
       return;
     }
@@ -453,26 +483,7 @@
       matrix = folderResp?.matrixConfig ?? null;
       organizationId = folderResp?.organizationId ?? null;
       organizationName = folderResp?.organizationName ?? null;
-      
-      // Extraire les scores depuis data (avec fallback rétrocompatibilité)
-      const valueScores = useCase?.data?.valueScores || useCase?.valueScores || [];
-      const complexityScores = useCase?.data?.complexityScores || useCase?.complexityScores || [];
-      
-      if (matrix && valueScores.length > 0 && complexityScores.length > 0) {
-        calculatedScores = calculateUseCaseScores(
-          matrix,
-          valueScores,
-          complexityScores
-        );
-      } else if (useCase?.data?.totalValueScore !== undefined || useCase?.data?.totalComplexityScore !== undefined) {
-        // Si les scores totaux sont déjà dans data, les utiliser directement
-        calculatedScores = {
-          finalValueScore: useCase?.data?.totalValueScore || useCase?.totalValueScore || 0,
-          finalComplexityScore: useCase?.data?.totalComplexityScore || useCase?.totalComplexityScore || 0,
-          valueStars: Math.round((useCase?.data?.totalValueScore || useCase?.totalValueScore || 0) / 20),
-          complexityStars: Math.round((useCase?.data?.totalComplexityScore || useCase?.totalComplexityScore || 0) / 20)
-        };
-      }
+      recalculateScoresFromCurrentUseCase();
     } catch (err) {
       console.error('Failed to load matrix:', err);
     }
@@ -497,28 +508,7 @@
     commentCountsLoading = true;
     try {
       const res = await listComments({ contextType: 'usecase', contextId: useCaseId });
-      const counts: Record<string, number> = {};
-      const threads = new Map<string, { status: string; count: number; sectionKey: string | null }>();
-      for (const item of res.items || []) {
-        const threadId = item.thread_id;
-        if (!threadId) continue;
-        const existing = threads.get(threadId);
-        if (!existing) {
-          threads.set(threadId, {
-            status: item.status,
-            count: 1,
-            sectionKey: item.section_key || null,
-          });
-        } else {
-          threads.set(threadId, { ...existing, count: existing.count + 1 });
-        }
-      }
-      for (const thread of threads.values()) {
-        if (thread.status === 'closed') continue;
-        const key = thread.sectionKey || 'root';
-        counts[key] = (counts[key] || 0) + thread.count;
-      }
-      commentCounts = counts;
+      commentCounts = buildOpenCommentCounts(res.items || []);
       commentCountsRetryAttempts = 0;
     } catch {
       // ignore; badges are optional

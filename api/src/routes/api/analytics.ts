@@ -8,6 +8,7 @@ import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { hydrateUseCases } from './use-cases';
 import { requireEditor } from '../../middleware/rbac';
+import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 export const analyticsRouter = new Hono();
 
@@ -89,8 +90,12 @@ const executiveSummarySchema = z.object({
 
 analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', executiveSummarySchema), async (c) => {
   try {
-    const { workspaceId } = c.get('user') as { workspaceId: string };
+    const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
     const { folder_id, value_threshold, complexity_threshold, model } = c.req.valid('json');
+    const requestLocale = resolveLocaleFromHeaders({
+      appLocaleHeader: c.req.header('x-app-locale'),
+      acceptLanguageHeader: c.req.header('accept-language')
+    });
 
     // Vérifier que le dossier existe
     const [folder] = await db
@@ -115,7 +120,9 @@ analyticsRouter.post('/executive-summary', requireEditor, zValidator('json', exe
       folderId: folder_id,
       valueThreshold: value_threshold,
       complexityThreshold: complexity_threshold,
-      model: selectedModel
+      model: selectedModel,
+      initiatedByUserId: userId,
+      locale: requestLocale
     }, { workspaceId });
 
     return c.json({

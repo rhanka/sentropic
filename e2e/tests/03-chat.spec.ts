@@ -95,17 +95,17 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Attendre que la page soit chargée (Svelte est réactif, timeout 1s)
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget (bouton en bas à droite)
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible (le panneau remplace la bulle)
     // Le panneau a une classe spécifique et contient le textarea (Svelte est réactif, timeout 1s)
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Envoyer un message avec une demande de réponse spécifique pour vérifier la réponse
     const expectedResponse = 'OK';
@@ -116,7 +116,7 @@ test.describe.serial('Chat', () => {
     // Svelte est réactif, le message apparaît immédiatement (timeout 1s)
     const userGroup = page.locator('div.flex.flex-col.items-end.group').last();
     const userMessage = userGroup.locator('.userMarkdown').filter({ hasText: message }).first();
-    await expect(userMessage).toBeVisible({ timeout: 5000 });
+    await expect(userMessage).toBeVisible({ timeout: 1000 });
     
     // Le placeholder assistant (StreamMessage) est ajouté immédiatement après l'envoi.
     await expect.poll(async () => await assistantWrapper(page).count(), { timeout: 10_000 }).toBeGreaterThan(0);
@@ -134,16 +134,16 @@ test.describe.serial('Chat', () => {
   });
 
   test('devrait envoyer le bon contexte primaire au backend selon la route', async ({ page }) => {
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
 
     // 1) /folders → no contextId (expect no primaryContextType)
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     const r1 = await sendMessageAndWaitApi(page, composer, 'Test context dossiers');
     expect(r1.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r1.requestBody?.primaryContextId ?? null).toBeNull();
@@ -151,10 +151,10 @@ test.describe.serial('Chat', () => {
     // 2) /organizations → no contextId (expect no primaryContextType)
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 5000 });
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     const r2 = await sendMessageAndWaitApi(page, composer, 'Test context organisations');
     expect(r2.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r2.requestBody?.primaryContextId ?? null).toBeNull();
@@ -165,7 +165,7 @@ test.describe.serial('Chat', () => {
     const closeButton = page.locator('button[aria-label="Fermer"]');
     if (await closeButton.isVisible().catch(() => false)) {
       await closeButton.click();
-      await expect(composer).not.toBeVisible({ timeout: 5000 });
+      await expect(composer).not.toBeVisible({ timeout: 1000 });
     }
     const organizationRows = page.locator('article.rounded.border.border-slate-200');
     if ((await organizationRows.count()) > 0) {
@@ -176,9 +176,9 @@ test.describe.serial('Chat', () => {
       const organizationId = m ? m[1] : '';
       expect(organizationId).toBeTruthy();
 
-      await expect(chatButton).toBeVisible({ timeout: 5000 });
+      await expect(chatButton).toBeVisible({ timeout: 1000 });
       await chatButton.click();
-      await expect(composer).toBeVisible({ timeout: 5000 });
+      await expect(composer).toBeVisible({ timeout: 1000 });
       const r2b = await sendMessageAndWaitApi(page, composer, 'Test context organisation detail');
       expect(r2b.requestBody?.primaryContextType).toBe('organization');
       expect(r2b.requestBody?.primaryContextId).toBe(organizationId);
@@ -200,9 +200,9 @@ test.describe.serial('Chat', () => {
     const match = page.url().match(/\/usecase\/([^/?#]+)/);
     const useCaseId = match ? match[1] : '';
     expect(useCaseId).toBeTruthy();
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     const r3 = await sendMessageAndWaitApi(page, composer, 'Test context usecase detail');
     expect(r3.requestBody?.primaryContextType).toBe('usecase');
     expect(r3.requestBody?.primaryContextId).toBe(useCaseId);
@@ -210,13 +210,13 @@ test.describe.serial('Chat', () => {
 
   test('devrait gérer les contextes provisoires et persistants', async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
 
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 1000 });
 
     const organizationRows = page.locator('article.rounded.border.border-slate-200');
     if ((await organizationRows.count()) === 0) return;
@@ -226,12 +226,12 @@ test.describe.serial('Chat', () => {
     const orgName = (await page.locator('h1').first().textContent())?.trim();
     if (!orgName) return;
 
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
-    await expect(menu.locator('button', { hasText: orgName })).toBeVisible({ timeout: 5000 });
+    await expect(menu.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
     const webSearchButton = menu.locator('button', { hasText: 'Web search' });
     const webSearchIcon = webSearchButton.locator('svg');
     const wasEnabled = await webSearchIcon.evaluate((el) => el.classList.contains('text-slate-900'));
@@ -241,10 +241,10 @@ test.describe.serial('Chat', () => {
     // Quitter la vue sans envoyer de message: contexte provisoire supprimé.
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu2 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
     await expect(menu2.locator('button', { hasText: orgName })).toHaveCount(0);
@@ -258,19 +258,19 @@ test.describe.serial('Chat', () => {
     await organizationRows.first().click();
     await page.waitForURL(/\/organizations\/[^/?#]+$/, { timeout: 10_000 });
     await page.waitForLoadState('domcontentloaded');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     await sendMessageAndWaitApi(page, composer, 'Contexte utilisé');
 
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu3 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
-    await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 5000 });
+    await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
   });
 
   test('non-régression app web: menu outils standard sans outils locaux extension', async ({ page }) => {
@@ -311,17 +311,17 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
     // Attendre que le panneau soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Basculer vers Jobs via l'onglet
     const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: /^Jobs(?: IA)?$/i }).first();
-    await expect(jobsTab).toBeVisible({ timeout: 5000 });
+    await expect(jobsTab).toBeVisible({ timeout: 1000 });
     await jobsTab.click();
     
     // Vérifier que le panneau Jobs est visible (pas le chat)
@@ -329,7 +329,7 @@ test.describe.serial('Chat', () => {
     
     // Basculer de retour vers Chat
     const chatTab = page.locator('button, [role="tab"]').filter({ hasText: /^Chat(?: IA)?$/i }).first();
-    await expect(chatTab).toBeVisible({ timeout: 5000 });
+    await expect(chatTab).toBeVisible({ timeout: 1000 });
     await chatTab.click();
     
     // Vérifier que le panneau chat est de nouveau visible
@@ -343,21 +343,22 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
     const message1 = `Réponds brièvement (test E2E)`;
-    await sendMessageAndWaitApi(page, composer, message1);
+    const firstSend = await sendMessageAndWaitApi(page, composer, message1);
+    expect(firstSend.sessionId).toBeTruthy();
     
     // Attendre que le message utilisateur apparaisse
     const userMessage1 = page.locator('.userMarkdown').filter({ hasText: message1 }).first();
-    await expect(userMessage1).toBeVisible({ timeout: 5000 });
+    await expect(userMessage1).toBeVisible({ timeout: 1000 });
     
     // Attendre qu'un message assistant apparaisse (placeholder streaming ou contenu final)
     const assistantWrappers = assistantWrapper(page);
@@ -365,11 +366,10 @@ test.describe.serial('Chat', () => {
     
     // Envoyer un deuxième message dans la même session avec une autre réponse spécifique
     const message2 = `Deuxième message (test E2E)`;
-    await sendMessageAndWaitApi(page, composer, message2);
-    
-    // Vérifier que les deux messages utilisateur sont visibles
-    const userMessage2 = page.locator('.userMarkdown').filter({ hasText: message2 }).first();
-    await expect(userMessage2).toBeVisible({ timeout: 5000 });
+    const secondSend = await sendMessageAndWaitApi(page, composer, message2);
+    expect(secondSend.sessionId).toBe(firstSend.sessionId);
+    expect(secondSend.userMessageId).toBeTruthy();
+    expect(secondSend.userMessageId).not.toBe(firstSend.userMessageId);
     
     // Le point clé: le 2e message n'a pas effacé le 1er (session/conversation conservée)
     await expect(userMessage1).toBeVisible({ timeout: 5_000 });
@@ -383,12 +383,12 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page).toHaveURL(/\/folders$/);
 
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
 
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
@@ -396,7 +396,7 @@ test.describe.serial('Chat', () => {
 
     const userGroup = page.locator('div.flex.flex-col.items-end.group').last();
     const userMessage = userGroup.locator('.userMarkdown').filter({ hasText: message }).first();
-    await expect(userMessage).toBeVisible({ timeout: 5000 });
+    await expect(userMessage).toBeVisible({ timeout: 1000 });
 
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
     try {
@@ -412,15 +412,15 @@ test.describe.serial('Chat', () => {
 
     await userGroup.locator('button[aria-label="Modifier"]').click({ force: true });
     const editInput = userGroup.locator('[contenteditable="true"]').first();
-    await expect(editInput).toBeVisible({ timeout: 5000 });
+    await expect(editInput).toBeVisible({ timeout: 1000 });
     await editInput.click();
     await page.keyboard.press('Control+A');
     const updatedMessage = 'Message modifié (E2E)';
     await page.keyboard.type(updatedMessage);
     const saveButton = userGroup.locator('button', { hasText: 'Envoyer' });
-    await expect(saveButton).toBeVisible({ timeout: 5000 });
+    await expect(saveButton).toBeVisible({ timeout: 1000 });
     await saveButton.click();
-    await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 1000 });
 
     const assistantGroup = assistantWrapper(page).last();
     const usefulButton = assistantGroup.locator('button[aria-label="Utile"]');
@@ -446,20 +446,22 @@ test.describe.serial('Chat', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
 
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
 
     await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
 
-    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
-    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    const sessionMenuButton = page
+      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
+      .first();
+    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
     await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
 
     const selectedSession = sessionMenu.locator('button.font-semibold').first();
     await expect.poll(async () => {
@@ -490,13 +492,13 @@ test.describe.serial('Chat', () => {
 
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
 
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
-    await expect(chatButton).toBeVisible({ timeout: 5000 });
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 1000 });
 
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
     await menuButton.click();
@@ -511,7 +513,7 @@ test.describe.serial('Chat', () => {
       .filter({ has: page.locator('button[aria-label="Supprimer le document"]') })
       .first();
     await expect(docRow).toBeVisible({ timeout: 15_000 });
-    await expect(docRow).toContainText(/En attente|Analyse en cours|Résumé prêt/);
+    await expect(docRow).toContainText(/En attente|Analyse en cours|Résumé en cours|Résumé prêt|Pending|Summarizing|Summary ready/);
     await expect(docRow).toContainText('Résumé prêt', { timeout: 90_000 });
 
     const { jobId, streamId } = await sendMessageAndWaitApi(
@@ -547,7 +549,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -592,7 +594,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -622,11 +624,13 @@ test.describe.serial('Chat', () => {
     }
     
     // Vérifier que le menu de sessions contient maintenant au moins une conversation
-    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
-    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    const sessionMenuButton = page
+      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
+      .first();
+    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
     await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
     const sessionItems = sessionMenu.locator('div.max-h-48 button');
     expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
   });
@@ -638,7 +642,7 @@ test.describe.serial('Chat', () => {
     await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
     
     // Ouvrir le ChatWidget
-    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     
@@ -667,11 +671,13 @@ test.describe.serial('Chat', () => {
     }
     
     // Vérifier qu'une session existe dans le menu
-    const sessionMenuButton = page.locator('button[aria-label="Choisir une conversation"]');
-    await expect(sessionMenuButton).toBeVisible({ timeout: 5000 });
+    const sessionMenuButton = page
+      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
+      .first();
+    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
     await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: 'Nouvelle session' }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 5000 });
+    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
+    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
     const sessionItems = sessionMenu.locator('div.max-h-48 button');
     expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
     
@@ -697,10 +703,13 @@ test.describe.serial('Chat', () => {
     // Attendre que l'UI revienne à l'état "nouvelle session" (messages vides)
     await expect(page.getByText('Aucun message. Écris un message pour démarrer.')).toBeVisible({ timeout: 15_000 });
     
-    // Vérifier que le menu est revenu à "Aucune conversation"
+    // Vérifier que le menu est revenu à l'état "aucune conversation"
     await sessionMenuButton.click();
-    const emptyLabel = page.locator('div').filter({ hasText: 'Aucune conversation' }).first();
-    await expect(emptyLabel).toBeVisible({ timeout: 5000 });
+    await expect
+      .poll(async () => sessionItems.count(), { timeout: 1000 })
+      .toBe(0);
+    const emptyLabel = sessionMenu.locator('div').filter({ hasText: /aucune conversation|no conversation/i }).first();
+    await expect(emptyLabel).toBeVisible({ timeout: 1000 });
   });
 
 });

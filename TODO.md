@@ -146,8 +146,12 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [x] adapter les directive d'architecture design pattern: capitaliser les design patterns dans les spec (directives), et s'assurer de la documentation et de la gestion du cycle de vie de gestion des composants clés (API et UI), avec gestion de la dette technique interne (plan de refacto)
   - [x] Créer un mdc pour le design system
 - [x] Specs mdc: consolidate multi-branch isolation mode (root `dev` preserved for user UAT, branch dev in `tmp/feat-<slug>`, tests on dedicated ENV, `ENV` always last in make commands)
+- [x] Minor UI & tooling evols branch (`feat/minor-evols-ui`) delivered and fully validated (Lots 1→4 + Lot N green on CI run `22198601064`).
 
 **⏳ À faire :**
+- [ ] Rebase integration post-merge `feat/chrome-plugin` -> `feat/minor-evols-ui`
+  - [ ] Resolve the 8 conflicted files by preserving extension runtime parity from `main` and replaying minor evols deltas.
+  - [ ] Re-run API/UI/E2E gates and full UAT (web app + extension non-regression).
 - [ ] Sécurité tooling API — exception temporaire minimatch (CVE-2026-26996)
   - [ ] Exception enregistrée dans `.security/vulnerability-register.yaml` (composant npm embarqué image API, chemin build/tooling)
   - [ ] Planifier l'upgrade npm/base image vers une version embarquant minimatch corrigé (sans patch manuel fragile)
@@ -294,6 +298,13 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Github
         - [ ] Issues
         - [ ] PR
+      - [ ] Messageries (en plus de Google Chat et Teams)
+        - [ ] Unification des messageries côté UI
+        - [ ] Whatsapp
+        - [ ] Telegram
+        - [ ] Signal
+        - [ ] Dischord
+        - [ ] Slack
     - [ ] Pilotage API pour accélération
       - [ ] Capacité local / délégation remote (via Auth appli)
       - [ ] Google workspace
@@ -309,6 +320,15 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
         - [ ] Sharepoint / Excel
         - [ ] Sharepoint / Word
         - [ ] Sharepoint / Powerpoint
+      - [ ] Messageries
+        - [ ] Whatsapp
+        - [ ] Telegram
+        - [ ] Signal
+        - [ ] Dischord
+        - [ ] Slack
+      - [ ] Github
+        - [ ] Issues
+        - [ ] PR
 - [ ] Créer une capacité d'agentique en worker (cluster kube) (approfondir)
 - [ ] Agent de code (vs code + remote) (approfondir)
   - [ ] Vs code

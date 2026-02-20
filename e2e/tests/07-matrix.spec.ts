@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
+import { waitForLockedByOtherWithOptions, waitForNoLocker } from '../helpers/lock-ui';
 import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Configuration de la matrice', () => {
@@ -79,7 +79,7 @@ test.describe('Configuration de la matrice', () => {
       await page.reload({ waitUntil: 'domcontentloaded' });
     }
     await expect
-      .poll(async () => page.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+      .poll(async () => page.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 2_000 })
       .toBe(folderId);
   };
 
@@ -160,17 +160,17 @@ test.describe('Configuration de la matrice', () => {
       await page.waitForLoadState('domcontentloaded');
       await page
         .waitForResponse((res) => res.url().includes('/api/v1/folders') && res.request().method() === 'GET', {
-          timeout: 10_000,
+          timeout: 2_000,
         })
         .catch(() => {});
       const folderRow = page
         .locator('article[role="button"]')
         .filter({ has: page.locator('h2', { hasText: 'Dossier Test' }) })
         .first();
-      await expect(folderRow).toBeVisible({ timeout: 10_000 });
+      await expect(folderRow).toBeVisible({ timeout: 2_000 });
       await folderRow.scrollIntoViewIfNeeded();
       await folderRow.click({ force: true });
-      await page.waitForURL(new RegExp(`/folders/${folderId}`), { timeout: 10_000 });
+      await page.waitForURL(new RegExp(`/folders/${folderId}`), { timeout: 2_000 });
       await page.locator('a[href="/matrix"]').click();
       await page.waitForLoadState('domcontentloaded');
 
@@ -185,7 +185,7 @@ test.describe('Configuration de la matrice', () => {
       await exportAction.click();
 
       const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
-      await expect(exportDialog).toBeVisible({ timeout: 10_000 });
+      await expect(exportDialog).toBeVisible({ timeout: 2_000 });
 
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 20_000 }),
@@ -426,7 +426,7 @@ test.describe('Configuration de la matrice', () => {
 
       await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
-      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await ensureCurrentFolderId(pageA);
 
       await pageA.click('a[href="/matrix"]');
@@ -451,17 +451,17 @@ test.describe('Configuration de la matrice', () => {
 
       await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await expect
-        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 2_000 })
         .toBe(folderId);
       await expect
-        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 10_000 })
+        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 2_000 })
         .toBe(folderId);
 
       await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await ensureCurrentFolderId(pageB);
 
       await pageB.click('a[href="/matrix"]');
@@ -483,7 +483,7 @@ test.describe('Configuration de la matrice', () => {
       }
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      await waitForLockedByOther(pageB);
+      await waitForLockedByOtherWithOptions(pageB, undefined, { requireDisabled: false });
       const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
       await requestButton.click();
 
@@ -514,7 +514,7 @@ test.describe('Configuration de la matrice', () => {
 
       await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageA.waitForLoadState('domcontentloaded');
-      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await ensureCurrentFolderId(pageA);
 
       await pageA.click('a[href="/matrix"]');
@@ -540,7 +540,7 @@ test.describe('Configuration de la matrice', () => {
       const pageB = await userBContext.newPage();
       await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
       await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 10_000 });
+      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await ensureCurrentFolderId(pageB);
 
       await pageB.click('a[href="/matrix"]');
@@ -549,8 +549,22 @@ test.describe('Configuration de la matrice', () => {
       await ensureCurrentFolderId(pageB);
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-      // Wait for lock to be released or acquired by User B
-      await waitForNoLocker(pageB);
+      // Wait for lock to be released or acquired by User B.
+      // In both cases User B must be able to edit (no "request unlock" state).
+      const requestUnlockButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+      const editableField = pageB.locator('input:not([type="file"]):not(.hidden), textarea').first();
+      await expect
+        .poll(async () => {
+          const needsUnlockRequest =
+            (await requestUnlockButton.count()) > 0 &&
+            (await requestUnlockButton.isVisible().catch(() => false));
+          const canEdit =
+            (await editableField.count()) > 0 &&
+            (await editableField.isVisible().catch(() => false)) &&
+            (await editableField.isEnabled().catch(() => false));
+          return canEdit && !needsUnlockRequest;
+        }, { timeout: 2_000 })
+        .toBe(true);
 
       await userBContext.close();
 

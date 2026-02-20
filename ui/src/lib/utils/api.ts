@@ -33,6 +33,12 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
   const rawUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+  const isBrowser = getApiBrowserFlag() ?? _skBrowser;
+  const appLocale = (() => {
+    if (!isBrowser) return 'fr';
+    const raw = (localStorage.getItem('locale') || 'fr').trim().toLowerCase();
+    return raw.startsWith('en') ? 'en' : 'fr';
+  })();
 
   // Attach workspace scope (stored in localStorage) as `workspace_id` query param.
   const scoped = getScopedWorkspaceIdForUser();
@@ -42,7 +48,6 @@ export async function apiRequest<T = any>(
     if (endpoint.startsWith('/auth') || rawUrl.includes('/auth/')) return rawUrl;
     // Never scope workspace bootstrap endpoints, otherwise a stale localStorage workspace_id can block /workspaces itself
     if (endpoint === '/workspaces' || endpoint.startsWith('/workspaces/')) return rawUrl;
-    const isBrowser = getApiBrowserFlag() ?? _skBrowser;
     if (!isBrowser) return rawUrl;
     const u = new URL(rawUrl, window.location.origin);
     if (!u.searchParams.has('workspace_id')) u.searchParams.set('workspace_id', scoped);
@@ -54,6 +59,7 @@ export async function apiRequest<T = any>(
     credentials: 'include', // Always include cookies for authentication
     headers: {
       'Content-Type': 'application/json',
+      'X-App-Locale': appLocale,
       ...options.headers,
     },
   });

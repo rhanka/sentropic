@@ -357,4 +357,35 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     expect(seenToolNames).toContain('tab_read');
     expect(seenToolNames).toContain('web_search');
   });
+
+  it('should expose requested web tools without business context', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    let seenToolNames: string[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      seenToolNames = toolNames(opts?.tools);
+      return stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'search web without domain context',
+      model: 'gpt-4.1-nano'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['web_search', 'web_extract']
+    });
+
+    expect(seenToolNames).toContain('web_search');
+    expect(seenToolNames).toContain('web_extract');
+  });
 });

@@ -163,7 +163,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
 
       const widget = page.locator('#chat-widget-dialog');
       await expect(widget).toBeVisible({ timeout: 10_000 });
-      await widget.locator('button:has-text("Commentaires")').click();
+      await widget.getByRole('button', { name: 'Commentaires', exact: true }).click();
 
       const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
       const editable = composer.locator('[contenteditable="true"]');

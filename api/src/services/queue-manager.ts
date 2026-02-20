@@ -2,7 +2,12 @@ import { db, pool } from '../db/client';
 import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
-import { generateUseCaseList, generateUseCaseDetail, type UseCaseListItem } from './context-usecase';
+import {
+  generateUseCaseList,
+  generateUseCaseDetail,
+  type UseCaseDetail,
+  type UseCaseListItem,
+} from './context-usecase';
 import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
 import { defaultMatrixConfig } from '../config/default-matrix';
@@ -10,6 +15,7 @@ import type { MatrixConfig } from '../types/matrix';
 import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
 import { validateScores, fixScores } from '../utils/score-validation';
 import {
+  comments,
   folders,
   organizations,
   useCases,
@@ -18,6 +24,8 @@ import {
   type JobQueueRow,
   contextDocuments,
   contextModificationHistory,
+  users,
+  workspaceMemberships,
 } from '../db/schema';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
@@ -35,6 +43,8 @@ import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDe
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
+import type { CommentContextType } from './context-comments';
+import { type AppLocale, normalizeLocale } from '../utils/locale';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -71,6 +81,64 @@ function sanitizeJobResultForPublic(result: unknown): unknown {
   return copy;
 }
 
+function isSameValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function normalizeAutoGenerationSectionKeys(
+  contextType: CommentContextType,
+  sectionKeys: string[]
+): string[] {
+  return Array.from(
+    new Set(
+      sectionKeys
+        .map((s) => {
+          const sectionKey = String(s ?? '').trim();
+          if (!sectionKey) return '';
+          return contextType === 'usecase' && sectionKey.startsWith('data.')
+            ? sectionKey.slice('data.'.length)
+            : sectionKey;
+        })
+        .filter(Boolean)
+    )
+  );
+}
+
+export function buildGeneratedUseCasePayloadForPersistence(
+  existingData: Partial<UseCaseData>,
+  useCaseDetail: UseCaseDetail
+): { useCaseData: UseCaseData; generatedUseCaseFields: string[] } {
+  const useCaseData: UseCaseData = {
+    name: existingData.name || useCaseDetail.name,
+    description: existingData.description || useCaseDetail.description,
+    problem: useCaseDetail.problem,
+    solution: useCaseDetail.solution,
+    domain: useCaseDetail.domain,
+    technologies: useCaseDetail.technologies,
+    deadline: useCaseDetail.leadtime,
+    contact: useCaseDetail.contact,
+    benefits: useCaseDetail.benefits,
+    constraints: useCaseDetail.constraints,
+    metrics: useCaseDetail.metrics,
+    risks: useCaseDetail.risks,
+    nextSteps: useCaseDetail.nextSteps,
+    dataSources: useCaseDetail.dataSources,
+    dataObjects: useCaseDetail.dataObjects,
+    references: useCaseDetail.references || [],
+    valueScores: useCaseDetail.valueScores,
+    complexityScores: useCaseDetail.complexityScores
+  };
+  const generatedUseCaseFields = Object.keys(useCaseData)
+    .filter((field) => {
+      const beforeValue = (existingData as Record<string, unknown>)[field];
+      const afterValue = (useCaseData as unknown as Record<string, unknown>)[field];
+      return !isSameValue(beforeValue, afterValue);
+    })
+    .map((field) => `data.${field}`);
+
+  return { useCaseData, generatedUseCaseFields };
+}
+
 export type JobType =
   | 'organization_enrich'
   | 'matrix_generate'
@@ -87,12 +155,16 @@ export interface OrganizationEnrichJobData {
   organizationId: string;
   organizationName: string;
   model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
 }
 
 export interface MatrixGenerateJobData {
   folderId: string;
   organizationId: string;
   model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
 }
 
 export interface UseCaseListJobData {
@@ -102,6 +174,8 @@ export interface UseCaseListJobData {
   matrixMode?: MatrixMode;
   model?: string;
   useCaseCount?: number;
+  initiatedByUserId?: string;
+  locale?: string;
 }
 
 export interface UseCaseDetailJobData {
@@ -110,6 +184,8 @@ export interface UseCaseDetailJobData {
   folderId: string;
   matrixMode?: MatrixMode;
   model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
 }
 
 export interface ExecutiveSummaryJobData {
@@ -117,6 +193,8 @@ export interface ExecutiveSummaryJobData {
   valueThreshold?: number | null;
   complexityThreshold?: number | null;
   model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
 }
 
 export interface ChatMessageJobData {
@@ -135,6 +213,7 @@ export interface ChatMessageJobData {
     previousResponseId: string;
     toolOutputs: Array<{ callId: string; output: string }>;
   };
+  locale?: string;
 }
 
 export interface DocumentSummaryJobData {
@@ -227,6 +306,154 @@ export class QueueManager {
       await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
+    }
+  }
+
+  private async notifyCommentEvent(
+    workspaceId: string,
+    contextType: string,
+    contextId: string,
+    data: Record<string, unknown> = {}
+  ): Promise<void> {
+    const payload = JSON.stringify({ workspace_id: workspaceId, context_type: contextType, context_id: contextId, data });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  private getAutoGenerationFieldLabel(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
+    const key = String(sectionKey ?? '').trim();
+    if (!key) return locale === 'en' ? 'General' : 'General';
+    const labelByContext: Record<string, Record<string, { fr: string; en: string }>> = {
+      usecase: {
+        name: { fr: 'Nom', en: 'Name' },
+        description: { fr: 'Description', en: 'Description' },
+        problem: { fr: 'Probleme', en: 'Problem' },
+        solution: { fr: 'Solution', en: 'Solution' },
+        benefits: { fr: 'Benefices recherches', en: 'Target benefits' },
+        constraints: { fr: 'Contraintes', en: 'Constraints' },
+        metrics: { fr: 'Mesures du succes', en: 'Success metrics' },
+        risks: { fr: 'Risques', en: 'Risks' },
+        nextSteps: { fr: 'Prochaines etapes', en: 'Next steps' },
+        technologies: { fr: 'Technologies', en: 'Technologies' },
+        dataSources: { fr: 'Sources des donnees', en: 'Data sources' },
+        dataObjects: { fr: 'Donnees', en: 'Data' },
+        contact: { fr: 'Contact', en: 'Contact' },
+        domain: { fr: 'Domaine', en: 'Domain' },
+        deadline: { fr: 'Delai', en: 'Deadline' },
+        valueScores: { fr: 'Axes de valeur', en: 'Value axes' },
+        complexityScores: { fr: 'Axes de complexite', en: 'Complexity axes' },
+      },
+      organization: {
+        name: { fr: 'Nom', en: 'Name' },
+        industry: { fr: 'Secteur', en: 'Industry' },
+        size: { fr: 'Taille', en: 'Size' },
+        technologies: { fr: 'Technologies', en: 'Technologies' },
+        products: { fr: 'Produits et Services', en: 'Products and services' },
+        processes: { fr: 'Processus Metier', en: 'Business processes' },
+        kpis: { fr: 'Indicateurs de performance', en: 'Performance indicators' },
+        challenges: { fr: 'Defis Principaux', en: 'Key challenges' },
+        objectives: { fr: 'Objectifs Strategiques', en: 'Strategic objectives' },
+        references: { fr: 'References', en: 'References' },
+      },
+      folder: {
+        name: { fr: 'Nom du dossier', en: 'Folder name' },
+        description: { fr: 'Contexte', en: 'Context' },
+      },
+      executive_summary: {
+        introduction: { fr: 'Introduction', en: 'Introduction' },
+        analyse: { fr: 'Analyse', en: 'Analysis' },
+        analysis: { fr: 'Analyse', en: 'Analysis' },
+        recommandation: { fr: 'Recommandations', en: 'Recommendations' },
+        recommendations: { fr: 'Recommandations', en: 'Recommendations' },
+        synthese_executive: { fr: 'Synthese executive', en: 'Executive summary' },
+        synthese: { fr: 'Synthese', en: 'Summary' },
+        summary: { fr: 'Synthese', en: 'Summary' },
+        references: { fr: 'References', en: 'References' },
+      },
+      matrix: {
+        matrixConfig: { fr: 'Configuration de la matrice', en: 'Matrix configuration' },
+        matrixTemplate: { fr: 'Modele de matrice', en: 'Matrix template' },
+      },
+    };
+    const localized = labelByContext[contextType]?.[key];
+    return localized ? (locale === 'en' ? localized.en : localized.fr) : key;
+  }
+
+  private formatAutoGenerationFieldComment(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
+    const localizedField = this.getAutoGenerationFieldLabel(contextType, sectionKey, locale);
+    if (locale === 'en') {
+      return `Field "${localizedField}" was generated by AI assistant. Please review and adjust if needed.`;
+    }
+    return `Le champ "${localizedField}" a ete genere par l'assistant IA. Merci de le verifier et de l'ajuster si necessaire.`;
+  }
+
+  private async resolveAutoGenerationCommentAuthorId(opts: {
+    workspaceId: string;
+    preferredUserId?: string | null | undefined;
+  }): Promise<string | null> {
+    const preferredUserId = (opts.preferredUserId ?? '').trim();
+    if (preferredUserId) {
+      const [preferredUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, preferredUserId))
+        .limit(1);
+      if (preferredUser?.id) return preferredUser.id;
+    }
+
+    const workspaceId = (opts.workspaceId ?? '').trim();
+    if (!workspaceId) return null;
+
+    const [fallbackMember] = await db
+      .select({ userId: workspaceMemberships.userId })
+      .from(workspaceMemberships)
+      .where(eq(workspaceMemberships.workspaceId, workspaceId))
+      .limit(1);
+
+    return (fallbackMember?.userId ?? '').trim() || null;
+  }
+
+  private async createAutoGenerationFieldComments(opts: {
+    workspaceId: string;
+    contextType: CommentContextType;
+    contextId: string;
+    sectionKeys: string[];
+    createdBy: string | null | undefined;
+    locale?: string;
+  }): Promise<void> {
+    const workspaceId = (opts.workspaceId ?? '').trim();
+    const contextId = (opts.contextId ?? '').trim();
+    const createdBy = await this.resolveAutoGenerationCommentAuthorId({
+      workspaceId,
+      preferredUserId: opts.createdBy
+    });
+    if (!workspaceId || !contextId || !createdBy) return;
+    const locale = normalizeLocale(opts.locale) ?? 'fr';
+
+    const uniqueSectionKeys = normalizeAutoGenerationSectionKeys(opts.contextType, opts.sectionKeys);
+    for (const sectionKey of uniqueSectionKeys) {
+      const now = new Date();
+      const commentId = createId();
+      await db.insert(comments).values({
+        id: commentId,
+        workspaceId,
+        contextType: opts.contextType,
+        contextId,
+        sectionKey,
+        createdBy,
+        assignedTo: createdBy,
+        status: 'open',
+        threadId: createId(),
+        content: this.formatAutoGenerationFieldComment(opts.contextType, sectionKey, locale),
+        toolCallId: `auto_generation:${commentId}`,
+        createdAt: now,
+        updatedAt: now
+      });
+      await this.notifyCommentEvent(workspaceId, opts.contextType, contextId, { action: 'created', comment_id: commentId });
     }
   }
 
@@ -854,7 +1081,7 @@ export class QueueManager {
    * Worker pour l'enrichissement d'organisation
    */
   private async processOrganizationEnrich(data: OrganizationEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
-    const { organizationId, organizationName, model } = data;
+    const { organizationId, organizationName, model, initiatedByUserId, locale } = data;
     
     // Générer un streamId pour le streaming
     // IMPORTANT:
@@ -967,6 +1194,11 @@ export class QueueManager {
       technologies: keepIfFilled(existingData.technologies, cleanedData.technologies),
       references: mergeRefs(existingData.references, cleanedReferences),
     };
+    const generatedOrganizationFields = Object.keys(mergedData).filter((field) => {
+      const beforeValue = (existingData as Record<string, unknown>)[field];
+      const afterValue = (mergedData as unknown as Record<string, unknown>)[field];
+      return !isSameValue(beforeValue, afterValue);
+    });
 
     // Store enriched profile in organizations.data JSONB
     await db
@@ -979,10 +1211,18 @@ export class QueueManager {
       .where(eq(organizations.id, organizationId));
 
     await this.notifyOrganizationEvent(organizationId);
+    await this.createAutoGenerationFieldComments({
+      workspaceId,
+      contextType: 'organization',
+      contextId: organizationId,
+      sectionKeys: generatedOrganizationFields,
+      createdBy: initiatedByUserId,
+      locale
+    });
   }
 
   private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, organizationId, model } = data;
+    const { folderId, organizationId, model, initiatedByUserId, locale } = data;
 
     const [folder] = await db
       .select()
@@ -1052,6 +1292,22 @@ export class QueueManager {
 
     await this.notifyOrganizationEvent(organizationId);
     await this.notifyFolderEvent(folderId);
+    await this.createAutoGenerationFieldComments({
+      workspaceId: folder.workspaceId,
+      contextType: 'matrix',
+      contextId: folderId,
+      sectionKeys: ['matrixConfig'],
+      createdBy: initiatedByUserId,
+      locale
+    });
+    await this.createAutoGenerationFieldComments({
+      workspaceId: folder.workspaceId,
+      contextType: 'organization',
+      contextId: organizationId,
+      sectionKeys: ['matrixTemplate'],
+      createdBy: initiatedByUserId,
+      locale
+    });
   }
 
   private sanitizePgText(input: string): string {
@@ -1438,7 +1694,7 @@ export class QueueManager {
    * Worker pour la génération de liste de cas d'usage
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, matrixMode, model, useCaseCount } = data;
+    const { folderId, input, organizationId, matrixMode, model, useCaseCount, initiatedByUserId, locale } = data;
 
     const [folder] = await db
       .select({
@@ -1531,6 +1787,10 @@ export class QueueManager {
         ? useCaseList.dossier.trim()
         : '';
     const nextFolderName = userFolderName || generatedFolderName;
+    const generatedFolderFields: string[] = [];
+    if (!userFolderName && generatedFolderName) {
+      generatedFolderFields.push('name');
+    }
     if (nextFolderName) {
       const shouldFillDescription = !folder.description || !folder.description.trim();
       await db
@@ -1542,6 +1802,14 @@ export class QueueManager {
         .where(eq(folders.id, folderId));
       console.log(`📁 Folder updated: ${nextFolderName} (ID: ${folderId}, Org: ${resolvedOrganizationId || 'None'})`);
       await this.notifyFolderEvent(folderId);
+      await this.createAutoGenerationFieldComments({
+        workspaceId,
+        contextType: 'folder',
+        contextId: folderId,
+        sectionKeys: generatedFolderFields,
+        createdBy: initiatedByUserId,
+        locale
+      });
     }
 
     // Créer les cas d'usage en mode generating
@@ -1551,7 +1819,6 @@ export class QueueManager {
       const useCaseData: UseCaseData = {
         name: title, // Stocker name dans data
         description: useCaseItem.description || '', // Stocker description dans data
-        process: '',
         technologies: [],
         deadline: '',
         contact: '',
@@ -1580,6 +1847,18 @@ export class QueueManager {
     await db.insert(useCases).values(draftUseCases);
     for (const uc of draftUseCases) {
       await this.notifyUseCaseEvent(uc.id);
+      const data = uc.data as unknown as Record<string, unknown>;
+      const generatedUseCaseFields: string[] = [];
+      if (typeof data.name === 'string' && data.name.trim()) generatedUseCaseFields.push('data.name');
+      if (typeof data.description === 'string' && data.description.trim()) generatedUseCaseFields.push('data.description');
+      await this.createAutoGenerationFieldComments({
+        workspaceId,
+        contextType: 'usecase',
+        contextId: uc.id,
+        sectionKeys: generatedUseCaseFields,
+        createdBy: initiatedByUserId,
+        locale
+      });
     }
 
     // Marquer le dossier comme terminé
@@ -1601,7 +1880,9 @@ export class QueueManager {
             useCaseName: useCaseName,
             folderId: folderId,
             matrixMode,
-            model: selectedModel
+            model: selectedModel,
+            initiatedByUserId,
+            locale
           }, { workspaceId, maxRetries: 1 });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
@@ -1654,7 +1935,7 @@ export class QueueManager {
    * Worker pour le détail d'un cas d'usage
    */
   private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
-    const { useCaseId, useCaseName, folderId, matrixMode, model } = data;
+    const { useCaseId, useCaseName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -1772,41 +2053,30 @@ export class QueueManager {
       }
     }
     
-    // Construire l'objet data JSONB (préserver name et description existants, ou utiliser ceux du détail)
-    const useCaseData: UseCaseData = {
-      name: existingData.name || useCaseDetail.name, // Préserver name existant ou utiliser celui du détail
-      description: existingData.description || useCaseDetail.description, // Préserver description existante ou utiliser celle du détail
-      problem: useCaseDetail.problem,
-      solution: useCaseDetail.solution,
-      process: useCaseDetail.domain, // domain du prompt -> process en DB
-      domain: useCaseDetail.domain,
-      technologies: useCaseDetail.technologies,
-      prerequisites: useCaseDetail.prerequisites,
-      deadline: useCaseDetail.leadtime, // leadtime du prompt -> deadline en DB
-      contact: useCaseDetail.contact,
-      benefits: useCaseDetail.benefits,
-      constraints: useCaseDetail.constraints,
-      metrics: useCaseDetail.metrics,
-      risks: useCaseDetail.risks,
-      nextSteps: useCaseDetail.nextSteps,
-      dataSources: useCaseDetail.dataSources,
-      dataObjects: useCaseDetail.dataObjects,
-      references: useCaseDetail.references || [],
-      valueScores: useCaseDetail.valueScores,
-      complexityScores: useCaseDetail.complexityScores
-    };
+    const { useCaseData, generatedUseCaseFields } = buildGeneratedUseCasePayloadForPersistence(
+      existingData,
+      useCaseDetail
+    );
     
     // Mettre à jour le cas d'usage
-    // Note: Toutes les colonnes métier (prerequisites, deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
+    // Note: Toutes les colonnes métier (deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
     // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(useCases)
       .set({
-        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, prerequisites, deadline, contact, benefits, etc.)
+        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })
       .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
     await this.notifyUseCaseEvent(useCaseId);
+    await this.createAutoGenerationFieldComments({
+      workspaceId: folder.workspaceId,
+      contextType: 'usecase',
+      contextId: useCaseId,
+      sectionKeys: generatedUseCaseFields,
+      createdBy: initiatedByUserId,
+      locale
+    });
 
     // Vérifier si tous les use cases du dossier sont complétés
     const allUseCases = await db
@@ -1836,7 +2106,9 @@ export class QueueManager {
         try {
           await this.addJob('executive_summary', {
             folderId,
-            model: selectedModel
+            model: selectedModel,
+            initiatedByUserId,
+            locale
           }, { workspaceId: folder.workspaceId });
           console.log(`📝 Job executive_summary ajouté pour le dossier ${folderId}`);
         } catch (error) {
@@ -1853,9 +2125,16 @@ export class QueueManager {
    * Worker pour la génération de synthèse exécutive
    */
   private async processExecutiveSummary(data: ExecutiveSummaryJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, valueThreshold, complexityThreshold, model } = data;
+    const { folderId, valueThreshold, complexityThreshold, model, initiatedByUserId, locale } = data;
 
     console.log(`📊 Génération de la synthèse exécutive pour le dossier ${folderId}`);
+    const [folderBefore] = await db
+      .select({ workspaceId: folders.workspaceId, executiveSummary: folders.executiveSummary })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    const beforeExecutiveSummary =
+      parseJsonField<Record<string, unknown>>(folderBefore?.executiveSummary ?? null) ?? {};
 
     // Générer la synthèse exécutive
     await generateExecutiveSummary({
@@ -1867,14 +2146,23 @@ export class QueueManager {
       streamId: `folder_${folderId}`
     });
 
-    const [folder] = await db
-      .select({ workspaceId: folders.workspaceId })
+    const [folderAfter] = await db
+      .select({ workspaceId: folders.workspaceId, executiveSummary: folders.executiveSummary })
       .from(folders)
       .where(eq(folders.id, folderId))
       .limit(1);
-    if (folder?.workspaceId) {
+    const workspaceId = folderAfter?.workspaceId ?? folderBefore?.workspaceId ?? '';
+    const afterExecutiveSummary =
+      parseJsonField<Record<string, unknown>>(folderAfter?.executiveSummary ?? null) ?? {};
+    const generatedExecutiveSummaryFields = Object.keys(afterExecutiveSummary).filter((field) => {
+      const beforeValue = (beforeExecutiveSummary as Record<string, unknown>)[field];
+      const afterValue = (afterExecutiveSummary as Record<string, unknown>)[field];
+      return !isSameValue(beforeValue, afterValue);
+    });
+
+    if (workspaceId) {
       await this.invalidateDocxCacheForEntity({
-        workspaceId: folder.workspaceId,
+        workspaceId,
         templateId: 'executive-synthesis-multipage',
         entityType: 'folder',
         entityId: folderId,
@@ -1886,6 +2174,16 @@ export class QueueManager {
       .set({ status: 'completed' })
       .where(eq(folders.id, folderId));
     await this.notifyFolderEvent(folderId);
+    if (workspaceId) {
+      await this.createAutoGenerationFieldComments({
+        workspaceId,
+        contextType: 'executive_summary',
+        contextId: folderId,
+        sectionKeys: generatedExecutiveSummaryFields,
+        createdBy: initiatedByUserId,
+        locale
+      });
+    }
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
   }
@@ -1904,6 +2202,7 @@ export class QueueManager {
       tools,
       localToolDefinitions,
       resumeFrom,
+      locale,
     } = data;
     await chatService.runAssistantGeneration({
       userId,
@@ -1914,6 +2213,7 @@ export class QueueManager {
       tools,
       localToolDefinitions,
       resumeFrom,
+      locale,
       signal
     });
   }
