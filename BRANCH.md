@@ -313,8 +313,11 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
   - [x] Add a short spec addendum documenting canonical section-key conventions and comment-context routing per view (`usecase`, `organization`, `folder`, `executive_summary`).
       - [x] Added in `spec/SPEC.md` section `12.1`.
 
-- [ ] **Lot N — Final validation**
-  - [ ] **API tests**
+- [x] **Lot N — Final validation**
+  - [x] **API tests**
+    - [x] Static gates (API):
+      - [x] `make -C tmp/feat-minor-evols-ui typecheck-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui lint-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] Identify/update impacted API tests:
       - [x] `api/tests/api/comments.test.ts`
       - [x] `api/tests/api/use-cases-generate-matrix.test.ts`
@@ -332,7 +335,10 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [x] generation payload sanitization (`process`/`prerequisites` not persisted)
     - [x] Sub-lot gate: `make test-api ENV=test`.
       - [x] `make -C tmp/feat-minor-evols-ui test-api API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui DISABLE_RATE_LIMIT=true`
-  - [ ] **UI tests (TypeScript only)**
+  - [x] **UI tests (TypeScript only)**
+    - [x] Static gates (UI):
+      - [x] `make -C tmp/feat-minor-evols-ui typecheck-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui lint-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
     - [x] Identify/update impacted UI tests:
       - [x] `ui/tests/utils/comments.test.ts`
       - [x] `ui/tests/utils/api.test.ts`
@@ -345,18 +351,65 @@ Deliver a compact set of UX and tool behavior improvements around chat feedback,
       - [x] comment badge count visibility logic on section headers
     - [x] Sub-lot gate: `make test-ui ENV=test`.
       - [x] `make -C tmp/feat-minor-evols-ui test-ui API_PORT=8793 UI_PORT=5182 MAILDEV_UI_PORT=1086 ENV=test-feat-minor-evols-ui`
-  - [ ] **E2E tests**
-    - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
-      - [ ] Attempted: `make -C tmp/feat-minor-evols-ui build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui` -> blocked in `build-api` by production `npm audit --audit-level=high --omit=dev` (high vulnerabilities in transitive AWS SDK chain / `fast-xml-parser`).
-    - [ ] Identify/update impacted E2E tests:
+  - [x] **E2E tests**
+    - [x] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`.
+      - [x] Build now passes for API + UI images on branch CI path.
+    - [x] Identify/update impacted E2E tests:
       - [x] `e2e/tests/05-usecase-detail.spec.ts` (header badges / comments flow)
       - [x] `e2e/tests/01-organizations-detail.spec.ts` (organization detail comments/header)
       - [x] `e2e/tests/03-dashboard.spec.ts` (executive summary/dashboard flows)
       - [x] `e2e/tests/07_comment_assistant.spec.ts` (AI comment badge behavior)
-      - [ ] comment badge counters visible and clickable on headers (`/usecase/[id]`, `/organizations/[id]`, `/dashboard`).
-      - [ ] generated usecase detail persists `domain` and excludes unsupported fields (`process`, `prerequisites`) in effective payload.
-    - [ ] Scoped runs while evolving: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
-      - [ ] Attempted: `make -C tmp/feat-minor-evols-ui test-e2e E2E_SPEC=tests/07_comment_assistant.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui` -> blocked at `db-seed-test` (`/app/dist/tests/utils/seed-test-data.js` missing) because E2E stack runs production API image that was not rebuilt successfully.
-    - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e`.
-  - [ ] Final gate: create PR with `BRANCH.md` content as initial message and verify CI for the branch.
-  - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`.
+      - [x] comment badge counters visible and clickable on headers (`/usecase/[id]`, `/organizations/[id]`, `/dashboard`).
+      - [x] generated usecase detail persists `domain` and excludes unsupported fields (`process`, `prerequisites`) in effective payload.
+    - [x] Scoped runs while evolving:
+      - [x] `make -C tmp/feat-minor-evols-ui test-e2e E2E_SPEC=tests/03-dashboard.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-e2e E2E_SPEC=tests/05-usecase-detail.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-e2e E2E_SPEC=tests/07-matrix.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-e2e E2E_GROUPS="03 04 05" WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
+      - [x] `make -C tmp/feat-minor-evols-ui test-e2e E2E_GROUPS="06 07" WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui`
+    - [x] CI final gate: `test-e2e (group-a, 00 01 02)`, `test-e2e (group-b, 03 04 05)`, and `test-e2e (group-c, 06 07)` all green on run `22198601064` (SHA `5de2863`).
+    - [x] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5178 MAILDEV_UI_PORT=1082 ENV=e2e-feat-minor-evols-ui` (CI equivalent green).
+  - [x] Final gate: PR created (`#60`) with branch CI fully green.
+  - [x] Final wrap-up: `TODO.md` updated; `BRANCH.md` intentionally kept in branch (per explicit user request).
+
+- [ ] **Lot Rebase — Integration on top of `main` (post `feat/chrome-plugin` merge)**
+  - [ ] Inputs and constraints
+    - [x] Rebase target confirmed: `origin/main` after `feat/chrome-plugin` merge.
+    - [x] Conflict inventory confirmed via merge simulation: 8 files (`BRANCH.md`, `api/src/routes/api/chat.ts`, `api/src/services/chat-service.ts`, `api/src/services/queue-manager.ts`, `ui/src/lib/components/ChatPanel.svelte`, `ui/src/lib/components/ChatWidget.svelte`, `ui/src/lib/components/EditableInput.svelte`, `ui/src/lib/utils/api.ts`).
+    - [x] Detailed divergence analysis written in non-committed `/tmp/ANALYSE_REBASE.md`.
+  - [ ] Rebase A — API contract merge (`chat.ts`, `chat-service.ts`, `queue-manager.ts`, `ui/src/lib/utils/api.ts`)
+    - [ ] Keep `main` extension API/runtime flows (`localToolDefinitions`, `/chat/messages/:id/tool-results`, tool-permissions lifecycle).
+    - [ ] Re-apply minor evols API behavior:
+      - [ ] locale propagation (`X-App-Locale` -> queue jobs -> tool update comments),
+      - [ ] auto-comment section-key normalization,
+      - [ ] usecase detail payload sanitization (`domain` kept, `process`/`prerequisites` excluded).
+    - [ ] Tech gate A: `make typecheck-api ... ENV=test-feat-minor-evols-ui` + `make lint-api ... ENV=test-feat-minor-evols-ui` + scoped API tests.
+    - [ ] UAT A:
+      - [ ] Usecase detail generation persists `domain`, excludes `process`/`prerequisites`.
+      - [ ] Tool update + generation create localized auto-comments (FR/EN based on app locale).
+      - [ ] Extension local tool roundtrip still resumes assistant stream.
+  - [ ] Rebase B — Chat UI merge (`ChatPanel.svelte`, `ChatWidget.svelte`)
+    - [ ] Keep `main` extension UX/runtime blocks (side panel, auth menu, endpoint health, permissions cards, local tool prompts).
+    - [ ] Re-apply minor evols comment-review UX:
+      - [ ] sub-header actions for comments,
+      - [ ] localized section labels in comment header,
+      - [ ] previous/next + auto-jump after resolve,
+      - [ ] badge visual token (`bg-primary`) and count behavior parity.
+    - [ ] Tech gate B: `make typecheck-ui ... ENV=test-feat-minor-evols-ui` + `make lint-ui ... ENV=test-feat-minor-evols-ui` + scoped UI tests.
+    - [ ] UAT B:
+      - [ ] Web app comments UX parity (sub-header actions, navigation, resolve flow).
+      - [ ] Extension parity non-reg (floating + sidepanel + endpoint/auth settings + local-tool permission prompts).
+  - [ ] Rebase C — EditableInput merge (`EditableInput.svelte`)
+    - [ ] Keep immediate autosave / centralized debounce / delayed saving indicator from minor evols.
+    - [ ] Keep non-reg reference navigation behavior from `main` (no full-page reload/flicker on hash reference click).
+    - [ ] Tech gate C: `make typecheck-ui ... ENV=test-feat-minor-evols-ui` + `make lint-ui ... ENV=test-feat-minor-evols-ui` + relevant E2E specs.
+    - [ ] UAT C:
+      - [ ] No page refresh/flicker while typing on dashboard/organizations/usecase.
+      - [ ] Cross-session live updates remain functional on usecase/organization/matrix/dashboard sections.
+  - [ ] Rebase final gates
+    - [ ] Full tests: `make test-api ... ENV=test-feat-minor-evols-ui` + `make test-ui ... ENV=test-feat-minor-evols-ui`.
+    - [ ] E2E groups (CI-equivalent split): `00 01 02`, `03 04 05`, `06 07`.
+    - [ ] Final UAT plan (root workspace):
+      - [ ] Web app non-reg (lots minor evols: badges/comments/autosave/dashboard/org/matrix).
+      - [ ] Extension non-reg (lots chrome plugin: open/send/stream, explicit auth, endpoint health, `tab_read`/`tab_action` with permission decisions).
+      - [ ] Localized auto-comments non-reg (`fr`/`en`) and section-key mapping parity.
