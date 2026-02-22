@@ -1,20 +1,22 @@
 # Conductor Status
 
 ## BR-00 `feat/roadmap-stabilization`
-- Timestamp (UTC): 2026-02-22T04:04:08Z
-- State: Scoping complete, isolated worktree ready, implementation pending open decisions.
+- Timestamp (UTC): 2026-02-22T06:25:00Z
+- State: Completed (docs/process stabilization), ready to launch W1 parallelization.
 - Done:
   - Reviewed `PLAN.md` and `plan/00-BRANCH_feat-roadmap-stabilization.md`.
   - Completed Lot 0 scoping reads (`.mdc` rules, `README.md`, `TODO.md`, W1-linked specs).
   - Captured required Make targets for debug/testing and CI parity.
   - Confirmed dependency boundary: BR-00 must complete before BR-01/BR-02/BR-03 kickoff.
   - Identified immediate blockers and risk points for W1 launch.
+  - Converted BR-00 workspace setup to a proper git worktree (`tmp/feat-roadmap-stabilization`) and updated workflow guidance from clone-based setup to worktree-based setup (`BR00-EX1`).
   - Created and configured isolated workspace `tmp/feat-roadmap-stabilization` (`ENV=feat-roadmap-stabilization`, `API_PORT=8700`, `UI_PORT=5100`, `MAILDEV_UI_PORT=1000`).
   - Confirmed there are no active git conflicts between `origin/main` and `origin/feat/minor-evols-ui`; branch requires parity audit, not conflict merge.
+  - Consolidated BR-00 decisions in `plan/CONDUCTOR_QUESTIONS.md` and synced roadmap notes.
+  - Closed BR-00 lots with BR00-D3 proof: changed files are docs/process only; no runtime code deltas under `api/**`, `ui/**`, `e2e/**`.
 - Next actions:
-  - Resolve BR-00 open decisions (parity arbitration policy, minimatch remediation scope/date, CI/UAT parity scope).
-  - Build Lot 1 parity-audit file set and execute targeted non-regression checks.
-  - Resolve QL-1 decisions (`MPA-Q1`, `MPA-Q2`, `MPA-Q3`, `AWT-Q1`, `AWT-Q2`, `AWT-Q5`) before W1 launch.
+  - Start Wave W1 execution in parallel (`BR-01`, `BR-02`, `BR-03`) using isolated worktrees and branch plans.
+  - Keep minimatch mitigation tracking (`owner=conductor`, `target=BR-07`, `due=2026-03-01`) until exception closure.
 
 ## Conductor Dry-Run Probe (3 parallel Codex sessions)
 - Timestamp (UTC): 2026-02-22T04:48:20Z
