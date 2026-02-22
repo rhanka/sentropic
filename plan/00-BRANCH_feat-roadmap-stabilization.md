@@ -14,10 +14,36 @@ Stabilize the roadmap baseline by completing post-merge integration between chro
 - All new text in English.
 - Branch environment mapping: `ENV=feat-roadmap-stabilization` `API_PORT=8700` `UI_PORT=5100` `MAILDEV_UI_PORT=1000`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `.security/vulnerability-register.yaml`
+  - `plan/00-BRANCH_feat-roadmap-stabilization.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - Confirm the canonical source for each of the 8 conflicted files before replaying deltas.
 - Confirm if minimatch remediation can be delivered in this branch or only planned with fixed target date.
 - Confirm CI/UAT scope required for extension + web app parity sign-off.
+- Lot 0 scoping (2026-02-22): `tmp/feat-roadmap-stabilization` is not present yet; create it before Lot 1.
+- W1 launch blocker (from `PLAN.md` QL-1): unresolved `MPA-Q1`, `MPA-Q2`, `MPA-Q3`, `AWT-Q1`, `AWT-Q2`, `AWT-Q5`.
+- Security risk window: minimatch exception `CVE-2026-26996_api_minimatch_10.1.2` is still `accepted_temporary` with `review_due: 2026-02-26`; owner/branch/date for closure is still open.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -33,12 +59,26 @@ Stabilize the roadmap baseline by completing post-merge integration between chro
   - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
   - Switch back to `tmp/feat-<slug>` after UAT.
 
+## Temporary Debug Baseline (before BR-07 delivery)
+- Goal: reduce developer/user interruptions for UI debug and UX validation until the dedicated Playwright debug agent is shipped.
+- Mandatory loop for each UI bug:
+  1. Reproduce in branch environment and capture evidence (`steps`, `expected`, `actual`, screenshot/log extract).
+  2. Run targeted checks first (`typecheck`, `lint`, focused `test-ui`, focused `test-e2e` when needed).
+  3. Apply fix and re-run the same focused checks.
+  4. Update branch notes with root cause and non-regression scope.
+- Escalation policy:
+  - Do not ask the user for routine debug steps already covered by evidence.
+  - Ask only for product/UX decisions, missing credentials, or contradictory specs.
+  - Batch questions once per lot using question IDs.
+
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read relevant `.mdc` files, `README.md`, `TODO.md`, and linked specs.
+  - [x] Read relevant `.mdc` files, `README.md`, `TODO.md`, and linked specs.
   - [ ] Confirm isolated worktree `tmp/feat-roadmap-stabilization` and environment mapping (`ENV=feat-roadmap-stabilization`).
-  - [ ] Capture Make targets needed for debug/testing and CI parity.
-  - [ ] Confirm scope and dependency boundaries with BR-01/BR-02/BR-03 wave kickoff.
+  - [x] Capture Make targets needed for debug/testing and CI parity.
+  - [x] Confirm scope and dependency boundaries with BR-01/BR-02/BR-03 wave kickoff.
+  - [ ] Confirm temporary debug baseline and escalation policy for pre-BR-07 work.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Post-merge integration recovery**

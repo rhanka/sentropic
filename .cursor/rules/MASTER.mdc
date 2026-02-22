@@ -45,6 +45,11 @@ As a very first thing, when you work on features, you must acknowledge that you 
 - Sub-agents must use isolated branches or isolated repo copies with distinct `ENV`/ports.
 - Orchestrator consolidates decisions and applies changes to the main branch.
 
+### Branch Scope Control (MANDATORY)
+- Every branch must declare `Allowed Paths`, `Forbidden Paths`, and `Conditional Paths` in its `BRANCH.md`.
+- By default, changes to `Makefile`, `docker-compose*.yml`, and `.cursor/rules/**` are forbidden unless an explicit tracked exception is approved.
+- Scope exceptions must be declared with an ID (`BRxx-EXn`) and mirrored in conductor questions.
+
 ### Orchestration Modes (choose one)
 - **Mono-branch + cherry-pick**: sub-agents work in isolated branches/tmp; orchestrator cherry-picks into main branch; run full tests once at the end.
 - **Multi-branch**: sub-agents push their branches; CI runs per branch; orchestrator merges/cherry-picks; expect multiple test cycles.
@@ -99,7 +104,7 @@ As a very first thing, when you work on features, you must acknowledge that you 
 3. **Verify consistency** → Run `make check`
 
 ### Branch Docs for Complex Work
-- Use `BRANCH_TEMPLATE.md` when creating `BRANCH.md`.
+- Use `plan/BRANCH_TEMPLATE.md` when creating `BRANCH.md`.
 - For complex branches, create `spec/BRANCH_SPEC_EVOL.md` early, then consolidate into existing specs and delete it before final validation.
 
 ## Security & Compliance
@@ -137,6 +142,8 @@ As a very first thing, when you work on features, you must acknowledge that you 
 - `testing.mdc` - Testing strategy + E2E testing + implementation guide
 - `security.mdc` - Security practices
 - `data.mdc` - Data model and migration directives
+- `conductor.mdc` - Conductor orchestration loop, steering, relaunch, closure/cleaning
+- `subagents.mdc` - Sub-agent onboarding contract, execution rules, handoff protocol
 
 ### Documentation Files (User Guides)
 - `README.md` - Project overview and setup

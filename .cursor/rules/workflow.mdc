@@ -14,12 +14,17 @@
 
 ## FEATURE (lean)
 1. Read the target `TODO.md` item (**Next** or **Now**).
-2. Create `BRANCH.md` from `BRANCH_TEMPLATE.md` and keep questions there.
+2. Create `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` and keep questions there.
 3. Follow the lot-based flow in `BRANCH.md` (UAT lots → docs consolidation → final tests).
 4. Constraints to enforce:
    - One migration file max in `api/drizzle/*.sql`.
    - Tests are listed exhaustively in Lot N by scope and file.
    - For complex branches, use `spec/BRANCH_SPEC_EVOL.md` (add in Lot 0, consolidate before tests, then delete).
+   - Branch scope boundaries are mandatory in `BRANCH.md`:
+     - `Allowed Paths`
+     - `Forbidden Paths`
+     - `Conditional Paths`
+     - Exception process with `BRxx-EXn`.
 5. Post a 3–6 step plan as the first PR comment.
 6. Keep `spec/*.md` in sync with behavior changes (or note gaps in `BRANCH.md`).
 
@@ -37,6 +42,23 @@
 - The orchestrator **selects the mode automatically** and records it in `BRANCH.md`:
   - **Mono-branch + cherry-pick** (single final test cycle)
   - **Multi-branch** (CI per branch, multiple test cycles)
+
+### Branch Scope Boundaries (MANDATORY)
+- Every implementation branch must declare explicit scope boundaries in `BRANCH.md`:
+  - `Allowed Paths`
+  - `Forbidden Paths`
+  - `Conditional Paths`
+- Default forbidden paths for all branches unless explicit exception:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - other branch plan files (`plan/NN-BRANCH_*.md`, except current branch file)
+- Any conditional change requires a declared exception `BRxx-EXn` before code changes,
+  unless the path is already listed in branch `Allowed Paths`.
+- Any forbidden change requires a declared exception `BRxx-EXn` before code changes:
+  - add it in branch `## Questions / Notes`,
+  - mirror it in `plan/CONDUCTOR_QUESTIONS.md`,
+  - include rationale + impact + rollback.
 
 ### Multi-need, multi-branch (MANDATORY)
 - When a TODO item bundles **multiple needs** (e.g., i18n + data model + print template), split into **multiple branches**, one need per branch.
@@ -95,6 +117,43 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 - Before handing back to the user, run `make logs-ui` or `make logs-api` to ensure no syntax/runtime errors.
 - Before handing back to the user, update the UAT checklist and test plan in `BRANCH.md` and tick completed items.
 
+### UI/UX Debug Ticket Loop (MANDATORY)
+When a UI/UX anomaly is detected, track and process it as a debug ticket.
+
+Ticket record location:
+- Use `plan/DEBUG_TICKETS.md` as the shared lightweight register.
+
+Minimum ticket fields:
+- `ID` (`DBG-###`)
+- `Branch`
+- `Owner`
+- `Severity`
+- `Status` (`open`, `in_progress`, `blocked`, `fixed`, `closed`)
+- `Repro steps`
+- `Expected`
+- `Actual`
+- `Evidence` (logs/screenshots/videos/trace links)
+- `Decision needed` (if any)
+
+Ownership and routing:
+- Default owner is the active branch implementation sub-agent/developer.
+- Conductor triages priority and confirms final branch assignment.
+- Product/UX decisions remain user-owned and must be asked in batched questions.
+
+Processing cycle (before asking user):
+1. Reproduce in branch environment and collect evidence.
+2. Run focused checks first (`typecheck`, `lint`, scoped `test-ui`, scoped `test-e2e` when relevant).
+3. Apply fix and rerun the same focused checks.
+4. Update ticket with root cause and non-regression scope.
+
+Escalation discipline:
+- Do not ask user for routine technical debug steps already covered by evidence.
+- Escalate only for product/UX decisions, missing credentials, or contradictory specifications.
+- Batch questions once per lot unless a new hard blocker appears.
+
+Roadmap note:
+- BR-07 introduces the automated debug assistant and CI artifact pipeline; until then this manual loop is mandatory.
+
 ## Development Conventions
 - **Commits**: Conventional Commits (feat:, fix:, chore:, refactor:, docs:, test:)
 - **Branches**: `feat/<slug>`, `fix/<slug>`, `boot/<slug>`. Open only one at once
@@ -132,6 +191,8 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 
 ### Feature Completion (aligned to BRANCH.md)
 - Follow the final lots in `BRANCH.md` (tests, CI check, final cleanup).
+- Close or defer all branch-related debug tickets in `plan/DEBUG_TICKETS.md` with owner/date before final handoff.
+- Ensure no unauthorized scope drift (all `BRxx-EXn` resolved or explicitly deferred with owner/date).
 - Final cleanup: remove `BRANCH.md`, check `TODO.md`, commit, push.
 
 ### CI Monitoring (MANDATORY)
@@ -235,6 +296,6 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 - **Documentation**: Link vulnerability fixes to component upgrade commits
 
 ## Feature Branch Management
-- **REQUIRED**: Create `BRANCH.md` from `BRANCH_TEMPLATE.md` for each branch.
+- **REQUIRED**: Create `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` for each branch.
 - **LOCATION**: Repository root (not committed to main).
 - **PURPOSE**: Single source of truth for plan, lots, UAT, and final gates.
