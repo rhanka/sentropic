@@ -14,6 +14,28 @@ Deliver the provider abstraction layer and runtime routing with OpenAI and Gemin
 - All new text in English.
 - Branch environment mapping: `ENV=feat-model-runtime-openai-gemini` `API_PORT=8701` `UI_PORT=5101` `MAILDEV_UI_PORT=1001`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `plan/01-BRANCH_feat-model-runtime-openai-gemini.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - MPA-Q1: Canonical naming/versioning policy for exposed model ids.
 - MPA-Q2: Auto-link SSO identities by email or explicit confirmation.
@@ -39,6 +61,7 @@ Deliver the provider abstraction layer and runtime routing with OpenAI and Gemin
   - [ ] Confirm isolated worktree `tmp/feat-model-runtime-openai-gemini` and environment mapping (`ENV=feat-model-runtime-openai-gemini`).
   - [ ] Capture Make targets needed for debug/testing and CI parity.
   - [ ] Confirm scope and dependency boundaries with upstream branches.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Provider Contract + Registry**

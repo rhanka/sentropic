@@ -1,0 +1,97 @@
+---
+description: Conductor orchestration workflow (mono-branch and multi-branch)
+alwaysApply: true
+tags: [orchestration, conductor, steering]
+---
+
+# CONDUCTOR
+
+## Role
+The conductor plans, launches, steers, and integrates branch workstreams. Sub-agents execute orthogonal tasks only.
+
+## Mode Selection (MANDATORY)
+- Select and record the orchestration mode in the branch execution file:
+  - `Mono-branch + cherry-pick`
+  - `Multi-branch`
+- Follow `workflow.mdc` as source of truth for when multi-branch is mandatory (multi-need TODO items).
+- This file is an operational shortcut, not a replacement of `workflow.mdc`.
+
+## Source Guides (single source of truth)
+- Global constraints: `.cursor/rules/MASTER.mdc`
+- Branch/worktree setup: `.cursor/rules/workflow.mdc` -> `Tmp workspace setup (MANDATORY for multi-branch)`
+- Sub-agent prompt contract: `.cursor/rules/workflow.mdc` -> `Sub-agent implementation prompt (MANDATORY)`
+- Test and security gates: `.cursor/rules/testing.mdc`, `.cursor/rules/security.mdc`
+
+## Orchestration Cycle
+1. Select mode (mono vs multi) and record it.
+2. For multi-branch: validate `PLAN.md` dependencies and active wave.
+3. Launch read-only scoping (Lot 0), then consolidate blockers and questions.
+4. Ask the user in one batched question set (IDs + options + recommendation + impact).
+5. Launch implementation sub-agents per orthogonal branch.
+6. Steer, relaunch, and unblock until lots are complete.
+7. Integrate, run final gates, update docs, close branches cleanly.
+
+## Port Non-Concurrency Rules
+- Keep root workspace for user dev/UAT (`ENV=dev`) stable and isolated.
+- Each active branch environment must have a unique tuple:
+  - `ENV`
+  - `API_PORT`
+  - `UI_PORT`
+  - `MAILDEV_UI_PORT`
+- Before launching a sub-agent, verify active compose projects with `make ps-all`.
+- If a port conflict is detected, reassign ports before starting services and update:
+  - `tmp/<branch-slug>/.env`
+  - branch execution file (`BRANCH.md` or `plan/NN-BRANCH_*.md`)
+  - `PLAN.md` if global mapping changed.
+
+## Launch Packet Template (to sub-agents)
+- Branch id, branch name, and working directory.
+- Lot scope and files in/out of scope.
+- Allowed Paths / Forbidden Paths / Conditional Paths for the branch.
+- Exact env/port mapping.
+- Required reads (`MASTER.mdc`, `workflow.mdc`, and relevant `.mdc` files).
+- Required outputs (files/checklists/tests).
+- Stop conditions and question escalation format (`BRxx-Qn`).
+- Exception format for scope overrides (`BRxx-EXn`).
+- Commit policy (`make commit`, selective `git add`, never `git add .`).
+
+## Steering and Relaunch Protocol
+- Track progress by checkboxes in branch execution file.
+- Track scope adherence against branch `Allowed/Forbidden/Conditional` paths.
+- If blocked, request a structured brief:
+  - current state,
+  - blocker,
+  - options,
+  - recommended option,
+  - impact.
+- Relaunch with a narrow delta scope and explicit continuity context.
+- Do not relaunch with broad or ambiguous instructions.
+
+## User Question/Answer Protocol
+- Ask questions in batches, not one-by-one interruptions.
+- Require evidence-first escalation (repro steps + logs/artifacts + attempted checks).
+- Keep at most one question batch per lot/branch unless a new hard blocker appears.
+- For each question include:
+  - `ID`
+  - decision needed
+  - options
+  - recommended option
+  - delivery impact
+- For scope exceptions, use `BRxx-EXn` and include:
+  - requested path(s),
+  - justification,
+  - risk/rollback.
+- After answers, update:
+  - `plan/CONDUCTOR_QUESTIONS.md`
+  - `plan/CONDUCTOR_STATUS.md`
+  - impacted branch execution files (`BRANCH.md` and/or `plan/NN-BRANCH_*.md`)
+
+## Branch Closure and Cleaning Checklist
+Before closing a branch:
+1. Lot checkboxes complete in branch execution file.
+2. Required tests and UAT checkpoints marked and evidenced.
+3. Open questions resolved or explicitly deferred with owner/date.
+4. Branch environment stopped cleanly with `make down ENV=<branch-env>`.
+5. No stale active service for closed branch in `make ps-all`.
+6. `PLAN.md` updated with status and next dependency unlocks (multi-branch only).
+7. Scope exceptions (`BRxx-EXn`) are resolved or explicitly deferred with owner/date.

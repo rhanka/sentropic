@@ -13,6 +13,24 @@
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `<path-or-glob-1>`
+  - `<path-or-glob-2>`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `<other-sensitive-paths>`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Questions / Notes` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - <Open questions that affect scope or sequencing.>
 
@@ -39,6 +57,7 @@
   - [ ] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
   - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [ ] Confirm scope and guardrails.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] If the branch is complex, add `spec/BRANCH_SPEC_EVOL.md` (initial draft).
 
 - [ ] **Lot 1 — <Main change>**

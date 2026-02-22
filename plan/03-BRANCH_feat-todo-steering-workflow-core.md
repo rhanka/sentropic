@@ -14,6 +14,28 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
 - All new text in English.
 - Branch environment mapping: `ENV=feat-todo-steering-workflow-core` `API_PORT=8703` `UI_PORT=5103` `MAILDEV_UI_PORT=1003`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `plan/03-BRANCH_feat-todo-steering-workflow-core.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - AWT-Q1: Minimum status taxonomy for W1.
 - AWT-Q2: Critical actions list that must enforce human approval.
@@ -39,6 +61,7 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
   - [ ] Confirm isolated worktree `tmp/feat-todo-steering-workflow-core` and environment mapping (`ENV=feat-todo-steering-workflow-core`).
   - [ ] Capture Make targets needed for debug/testing and CI parity.
   - [ ] Confirm scope and dependency boundaries with upstream branches.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Core Domain and API**

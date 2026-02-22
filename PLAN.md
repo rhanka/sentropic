@@ -44,19 +44,43 @@ Cross-reference baseline specs:
 
 | ID | Branch | Objective | Target | Depends on | BRANCH.md path |
 |---|---|---|---|---|---|
-| BR-00 | `feat/roadmap-stabilization` | Rebase/integration stabilization + minimatch exception lifecycle | W1 | none | `plan/BRANCH_feat-roadmap-stabilization.md` |
-| BR-01 | `feat/model-runtime-openai-gemini` | Provider abstraction + 2 providers + BYOK precedence | W1 | BR-00 | `plan/BRANCH_feat-model-runtime-openai-gemini.md` |
-| BR-02 | `feat/sso-chatgpt` | OpenAI/ChatGPT SSO (admin/user) | W1 | BR-00 | `plan/BRANCH_feat-sso-chatgpt.md` |
-| BR-03 | `feat/todo-steering-workflow-core` | TODO v1 + steering v1 + workflow core | W1 | BR-00 | `plan/BRANCH_feat-todo-steering-workflow-core.md` |
-| BR-04 | `feat/workspace-template-catalog` | Multi-template workspace foundation (`ai-ideas`, `todo`) | W1 | BR-03 | `plan/BRANCH_feat-workspace-template-catalog.md` |
-| BR-05 | `feat/vscode-plugin-v1` | VSCode plugin v1 (`plan/tools/summary/checkpoint`) | W1 | BR-01, BR-03 | `plan/BRANCH_feat-vscode-plugin-v1.md` |
-| BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | BR-00 | `plan/BRANCH_feat-chrome-upstream-v1.md` |
-| BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | BR-00 | `plan/BRANCH_feat-release-ui-npm-and-pretest.md` |
-| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | BR-01 | `plan/BRANCH_feat-model-runtime-claude-mistral.md` |
-| BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | BR-02 | `plan/BRANCH_feat-sso-google.md` |
-| BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | BR-05, BR-08 | `plan/BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
-| BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | BR-06, BR-08 | `plan/BRANCH_feat-chrome-upstream-multitab-voice.md` |
-| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07 | `plan/BRANCH_feat-release-chrome-vscode-ci-publish.md` |
+| BR-00 | `feat/roadmap-stabilization` | Rebase/integration stabilization + minimatch exception lifecycle | W1 | none | `plan/00-BRANCH_feat-roadmap-stabilization.md` |
+| BR-01 | `feat/model-runtime-openai-gemini` | Provider abstraction + 2 providers + BYOK precedence | W1 | BR-00 | `plan/01-BRANCH_feat-model-runtime-openai-gemini.md` |
+| BR-02 | `feat/sso-chatgpt` | OpenAI/ChatGPT SSO (admin/user) | W1 | BR-00 | `plan/02-BRANCH_feat-sso-chatgpt.md` |
+| BR-03 | `feat/todo-steering-workflow-core` | TODO v1 + steering v1 + workflow core | W1 | BR-00 | `plan/03-BRANCH_feat-todo-steering-workflow-core.md` |
+| BR-04 | `feat/workspace-template-catalog` | Multi-template workspace foundation (`ai-ideas`, `todo`) | W1 | BR-03 | `plan/04-BRANCH_feat-workspace-template-catalog.md` |
+| BR-05 | `feat/vscode-plugin-v1` | VSCode plugin v1 (`plan/tools/summary/checkpoint`) | W1 | BR-01, BR-03 | `plan/05-BRANCH_feat-vscode-plugin-v1.md` |
+| BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | BR-00 | `plan/06-BRANCH_feat-chrome-upstream-v1.md` |
+| BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | BR-00 | `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` |
+| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
+| BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | BR-02 | `plan/09-BRANCH_feat-sso-google.md` |
+| BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | BR-05, BR-08 | `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
+| BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |
+| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
+
+## 3.1) Branch scope matrix (touch boundaries)
+
+Global no-touch default for all branches (unless approved exception `BRxx-EXn`):
+- `Makefile`
+- `docker-compose*.yml`
+- `.cursor/rules/**`
+- `plan/NN-BRANCH_*.md` files outside the active branch
+
+| ID | Primary allowed paths | Conditional/exception paths |
+|---|---|---|
+| BR-00 | `api/**`, `ui/**`, `e2e/**`, `.security/vulnerability-register.yaml` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-01 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-02 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-03 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-04 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-05 | `api/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md` |
+| BR-06 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-07 | `.github/workflows/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `api/**`, `spec/**`, `PLAN.md`, `TODO.md` |
+| BR-08 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-09 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-10 | `api/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md` |
+| BR-11 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
+| BR-12 | `.github/workflows/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `api/**`, `spec/**`, `PLAN.md`, `TODO.md` |
 
 ## 4) Dependency graph
 
@@ -164,7 +188,7 @@ Example for BR-05 (`nn=05`):
 
 Each branch is closable when all conditions are met:
 - Scope limited to one roadmap capability.
-- Branch-specific plan file `plan/BRANCH_<feat-slug>.md` completed and checked.
+- Branch-specific plan file `plan/NN-BRANCH_<feat-slug>.md` completed and checked.
 - Typecheck/lint/tests run in isolated envs.
 - Relevant E2E checks executed for impacted surfaces.
 - Specs updated and linked in commit/PR description.

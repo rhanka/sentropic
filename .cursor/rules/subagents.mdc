@@ -1,0 +1,72 @@
+---
+description: Sub-agent onboarding and execution contract
+alwaysApply: true
+tags: [orchestration, subagent, workflow]
+---
+
+# SUBAGENTS
+
+## Goal
+Provide a minimal and repeatable contract so each sub-agent can deliver one orthogonal lot safely.
+
+## Mandatory Read Order
+1. `.cursor/rules/MASTER.mdc`
+2. `.cursor/rules/workflow.mdc`
+3. Scope-relevant rules: `architecture.mdc`, `testing.mdc`, `security.mdc`, `data.mdc`
+4. `README.md` and `TODO.md`
+5. `PLAN.md` (when orchestration is multi-branch)
+6. Branch execution file (`BRANCH.md`, `tmp/<branch-slug>/BRANCH.md`, or `plan/NN-BRANCH_*.md`)
+
+## Required Launch Packet (from conductor)
+- Branch id, branch name, and working directory.
+- Exact scope (lot, files in scope, files out of scope).
+- Allowed Paths / Forbidden Paths / Conditional Paths.
+- Environment mapping (`ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`).
+- Port ownership check result (ports are free or already owned by same branch env).
+- Expected outputs (artifacts, tests, checkboxes to update).
+- Stop conditions requiring conductor decision.
+- Scope exception format (`BRxx-EXn`) if conditional/forbidden path changes are requested.
+- Commit policy (`make commit`, selective `git add`, never `git add .`).
+
+## Execution Rules
+- Use Make targets only (no direct Docker commands).
+- Keep `ENV=<env>` as the last argument in all Make commands.
+- Edit only files matching `Allowed Paths`.
+- Do not change `Forbidden Paths`.
+- Treat `Conditional Paths` as blocked until `BRxx-EXn` is approved, unless they are explicitly listed in `Allowed Paths`.
+- Change only files in scope.
+- Keep all code/comments/docs in English.
+- Do not commit or push unless explicitly requested in the launch packet.
+- Do not silently resolve ambiguities; raise a structured question.
+
+## Port Safety Rules
+- Never start services on ports that belong to another active branch environment.
+- If a mapped port is occupied by another compose project, stop and request a new mapping from conductor.
+- Keep `ENV` explicit and consistent in all Make commands.
+
+## Reporting Contract
+Return a short structured brief:
+1. `Done`: concrete changes with file paths.
+2. `Checks`: commands executed and outcomes.
+3. `Open questions`: IDs `BRxx-Qn`, options, recommendation.
+4. `Risks`: regressions, dependencies, or follow-up actions.
+5. `Scope adherence`: any `BRxx-EXn` used or `none`.
+
+Question discipline:
+- escalate only after collecting technical evidence and attempted focused checks;
+- batch questions once per lot unless a new hard blocker appears.
+
+## Restart / Relaunch Protocol
+When interrupted or relaunched:
+1. run `git status --short`;
+2. read the current branch execution file;
+3. resume from the first unchecked item of the active lot;
+4. preserve prior decisions unless the conductor explicitly overrides them;
+5. report only the delta since last run.
+
+## Branch Closure Handoff
+Before branch closure, provide:
+1. final lot checkbox status (including tests/UAT checkpoints);
+2. final open questions list (or explicit `none`);
+3. cleanup status for branch environment (`make down ENV=<branch-env>`, if requested by conductor);
+4. explicit note of any residual risk to merge.
