@@ -198,3 +198,10 @@ Each branch is closable when all conditions are met:
 
 All remaining unchecked items in `TODO.md` remain in legacy backlog.
 After 2026-03-08, create a new planning pass to map them into branch waves using the same orchestration model.
+
+## 10) Execution notes
+
+- 2026-02-22: BR-00 marked ready to unblock W1.
+  - QL-1 baseline decisions consolidated in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Runtime code change proof for BR-00 is empty under `api/**`, `ui/**`, `e2e/**`; full gates skipped per BR00-D3 policy.
+  - Temporary minimatch exception remains planned for closure in BR-07 (`target due date: 2026-03-01`).

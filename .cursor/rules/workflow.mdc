@@ -76,13 +76,15 @@ When multiple branches are planned (multi-need split), the orchestrator **must**
 4. **Integration**: Orchestrator collects results, runs final gates, creates PRs.
 
 ### Tmp workspace setup (MANDATORY for multi-branch)
-Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup sequence is **atomic** — never separate clone from branch creation or BRANCH.md writing:
+Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup sequence is **atomic** — never separate worktree creation from branch creation or BRANCH.md writing:
 
-1. **Clone + branch + env + BRANCH.md in one shot** (per branch):
+1. **Worktree + branch + env + BRANCH.md in one shot** (per branch):
    ```bash
-   rm -rf tmp/<branch-slug>
-   git clone . tmp/<branch-slug>
-   cd tmp/<branch-slug> && git checkout -b <branch-name>
+   git worktree remove tmp/<branch-slug> 2>/dev/null || true
+   git worktree add -b <branch-name> tmp/<branch-slug> main
+   # if branch already exists:
+   # git worktree add tmp/<branch-slug> <branch-name>
+   cd tmp/<branch-slug>
    cp ../../.env .env  # if .env exists
    # then append/override in tmp/.env:
    # ENV=<branch-slug>
@@ -90,10 +92,9 @@ Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup
    # UI_PORT=<unique>
    # MAILDEV_UI_PORT=<unique>
    ```
-2. **Write `BRANCH.md`** into the clone immediately after setup (with scoping decisions already integrated).
-   - Do NOT create `BRANCH.md` before cloning (it will be destroyed by `rm -rf`).
-   - Do NOT create `BRANCH.md` in the main repo's `tmp/` before cloning.
-3. **Port isolation**: Each clone uses distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
+2. **Write `BRANCH.md`** into the worktree immediately after setup (with scoping decisions already integrated).
+   - Do NOT create `BRANCH.md` before the worktree is created.
+3. **Port isolation**: Each worktree uses distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
 4. **Sub-agent prompt**: Always tell the sub-agent its working directory is `tmp/<branch-slug>/` and pass the full `BRANCH.md` content in the prompt (don't rely on the sub-agent reading it).
 
 ### Codex Launch Wrapper (MANDATORY for conductor-run automation)
@@ -230,7 +231,7 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 ## Dependency Management
 - **Package-lock updates**: Always use `make update.<package>.lock` to update package-lock.json files (if implemented)
 - **Docker-only**: Never run `npm install` directly - all dependency management must go through Docker
-- **Available commands**: 
+- **Available commands**:
   - `make update.api.lock` - Update API package-lock.json (if implemented)
   - `make update.ui.lock` - Update UI package-lock.json (if implemented)
 - **Clean environment**: Remove local `node_modules` if they exist outside Docker containers
