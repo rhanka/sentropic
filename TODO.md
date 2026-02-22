@@ -232,6 +232,7 @@ Roadmap specifications:
   - [ ] Re-run API/UI/E2E gates and full UAT (web app + extension non-regression).
 - [ ] Sécurité tooling API — exception temporaire minimatch (CVE-2026-26996)
   - [ ] Exception enregistrée dans `.security/vulnerability-register.yaml` (composant npm embarqué image API, chemin build/tooling)
+  - [ ] Planifier et exécuter l'upgrade `eslint` (et lockfile associé) pour embarquer une version de `minimatch` corrigée.
   - [ ] Planifier l'upgrade npm/base image vers une version embarquant minimatch corrigé (sans patch manuel fragile)
   - [ ] Retirer l'exception après validation `make test-api-security-container`
 - [ ] Isoler les jobs IA sur un worker dédié (comme DOCX)
