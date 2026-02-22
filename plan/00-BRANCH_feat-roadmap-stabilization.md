@@ -4,7 +4,7 @@
 Stabilize the roadmap baseline by completing post-merge integration between chrome-plugin and minor-evols-ui branches and closing the temporary minimatch security exception lifecycle with an actionable mitigation plan.
 
 ## Scope / Guardrails
-- Scope limited to integration conflict resolution, non-regression validation, and security exception lifecycle documentation/alignment.
+- Scope limited to post-merge parity reconciliation, non-regression validation, and security exception lifecycle documentation/alignment.
 - One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -38,10 +38,10 @@ Stabilize the roadmap baseline by completing post-merge integration between chro
   - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
 
 ## Questions / Notes
-- Confirm the canonical source for each of the 8 conflicted files before replaying deltas.
+- No active git conflicts remain between `main` and `feat/minor-evols-ui`; Lot 1 starts with parity-audit scope definition.
 - Confirm if minimatch remediation can be delivered in this branch or only planned with fixed target date.
 - Confirm CI/UAT scope required for extension + web app parity sign-off.
-- Lot 0 scoping (2026-02-22): `tmp/feat-roadmap-stabilization` is not present yet; create it before Lot 1.
+- Lot 0 scoping update (2026-02-22): isolated worktree `tmp/feat-roadmap-stabilization` created and configured.
 - W1 launch blocker (from `PLAN.md` QL-1): unresolved `MPA-Q1`, `MPA-Q2`, `MPA-Q3`, `AWT-Q1`, `AWT-Q2`, `AWT-Q5`.
 - Security risk window: minimatch exception `CVE-2026-26996_api_minimatch_10.1.2` is still `accepted_temporary` with `review_due: 2026-02-26`; owner/branch/date for closure is still open.
 
@@ -74,17 +74,17 @@ Stabilize the roadmap baseline by completing post-merge integration between chro
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
   - [x] Read relevant `.mdc` files, `README.md`, `TODO.md`, and linked specs.
-  - [ ] Confirm isolated worktree `tmp/feat-roadmap-stabilization` and environment mapping (`ENV=feat-roadmap-stabilization`).
+  - [x] Confirm isolated worktree `tmp/feat-roadmap-stabilization` and environment mapping (`ENV=feat-roadmap-stabilization`).
   - [x] Capture Make targets needed for debug/testing and CI parity.
   - [x] Confirm scope and dependency boundaries with BR-01/BR-02/BR-03 wave kickoff.
-  - [ ] Confirm temporary debug baseline and escalation policy for pre-BR-07 work.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+  - [x] Confirm temporary debug baseline and escalation policy for pre-BR-07 work.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Post-merge integration recovery**
-  - [ ] Resolve the 8 conflicted files preserving extension runtime parity from `main` while replaying minor evolutions.
+  - [ ] Build a parity-audit file set from post-merge deltas, then reconcile runtime behavior (`main` baseline + minor evolutions).
   - [ ] Validate extension and web app runtime behavior parity after conflict resolution.
-  - [ ] Document final conflict decisions in branch notes.
+  - [ ] Document final parity decisions in branch notes.
   - [ ] Lot 1 gate:
     - [ ] `make typecheck-api ENV=test-feat-roadmap-stabilization`
     - [ ] `make lint-api ENV=test-feat-roadmap-stabilization`
