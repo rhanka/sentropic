@@ -22,6 +22,18 @@ The conductor plans, launches, steers, and integrates branch workstreams. Sub-ag
 - Sub-agent prompt contract: `.cursor/rules/workflow.mdc` -> `Sub-agent implementation prompt (MANDATORY)`
 - Test and security gates: `.cursor/rules/testing.mdc`, `.cursor/rules/security.mdc`
 
+## CLI Launch Mechanism (MANDATORY)
+- Do not launch with a command segment starting directly with `codex`.
+- Always launch through shell wrapper:
+  - foreground: `/bin/bash -lc '<command>'`
+  - detached: `setsid nohup /bin/bash <worker-script> ...`
+- For isolated conductor dry-runs, use a writable workspace-local home:
+  - `CODEX_HOME=<repo>/.tmp/...`
+  - `XDG_CACHE_HOME=<repo>/.tmp/...`
+  - `XDG_CONFIG_HOME=<repo>/.tmp/...`
+- If auth context is required, copy only required auth/config files into the isolated `CODEX_HOME`.
+- Keep launch logs in `.tmp/codex_orch_*` and clean them after the exercise.
+
 ## Orchestration Cycle
 1. Select mode (mono vs multi) and record it.
 2. For multi-branch: validate `PLAN.md` dependencies and active wave.
