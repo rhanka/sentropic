@@ -1,102 +1,79 @@
-# Feature: SSO ChatGPT (OpenAI)
+# Feature: Codex Sign-In Enablement (Dev/VSCode Plugin)
 
 ## Objective
-Deliver OpenAI/ChatGPT SSO login and account linking flows for admin and standard users while preserving existing WebAuthn behavior.
+Pivot BR-02 away from OpenAI SSO inside this application and define a Codex sign-in strategy for development and VSCode plugin usage.
+
+Important product decision:
+- This branch does **not** deliver OpenAI OAuth/OIDC login for app end users.
+- This branch aligns with Codex/ChatGPT sign-in usage for coding workflows only.
 
 ## Scope / Guardrails
-- Scope limited to API auth adapters, callback/session flows, account-linking UX, RBAC-safe role handling.
-- One migration max in `api/drizzle/*.sql` (if applicable).
+- Scope limited to:
+  - rollback of in-app OpenAI SSO implementation attempted earlier in BR-02;
+  - documentation/spec alignment for Codex sign-in usage in dev/plugin workflows.
+- No `Makefile` or docker-compose changes.
 - Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>`.
-- Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Branch environment mapping: `ENV=feat-sso-chatgpt` `API_PORT=8702` `UI_PORT=5102` `MAILDEV_UI_PORT=1002`.
+- Root workspace `~/src/top-ai-ideas-fullstack` remains reserved for user UAT/dev (`ENV=dev`).
+- Branch environment mapping remains defined for consistency: `ENV=feat-sso-chatgpt` `API_PORT=8702` `UI_PORT=5102` `MAILDEV_UI_PORT=1002`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/**`
-  - `ui/**`
-  - `e2e/**`
   - `plan/02-BRANCH_feat-sso-chatgpt.md`
-  - `plan/DEBUG_TICKETS.md`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
-  - `scripts/**` (only if strictly required by the branch objective)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
-  - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `spec/**`
+  - `PLAN.md`, `TODO.md`
+  - `scripts/**`
+
+## Scope Exceptions
+- `BR02-EX1` (resolved 2026-02-22)
+  - Path: `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
+  - Reason: codify Codex sign-in constraints for VSCode plugin roadmap after product pivot.
+  - Impact: documentation only.
+  - Rollback: revert this file section.
 
 ## Questions / Notes
-- MPA-Q2: Auto-link by email or explicit linking confirmation.
-- Define fallback UX when OpenAI identity exists but cannot be linked.
-- Define admin/user visibility for linked identities in settings.
+- Decision confirmed by product owner (2026-02-22):
+  - OpenAI in-app SSO is not required now.
+  - Target utility is Codex sign-in for development/plugin coding workflows.
+- Billing constraint captured:
+  - Codex/ChatGPT sign-in does not provide free OpenAI API usage for this backend.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: This branch is scoped to one capability and remains independently mergeable.
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
+- Rationale: pivot + cleanup + docs alignment only.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot when UI/plugin surface is impacted).
-- UAT checkpoints must be listed as checkboxes inside each relevant lot.
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+- UAT is not required for this branch after pivot, because the resulting delta is docs/process only.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read relevant `.mdc` files, `README.md`, `TODO.md`, and linked specs.
-  - [ ] Confirm isolated worktree `tmp/feat-sso-chatgpt` and environment mapping (`ENV=feat-sso-chatgpt`).
-  - [ ] Capture Make targets needed for debug/testing and CI parity.
-  - [ ] Confirm scope and dependency boundaries with upstream branches.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-  - [ ] Finalize open questions required before implementation starts.
+- [x] **Lot 0 — Baseline & pivot decision**
+  - [x] Validate branch objective mismatch against product constraints.
+  - [x] Confirm pivot with user: Codex sign-in for dev/plugin only.
 
-- [ ] **Lot 1 — OpenAI SSO Backend**
-  - [ ] Add OpenAI/ChatGPT SSO provider adapter and callback endpoints.
-  - [ ] Implement secure account linking and conflict error contracts.
-  - [ ] Preserve WebAuthn and session refresh compatibility.
-  - [ ] Lot 1 gate:
-    - [ ] `make typecheck-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make lint-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make test-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make typecheck-ui ENV=test-feat-sso-chatgpt`
-    - [ ] `make lint-ui ENV=test-feat-sso-chatgpt`
-    - [ ] `make test-ui ENV=test-feat-sso-chatgpt`
+- [x] **Lot 1 — Remove in-app OpenAI SSO implementation**
+  - [x] Revert `feat(auth): add OpenAI SSO linked-state UI and unlink flow` (`130e9be`).
+  - [x] Revert `feat(auth): add OpenAI SSO UI entrypoints and capture Lot 1 gate blockers` (`392ba71`).
+  - [x] Revert `feat: checkpoint lot0 and lot1 progress` (`7b4a2d7`).
+  - [x] Ensure no residual refs for `OPENAI_SSO_*`, `/auth/sso/openai`, `sso-openai-adapter`.
 
-- [ ] **Lot 2 — UI Integration + Session Guardrails**
-  - [ ] Add SSO entry points in login/settings flows with clear role constraints.
-  - [ ] Implement linked-identity status display and unlink flow.
-  - [ ] Add non-regression tests for auth/session transitions.
-  - [ ] Lot 2 gate:
-    - [ ] `make typecheck-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make lint-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make test-api ENV=test-feat-sso-chatgpt`
-    - [ ] `make typecheck-ui ENV=test-feat-sso-chatgpt`
-    - [ ] `make lint-ui ENV=test-feat-sso-chatgpt`
-    - [ ] `make test-ui ENV=test-feat-sso-chatgpt`
+- [x] **Lot 2 — Codex sign-in roadmap alignment**
+  - [x] Recreate branch execution file (`BRANCH.md`) for the new objective.
+  - [x] Update this branch plan to reflect pivoted scope and acceptance.
+  - [x] Update VSCode plugin evolution spec with Codex sign-in constraints and usage boundaries (`BR02-EX1`).
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [x] **Lot N — Final validation**
+  - [x] Verify branch status is clean after rollback + docs updates.
+  - [x] Confirm no runtime/API/UI behavior change remains from prior OpenAI SSO attempt.
+  - [x] Mark branch as mergeable docs/process pivot.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate branch learnings into the relevant `spec/*` files.
-  - [ ] Update `PLAN.md` status and dependency notes after integration readiness.
-
-- [ ] **Lot N — Final validation**
-  - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
-  - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
+## References (OpenAI official)
+- Codex CLI sign-in with ChatGPT: <https://help.openai.com/en/articles/11381614-codex-cli-and-sign-in-with-chatgpt>
+- Codex with ChatGPT plans: <https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan>
+- ChatGPT vs API billing separation: <https://help.openai.com/en/articles/9039756-billing-settings-in-chatgpt-vs-platform>
