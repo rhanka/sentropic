@@ -31,6 +31,7 @@ Provide a minimal and repeatable contract so each sub-agent can deliver one orth
 ## Execution Rules
 - Use Make targets only (no direct Docker commands).
 - Keep `ENV=<env>` as the last argument in all Make commands.
+- At end of each completed lot, stop the branch environment with `make down ENV=<branch-env>`, unless conductor explicitly requests to keep it up for immediate UAT.
 - Edit only files matching `Allowed Paths`.
 - Do not change `Forbidden Paths`.
 - Treat `Conditional Paths` as blocked until `BRxx-EXn` is approved, unless they are explicitly listed in `Allowed Paths`.
@@ -68,5 +69,5 @@ When interrupted or relaunched:
 Before branch closure, provide:
 1. final lot checkbox status (including tests/UAT checkpoints);
 2. final open questions list (or explicit `none`);
-3. cleanup status for branch environment (`make down ENV=<branch-env>`, if requested by conductor);
+3. cleanup status for branch environment (must run `make down ENV=<branch-env>` then `make ps ENV=<branch-env>` and report no remaining services; skip only if conductor explicitly asks to keep env up for immediate UAT);
 4. explicit note of any residual risk to merge.
