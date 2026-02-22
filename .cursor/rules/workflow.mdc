@@ -114,6 +114,7 @@ When launching a sub-agent for **implementation** (not read-only exploration), t
    - If your scope touches architecture, tests, security, or data: also read the relevant rule files in `.cursor/rules/` (e.g. `architecture.mdc`, `testing.mdc`, `security.mdc`, `data.mdc`).
 2. **Commit rule (explicit)**: "For every commit use ONLY: `make commit MSG=\"type: concise description\"` (single line). Never run `git commit` or `git commit -m` — that would add a Co-authored-by trailer and break the project rule. If `make commit` is not available in your environment, report that and never use `git commit."
 3. **Staging**: "Use selective staging: `git add <file1> <file2>...` then `make commit MSG=\"...\"`. Never use `git add .` or `git add -A`."
+4. **Environment cleanup (explicit)**: "At end of each completed lot, run `make down ENV=<branch-env>` and verify with `make ps ENV=<branch-env>`. Keep env running only if conductor explicitly requests immediate UAT on that env."
 
 The orchestrator must copy or adapt this block into every implementation sub-agent prompt so that the rule is applied even if the sub-agent runtime does not load the workspace rules.
 
