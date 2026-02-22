@@ -147,6 +147,18 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [x] Créer un mdc pour le design system
 - [x] Specs mdc: consolidate multi-branch isolation mode (root `dev` preserved for user UAT, branch dev in `tmp/feat-<slug>`, tests on dedicated ENV, `ENV` always last in make commands)
 - [x] Minor UI & tooling evols branch (`feat/minor-evols-ui`) delivered and fully validated (Lots 1→4 + Lot N green on CI run `22198601064`).
+- [x] Concevoir le plugin chrome (socle livré jusqu'au lot 6B)
+  - [x] SDLC
+    - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
+    - [x] isoler correctement le chatwidget et ses stores pour permettre ce mode
+    - [x] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
+  - [x] UI
+    - [x] mode bulle + flottant
+    - [x] mode docker/side panel
+    - [x] toasters également
+  - [x] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+- [x] Design system
+  - [x] Normaliser les couleurs primary des boutons
 
 **⏳ À faire :**
 - [ ] Rebase integration post-merge `feat/chrome-plugin` -> `feat/minor-evols-ui`
@@ -220,8 +232,6 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
     - [ ] Gestion des conflits (édition sur le gdrive du doc en confit sur une section)
   - [ ] Gestion de bibliothèque de style
     - [ ] Template de slides
-- Design system
-    - [ ] Normaliser les couleurs primary des boutons
 - [ ] Storybook (spec)
   - [ ] analyser les test existant UI, API et e2e et faire un gap analysis aux meilleures pratiques
   - [ ] évaluer l'opportunité d'utiliser storybook pour le testing de composant UI et assurer l'accélélération du testing
@@ -266,18 +276,11 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
       - [ ] Gemini
       - [ ] Claude
       - [ ] Mistral
-- [x] Concevoir le plugin chrome (socle livré jusqu'au lot 6B)
-  - [x] SDLC
-    - [ ] si possible avoir un plugin "capsule", charger la lib depuis le site de référence
-    - [x] isoler correctement le chatwidget et ses stores pour permettre ce mode
-    - [x] fiabiliser la connectivité API du widget flottant (init session + send/stream, sans `Failed to fetch`) via la conf d'extension / proxy (Lot 4A)
-  - [x] UI
-    - [x] mode bulle + flottant
-    - [x] mode docker/side panel
-    - [x] toasters également
-  - [x] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
+
     - [x] Lecture d'un tab
     - [x] Automation d'un tab (cliquer ...)
+- [ ] Plugin Chrome (suite)
+  - [ ] Collaboration local / remote
     - [ ] Collaboration local / remote (outils d'un workspace)
   - Tools spécialisés
     - [ ] Interaction avec applications via UI
