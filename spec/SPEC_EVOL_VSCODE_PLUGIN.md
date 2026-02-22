@@ -85,6 +85,15 @@ Current state summary:
 - Permission model:
   - explicit allow/deny per tool category.
 
+### 4.4 Codex sign-in constraints (W1 clarification)
+- Codex sign-in via ChatGPT is allowed for developer/plugin coding workflows.
+- This sign-in path is **not** an end-user authentication provider for this application.
+- The plugin must keep auth domains separated:
+  - App/API domain: existing app auth/session contracts for API-backed features.
+  - Codex domain: coding assistant auth used by Codex workflows in dev/plugin contexts.
+- Product rule: do not build OpenAI OAuth login for app users from this Codex sign-in capability.
+- Billing rule: Codex/ChatGPT sign-in does not imply free backend OpenAI API usage.
+
 ## 5) Branch plan
 
 - `feat/vscode-plugin-v1`
