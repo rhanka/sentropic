@@ -159,8 +159,74 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
   - [x] Gestion des tools locaux chrome via ws ete store dedié (sevice worker)
 - [x] Design system
   - [x] Normaliser les couleurs primary des boutons
+- [x] Minor evols
+  - [x] Toaster: passer en bas (adjoint à l'icone de chat)
+  - [x] EditableInput: passer d'une attente de 5 seconde à un retour immédiat
+  - [x] Editable input dans les view:
+    - [x] Matrice: passer à un mode input texte / md pour les axes
+    - [x] Secteur = trop petit
+    - [x] Inspecter les autres pb de tail similaire à secteur
+  - [x] Agents de génération : créer un commentaire par défaut
+  - [x] Tool de modification : mettre un commentaire sur les champs modifiés
 
 **⏳ À faire :**
+### Priority roadmap (2026-02-23 to 2026-03-08)
+
+Roadmap source of truth:
+- `PLAN.md`
+
+Roadmap specifications:
+- `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
+- `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
+- `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
+- `spec/SPEC_EVOL_CHROME_UPSTREAM.md`
+- `spec/SPEC_EVOL_RELEASE_QA_PIPELINE.md`
+
+#### Week 1 target (deadline: 2026-03-01)
+
+- [ ] **BR-00** `feat/roadmap-stabilization`
+  - [ ] Resolve post-merge integration (`feat/chrome-plugin` -> `feat/minor-evols-ui`) and re-run full non-regression.
+  - [ ] Close the temporary minimatch security exception lifecycle with explicit mitigation planning.
+- [ ] **BR-01** `feat/model-runtime-openai-gemini`
+  - [ ] Deliver provider abstraction + model catalog and runtime routing with at least 2 providers (`OpenAI`, `Google/Gemini`).
+  - [ ] Support global and per-user BYOK precedence rules.
+- [ ] **BR-02** `feat/sso-chatgpt`
+  - [ ] Deliver OpenAI/ChatGPT SSO for admin and standard users.
+- [ ] **BR-03** `feat/todo-steering-workflow-core`
+  - [ ] Deliver TODO management v1 (plan/checkpoints/status) + steering mode v1.
+  - [ ] Deliver base workflow/autonomous agent orchestration with human approval points.
+- [ ] **BR-04** `feat/workspace-template-catalog`
+  - [ ] Deliver workspace multi-template foundation (`ai-ideas`, `todo`) with template-scoped workflow metadata.
+- [ ] **BR-05** `feat/vscode-plugin-v1`
+  - [ ] Deliver VSCode plugin v1 (`plan`, `tools`, `summary`, `checkpoint`).
+- [ ] **BR-06** `feat/chrome-upstream-v1`
+  - [ ] Deliver upstream chrome control foundation (remote control + upstream sync, single-tab baseline).
+- [ ] **BR-07** `feat/release-ui-npm-and-pretest`
+  - [ ] Publish Svelte UI package to npm via CI.
+  - [ ] Integrate Playwright UI debug/pretest agent in build pipeline (usable during debugging, not only UAT).
+
+#### Week 2 target (deadline: 2026-03-08)
+
+- [ ] **BR-08** `feat/model-runtime-claude-mistral`
+  - [ ] Expand to 4 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`).
+- [ ] **BR-09** `feat/sso-google`
+  - [ ] Deliver Google SSO for admin and standard users.
+- [ ] **BR-10** `feat/vscode-plugin-v2-multi-agent`
+  - [ ] Deliver VSCode plugin v2 with multi-agent and multi-model orchestration.
+- [ ] **BR-11** `feat/chrome-upstream-multitab-voice`
+  - [ ] Deliver multi-tab upstream and voice controls.
+- [ ] **BR-12** `feat/release-chrome-vscode-ci-publish`
+  - [ ] Publish Chrome plugin and VSCode plugin automatically from CI.
+
+#### Branch closure rules for this roadmap
+
+- [ ] Branches must stay orthogonal and independently mergeable.
+- [ ] Keep at most 3 parallel implementation branches in a wave.
+- [ ] Always keep user UAT in root workspace (`./`, `ENV=dev`) and development/testing in `tmp/feat-*` isolated environments.
+- [ ] Run E2E from branch environments before merge to keep branches fully testable and non-blocking.
+
+### Legacy backlog (unordered)
+
 - [ ] Rebase integration post-merge `feat/chrome-plugin` -> `feat/minor-evols-ui`
   - [ ] Resolve the 8 conflicted files by preserving extension runtime parity from `main` and replaying minor evols deltas.
   - [ ] Re-run API/UI/E2E gates and full UAT (web app + extension non-regression).
@@ -333,7 +399,7 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
         - [ ] Issues
         - [ ] PR
 - [ ] Créer une capacité d'agentique en worker (cluster kube) (approfondir)
-- [ ] Agent de code (vs code + remote) (approfondir)
+- [ ] Agent de code (vscode + remote) (approfondir)
   - [ ] Vs code
     - [ ] Modeles
     - [ ] BYOK
@@ -378,15 +444,6 @@ techniques restent anglophones (e.g migrer cas-usage vers usecase)
 - [ ] CI evols
   - [ ] Separer build-api des test unitaires et intégration pour permettre test-e2e de commencer plus tôt, et mettre le publish api en dépendance des tests unitaires et intégration
   - [ ] Envisager le matrix pour les text unitaires et intégration
-- [ ] Minor evols
-  - [ ] Toaster: passer en bas (adjoint à l'icone de chat)
-  - [ ] EditableInput: passer d'une attente de 5 seconde à un retour immédiat
-  - [ ] Editable input dans les view:
-    - [ ] Matrice: passer à un mode input texte / md pour les axes
-    - [ ] Secteur = trop petit
-    - [ ] Inspecter les autres pb de tail similaire à secteur
-  - [ ] Agents de génération : créer un commentaire par défaut
-  - [ ] Tool de modification : mettre un commentaire sur les champs modifiés
 - [ ] Agent assistant UI: pour un "template" (workflow/objets/agents), gérer un agent favorisant
   - [ ] l'autodiscovery d'un utilisateur sur ce template (design phase)
     - [ ] aide complete initiale : parcourir les écrans, donner des tips
