@@ -228,7 +228,7 @@ Roadmap specifications:
 ### Legacy backlog (unordered)
 
 - [ ] Rebase integration post-merge `feat/chrome-plugin` -> `feat/minor-evols-ui`
-  - [ ] Resolve the 8 conflicted files by preserving extension runtime parity from `main` and replaying minor evols deltas.
+  - [ ] Build a parity audit scope from post-merge deltas and preserve extension/runtime behavior while replaying minor evols updates.
   - [ ] Re-run API/UI/E2E gates and full UAT (web app + extension non-regression).
 - [ ] Sécurité tooling API — exception temporaire minimatch (CVE-2026-26996)
   - [ ] Exception enregistrée dans `.security/vulnerability-register.yaml` (composant npm embarqué image API, chemin build/tooling)
