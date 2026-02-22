@@ -14,6 +14,28 @@ Deliver OpenAI/ChatGPT SSO login and account linking flows for admin and standar
 - All new text in English.
 - Branch environment mapping: `ENV=feat-sso-chatgpt` `API_PORT=8702` `UI_PORT=5102` `MAILDEV_UI_PORT=1002`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `plan/02-BRANCH_feat-sso-chatgpt.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - MPA-Q2: Auto-link by email or explicit linking confirmation.
 - Define fallback UX when OpenAI identity exists but cannot be linked.
@@ -39,6 +61,7 @@ Deliver OpenAI/ChatGPT SSO login and account linking flows for admin and standar
   - [ ] Confirm isolated worktree `tmp/feat-sso-chatgpt` and environment mapping (`ENV=feat-sso-chatgpt`).
   - [ ] Capture Make targets needed for debug/testing and CI parity.
   - [ ] Confirm scope and dependency boundaries with upstream branches.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — OpenAI SSO Backend**

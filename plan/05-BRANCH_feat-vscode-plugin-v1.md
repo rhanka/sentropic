@@ -14,6 +14,29 @@ Deliver VSCode plugin v1 based on shared ChatWidget/chat core with plan/tools/su
 - All new text in English.
 - Branch environment mapping: `ENV=feat-vscode-plugin-v1` `API_PORT=8705` `UI_PORT=5105` `MAILDEV_UI_PORT=1005`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `scripts/**`
+  - `plan/05-BRANCH_feat-vscode-plugin-v1.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - VSC-Q2: Allowed shell command set for v1 local tools.
 - VSC-Q3: Checkpoint model (git-only or mixed with domain snapshots).
@@ -39,6 +62,7 @@ Deliver VSCode plugin v1 based on shared ChatWidget/chat core with plan/tools/su
   - [ ] Confirm isolated worktree `tmp/feat-vscode-plugin-v1` and environment mapping (`ENV=feat-vscode-plugin-v1`).
   - [ ] Capture Make targets needed for debug/testing and CI parity.
   - [ ] Confirm scope and dependency boundaries with upstream branches.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Plugin Host and Shared Chat Core**

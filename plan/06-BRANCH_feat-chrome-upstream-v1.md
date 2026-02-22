@@ -14,6 +14,28 @@ Deliver upstream remote control foundation for Chrome plugin with secure single-
 - All new text in English.
 - Branch environment mapping: `ENV=feat-chrome-upstream-v1` `API_PORT=8706` `UI_PORT=5106` `MAILDEV_UI_PORT=1006`.
 
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `plan/06-BRANCH_feat-chrome-upstream-v1.md`
+  - `plan/DEBUG_TICKETS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `spec/**`, `PLAN.md`, `TODO.md` (docs consolidation or roadmap sync only)
+  - `scripts/**` (only if strictly required by the branch objective)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
+  - Include reason, impact, and rollback strategy.
+  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+
 ## Questions / Notes
 - CHU-Q1: Upstream transport mode (WS-only vs SSE/REST hybrid).
 - CHU-Q2: Minimum permission granularity for upstream actions.
@@ -39,6 +61,7 @@ Deliver upstream remote control foundation for Chrome plugin with secure single-
   - [ ] Confirm isolated worktree `tmp/feat-chrome-upstream-v1` and environment mapping (`ENV=feat-chrome-upstream-v1`).
   - [ ] Capture Make targets needed for debug/testing and CI parity.
   - [ ] Confirm scope and dependency boundaries with upstream branches.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
 
 - [ ] **Lot 1 — Upstream Session Protocol**
