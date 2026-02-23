@@ -96,7 +96,8 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Pre-flight (branch env up):
-    - [ ] `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
+    - [ ] Feature-branch workspace: `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
+    - [ ] UAT fusion branch (local): `make -C /home/antoinefa/src/top-ai-ideas-fullstack up API_PORT=8893 UI_PORT=5293 MAILDEV_UI_PORT=1193 REGISTRY=local ENV=uat-br13-local`
     - [ ] Login with a valid user and open `/settings`.
   - [ ] UAT-01 Settings card is visible:
     - [ ] Section title and description are rendered in settings.
