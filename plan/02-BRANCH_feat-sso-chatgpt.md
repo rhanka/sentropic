@@ -6,6 +6,7 @@ Pivot BR-02 away from OpenAI SSO inside this application and define a Codex sign
 Important product decision:
 - This branch does **not** deliver OpenAI OAuth/OIDC login for app end users.
 - This branch aligns with Codex/ChatGPT sign-in usage for coding workflows only.
+- Any runtime/plugin implementation work (if applicable) belongs to BR-05, not BR-02.
 
 ## Scope / Guardrails
 - Scope limited to:

@@ -2,6 +2,7 @@
 
 ## Objective
 Deliver VSCode plugin v1 based on shared ChatWidget/chat core with plan/tools/summary/checkpoint and API-driven orchestration.
+Include Codex sign-in integration for developer/plugin coding workflows (dev-only auth domain, no end-user app SSO).
 
 ## Scope / Guardrails
 - Scope limited to VSCode extension shell, webview integration, local tools bridge, API orchestration bridge.
@@ -68,6 +69,7 @@ Deliver VSCode plugin v1 based on shared ChatWidget/chat core with plan/tools/su
 - [ ] **Lot 1 — Plugin Host and Shared Chat Core**
   - [ ] Bootstrap VSCode extension and webview with shared ChatWidget/chat core adapters.
   - [ ] Implement auth/session bridge and API orchestration connection.
+  - [ ] Implement Codex sign-in handoff/status for plugin dev workflow.
   - [ ] Add plan/summary/checkpoint baseline views.
   - [ ] Lot 1 gate:
     - [ ] `make typecheck-api ENV=test-feat-vscode-plugin-v1`
