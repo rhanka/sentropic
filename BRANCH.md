@@ -94,25 +94,29 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] `make build-api build-ui-image REGISTRY=local API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=e2e-feat-chrome-plugin-download-distribution`
     - [x] `make test-e2e REGISTRY=local E2E_SPEC=e2e/tests/06-settings.spec.ts WORKERS=2 RETRIES=0 MAX_FAILURES=1 API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` (16 passed, 3 skipped)
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Pre-flight (branch env up):
+- [ ] **Lot N-2 — UAT: Settings Chrome Plugin card**
+  - [ ] Pre-flight (branch env up, Settings Chrome Plugin card):
     - [ ] Feature-branch workspace: `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
+    - [ ] Root `ENV=dev` preflight (config parity for Settings Chrome Plugin card):
+      - [ ] In `/home/antoinefa/src/top-ai-ideas-fullstack/.env`, set required keys: `CHROME_EXTENSION_DOWNLOAD_URL`, `CHROME_EXTENSION_VERSION`, `CHROME_EXTENSION_SOURCE`.
+      - [ ] Verify `CHROME_EXTENSION_DOWNLOAD_URL` is reachable (example: `curl -I "$CHROME_EXTENSION_DOWNLOAD_URL"` returns a `2xx`/`3xx` response).
+      - [ ] After any `.env` change, restart the API before UAT (example: `make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`).
     - [ ] UAT fusion branch (local): `make -C /home/antoinefa/src/top-ai-ideas-fullstack up API_PORT=8893 UI_PORT=5293 MAILDEV_UI_PORT=1193 REGISTRY=local ENV=uat-br13-local`
     - [ ] Login with a valid user and open `/settings`.
-  - [ ] UAT-01 Settings card is visible:
-    - [ ] Section title and description are rendered in settings.
+  - [ ] UAT-01 Settings Chrome Plugin card is visible:
+    - [ ] Settings Chrome Plugin card title and description are rendered in `/settings`.
     - [ ] Download button is visible and enabled when metadata loads.
-  - [ ] UAT-02 Metadata rendering:
-    - [ ] Version is displayed (`settings.chromeExtension.version`).
-    - [ ] Source is displayed (`settings.chromeExtension.source`).
-  - [ ] UAT-03 Download URL behavior:
-    - [ ] Download CTA points to configured backend URL (`/api/v1/chrome-extension/download` metadata).
-    - [ ] Click opens download target in a new tab.
-  - [ ] UAT-04 Error/fallback behavior:
-    - [ ] With missing/invalid `CHROME_EXTENSION_DOWNLOAD_URL`, card shows error state.
+  - [ ] UAT-02 Settings Chrome Plugin card metadata rendering:
+    - [ ] Version is displayed (`settings.chromeExtension.versionLabel` + value).
+    - [ ] Source is displayed (`settings.chromeExtension.sourceLabel` + value).
+  - [ ] UAT-03 Settings Chrome Plugin card download URL behavior:
+    - [ ] Download CTA uses URL returned by `/api/v1/chrome-extension/download`.
+    - [ ] Clicking CTA opens the configured download target in a new tab.
+  - [ ] UAT-04 Settings Chrome Plugin card error/fallback behavior:
+    - [ ] With missing/invalid `CHROME_EXTENSION_DOWNLOAD_URL`, the card shows the API/fallback error state.
     - [ ] Retry button is visible in error state.
-  - [ ] UAT-05 Recovery path:
-    - [ ] After fixing config and refreshing/retrying, error state clears and CTA is restored.
+  - [ ] UAT-05 Settings Chrome Plugin card recovery path:
+    - [ ] After fixing config, restarting API, and refreshing/retrying, error state clears and CTA is restored.
   - [ ] Exit criteria:
     - [ ] UAT-01..UAT-05 all validated.
     - [ ] Result captured in this file (date + tester + notes).
