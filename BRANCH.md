@@ -25,7 +25,8 @@ This branch does not implement OpenAI SSO for app end users.
   - no app end-user OpenAI OAuth/OIDC login in BR-02.
   - Codex sign-in is for developer/plugin coding workflows only.
 - Billing clarification:
-  - Codex/ChatGPT sign-in does not provide free backend OpenAI API usage.
+  - Codex/ChatGPT sign-in may provide included Codex usage (plan-limited) for coding workflows.
+  - It does not provide free OpenAI API usage for this backend.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
