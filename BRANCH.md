@@ -98,9 +98,11 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
   - [ ] Pre-flight (branch env up, Settings Chrome Plugin card):
     - [ ] Feature-branch workspace: `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
     - [ ] Root `ENV=dev` preflight (config parity for Settings Chrome Plugin card):
-      - [ ] In `/home/antoinefa/src/top-ai-ideas-fullstack/.env`, set required keys: `CHROME_EXTENSION_DOWNLOAD_URL`, `CHROME_EXTENSION_VERSION`, `CHROME_EXTENSION_SOURCE`.
-      - [ ] Verify `CHROME_EXTENSION_DOWNLOAD_URL` is reachable (example: `curl -I "$CHROME_EXTENSION_DOWNLOAD_URL"` returns a `2xx`/`3xx` response).
-      - [ ] After any `.env` change, restart the API before UAT (example: `make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`).
+      - [ ] Option A (remote URL): set `CHROME_EXTENSION_DOWNLOAD_URL` (and optional `CHROME_EXTENSION_VERSION`, `CHROME_EXTENSION_SOURCE`) in `/home/antoinefa/src/top-ai-ideas-fullstack/.env`, then verify URL reachability (`curl -I "$CHROME_EXTENSION_DOWNLOAD_URL"` returns `2xx`/`3xx`).
+      - [ ] Option B (local package fallback pipeline for Settings Chrome Plugin card):
+        1) [ ] Build extension artifacts.
+        2) [ ] Package the zip at the instance-served path `/chrome-extension/top-ai-ideas-chrome-extension.zip`.
+        3) [ ] Restart API (`make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`) and verify the Settings Chrome Plugin card loads with download CTA.
     - [ ] UAT fusion branch (local): `make -C /home/antoinefa/src/top-ai-ideas-fullstack up API_PORT=8893 UI_PORT=5293 MAILDEV_UI_PORT=1193 REGISTRY=local ENV=uat-br13-local`
     - [ ] Login with a valid user and open `/settings`.
   - [ ] UAT-01 Settings Chrome Plugin card is visible:

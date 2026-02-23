@@ -31,12 +31,13 @@ describe('Chrome extension download metadata API', () => {
     await cleanupAuthData();
   });
 
-  it('returns 503 when the extension download URL is missing', async () => {
+  it('returns 503 when the extension download URL and origin fallback are missing', async () => {
     const response = await authenticatedRequest(app, 'GET', '/api/v1/chrome-extension/download', user.sessionToken!);
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
-      message: 'Chrome extension download URL is not configured for this instance.',
+      message:
+        'Chrome extension download is unavailable: set CHROME_EXTENSION_DOWNLOAD_URL in the API environment and restart the API.',
     });
   });
 
@@ -47,7 +48,8 @@ describe('Chrome extension download metadata API', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
-      message: 'Chrome extension download URL must be a valid http(s) URL.',
+      message:
+        'Chrome extension download is unavailable: CHROME_EXTENSION_DOWNLOAD_URL must be a valid http(s) URL, then restart the API.',
     });
   });
 
@@ -56,13 +58,38 @@ describe('Chrome extension download metadata API', () => {
     process.env.CHROME_EXTENSION_VERSION = '1.4.2';
     process.env.CHROME_EXTENSION_SOURCE = 'ci:build-ext';
 
-    const response = await authenticatedRequest(app, 'GET', '/api/v1/chrome-extension/download', user.sessionToken!);
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/chrome-extension/download',
+      user.sessionToken!,
+      undefined,
+      { Origin: 'https://app.example.com' }
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
       version: '1.4.2',
       source: 'ci:build-ext',
+    });
+  });
+
+  it('returns origin-based fallback download metadata when env URL is missing', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/chrome-extension/download',
+      user.sessionToken!,
+      undefined,
+      { Origin: 'https://dev.example.local:5173' }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      downloadUrl: 'https://dev.example.local:5173/chrome-extension/top-ai-ideas-chrome-extension.zip',
+      version: '0.1.0',
+      source: 'ui/chrome-ext',
     });
   });
 });

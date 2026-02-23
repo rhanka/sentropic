@@ -552,7 +552,7 @@
       "versionLabel": "Version",
       "sourceLabel": "Source",
       "errors": {
-        "load": "Impossible de charger la carte Paramètres Plugin Chrome. Cette carte nécessite CHROME_EXTENSION_DOWNLOAD_URL dans la configuration API ; vérifiez que l'URL de téléchargement est accessible, puis redémarrez l'API."
+        "load": "Impossible de charger la carte Paramètres Plugin Chrome. Configurez CHROME_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /chrome-extension/top-ai-ideas-chrome-extension.zip, puis redémarrez l'API."
       }
     },
     "systemInfo": "Informations système",
