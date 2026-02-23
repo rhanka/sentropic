@@ -42,7 +42,8 @@ Important product decision:
   - OpenAI in-app SSO is not required now.
   - Target utility is Codex sign-in for development/plugin coding workflows.
 - Billing constraint captured:
-  - Codex/ChatGPT sign-in does not provide free OpenAI API usage for this backend.
+  - Codex/ChatGPT sign-in may provide included Codex usage (plan-limited) for coding workflows.
+  - It does not provide free OpenAI API usage for this backend.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**

@@ -92,7 +92,7 @@ Current state summary:
   - App/API domain: existing app auth/session contracts for API-backed features.
   - Codex domain: coding assistant auth used by Codex workflows in dev/plugin contexts.
 - Product rule: do not build OpenAI OAuth login for app users from this Codex sign-in capability.
-- Billing rule: Codex/ChatGPT sign-in does not imply free backend OpenAI API usage.
+- Billing rule: Codex/ChatGPT sign-in may include plan-limited Codex usage for coding workflows, but does not imply free backend OpenAI API usage.
 
 ## 5) Branch plan
 
