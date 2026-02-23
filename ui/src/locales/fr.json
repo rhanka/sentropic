@@ -552,7 +552,7 @@
       "versionLabel": "Version",
       "sourceLabel": "Source",
       "errors": {
-        "load": "Impossible de charger les informations de téléchargement de l'extension Chrome."
+        "load": "Impossible de charger la carte Paramètres Plugin Chrome. Cette carte nécessite CHROME_EXTENSION_DOWNLOAD_URL dans la configuration API ; vérifiez que l'URL de téléchargement est accessible, puis redémarrez l'API."
       }
     },
     "systemInfo": "Informations système",

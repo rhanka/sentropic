@@ -32,12 +32,24 @@ chromeExtensionRouter.get('/download', async (c) => {
   const config = readConfig();
 
   if (!config.downloadUrl) {
-    return c.json({ message: 'Chrome extension download URL is not configured for this instance.' }, 503);
+    return c.json(
+      {
+        message:
+          'Chrome extension download is unavailable: set CHROME_EXTENSION_DOWNLOAD_URL in the API environment and restart the API.',
+      },
+      503
+    );
   }
 
   const normalizedUrl = normalizeHttpUrl(config.downloadUrl);
   if (!normalizedUrl) {
-    return c.json({ message: 'Chrome extension download URL must be a valid http(s) URL.' }, 503);
+    return c.json(
+      {
+        message:
+          'Chrome extension download is unavailable: CHROME_EXTENSION_DOWNLOAD_URL must be a valid http(s) URL, then restart the API.',
+      },
+      503
+    );
   }
 
   return c.json({

@@ -552,7 +552,7 @@
       "versionLabel": "Version",
       "sourceLabel": "Source",
       "errors": {
-        "load": "Unable to load Chrome extension download information."
+        "load": "Unable to load the Settings Chrome Plugin card. This card requires CHROME_EXTENSION_DOWNLOAD_URL in the API configuration; verify the download URL is reachable, then restart the API."
       }
     },
     "systemInfo": "System information",
