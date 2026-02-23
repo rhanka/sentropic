@@ -19,6 +19,7 @@ import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
+import { chromeExtensionRouter } from './chrome-extension';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -47,6 +48,10 @@ apiRouter.route('/analytics', analyticsRouter);
 // User self-service routes
 apiRouter.use('/me/*', requireAuth);
 apiRouter.route('/me', meRouter);
+
+// Chrome extension metadata route for authenticated users.
+apiRouter.use('/chrome-extension/*', requireAuth);
+apiRouter.route('/chrome-extension', chromeExtensionRouter);
 
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);

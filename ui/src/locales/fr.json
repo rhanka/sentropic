@@ -543,6 +543,18 @@
     "queueRunning": "En cours",
     "queueDone": "Terminés",
     "queueFailed": "Échoués",
+    "chromeExtension": {
+      "title": "Extension Chrome",
+      "description": "Téléchargez le dernier package de l'extension Chrome configuré pour cette instance.",
+      "loading": "Chargement du package d'extension…",
+      "downloadCta": "Télécharger l'extension (.zip)",
+      "retry": "Réessayer",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Impossible de charger les informations de téléchargement de l'extension Chrome."
+      }
+    },
     "systemInfo": "Informations système",
     "systemInfoLabels": {
       "version": "Version",
