@@ -14,6 +14,7 @@ By 2026-03-01 (Week 1):
 - Base workflow/autonomous agent orchestration.
 - Workspace multi-template foundation (`ai-ideas`, `todo`).
 - Chrome upstream control foundation (single-tab).
+- Chrome plugin downloadable package exposed from app settings (instance-configured URL).
 - Svelte UI npm publish automation.
 - Playwright UI debug/pretest agent integrated in build flow.
 - OpenAI/ChatGPT in-app SSO deferred (out of current roadmap window).
@@ -53,11 +54,12 @@ Cross-reference baseline specs:
 | BR-05 | `feat/vscode-plugin-v1` | VSCode plugin v1 (`plan/tools/summary/checkpoint`) + Codex sign-in integration (dev/plugin workflow) | W1 | BR-01, BR-03 | `plan/05-BRANCH_feat-vscode-plugin-v1.md` |
 | BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | BR-00 | `plan/06-BRANCH_feat-chrome-upstream-v1.md` |
 | BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | BR-00 | `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` |
+| BR-13 | `feat/chrome-plugin-download-distribution` | Package Chrome plugin and expose downloadable URL in `/settings` | W1 | BR-06 | `plan/13-BRANCH_feat-chrome-plugin-download-distribution.md` |
 | BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
 | BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | BR-00 | `plan/09-BRANCH_feat-sso-google.md` |
 | BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | BR-05, BR-08 | `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
 | BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |
-| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
+| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07, BR-13 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
 
 ## 3.1) Branch scope matrix (touch boundaries)
 
@@ -82,6 +84,7 @@ Global no-touch default for all branches (unless approved exception `BRxx-EXn`):
 | BR-10 | `api/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md` |
 | BR-11 | `api/**`, `ui/**`, `e2e/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md`, `scripts/**` |
 | BR-12 | `.github/workflows/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `api/**`, `spec/**`, `PLAN.md`, `TODO.md` |
+| BR-13 | `api/**`, `ui/**`, `e2e/**`, `scripts/**` | `api/drizzle/*.sql`, `.github/workflows/**`, `spec/**`, `PLAN.md`, `TODO.md` |
 
 ## 4) Dependency graph
 
@@ -100,6 +103,7 @@ graph TD
   BR10[BR-10 vscode v2 multi-agent]
   BR11[BR-11 chrome multitab+voice]
   BR12[BR-12 release chrome+vscode ci]
+  BR13[BR-13 chrome plugin download distribution]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -109,6 +113,7 @@ graph TD
   BR03 --> BR05
   BR00 --> BR06
   BR00 --> BR07
+  BR06 --> BR13
 
   BR01 --> BR08
   BR00 --> BR09
@@ -119,6 +124,7 @@ graph TD
   BR05 --> BR12
   BR06 --> BR12
   BR07 --> BR12
+  BR13 --> BR12
 ```
 
 ## 5) Waves (max 3 parallel branches)
@@ -138,6 +144,7 @@ graph TD
 
 ### Wave W3 (2026-02-27 to 2026-03-01)
 - BR-07
+- BR-13
 
 ### Wave W4 (2026-03-02 to 2026-03-05)
 - BR-08
