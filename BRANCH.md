@@ -47,13 +47,13 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 - Rationale: This branch is a focused delivery slice and should stay independently mergeable.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot when UI/plugin surface is impacted).
+- **Mono-branch**: UAT is performed on the branch worktree environment before push (after each lot when UI/plugin surface is impacted).
 - UAT checkpoints must be listed as checkboxes inside each relevant lot.
 - Execution flow (mandatory):
   - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+  - Keep branch local (commit allowed), do not push before user UAT sign-off.
+  - Run user UAT against the branch environment (`ENV=feat-<slug>`, dedicated ports).
+  - After `UAT OK`, push branch and continue PR/CI flow.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -95,8 +95,26 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] `make test-e2e REGISTRY=local E2E_SPEC=e2e/tests/06-settings.spec.ts WORKERS=2 RETRIES=0 MAX_FAILURES=1 API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` (16 passed, 3 skipped)
 
 - [ ] **Lot N-2 — UAT**
-  - [ ] Verify end-user path: open settings and download plugin artifact from configured instance URL.
-  - [ ] Verify fallback/error message when metadata endpoint is unavailable.
+  - [ ] Pre-flight (branch env up):
+    - [ ] `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
+    - [ ] Login with a valid user and open `/settings`.
+  - [ ] UAT-01 Settings card is visible:
+    - [ ] Section title and description are rendered in settings.
+    - [ ] Download button is visible and enabled when metadata loads.
+  - [ ] UAT-02 Metadata rendering:
+    - [ ] Version is displayed (`settings.chromeExtension.version`).
+    - [ ] Source is displayed (`settings.chromeExtension.source`).
+  - [ ] UAT-03 Download URL behavior:
+    - [ ] Download CTA points to configured backend URL (`/api/v1/chrome-extension/download` metadata).
+    - [ ] Click opens download target in a new tab.
+  - [ ] UAT-04 Error/fallback behavior:
+    - [ ] With missing/invalid `CHROME_EXTENSION_DOWNLOAD_URL`, card shows error state.
+    - [ ] Retry button is visible in error state.
+  - [ ] UAT-05 Recovery path:
+    - [ ] After fixing config and refreshing/retrying, error state clears and CTA is restored.
+  - [ ] Exit criteria:
+    - [ ] UAT-01..UAT-05 all validated.
+    - [ ] Result captured in this file (date + tester + notes).
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
