@@ -37,7 +37,7 @@ Deliver Google SSO flows for admin and standard users with account linking and s
   - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
 
 ## Questions / Notes
-- Reconfirm identity linking policy consistency with OpenAI SSO implementation.
+- Reconfirm identity linking policy consistency with the existing auth/account-linking baseline.
 - Define behavior for users with multiple linked providers.
 - Define user-facing error messaging for Google scope/consent failures.
 
