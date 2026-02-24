@@ -62,6 +62,59 @@ test.describe('Page Paramètres', () => {
     }
   });
 
+  test('devrait afficher la carte de téléchargement de l’extension Chrome', async ({ browser }) => {
+    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    try {
+      await page.route('**/api/v1/chrome-extension/download**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
+            version: '1.4.2',
+            source: 'ci:build-ext',
+          }),
+        });
+      });
+
+      await page.goto('/settings');
+      await page.waitForLoadState('domcontentloaded');
+
+      await expect(page.getByTestId('chrome-extension-download-card')).toBeVisible();
+      await expect(page.getByTestId('chrome-extension-version')).toHaveText('1.4.2');
+      await expect(page.getByTestId('chrome-extension-source')).toHaveText('ci:build-ext');
+      await expect(page.getByTestId('chrome-extension-download-cta')).toHaveAttribute(
+        'href',
+        'https://downloads.example.com/top-ai-ideas/chrome-ext.zip'
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('devrait afficher une erreur si le téléchargement extension est indisponible', async ({ browser }) => {
+    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    try {
+      await page.route('**/api/v1/chrome-extension/download**', async (route) => {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'Chrome extension download URL is not configured for this instance.',
+          }),
+        });
+      });
+
+      await page.goto('/settings');
+      await page.waitForLoadState('domcontentloaded');
+
+      await expect(page.getByTestId('chrome-extension-download-error')).toContainText('not configured');
+      await expect(page.getByTestId('chrome-extension-download-retry')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   test('devrait afficher les sections de configuration', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {

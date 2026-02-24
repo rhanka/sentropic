@@ -9,14 +9,39 @@ const rootDir = path.resolve(__dirname, '..');
 const extDir = path.resolve(rootDir, 'chrome-ext');
 const distDir = path.resolve(extDir, 'dist');
 const staticDir = path.resolve(rootDir, 'static');
+const packageJsonPath = path.resolve(rootDir, 'package.json');
+const manifestPath = path.resolve(extDir, 'manifest.json');
 
 console.log('📋 Copying extension assets...');
 
 // Ensure dist directory exists (should be created by vite build)
 if (!fs.existsSync(distDir)) fs.mkdirSync(distDir, { recursive: true });
 
-// Copy manifest.json
-fs.copyFileSync(path.join(extDir, 'manifest.json'), path.join(distDir, 'manifest.json'));
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const sourceManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const manifest = {
+    ...sourceManifest,
+    version: packageJson.version,
+};
+
+fs.writeFileSync(
+    path.join(distDir, 'manifest.json'),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    'utf8'
+);
+
+fs.writeFileSync(
+    path.join(distDir, 'extension-metadata.json'),
+    `${JSON.stringify(
+        {
+            version: manifest.version,
+            source: 'ui/chrome-ext',
+        },
+        null,
+        2
+    )}\n`,
+    'utf8'
+);
 
 // Create icons directory
 const iconsDir = path.join(distDir, 'icons');
