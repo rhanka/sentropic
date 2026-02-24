@@ -546,8 +546,10 @@
     "chromeExtension": {
       "title": "Chrome extension",
       "description": "Download the latest Chrome extension package configured for this instance.",
+      "experimentalWarning": "(experimental only, for developers)",
       "loading": "Loading extension package…",
       "downloadCta": "Download extension (.zip)",
+      "downloadTooltip": "Download the Chrome extension",
       "retry": "Retry",
       "versionLabel": "Version",
       "sourceLabel": "Source",

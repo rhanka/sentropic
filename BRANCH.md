@@ -94,34 +94,16 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] `make build-api build-ui-image REGISTRY=local API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=e2e-feat-chrome-plugin-download-distribution`
     - [x] `make test-e2e REGISTRY=local E2E_SPEC=e2e/tests/06-settings.spec.ts WORKERS=2 RETRIES=0 MAX_FAILURES=1 API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` (16 passed, 3 skipped)
 
-- [ ] **Lot N-2 — UAT: Settings Chrome Plugin card**
-  - [ ] Pre-flight (branch env up, Settings Chrome Plugin card):
-    - [ ] Feature-branch workspace: `make -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-chrome-plugin-download-distribution dev API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=feat-chrome-plugin-download-distribution`
-    - [ ] Root `ENV=dev` preflight (config parity for Settings Chrome Plugin card):
-      - [ ] Option A (remote URL): set `CHROME_EXTENSION_DOWNLOAD_URL` (and optional `CHROME_EXTENSION_VERSION`, `CHROME_EXTENSION_SOURCE`) in `/home/antoinefa/src/top-ai-ideas-fullstack/.env`, then verify URL reachability (`curl -I "$CHROME_EXTENSION_DOWNLOAD_URL"` returns `2xx`/`3xx`).
-      - [ ] Option B (local package fallback pipeline for Settings Chrome Plugin card):
-        1) [ ] Build extension artifacts.
-        2) [ ] Package the zip at the instance-served path `/chrome-extension/top-ai-ideas-chrome-extension.zip`.
-        3) [ ] Restart API (`make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`) and verify the Settings Chrome Plugin card loads with download CTA.
-    - [ ] UAT fusion branch (local): `make -C /home/antoinefa/src/top-ai-ideas-fullstack up API_PORT=8893 UI_PORT=5293 MAILDEV_UI_PORT=1193 REGISTRY=local ENV=uat-br13-local`
-    - [ ] Login with a valid user and open `/settings`.
-  - [ ] UAT-01 Settings Chrome Plugin card is visible:
-    - [ ] Settings Chrome Plugin card title and description are rendered in `/settings`.
-    - [ ] Download button is visible and enabled when metadata loads.
-  - [ ] UAT-02 Settings Chrome Plugin card metadata rendering:
-    - [ ] Version is displayed (`settings.chromeExtension.versionLabel` + value).
-    - [ ] Source is displayed (`settings.chromeExtension.sourceLabel` + value).
-  - [ ] UAT-03 Settings Chrome Plugin card download URL behavior:
-    - [ ] Download CTA uses URL returned by `/api/v1/chrome-extension/download`.
-    - [ ] Clicking CTA opens the configured download target in a new tab.
-  - [ ] UAT-04 Settings Chrome Plugin card error/fallback behavior:
-    - [ ] With missing/invalid `CHROME_EXTENSION_DOWNLOAD_URL`, the card shows the API/fallback error state.
-    - [ ] Retry button is visible in error state.
-  - [ ] UAT-05 Settings Chrome Plugin card recovery path:
-    - [ ] After fixing config, restarting API, and refreshing/retrying, error state clears and CTA is restored.
-  - [ ] Exit criteria:
-    - [ ] UAT-01..UAT-05 all validated.
-    - [ ] Result captured in this file (date + tester + notes).
+- [x] **Lot N-2 — UAT: Chrome extension developer distribution**
+  - [x] Pre-flight (nominal root environment): `make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`, log in with a valid user, open `/settings`.
+  - [x] UAT-01: Download the extension package from the Settings Chrome extension card.
+  - [x] UAT-02: Load/install the unpacked extension in Chrome developer mode.
+  - [x] UAT-03: Sign in to the current instance from the extension.
+  - [x] UAT-04: Start a chat from the extension.
+  - [x] UAT-05: Execute the `tab_info` tool successfully from the extension session.
+  - [x] Exit criteria:
+    - [x] UAT-01..UAT-05 validated.
+    - [x] Result captured: 2026-02-23, tester `antoinefa`, status `OK`.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.

@@ -14,7 +14,7 @@
   } from '$lib/utils/chrome-extension-download';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
-  import { Edit, X } from '@lucide/svelte';
+  import { Download, Edit, X } from '@lucide/svelte';
 
   interface Prompt {
     id: string;
@@ -382,6 +382,9 @@
       <div class="space-y-1">
         <h2 class="text-lg font-semibold text-slate-800">{$_('settings.chromeExtension.title')}</h2>
         <p class="text-sm text-slate-600">{$_('settings.chromeExtension.description')}</p>
+        <p class="text-sm font-medium text-rose-700">
+          {$_('settings.chromeExtension.experimentalWarning')}
+        </p>
       </div>
 
       {#if isLoadingChromeExtensionDownload}
@@ -390,13 +393,15 @@
         </span>
       {:else if chromeExtensionDownloadMetadata}
         <a
-          class="rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+          class="inline-flex h-10 w-10 items-center justify-center rounded border border-primary text-primary transition hover:bg-primary/10"
           href={chromeExtensionDownloadMetadata.downloadUrl}
           target="_blank"
           rel="noreferrer noopener"
+          aria-label={$_('settings.chromeExtension.downloadTooltip')}
+          title={$_('settings.chromeExtension.downloadTooltip')}
           data-testid="chrome-extension-download-cta"
         >
-          {$_('settings.chromeExtension.downloadCta')}
+          <Download class="h-5 w-5" />
         </a>
       {:else}
         <button
