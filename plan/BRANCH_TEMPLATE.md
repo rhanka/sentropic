@@ -128,5 +128,6 @@
   - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
   - [ ] Retest AI flaky allowlist (non-blocking) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky allowlist test is accepted
-  - [ ] Final gate: Créate PR with BRANCH.md content as initial message & Verify CI for the branch
-  - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
