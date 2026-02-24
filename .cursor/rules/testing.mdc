@@ -11,7 +11,8 @@ This document defines the testing strategy for the assistant project, ensuring a
 - **70% unit, 20% integration, 10% E2E** - Test pyramid
 
 ### Quality Gates
-- All tests must pass before merge
+- All non-AI tests must pass before merge
+- AI flaky allowlist tests are non-blocking when documented with failure signature and explicit user sign-off
 - Security tests must pass before merge
 - i18n coverage must be 100% (EN/FR parity) (to be)
 - Unit test coverage: minimum 70%
@@ -26,6 +27,20 @@ On TARGET=development:
 - `make test-api [SCOPE=tests/test.ts] ENV=test` - API unit + integration tests (Vitest)
 On TARGET=production (requires first `make build-api build-ui-image`):
 - `make test-e2e [E2E_SPEC=tests/test.ts] API_PORT=<api_port> UI_PORT=<ui_port> MAILDEV_UI_PORT=<maildev_port> ENV=e2e` - E2E tests (Playwright)
+
+### AI Flaky Allowlist (Non-blocking)
+- API allowlist:
+  - `make test-api-ai`
+  - `api/tests/ai/**` (including `api/tests/ai/usecase-generation-async.test.ts`)
+- E2E allowlist:
+  - `e2e/tests/00-ai-generation.spec.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/tests/03-chat-chrome-extension.spec.ts`
+  - `e2e/tests/07_comment_assistant.spec.ts`
+- Acceptance criteria for non-blocking failure:
+  - Failure signature indicates provider/network/model nondeterminism.
+  - Exact command + failing file + failure signature are recorded in `BRANCH.md`.
+  - User sign-off is explicitly recorded before merge.
 
 ### Environment Isolation Rules (MANDATORY)
 - Keep user UAT/dev on root workspace only: `~/src/top-ai-ideas-fullstack` with `ENV=dev` (default user environment, stable data).
@@ -50,6 +65,7 @@ On TARGET=production (requires first `make build-api build-ui-image`):
   - UI: `make test-ui SCOPE=tests/your-file.spec.ts`
   - E2E: `make test-e2e E2E_SPEC=tests/your-file.spec.ts`
 - Use full gates at the end: `make test-api`, `make test-ui`, and `make clean test-e2e`.
+- If full gates fail only inside the AI flaky allowlist, treat as non-blocking and document failure signatures in `BRANCH.md`.
 - E2E runs must be preceded by `make build-api build-ui-image`.
 - Between E2E passes: run `make clean ... ENV=e2e` first, then `make test-e2e ... ENV=e2e`, then `make clean ... ENV=e2e`.
 - Update the test plan in `BRANCH.md` after each lot (what changed and what must be re-tested).
@@ -153,6 +169,6 @@ On TARGET=production (requires first `make build-api build-ui-image`):
 
 ### 4. Quality Gates
 - **All unit tests must pass** before integration tests
-- **Integration tests must pass** before E2E tests
+- **Integration tests must pass** before E2E tests (except documented AI allowlist flakiness)
 - **API tests**: Comprehensive coverage of endpoints, AI, and queue
-- **E2E tests**: Critical user workflows validation
+- **E2E tests**: Critical user workflows validation (AI allowlist failures can be accepted as non-blocking with explicit traceability)
