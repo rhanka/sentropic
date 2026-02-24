@@ -119,7 +119,7 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 
 - [x] **Lot N — Final validation**
   - [x] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
-  - [x] Verify CI status and attach executed command list in PR notes.
+  - [ ] Verify CI status and attach executed command list in PR notes (pending: no PR / no branch-scoped CI run).
   - [x] Ensure branch remains orthogonal, mergeable, and non-blocking.
 
 ## Evidence Log
@@ -167,6 +167,7 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 - `TAIL=40 make logs-ui REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (UI dev server healthy).
 - `curl -s "https://api.github.com/repos/rhanka/top-ai-ideas-fullstack/actions/runs?branch=feat/chrome-plugin-download-distribution&per_page=1"` -> `total_count: 0` (no branch-scoped workflow run currently returned by API).
 - `curl -s "https://api.github.com/repos/rhanka/top-ai-ideas-fullstack/actions/runs?per_page=1"` -> latest repository run visible (`main`, `completed`, `success`, run `22333136646`).
+- CI status note: branch CI validation is still pending until a PR (or explicit branch run) exists for `feat/chrome-plugin-download-distribution`.
 - `make down REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (end-of-lot cleanup).
 - `make ps REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (no running services).
 - `make down REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (explicit E2E cleanup confirmation).
