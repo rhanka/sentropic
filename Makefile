@@ -16,6 +16,10 @@ export VITE_EXTENSION_PROFILE ?= uat
 export VITE_EXTENSION_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
 export VITE_EXTENSION_APP_BASE_URL ?= http://localhost:$(UI_PORT)
 export VITE_EXTENSION_WS_BASE_URL ?=
+export VITE_EXTENSION_PROFILE_BUILD ?= prod
+export VITE_EXTENSION_API_BASE_URL_BUILD ?= https://top-ai-ideas-api.sent-tech.ca/api/v1
+export VITE_EXTENSION_APP_BASE_URL_BUILD ?= https://top-ai-ideas.sent-tech.ca
+export VITE_EXTENSION_WS_BASE_URL_BUILD ?=
 export API_BASE_URL ?= http://localhost:$(API_PORT)
 export UI_BASE_URL ?= http://localhost:$(UI_PORT)
 export MAILDEV_API_URL ?= http://localhost:$(MAILDEV_UI_PORT)
@@ -138,7 +142,12 @@ build: build-ui build-api ## Build UI and API artifacts
 
 .PHONY: build-ui-image
 build-ui-image: ## Build the UI Docker image for production
-	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache ui
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache \
+		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) \
+		ui
 
 .PHONY: build-ui
 build-ui: ## Build the SvelteKit UI (static)

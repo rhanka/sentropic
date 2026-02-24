@@ -339,6 +339,32 @@ Endpoints:
 
 Server normalizes/safeguards tool/origin patterns and persists to `extension_tool_permissions`.
 
+### 5.4 Download Metadata API for Settings Distribution (BR-13)
+
+Endpoint:
+
+- `GET /api/v1/chrome-extension/download`
+
+Response contract:
+
+- `{ version: string; source: string; downloadUrl: string }`
+
+Resolution rules:
+
+1. If `CHROME_EXTENSION_DOWNLOAD_URL` is defined, it must be a valid `http(s)` URL.
+2. If the URL is missing, the API derives a fallback from request `Origin` + `/chrome-extension/top-ai-ideas-chrome-extension.zip`.
+3. If neither a valid env URL nor a valid origin fallback is available, the API returns `503` with an actionable configuration message.
+
+Defaults:
+
+- `CHROME_EXTENSION_VERSION` defaults to `0.1.0`.
+- `CHROME_EXTENSION_SOURCE` defaults to `ui/chrome-ext`.
+
+UI consumption:
+
+- `/settings` reads this endpoint and renders version/source + download CTA.
+- Error payload message is surfaced in the settings Chrome extension card.
+
 ---
 
 ## 6. Manifest V3
@@ -457,35 +483,42 @@ Entry points:
 ```makefile
 # Build the Chrome extension
 build-ext:
-	docker compose run --rm ui npm run build:ext
+	# up-ui + containerized npm run build:ext
 
 # Watch mode for extension development
 dev-ext:
-	docker compose run --rm ui npm run dev:ext
-
-# Package the extension as .zip for Chrome Web Store
-package-ext:
-	cd ui/chrome-ext/dist && zip -r ../../../top-ai-ideas-ext.zip .
+	# up-ui + containerized npm run dev:ext
 ```
+
+`npm run build:ext` executes:
+
+1. extension bundle build (`vite build --config ./chrome-ext/vite.config.ext.ts`)
+2. manifest/icon/metadata copy (`ui/chrome-ext/copy-assets.js`)
+3. zip packaging to static distribution path (`ui/chrome-ext/package-extension-zip.js`)
 
 ### 8.3 Output Structure
 
 ```
 ui/chrome-ext/dist/
 ├── manifest.json
+├── extension-metadata.json
 ├── background.js
 ├── content.js
 ├── chatwidget.js
 ├── chatwidget.css
-├── popup.html
+├── chrome-ext/popup.html
 ├── popup.js
-├── sidepanel.html
+├── chrome-ext/sidepanel.html
 ├── sidepanel.js
+├── chunks/*
 └── icons/
     ├── icon-16.png
     ├── icon-32.png
     ├── icon-48.png
     └── icon-128.png
+
+ui/static/chrome-extension/
+└── top-ai-ideas-chrome-extension.zip
 ```
 
 ---
@@ -536,6 +569,7 @@ initI18n({
   - Runtime tool permissions (`once/always/never`) with backend sync
   - Extension auth token flow and API proxying
   - Tool scope UX in extension sessions (restricted toolset, local toggles, plugin tab behavior)
+  - Download-distribution contract (`/api/v1/chrome-extension/download` + `/settings` download CTA + packaged zip in `ui/static/chrome-extension/`)
 - Remaining:
   - Cross-spec consolidation and final test/doc gates tracked in `BRANCH.md`
 

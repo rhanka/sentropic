@@ -543,6 +543,20 @@
     "queueRunning": "Running",
     "queueDone": "Done",
     "queueFailed": "Failed",
+    "chromeExtension": {
+      "title": "Chrome extension",
+      "description": "Download the latest Chrome extension package configured for this instance.",
+      "experimentalWarning": "(experimental only, for developers)",
+      "loading": "Loading extension package…",
+      "downloadCta": "Download extension (.zip)",
+      "downloadTooltip": "Download the Chrome extension",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
+      }
+    },
     "systemInfo": "System information",
     "systemInfoLabels": {
       "version": "Version",
