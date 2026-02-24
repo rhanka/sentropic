@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.4
 FROM node:24-alpine AS base
 WORKDIR /app
+RUN apk add --no-cache zip
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
     elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install --frozen-lockfile; \
@@ -15,8 +16,19 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 FROM base AS build
 ARG VITE_API_BASE_URL=/api/v1
+ARG VITE_EXTENSION_PROFILE=prod
+ARG VITE_EXTENSION_API_BASE_URL=https://top-ai-ideas-api.sent-tech.ca/api/v1
+ARG VITE_EXTENSION_APP_BASE_URL=https://top-ai-ideas.sent-tech.ca
+ARG VITE_EXTENSION_WS_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_EXTENSION_PROFILE=$VITE_EXTENSION_PROFILE
+ENV VITE_EXTENSION_API_BASE_URL=$VITE_EXTENSION_API_BASE_URL
+ENV VITE_EXTENSION_APP_BASE_URL=$VITE_EXTENSION_APP_BASE_URL
+ENV VITE_EXTENSION_WS_BASE_URL=$VITE_EXTENSION_WS_BASE_URL
 RUN echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+RUN echo "VITE_EXTENSION_PROFILE=$VITE_EXTENSION_PROFILE"
+RUN echo "VITE_EXTENSION_API_BASE_URL=$VITE_EXTENSION_API_BASE_URL"
+RUN echo "VITE_EXTENSION_APP_BASE_URL=$VITE_EXTENSION_APP_BASE_URL"
 RUN npm run build
 CMD ["npm", "run", "build"]
 

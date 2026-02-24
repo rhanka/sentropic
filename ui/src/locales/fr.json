@@ -546,8 +546,10 @@
     "chromeExtension": {
       "title": "Extension Chrome",
       "description": "Téléchargez le dernier package de l'extension Chrome configuré pour cette instance.",
+      "experimentalWarning": "(expérimental seulement, pour développeurs)",
       "loading": "Chargement du package d'extension…",
       "downloadCta": "Télécharger l'extension (.zip)",
+      "downloadTooltip": "Téléchargez l’extension Chrome",
       "retry": "Réessayer",
       "versionLabel": "Version",
       "sourceLabel": "Source",
