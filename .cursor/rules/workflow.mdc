@@ -226,7 +226,11 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 - **Before UAT lot**: `make typecheck-<ui/api>` and `make lint-<ui/api>` for changed components
 - **Before final tests**: `make build-api build-ui-image`
 - **Final tests**: `make test-api`, `make test-ui`, and `make clean test-e2e`
-- **CI/CD**: All tests must pass, guides must be consistent
+- **AI flaky allowlist (non-blocking, must be documented in `BRANCH.md`)**:
+  - API: `make test-api-ai`, `api/tests/ai/**` (including `api/tests/ai/usecase-generation-async.test.ts`)
+  - E2E: `e2e/tests/00-ai-generation.spec.ts`, `e2e/tests/03-chat.spec.ts`, `e2e/tests/03-chat-chrome-extension.spec.ts`, `e2e/tests/07_comment_assistant.spec.ts`
+  - Acceptance rule: if failure signature is consistent with provider/network/model nondeterminism, mark `flaky accepted` with exact command + failing test file + failure signature.
+- **CI/CD**: All non-AI gates must pass; AI allowlist failures require explicit traceability in `BRANCH.md` and user sign-off before merge.
 - **Architecture**: Verify `make` commands work before any changes
 
 ## Dependency Management

@@ -34,6 +34,20 @@
 ## Questions / Notes
 - <Open questions that affect scope or sequencing.>
 
+## AI Flaky Allowlist (MANDATORY)
+- Non-blocking API AI tests:
+  - `make test-api-ai`
+  - `api/tests/ai/**` (including `api/tests/ai/usecase-generation-async.test.ts`)
+- Non-blocking E2E AI tests:
+  - `e2e/tests/00-ai-generation.spec.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/tests/03-chat-chrome-extension.spec.ts`
+  - `e2e/tests/07_comment_assistant.spec.ts`
+- Acceptance rule:
+  - If failures are caused by provider/network/model nondeterminism, mark them as `flaky accepted`.
+  - Record exact command + failing test file + failure signature in `BRANCH.md`.
+  - Capture explicit user sign-off before merge.
+
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
@@ -64,12 +78,13 @@
   - [ ] <Task 1>
   - [ ] <Task 2>
   - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
+    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
       - [ ] <Exhaustive list of API test updates (file-by-file, existing + new)>
       - [ ] <Evolve or add API tests (e.g., update `api/tests/api/organizations.spec.ts` or add `api/tests/api/new-feature.spec.ts`)>
       - [ ] <Scoped runs while evolving tests: `make test-api-<suite> SCOPE=tests/your-file.spec.ts ENV=test-<branch-slug>`>
       - [ ] Sub-lot gate: `make test-api ENV=test-<branch-slug>`
+      - [ ] AI flaky allowlist run (non-blocking): `make test-api-ai ENV=test-<branch-slug>` and document status/signature in `BRANCH.md`
     - [ ] **UI tests (TypeScript only)**
       - [ ] <Exhaustive list of UI TS test updates (file-by-file, existing + new)>
       - [ ] <Evolve or add UI TS tests (e.g., update `ui/tests/stores/organizations.spec.ts` or add `ui/tests/utils/new-feature.spec.ts`)>
@@ -81,6 +96,7 @@
       - [ ] <Evolve or add E2E tests (e.g., update `e2e/tests/05-organizations.spec.ts` or add `e2e/tests/10-new-feature.spec.ts`)>
       - [ ] <Scoped runs while evolving tests: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`>
       - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-<branch-slug> E2E_GROUP=<matrix.e2e_group>` (pour matrix.e2_group = 00 01 02, 03 04 05, 06 06, cf .github/workflows/ci.yml for exact ref of split)
+      - [ ] AI flaky allowlist run (non-blocking): scoped `E2E_SPEC` runs for AI specs and document status/signature in `BRANCH.md`
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] <Instruction by env (chrome plugin, vscode, ...) brefore testing>
       - [ ] <Detailed évol tests>
@@ -110,5 +126,7 @@
   - [ ] Retest UI (cf Lot1, copy checklist)
   - [ ] Retest API (cf Lot1, copy checklist)
   - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky allowlist (non-blocking) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky allowlist test is accepted
   - [ ] Final gate: Créate PR with BRANCH.md content as initial message & Verify CI for the branch
   - [ ] Final commit removes `BRANCH.md` and checks `TODO.md`
