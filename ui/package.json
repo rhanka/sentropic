@@ -5,14 +5,14 @@
   "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "svelte-kit sync && npm run build:ext && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js",
+    "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js && node ./chrome-ext/package-extension-zip.js",
     "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",
     "client:generate": "echo 'Client generation placeholder'"
   },
