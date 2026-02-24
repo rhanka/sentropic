@@ -393,7 +393,7 @@
         </span>
       {:else if chromeExtensionDownloadMetadata}
         <a
-          class="inline-flex h-10 w-10 items-center justify-center rounded p-2 text-primary transition hover:text-primary/80"
+          class="inline-flex h-10 w-10 items-center justify-center rounded p-2 text-primary transition hover:bg-slate-50"
           href={chromeExtensionDownloadMetadata.downloadUrl}
           target="_blank"
           rel="noreferrer noopener"
