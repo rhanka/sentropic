@@ -30,15 +30,17 @@ As a very first thing, when you work on features, you must acknowledge that you 
 
 ### Compose Isolation (MANDATORY)
 - Use `ENV=<branch-slug>` as the short alias; `COMPOSE_PROJECT_NAME` is derived from `ENV` in `Makefile`.
+- Never use shell-prefix env assignments before `make` (forbidden): `ENV=... make ...`.
+- Always pass variables after the Make target, with `ENV` last.
 - Before starting services, verify required host ports are free or already owned by the same Compose project.
 - If a port is taken by another Compose project, pick a new port and set:
   - `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`
 - Keep `VITE_API_BASE_URL` aligned with `API_PORT`.
 - Default ports are defined in `Makefile` and can be overridden via environment variables.
 - Example usage (apply to all Make commands):
-  - `ENV=feat-refactor-mdc API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1081 make dev`
-  - `ENV=feat-refactor-mdc make ps`
-  - `ENV=feat-refactor-mdc make exec-api CMD="node -v"`
+  - `make dev API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1081 ENV=feat-refactor-mdc`
+  - `make ps ENV=feat-refactor-mdc`
+  - `make exec-api CMD="node -v" ENV=feat-refactor-mdc`
 
 ### Orchestrator Framework (MANDATORY)
 - The main agent acts as orchestrator; sub-agents handle **orthogonal** tasks only.
