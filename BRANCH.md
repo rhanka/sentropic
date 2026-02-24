@@ -44,6 +44,10 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
   - Reason: CI must be able to choose/override extension target URLs cleanly.
   - Impact: production extension defaults are now defined in `build-ui-image` variables and overridable in CI.
   - Rollback: restore Dockerfile ARG defaults and revert `build-ui-image` injected vars.
+- `BR13-EX2` (approved): update `spec/**` and `PLAN.md` for Lot N-1 consolidation.
+  - Reason: final branch closure requires permanent spec alignment and roadmap status/dependency traceability.
+  - Impact: documentation-only updates; no runtime behavior or CI pipeline change.
+  - Rollback: revert only BR13 documentation commits.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -109,14 +113,14 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] UAT-01..UAT-05 validated.
     - [x] Result captured: 2026-02-23, tester `antoinefa`, status `OK`.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate branch documentation updates into the relevant `spec/*` files.
-  - [ ] Update `PLAN.md` status and dependency notes after integration readiness.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Consolidate branch documentation updates into the relevant `spec/*` files.
+  - [x] Update `PLAN.md` status and dependency notes after integration readiness.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
-  - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
+- [x] **Lot N — Final validation**
+  - [x] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
+  - [x] Verify CI status and attach executed command list in PR notes.
+  - [x] Ensure branch remains orthogonal, mergeable, and non-blocking.
 
 ## Evidence Log
 - API route implemented: `api/src/routes/api/chrome-extension.ts` and mounted in `api/src/routes/api/index.ts`.
@@ -135,3 +139,35 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
   - `api/tests/api/chrome-extension-download.test.ts`
   - `ui/tests/utils/chrome-extension-download.test.ts`
 - E2E settings coverage extended in `e2e/tests/06-settings.spec.ts` for download card success/error states.
+
+### Lot N-1 docs consolidation evidence (2026-02-24)
+- `BR13-EX2` declared in this file and mirrored in `plan/CONDUCTOR_QUESTIONS.md` before touching conditional paths.
+- Spec consolidation done in `spec/SPEC_CHROME_PLUGIN.md`:
+  - Added API contract section for `GET /api/v1/chrome-extension/download` (fallback/error/default behavior).
+  - Updated build/distribution documentation to reflect current `build:ext` flow and zip output path.
+- Roadmap consolidation done in `PLAN.md`:
+  - Added `3.0) Branch readiness snapshots` with BR-13 `ready-for-push` status and BR-12 dependency note.
+
+### Lot N final validation command log (2026-02-24)
+- `make typecheck-api REGISTRY=local ENV=test-feat-chrome-plugin-download-distribution` -> failed (port collision `0.0.0.0:1080` already allocated).
+- `make down REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (cleanup before rerun).
+- `make typecheck-api REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed.
+- `make lint-api REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed.
+- `make test-api REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed.
+  - Non-AI suites passed.
+  - AI suites (`tests/ai/**`) passed; no flaky allowlist exception used.
+- `make typecheck-ui REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed.
+- `make lint-ui REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed.
+- `make test-ui REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (`20` files, `175` tests).
+- `make build-api build-ui-image REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed.
+- `make clean REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (pre-E2E reset).
+- `make test-e2e REGISTRY=local E2E_SPEC=e2e/tests/06-settings.spec.ts WORKERS=2 RETRIES=0 MAX_FAILURES=1 API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (`16` passed, `3` skipped).
+- `make clean REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (post-E2E reset).
+- `TAIL=40 make logs-api REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (healthy `/api/v1/health` loop).
+- `TAIL=40 make logs-ui REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (UI dev server healthy).
+- `curl -s "https://api.github.com/repos/rhanka/top-ai-ideas-fullstack/actions/runs?branch=feat/chrome-plugin-download-distribution&per_page=1"` -> `total_count: 0` (no branch-scoped workflow run currently returned by API).
+- `curl -s "https://api.github.com/repos/rhanka/top-ai-ideas-fullstack/actions/runs?per_page=1"` -> latest repository run visible (`main`, `completed`, `success`, run `22333136646`).
+- `make down REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (end-of-lot cleanup).
+- `make ps REGISTRY=local API_PORT=8733 UI_PORT=5133 MAILDEV_UI_PORT=1033 ENV=test-feat-chrome-plugin-download-distribution` -> passed (no running services).
+- `make down REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (explicit E2E cleanup confirmation).
+- `make ps REGISTRY=local API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` -> passed (no running services).
