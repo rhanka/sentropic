@@ -33,6 +33,10 @@
 - **Source**: Use the **exact text** of `BRANCH.md` to build the PR title/body (objective + scope + lots + tests).
 - **Format**: Keep PR content in English and include the current test plan from `BRANCH.md`.
 - **Action**: Create the PR only after the branch is in a consistent state (no pending lots except final validation).
+- **Merge-prep sequence (mandatory)**:
+  - Step 1: create/update PR with `BRANCH.md` as the source-of-truth body.
+  - Step 2: complete UAT + CI gates while `BRANCH.md` is still present in branch history and workspace.
+  - Step 3: when UAT + CI are both `OK`, commit deletion of `BRANCH.md`, push, then merge.
 
 ### Orchestration (Conductor-style)
 - Use the main agent as **orchestrator** and sub-agents only for **orthogonal tasks** (e.g., spec review, test plan review, API/UI diffs).
@@ -203,7 +207,7 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 - Follow the final lots in `BRANCH.md` (tests, CI check, final cleanup).
 - Close or defer all branch-related debug tickets in `plan/DEBUG_TICKETS.md` with owner/date before final handoff.
 - Ensure no unauthorized scope drift (all `BRxx-EXn` resolved or explicitly deferred with owner/date).
-- Final cleanup: remove `BRANCH.md`, check `TODO.md`, commit, push.
+- Final cleanup order: `PR from BRANCH.md` -> `UAT + CI green` -> `remove BRANCH.md` -> `push` -> `merge`.
 
 ### CI Monitoring (MANDATORY)
 - After any push to a feature branch or PR update, automatically verify GitHub Actions runs.
