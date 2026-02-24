@@ -95,7 +95,7 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] `make test-e2e REGISTRY=local E2E_SPEC=e2e/tests/06-settings.spec.ts WORKERS=2 RETRIES=0 MAX_FAILURES=1 API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093 ENV=e2e-feat-chrome-plugin-download-distribution` (16 passed, 3 skipped)
 
 - [x] **Lot N-2 — UAT: Chrome extension developer distribution**
-  - [x] Pre-flight (nominal root environment): `make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`, log in with a valid user, open `/settings`.
+  - [x] Pre-flight (nominal root environment): `make -C /home/antoinefa/src/top-ai-ideas-fullstack down ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack build-ext ENV=dev` then `make -C /home/antoinefa/src/top-ai-ideas-fullstack dev ENV=dev`, log in with a valid user, open `/settings`.
   - [x] UAT-01: Download the extension package from the Settings Chrome extension card.
   - [x] UAT-02: Load/install the unpacked extension in Chrome developer mode.
   - [x] UAT-03: Sign in to the current instance from the extension.
@@ -106,7 +106,7 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
     - [x] Result captured: 2026-02-23, tester `antoinefa`, status `OK`.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate branch learnings into the relevant `spec/*` files.
+  - [ ] Consolidate branch documentation updates into the relevant `spec/*` files.
   - [ ] Update `PLAN.md` status and dependency notes after integration readiness.
 
 - [ ] **Lot N — Final validation**
@@ -117,8 +117,16 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 ## Evidence Log
 - API route implemented: `api/src/routes/api/chrome-extension.ts` and mounted in `api/src/routes/api/index.ts`.
 - Env keys added: `CHROME_EXTENSION_DOWNLOAD_URL`, `CHROME_EXTENSION_VERSION`, `CHROME_EXTENSION_SOURCE` in `api/src/config/env.ts`.
-- Packaging metadata generated in extension build output: `ui/chrome-ext/copy-assets.js` now writes `manifest.json` with package version + `extension-metadata.json`.
-- Settings UI integration: `ui/src/routes/settings/+page.svelte` with download card and loading/error/retry states.
+- Packaging metadata generated in extension build output: `ui/chrome-ext/copy-assets.js` writes `manifest.json` with package version + `extension-metadata.json`.
+- Packaging zip automation added: `ui/chrome-ext/package-extension-zip.js` creates `ui/static/chrome-extension/top-ai-ideas-chrome-extension.zip` with a root folder (`top-ai-ideas-chrome-extension/`).
+- Build pipeline hardened for clean CI/container builds:
+  - `ui/package.json` `build` now runs `svelte-kit sync && npm run build:ext && vite build`.
+  - `ui/chrome-ext/tsconfig.json` added so extension build does not depend on pre-existing `.svelte-kit` files.
+  - `ui/Dockerfile` installs `zip` in base image and sets explicit production defaults for extension runtime config args (`VITE_EXTENSION_*`).
+- Settings UI integration refined in `ui/src/routes/settings/+page.svelte`:
+  - localized developer warning text on Chrome extension card,
+  - localized download tooltip,
+  - icon CTA aligned with existing icon-button pattern.
 - UI/API helper tests added:
   - `api/tests/api/chrome-extension-download.test.ts`
   - `ui/tests/utils/chrome-extension-download.test.ts`
