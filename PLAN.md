@@ -61,6 +61,12 @@ Cross-reference baseline specs:
 | BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |
 | BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07, BR-13 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
 
+### 3.0) Branch readiness snapshots
+
+- **BR-13** (`feat/chrome-plugin-download-distribution`) status on 2026-02-24: `ready-for-push`.
+  - UAT already validated on 2026-02-23 (`OK`, tester `antoinefa`).
+  - Dependency note: BR-13 output is now available as an input for BR-12 (Chrome/VSCode publish automation wave).
+
 ## 3.1) Branch scope matrix (touch boundaries)
 
 Global no-touch default for all branches (unless approved exception `BRxx-EXn`):

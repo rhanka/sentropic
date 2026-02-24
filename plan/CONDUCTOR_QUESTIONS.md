@@ -65,3 +65,9 @@ Resolved on 2026-02-22: owner is conductor (Codex) and `tmp/feat-roadmap-stabili
   Reason: standardize tmp setup on `git worktree` to avoid isolated clone drift and simplify conductor orchestration.
   Impact: documentation/process only, no product/runtime change.
   Rollback: revert the `Tmp workspace setup` section to previous clone-based instructions.
+
+- **BR13-EX2** (approved, 2026-02-24)
+  Path: `spec/**`, `PLAN.md` (`Conditional Paths` override for BR-13).
+  Reason: close Lot N-1 by consolidating Chrome plugin download-distribution behavior into long-lived specs and by updating roadmap branch status/dependencies.
+  Impact: documentation-only updates for branch traceability and merge readiness.
+  Rollback: revert BR-13 documentation consolidation commit.
