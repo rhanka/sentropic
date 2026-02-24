@@ -40,6 +40,10 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 - Distribution default for fast delivery: unsigned zip artifact for developer side-load.
 - URL source of truth: server-side config (instance-level), exposed via API to the settings page.
 - Signed CRX and store publication remain out of this branch (handled later by release branch).
+- `BR13-EX1` (approved): update `Makefile` to move production extension build-arg fallbacks out of `ui/Dockerfile`.
+  - Reason: CI must be able to choose/override extension target URLs cleanly.
+  - Impact: production extension defaults are now defined in `build-ui-image` variables and overridable in CI.
+  - Rollback: restore Dockerfile ARG defaults and revert `build-ui-image` injected vars.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -122,7 +126,7 @@ Deliver a fast distribution path for the Chrome plugin: package artifact generat
 - Build pipeline hardened for clean CI/container builds:
   - `ui/package.json` `build` now runs `svelte-kit sync && npm run build:ext && vite build`.
   - `ui/chrome-ext/tsconfig.json` added so extension build does not depend on pre-existing `.svelte-kit` files.
-  - `ui/Dockerfile` installs `zip` in base image and sets explicit production defaults for extension runtime config args (`VITE_EXTENSION_*`).
+  - `ui/Dockerfile` installs `zip` in base image; production extension defaults moved to `Makefile` (`build-ui-image`) via overridable `VITE_EXTENSION_*_BUILD` variables and explicit Docker `--build-arg` forwarding.
 - Settings UI integration refined in `ui/src/routes/settings/+page.svelte`:
   - localized developer warning text on Chrome extension card,
   - localized download tooltip,
