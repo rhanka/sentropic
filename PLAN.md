@@ -1,6 +1,6 @@
 # PLAN - Two-Week Orchestrated Roadmap
 
-Status: Active roadmap plan (created 2026-02-22, updated 2026-02-24 with BR-01 docs consolidation)
+Status: Active roadmap plan (created 2026-02-22, updated 2026-02-25 with branch status clarity)
 Window: 2026-02-23 to 2026-03-08
 
 ## 1) Delivery targets in this window
@@ -44,32 +44,34 @@ Cross-reference baseline specs:
 
 ## 3) Branch catalog (ordered priority)
 
-| ID | Branch | Objective | Target | Depends on | BRANCH.md path |
-|---|---|---|---|---|---|
-| BR-00 | `feat/roadmap-stabilization` | Rebase/integration stabilization + minimatch exception lifecycle | W1 | none | `plan/00-BRANCH_feat-roadmap-stabilization.md` |
-| BR-01 | `feat/model-runtime-openai-gemini` | Provider abstraction + 2 providers + BYOK precedence | W1 | BR-00 | `plan/01-BRANCH_feat-model-runtime-openai-gemini.md` |
-| BR-02 | `feat/sso-chatgpt` | Codex sign-in roadmap alignment + rollback of in-app OpenAI SSO attempt (docs/process only) | W1 | BR-00 | `plan/02-BRANCH_feat-sso-chatgpt.md` |
-| BR-03 | `feat/todo-steering-workflow-core` | TODO v1 + steering v1 + workflow core | W1 | BR-00 | `plan/03-BRANCH_feat-todo-steering-workflow-core.md` |
-| BR-04 | `feat/workspace-template-catalog` | Multi-template workspace foundation (`ai-ideas`, `todo`) | W1 | BR-03 | `plan/04-BRANCH_feat-workspace-template-catalog.md` |
-| BR-05 | `feat/vscode-plugin-v1` | VSCode plugin v1 (`plan/tools/summary/checkpoint`) + Codex sign-in integration (dev/plugin workflow) | W1 | BR-01, BR-03 | `plan/05-BRANCH_feat-vscode-plugin-v1.md` |
-| BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | BR-00 | `plan/06-BRANCH_feat-chrome-upstream-v1.md` |
-| BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | BR-00 | `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` |
-| BR-13 | `feat/chrome-plugin-download-distribution` | Package Chrome plugin and expose downloadable URL in `/settings` | W1 | BR-06 | `plan/13-BRANCH_feat-chrome-plugin-download-distribution.md` |
-| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
-| BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | BR-00 | `plan/09-BRANCH_feat-sso-google.md` |
-| BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | BR-05, BR-08 | `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
-| BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |
-| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | BR-05, BR-06, BR-07, BR-13 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
+| ID | Branch | Objective | Target | Status | Depends on | BRANCH.md path |
+|---|---|---|---|---|---|---|
+| BR-00 | `feat/roadmap-stabilization` | Rebase/integration stabilization + minimatch exception lifecycle | W1 | `done` | none | `plan/00-BRANCH_feat-roadmap-stabilization.md` |
+| BR-01 | `feat/model-runtime-openai-gemini` | Provider abstraction + 2 providers + BYOK precedence | W1 | `done` | BR-00 | `plan/01-BRANCH_feat-model-runtime-openai-gemini.md` |
+| BR-02 | `feat/sso-chatgpt` | Codex sign-in roadmap alignment + rollback of in-app OpenAI SSO attempt (docs/process only) | W1 | `done` | BR-00 | `plan/02-BRANCH_feat-sso-chatgpt.md` |
+| BR-03 | `feat/todo-steering-workflow-core` | TODO v1 + steering v1 + workflow core | W1 | `plan` | BR-00 | `plan/03-BRANCH_feat-todo-steering-workflow-core.md` |
+| BR-04 | `feat/workspace-template-catalog` | Multi-template workspace foundation (`ai-ideas`, `todo`) | W1 | `plan` | BR-03 | `plan/04-BRANCH_feat-workspace-template-catalog.md` |
+| BR-05 | `feat/vscode-plugin-v1` | VSCode plugin v1 (`plan/tools/summary/checkpoint`) + Codex sign-in integration (dev/plugin workflow) | W1 | `plan` | BR-01, BR-03 | `plan/05-BRANCH_feat-vscode-plugin-v1.md` |
+| BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | `plan` | BR-00 | `plan/06-BRANCH_feat-chrome-upstream-v1.md` |
+| BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | `plan` | BR-00 | `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` |
+| BR-13 | `feat/chrome-plugin-download-distribution` | Package Chrome plugin and expose downloadable URL in `/settings` | W1 | `done` | BR-06 | `plan/13-BRANCH_feat-chrome-plugin-download-distribution.md` |
+| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | `plan` | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
+| BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | `plan` | BR-00 | `plan/09-BRANCH_feat-sso-google.md` |
+| BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | `plan` | BR-05, BR-08 | `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
+| BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | `plan` | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |
+| BR-12 | `feat/release-chrome-vscode-ci-publish` | CI automated publishing for Chrome + VSCode | W2 | `plan` | BR-05, BR-06, BR-07, BR-13 | `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` |
 
 ### 3.0) Branch readiness snapshots
 
-- **BR-13** (`feat/chrome-plugin-download-distribution`) status on 2026-02-24: `ready-for-push`.
+- **BR-13** (`feat/chrome-plugin-download-distribution`) status: `done`.
   - UAT already validated on 2026-02-23 (`OK`, tester `antoinefa`).
   - Dependency note: BR-13 output is now available as an input for BR-12 (Chrome/VSCode publish automation wave).
-- **BR-01** (`feat/model-runtime-openai-gemini`) status on 2026-02-24: `ready-for-push`.
+- **BR-01** (`feat/model-runtime-openai-gemini`) status: `done`.
   - UAT checklist validated by user on root UAT workspace.
   - Delivered scope consolidated into `spec/SPEC_CHATBOT.md`.
   - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` now tracks only remaining deltas (post-BR-01).
+- **BR-02** (`feat/sso-chatgpt`) status: `done` (branch closed by product pivot).
+- **BR-00** (`feat/roadmap-stabilization`) status: `done`.
 
 ## 3.1) Branch scope matrix (touch boundaries)
 
@@ -140,30 +142,30 @@ graph TD
 ## 5) Waves (max 3 parallel branches)
 
 ### Wave W0 (2026-02-23)
-- BR-00
+- BR-00 (`done`)
 
 ### Wave W1 (2026-02-24 to 2026-02-26)
-- BR-01
-- BR-02
-- BR-03
+- BR-01 (`done`)
+- BR-02 (`done`)
+- BR-03 (`plan`)
 
 ### Wave W2 (2026-02-26 to 2026-03-01)
-- BR-04
-- BR-05
-- BR-06
+- BR-04 (`plan`)
+- BR-05 (`plan`)
+- BR-06 (`plan`)
 
 ### Wave W3 (2026-02-27 to 2026-03-01)
-- BR-07
-- BR-13
+- BR-07 (`plan`)
+- BR-13 (`done`)
 
 ### Wave W4 (2026-03-02 to 2026-03-05)
-- BR-08
-- BR-09
-- BR-10
+- BR-08 (`plan`)
+- BR-09 (`plan`)
+- BR-10 (`plan`)
 
 ### Wave W5 (2026-03-05 to 2026-03-08)
-- BR-11
-- BR-12
+- BR-11 (`plan`)
+- BR-12 (`plan`)
 
 ## 6) Environment and branch execution convention
 
@@ -220,7 +222,7 @@ After 2026-03-08, create a new planning pass to map them into branch waves using
 ## 10) Execution notes
 
 - 2026-02-22: BR-00 marked ready to unblock W1.
-  - QL-1 baseline decisions consolidated in `plan/CONDUCTOR_QUESTIONS.md`.
+  - QL-1 baseline decisions consolidated in BR-00 branch notes.
   - Runtime code change proof for BR-00 is empty under `api/**`, `ui/**`, `e2e/**`; full gates skipped per BR00-D3 policy.
   - Temporary minimatch exception remains planned for closure in BR-07 (`target due date: 2026-03-01`).
 - 2026-02-24: BR-01 (`feat/model-runtime-openai-gemini`) reached push-readiness closure in isolated env `test-br01-final-gemini`.

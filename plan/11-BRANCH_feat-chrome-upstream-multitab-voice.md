@@ -10,6 +10,7 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-chrome-upstream-multitab-voice` `API_PORT=8711` `UI_PORT=5111` `MAILDEV_UI_PORT=1011`.
@@ -20,7 +21,6 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
   - `ui/**`
   - `e2e/**`
   - `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,12 +34,25 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - CHU-Q3: Conflict resolution when multiple tabs match intent.
 - CHU-Q4: Voice provider/runtime constraints for privacy and performance.
 - CHU-Q5: Session timeout and forced re-approval policy.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -66,6 +79,9 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
 
 - [ ] **Lot 1 — Multi-Tab Orchestration**
   - [ ] Implement tab registry and tab-scoped command targeting.
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Implement arbitration rules for active/background tab control.
   - [ ] Add rollback-safe checkpoint markers for multi-tab command chains.
   - [ ] Lot 1 gate:
@@ -92,9 +108,15 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
     - [ ] `make build-api build-ui-image API_PORT=8711 UI_PORT=5111 MAILDEV_UI_PORT=1011 ENV=e2e-feat-chrome-upstream-multitab-voice`
     - [ ] `make clean test-e2e API_PORT=8711 UI_PORT=5111 MAILDEV_UI_PORT=1011 ENV=e2e-feat-chrome-upstream-multitab-voice`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
+  - [ ] Chrome plugin (if impacted)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -103,4 +125,3 @@ Extend Chrome upstream control to multi-tab orchestration and voice commands wit
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
