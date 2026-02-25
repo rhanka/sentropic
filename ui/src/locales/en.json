@@ -334,7 +334,10 @@
     "context": "Context",
     "contextPlaceholder": "Describe the business context and objectives…",
       "useCaseCount": "Number of use cases",
+      "modelLabel": "Generation model",
+      "modelHint": "Used for use-case and matrix generation for this folder.",
       "default": "Default: {count}",
+      "loadingModelCatalog": "Loading models…",
       "loadingOrganizations": "Loading organizations…",
       "noOrganizations": "No organizations available.",
       "documentsTitle": "Documents",
@@ -358,6 +361,7 @@
         "readOnlyCreateDisabled": "Read-only mode: creation disabled.",
         "readOnlyActionNotAllowed": "Read-only mode: action not allowed.",
         "draftLoadFailed": "Unable to load draft",
+        "loadModelCatalog": "Error while loading models",
         "missingInput": "Provide a context, a name, or add a document.",
         "create": "Error while creating folder",
         "generationStart": "Error while starting generation"
@@ -529,7 +533,22 @@
     "promptManagement": "AI prompts management",
     "aiConfig": "AI configuration",
     "aiLoading": "Loading settings…",
-    "aiDefaultModel": "Default OpenAI model",
+    "userAi": {
+      "title": "AI configuration",
+      "description": "Choose the default AI model for your new chats and generation forms.",
+      "save": "Save settings",
+      "saving": "Saving…",
+      "toast": {
+        "updated": "Personal AI configuration updated."
+      },
+      "errors": {
+        "load": "Error while loading personal AI settings",
+        "save": "Error while saving personal AI settings"
+      }
+    },
+    "aiDefaultProvider": "Default provider",
+    "aiDefaultProviderHint": "Provider used for chat and structured AI runs by default",
+    "aiDefaultModel": "Default model",
     "aiDefaultModelHint": "Model used by default for all AI operations",
     "aiConcurrency": "Concurrent jobs",
     "aiConcurrencyHint": "Number of AI jobs processed in parallel (1-50)",

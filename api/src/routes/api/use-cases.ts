@@ -553,7 +553,7 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
-    const aiSettings = await settingsService.getAISettings();
+    const aiSettings = await settingsService.getAISettings({ userId });
     const selectedModel = model || aiSettings.defaultModel;
 
     let organizationMatrixTemplate: Record<string, unknown> | null = null;
@@ -715,7 +715,7 @@ useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), 
     const { model } = c.req.valid('json');
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
-    const aiSettings = await settingsService.getAISettings();
+    const aiSettings = await settingsService.getAISettings({ userId });
     const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer le cas d'usage

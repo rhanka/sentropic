@@ -6,8 +6,13 @@ test.describe.serial('Chat extension evolutions', () => {
   const composerSelector = '[role="textbox"][aria-label="Composer"]';
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
-    const editable = composer.locator('[contenteditable="true"]');
-    await editable.click();
+    const editable = page
+      .locator(
+        '[role="textbox"][aria-label="Composer"][contenteditable="true"]:visible, [role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]:visible'
+      )
+      .first();
+    await expect(editable).toBeVisible({ timeout: 5_000 });
+    await editable.focus();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(message);
@@ -206,6 +211,9 @@ test.describe.serial('Chat extension evolutions', () => {
     const tabActionToggle = menu.locator('button', { hasText: 'Onglet (actions)' }).first();
     await expect(tabActionToggle).toBeVisible({ timeout: 10_000 });
     await tabActionToggle.click();
+    await menuButton.click();
+    await expect(menu).not.toBeVisible({ timeout: 10_000 });
+    await expect(composer).toBeVisible({ timeout: 10_000 });
 
     const secondRequest = await sendMessageAndWaitApi(
       page,
@@ -218,4 +226,3 @@ test.describe.serial('Chat extension evolutions', () => {
     expect(secondNames).toEqual(['tab_read']);
   });
 });
-

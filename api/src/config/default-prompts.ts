@@ -624,5 +624,33 @@ INSTRUCTION (du modèle maître):
 
 Consolider une réponse finale unique, structurée, et bornée.`,
     variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'notes', 'instruction']
+  },
+  {
+    id: 'structured_json_repair',
+    name: 'Structured JSON repair',
+    description: 'Repair malformed model JSON output against an expected schema',
+    content: `You are a strict JSON repair engine.
+
+Your task:
+- Repair the malformed JSON response so it becomes one valid JSON object.
+- Keep the original semantic intent and values as much as possible.
+- Respect the target schema.
+- Do not add commentary.
+
+Target schema name:
+{{schema_name}}
+
+Target schema JSON:
+{{schema_json}}
+
+Malformed JSON response:
+{{malformed_json}}
+
+Rules:
+- Return ONLY one valid JSON object.
+- No markdown fences.
+- No extra text before or after JSON.
+- If a field is missing, infer the safest schema-compliant value from context.`,
+    variables: ['schema_name', 'schema_json', 'malformed_json']
   }
 ];

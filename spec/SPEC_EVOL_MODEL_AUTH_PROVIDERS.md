@@ -1,6 +1,6 @@
 # SPEC EVOL - Model Providers and SSO Federation
 
-Status: Draft for roadmap orchestration (2026-02-22)
+Status: Active evolution backlog (2026-02-24). Delivered BR-01 baseline has been consolidated into `spec/SPEC_CHATBOT.md`.
 
 ## 1) Objective
 Deliver a production-ready multi-provider AI runtime and identity federation in two milestones:
@@ -37,8 +37,8 @@ Relevant references:
 
 Current state summary:
 - Auth and session flows are WebAuthn-first.
-- AI runtime is mostly OpenAI-centric.
-- Model switching in chat is not complete (`SPEC_CHATBOT.md`, CU-006/CU-007).
+- AI runtime baseline is OpenAI+Gemini (delivered in BR-01).
+- Remaining chatbot delta in this EVOL scope is mainly deepening/fallback behavior (`SPEC_CHATBOT.md`, CU-007).
 
 ## 4) Target capabilities
 
@@ -78,6 +78,10 @@ Current state summary:
 - Keep existing WebAuthn login path available (no regression).
 - Support linking/unlinking SSO identities from existing users.
 
+### 4.5 User-scoped defaults and generation alignment
+- Delivered in BR-01 and consolidated into `spec/SPEC_CHATBOT.md` (runtime baseline section).
+- Out of this EVOL backlog unless new deltas are explicitly opened.
+
 ## 5) Branch plan
 
 - `feat/model-runtime-openai-gemini` (W1)
@@ -96,21 +100,28 @@ W1:
 - Two providers are selectable and functional in chat and structured flows.
 - OpenAI/ChatGPT SSO works for admin and user roles.
 - No regression on existing WebAuthn login and session refresh.
+- User can set a personal default provider/model, inherited from admin defaults when unset.
+- Chat and generation flows default to user preferences, with per-conversation/per-generation overrides.
+- BR-01 follow-up is delivered with a single schema migration on `settings` (`user_id` FK + scoped uniqueness constraints).
 
 W2:
 - Four providers are available and testable (`OpenAI`, `Gemini`, `Claude`, `Mistral`).
 - Google SSO is functional with account linking.
 - Provider outage on one adapter does not break all runtime flows.
 
-## 7) Open questions
+## 7) Consolidation note (2026-02-24)
 
-- `MPA-Q1`: What is the canonical naming/versioning policy for model IDs exposed in UI?
-- `MPA-Q2`: Should SSO users be auto-linked by email, or require explicit user confirmation?
-- `MPA-Q3`: Are admins allowed to enforce provider deny/allow lists per workspace?
+- Delivered BR-01 runtime scope has been moved to `spec/SPEC_CHATBOT.md` to keep one canonical implementation spec.
+- This EVOL document now tracks remaining roadmap deltas (not yet delivered), primarily:
+  - OpenAI/ChatGPT SSO and Google SSO federation milestones,
+  - W2 provider expansion (`Claude`, `Mistral`) and associated routing/fallback policies.
+
+## 8) Open questions
+
 - `MPA-Q4`: What is the compliance baseline for provider request/response retention?
 - `MPA-Q5`: Do we require provider-level fallback in the same request, or only user-driven retry?
 
-## 8) Risks
+## 9) Risks
 
 - Provider SDK/API instability across releases.
 - SSO edge-cases with account linking and duplicate identities.

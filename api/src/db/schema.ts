@@ -69,11 +69,16 @@ export const useCases = pgTable('use_cases', {
 });
 
 export const settings = pgTable('settings', {
-  key: text('key').primaryKey(),
+  key: text('key').notNull(),
+  userId: text('user_id'),
   value: text('value'),
   description: text('description'),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
-});
+}, (table) => ({
+  keyIdx: index('settings_key_idx').on(table.key),
+  userIdIdx: index('settings_user_id_idx').on(table.userId),
+  userKeyIdx: index('settings_user_key_idx').on(table.userId, table.key),
+}));
 
 export const businessConfig = pgTable('business_config', {
   id: text('id').primaryKey(),

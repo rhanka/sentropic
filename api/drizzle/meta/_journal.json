@@ -155,6 +155,13 @@
       "when": 1771459200000,
       "tag": "0021_extension_tool_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1771545600000,
+      "tag": "0022_settings_user_scope",
+      "breakpoints": true
     }
   ]
 }

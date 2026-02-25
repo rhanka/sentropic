@@ -28,6 +28,7 @@
   import type { MatrixConfig } from '$lib/types/matrix';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { renderInlineMarkdown } from '$lib/utils/markdown';
+  import { formatCompactModelLabel } from '$lib/utils/model-display';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
@@ -542,7 +543,7 @@
         {/if}
         {#if currentFolder.model}
           <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-            {currentFolder.model}
+            {formatCompactModelLabel(currentFolder.model)}
           </span>
         {/if}
         <LockPresenceBadge
@@ -748,7 +749,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             {#if useCase.model}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
-                {useCase.model}
+                {formatCompactModelLabel(useCase.model)}
               </span>
             {/if}
             {#if isDetailing}

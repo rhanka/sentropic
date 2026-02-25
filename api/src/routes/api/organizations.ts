@@ -228,7 +228,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
     acceptLanguageHeader: c.req.header('accept-language')
   });
 
-  const aiSettings = await settingsService.getAISettings();
+  const aiSettings = await settingsService.getAISettings({ userId });
   const selectedModel = model || aiSettings.defaultModel;
 
   const [org] = await db

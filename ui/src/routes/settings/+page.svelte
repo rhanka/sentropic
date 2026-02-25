@@ -12,6 +12,7 @@
     getChromeExtensionDownloadErrorMessage,
     type ChromeExtensionDownloadMetadata,
   } from '$lib/utils/chrome-extension-download';
+  import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import { Download, Edit, X } from '@lucide/svelte';
@@ -22,6 +23,33 @@
     description: string;
     content: string;
     variables: string[];
+  }
+
+  interface CatalogProvider {
+    provider_id: 'openai' | 'gemini';
+    label: string;
+    status: 'ready' | 'planned';
+  }
+
+  interface CatalogModel {
+    provider_id: 'openai' | 'gemini';
+    model_id: string;
+    label: string;
+    default_contexts: string[];
+  }
+
+  interface ModelCatalogPayload {
+    providers: CatalogProvider[];
+    models: CatalogModel[];
+    defaults: {
+      provider_id: 'openai' | 'gemini';
+      model_id: string;
+    };
+  }
+
+  interface ModelCatalogGroup {
+    provider: CatalogProvider;
+    models: CatalogModel[];
   }
 
   let isResetting = false;
@@ -40,11 +68,41 @@
   let aiSettings = {
     concurrency: 10,
     publishingConcurrency: 5,
-    defaultModel: 'gpt-5',
+    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultModel: 'gpt-5.2',
     processingInterval: 1000
   };
+  let modelCatalog: ModelCatalogPayload = {
+    providers: [],
+    models: [],
+    defaults: { provider_id: 'openai', model_id: 'gpt-4.1-nano' }
+  };
+  let modelCatalogGroups: ModelCatalogGroup[] = [];
   let isLoadingAISettings = false;
+  let isLoadingModelCatalog = false;
   let isSavingAISettings = false;
+  let userAISettings = {
+    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultModel: 'gpt-4.1-nano',
+  };
+  let isLoadingUserAISettings = false;
+  let isSavingUserAISettings = false;
+
+  const modelSelectionKey = (providerId: 'openai' | 'gemini', modelId: string) =>
+    `${providerId}::${modelId}`;
+
+  const parseModelSelectionKey = (
+    rawKey: string
+  ): { providerId: 'openai' | 'gemini'; modelId: string } | null => {
+    const separatorIndex = rawKey.indexOf('::');
+    if (separatorIndex <= 0) return null;
+    const providerCandidate = rawKey.slice(0, separatorIndex);
+    const modelId = rawKey.slice(separatorIndex + 2);
+    if ((providerCandidate !== 'openai' && providerCandidate !== 'gemini') || !modelId) {
+      return null;
+    }
+    return { providerId: providerCandidate, modelId };
+  };
   
   // Gestion de la queue
   let queueStats = {
@@ -59,10 +117,12 @@
   onMount(async () => {
     await loadMe();
     await loadChromeExtensionDownloadMetadata();
+    await loadModelCatalog();
+    await loadUserAISettings();
     if (isAdmin()) {
-    await loadPrompts();
-    await loadAISettings();
-    await loadQueueStats();
+      await loadPrompts();
+      await loadAISettings();
+      await loadQueueStats();
     }
   });
 
@@ -207,9 +267,174 @@
     }
   };
 
+  const loadUserAISettings = async () => {
+    isLoadingUserAISettings = true;
+    try {
+      const payload = await apiGet<{
+        defaultProviderId: 'openai' | 'gemini';
+        defaultModel: string;
+      }>('/me/ai-settings');
+      userAISettings.defaultProviderId = payload.defaultProviderId;
+      userAISettings.defaultModel = payload.defaultModel;
+    } catch (error) {
+      console.error('Failed to load user AI settings:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.userAi.errors.load')
+      });
+    } finally {
+      isLoadingUserAISettings = false;
+    }
+  };
+
+  const loadModelCatalog = async () => {
+    isLoadingModelCatalog = true;
+    try {
+      modelCatalog = await apiGet<ModelCatalogPayload>('/models/catalog');
+    } catch (error) {
+      console.error('Failed to load model catalog:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.ai.errors.load')
+      });
+    } finally {
+      isLoadingModelCatalog = false;
+    }
+  };
+
+  $: modelCatalogGroups = modelCatalog.providers
+    .map((provider) => ({
+      provider,
+      models: modelCatalog.models.filter((entry) => entry.provider_id === provider.provider_id)
+    }))
+    .filter((group) => group.models.length > 0);
+
+  $: {
+    if (modelCatalog.models.length > 0) {
+      const exactMatch = modelCatalog.models.find(
+        (entry) =>
+          entry.provider_id === aiSettings.defaultProviderId &&
+          entry.model_id === aiSettings.defaultModel
+      );
+      if (!exactMatch) {
+        const providerFallback =
+          modelCatalog.models.find((entry) => entry.provider_id === aiSettings.defaultProviderId) ??
+          modelCatalog.models[0];
+        aiSettings.defaultProviderId = providerFallback.provider_id;
+        aiSettings.defaultModel = providerFallback.model_id;
+      }
+    }
+  }
+
+  $: {
+    if (modelCatalog.models.length > 0) {
+      const exactMatch = modelCatalog.models.find(
+        (entry) =>
+          entry.provider_id === userAISettings.defaultProviderId &&
+          entry.model_id === userAISettings.defaultModel
+      );
+      if (!exactMatch) {
+        const providerFallback =
+          modelCatalog.models.find(
+            (entry) => entry.provider_id === userAISettings.defaultProviderId
+          ) ?? modelCatalog.models[0];
+        userAISettings.defaultProviderId = providerFallback.provider_id;
+        userAISettings.defaultModel = providerFallback.model_id;
+      }
+    }
+  }
+
+  const handleDefaultModelSelectionChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    if (!target) return;
+    const parsed = parseModelSelectionKey(target.value);
+    if (!parsed) return;
+    aiSettings.defaultProviderId = parsed.providerId;
+    aiSettings.defaultModel = parsed.modelId;
+  };
+
+  const handleUserDefaultModelSelectionChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    if (!target) return;
+    const parsed = parseModelSelectionKey(target.value);
+    if (!parsed) return;
+    userAISettings.defaultProviderId = parsed.providerId;
+    userAISettings.defaultModel = parsed.modelId;
+  };
+
+  const selectedDefaultModelSelectionKey = () => {
+    if (!aiSettings.defaultModel) return '';
+    return modelSelectionKey(aiSettings.defaultProviderId, aiSettings.defaultModel);
+  };
+
+  const selectedUserDefaultModelSelectionKey = () => {
+    if (!userAISettings.defaultModel) return '';
+    return modelSelectionKey(
+      userAISettings.defaultProviderId,
+      userAISettings.defaultModel
+    );
+  };
+
+  const providerGroupLabel = (provider: CatalogProvider) => {
+    return provider.status === 'ready'
+      ? provider.label
+      : `${provider.label} (${provider.status})`;
+  };
+
+  const fallbackDefaultModelOption = () => {
+    return modelCatalog.models.find((entry) => entry.model_id === aiSettings.defaultModel);
+  };
+
+  const fallbackUserDefaultModelOption = () => {
+    return modelCatalog.models.find(
+      (entry) => entry.model_id === userAISettings.defaultModel
+    );
+  };
+
+  const normalizeAIModelSelection = () => {
+    const selectedModel = modelCatalog.models.find(
+      (entry) =>
+        entry.provider_id === aiSettings.defaultProviderId &&
+        entry.model_id === aiSettings.defaultModel
+    );
+    if (selectedModel) return;
+    const byModelId = modelCatalog.models.find((entry) => entry.model_id === aiSettings.defaultModel);
+    if (byModelId) {
+      aiSettings.defaultProviderId = byModelId.provider_id;
+      return;
+    }
+    const firstModel = modelCatalog.models[0];
+    if (firstModel) {
+      aiSettings.defaultProviderId = firstModel.provider_id;
+      aiSettings.defaultModel = firstModel.model_id;
+    }
+  };
+
+  const normalizeUserAIModelSelection = () => {
+    const selectedModel = modelCatalog.models.find(
+      (entry) =>
+        entry.provider_id === userAISettings.defaultProviderId &&
+        entry.model_id === userAISettings.defaultModel
+    );
+    if (selectedModel) return;
+    const byModelId = modelCatalog.models.find(
+      (entry) => entry.model_id === userAISettings.defaultModel
+    );
+    if (byModelId) {
+      userAISettings.defaultProviderId = byModelId.provider_id;
+      return;
+    }
+    const firstModel = modelCatalog.models[0];
+    if (firstModel) {
+      userAISettings.defaultProviderId = firstModel.provider_id;
+      userAISettings.defaultModel = firstModel.model_id;
+    }
+  };
+
   const saveAISettings = async () => {
     isSavingAISettings = true;
     try {
+      normalizeAIModelSelection();
       const result = await apiPut('/ai-settings', aiSettings);
       aiSettings = result.settings;
       addToast({
@@ -224,6 +449,35 @@
       });
     } finally {
       isSavingAISettings = false;
+    }
+  };
+
+  const saveUserAISettings = async () => {
+    isSavingUserAISettings = true;
+    try {
+      normalizeUserAIModelSelection();
+      const result = await apiPut('/me/ai-settings', {
+        defaultProviderId: userAISettings.defaultProviderId,
+        defaultModel: userAISettings.defaultModel,
+      });
+      userAISettings.defaultProviderId = result.settings.defaultProviderId;
+      userAISettings.defaultModel = result.settings.defaultModel;
+      emitUserAISettingsUpdated({
+        defaultProviderId: userAISettings.defaultProviderId,
+        defaultModel: userAISettings.defaultModel,
+      });
+      addToast({
+        type: 'success',
+        message: get(_)('settings.userAi.toast.updated')
+      });
+    } catch (error) {
+      console.error('Failed to save user AI settings:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.userAi.errors.save')
+      });
+    } finally {
+      isSavingUserAISettings = false;
     }
   };
 
@@ -377,6 +631,65 @@
     {/if}
   </div>
 
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800">{$_('settings.userAi.title')}</h2>
+    <p class="text-sm text-slate-600">{$_('settings.userAi.description')}</p>
+
+    {#if isLoadingModelCatalog || isLoadingUserAISettings}
+      <div class="flex items-center gap-3">
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+        <p class="text-sm text-blue-700">{$_('settings.aiLoading')}</p>
+      </div>
+    {:else}
+      <div class="space-y-4">
+        <div>
+          <label for="user-ai-default-model" class="block text-sm font-medium text-slate-700 mb-2">
+            {$_('settings.aiDefaultModel')}
+          </label>
+          <select
+            id="user-ai-default-model"
+            value={selectedUserDefaultModelSelectionKey()}
+            on:change={handleUserDefaultModelSelectionChange}
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {#if modelCatalogGroups.length === 0}
+              {#if fallbackUserDefaultModelOption()}
+                <option
+                  value={modelSelectionKey(fallbackUserDefaultModelOption()?.provider_id ?? userAISettings.defaultProviderId, userAISettings.defaultModel)}
+                >
+                  {fallbackUserDefaultModelOption()?.label ?? userAISettings.defaultModel}
+                </option>
+              {:else}
+                <option value={selectedUserDefaultModelSelectionKey()}>
+                  {userAISettings.defaultModel}
+                </option>
+              {/if}
+            {:else}
+              {#each modelCatalogGroups as group}
+                <optgroup label={providerGroupLabel(group.provider)}>
+                  {#each group.models as modelOption}
+                    <option value={modelSelectionKey(modelOption.provider_id, modelOption.model_id)}>
+                      {modelOption.label}
+                    </option>
+                  {/each}
+                </optgroup>
+              {/each}
+            {/if}
+          </select>
+          <p class="text-xs text-slate-500 mt-1">{$_('settings.aiDefaultModelHint')}</p>
+        </div>
+
+        <button
+          on:click={saveUserAISettings}
+          disabled={isSavingUserAISettings}
+          class="w-full px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSavingUserAISettings ? $_('settings.userAi.saving') : $_('settings.userAi.save')}
+        </button>
+      </div>
+    {/if}
+  </div>
+
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="chrome-extension-download-card">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
@@ -489,26 +802,45 @@
 	      {$_('settings.ai.description')}
 	    </p>
     
-    {#if isLoadingAISettings}
+    {#if isLoadingAISettings || isLoadingModelCatalog}
       <div class="flex items-center gap-3">
         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
         <p class="text-sm text-blue-700">{$_('settings.aiLoading')}</p>
       </div>
     {:else}
       <div class="grid gap-6 md:grid-cols-2">
-        <!-- Modèle par défaut -->
         <div>
           <label for="ai-default-model" class="block text-sm font-medium text-slate-700 mb-2">{$_('settings.aiDefaultModel')}</label>
-                  <select 
-                    id="ai-default-model"
-                    bind:value={aiSettings.defaultModel}
-                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="gpt-5">GPT-5</option>
-                    <option value="gpt-5.2">GPT-5.2</option>
-                    <option value="gpt-5-mini">GPT-5 Mini</option>
-                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-                  </select>
+          <select
+            id="ai-default-model"
+            value={selectedDefaultModelSelectionKey()}
+            on:change={handleDefaultModelSelectionChange}
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {#if modelCatalogGroups.length === 0}
+              {#if fallbackDefaultModelOption()}
+                <option
+                  value={modelSelectionKey(fallbackDefaultModelOption()?.provider_id ?? aiSettings.defaultProviderId, aiSettings.defaultModel)}
+                >
+                  {fallbackDefaultModelOption()?.label ?? aiSettings.defaultModel}
+                </option>
+              {:else}
+                <option value={selectedDefaultModelSelectionKey()}>
+                  {aiSettings.defaultModel}
+                </option>
+              {/if}
+            {:else}
+              {#each modelCatalogGroups as group}
+                <optgroup label={providerGroupLabel(group.provider)}>
+                  {#each group.models as modelOption}
+                    <option value={modelSelectionKey(modelOption.provider_id, modelOption.model_id)}>
+                      {modelOption.label}
+                    </option>
+                  {/each}
+                </optgroup>
+              {/each}
+            {/if}
+          </select>
           <p class="text-xs text-slate-500 mt-1">{$_('settings.aiDefaultModelHint')}</p>
         </div>
 

@@ -14,9 +14,9 @@ export const settingsRouter = new Hono();
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
-  const openaiModelsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'openai_models'`) as { value: string } | undefined;
-  const promptsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'prompts'`) as { value: string } | undefined;
-  const generationLimitsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'generation_limits'`) as { value: string } | undefined;
+  const openaiModelsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'openai_models' AND user_id IS NULL`) as { value: string } | undefined;
+  const promptsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'prompts' AND user_id IS NULL`) as { value: string } | undefined;
+  const generationLimitsRecord = await db.get(sql`SELECT value FROM settings WHERE key = 'generation_limits' AND user_id IS NULL`) as { value: string } | undefined;
 
   return c.json({
     openaiModels: openaiModelsRecord?.value ? JSON.parse(openaiModelsRecord.value) : {},
@@ -30,18 +30,33 @@ settingsRouter.put('/', zValidator('json', settingsSchema), async (c) => {
   
   // Mettre à jour les paramètres dans le système clé-valeur
   await db.run(sql`
-    INSERT OR REPLACE INTO settings (key, value, description, updated_at)
-    VALUES ('openai_models', ${JSON.stringify(payload.openaiModels)}, 'Modèles OpenAI configurés', ${new Date().toISOString()})
+    INSERT INTO settings (key, user_id, value, description, updated_at)
+    VALUES ('openai_models', NULL, ${JSON.stringify(payload.openaiModels)}, 'Configured OpenAI models', ${new Date().toISOString()})
+    ON CONFLICT (key) WHERE user_id IS NULL
+    DO UPDATE SET
+      value = EXCLUDED.value,
+      description = EXCLUDED.description,
+      updated_at = EXCLUDED.updated_at
   `);
   
   await db.run(sql`
-    INSERT OR REPLACE INTO settings (key, value, description, updated_at)
-    VALUES ('prompts', ${JSON.stringify(payload.prompts)}, 'Prompts configurés', ${new Date().toISOString()})
+    INSERT INTO settings (key, user_id, value, description, updated_at)
+    VALUES ('prompts', NULL, ${JSON.stringify(payload.prompts)}, 'Configured prompts', ${new Date().toISOString()})
+    ON CONFLICT (key) WHERE user_id IS NULL
+    DO UPDATE SET
+      value = EXCLUDED.value,
+      description = EXCLUDED.description,
+      updated_at = EXCLUDED.updated_at
   `);
   
   await db.run(sql`
-    INSERT OR REPLACE INTO settings (key, value, description, updated_at)
-    VALUES ('generation_limits', ${JSON.stringify(payload.generationLimits)}, 'Limites de génération', ${new Date().toISOString()})
+    INSERT INTO settings (key, user_id, value, description, updated_at)
+    VALUES ('generation_limits', NULL, ${JSON.stringify(payload.generationLimits)}, 'Generation limits', ${new Date().toISOString()})
+    ON CONFLICT (key) WHERE user_id IS NULL
+    DO UPDATE SET
+      value = EXCLUDED.value,
+      description = EXCLUDED.description,
+      updated_at = EXCLUDED.updated_at
   `);
 
   return c.json(payload);

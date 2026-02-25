@@ -176,6 +176,7 @@ Roadmap source of truth:
 - `PLAN.md`
 
 Roadmap specifications:
+- `spec/SPEC_CHATBOT.md` (canonical delivered runtime behavior for BR-01)
 - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
 - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
@@ -187,9 +188,10 @@ Roadmap specifications:
 - [ ] **BR-00** `feat/roadmap-stabilization`
   - [ ] Resolve post-merge integration (`feat/chrome-plugin` -> `feat/minor-evols-ui`) and re-run full non-regression.
   - [ ] Close the temporary minimatch security exception lifecycle with explicit mitigation planning.
-- [ ] **BR-01** `feat/model-runtime-openai-gemini`
-  - [ ] Deliver provider abstraction + model catalog and runtime routing with at least 2 providers (`OpenAI`, `Google/Gemini`).
-  - [ ] Support global and per-user BYOK precedence rules.
+- [x] **BR-01** `feat/model-runtime-openai-gemini`
+  - [x] Deliver provider abstraction + model catalog and runtime routing with at least 2 providers (`OpenAI`, `Google/Gemini`).
+  - [x] Support global and per-user BYOK precedence rules.
+  - [x] Consolidate delivered behavior into `spec/SPEC_CHATBOT.md` and keep only remaining deltas in `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`.
 - [ ] **BR-02** `feat/sso-chatgpt`
   - [ ] Deliver OpenAI/ChatGPT SSO for admin and standard users.
 - [ ] **BR-03** `feat/todo-steering-workflow-core`

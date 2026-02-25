@@ -45,6 +45,7 @@ import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
+import type { ProviderId } from './provider-runtime';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -201,6 +202,8 @@ export interface ChatMessageJobData {
   userId: string;
   sessionId: string;
   assistantMessageId: string;
+  providerId?: ProviderId;
+  providerApiKey?: string;
   model?: string;
   contexts?: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary'; contextId: string }>;
   tools?: string[];
@@ -2197,6 +2200,8 @@ export class QueueManager {
       userId,
       sessionId,
       assistantMessageId,
+      providerId,
+      providerApiKey,
       model,
       contexts,
       tools,
@@ -2208,6 +2213,8 @@ export class QueueManager {
       userId,
       sessionId,
       assistantMessageId,
+      providerId: providerId ?? null,
+      providerApiKey: providerApiKey ?? null,
       model: model ?? null,
       contexts,
       tools,

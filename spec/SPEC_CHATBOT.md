@@ -1,6 +1,6 @@
 ## Functional specification (use cases CU)
 
-> **Summary:** 21 use cases identified (CU-001 to CU-021) covering: object modifications, history, streaming reasoning, replay, context management, model switching, deepening, structured calls vs informal sessions, object creation via chat, consultation/search, cancellation/rollback, multi‑context, suggestions, export/sharing, session management, view integration, long context, validation/confirmation, queue integration, notifications/feedback, and error handling.
+> **Summary:** 22 use cases identified (CU-001 to CU-022) covering: object modifications, history, streaming reasoning, replay, context management, model switching, deepening, structured calls vs informal sessions, object creation via chat, consultation/search, cancellation/rollback, multi‑context, suggestions, export/sharing, session management, view integration, long context, validation/confirmation, queue integration, notifications/feedback, error handling, and document context.
 
 - [x] **CU-001: Modify existing objects via chat** (use case only)
   - [x] Modify `use_cases.data.*` via tool `update_usecase_field`
@@ -32,10 +32,12 @@
   - [x] Tool `update_usecase_field` to modify
   - [ ] Access to object modification history (via tools) (coming)
   - [ ] Context summary when too long (coming)
-- [ ] **CU-006: Language model switch in sessions**
+- [x] **CU-006: Language model switch in sessions**
   - [x] Model used for each message stored in `chat_messages.model`
-  - [ ] User can change OpenAI model mid‑session
-  - [ ] User can specify the model for the next response
+  - [x] User can change provider/model mid‑session (OpenAI/Gemini)
+  - [x] User can specify the model for the next response
+  - [x] New conversations initialize from user default model (`/api/v1/me/ai-settings`), with admin fallback when user setting is absent
+  - [x] Edit/retry uses the current composer model selection
 - [ ] **CU-007: Deepen with a higher‑tier model**
   - [ ] User can request deeper analysis with a higher‑tier model
   - [ ] System can suggest using a higher‑tier model
@@ -121,6 +123,47 @@
   - [ ] Attach one or more documents to an organization, folder, or use case
   - [ ] Upload with automatic summary (0.1k token/page)
   - [ ] Consult metadata and summary
+
+## Model runtime baseline (OpenAI + Gemini) — delivered
+
+- Runtime model catalog is exposed by `GET /api/v1/models/catalog` and consumed by grouped selectors in:
+  - chat composer,
+  - user settings (`/settings`),
+  - folder generation (`/folder/new`).
+- User-level defaults are managed by:
+  - `GET /api/v1/me/ai-settings`,
+  - `PUT /api/v1/me/ai-settings`.
+- Storage strategy (delivered):
+  - existing `settings` table extended with nullable `user_id` (FK `users.id`) for scoped KV entries,
+  - admin/global settings remain in rows with `user_id IS NULL`,
+  - user defaults are persisted with keys:
+    - `default_provider_id`,
+    - `default_model`,
+  - uniqueness constraints are scoped:
+    - global uniqueness on `key` when `user_id IS NULL`,
+    - per-user uniqueness on `(user_id, key)` when `user_id IS NOT NULL`.
+- Effective default chain:
+  1. user scoped default,
+  2. admin/workspace default,
+  3. hard fallback (`openai` + `gpt-4.1-nano`).
+- Conversation behavior:
+  - model selection is sticky per conversation when reopening,
+  - new conversation starts from current effective user default.
+- Structured generation behavior:
+  - `/folder/new` can override model per run without mutating user defaults.
+- Active user-facing catalog is intentionally reduced to four entries:
+  - `gpt-4.1-nano`,
+  - `gpt-5.2`,
+  - `gemini-2.5-flash-lite`,
+  - `gemini-3.1-pro-preview-customtools`.
+- Gemini-specific runtime/UI compatibility:
+  - UI smooth pseudo-streaming for larger chunk deltas,
+  - provider-side schema compatibility compiler before Gemini structured calls (unsupported keywords removed),
+  - one-shot structured JSON repair retry using `defaultPrompts.structured_json_repair`.
+- Settings save propagation:
+  - saving user defaults triggers a browser event to refresh new-conversation defaults immediately (no page reload).
+- Display normalization:
+  - long Gemini model IDs are compacted for badges (example: `gemini-3.1`).
 
 ## Admin scoped chat (Chat‑1 + read‑only)
 
@@ -656,7 +699,7 @@ const replay = await replayChatSession('session-789');
 **CU coverage**: CU-006 (model switch), CU-007 (deepening), CU-009 (object creation), CU-013 (suggestions), CU-014 (export/sharing), CU-017 (long context), CU-020 (feedback), CU-021 (improved error handling)
 
 **To implement**:
-- [ ] Model switch in sessions (UI + API)
+- [x] Model switch in sessions (UI + API)
 - [ ] Deepen with higher‑tier model
 - [ ] Object creation via chat (tools)
 - [ ] Suggestions and recommendations (proactive AI)

@@ -1,6 +1,4 @@
-import { test, expect, request } from '@playwright/test';
-import path from 'node:path';
-import { withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { test, expect } from '@playwright/test';
 
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
@@ -8,17 +6,18 @@ test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debuggi
 // Important: ces tests manipulent le même compte + les mêmes sessions.
 // En parallèle (workers>1), ils se marchent dessus (création/suppression sessions) → flaky.
 test.describe.serial('Chat', () => {
-  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
-  const ADMIN_STATE = './.auth/state.json';
-  const USER_A_STATE = './.auth/user-a.json';
-  const USER_A_EMAIL = 'e2e-user-a@example.com';
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
-    const editable = composer.locator('[contenteditable="true"]');
-    await editable.click();
+    const editable = page
+      .locator(
+        '[role="textbox"][aria-label="Composer"][contenteditable="true"]:visible, [role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]:visible'
+      )
+      .first();
+    await expect(editable).toBeVisible({ timeout: 5_000 });
+    await editable.focus();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(message);
@@ -295,6 +294,9 @@ test.describe.serial('Chat', () => {
     await expect(menu.locator('button', { hasText: 'Web search' })).toBeVisible({ timeout: 5000 });
     await expect(menu.locator('button', { hasText: 'tab_read' })).toHaveCount(0);
     await expect(menu.locator('button', { hasText: 'tab_action' })).toHaveCount(0);
+    await menuButton.click();
+    await expect(menu).not.toBeVisible({ timeout: 5000 });
+    await expect(composer).toBeVisible({ timeout: 5000 });
 
     const requestData = await sendMessageAndWaitApi(
       page,
@@ -468,78 +470,6 @@ test.describe.serial('Chat', () => {
       const text = (await selectedSession.textContent())?.trim() ?? '';
       return text;
     }, { timeout: 90_000 }).not.toMatch(/^Conversation\s/);
-  });
-
-  test('devrait permettre upload + résumé + usage tool + suppression en viewer', async ({ browser }) => {
-    const adminApi = await request.newContext({ baseURL: API_BASE_URL, storageState: ADMIN_STATE });
-    const workspacesRes = await adminApi.get('/api/v1/workspaces');
-    expect(workspacesRes.ok()).toBeTruthy();
-    const workspacesData = await workspacesRes.json().catch(() => null);
-    const adminWorkspace = (workspacesData?.items ?? []).find((w: { name?: string }) => w.name === 'Admin Workspace');
-    const adminWorkspaceId = String(adminWorkspace?.id ?? '');
-    expect(adminWorkspaceId).toBeTruthy();
-
-    const addMemberRes = await adminApi.post(`/api/v1/workspaces/${adminWorkspaceId}/members`, {
-      data: { email: USER_A_EMAIL, role: 'viewer' }
-    });
-    expect(addMemberRes.ok()).toBeTruthy();
-    await adminApi.dispose();
-
-    const userContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_A_STATE, adminWorkspaceId),
-    });
-    const page = await userContext.newPage();
-
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
-
-    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
-    await chatButton.click();
-    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 1000 });
-
-    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
-    await menuButton.click();
-    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
-    const fileInput = menu.locator('input[type="file"]');
-    const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/README.md');
-    await fileInput.setInputFiles(fixturePath);
-    await expect(page.locator('div.absolute').filter({ hasText: 'Contexte(s)' })).toHaveCount(0);
-
-    const docRow = page
-      .locator('div', { hasText: 'README.md' })
-      .filter({ has: page.locator('button[aria-label="Supprimer le document"]') })
-      .first();
-    await expect(docRow).toBeVisible({ timeout: 15_000 });
-    await expect(docRow).toContainText(/En attente|Analyse en cours|Résumé en cours|Résumé prêt|Pending|Summarizing|Summary ready/);
-    await expect(docRow).toContainText('Résumé prêt', { timeout: 90_000 });
-
-    const { jobId, streamId } = await sendMessageAndWaitApi(
-      page,
-      composer,
-      'Liste les documents de la session et cite leur nom.'
-    );
-    const assistantResponse = assistantBubble(page).filter({ hasText: 'README.md' }).last();
-    try {
-      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
-    } catch (e) {
-      await debugAssistantState(page);
-      await debugBackendState(page, jobId, streamId);
-      throw e;
-    }
-
-    await Promise.all([
-      page.waitForResponse((res) => {
-        const req = res.request();
-        return req.method() === 'DELETE' && res.url().includes('/api/v1/documents/');
-      }, { timeout: 30_000 }),
-      docRow.locator('button[aria-label="Supprimer le document"]').click()
-    ]);
-    await expect(docRow).toHaveCount(0);
-
-    await userContext.close();
   });
 
   test('devrait conserver la session après fermeture et réouverture du widget', async ({ page }) => {

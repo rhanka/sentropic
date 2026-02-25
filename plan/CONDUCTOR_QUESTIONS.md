@@ -71,3 +71,39 @@ Resolved on 2026-02-22: owner is conductor (Codex) and `tmp/feat-roadmap-stabili
   Reason: close Lot N-1 by consolidating Chrome plugin download-distribution behavior into long-lived specs and by updating roadmap branch status/dependencies.
   Impact: documentation-only updates for branch traceability and merge readiness.
   Rollback: revert BR-13 documentation consolidation commit.
+
+- **BR01-EX1** (resolved, 2026-02-23)
+  Path: `docker-compose.yml` (`Forbidden Paths` override for BR-01).
+  Reason: pass `GEMINI_API_KEY` into the API container so BR-01 Gemini runtime can use branch/root `.env` credentials in test/dev envs.
+  Impact: compose environment wiring only (`api` service), no app logic change.
+  Rollback: remove `GEMINI_API_KEY=${GEMINI_API_KEY}` from `api.environment`.
+
+- **BR01-EX2** (resolved, 2026-02-24)
+  Path: `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`, `PLAN.md` (`Conditional Paths` override for BR-01 docs consolidation).
+  Reason: close BR-01 Lot N-1 by consolidating provider-runtime branch learnings and integration readiness status.
+  Impact: documentation-only updates to roadmap/spec traceability, no product/runtime behavior change.
+  Rollback: revert the BR-01 closure notes added to the spec and roadmap plan.
+
+- **BR01-EX3** (resolved, 2026-02-24)
+  Path: `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`, `BRANCH.md` (`Conditional Paths` override for BR-01 follow-up planning update).
+  Reason: document and gate the BR-01 scope increment (user-scoped defaults + `/folder/new` model selection) before implementation.
+  Impact: documentation-only updates; no runtime or infrastructure change.
+  Rollback: revert BR-01 follow-up planning notes from `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` and `BRANCH.md`.
+
+- **BR01-EX4** (resolved, 2026-02-25)
+  Path: `.github/workflows/ci.yml` (`Conditional Paths` override for BR-01 CI credential parity).
+  Reason: inject `GEMINI_API_KEY` in the same CI jobs/scopes where `OPENAI_API_KEY` is already injected.
+  Impact: CI env wiring only; no runtime/app behavior change.
+  Rollback: remove `GEMINI_API_KEY` workflow env lines added alongside `OPENAI_API_KEY`.
+
+- **BR01-EX5** (resolved, 2026-02-25)
+  Path: `.github/workflows/ci.yml` (`Conditional Paths` override for BR-01 CI matrix adjustment).
+  Reason: shard `test-api-unit-integration` `endpoints` suite into four shards to reduce suite contention and stabilize CI runtime.
+  Impact: CI-only change; no runtime/app behavior change.
+  Rollback: revert commit `cd73ea8` to restore the previous non-sharded endpoints matrix entry.
+
+- **BR01-EX6** (resolved, 2026-02-25)
+  Path: `.github/workflows/ci.yml`, `e2e/tests/03-chat.spec.ts`, `e2e/tests/08-chat-heavy.spec.ts`, `e2e/tests/08-documents-summary.spec.ts` (`Conditional Paths` override for BR-01 E2E rebalance).
+  Reason: split heavy `03`/`04` E2E flows into dedicated `08-*` specs and add a 4th E2E matrix group to reduce critical-path tail duration.
+  Impact: CI/test-organization only; no runtime/app behavior change.
+  Rollback: move the heavy viewer chat flow back to `03-chat.spec.ts`, rename `08-documents-summary.spec.ts` back to `04-documents-summary.spec.ts`, and restore the prior 3-group E2E matrix in `.github/workflows/ci.yml`.
