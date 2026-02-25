@@ -12,6 +12,7 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-release-ui-npm-and-pretest` `API_PORT=8707` `UI_PORT=5107` `MAILDEV_UI_PORT=1007`.
@@ -23,7 +24,6 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
   - `e2e/**`
   - `scripts/**`
   - `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -37,13 +37,26 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - REL-Q1: Final npm package names/scopes.
 - REL-Q4: Minimum pretest gate required for W1.
 - Define release trigger policy for prerelease vs stable.
 - Confirm target size for the packaged exploratory scenario set in W1 (`3-5` critical journeys recommended).
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -79,6 +92,9 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
 
 - [ ] **Lot 1 — UI Package Publish Automation**
   - [ ] Implement CI job for npm publish with release-safe guards.
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Add package versioning and provenance checks.
   - [ ] Document rollback strategy for failed publish attempts.
   - [ ] Lot 1 gate:
@@ -111,9 +127,11 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
     - [ ] `make build-api build-ui-image API_PORT=8707 UI_PORT=5107 MAILDEV_UI_PORT=1007 ENV=e2e-feat-release-ui-npm-and-pretest`
     - [ ] `make clean test-e2e API_PORT=8707 UI_PORT=5107 MAILDEV_UI_PORT=1007 ENV=e2e-feat-release-ui-npm-and-pretest`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -122,4 +140,3 @@ Deliver automated UI npm publishing and an integrated automated debug assistant 
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.

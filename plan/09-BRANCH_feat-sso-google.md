@@ -10,6 +10,7 @@ Deliver Google SSO flows for admin and standard users with account linking and s
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-sso-google` `API_PORT=8709` `UI_PORT=5109` `MAILDEV_UI_PORT=1009`.
@@ -20,7 +21,6 @@ Deliver Google SSO flows for admin and standard users with account linking and s
   - `ui/**`
   - `e2e/**`
   - `plan/09-BRANCH_feat-sso-google.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,12 +34,25 @@ Deliver Google SSO flows for admin and standard users with account linking and s
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - Reconfirm identity linking policy consistency with the existing auth/account-linking baseline.
 - Define behavior for users with multiple linked providers.
 - Define user-facing error messaging for Google scope/consent failures.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -66,6 +79,9 @@ Deliver Google SSO flows for admin and standard users with account linking and s
 
 - [ ] **Lot 1 — Google SSO Backend**
   - [ ] Implement Google provider endpoints and callback verification.
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Implement account linking conflict handling and secure mapping.
   - [ ] Preserve WebAuthn and existing session refresh behavior.
   - [ ] Lot 1 gate:
@@ -88,9 +104,11 @@ Deliver Google SSO flows for admin and standard users with account linking and s
     - [ ] `make lint-ui ENV=test-feat-sso-google`
     - [ ] `make test-ui ENV=test-feat-sso-google`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -99,4 +117,3 @@ Deliver Google SSO flows for admin and standard users with account linking and s
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
