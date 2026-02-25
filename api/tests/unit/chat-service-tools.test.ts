@@ -358,6 +358,62 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     expect(seenToolNames).toContain('web_search');
   });
 
+it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is gemini', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+    mock.mockReset();
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          { type: 'content_delta', data: { delta: 'low' } },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Gemini response' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Assess this request',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      providerId: 'gemini',
+      model: 'gemini-3.1-pro-preview-customtools'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      providerId: 'gemini',
+      model: msg.model
+    });
+
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]?.providerId).toBe('gemini');
+    expect(calls[0]?.model).toBe('gemini-2.5-flash-lite');
+    expect(calls[1]?.providerId).toBe('gemini');
+    expect(calls[1]?.model).toBe('gemini-3.1-pro-preview-customtools');
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const effortStatus = events.find(
+      (e) =>
+        e.eventType === 'status' &&
+        (e.data as any)?.state === 'reasoning_effort_selected'
+    );
+    expect(effortStatus).toBeDefined();
+    expect((effortStatus as any).data?.effort).toBe('low');
+    expect((effortStatus as any).data?.by).toBe('gemini-2.5-flash-lite');
+  });
+
   it('should expose requested web tools without business context', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     let seenToolNames: string[] = [];

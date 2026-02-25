@@ -808,6 +808,7 @@ export const executeWithToolsStream = async (
       messages: [{ role: 'user', content: prompt }],
       model,
       responseFormat,
+      structuredOutput,
       reasoningSummary,
       reasoningEffort,
       maxOutputTokens,

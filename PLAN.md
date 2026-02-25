@@ -1,6 +1,6 @@
 # PLAN - Two-Week Orchestrated Roadmap
 
-Status: Draft roadmap plan (created 2026-02-22)
+Status: Active roadmap plan (created 2026-02-22, updated 2026-02-24 with BR-01 docs consolidation)
 Window: 2026-02-23 to 2026-03-08
 
 ## 1) Delivery targets in this window
@@ -66,6 +66,10 @@ Cross-reference baseline specs:
 - **BR-13** (`feat/chrome-plugin-download-distribution`) status on 2026-02-24: `ready-for-push`.
   - UAT already validated on 2026-02-23 (`OK`, tester `antoinefa`).
   - Dependency note: BR-13 output is now available as an input for BR-12 (Chrome/VSCode publish automation wave).
+- **BR-01** (`feat/model-runtime-openai-gemini`) status on 2026-02-24: `ready-for-push`.
+  - UAT checklist validated by user on root UAT workspace.
+  - Delivered scope consolidated into `spec/SPEC_CHATBOT.md`.
+  - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` now tracks only remaining deltas (post-BR-01).
 
 ## 3.1) Branch scope matrix (touch boundaries)
 
@@ -183,7 +187,7 @@ Example for BR-05 (`nn=05`):
 ## 7) Question lots (to resolve before each wave)
 
 ### QL-1 (deadline: 2026-02-24, blocks W1)
-- `MPA-Q1`, `MPA-Q2`, `MPA-Q3` from `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
+- `MPA-Q1`, `MPA-Q2`, `MPA-Q3` were resolved in conductor decisions (no remaining W1 blocker).
 - `AWT-Q1`, `AWT-Q2`, `AWT-Q5` from `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
 
 ### QL-2 (deadline: 2026-02-27, blocks W2/W3)
@@ -219,3 +223,12 @@ After 2026-03-08, create a new planning pass to map them into branch waves using
   - QL-1 baseline decisions consolidated in `plan/CONDUCTOR_QUESTIONS.md`.
   - Runtime code change proof for BR-00 is empty under `api/**`, `ui/**`, `e2e/**`; full gates skipped per BR00-D3 policy.
   - Temporary minimatch exception remains planned for closure in BR-07 (`target due date: 2026-03-01`).
+- 2026-02-24: BR-01 (`feat/model-runtime-openai-gemini`) reached push-readiness closure in isolated env `test-br01-final-gemini`.
+  - Included baseline commit trace: `456de01 chore(br01): wire gemini env into api compose runtime`.
+  - Non-AI gates passed (`typecheck/lint` API+UI, API smoke/unit/endpoints/queue/security/limit, UI tests).
+  - AI allowlist remains non-blocking with explicit failure signatures documented in `tmp/feat-model-runtime-openai-gemini/BRANCH.md`.
+  - Dependency status: BR-05 (`feat/vscode-plugin-v1`) and BR-08 (`feat/model-runtime-claude-mistral`) remain unblocked by BR-01.
+- 2026-02-24: BR-01 docs consolidation completed.
+  - Canonical delivered runtime behavior moved/kept in `spec/SPEC_CHATBOT.md`.
+  - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` trimmed to remaining roadmap backlog.
+  - `TODO.md` BR-01 roadmap item updated as completed.

@@ -15,6 +15,7 @@
   import { useCasesStore } from '$lib/stores/useCases';
   import { goto } from '$app/navigation';
   import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
+  import { formatCompactModelLabel } from '$lib/utils/model-display';
   import {
     CheckCircle2,
     AlertTriangle,
@@ -549,7 +550,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {/if}
           {#if useCase.model}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-              {useCase.model}
+              {formatCompactModelLabel(useCase.model)}
             </span>
           {/if}
           <div class="flex gap-2">
@@ -566,7 +567,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           {/if}
           {#if useCase.model}
             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-              {useCase.model}
+              {formatCompactModelLabel(useCase.model)}
             </span>
           {/if}
         </div>

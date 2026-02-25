@@ -22,6 +22,8 @@
   export let historySource: 'none' | 'stream' | 'chat' = 'none';
   export let historyLimit = 2000;
   export let historyPending: boolean = false;
+  export let smoothContentStreaming = false;
+  export let smoothChunkThreshold = 80;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
@@ -69,11 +71,62 @@
   let detailLoading = false;
   let detailLoaded = false;
   let lastInitialEventsRef: unknown = null;
+  let smoothedContentText = '';
+  let smoothPendingText = '';
+  let smoothTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Chat bubble: keep a single DOM subtree and only update the content prop.
   // This avoids a visual "blink" when switching from streamed markdown to final persisted markdown.
   $: finalText = typeof finalContent === 'string' ? finalContent : '';
-  $: displayContent = finalText.trim().length > 0 ? finalText : (st.contentText || '');
+  $: streamedDisplayContent = smoothContentStreaming
+    ? smoothedContentText
+    : (st.contentText || '');
+  $: displayContent = finalText.trim().length > 0 ? finalText : streamedDisplayContent;
+
+  const cancelSmoothTimer = () => {
+    if (smoothTimer) {
+      clearTimeout(smoothTimer);
+      smoothTimer = null;
+    }
+  };
+
+  const smoothStepSize = (pendingLength: number): number => {
+    if (pendingLength > 2400) return 48;
+    if (pendingLength > 1200) return 32;
+    if (pendingLength > 600) return 20;
+    if (pendingLength > 240) return 12;
+    return 6;
+  };
+
+  const runSmoothPump = () => {
+    if (smoothTimer || !smoothPendingText) return;
+    const tick = () => {
+      if (!smoothPendingText) {
+        smoothTimer = null;
+        return;
+      }
+      const size = smoothStepSize(smoothPendingText.length);
+      const next = smoothPendingText.slice(0, size);
+      smoothPendingText = smoothPendingText.slice(size);
+      smoothedContentText = `${smoothedContentText}${next}`;
+      smoothTimer = setTimeout(tick, 18);
+    };
+    smoothTimer = setTimeout(tick, 0);
+  };
+
+  const pushSmoothedDelta = (delta: string) => {
+    if (!delta) return;
+    const shouldAnimate =
+      delta.length >= smoothChunkThreshold ||
+      smoothPendingText.length > 0 ||
+      smoothTimer !== null;
+    if (!shouldAnimate) {
+      smoothedContentText = st.contentText || '';
+      return;
+    }
+    smoothPendingText = `${smoothPendingText}${delta}`;
+    runSmoothPump();
+  };
 
   const scrollToEnd = (node: HTMLElement) => {
     const scroll = () => {
@@ -213,11 +266,23 @@
       st.stepTitle = $_('stream.response');
       const delta = String(data?.delta ?? '');
       st.contentText = (st.contentText || '') + delta;
+      if (smoothContentStreaming && variant === 'chat') {
+        pushSmoothedDelta(delta);
+      } else {
+        smoothPendingText = '';
+        cancelSmoothTimer();
+        smoothedContentText = st.contentText || '';
+      }
     } else if (eventType === 'done' || eventType === 'error') {
       st.endedAtMs = ts;
       st.stepKind = eventType === 'done' ? 'content' : 'status';
       st.stepTitle = eventType === 'done' ? $_('stream.done') : $_('stream.error');
       if (eventType === 'error') st.auxText = String(data?.message ?? $_('stream.unknownError'));
+      if (smoothPendingText) {
+        smoothPendingText = '';
+        cancelSmoothTimer();
+        smoothedContentText = st.contentText || '';
+      }
     }
   };
 
@@ -301,6 +366,7 @@
   };
 
   const reset = () => {
+    cancelSmoothTimer();
     st = {
       startedAtMs: Date.now(),
       endedAtMs: null,
@@ -318,6 +384,8 @@
       expanded: initiallyExpanded,
       lastSeq: 0
     };
+    smoothedContentText = '';
+    smoothPendingText = '';
     detailLoading = false;
     detailLoaded = false;
     lastInitialEventsRef = null;
@@ -331,8 +399,15 @@
   }
 
   onDestroy(() => {
+    cancelSmoothTimer();
     unsubscribe();
   });
+
+  $: if (!smoothContentStreaming) {
+    smoothPendingText = '';
+    cancelSmoothTimer();
+    smoothedContentText = st.contentText || '';
+  }
 
   $: hasSteps = st.sawReasoning || st.sawTools;
   $: hasContent = !!st.contentText && st.contentText.trim().length > 0;

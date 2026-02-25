@@ -3,6 +3,11 @@ import { db, pool } from '../db/client';
 import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
+import {
+  getModelCatalogPayload,
+  inferProviderFromModelId,
+  resolveDefaultSelection,
+} from './model-catalog';
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
@@ -36,6 +41,7 @@ import { getWorkspaceRole, hasWorkspaceRole, isWorkspaceDeleted } from './worksp
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
+import type { ProviderId } from './provider-runtime';
 
 export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
@@ -65,6 +71,8 @@ export type CreateChatMessageInput = {
   sessionId?: string | null;
   workspaceId?: string | null;
   content: string;
+  providerId?: ProviderId | null;
+  providerApiKey?: string | null;
   model?: string | null;
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
@@ -555,19 +563,41 @@ export class ChatService {
     return { messageId: options.messageId };
   }
 
-  async retryUserMessage(options: { messageId: string; userId: string }): Promise<{
+  async retryUserMessage(options: {
+    messageId: string;
+    userId: string;
+    providerId?: ProviderId | null;
+    model?: string | null;
+  }): Promise<{
     sessionId: string;
     userMessageId: string;
     assistantMessageId: string;
     streamId: string;
+    providerId: ProviderId;
     model: string;
   }> {
     const msg = await this.getMessageForUser(options.messageId, options.userId);
     if (!msg) throw new Error('Message not found');
     if (msg.role !== 'user') throw new Error('Only user messages can be retried');
 
-    const aiSettings = await settingsService.getAISettings();
-    const selectedModel = aiSettings.defaultModel;
+    const [aiSettings, catalog] = await Promise.all([
+      settingsService.getAISettings({ userId: options.userId }),
+      getModelCatalogPayload({ userId: options.userId }),
+    ]);
+    const inferredProviderId = inferProviderFromModelId(
+      catalog.models,
+      options.model
+    );
+    const resolvedSelection = resolveDefaultSelection(
+      {
+        providerId:
+          options.providerId || inferredProviderId || aiSettings.defaultProviderId,
+        modelId: options.model || aiSettings.defaultModel,
+      },
+      catalog.models
+    );
+    const selectedModel = resolvedSelection.model_id;
+    const selectedProviderId = resolvedSelection.provider_id;
 
     await db
       .delete(chatMessages)
@@ -601,6 +631,7 @@ export class ChatService {
       userMessageId: options.messageId,
       assistantMessageId,
       streamId: assistantMessageId,
+      providerId: selectedProviderId,
       model: selectedModel
     };
   }
@@ -679,6 +710,7 @@ export class ChatService {
     userMessageId: string;
     assistantMessageId: string;
     streamId: string;
+    providerId: ProviderId;
     model: string;
   }> {
     const desiredWorkspaceId = input.workspaceId ?? null;
@@ -716,9 +748,24 @@ export class ChatService {
       }
     }
 
-    // Modèle (default settings si non fourni)
-    const aiSettings = await settingsService.getAISettings();
-    const selectedModel = input.model || aiSettings.defaultModel;
+    // Provider/model selection (request overrides > inferred by model id > workspace defaults).
+    const [aiSettings, catalog] = await Promise.all([
+      settingsService.getAISettings({ userId: input.userId }),
+      getModelCatalogPayload({ userId: input.userId }),
+    ]);
+    const inferredProviderId = inferProviderFromModelId(catalog.models, input.model);
+    const resolvedSelection = resolveDefaultSelection(
+      {
+        providerId:
+          input.providerId ||
+          inferredProviderId ||
+          aiSettings.defaultProviderId,
+        modelId: input.model || aiSettings.defaultModel,
+      },
+      catalog.models
+    );
+    const selectedProviderId = resolvedSelection.provider_id;
+    const selectedModel = resolvedSelection.model_id;
 
     const userSeq = await this.getNextMessageSequence(sessionId);
     const assistantSeq = userSeq + 1;
@@ -772,6 +819,7 @@ export class ChatService {
       userMessageId,
       assistantMessageId,
       streamId: assistantMessageId,
+      providerId: selectedProviderId,
       model: selectedModel
     };
   }
@@ -925,6 +973,8 @@ export class ChatService {
     userId: string;
     sessionId: string;
     assistantMessageId: string;
+    providerId?: ProviderId | null;
+    providerApiKey?: string | null;
     model?: string | null;
     contexts?: Array<{ contextType: string; contextId: string }>;
     tools?: string[];
@@ -1405,15 +1455,44 @@ Règles :
         }))
       : null;
 
-    // If the selected model is gpt-5*, dynamically evaluate the reasoning effort needed for the last user question
-    // using gpt-5-nano (cheap classifier). This value (low/medium/high) is then passed as `reasoning.effort`.
-    const selectedModel = options.model || assistantRow.model || '';
+    const [aiSettings, catalog] = await Promise.all([
+      settingsService.getAISettings({ userId: options.userId }),
+      getModelCatalogPayload({ userId: options.userId }),
+    ]);
+    const inferredProviderId = inferProviderFromModelId(
+      catalog.models,
+      options.model || assistantRow.model || null
+    );
+    const resolvedSelection = resolveDefaultSelection(
+      {
+        providerId:
+          options.providerId ||
+          inferredProviderId ||
+          aiSettings.defaultProviderId,
+        modelId: options.model || assistantRow.model || aiSettings.defaultModel,
+      },
+      catalog.models
+    );
+    const selectedProviderId = resolvedSelection.provider_id;
+    const selectedModel = resolvedSelection.model_id;
+
+    // Reasoning-effort evaluation (best effort):
+    // - OpenAI gpt-5* keeps its existing evaluator behavior.
+    // - Gemini provider uses gemini-2.5-flash-lite for the same classification intent.
     const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
+    const shouldEvaluateReasoningEffort =
+      isGpt5 || selectedProviderId === 'gemini';
+    const evaluatorProviderId: ProviderId =
+      selectedProviderId === 'gemini' ? 'gemini' : 'openai';
+    const evaluatorModel =
+      selectedProviderId === 'gemini'
+        ? 'gemini-2.5-flash-lite'
+        : 'gpt-4.1-nano';
     let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
     // Default fallback if evaluator fails: medium.
     let reasoningEffortLabel: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'medium';
     let reasoningEffortBy: string | undefined;
-    if (isGpt5) {
+    if (shouldEvaluateReasoningEffort) {
       try {
         const evalTemplate = defaultPrompts.find((p) => p.id === 'chat_reasoning_effort_eval')?.content || '';
         if (evalTemplate) {
@@ -1428,13 +1507,12 @@ Règles :
             .replace('{{last_user_message}}', lastUserMessage || '(vide)')
             .replace('{{context_excerpt}}', excerpt || '(vide)');
 
-          // Evaluator model: prefer robustness over reasoning controls.
-          // gpt-4.1-nano does not support reasoning params (we already skip them in openai.ts),
-          // and avoids the server_error observed with gpt-5-nano effort=minimal.
-          const evaluatorModel = 'gpt-4.1-nano';
           let out = '';
           for await (const ev of callOpenAIResponseStream({
+            providerId: evaluatorProviderId,
             model: evaluatorModel,
+            userId: options.userId,
+            workspaceId: sessionWorkspaceId,
             messages: [{ role: 'user', content: evalPrompt }],
             // Ask for a single token (none|low|medium|high|xhigh).
             maxOutputTokens: 64,
@@ -1447,7 +1525,10 @@ Règles :
             } else if (ev.type === 'error') {
               const d = (ev.data ?? {}) as Record<string, unknown>;
               const reqId = typeof d.request_id === 'string' ? d.request_id : '';
-              const msg = typeof d.message === 'string' ? d.message : 'Erreur OpenAI (effort eval)';
+              const msg =
+                typeof d.message === 'string'
+                  ? d.message
+                  : 'Reasoning effort evaluation failed';
               throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
             }
           }
@@ -1473,7 +1554,7 @@ Règles :
             assistantMessageId: options.assistantMessageId,
             sessionId: options.sessionId,
             model: selectedModel,
-            evaluatorModel: 'gpt-4.1-nano',
+            evaluatorModel,
             error: safeMsg,
           });
         } catch {
@@ -1490,7 +1571,9 @@ Règles :
       }
     }
     // Always emit a "selected" status so the UI can display what was used.
-    if (!reasoningEffortBy) reasoningEffortBy = isGpt5 ? 'fallback' : 'non-gpt-5';
+    if (!reasoningEffortBy) {
+      reasoningEffortBy = shouldEvaluateReasoningEffort ? 'fallback' : 'non-gpt-5';
+    }
     await writeStreamEvent(
       options.assistantMessageId,
       'status',
@@ -1515,7 +1598,7 @@ Règles :
         workspaceId: sessionWorkspaceId,
         phase: 'pass1',
         iteration,
-        model: options.model || assistantRow.model || null,
+        model: selectedModel || null,
         toolChoice: 'auto',
         // IMPORTANT: tracer les tools au complet (description + schema) pour debug.
         tools: tools ?? null,
@@ -1537,7 +1620,11 @@ Règles :
       });
 
       for await (const event of callOpenAIResponseStream({
-        model: options.model || assistantRow.model || undefined,
+        providerId: selectedProviderId,
+        model: selectedModel,
+        credential: options.providerApiKey ?? undefined,
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
         messages: currentMessages,
         tools,
         // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
@@ -2232,7 +2319,7 @@ Règles :
         workspaceId: sessionWorkspaceId,
         phase: 'pass1',
         iteration,
-        model: options.model || assistantRow.model || null,
+        model: selectedModel || null,
         toolChoice: 'auto',
         tools: tools ?? null,
         openaiMessages: {
@@ -2342,7 +2429,7 @@ Règles :
           workspaceId: sessionWorkspaceId,
           phase: 'pass2',
           iteration: 1,
-          model: options.model || assistantRow.model || null,
+          model: selectedModel || null,
           toolChoice: 'none',
           tools: null,
           openaiMessages: pass2Messages,
@@ -2351,7 +2438,11 @@ Règles :
         });
 
         for await (const event of callOpenAIResponseStream({
-          model: options.model || assistantRow.model || undefined,
+          providerId: selectedProviderId,
+          model: selectedModel,
+          credential: options.providerApiKey ?? undefined,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
           messages: pass2Messages,
           tools: undefined,
           toolChoice: 'none',
@@ -2417,7 +2508,7 @@ Règles :
       .set({
         content: contentParts.join(''),
         reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-        model: options.model || assistantRow.model || null
+        model: selectedModel || null
       })
       .where(eq(chatMessages.id, options.assistantMessageId));
 

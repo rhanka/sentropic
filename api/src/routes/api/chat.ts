@@ -31,6 +31,8 @@ const localToolDefinitionInput = z.object({
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
+  providerId: z.enum(['openai', 'gemini']).optional(),
+  providerApiKey: z.string().min(1).optional(),
   model: z.string().optional(),
   workspace_id: z.string().optional(),
   primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
@@ -47,6 +49,11 @@ const feedbackInput = z.object({
 
 const editMessageInput = z.object({
   content: z.string().min(1)
+});
+
+const retryMessageInput = z.object({
+  providerId: z.enum(['openai', 'gemini']).optional(),
+  model: z.string().min(1).optional(),
 });
 
 const createSessionInput = z.object({
@@ -428,19 +435,35 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
 chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
   const messageId = c.req.param('id');
+  const payload = retryMessageInput.safeParse(await c.req.json().catch(() => ({})));
+  if (!payload.success) {
+    return c.json(
+      {
+        error: 'Invalid retry payload',
+        details: payload.error.issues,
+      },
+      400
+    );
+  }
   const requestLocale = resolveLocaleFromHeaders({
     appLocaleHeader: c.req.header('x-app-locale'),
     acceptLanguageHeader: c.req.header('accept-language')
   });
 
   try {
-    const created = await chatService.retryUserMessage({ messageId, userId: user.userId });
+    const created = await chatService.retryUserMessage({
+      messageId,
+      userId: user.userId,
+      providerId: payload.data.providerId ?? null,
+      model: payload.data.model ?? null,
+    });
     const jobId = await queueManager.addJob(
       'chat_message',
       {
         userId: user.userId,
         sessionId: created.sessionId,
         assistantMessageId: created.assistantMessageId,
+        providerId: created.providerId,
         model: created.model,
         locale: requestLocale
       },
@@ -481,6 +504,8 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     userId: user.userId,
     sessionId: body.sessionId ?? null,
     content: body.content,
+    providerId: body.providerId ?? null,
+    providerApiKey: body.providerApiKey ?? null,
     model: body.model ?? null,
     workspaceId: targetWorkspaceId,
     primaryContextType: body.primaryContextType ?? null,
@@ -493,6 +518,8 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     userId: user.userId,
     sessionId: created.sessionId,
     assistantMessageId: created.assistantMessageId,
+    providerId: created.providerId,
+    providerApiKey: body.providerApiKey ?? undefined,
     model: created.model,
     contexts: body.contexts ?? undefined,
     tools: body.tools ?? undefined,

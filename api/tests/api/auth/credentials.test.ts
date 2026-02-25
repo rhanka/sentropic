@@ -19,7 +19,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should return empty list for user with no credentials', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -41,7 +40,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should return user credentials list', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -85,7 +83,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should update credential device name', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -112,7 +109,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should return 404 for non-existent credential', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -134,13 +130,11 @@ describe('Credentials Management API Routes', () => {
 
     it('should return 403 for credential belonging to another user', async () => {
       const user1 = await createTestUser({
-        email: 'user1@example.com',
         displayName: 'User 1',
         withSession: true,
       });
 
       const user2 = await createTestUser({
-        email: 'user2@example.com',
         displayName: 'User 2',
       });
 
@@ -161,7 +155,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should reject invalid device name', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -194,7 +187,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should delete user credential', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -227,7 +219,6 @@ describe('Credentials Management API Routes', () => {
 
     it('should return 404 for non-existent credential', async () => {
       const user = await createTestUser({
-        email: 'testuser@example.com',
         displayName: 'Test User',
         withSession: true,
       });
@@ -246,13 +237,11 @@ describe('Credentials Management API Routes', () => {
 
     it('should return 403 for credential belonging to another user', async () => {
       const user1 = await createTestUser({
-        email: 'user1@example.com',
         displayName: 'User 1',
         withSession: true,
       });
 
       const user2 = await createTestUser({
-        email: 'user2@example.com',
         displayName: 'User 2',
       });
 

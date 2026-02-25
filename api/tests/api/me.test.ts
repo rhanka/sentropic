@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, useCases, workspaces } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, settings, useCases, workspaces } from '../../src/db/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
 describe('Me API', () => {
@@ -27,6 +27,67 @@ describe('Me API', () => {
 
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.ownerUserId, user.id)).limit(1);
     expect(ws.name).toBe('Workspace Renamed');
+  });
+
+  it('should read/write user-scoped AI defaults', async () => {
+    const user = await createAuthenticatedUser('editor');
+
+    const initial = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!
+    );
+    expect(initial.status).toBe(200);
+    const initialData = await initial.json();
+    expect(initialData.defaultProviderId).toBe('openai');
+    expect(initialData.defaultModel).toBe('gpt-4.1-nano');
+
+    const update = await authenticatedRequest(
+      app,
+      'PUT',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!,
+      { defaultModel: 'gemini-3.1-pro-preview-customtools' }
+    );
+    expect(update.status).toBe(200);
+    const updateData = await update.json();
+    expect(updateData.settings.defaultProviderId).toBe('gemini');
+    expect(updateData.settings.defaultModel).toBe(
+      'gemini-3.1-pro-preview-customtools'
+    );
+
+    const rows = await db
+      .select()
+      .from(settings)
+      .where(
+        and(
+          eq(settings.userId, user.id),
+          eq(settings.key, 'default_model')
+        )
+      );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe('gemini-3.1-pro-preview-customtools');
+
+    const globalDefaultModelRows = await db
+      .select()
+      .from(settings)
+      .where(and(isNull(settings.userId), eq(settings.key, 'default_model')));
+    if (globalDefaultModelRows.length > 0) {
+      expect(globalDefaultModelRows[0].value).toBe('gpt-4.1-nano');
+    }
+
+    const anotherUser = await createAuthenticatedUser('editor');
+    const anotherSettings = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/me/ai-settings',
+      anotherUser.sessionToken!
+    );
+    expect(anotherSettings.status).toBe(200);
+    const anotherData = await anotherSettings.json();
+    expect(anotherData.defaultProviderId).toBe('openai');
+    expect(anotherData.defaultModel).toBe('gpt-4.1-nano');
   });
 
   it('should delete user workspace data on DELETE /me', async () => {
@@ -120,5 +181,4 @@ describe('Me API', () => {
     expect(t.workspaceId).toBeNull();
   });
 });
-
 

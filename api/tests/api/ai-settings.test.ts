@@ -52,6 +52,7 @@ describe('AI Settings API', () => {
       const getSpy = vi.spyOn(settingsService, 'getAISettings').mockResolvedValue({
         concurrency: 9,
         publishingConcurrency: 7,
+        defaultProviderId: 'openai',
         defaultModel: 'gpt-4.1-mini',
         processingInterval: 1500,
       });
@@ -98,6 +99,20 @@ describe('AI Settings API', () => {
         setSpy.mockRestore();
         reloadSpy.mockRestore();
       }
+    });
+
+    it('rejects invalid default_provider_id', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'PUT',
+        '/api/v1/ai-settings/default_provider_id',
+        user.sessionToken!,
+        { value: 'invalid-provider' }
+      );
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.message).toContain('Invalid provider id');
     });
 
     it('does not reload queue settings for non-queue keys', async () => {
