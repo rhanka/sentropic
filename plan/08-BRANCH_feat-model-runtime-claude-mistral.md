@@ -10,6 +10,7 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-model-runtime-claude-mistral` `API_PORT=8708` `UI_PORT=5108` `MAILDEV_UI_PORT=1008`.
@@ -20,7 +21,6 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
   - `ui/**`
   - `e2e/**`
   - `plan/08-BRANCH_feat-model-runtime-claude-mistral.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,12 +34,25 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - MPA-Q4: Provider request/response retention compliance baseline.
 - MPA-Q5: Fallback behavior in same request vs user-driven retry.
 - Define parity criteria for tool support between providers.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -66,6 +79,9 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
 
 - [ ] **Lot 1 — Provider Adapter Expansion**
   - [ ] Implement Claude and Mistral provider adapters with shared contract.
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Expand model catalog and default selection rules.
   - [ ] Normalize provider-specific error handling.
   - [ ] Lot 1 gate:
@@ -88,9 +104,11 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
     - [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
     - [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -99,4 +117,3 @@ Extend provider runtime to Anthropic Claude and Mistral while preserving compati
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.

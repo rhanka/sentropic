@@ -10,6 +10,7 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-todo-steering-workflow-core` `API_PORT=8703` `UI_PORT=5103` `MAILDEV_UI_PORT=1003`.
@@ -20,7 +21,6 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
   - `ui/**`
   - `e2e/**`
   - `plan/03-BRANCH_feat-todo-steering-workflow-core.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,12 +34,25 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - AWT-Q1: Minimum status taxonomy for W1.
 - AWT-Q2: Critical actions list that must enforce human approval.
 - AWT-Q5: Steering ownership (workspace admin only vs per-user session).
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -66,6 +79,9 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
 
 - [ ] **Lot 1 — Core Domain and API**
   - [ ] Add core entities (plans, steps, checkpoints, steering events).
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Implement API CRUD for plan/steps/checkpoints and steering mode updates.
   - [ ] Implement trace links from steps to tool executions.
   - [ ] Lot 1 gate:
@@ -88,9 +104,11 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
     - [ ] `make lint-ui ENV=test-feat-todo-steering-workflow-core`
     - [ ] `make test-ui ENV=test-feat-todo-steering-workflow-core`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -99,4 +117,3 @@ Deliver core entities and runtime for TODO plans, steering modes, and workflow o
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
