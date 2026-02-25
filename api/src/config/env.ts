@@ -9,6 +9,7 @@ const envSchema = z.object({
   DB_SSL_CA_PEM: z.string().optional(),
   DB_SSL_CA_PEM_B64: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { settingsService } from '../../services/settings';
 import { queueManager } from '../../services/queue-manager';
+import { getModelCatalogPayload, resolveDefaultSelection } from '../../services/model-catalog';
+import { isProviderId } from '../../services/provider-runtime';
 
 const aiSettingsRouter = new Hono();
 
@@ -20,6 +22,7 @@ aiSettingsRouter.get('/', async (c) => {
 const updateAISettingsSchema = z.object({
   concurrency: z.number().min(1).max(50).optional(),
   publishingConcurrency: z.number().min(1).max(50).optional(),
+  defaultProviderId: z.enum(['openai', 'gemini']).optional(),
   defaultModel: z.string().min(1).optional(),
   processingInterval: z.number().min(1000).max(60000).optional(),
 });
@@ -28,9 +31,28 @@ aiSettingsRouter.put('/', async (c) => {
   try {
     const body = await c.req.json();
     const validatedData = updateAISettingsSchema.parse(body);
+    const updates: Parameters<typeof settingsService.updateAISettings>[0] = { ...validatedData };
+
+    if (validatedData.defaultProviderId !== undefined || validatedData.defaultModel !== undefined) {
+      const [currentSettings, catalog] = await Promise.all([
+        settingsService.getAISettings(),
+        getModelCatalogPayload(),
+      ]);
+
+      const resolved = resolveDefaultSelection(
+        {
+          providerId: validatedData.defaultProviderId ?? currentSettings.defaultProviderId,
+          modelId: validatedData.defaultModel ?? currentSettings.defaultModel,
+        },
+        catalog.models
+      );
+
+      updates.defaultProviderId = resolved.provider_id;
+      updates.defaultModel = resolved.model_id;
+    }
 
     // Mettre à jour les paramètres
-    await settingsService.updateAISettings(validatedData);
+    await settingsService.updateAISettings(updates);
 
     // Recharger les paramètres dans le queue manager
     await queueManager.reloadSettings();
@@ -94,10 +116,16 @@ aiSettingsRouter.put('/:key', async (c) => {
       return c.json({ message: 'Value is required' }, 400);
     }
 
+    if (key === 'default_provider_id') {
+      if (typeof value !== 'string' || !isProviderId(value)) {
+        return c.json({ message: 'Invalid provider id' }, 400);
+      }
+    }
+
     await settingsService.set(key, value, description);
 
     // Recharger les paramètres si c'est un paramètre IA
-    if (['ai_concurrency', 'publishing_concurrency', 'default_model', 'queue_processing_interval'].includes(key)) {
+    if (['ai_concurrency', 'publishing_concurrency', 'default_provider_id', 'default_model', 'queue_processing_interval'].includes(key)) {
       await queueManager.reloadSettings();
     }
 

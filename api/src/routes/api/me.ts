@@ -19,6 +19,12 @@ import {
   workspaces,
 } from '../../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
+import { settingsService } from '../../services/settings';
+import {
+  getModelCatalogPayload,
+  inferProviderFromModelId,
+  resolveDefaultSelection,
+} from '../../services/model-catalog';
 
 export const meRouter = new Hono();
 
@@ -69,6 +75,17 @@ const patchMeSchema = z.object({
   workspaceName: z.string().min(1).max(128).optional(),
 });
 
+const patchMyAISettingsSchema = z
+  .object({
+    defaultProviderId: z.enum(['openai', 'gemini']).optional(),
+    defaultModel: z.string().min(1).optional(),
+  })
+  .refine(
+    (value) =>
+      value.defaultProviderId !== undefined || value.defaultModel !== undefined,
+    { message: 'At least one field is required' }
+  );
+
 meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
   const { userId, workspaceId } = c.get('user');
   const { workspaceName } = c.req.valid('json');
@@ -92,6 +109,77 @@ meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
 
   return c.json({ success: true });
 });
+
+meRouter.get('/ai-settings', async (c) => {
+  const { userId } = c.get('user');
+
+  const [currentSettings, catalog] = await Promise.all([
+    settingsService.getAISettings({ userId }),
+    getModelCatalogPayload({ userId }),
+  ]);
+
+  const resolved = resolveDefaultSelection(
+    {
+      providerId: currentSettings.defaultProviderId,
+      modelId: currentSettings.defaultModel,
+    },
+    catalog.models
+  );
+
+  return c.json({
+    defaultProviderId: resolved.provider_id,
+    defaultModel: resolved.model_id,
+  });
+});
+
+meRouter.put(
+  '/ai-settings',
+  zValidator('json', patchMyAISettingsSchema),
+  async (c) => {
+    const { userId } = c.get('user');
+    const body = c.req.valid('json');
+
+    const [currentSettings, catalog] = await Promise.all([
+      settingsService.getAISettings({ userId }),
+      getModelCatalogPayload({ userId }),
+    ]);
+    const inferredProviderId = inferProviderFromModelId(
+      catalog.models,
+      body.defaultModel ?? null
+    );
+
+    const resolved = resolveDefaultSelection(
+      {
+        providerId:
+          body.defaultProviderId ??
+          inferredProviderId ??
+          currentSettings.defaultProviderId,
+        modelId: body.defaultModel ?? currentSettings.defaultModel,
+      },
+      catalog.models
+    );
+
+    await Promise.all([
+      settingsService.set(
+        'default_provider_id',
+        resolved.provider_id,
+        'User default AI provider',
+        { userId }
+      ),
+      settingsService.set('default_model', resolved.model_id, 'User default AI model', {
+        userId,
+      }),
+    ]);
+
+    return c.json({
+      success: true,
+      settings: {
+        defaultProviderId: resolved.provider_id,
+        defaultModel: resolved.model_id,
+      },
+    });
+  }
+);
 
 meRouter.post('/deactivate', async (c) => {
   const { userId } = c.get('user');
@@ -206,5 +294,3 @@ meRouter.delete('/', async (c) => {
 
   return c.json({ success: true });
 });
-
-

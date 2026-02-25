@@ -124,7 +124,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [smoke, unit, endpoints, queue, ai, security, limit]
+        include:
+          - suite: smoke
+          - suite: unit
+          - suite: queue
+          - suite: ai
+          - suite: security
+          - suite: limit
+          - suite: endpoints
+            endpoints_shard: 1
+          - suite: endpoints
+            endpoints_shard: 2
+          - suite: endpoints
+            endpoints_shard: 3
+          - suite: endpoints
+            endpoints_shard: 4
     steps:
       - uses: actions/checkout@v4
       - name: Setup Docker
@@ -140,11 +154,18 @@ jobs:
         run: make up-api-test-ci
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       - name: Test API (${{ matrix.suite }})
-        run: make test-api-${{ matrix.suite }}
+        run: |
+          if [ "${{ matrix.suite }}" = "endpoints" ]; then
+            make exec-api CMD="TEST_CLEANUP_SCOPE=tracked VITEST_MAX_WORKERS=4 npm run test:endpoints -- --shard=${{ matrix.endpoints_shard }}/4"
+          else
+            make test-api-${{ matrix.suite }}
+          fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       - name: Show API logs on failure
         if: failure()
@@ -196,11 +217,13 @@ jobs:
       matrix:
         include:
           - group: group-a
-            e2e_groups: "00 01 02"
+            e2e_groups: "00 02 06"
           - group: group-b
-            e2e_groups: "03 04 05"
+            e2e_groups: "01 04"
           - group: group-c
-            e2e_groups: "06 07"
+            e2e_groups: "03 05 07"
+          - group: group-d
+            e2e_groups: "08"
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -239,6 +262,7 @@ jobs:
       - name: Test e2e API & UI (${{ matrix.group }})
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           E2E_GROUPS: ${{ matrix.e2e_groups }}
         run: make test-e2e
@@ -365,6 +389,7 @@ jobs:
       - name: Test restore and smoke tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: make db-restore up-api-test test-api-smoke-restore BACKUP_FILE=$(ls -t data/backup/prod-*.dump | head -1 | xargs basename) SKIP_CONFIRM=true
 

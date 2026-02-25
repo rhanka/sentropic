@@ -176,6 +176,209 @@ function parseJsonLenient<T>(raw: string): T {
   }
 }
 
+type StructuredOutputConfig = {
+  name: string;
+  strict: true;
+  schema: Record<string, unknown>;
+};
+
+const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    dossier: { type: 'string' },
+    useCases: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          titre: { type: 'string' },
+          description: { type: 'string' },
+          ref: { type: 'string' },
+        },
+        required: ['titre', 'description', 'ref'],
+      },
+    },
+  },
+  required: ['dossier', 'useCases'],
+};
+
+const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    name: { type: 'string' },
+    description: { type: 'string' },
+    problem: { type: 'string' },
+    solution: { type: 'string' },
+    domain: { type: 'string' },
+    technologies: { type: 'array', items: { type: 'string' } },
+    leadtime: { type: 'string' },
+    prerequisites: { type: 'string' },
+    contact: { type: 'string' },
+    benefits: { type: 'array', items: { type: 'string' } },
+    metrics: { type: 'array', items: { type: 'string' } },
+    risks: { type: 'array', items: { type: 'string' } },
+    constraints: {
+      type: 'array',
+      minItems: 1,
+      items: { type: 'string', minLength: 3 },
+    },
+    nextSteps: { type: 'array', items: { type: 'string' } },
+    dataSources: { type: 'array', items: { type: 'string' } },
+    dataObjects: { type: 'array', items: { type: 'string' } },
+    references: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string' },
+          url: { type: 'string' },
+          excerpt: { type: 'string' },
+        },
+        required: ['title', 'url', 'excerpt'],
+      },
+    },
+    valueScores: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          axisId: { type: 'string' },
+          rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+          description: { type: 'string' },
+        },
+        required: ['axisId', 'rating', 'description'],
+      },
+    },
+    complexityScores: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          axisId: { type: 'string' },
+          rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+          description: { type: 'string' },
+        },
+        required: ['axisId', 'rating', 'description'],
+      },
+    },
+  },
+  required: [
+    'name',
+    'description',
+    'problem',
+    'solution',
+    'domain',
+    'technologies',
+    'leadtime',
+    'prerequisites',
+    'contact',
+    'benefits',
+    'metrics',
+    'risks',
+    'constraints',
+    'nextSteps',
+    'dataSources',
+    'dataObjects',
+    'references',
+    'valueScores',
+    'complexityScores',
+  ],
+};
+
+const isGeminiModel = (model?: string): boolean => {
+  return typeof model === 'string' && model.trim().toLowerCase().startsWith('gemini');
+};
+
+const isGeminiResponseSchemaCompatibilityError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error ? error.message : String(error ?? '');
+  return (
+    /generation_config\.response_schema/i.test(message) &&
+    (/Unknown name/i.test(message) || /Cannot find field/i.test(message))
+  );
+};
+
+const executeStructuredGenerationWithGeminiFallback = async (params: {
+  prompt: string;
+  model?: string;
+  useDocuments: boolean;
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>;
+  structuredOutput: StructuredOutputConfig;
+  promptId: string;
+  streamId: string;
+  reasoningSummary?: 'detailed';
+  reasoningEffort?: 'high';
+  signal?: AbortSignal;
+}): Promise<string> => {
+  const baseOptions = {
+    model: params.model,
+    useWebSearch: true,
+    useDocuments: params.useDocuments,
+    documentsContexts: params.documentsContexts,
+    responseFormat: 'json_object' as const,
+    ...(params.reasoningSummary ? { reasoningSummary: params.reasoningSummary } : {}),
+    ...(params.reasoningEffort ? { reasoningEffort: params.reasoningEffort } : {}),
+    promptId: params.promptId,
+    streamId: params.streamId,
+    signal: params.signal,
+  };
+
+  try {
+    const { content } = await executeWithToolsStream(params.prompt, {
+      ...baseOptions,
+      structuredOutput: params.structuredOutput,
+    });
+    return content;
+  } catch (error) {
+    if (!isGeminiModel(params.model) || !isGeminiResponseSchemaCompatibilityError(error)) {
+      throw error;
+    }
+    const { content } = await executeWithToolsStream(params.prompt, baseOptions);
+    return content;
+  }
+};
+
+const parseStructuredJsonWithSingleRepair = async <T>(params: {
+  rawContent: string;
+  model?: string;
+  schemaName: string;
+  schema: Record<string, unknown>;
+  signal?: AbortSignal;
+}): Promise<T> => {
+  try {
+    return parseJsonLenient<T>(params.rawContent);
+  } catch {
+    const repairPromptTemplate =
+      defaultPrompts.find((p) => p.id === 'structured_json_repair')?.content || '';
+    if (!repairPromptTemplate) {
+      throw new Error('Prompt structured_json_repair non trouvé');
+    }
+
+    const repairPrompt = repairPromptTemplate
+      .replace('{{schema_name}}', params.schemaName)
+      .replace('{{schema_json}}', JSON.stringify(params.schema, null, 2))
+      .replace('{{malformed_json}}', params.rawContent);
+
+    const { content: repairedContent } = await executeWithToolsStream(repairPrompt, {
+      model: params.model,
+      useWebSearch: false,
+      responseFormat: 'json_object',
+      promptId: 'structured_json_repair',
+      signal: params.signal,
+    });
+    if (!repairedContent) {
+      throw new Error('Aucune réponse reçue lors de la tentative de réparation JSON');
+    }
+    return parseJsonLenient<T>(repairedContent);
+  }
+};
+
 /**
  * Générer une liste de cas d'usage
  */
@@ -220,47 +423,32 @@ export const generateUseCaseList = async (
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
   
   const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
-  const { content } = await executeWithToolsStream(prompt, {
+  const content = await executeStructuredGenerationWithGeminiFallback({
+    prompt,
     model,
-    useWebSearch: true,
     useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
     documentsContexts,
-    responseFormat: 'json_object',
     structuredOutput: {
       name: 'use_case_list',
       strict: true,
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          dossier: { type: 'string' },
-          useCases: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                titre: { type: 'string' },
-                description: { type: 'string' },
-                ref: { type: 'string' }
-              },
-              required: ['titre', 'description', 'ref']
-            }
-          }
-        },
-        required: ['dossier', 'useCases']
-      }
+      schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
     },
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_list',
     streamId: finalStreamId,
-    signal
+    signal,
   });
   
   if (!content) throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
   
   try {
-    return parseJsonLenient<UseCaseList>(content);
+    return await parseStructuredJsonWithSingleRepair<UseCaseList>({
+      rawContent: content,
+      model,
+      schemaName: 'use_case_list',
+      schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
+      signal,
+    });
   } catch (e) {
     console.error('Erreur de parsing JSON pour la liste:', e);
     console.error('Contenu reçu:', content);
@@ -312,112 +500,32 @@ export const generateUseCaseDetail = async (
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
   
   const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
-  const { content } = await executeWithToolsStream(prompt, {
+  const content = await executeStructuredGenerationWithGeminiFallback({
+    prompt,
     model,
-    useWebSearch: true,
     useDocuments: Boolean(documentsContexts && documentsContexts.length > 0),
     documentsContexts,
-    responseFormat: 'json_object',
     structuredOutput: {
       name: 'use_case_detail',
       strict: true,
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          name: { type: 'string' },
-          description: { type: 'string' },
-          problem: { type: 'string' },
-          solution: { type: 'string' },
-          domain: { type: 'string' },
-          technologies: { type: 'array', items: { type: 'string' } },
-          leadtime: { type: 'string' },
-          prerequisites: { type: 'string' },
-          contact: { type: 'string' },
-          benefits: { type: 'array', items: { type: 'string' } },
-          metrics: { type: 'array', items: { type: 'string' } },
-          risks: { type: 'array', items: { type: 'string' } },
-          constraints: {
-            type: 'array',
-            minItems: 1,
-            items: { type: 'string', minLength: 3 }
-          },
-          nextSteps: { type: 'array', items: { type: 'string' } },
-          dataSources: { type: 'array', items: { type: 'string' } },
-          dataObjects: { type: 'array', items: { type: 'string' } },
-          references: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                title: { type: 'string' },
-                url: { type: 'string' },
-                excerpt: { type: 'string' }
-              },
-              required: ['title', 'url', 'excerpt']
-            }
-          },
-          valueScores: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                axisId: { type: 'string' },
-                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
-                description: { type: 'string' }
-              },
-              required: ['axisId', 'rating', 'description']
-            }
-          },
-          complexityScores: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                axisId: { type: 'string' },
-                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
-                description: { type: 'string' }
-              },
-              required: ['axisId', 'rating', 'description']
-            }
-          }
-        },
-        required: [
-          'name',
-          'description',
-          'problem',
-          'solution',
-          'domain',
-          'technologies',
-          'leadtime',
-          'prerequisites',
-          'contact',
-          'benefits',
-          'metrics',
-          'risks',
-          'constraints',
-          'nextSteps',
-          'dataSources',
-          'dataObjects',
-          'references',
-          'valueScores',
-          'complexityScores'
-        ]
-      }
+      schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
     },
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
     promptId: 'use_case_detail',
     streamId: finalStreamId,
-    signal
+    signal,
   });
   
   if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCase}`);
   
   try {
-    const detail = parseJsonLenient<UseCaseDetail>(content);
+    const detail = await parseStructuredJsonWithSingleRepair<UseCaseDetail>({
+      rawContent: content,
+      model,
+      schemaName: 'use_case_detail',
+      schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
+      signal,
+    });
     // Normalize list fields to avoid marker-only entries and nested bullet formatting.
     const normalized = {
       ...detail,

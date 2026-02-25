@@ -334,7 +334,10 @@
     "context": "Contexte",
     "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
       "useCaseCount": "Nombre de cas d'usage",
+      "modelLabel": "Modèle de génération",
+      "modelHint": "Utilisé pour la génération des cas d'usage et de la matrice de ce dossier.",
       "default": "Défaut: {count}",
+      "loadingModelCatalog": "Chargement des modèles…",
       "loadingOrganizations": "Chargement des organisations…",
       "noOrganizations": "Aucune organisation disponible.",
       "documentsTitle": "Documents",
@@ -358,6 +361,7 @@
         "readOnlyCreateDisabled": "Mode lecture seule : création désactivée.",
         "readOnlyActionNotAllowed": "Mode lecture seule : action non autorisée.",
         "draftLoadFailed": "Impossible de charger le brouillon",
+        "loadModelCatalog": "Erreur lors du chargement des modèles",
         "missingInput": "Renseigner un contexte, un nom, ou ajouter un document.",
         "create": "Erreur lors de la création du dossier",
         "generationStart": "Erreur lors du démarrage de la génération"
@@ -529,7 +533,22 @@
     "promptManagement": "Gestion des Prompts IA",
     "aiConfig": "Configuration IA",
     "aiLoading": "Chargement des paramètres…",
-    "aiDefaultModel": "Modèle OpenAI par défaut",
+    "userAi": {
+      "title": "Configuration IA",
+      "description": "Choisissez le modèle IA par défaut pour vos nouveaux chats et formulaires de génération.",
+      "save": "Sauvegarder les paramètres",
+      "saving": "Sauvegarde…",
+      "toast": {
+        "updated": "Configuration IA personnelle mise à jour."
+      },
+      "errors": {
+        "load": "Erreur lors du chargement des paramètres IA personnels",
+        "save": "Erreur lors de la sauvegarde des paramètres IA personnels"
+      }
+    },
+    "aiDefaultProvider": "Provider par défaut",
+    "aiDefaultProviderHint": "Provider utilisé par défaut pour le chat et les générations structurées",
+    "aiDefaultModel": "Modèle par défaut",
     "aiDefaultModelHint": "Modèle utilisé par défaut pour toutes les opérations IA",
     "aiConcurrency": "Jobs simultanés",
     "aiConcurrencyHint": "Nombre de jobs IA traités en parallèle (1-50)",

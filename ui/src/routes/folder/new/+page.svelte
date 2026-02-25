@@ -14,6 +14,31 @@
   import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
   import type { Organization } from '$lib/stores/organizations';
 
+  type ModelProviderId = 'openai' | 'gemini';
+  interface ModelCatalogProvider {
+    provider_id: ModelProviderId;
+    label: string;
+    status: 'ready' | 'planned';
+  }
+  interface ModelCatalogModel {
+    provider_id: ModelProviderId;
+    model_id: string;
+    label: string;
+    default_contexts: string[];
+  }
+  interface ModelCatalogPayload {
+    providers: ModelCatalogProvider[];
+    models: ModelCatalogModel[];
+    defaults: {
+      provider_id: ModelProviderId;
+      model_id: string;
+    };
+  }
+  interface ModelCatalogGroup {
+    provider: ModelCatalogProvider;
+    models: ModelCatalogModel[];
+  }
+
   let folder: Partial<Folder> = {
     name: '',
     description: '',
@@ -42,6 +67,16 @@
   let useOrganizationMatrix = true;
   let generateOrganizationMatrix = true;
   let lastMatrixOptionsOrgId: string | null = null;
+  let modelCatalog: ModelCatalogPayload = {
+    providers: [],
+    models: [],
+    defaults: { provider_id: 'openai', model_id: 'gpt-4.1-nano' },
+  };
+  let modelCatalogGroups: ModelCatalogGroup[] = [];
+  let selectedGenerationProviderId: ModelProviderId = 'openai';
+  let selectedGenerationModelId = 'gpt-4.1-nano';
+  let selectedGenerationModelSelectionKey = 'openai::gpt-4.1-nano';
+  let isLoadingModelCatalog = false;
 
   type MatrixModeRequest = 'organization' | 'generate' | 'default';
 
@@ -58,8 +93,78 @@
     }
   };
 
+  const modelSelectionKey = (providerId: ModelProviderId, modelId: string) =>
+    `${providerId}::${modelId}`;
+
+  const parseModelSelectionKey = (
+    rawValue: string,
+  ): { providerId: ModelProviderId; modelId: string } | null => {
+    const separatorIndex = rawValue.indexOf('::');
+    if (separatorIndex <= 0) return null;
+    const providerId = rawValue.slice(0, separatorIndex) as ModelProviderId;
+    const modelId = rawValue.slice(separatorIndex + 2);
+    if (!modelId) return null;
+    if (providerId !== 'openai' && providerId !== 'gemini') return null;
+    return { providerId, modelId };
+  };
+
+  const providerGroupLabel = (provider: ModelCatalogProvider) =>
+    provider.status === 'ready'
+      ? provider.label
+      : `${provider.label} (${provider.status})`;
+
+  const loadModelCatalog = async () => {
+    isLoadingModelCatalog = true;
+    try {
+      modelCatalog = await apiGet<ModelCatalogPayload>('/models/catalog');
+      modelCatalogGroups = modelCatalog.providers
+        .map((provider) => ({
+          provider,
+          models: modelCatalog.models.filter(
+            (entry) => entry.provider_id === provider.provider_id,
+          ),
+        }))
+        .filter((group) => group.models.length > 0);
+
+      selectedGenerationProviderId =
+        modelCatalog.defaults?.provider_id ??
+        modelCatalog.providers[0]?.provider_id ??
+        'openai';
+      selectedGenerationModelId =
+        modelCatalog.defaults?.model_id ??
+        modelCatalog.models.find(
+          (entry) => entry.provider_id === selectedGenerationProviderId,
+        )?.model_id ??
+        modelCatalog.models[0]?.model_id ??
+        selectedGenerationModelId;
+      selectedGenerationModelSelectionKey = modelSelectionKey(
+        selectedGenerationProviderId,
+        selectedGenerationModelId,
+      );
+    } catch (err) {
+      console.error('Failed to load model catalog:', err);
+      addToast({
+        type: 'error',
+        message: get(_)('folders.new.errors.loadModelCatalog'),
+      });
+    } finally {
+      isLoadingModelCatalog = false;
+    }
+  };
+
+  const handleGenerationModelSelectionChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    if (!target) return;
+    const parsed = parseModelSelectionKey(target.value);
+    if (!parsed) return;
+    selectedGenerationProviderId = parsed.providerId;
+    selectedGenerationModelId = parsed.modelId;
+    selectedGenerationModelSelectionKey = target.value;
+  };
+
   onMount(() => {
     void loadOrganizations();
+    void loadModelCatalog();
     if ($workspaceReadOnlyScope) {
       addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyCreateDisabled') });
       goto('/folders');
@@ -222,7 +327,8 @@
         folder_id: id,
         use_case_count: nbUseCases,
         organization_id: $currentOrganizationId || undefined,
-        matrix_mode: matrixMode
+        matrix_mode: matrixMode,
+        model: selectedGenerationModelId || undefined,
       });
 
       addToast({ type: 'info', message: get(_)('folders.new.toast.generationStarted') });
@@ -264,6 +370,29 @@
       generateOrganizationMatrix = true;
     }
   }
+
+  $: {
+    if (modelCatalog.models.length > 0) {
+      const exactMatch = modelCatalog.models.some(
+        (entry) =>
+          entry.provider_id === selectedGenerationProviderId &&
+          entry.model_id === selectedGenerationModelId,
+      );
+      if (!exactMatch) {
+        const providerFallback =
+          modelCatalog.models.find(
+            (entry) => entry.provider_id === selectedGenerationProviderId,
+          ) ?? modelCatalog.models[0];
+        selectedGenerationProviderId = providerFallback.provider_id;
+        selectedGenerationModelId = providerFallback.model_id;
+      }
+    }
+  }
+
+  $: selectedGenerationModelSelectionKey = modelSelectionKey(
+    selectedGenerationProviderId,
+    selectedGenerationModelId,
+  );
 
   $: {
     const n = Number(nbUseCases);
@@ -414,6 +543,41 @@
 	      />
 	      <span class="text-xs text-slate-500">{$_('folders.new.default', { values: { count: 10 } })}</span>
 	    </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium text-slate-700" for="generation-model">
+          {$_('folders.new.modelLabel')}
+        </label>
+        {#if isLoadingModelCatalog}
+          <div class="w-full rounded border border-slate-300 p-2 bg-slate-50 text-slate-500">
+            {$_('folders.new.loadingModelCatalog')}
+          </div>
+        {:else}
+          <select
+            id="generation-model"
+            class="w-full rounded border border-slate-300 p-2"
+            value={selectedGenerationModelSelectionKey}
+            on:change={handleGenerationModelSelectionChange}
+          >
+            {#if modelCatalogGroups.length === 0}
+              <option value={selectedGenerationModelSelectionKey}>
+                {selectedGenerationModelId}
+              </option>
+            {:else}
+              {#each modelCatalogGroups as group}
+                <optgroup label={providerGroupLabel(group.provider)}>
+                  {#each group.models as modelOption}
+                    <option value={modelSelectionKey(modelOption.provider_id, modelOption.model_id)}>
+                      {modelOption.label}
+                    </option>
+                  {/each}
+                </optgroup>
+              {/each}
+            {/if}
+          </select>
+          <p class="text-xs text-slate-500">{$_('folders.new.modelHint')}</p>
+        {/if}
+      </div>
 	  </div>
 
   <div class="space-y-2">

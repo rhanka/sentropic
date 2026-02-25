@@ -28,8 +28,9 @@ describe('Authentication API Routes', () => {
     });
 
     it('should generate authentication options with email', async () => {
+      const email = `testuser-${crypto.randomUUID()}@example.com`;
       const user = await createTestUser({
-        email: 'testuser@example.com',
+        email,
         displayName: 'Test User',
       });
       await createMockCredential(user.id);
@@ -38,7 +39,7 @@ describe('Authentication API Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'testuser@example.com',
+          email,
         }),
       });
 

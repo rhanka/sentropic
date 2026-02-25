@@ -14,6 +14,7 @@ import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
+import { modelsRouter } from './models';
 import { workspacesRouter } from './workspaces';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
@@ -82,6 +83,10 @@ apiRouter.use('/exports/*', requireAuth);
 apiRouter.route('/exports', exportsRouter);
 apiRouter.use('/imports/*', requireAuth);
 apiRouter.route('/imports', importsRouter);
+
+// Model catalog: authenticated read access for runtime/UI selectors.
+apiRouter.use('/models/*', requireAuth);
+apiRouter.route('/models', modelsRouter);
 
 // Admin routes (require admin_org or admin_app)
 apiRouter.use('/settings/*', requireAuth, requireAdmin);
