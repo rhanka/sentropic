@@ -10,6 +10,7 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-*` / `ENV=e2e-*`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Branch environment mapping: `ENV=feat-release-chrome-vscode-ci-publish` `API_PORT=8712` `UI_PORT=5112` `MAILDEV_UI_PORT=1012`.
@@ -21,7 +22,6 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
   - `e2e/**`
   - `scripts/**`
   - `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md`
-  - `plan/DEBUG_TICKETS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -35,12 +35,25 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in this file before touching conditional/forbidden paths.
   - Include reason, impact, and rollback strategy.
-  - Mirror exception in `plan/CONDUCTOR_QUESTIONS.md`.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
 - REL-Q2: Tag-only release policy vs branch prerelease model.
 - REL-Q3: Mandatory signing/provenance constraints.
 - REL-Q5: Retention policy for release and pretest artifacts.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -67,6 +80,9 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
 
 - [ ] **Lot 1 — Plugin Packaging and Release Workflows**
   - [ ] Implement CI packaging for Chrome plugin and VSCode extension.
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] Implement publish jobs with explicit release gates and approvals.
   - [ ] Add secrets validation and fail-fast checks for publish credentials.
   - [ ] Lot 1 gate:
@@ -87,9 +103,19 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
     - [ ] `make build-api build-ui-image API_PORT=8712 UI_PORT=5112 MAILDEV_UI_PORT=1012 ENV=e2e-feat-release-chrome-vscode-ci-publish`
     - [ ] `make clean test-e2e API_PORT=8712 UI_PORT=5112 MAILDEV_UI_PORT=1012 ENV=e2e-feat-release-chrome-vscode-ci-publish`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Run targeted UAT scenarios for impacted capabilities.
-  - [ ] Run non-regression checks on adjacent workflows.
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (splitted by sublist for each env)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
+  - [ ] Chrome plugin (if impacted)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
+  - [ ] VSCode plugin (if impacted)
+    - [ ] <Instruction by env before testing>
+    - [ ] <Detailed evol tests>
+    - [ ] <Detailed non reg tests>
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate branch learnings into the relevant `spec/*` files.
@@ -98,4 +124,3 @@ Deliver automated CI publishing for Chrome and VSCode plugins with release gatin
 - [ ] **Lot N — Final validation**
   - [ ] Re-run full branch gates (typecheck, lint, tests, e2e when impacted).
   - [ ] Verify CI status and attach executed command list in PR notes.
-  - [ ] Ensure branch remains orthogonal, mergeable, and non-blocking.
