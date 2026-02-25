@@ -10,6 +10,7 @@
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
 - Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 
@@ -27,25 +28,21 @@
   - `.github/workflows/**`
   - `<other-sensitive-paths>`
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Questions / Notes` before touching any conditional/forbidden path.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in `plan/CONDUCTOR_QUESTIONS.md`.
 
-## Questions / Notes
-- <Open questions that affect scope or sequencing.>
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
-## AI Flaky Allowlist (MANDATORY)
-- Non-blocking API AI tests:
-  - `make test-api-ai`
-  - `api/tests/ai/**` (including `api/tests/ai/usecase-generation-async.test.ts`)
-- Non-blocking E2E AI tests:
-  - `e2e/tests/00-ai-generation.spec.ts`
-  - `e2e/tests/03-chat.spec.ts`
-  - `e2e/tests/03-chat-chrome-extension.spec.ts`
-  - `e2e/tests/07_comment_assistant.spec.ts`
+## AI Flaky tests
 - Acceptance rule:
-  - If failures are caused by provider/network/model nondeterminism, mark them as `flaky accepted`.
-  - Record exact command + failing test file + failure signature in `BRANCH.md`.
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
@@ -76,6 +73,9 @@
 
 - [ ] **Lot 1 — <Main change>**
   - [ ] <Task 1>
+    - <feedback loop if required only>
+      - `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+      - `clarification` / `acknowledge` / `refuse`: explanation
   - [ ] <Task 2>
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
@@ -84,7 +84,7 @@
       - [ ] <Evolve or add API tests (e.g., update `api/tests/api/organizations.spec.ts` or add `api/tests/api/new-feature.spec.ts`)>
       - [ ] <Scoped runs while evolving tests: `make test-api-<suite> SCOPE=tests/your-file.spec.ts ENV=test-<branch-slug>`>
       - [ ] Sub-lot gate: `make test-api ENV=test-<branch-slug>`
-      - [ ] AI flaky allowlist run (non-blocking): `make test-api-ai ENV=test-<branch-slug>` and document status/signature in `BRANCH.md`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-<branch-slug>` and document status/signature in `BRANCH.md`
     - [ ] **UI tests (TypeScript only)**
       - [ ] <Exhaustive list of UI TS test updates (file-by-file, existing + new)>
       - [ ] <Evolve or add UI TS tests (e.g., update `ui/tests/stores/organizations.spec.ts` or add `ui/tests/utils/new-feature.spec.ts`)>
@@ -96,7 +96,7 @@
       - [ ] <Evolve or add E2E tests (e.g., update `e2e/tests/05-organizations.spec.ts` or add `e2e/tests/10-new-feature.spec.ts`)>
       - [ ] <Scoped runs while evolving tests: `make test-e2e E2E_SPEC=tests/your-file.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e`>
       - [ ] Sub-lot gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-<branch-slug> E2E_GROUP=<matrix.e2e_group>` (pour matrix.e2_group = 00 01 02, 03 04 05, 06 06, cf .github/workflows/ci.yml for exact ref of split)
-      - [ ] AI flaky allowlist run (non-blocking): scoped `E2E_SPEC` runs for AI specs and document status/signature in `BRANCH.md`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): scoped `E2E_SPEC` runs for AI specs and document status/signature in `BRANCH.md`
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] <Instruction by env (chrome plugin, vscode, ...) brefore testing>
       - [ ] <Detailed évol tests>
@@ -126,8 +126,8 @@
   - [ ] Retest UI (cf Lot1, copy checklist)
   - [ ] Retest API (cf Lot1, copy checklist)
   - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky allowlist (non-blocking) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky allowlist test is accepted
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
