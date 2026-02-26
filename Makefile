@@ -48,6 +48,20 @@ ps: ## Show docker compose services status (dev stack)
 ps-all: ## Show docker compose services status (dev + test overrides)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml ps
 
+.PHONY: docker-stats
+docker-stats: ## Show docker stats (ALL=1 for all running containers)
+	@set -euo pipefail; \
+	if [ "$(ALL)" = "1" ]; then \
+		docker stats --no-stream; \
+	else \
+		ids="$$(docker ps --filter "label=com.docker.compose.project=$(ENV)" --format '{{.ID}}')"; \
+		if [ -z "$$ids" ]; then \
+			echo "No running containers for compose project '$(ENV)'."; \
+		else \
+			docker stats --no-stream $$ids; \
+		fi; \
+	fi
+
 version:
 	@echo "API_VERSION: $(API_VERSION)"
 	@echo "UI_VERSION: $(UI_VERSION)"
@@ -55,6 +69,56 @@ version:
 .PHONY: cloc
 cloc: ## Count lines of code (whole repo)
 	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$'
+
+.PHONY: conductor-agent-report agent-conductor-report conductor-agent-status agent-conductor-status agent-conductore-status
+conductor-agent-report: ## Conductor report with done/treated %, SLOC and heartbeat/stall for BR03/04/05/06
+	@set -euo pipefail; \
+	now="$$(date +%s)"; \
+	ts="$$(date '+%Y-%m-%d %H:%M:%S %z')"; \
+	total_done=0; total_treated=0; total_all=0; \
+	lanes=( \
+		"BR03|A|tmp/feat-todo-steering-workflow-core" \
+		"BR04|B|tmp/feat-workspace-template-catalog" \
+		"BR05|C|tmp/feat-vscode-plugin-v1" \
+		"BR06|D|tmp/feat-chrome-upstream-v1" \
+	); \
+	echo "Conductor report ($$ts)"; \
+	echo "lane | agent | branch | done | treated | dirty | head | sloc | heartbeat"; \
+	echo "-----|-------|--------|------|---------|-------|------|------|----------"; \
+	for lane_row in "$${lanes[@]}"; do \
+		IFS='|' read -r lane agent dir <<< "$$lane_row"; \
+		file="$$dir/BRANCH.md"; \
+		branch="$$(git -C "$$dir" branch --show-current 2>/dev/null || echo '?')"; \
+		head="$$(git -C "$$dir" rev-parse --short HEAD 2>/dev/null || echo '?')"; \
+		dirty="$$(git -C "$$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"; \
+		if [ -f "$$file" ]; then \
+			done_count="$$(grep -E '^[[:space:]]*- \[x\]' -c "$$file" || true)"; \
+			defer_count="$$(grep -E '^[[:space:]]*- \[!\]' -c "$$file" || true)"; \
+			total_count="$$(grep -E '^[[:space:]]*- \[( |x|!)\]' -c "$$file" || true)"; \
+			mtime="$$(stat -c %Y "$$file" 2>/dev/null || echo 0)"; \
+		else \
+			done_count=0; defer_count=0; total_count=0; mtime=0; \
+		fi; \
+		treated_count="$$((done_count + defer_count))"; \
+		done_pct="$$(awk -v a="$$done_count" -v b="$$total_count" 'BEGIN{if(b==0){printf "0.0"} else {printf "%.1f",(100*a)/b}}')"; \
+		treated_pct="$$(awk -v a="$$treated_count" -v b="$$total_count" 'BEGIN{if(b==0){printf "0.0"} else {printf "%.1f",(100*a)/b}}')"; \
+		age="$$((now - mtime))"; \
+		if [ "$$age" -gt 60 ]; then hb="STALL($${age}s)"; else hb="ACTIVE($${age}s)"; fi; \
+		sloc="$$($(MAKE) --no-print-directory -s -C "$$dir" cloc 2>/dev/null | awk '/^SUM:/{print $$5}' | tail -n1)"; \
+		if [ -z "$$sloc" ]; then sloc="n/a"; fi; \
+		echo "$$lane | $$agent | $$branch | $$done_count/$$total_count ($$done_pct%) | $$treated_count/$$total_count ($$treated_pct%) | $$dirty | $$head | $$sloc | $$hb"; \
+		total_done="$$((total_done + done_count))"; \
+		total_treated="$$((total_treated + treated_count))"; \
+		total_all="$$((total_all + total_count))"; \
+	done; \
+	total_done_pct="$$(awk -v a="$$total_done" -v b="$$total_all" 'BEGIN{if(b==0){printf "0.0"} else {printf "%.1f",(100*a)/b}}')"; \
+	total_treated_pct="$$(awk -v a="$$total_treated" -v b="$$total_all" 'BEGIN{if(b==0){printf "0.0"} else {printf "%.1f",(100*a)/b}}')"; \
+	echo "TOTAL | - | - | $$total_done/$$total_all ($$total_done_pct%) | $$total_treated/$$total_all ($$total_treated_pct%) | - | - | - | -"
+
+agent-conductor-report: conductor-agent-report ## Backward-compatible alias
+conductor-agent-status: conductor-agent-report ## Alias used in some workflows
+agent-conductor-status: conductor-agent-report ## Alias used in some workflows
+agent-conductore-status: conductor-agent-report ## Typo-compatible alias
 
 .PHONY: test-cloc
 test-cloc: ## Count lines of code (tests only: api/tests ui/tests e2e/tests)
