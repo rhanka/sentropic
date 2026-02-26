@@ -1,7 +1,7 @@
 # Feature: TODO + Steering + Workflow Core
 
 ## Objective
-Rebuild BR-03 from scratch on baseline `a092aac` to deliver TODO/plan + steering + workflow core semantics from `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`: executable domain model, runtime orchestration, in-flight steer, and minimal UI surfaces (chat TODO card + basic agent/workflow configuration).
+Rebuild BR-03 from baseline `3f889e3` to deliver TODO/plan + steering + workflow core semantics from `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`: executable domain model, runtime orchestration, in-flight steer, and minimal UI surfaces (chat TODO card + basic agent/workflow configuration).
 
 ## Scope / Guardrails
 - Scope limited to BR-03 v1 semantics:
@@ -42,6 +42,7 @@ Rebuild BR-03 from scratch on baseline `a092aac` to deliver TODO/plan + steering
   - `api/**`
   - `ui/**`
   - `e2e/**`
+  - `BRANCH.md`
   - `plan/03-BRANCH_feat-todo-steering-workflow-core.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -102,6 +103,20 @@ Open decision items for BR-03 restart:
   - `Reason`: docs consolidation at Lot N-1 must reflect BR-03 boundaries (including explicit BR-14 deferral).
   - `Impact`: documentation/roadmap sync only, no runtime behavior.
   - `Rollback`: revert docs-only commit if consolidation is rejected.
+- `ID`: `BR03-FL05`
+  - `Branch`: `BR-03`
+  - `Owner`: sub-agent implementation run + conductor
+  - `Severity`: medium
+  - `Status`: `acknowledge`
+  - `Repro steps`:
+    - run `make typecheck-api ENV=test-feat-todo-steering-workflow-core`
+    - run `make lint-api ENV=test-feat-todo-steering-workflow-core`
+    - run `make test-api-unit ENV=test-feat-todo-steering-workflow-core`
+  - `Expected`: branch test environment health checks and broad API gates run without schema drift errors.
+  - `Actual`: drift reproduced on `2026-02-26` (`drizzle.__drizzle_migrations` already at ids 23/24 while `settings` missed `user_id`), causing API health 503 and unit failures.
+  - `Evidence`: `make logs-api ENV=test-feat-todo-steering-workflow-core`, `make exec-api CMD="...information_schema.columns..." ENV=test-feat-todo-steering-workflow-core`, then successful reruns of `make typecheck-api ENV=test-feat-todo-steering-workflow-core`, `make lint-api ENV=test-feat-todo-steering-workflow-core`, `make test-api-unit ENV=test-feat-todo-steering-workflow-core`.
+  - `Resolution`: add idempotent schema reconciliation in `api/src/db/run-migrations.ts` (drop legacy `settings_pkey`, ensure `settings.user_id` + FK + unique indexes) after drizzle migrate.
+  - `Blocker threshold`: closed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -126,26 +141,32 @@ Open decision items for BR-03 restart:
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints refresh**
-  - [ ] Confirm branch baseline is `a092aac` from `origin/main`.
-  - [ ] Re-read mandatory rule/spec/template set and freeze BR-03 boundaries from `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`.
-  - [ ] Confirm isolated worktree `tmp/feat-todo-steering-workflow-core`.
-  - [ ] Confirm environment mapping and command style:
+- [x] **Lot 0 — Baseline & constraints refresh**
+  - [x] Confirm branch baseline is `3f889e3` from `origin/main`.
+  - [x] Re-read mandatory rule/spec/template set and freeze BR-03 boundaries from `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`.
+  - [x] Confirm isolated worktree `tmp/feat-todo-steering-workflow-core`.
+  - [x] Confirm environment mapping and command style:
     - `ENV=dev-feat-todo-steering-workflow-core` for branch dev runtime.
     - `ENV=test-feat-todo-steering-workflow-core` for API/UI test runs.
     - `ENV=e2e-feat-todo-steering-workflow-core` for Playwright runs.
     - `ENV` must always be the last argument in `make` commands.
-  - [ ] Confirm scope in/out split:
+  - [x] Confirm scope in/out split:
     - include TODO/plan + steering + workflow core semantics.
     - exclude broad panel redesign (deferred to BR-14).
   - [x] Freeze `Feedback Loop` clarifications (`BR03-FL01..FL04`) before implementation lots. (locked by conductor/product decisions on 2026-02-26)
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and keep `BR03-EX1` pending for docs consolidation.
-  - [ ] Prepare implementation file map and one-migration strategy:
-    - target migration: `api/drizzle/0023_todo_steering_workflow_core.sql` (name placeholder, single file max).
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and keep `BR03-EX1` pending for docs consolidation.
+  - [x] Prepare implementation file map and one-migration strategy:
+    - target migration: `api/drizzle/0023_todo_steering_workflow_core.sql` (single file max).
     - schema updates in `api/src/db/schema.ts`.
+    - domain services/tests map:
+      - `api/src/services/todo-runtime.ts`
+      - `api/tests/unit/task-status-machine.test.ts`
+      - `api/tests/unit/todo-plan-ownership.test.ts`
+      - `api/tests/unit/guardrail-enforcement.test.ts`
+      - `api/tests/unit/workflow-placeholder-extraction.test.ts`
 
-- [ ] **Lot 1 — Data model + domain invariants (TODO/plan/task/guardrails/runs)**
-  - [ ] Add one consolidated migration for BR-03 core entities:
+- [x] **Lot 1 — Data model + domain invariants (TODO/plan/task/guardrails/runs)**
+  - [x] Add one consolidated migration for BR-03 core entities:
     - `plans`, `todos`, `tasks`
     - `todo_dependencies`, `task_dependencies` (optional task-level dependencies)
     - `task_io_contracts`
@@ -154,31 +175,46 @@ Open decision items for BR-03 restart:
     - `agent_definitions`
     - `entity_links`
     - `execution_runs`, `execution_events` (including `steer` events)
-  - [ ] Extend `api/src/db/schema.ts` with typed table definitions + indexes + relations.
-  - [ ] Implement domain services for:
+  - [x] Extend `api/src/db/schema.ts` with typed table definitions + indexes + relations.
+  - [x] Implement domain services for:
     - task status transition matrix validation;
     - ownership/reassignment rules;
     - guardrail enforcement classification (`scope`, `quality`, `safety`, `approval`);
     - run/event model write/read semantics.
-  - [ ] Keep TODO/plan aggregate status behavior aligned with `BR03-FL01` decision.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `make lint-api ENV=test-feat-todo-steering-workflow-core`
-    - [ ] **API tests**
-      - [ ] Existing files to update:
-        - `api/tests/unit/queue-manager-contract.test.ts` (run/event enqueue alignment when tasks progress)
-        - `api/tests/unit/tools.test.ts` (tool metadata alignment with plan/todo domain)
-      - [ ] New files to add:
-        - `api/tests/unit/task-status-machine.test.ts`
-        - `api/tests/unit/todo-plan-ownership.test.ts`
-        - `api/tests/unit/guardrail-enforcement.test.ts`
-        - `api/tests/unit/workflow-placeholder-extraction.test.ts`
-      - [ ] Scoped runs while evolving:
-        - `make test-api-unit SCOPE=tests/unit/task-status-machine.test.ts ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-unit SCOPE=tests/unit/todo-plan-ownership.test.ts ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-unit SCOPE=tests/unit/guardrail-enforcement.test.ts ENV=test-feat-todo-steering-workflow-core`
-      - [ ] Sub-lot gate: `make test-api-unit ENV=test-feat-todo-steering-workflow-core`
-      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-feat-todo-steering-workflow-core` and document status/signature in `BRANCH.md`
+  - [x] Keep TODO/plan aggregate status behavior aligned with `BR03-FL01` decision.
+  - [x] Reconcile drifted settings schema at startup/migration time (`settings.user_id` remediation for `BR03-FL05`).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-todo-steering-workflow-core`
+    - [x] `make lint-api ENV=test-feat-todo-steering-workflow-core`
+    - [x] **API tests**
+      - [x] Existing files to update:
+        - [x] `api/tests/unit/queue-manager-contract.test.ts` (run/event enqueue alignment when tasks progress)
+        - [x] `api/tests/unit/tools.test.ts` (tool metadata alignment with plan/todo domain)
+      - [x] New files to add:
+        - [x] `api/tests/unit/task-status-machine.test.ts`
+        - [x] `api/tests/unit/todo-plan-ownership.test.ts`
+        - [x] `api/tests/unit/guardrail-enforcement.test.ts`
+        - [x] `api/tests/unit/workflow-placeholder-extraction.test.ts`
+      - [x] Scoped runs while evolving:
+        - [x] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/tools.test.ts ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/task-status-machine.test.ts ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/todo-plan-ownership.test.ts ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/guardrail-enforcement.test.ts ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/workflow-placeholder-extraction.test.ts ENV=test-feat-todo-steering-workflow-core`
+      - [x] Sub-lot gate: `make test-api-unit ENV=test-feat-todo-steering-workflow-core`
+      - [x] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-feat-todo-steering-workflow-core` and document status/signature in `BRANCH.md`
+    - [x] Evidence (2026-02-26):
+      - `make typecheck-api ENV=test-feat-todo-steering-workflow-core` => pass (`tsc --noEmit`).
+      - `make lint-api ENV=test-feat-todo-steering-workflow-core` => pass (`eslint "src/**/*.ts"`).
+      - `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 2 tests).
+      - `make test-api-unit SCOPE=tests/unit/tools.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 11 tests).
+      - `make test-api-unit SCOPE=tests/unit/task-status-machine.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 4 tests).
+      - `make test-api-unit SCOPE=tests/unit/todo-plan-ownership.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 5 tests).
+      - `make test-api-unit SCOPE=tests/unit/guardrail-enforcement.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 4 tests).
+      - `make test-api-unit SCOPE=tests/unit/workflow-placeholder-extraction.test.ts ENV=test-feat-todo-steering-workflow-core` => pass (1 file, 3 tests).
+      - `make test-api-unit ENV=test-feat-todo-steering-workflow-core` => pass (32 files, 247 tests).
+      - `make test-api-ai ENV=test-feat-todo-steering-workflow-core` => pass (9 files, 26 tests, duration: 375.65s; no flaky failure signature).
 
 - [ ] **Lot 2 — API contracts + orchestration endpoints**
   - [ ] Implement BR-03 v1 API endpoints:
