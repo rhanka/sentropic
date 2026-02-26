@@ -29,12 +29,18 @@ Provide a reusable prompt for sub-agents where branch design is driven by `.mdc`
 - `workflow.mdc`, `subagents.mdc`, `testing.mdc` apply as hard constraints.
 - Use `make` targets only (no direct Docker commands).
 - Run branch work in isolated worktree `tmp/<branch-slug>`.
+- Never use shell-prefix variable assignment before `make` (forbidden): `ENV=... make ...`.
+- Always use command form: `make <target> <vars> ENV=<env>` with `ENV` strictly last.
 - Environment naming convention (per `workflow.mdc` + `subagents.mdc` + `testing.mdc`):
   - Branch environments: `ENV=<dev|test|e2e>-<branch-slug>`.
   - Root workspace stable environment remains `ENV=dev` (reserved for user dev/UAT).
 - Keep `ENV=<env>` as the last argument in each `make` command.
 - Keep ports isolated per branch: `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
 - Run automated tests on dedicated branch environments (`ENV=test-<branch-slug>` / `ENV=e2e-<branch-slug>`), never on root `ENV=dev`.
+- Approval-safe execution:
+  - If a command is likely to require user approval/escalation, do not execute it directly from sub-agent.
+  - Instead, report the exact command to conductor and wait for conductor execution/confirmation.
+  - If a sub-agent accidentally triggers an approval prompt and blocks, stop immediately and report the blocked command.
 
 ## Prompt (copy/paste)
 You are sub-agent owner of the branch and worktree described in the launch packet.
@@ -75,6 +81,7 @@ You are sub-agent owner of the branch and worktree described in the launch packe
 - Keep scope strict to allowed paths from the launch packet.
 - If a prerequisite is unresolved, create a Feedback Loop item (`blocked` or `attention`) instead of guessing.
 - Enforce tooling/environment constraints from `workflow.mdc`, `subagents.mdc`, and `testing.mdc`: Make-only workflow, branch env naming `ENV=<dev|test|e2e>-<branch-slug>` (except root `ENV=dev`), `ENV` as last make argument, and isolated ports.
+- Before running any `make`, validate command shape locally: `make <target> ... ENV=<env>` (ENV last, no shell-prefix env assignment).
 - No timeout inflation in tests.
 - Default: do not commit.
 
