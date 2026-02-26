@@ -5,8 +5,9 @@
 - **FIRST**: Read `.cursor/rules/MASTER.mdc` for consolidated rules overview
 - **SECOND**: Read `README.md` for project overview and setup
 - **THIRD**: Read `TODO.md` for current priorities and items
-- **FOURTH**: Read `BRANCH.md` if it exists (current branch plan)
-- **FIFTH**: Read relevant `spec/*.md` files for the current scope
+- **FOURTH**: Read `PLAN.md` when present (branch dependencies, waves, statuses)
+- **FIFTH**: Read `BRANCH.md` if it exists (current branch plan)
+- **SIXTH**: Read relevant `spec/*.md` files for the current scope
 - Propose a short action plan before coding. Request human approval when "⚠ approval".
 - apply `workflow.mdc` for coding practice, `testing.mdc` for testing practice, and `security.mdc` for security
 - be conform to `architecture.mdc` architecture directives
@@ -14,7 +15,12 @@
 
 ## FEATURE (lean)
 1. Read the target `TODO.md` item (**Next** or **Now**).
-2. Create `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` and keep questions there.
+2. Create `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` and keep clarifications in `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+   - First iteration must be detailed (mandatory):
+     - lot-by-lot actionable tasks (no placeholder-only content);
+     - API/UI/E2E test plans listed at file granularity (`existing + updated + new`);
+     - detailed UAT checklists by impacted surface (`web app` / `chrome plugin` / `vscode plugin`);
+     - explicit blocker/decision items recorded in `Feedback Loop`.
 3. Follow the lot-based flow in `BRANCH.md` (UAT lots → docs consolidation → final tests).
 4. Constraints to enforce:
    - One migration file max in `api/drizzle/*.sql`.
@@ -60,8 +66,8 @@
 - Any conditional change requires a declared exception `BRxx-EXn` before code changes,
   unless the path is already listed in branch `Allowed Paths`.
 - Any forbidden change requires a declared exception `BRxx-EXn` before code changes:
-  - add it in branch `## Questions / Notes`,
-  - mirror it in `plan/CONDUCTOR_QUESTIONS.md`,
+  - add it in branch `## Feedback Loop` (or `## Questions / Notes` if not yet migrated),
+  - mirror it in the same branch execution file,
   - include rationale + impact + rollback.
 
 ### Multi-need, multi-branch (MANDATORY)
@@ -98,6 +104,10 @@ Each branch in a wave **must** have its own isolated `tmp/` workspace. The setup
    ```
 2. **Write `BRANCH.md`** into the worktree immediately after setup (with scoping decisions already integrated).
    - Do NOT create `BRANCH.md` before the worktree is created.
+   - First write must follow `plan/BRANCH_TEMPLATE.md` and be detailed enough for execution:
+     - concrete lots/tasks,
+     - file-level API/UI/E2E test lists,
+     - detailed UAT checklist for impacted surfaces.
 3. **Port isolation**: Each worktree uses distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`.
 4. **Sub-agent prompt**: Always tell the sub-agent its working directory is `tmp/<branch-slug>/` and pass the full `BRANCH.md` content in the prompt (don't rely on the sub-agent reading it).
 
@@ -119,6 +129,8 @@ When launching a sub-agent for **implementation** (not read-only exploration), t
 2. **Commit rule (explicit)**: "For every commit use ONLY: `make commit MSG=\"type: concise description\"` (single line). Never run `git commit` or `git commit -m` — that would add a Co-authored-by trailer and break the project rule. If `make commit` is not available in your environment, report that and never use `git commit."
 3. **Staging**: "Use selective staging: `git add <file1> <file2>...` then `make commit MSG=\"...\"`. Never use `git add .` or `git add -A`."
 4. **Environment cleanup (explicit)**: "At end of each completed lot, run `make down ENV=<branch-env>` and verify with `make ps ENV=<branch-env>`. Keep env running only if conductor explicitly requests immediate UAT on that env."
+5. **Planning depth (explicit, mandatory when creating/updating `BRANCH.md`)**: "First planning iteration must be detailed: actionable lots, API/UI/E2E test files at file granularity, and detailed UAT checklist by impacted surfaces."
+6. **Branch planning references (explicit)**: "When editing `BRANCH.md`, read and reference `PLAN.md`, relevant `spec/*.md`, and keep formatting aligned with `plan/BRANCH_TEMPLATE.md`."
 
 The orchestrator must copy or adapt this block into every implementation sub-agent prompt so that the rule is applied even if the sub-agent runtime does not load the workspace rules.
 
@@ -131,42 +143,31 @@ As a very first thing, you acknowledge the next TODO and the way you will work o
 - Before handing back to the user, run `make logs-ui` or `make logs-api` to ensure no syntax/runtime errors.
 - Before handing back to the user, update the UAT checklist and test plan in `BRANCH.md` and tick completed items.
 
-### UI/UX Debug Ticket Loop (MANDATORY)
-When a UI/UX anomaly is detected, track and process it as a debug ticket.
+### UI/UX Feedback Loop (MANDATORY)
+When a UI/UX anomaly is detected, track and process it in the active branch execution file (`BRANCH.md`) via `## Feedback Loop`.
 
-Ticket record location:
-- Use `plan/DEBUG_TICKETS.md` as the shared lightweight register.
-
-Minimum ticket fields:
-- `ID` (`DBG-###`)
+Minimum fields:
+- `ID` (branch-local feedback ID, e.g. `BRxx-FLn`)
 - `Branch`
 - `Owner`
 - `Severity`
-- `Status` (`open`, `in_progress`, `blocked`, `fixed`, `closed`)
+- `Status` (`attention`, `blocked`, `clarification`, `acknowledge`, `refuse`, `deferred`, `cancelled`)
 - `Repro steps`
 - `Expected`
 - `Actual`
 - `Evidence` (logs/screenshots/videos/trace links)
 - `Decision needed` (if any)
 
-Ownership and routing:
-- Default owner is the active branch implementation sub-agent/developer.
-- Conductor triages priority and confirms final branch assignment.
-- Product/UX decisions remain user-owned and must be asked in batched questions.
-
 Processing cycle (before asking user):
 1. Reproduce in branch environment and collect evidence.
 2. Run focused checks first (`typecheck`, `lint`, scoped `test-ui`, scoped `test-e2e` when relevant).
 3. Apply fix and rerun the same focused checks.
-4. Update ticket with root cause and non-regression scope.
+4. Update feedback item with root cause and non-regression scope.
 
 Escalation discipline:
 - Do not ask user for routine technical debug steps already covered by evidence.
 - Escalate only for product/UX decisions, missing credentials, or contradictory specifications.
 - Batch questions once per lot unless a new hard blocker appears.
-
-Roadmap note:
-- BR-07 introduces the automated debug assistant and CI artifact pipeline; until then this manual loop is mandatory.
 
 ## Development Conventions
 - **Commits**: Conventional Commits (feat:, fix:, chore:, refactor:, docs:, test:)
@@ -205,7 +206,7 @@ After completing any task, **ALWAYS propose the next step** by following the wor
 
 ### Feature Completion (aligned to BRANCH.md)
 - Follow the final lots in `BRANCH.md` (tests, CI check, final cleanup).
-- Close or defer all branch-related debug tickets in `plan/DEBUG_TICKETS.md` with owner/date before final handoff.
+- Close or defer all branch-related `Feedback Loop` items with owner/date before final handoff.
 - Ensure no unauthorized scope drift (all `BRxx-EXn` resolved or explicitly deferred with owner/date).
 - Final cleanup order: `PR from BRANCH.md` -> `UAT + CI green` -> `remove BRANCH.md` -> `push` -> `merge`.
 

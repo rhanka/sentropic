@@ -10,17 +10,23 @@ tags: [orchestration, subagent, workflow]
 Provide a minimal and repeatable contract so each sub-agent can deliver one orthogonal lot safely.
 
 ## Mandatory Read Order
-1. `.cursor/rules/MASTER.mdc`
-2. `.cursor/rules/workflow.mdc`
-3. Scope-relevant rules: `architecture.mdc`, `testing.mdc`, `security.mdc`, `data.mdc`
-4. `README.md` and `TODO.md`
-5. `PLAN.md` (when orchestration is multi-branch)
-6. Branch execution file (`BRANCH.md`, `tmp/<branch-slug>/BRANCH.md`, or `plan/NN-BRANCH_*.md`)
+1. `.cursor/rules/workflow.mdc`
+2. `.cursor/rules/MASTER.mdc`
+3. `.cursor/rules/subagents.mdc`
+4. Scope-relevant rules: `architecture.mdc`, `testing.mdc`, `security.mdc`, `data.mdc`, `components.mdc`, `design-system.mdc`, `conductor.mdc`
+5. `README.md` and `TODO.md`
+6. `PLAN.md` (mandatory when present, especially for branch dependencies/waves/status)
+7. Relevant `spec/*.md` files for the current scope
+8. Branch execution file (`BRANCH.md`, `tmp/<branch-slug>/BRANCH.md`, or `plan/NN-BRANCH_*.md`)
+9. `plan/BRANCH_TEMPLATE.md` (mandatory reference when creating/updating `BRANCH.md`)
 
 ## Required Launch Packet (from conductor)
 - Branch id, branch name, and working directory.
 - Exact scope (lot, files in scope, files out of scope).
 - Allowed Paths / Forbidden Paths / Conditional Paths.
+- `PLAN.md` context for the branch (dependencies, wave, status).
+- Relevant SPEC references to enforce.
+- Explicit branch design instruction (`Instruction specifique`) for this run.
 - Environment mapping (`ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`).
 - Port ownership check result (ports are free or already owned by same branch env).
 - Expected outputs (artifacts, tests, checkboxes to update).
@@ -39,6 +45,11 @@ Provide a minimal and repeatable contract so each sub-agent can deliver one orth
 - Keep all code/comments/docs in English.
 - Do not commit or push unless explicitly requested in the launch packet.
 - Do not silently resolve ambiguities; raise a structured question.
+- Planning mode depth rule (mandatory for first `BRANCH.md` iteration):
+  - produce a detailed lot-by-lot plan (not high-level placeholders);
+  - list API/UI/E2E tests at file granularity (existing + new + updated files);
+  - include detailed UAT checklist by impacted surface (`web app`, `chrome plugin`, `vscode plugin`);
+  - use `Feedback Loop` items for blockers/clarifications directly in `BRANCH.md`.
 
 ## Port Safety Rules
 - Never start services on ports that belong to another active branch environment.
@@ -49,9 +60,10 @@ Provide a minimal and repeatable contract so each sub-agent can deliver one orth
 Return a short structured brief:
 1. `Done`: concrete changes with file paths.
 2. `Checks`: commands executed and outcomes.
-3. `Open questions`: IDs `BRxx-Qn`, options, recommendation.
+3. `Feedback Loop`: IDs/status (`blocked`, `attention`, `clarification`, `acknowledge`, `refuse`), options, recommendation.
 4. `Risks`: regressions, dependencies, or follow-up actions.
 5. `Scope adherence`: any `BRxx-EXn` used or `none`.
+6. `Read set`: `.mdc` files + SPEC files actually read.
 
 Question discipline:
 - escalate only after collecting technical evidence and attempted focused checks;
@@ -61,13 +73,16 @@ Question discipline:
 When interrupted or relaunched:
 1. run `git status --short`;
 2. read the current branch execution file;
-3. resume from the first unchecked item of the active lot;
-4. preserve prior decisions unless the conductor explicitly overrides them;
-5. report only the delta since last run.
+3. review unresolved `Feedback Loop` blockers first;
+4. resume from the first unchecked item of the active lot;
+5. preserve prior decisions unless the conductor explicitly overrides them;
+6. report only the delta since last run.
 
 ## Branch Closure Handoff
 Before branch closure, provide:
 1. final lot checkbox status (including tests/UAT checkpoints);
-2. final open questions list (or explicit `none`);
+2. final `Feedback Loop` status list (or explicit `none`);
 3. cleanup status for branch environment (must run `make down ENV=<branch-env>` then `make ps ENV=<branch-env>` and report no remaining services; skip only if conductor explicitly asks to keep env up for immediate UAT);
-4. explicit note of any residual risk to merge.
+4. explicit note of any residual risk to merge;
+5. confirmation that all blocking feedback items are resolved as `acknowledge`/`refuse`/`deferred`/`cancelled` before merge;
+6. for UAT branches/worktrees, confirmation of commit-identical SHA with source branch.
