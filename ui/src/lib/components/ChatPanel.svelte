@@ -1080,6 +1080,13 @@
       icon: MessageCircle,
     },
     {
+      id: 'todo_create',
+      label: $_('chat.tools.todoCreate.label'),
+      description: $_('chat.tools.todoCreate.description'),
+      toolIds: ['todo_create'],
+      icon: List,
+    },
+    {
       id: 'web_search',
       label: $_('chat.tools.webSearch.label'),
       description: $_('chat.tools.webSearch.description'),

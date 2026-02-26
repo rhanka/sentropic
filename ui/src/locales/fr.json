@@ -911,6 +911,10 @@
         "label": "Commentaires (résolution)",
         "description": "Analyser et proposer des résolutions"
       },
+      "todoCreate": {
+        "label": "TODO runtime",
+        "description": "Créer des listes TODO exécutables depuis le chat"
+      },
       "webSearch": {
         "label": "Web search",
         "description": "Rechercher des infos sur le web"
@@ -935,6 +939,14 @@
       "usecaseUpdate": { "label": "Cas d'usage (édition)" },
       "matrix": { "label": "Matrice (lecture/édition)" },
       "executiveSummary": { "label": "Synthèse exécutive" }
+    },
+    "todoCard": {
+      "title": "TODO créé depuis le chat",
+      "statusLabel": "Statut",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "taskCountLabel": "Tâches",
+      "tasksLabel": "Checklist des tâches"
     },
     "comments": {
       "chooseThread": "Liste des commentaires",

@@ -30,6 +30,18 @@
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
 
   type Step = { title: string; body?: string; kind?: 'reasoning' | 'tool' | 'status' | 'content' | 'startup' | 'other' };
+  type TodoToolTask = {
+    id?: string;
+    title: string;
+  };
+  type TodoToolCard = {
+    toolCallId: string;
+    status: string;
+    planId: string | null;
+    todoId: string;
+    taskCount: number;
+    tasks: TodoToolTask[];
+  };
   type State = {
     startedAtMs: number;
     endedAtMs?: number | null;
@@ -44,6 +56,7 @@
     sawTools: boolean;
     sawStarted: boolean;
     steps: Step[];
+    todoCards: TodoToolCard[];
     expanded: boolean;
     lastSeq: number;
   };
@@ -62,6 +75,7 @@
     sawTools: false,
     sawStarted: false,
     steps: [],
+    todoCards: [],
     expanded: initiallyExpanded,
     lastSeq: 0
   };
@@ -169,6 +183,56 @@
     return !/\s$/.test(prev);
   };
 
+  const parseTodoToolCard = (
+    toolCallId: string,
+    rawResult: unknown,
+  ): TodoToolCard | null => {
+    if (!rawResult || typeof rawResult !== 'object') return null;
+    const result = rawResult as Record<string, unknown>;
+    const todoId = String(result.todoId ?? '').trim();
+    if (!todoId) return null;
+
+    const tasks = Array.isArray(result.tasks)
+      ? result.tasks
+          .map((entry) => {
+            const item =
+              entry && typeof entry === 'object'
+                ? (entry as Record<string, unknown>)
+                : null;
+            const title = String(item?.title ?? '').trim();
+            if (!title) return null;
+            const id = String(item?.id ?? '').trim();
+            return {
+              id: id || undefined,
+              title,
+            };
+          })
+          .filter((entry): entry is TodoToolTask => Boolean(entry))
+      : [];
+
+    return {
+      toolCallId,
+      status: String(result.status ?? 'completed'),
+      planId: typeof result.planId === 'string' ? result.planId : null,
+      todoId,
+      taskCount:
+        typeof result.taskCount === 'number' ? result.taskCount : tasks.length,
+      tasks,
+    };
+  };
+
+  const upsertTodoToolCard = (card: TodoToolCard) => {
+    const existingIndex = st.todoCards.findIndex(
+      (item) => item.toolCallId === card.toolCallId,
+    );
+    if (existingIndex === -1) {
+      st.todoCards = [...st.todoCards, card];
+      return;
+    }
+    st.todoCards[existingIndex] = card;
+    st.todoCards = [...st.todoCards];
+  };
+
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
     if (!Number.isFinite(sequence)) return;
     if (sequence <= st.lastSeq) return;
@@ -260,6 +324,12 @@
       st.stepTitle = $_('stream.tool', { values: { name: label } });
       if (err) st.auxText = String(err);
       upsertStep(st.stepTitle, err ? String(err) : undefined);
+      if (toolId && toolName === 'todo_create') {
+        const todoCard = parseTodoToolCard(toolId, data?.result);
+        if (todoCard) {
+          upsertTodoToolCard(todoCard);
+        }
+      }
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepKind = 'content';
@@ -291,7 +361,14 @@
       applyEvent(ev.eventType, ev.data, ev.sequence, ev.createdAt);
     }
     // trigger rerender for Set/Record updates
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, toolNameById: { ...st.toolNameById }, steps: [...st.steps] };
+    st = {
+      ...st,
+      toolCallIds: new Set(st.toolCallIds),
+      toolArgsById: { ...st.toolArgsById },
+      toolNameById: { ...st.toolNameById },
+      steps: [...st.steps],
+      todoCards: [...st.todoCards],
+    };
   };
 
   const hydrateHistory = async () => {
@@ -335,7 +412,14 @@
     const data = (evt as any).data ?? {};
 
     applyEvent(type, data, sequence);
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, steps: [...st.steps] };
+    st = {
+      ...st,
+      toolCallIds: new Set(st.toolCallIds),
+      toolArgsById: { ...st.toolArgsById },
+      toolNameById: { ...st.toolNameById },
+      steps: [...st.steps],
+      todoCards: [...st.todoCards],
+    };
 
     // callback parent pour scroll (uniquement sur events)
     onStreamEvent?.(type);
@@ -381,6 +465,7 @@
       sawTools: false,
       sawStarted: false,
       steps: [],
+      todoCards: [],
       expanded: initiallyExpanded,
       lastSeq: 0
     };
@@ -518,6 +603,46 @@
             </div>
           {/if}
         {/if}
+      {/if}
+      {#if st.todoCards.length > 0}
+        <div class="mt-2 space-y-2">
+          {#each st.todoCards as todoCard (todoCard.toolCallId)}
+            <div class="rounded border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-xs text-emerald-900">
+              <div class="font-semibold">{$_('chat.todoCard.title')}</div>
+              <div class="mt-1 space-y-0.5">
+                <div>
+                  <span class="font-medium">{$_('chat.todoCard.statusLabel')}:</span>
+                  {todoCard.status}
+                </div>
+                {#if todoCard.planId}
+                  <div>
+                    <span class="font-medium">{$_('chat.todoCard.planIdLabel')}:</span>
+                    {todoCard.planId}
+                  </div>
+                {/if}
+                <div>
+                  <span class="font-medium">{$_('chat.todoCard.todoIdLabel')}:</span>
+                  {todoCard.todoId}
+                </div>
+                <div>
+                  <span class="font-medium">{$_('chat.todoCard.taskCountLabel')}:</span>
+                  {todoCard.taskCount}
+                </div>
+              </div>
+              {#if todoCard.tasks.length > 0}
+                <div class="mt-2 font-medium">{$_('chat.todoCard.tasksLabel')}</div>
+                <ul class="mt-1 space-y-1">
+                  {#each todoCard.tasks as task, index (task.id ?? `${todoCard.toolCallId}-${index}`)}
+                    <li class="flex items-start gap-2">
+                      <span class="mt-0.5 inline-block h-3 w-3 rounded border border-emerald-500"></span>
+                      <span>{task.title}</span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/each}
+        </div>
       {/if}
     {:else}
       <!-- job -->
