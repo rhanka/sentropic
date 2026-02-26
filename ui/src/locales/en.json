@@ -643,6 +643,62 @@
         "purge": "Error while purging queue"
       }
     },
+    "runtime": {
+      "title": "TODO runtime configuration",
+      "description": "Manage Agent and Workflow configuration lineage used by TODO orchestration.",
+      "loading": "Loading TODO runtime configuration…",
+      "refresh": "Refresh runtime config",
+      "refreshing": "Refreshing…",
+      "readonlyHint": "Read-only scope: viewer/commenter roles can inspect runtime configuration but cannot edit, fork, or detach.",
+      "empty": "No runtime configuration item found.",
+      "source": "Source",
+      "parent": "Parent",
+      "root": "Lineage root",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "configJsonLabel": "Configuration (JSON)",
+      "edit": "Edit",
+      "fork": "Fork",
+      "detach": "Detach",
+      "save": "Save",
+      "cancel": "Cancel",
+      "inheritance": {
+        "attached": "Attached to parent",
+        "detached": "Detached from parent",
+        "drift": "Drift detected"
+      },
+      "agent": {
+        "title": "Agent Configuration",
+        "description": "Configure generation agents with fork/detach and inheritance indicators."
+      },
+      "workflow": {
+        "title": "Workflow Configuration",
+        "description": "Configure workflow definitions and keep placeholder extraction metadata up to date on save.",
+        "tasksLabel": "Workflow tasks",
+        "placeholdersLabel": "Extracted placeholders",
+        "placeholdersNone": "No placeholder detected in workflow metadata."
+      },
+      "toasts": {
+        "agentSaved": "Agent configuration updated.",
+        "workflowSaved": "Workflow configuration updated.",
+        "agentForked": "Agent configuration forked.",
+        "workflowForked": "Workflow configuration forked.",
+        "agentDetached": "Agent configuration detached from parent.",
+        "workflowDetached": "Workflow configuration detached from parent."
+      },
+      "errors": {
+        "load": "Failed to load TODO runtime configuration",
+        "missingName": "Name is required",
+        "invalidAgentConfigJson": "Agent configuration JSON must be a valid object",
+        "invalidWorkflowConfigJson": "Workflow configuration JSON must be a valid object",
+        "saveAgent": "Failed to save agent configuration",
+        "saveWorkflow": "Failed to save workflow configuration",
+        "forkAgent": "Failed to fork agent configuration",
+        "forkWorkflow": "Failed to fork workflow configuration",
+        "detachAgent": "Failed to detach agent configuration",
+        "detachWorkflow": "Failed to detach workflow configuration"
+      }
+    },
     "admin": {
       "resetDescription": "This section resets the application completely. All data (organizations, folders, use cases) will be permanently deleted.",
       "confirmResetAll": "Are you sure you want to delete ALL data? This action is irreversible.",
