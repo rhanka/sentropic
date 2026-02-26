@@ -911,6 +911,10 @@
         "label": "Comments (resolution)",
         "description": "Analyze and suggest resolutions"
       },
+      "todoCreate": {
+        "label": "TODO runtime",
+        "description": "Create executable TODO lists from chat"
+      },
       "webSearch": {
         "label": "Web search",
         "description": "Search for information on the web"
@@ -935,6 +939,14 @@
       "usecaseUpdate": { "label": "Use case (edit)" },
       "matrix": { "label": "Matrix (read/edit)" },
       "executiveSummary": { "label": "Executive summary" }
+    },
+    "todoCard": {
+      "title": "TODO created from chat",
+      "statusLabel": "Status",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "taskCountLabel": "Tasks",
+      "tasksLabel": "Task checklist"
     },
     "comments": {
       "chooseThread": "Comments list",
