@@ -643,6 +643,62 @@
         "purge": "Erreur lors de la purge de la queue"
       }
     },
+    "runtime": {
+      "title": "Configuration runtime TODO",
+      "description": "Gérez la lignée des configurations Agent et Workflow utilisées par l’orchestration TODO.",
+      "loading": "Chargement de la configuration runtime TODO…",
+      "refresh": "Actualiser la config runtime",
+      "refreshing": "Actualisation…",
+      "readonlyHint": "Mode lecture seule : les rôles viewer/commenter peuvent consulter la configuration runtime mais ne peuvent pas éditer, forker ou détacher.",
+      "empty": "Aucun élément de configuration runtime trouvé.",
+      "source": "Source",
+      "parent": "Parent",
+      "root": "Racine de lignée",
+      "nameLabel": "Nom",
+      "descriptionLabel": "Description",
+      "configJsonLabel": "Configuration (JSON)",
+      "edit": "Modifier",
+      "fork": "Fork",
+      "detach": "Detach",
+      "save": "Sauvegarder",
+      "cancel": "Annuler",
+      "inheritance": {
+        "attached": "Attaché au parent",
+        "detached": "Détaché du parent",
+        "drift": "Drift détecté"
+      },
+      "agent": {
+        "title": "Agent Configuration",
+        "description": "Configurez les agents de génération avec indicateurs fork/detach et héritage."
+      },
+      "workflow": {
+        "title": "Workflow Configuration",
+        "description": "Configurez les définitions de workflow et mettez à jour les métadonnées d’extraction de placeholders à la sauvegarde.",
+        "tasksLabel": "Tâches du workflow",
+        "placeholdersLabel": "Placeholders extraits",
+        "placeholdersNone": "Aucun placeholder détecté dans les métadonnées workflow."
+      },
+      "toasts": {
+        "agentSaved": "Configuration agent mise à jour.",
+        "workflowSaved": "Configuration workflow mise à jour.",
+        "agentForked": "Configuration agent forkée.",
+        "workflowForked": "Configuration workflow forkée.",
+        "agentDetached": "Configuration agent détachée du parent.",
+        "workflowDetached": "Configuration workflow détachée du parent."
+      },
+      "errors": {
+        "load": "Échec du chargement de la configuration runtime TODO",
+        "missingName": "Le nom est obligatoire",
+        "invalidAgentConfigJson": "Le JSON de configuration agent doit être un objet valide",
+        "invalidWorkflowConfigJson": "Le JSON de configuration workflow doit être un objet valide",
+        "saveAgent": "Échec de sauvegarde de la configuration agent",
+        "saveWorkflow": "Échec de sauvegarde de la configuration workflow",
+        "forkAgent": "Échec du fork de la configuration agent",
+        "forkWorkflow": "Échec du fork de la configuration workflow",
+        "detachAgent": "Échec du detach de la configuration agent",
+        "detachWorkflow": "Échec du detach de la configuration workflow"
+      }
+    },
     "admin": {
       "resetDescription": "Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.",
       "confirmResetAll": "Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.",
