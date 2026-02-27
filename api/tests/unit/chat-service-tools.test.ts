@@ -444,4 +444,68 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect(seenToolNames).toContain('web_search');
     expect(seenToolNames).toContain('web_extract');
   });
+
+  it('should expose and execute todo_create when explicitly requested', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_create_1',
+              name: 'todo_create',
+              args: JSON.stringify({
+                title: 'Release hardening',
+                planTitle: 'Release wave',
+                tasks: [
+                  { title: 'Run regression suite' },
+                  { title: 'Publish changelog' }
+                ]
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'TODO created.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Create a release TODO with tasks',
+      model: 'gpt-4.1-nano'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    expect(toolNames(calls[0]?.tools)).toContain('todo_create');
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_create_1'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('completed');
+    expect(typeof (resultEvent as any).data?.result?.todoId).toBe('string');
+    expect((resultEvent as any).data?.result?.taskCount).toBe(2);
+  });
 });
