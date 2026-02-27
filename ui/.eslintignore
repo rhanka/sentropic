@@ -1,5 +1,0 @@
-build/
-chrome-ext/dist/
-node_modules/
-*.d.ts
-.vite/
