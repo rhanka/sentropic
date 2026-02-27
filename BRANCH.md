@@ -97,12 +97,13 @@ Open decision items for BR-03 restart:
   - `Branch`: `BR-03`
   - `Owner`: conductor
   - `Severity`: medium
-  - `Status`: `attention`
+  - `Status`: `applied`
   - `Type`: scope exception request (`BRxx-EXn`)
   - `Path`: `spec/**`, `PLAN.md`, `TODO.md`
   - `Reason`: docs consolidation at Lot N-1 must reflect BR-03 boundaries (including explicit BR-14 deferral).
   - `Impact`: documentation/roadmap sync only, no runtime behavior.
   - `Rollback`: revert docs-only commit if consolidation is rejected.
+  - `Decision locked (2026-02-27)`: applied for Lot N-1 docs synchronization (`spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`, `spec/TOOLS.md`, `PLAN.md`, `TODO.md`).
 - `ID`: `BR03-FL05`
   - `Branch`: `BR-03`
   - `Owner`: sub-agent implementation run + conductor
@@ -416,9 +417,9 @@ Open decision items for BR-03 restart:
         - [x] Existing settings sections (AI settings, prompts, workspace settings) still operate.
         - [x] Workspace switching and RBAC behavior remain unchanged.
 
-- [ ] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
-  - [ ] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S6` before executing any TEST slice `L4-S7` to `L4-S10`.
-  - [ ] Baseline decisions for this lot:
+- [x] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
+  - [x] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S6` before executing any TEST slice `L4-S7` to `L4-S10`.
+  - [x] Baseline decisions for this lot:
     - [x] Migration policy is strict: no permanent dual execution path between legacy hardcoded generation and workflow runtime.
     - [x] Target workflow key is `ai_usecase_generation_v1` (context -> matrix optional -> usecase list -> TODO sync -> usecase details fanout -> executive summary).
     - [x] Route contract remains stable (`POST /api/v1/use-cases/generate`), but dispatch is workflow-runtime-only after migration.
@@ -426,125 +427,232 @@ Open decision items for BR-03 restart:
     - [x] Chat progression tools target: add runtime support for `todo_update` and `task_update` (aligned with `spec/TOOLS.md`).
     - [x] Session rule target: one active TODO max per chat session (deterministic conflict behavior for second create attempt in same session).
     - [!] Collaborative manual editing stays explicitly deferred for BR03 (multi-user actor markers, avatar-like overlays, concurrent editing conflict UX).
-  - [ ] **DEV slices (implementation first, no tests in this block)**
-    - [ ] `L4-S1` DEV - API chat progression tooling + one-active-TODO-per-session guard.
-      - API files impacted (planned):
+  - [x] **DEV slices (implementation first, no tests in this block)**
+    - [x] `L4-S1` DEV - API chat progression tooling + one-active-TODO-per-session guard.
+      - API files impacted:
         - `api/src/services/tools.ts` (`todo_update`, `task_update` tool definitions).
         - `api/src/services/chat-service.ts` (requested-tool allowlist + execution path for progression tools + conflict payload on second `todo_create`).
         - `api/src/services/todo-orchestration.ts` (session-aware helpers to update task/todo status + single active TODO rule).
-      - UI files impacted (planned):
+      - UI files impacted:
         - `ui/src/lib/components/ChatPanel.svelte` (tool toggle exposure for progression path).
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/tasks.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S2` DEV - Sticky TODO runtime panel in chat (bottom, full-width, collapsible, max-height scroll).
-      - API files impacted (planned):
-        - `api/src/services/chat-service.ts` (tool result payload normalization for runtime panel contract).
-      - UI files impacted (planned):
-        - `ui/src/lib/components/ChatPanel.svelte`
-        - `ui/src/lib/components/ChatWidget.svelte`
-        - `ui/src/lib/components/StreamMessage.svelte` (handoff from inline tool card to runtime panel feed).
+      - Scoped make checks (evidence locked from already-passed scoped runs on `2026-02-27`):
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit 0).
+        - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit 0).
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/chat-tools.test.ts (6 tests)`; `Test Files 1 passed`, `Tests 6 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/todos.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/tasks.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/tasks.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+    - [x] `L4-S2` DEV - Sticky TODO runtime panel in chat (bottom, full-width, collapsible, max-height scroll).
+      - API files impacted:
+        - `api/src/services/chat-service.ts` (normalized `tool_call_result.result.todoRuntime` contract for `todo_create` / `todo_update` / `task_update`).
+      - UI files impacted:
+        - `ui/src/lib/components/ChatPanel.svelte` (sticky full-width bottom panel, collapse/expand behavior, max-height internal scroll, session runtime feed merge).
+        - `ui/src/lib/components/ChatWidget.svelte` (chat/comments panel wrappers set `overflow-hidden` for stable sticky panel integration).
+        - `ui/src/lib/components/StreamMessage.svelte` (handoff from inline TODO tool card to runtime panel feed via `onTodoRuntime`; inline card removed).
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S3` DEV - Generation entrypoint migration to workflow runtime (no route-level hardcoded chain).
-      - API files impacted (planned):
-        - `api/src/routes/api/use-cases.ts` (replace direct enqueue orchestration by workflow-run start).
-        - `api/src/services/todo-orchestration.ts` (workflow run instantiation with workflow/agent lineage).
-        - `api/src/routes/api/workflow-config.ts` (if default generation workflow bootstrap path requires explicit seed/update contract).
-      - Runtime files impacted (planned):
-        - `api/src/services/queue-manager.ts` (remove direct orchestration branching from legacy generation chain; keep low-level execution role only).
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S4` DEV - Workflow task mapping for generation (`context_prepare`, `matrix_prepare`, `usecase_list`, `todo_sync`, `usecase_detail`, `executive_summary`) with agent assignment.
-      - API files impacted (planned):
-        - `api/src/services/todo-orchestration.ts` (workflow task sequencing/fanout metadata + assignment binding).
-        - `api/src/services/tools.ts` (if task payload shaping needs shared contracts).
-      - Data/config files impacted (planned):
-        - `api/src/db/schema.ts` (only if strict non-null lineage constraints become required; avoid migration unless blocker).
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-unit SCOPE=tests/unit/workflow-placeholder-extraction.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S5` DEV - Session-bound TODO persistence/rehydration linked to generated workflow progression.
-      - API files impacted (planned):
-        - `api/src/services/chat-service.ts` (persist/recover session TODO runtime projection from stream/tool events).
-        - `api/src/services/todo-orchestration.ts` (session-scoped lookup utility for active TODO and generated-task mapping).
-      - UI files impacted (planned):
-        - `ui/src/lib/components/ChatPanel.svelte`
-        - `ui/src/lib/stores/streamHub.ts`
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/stores/todo-runtime.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S6` DEV - Progression rendering semantics (checked + strike) for AI-updated tasks in panel + stream.
-      - UI files impacted (planned):
+      - Scoped make checks:
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit 0).
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+    - [x] `L4-S3` DEV - Generation entrypoint migration to workflow runtime (no route-level hardcoded chain).
+      - API files impacted:
+        - `api/src/routes/api/use-cases.ts` (route dispatch migrated to workflow runtime bootstrap + workflow metadata propagation in queued jobs).
+        - `api/src/services/todo-orchestration.ts` (generation workflow definition bootstrap + workflow run instantiation with lineage metadata).
+      - Runtime files impacted:
+        - `api/src/services/queue-manager.ts` (generation chain progression now requires workflow runtime metadata; legacy implicit fanout path removed from `usecase_list` progression).
+      - Scoped make checks:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`).
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/use-cases.test.ts (18 tests)`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/use-cases-generate-matrix.test.ts (8 tests)`.
+    - [x] `L4-S4` DEV - Workflow task mapping for generation (`context_prepare`, `matrix_prepare`, `usecase_list`, `todo_sync`, `usecase_detail`, `executive_summary`) with agent assignment.
+      - API files impacted:
+        - `api/src/services/todo-orchestration.ts` (canonical generation workflow key bootstrap, default task mapping insertion, and task-to-agent assignment resolution).
+      - Runtime files impacted:
+        - `api/src/services/queue-manager.ts` (workflow task-key propagation from list->detail->executive summary jobs with assignment metadata transfer).
+      - Scoped make checks:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/unit/queue-manager-contract.test.ts (2 tests)`.
+        - [x] `make test-api-unit SCOPE=tests/unit/workflow-placeholder-extraction.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/unit/workflow-placeholder-extraction.test.ts (3 tests)`.
+    - [x] `L4-S5` DEV - Session-bound TODO persistence/rehydration linked to generated workflow progression.
+      - API files impacted:
+        - `api/src/services/todo-orchestration.ts` (session runtime snapshot helper returns linked TODO + task progression for chat session rehydration).
+        - `api/src/services/chat-service.ts` (chat session message listing now returns `todoRuntime` snapshot alongside messages).
+        - `api/src/routes/api/chat.ts` (`GET /chat/sessions/:id/messages` now forwards `todoRuntime` payload).
+      - UI files impacted:
+        - `ui/src/lib/components/ChatPanel.svelte` (rehydrates sticky TODO panel from `/chat/sessions/:id/messages` snapshot on session load, with silent-refresh-safe behavior).
+      - Scoped make checks:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/chat.test.ts (33 tests)`.
+        - [x] `make test-ui SCOPE=tests/stores/todo-runtime.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/stores/todo-runtime.test.ts (3 tests)`.
+    - [x] `L4-S6` DEV - Progression rendering semantics (checked + strike) for AI-updated tasks in panel + stream.
+      - UI files impacted:
         - `ui/src/lib/components/StreamMessage.svelte`
         - `ui/src/lib/components/ChatPanel.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-      - Scoped make checks (run only after this DEV slice is implemented):
-        - `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-  - [ ] **TEST slices (execute only after DEV slices are complete)**
-    - [ ] `L4-S7` TEST - API scoped validation for progression + session rule.
-      - API files impacted (planned):
+      - Scoped make checks:
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+    - [x] `L4-S6b` DEV - Active-run steer UI consumption in TODO runtime panel.
+      - API files impacted:
+        - `api/src/services/todo-orchestration.ts` (session-bound runtime now returns `activeRun` + `runId`/`runStatus`/`runTaskId`; chat TODO creation accepts optional `sessionId` link for panel rehydration context).
+        - `api/src/services/chat-service.ts` (tool result normalization now forwards run metadata for `task_update`; chat session message payload includes `todoRuntime` snapshot).
+        - `api/src/routes/api/plans.ts` (optional `sessionId` support in TODO creation schema).
+      - UI files impacted:
+        - `ui/src/lib/components/ChatPanel.svelte` (steer message input + submit action to `POST /api/v1/runs/:runId/steer` + last steer feedback rendering in active runtime panel).
+        - `ui/src/lib/utils/todo-runtime-steer.ts` (run-state normalization + steer submit helper).
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+      - Scoped make checks:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`).
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+    - [x] `L4-S6c` DEV - Steer terminal-state coherence in runtime panel (post-crash continuation checkpoint).
+      - UI files impacted:
+        - `ui/src/lib/components/ChatPanel.svelte` (disable steer input when run is no longer steerable; explicit inactive-state hint in panel).
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+      - Scoped make checks (to execute after DEV checkpoint):
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` latest failure signatures: `expect(locator('h1')).toContainText(/Dossiers|Folders/i) failed` then retries timing out on `page.waitForRequest` for `/api/v1/runs/:runId/steer`.
+          - Mandatory triage executed each failure (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification: `test bug` in scoped spec flow (not API product regression).
+  - [x] **TEST slices (execute only after DEV slices are complete)**
+    - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
+      - API files impacted:
         - `api/tests/api/chat-tools.test.ts`
         - `api/tests/api/todos.test.ts`
         - `api/tests/api/tasks.test.ts`
         - `api/tests/api/chat.test.ts`
       - Scoped make commands:
-        - `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/tasks.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S8` TEST - API scoped validation for generation workflow runtime migration.
-      - API files impacted (planned):
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/chat-tools.test.ts (6 tests)`; `Test Files 1 passed`, `Tests 6 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/todos.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/tasks.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/tasks.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/chat.test.ts (33 tests)`; `Test Files 1 passed`, `Tests 33 passed`.
+    - [x] `L4-S8` TEST - API scoped validation for generation workflow runtime migration.
+      - API files impacted:
         - `api/tests/api/use-cases.test.ts`
         - `api/tests/api/use-cases-generate-matrix.test.ts`
         - `api/tests/api/runs-steer.test.ts`
-      - Unit files impacted (planned):
+      - Unit files impacted:
         - `api/tests/unit/queue-manager-contract.test.ts`
       - Scoped make commands:
-        - `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S9` TEST - UI scoped validation for panel state + rendering.
-      - UI files impacted (planned):
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/use-cases.test.ts (18 tests)`; `Test Files 1 passed`, `Tests 18 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/use-cases-generate-matrix.test.ts (8 tests)`; `Test Files 1 passed`, `Tests 8 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/runs-steer.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/unit/queue-manager-contract.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+    - [x] `L4-S9` TEST - UI scoped validation for panel state + rendering.
+      - UI files impacted:
         - `ui/tests/utils/todo-api.test.ts`
         - `ui/tests/utils/todo-chat-rendering.test.ts`
         - `ui/tests/utils/api.test.ts`
         - `ui/tests/stores/todo-runtime.test.ts`
       - Scoped make commands:
-        - `make test-ui SCOPE=tests/utils/todo-api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/utils/api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - `make test-ui SCOPE=tests/stores/todo-runtime.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S10` TEST - E2E scoped validation (session TODO runtime + generation to executive summary).
-      - E2E files impacted (planned):
+        - [x] `make test-ui SCOPE=tests/utils/todo-api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/api.test.ts (11 tests)`; `Test Files 1 passed`, `Tests 11 passed`.
+        - [x] `make test-ui SCOPE=tests/stores/todo-runtime.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/stores/todo-runtime.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+    - [x] `L4-S9b` TEST - Steer UI scoped validation (panel action + run feedback).
+      - UI files impacted:
+        - `ui/tests/utils/todo-runtime-steer.test.ts`
+      - API files revalidated for steer contract:
+        - `api/tests/api/todos.test.ts`
+        - `api/tests/api/runs-steer.test.ts`
+      - E2E file impacted:
+        - `e2e/tests/09-todo-steering-core.spec.ts` (steer now exercised from panel UI, not `page.request` direct API call).
+      - Scoped make commands:
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/todos.test.ts REGISTRY=local API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/todos.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts REGISTRY=local API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/api/runs-steer.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: production images rebuilt with `dist/tests/utils/seed-test-data.js` present in API image.
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/09-todo-steering-core.spec.ts:9:3` ; `1 passed (11.4s)`.
+          - `2026-02-27` failure signatures before final pass: `Bind for 0.0.0.0:1003 failed: port is already allocated`, `Bind for 0.0.0.0:5103 failed: port is already allocated`, and `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'`; mandatory triage executed each time (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification `test/infra` (not product/test logic), then recovered by `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, `make build-api build-ui-image ... ENV=e2e-feat-todo-steering-workflow-core`.
+    - [x] `L4-S10` TEST - E2E scoped validation (session TODO runtime + generation to executive summary).
+      - E2E files impacted:
         - `e2e/tests/09-todo-steering-core.spec.ts`
         - `e2e/tests/00-ai-generation.spec.ts`
         - `e2e/tests/05-executive-summary.spec.ts`
       - Scoped make commands:
-        - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-        - `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-        - `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-  - [ ] To-be docs (deferred):
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `TARGET=production docker compose build --no-cache api` then `TARGET=production docker compose ... ui` (exit `0`).
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/09-todo-steering-core.spec.ts:9:3` ; `1 passed (11.3s)`.
+        - [x] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `2 passed (1.3m)` including `tests/00-ai-generation.spec.ts:81:3` and `tests/00-ai-generation.spec.ts:156:3`.
+        - [x] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `2 passed (12.1s)` including `tests/05-executive-summary.spec.ts:105:3` and `tests/05-executive-summary.spec.ts:155:3`.
+          - `2026-02-27` rerun evidence (post-interruption): first scoped retry failed with infra signature `Bind for 0.0.0.0:1003 failed: port is already allocated`; mandatory triage executed (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`) and classified `test/infra` (not product/test logic). Second retry failed with infra signature `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` during `db-seed-test`; same mandatory triage protocol re-executed and classified `test/infra` precondition drift. Recovery sequence: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, `make build-api build-ui-image ... ENV=e2e-feat-todo-steering-workflow-core`; final reruns passed on same commands with signatures `tests/09-todo-steering-core.spec.ts: 1 passed (9.3s)`, `tests/00-ai-generation.spec.ts: 2 passed (1.1m)`, `tests/05-executive-summary.spec.ts: 2 passed (13.1s)`.
+  - [ ] **Lot 4 UAT checklist (human run only, root workspace `ENV=dev`)**
+    - [ ] UAT setup (operator):
+      - [ ] From root workspace `~/src/top-ai-ideas-fullstack`, run app on `ENV=dev`, open `/folders`, and open chat widget in AI mode.
+      - [ ] Start from a fresh chat session with TODO tooling enabled.
+    - [ ] UAT-L4-UI-STEER-1: steer interaction during active run.
+      - [ ] Create a TODO with at least one task, start task execution so runtime shows active run (`runId` + `runStatus` visible in panel).
+      - [ ] Enter a steer message in runtime steer input and submit.
+      - [ ] Confirm steer feedback block shows the submitted message and returned run status.
+    - [ ] UAT-L4-UI-STEER-2: steering semantics + progression coherence.
+      - [ ] While run is active, submit a second steer message and verify no duplicate run is created.
+      - [ ] Continue task progression and confirm panel status/task updates remain coherent after steering.
+      - [ ] If run reaches terminal status, verify steer submit becomes unavailable/disabled coherently.
+    - [ ] UAT-L4-RUNTIME-MIGRATION-1: session-bound TODO runtime migration outcome.
+      - [ ] Trigger one generation workflow from chat (`/folders`) and verify progression appears in the same session TODO runtime panel.
+      - [ ] Reload page and reopen the same chat session; verify runtime snapshot rehydrates with same TODO/tasks and run metadata.
+      - [ ] Confirm generated workflow progression remains single-path (no legacy duplicate chain) while steer interactions continue to target the active run.
+  - [!] To-be docs (deferred):
     - [!] Record multi-user/multi-AI collaborative TODO ergonomics as deferred evolution (actor markers/avatar-style visualization and concurrent editing UX).
 
 - [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
@@ -577,28 +685,31 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-7: single-path behavior (no dual-path execution).
       - [ ] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
       - [ ] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
-- [ ] **Lot N-1 — Docs consolidation**
+- [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Apply `BR03-EX1` if docs paths are touched.
   - [ ] Consolidate BR-03 semantics into target specs:
     - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (close v1 deltas and freeze terminology/transitions).
     - cross-reference `PLAN.md` and `TODO.md` branch status/dependency notes.
   - [ ] Explicitly retain BR-14 deferral for broad panel redesign.
-  - [ ] If `spec/BRANCH_SPEC_EVOL.md` was used during implementation, fold it into canonical specs and delete it.
+  - [ ] If `spec/BRANCH_SPEC_EVOL.md` was used during implementation, fold it into canonical specs and delete it. (Not used in BR-03; no fold/delete required.)
 
-- [ ] **Lot N — Final validation**
+- [ ] **Lot N — Final validation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Typecheck & Lint
     - [ ] `make typecheck-api ENV=test-feat-todo-steering-workflow-core`
+      - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`) via `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`.
+      - `2026-02-27` first-attempt infra failure signature: `Bind for 0.0.0.0:1003 failed: port is already allocated` during `up-api`; classified `test/infra` (not product), then resolved by `make down ... ENV=test-feat-todo-steering-workflow-core` + `make down ... ENV=e2e-feat-todo-steering-workflow-core`.
     - [ ] `make lint-api ENV=test-feat-todo-steering-workflow-core`
+      - `2026-02-27` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`) via `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`.
     - [ ] `make typecheck-ui ENV=test-feat-todo-steering-workflow-core`
     - [ ] `make lint-ui ENV=test-feat-todo-steering-workflow-core`
-  - [x] Retest API (existing + new BR-03 files) (Evidence-backed via scoped passes only: Lot1/Lot2 scoped suites + A19 scoped `folders` rerun; aggregate global gate deferred as non-blocking `[!]`.)
-    - [x] Existing updated: (A7 scoped passes: `chat.test.ts`, `chat-tools.test.ts`, `workspaces.test.ts`; Lot1 scoped unit passes: `queue-manager-contract.test.ts`, `tools.test.ts`; A19 scoped non-regression pass: `folders.test.ts`.)
+  - [ ] Retest API (existing + new BR-03 files) (Evidence-backed via scoped passes only: Lot1/Lot2 scoped suites + A19 scoped `folders` rerun; aggregate global gate deferred as non-blocking `[!]`.)
+    - [ ] Existing updated: (A7 scoped passes: `chat.test.ts`, `chat-tools.test.ts`, `workspaces.test.ts`; Lot1 scoped unit passes: `queue-manager-contract.test.ts`, `tools.test.ts`; A19 scoped non-regression pass: `folders.test.ts`.)
       - `api/tests/api/chat.test.ts`
       - `api/tests/api/chat-tools.test.ts`
       - `api/tests/api/workspaces.test.ts`
       - `api/tests/unit/queue-manager-contract.test.ts`
       - `api/tests/unit/tools.test.ts`
-    - [x] New: (A2 scoped passes: `plans/todos/tasks/runs-steer/agent-config/workflow-config`; Lot1 scoped unit passes: `task-status-machine/todo-plan-ownership/guardrail-enforcement/workflow-placeholder-extraction`.)
+    - [ ] New: (A2 scoped passes: `plans/todos/tasks/runs-steer/agent-config/workflow-config`; Lot1 scoped unit passes: `task-status-machine/todo-plan-ownership/guardrail-enforcement/workflow-placeholder-extraction`.)
       - `api/tests/api/plans.test.ts`
       - `api/tests/api/todos.test.ts`
       - `api/tests/api/tasks.test.ts`
@@ -632,10 +743,10 @@ Open decision items for BR-03 restart:
     - [ ] Gate: `make clean test-e2e API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 E2E_GROUP="03 06 09" ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] Verify no test timeout inflation was introduced.
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-    - [x] `make test-api-ai ENV=test-feat-todo-steering-workflow-core` (A18 scoped evidence, 2026-02-26: `make test-api-ai SCOPE=tests/ai/chat-sync.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core` => `1` file passed, `4` tests passed, `Duration 20.46s`.)
+    - [ ] `make test-api-ai ENV=test-feat-todo-steering-workflow-core` (A18 scoped evidence, 2026-02-26: `make test-api-ai SCOPE=tests/ai/chat-sync.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core` => `1` file passed, `4` tests passed, `Duration 20.46s`.)
     - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=e2e-feat-todo-steering-workflow-core`
-    - [x] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=e2e-feat-todo-steering-workflow-core` (A16 evidence, 2026-02-26: scoped run executed with `REGISTRY=local`, result `2 passed (19.8s)`; passing cases `tests/03-chat-chrome-extension.spec.ts:152` and `tests/03-chat-chrome-extension.spec.ts:184`.)
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=e2e-feat-todo-steering-workflow-core` (A16 evidence, 2026-02-26: scoped run executed with `REGISTRY=local`, result `2 passed (19.8s)`; passing cases `tests/03-chat-chrome-extension.spec.ts:152` and `tests/03-chat-chrome-extension.spec.ts:184`.)
     - [!] `make test-e2e E2E_SPEC=tests/07_comment_assistant.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=e2e-feat-todo-steering-workflow-core` (A20 failure evidence, 2026-02-26: initial `port 1003 already allocated`, then scoped rerun reached stable failure signature `tests/07_comment_assistant.spec.ts:117:3 IA poste un commentaire + badge Assistant IA` with `retry #1` after `3.0m`; classified `test/infra + test bug/flaky` candidate, deferred non-blocking under AI allowlist.)
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] Runtime sanity checks before handoff:
