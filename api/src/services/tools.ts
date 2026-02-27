@@ -618,6 +618,90 @@ export const todoCreateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+export const todoUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'todo_update',
+    description:
+      'Update an existing TODO item from chat. Use this tool to update ownership/content and to close or reopen TODO progression.',
+    parameters: {
+      type: 'object',
+      properties: {
+        todoId: {
+          type: 'string',
+          description: 'TODO id to update (required).'
+        },
+        title: {
+          type: 'string',
+          description: 'Optional updated TODO title.'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional updated TODO description.'
+        },
+        ownerUserId: {
+          type: 'string',
+          description: 'Optional owner user id (requires reassignment permission).'
+        },
+        status: {
+          type: 'string',
+          enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
+          description: 'Optional aggregate status intent. `done` closes the TODO; other statuses keep it open.'
+        },
+        closed: {
+          type: 'boolean',
+          description: 'Optional explicit close flag (true=close, false=reopen).'
+        },
+        metadata: {
+          type: 'object',
+          description: 'Optional TODO metadata object.'
+        }
+      },
+      required: ['todoId']
+    }
+  }
+};
+
+export const taskUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'task_update',
+    description:
+      'Update an existing task from chat. Use this tool to progress task status and update assignee/content.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: {
+          type: 'string',
+          description: 'Task id to update (required).'
+        },
+        title: {
+          type: 'string',
+          description: 'Optional updated task title.'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional updated task description.'
+        },
+        assigneeUserId: {
+          type: 'string',
+          description: 'Optional assignee user id (requires reassignment permission).'
+        },
+        status: {
+          type: 'string',
+          enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
+          description: 'Optional task status transition.'
+        },
+        metadata: {
+          type: 'object',
+          description: 'Optional task metadata object.'
+        }
+      },
+      required: ['taskId']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

@@ -282,8 +282,8 @@ chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', cr
 chatRouter.get('/sessions/:id/messages', async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');
-  const messages = await chatService.listMessages(sessionId, user.userId);
-  return c.json({ sessionId, messages });
+  const result = await chatService.listMessages(sessionId, user.userId);
+  return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
 
 /**
