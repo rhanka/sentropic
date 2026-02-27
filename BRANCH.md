@@ -387,8 +387,8 @@ Open decision items for BR-03 restart:
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app
     - [ ] UAT setup:
-      - [ ] Push branch from `tmp/feat-todo-steering-workflow-core`.
-      - [ ] Switch to root workspace `~/src/top-ai-ideas-fullstack` with `ENV=dev`.
+      - [x] Push branch from `tmp/feat-todo-steering-workflow-core`. (2026-02-27: `git -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-todo-steering-workflow-core push --force-with-lease origin feat/todo-steering-workflow-core` => pass; remote updated to `2d09b0a`.)
+      - [x] Switch to root workspace `~/src/top-ai-ideas-fullstack` with `ENV=dev`. (2026-02-27: `make -C /home/antoinefa/src/top-ai-ideas-fullstack ps ENV=dev` => pass; services `dev-api`, `dev-ui`, `dev-postgres`, `dev-maildev`, `dev-minio` up/healthy on standard dev ports.)
     - [ ] Detailed evol tests:
       - [ ] Open chat, ask AI to create a TODO with at least 3 tasks; verify inline TODO card renders in chat.
       - [ ] Verify TODO/task statuses follow v1 transitions (`todo -> planned -> in_progress -> done` and blocked/deferred/cancelled paths).
