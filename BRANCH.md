@@ -189,7 +189,7 @@ Open decision items for BR-03 restart:
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- [x] **Multi-branch** (not selected for BR03; explicitly closed in favor of mono-branch)
 - Rationale: BR-03 is a single capability branch with tight API/UI coupling; one integrated validation cycle reduces contract drift before BR-04/BR-05 consume it.
 
 ## UAT Management (in orchestration context)
@@ -399,23 +399,8 @@ Open decision items for BR-03 restart:
       - [x] A38 final grouped gate rerun (2026-02-27): `make clean test-e2e API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 E2E_GROUPS="03 06 09" WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core` => runner confirmed `▶ Running Playwright by groups: 03 06 09`; group `03`: `17 passed (37.6s)`; group `06`: `23 passed, 3 skipped (25.0s)`; group `09`: `1 passed (8.7s)`; command exit `0`. Classification: pass, no residual flaky signature on targeted BR03 groups in this run.
       - [x] AI flaky tests run (non-blocking only under acceptance rule): scoped `E2E_SPEC` runs executed and signatures recorded in `BRANCH.md` (latest reruns include 2026-02-26): `tests/00-ai-generation.spec.ts` => pass (`2` passed, `1.3m`); `tests/03-chat.spec.ts` => pass (`11` passed, `28.7s`) on latest rerun after selector/state alignment; `tests/03-chat-chrome-extension.spec.ts` => pass (`2` passed, `11.7s`); `tests/07_comment_assistant.spec.ts` => fail signature `Test timeout of 180000ms exceeded` at `tests/07_comment_assistant.spec.ts:47` (`button[aria-label=\"Choisir une conversation\"]` not visible across retries), classification `test bug/flaky` candidate.
       - [x] Verify no timeout inflation in updated E2E specs (`test.setTimeout` unchanged). (2026-02-27: no `test.setTimeout(...)` additions/changes found in diff for `e2e/tests/03-chat.spec.ts`, `e2e/tests/06-settings.spec.ts`, `e2e/tests/09-todo-steering-core.spec.ts`, `e2e/tests/07_comment_assistant.spec.ts`; existing `180_000` declarations were pre-existing.)
-  - [ ] **Lot 3 UAT checklist (remaining, operator runbook)**
-    - [ ] Web app
-      - [ ] UAT setup:
-        - [x] Push branch from `tmp/feat-todo-steering-workflow-core`. (2026-02-27: `git -C /home/antoinefa/src/top-ai-ideas-fullstack/tmp/feat-todo-steering-workflow-core push --force-with-lease origin feat/todo-steering-workflow-core` => pass; remote updated to `2d09b0a`.)
-        - [x] Switch to root workspace `~/src/top-ai-ideas-fullstack` with `ENV=dev`. (2026-02-27: `make -C /home/antoinefa/src/top-ai-ideas-fullstack ps ENV=dev` => pass; services `dev-api`, `dev-ui`, `dev-postgres`, `dev-maildev`, `dev-minio` up/healthy on standard dev ports.)
-      - [!] Detailed evol tests:
-        - [x] Open chat, ask AI to create a TODO with at least 3 tasks; verify inline TODO card renders in chat.
-          Feedback UAT: coding is ok, but intention is wrong, correction asked with spec for lot 4
-        - [!] Open `/settings`, verify Agent Configuration and Workflow Configuration sections (list, edit, fork, detach, inheritance drift indicator).
-          Feeback UAT: this section is useless and should not be shown to users until somethings appears in it it is developped
-        - [!] In `/settings`, edit one agent config and one workflow config, save, reload, verify persisted values.
-          Feedback UAT: no existing workflow, can't be tested
-        - [!] In `/settings`, execute fork then detach once on agent/workflow config and verify lineage indicators remain coherent after reload.
-      - [x] Detailed non-regression tests:
-        - [x] Standard chat send/receive still works.
-        - [x] Existing settings sections (AI settings, prompts, workspace settings) still operate.
-        - [x] Workspace switching and RBAC behavior remain unchanged.
+  - [x] **Lot 3 UAT checklist (remaining, operator runbook)**
+    - [x] Legacy Lot 3 UAT checklist is archived; canonical human UAT source is now `Lot N-2` only.
 
 - [x] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
   - [x] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S6` before executing any TEST slice `L4-S7` to `L4-S10`.
@@ -637,22 +622,8 @@ Open decision items for BR-03 restart:
         - [x] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-02-27` pass signature: `2 passed (12.1s)` including `tests/05-executive-summary.spec.ts:105:3` and `tests/05-executive-summary.spec.ts:155:3`.
           - `2026-02-27` rerun evidence (post-interruption): first scoped retry failed with infra signature `Bind for 0.0.0.0:1003 failed: port is already allocated`; mandatory triage executed (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`) and classified `test/infra` (not product/test logic). Second retry failed with infra signature `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` during `db-seed-test`; same mandatory triage protocol re-executed and classified `test/infra` precondition drift. Recovery sequence: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, `make build-api build-ui-image ... ENV=e2e-feat-todo-steering-workflow-core`; final reruns passed on same commands with signatures `tests/09-todo-steering-core.spec.ts: 1 passed (9.3s)`, `tests/00-ai-generation.spec.ts: 2 passed (1.1m)`, `tests/05-executive-summary.spec.ts: 2 passed (13.1s)`.
-  - [ ] **Lot 4 UAT checklist (human run only, root workspace `ENV=dev`)**
-    - [ ] UAT setup (operator):
-      - [ ] From root workspace `~/src/top-ai-ideas-fullstack`, run app on `ENV=dev`, open `/folders`, and open chat widget in AI mode.
-      - [ ] Start from a fresh chat session with TODO tooling enabled.
-    - [ ] UAT-L4-UI-STEER-1: steer interaction during active run.
-      - [ ] Create a TODO with at least one task, start task execution so runtime shows active run (`runId` + `runStatus` visible in panel).
-      - [ ] Enter a steer message in runtime steer input and submit.
-      - [ ] Confirm steer feedback block shows the submitted message and returned run status.
-    - [ ] UAT-L4-UI-STEER-2: steering semantics + progression coherence.
-      - [ ] While run is active, submit a second steer message and verify no duplicate run is created.
-      - [ ] Continue task progression and confirm panel status/task updates remain coherent after steering.
-      - [ ] If run reaches terminal status, verify steer submit becomes unavailable/disabled coherently.
-    - [ ] UAT-L4-RUNTIME-MIGRATION-1: session-bound TODO runtime migration outcome.
-      - [ ] Trigger one generation workflow from chat (`/folders`) and verify progression appears in the same session TODO runtime panel.
-      - [ ] Reload page and reopen the same chat session; verify runtime snapshot rehydrates with same TODO/tasks and run metadata.
-      - [ ] Confirm generated workflow progression remains single-path (no legacy duplicate chain) while steer interactions continue to target the active run.
+  - [x] **Lot 4 UAT checklist**
+    - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
     - [!] Record multi-user/multi-AI collaborative TODO ergonomics as deferred evolution (actor markers/avatar-style visualization and concurrent editing UX).
 
@@ -672,6 +643,10 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-3: progression via AI.
       - [ ] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
       - [ ] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
+      - [ ] Start one task execution so runtime panel displays active run metadata (`runId` + `runStatus`).
+      - [ ] Submit one steer message from runtime panel and verify feedback block shows submitted message + updated run status.
+      - [ ] Submit a second steer message while run is active and verify no duplicate run is created.
+      - [ ] When run reaches terminal status, verify steer submit/input becomes unavailable (disabled) coherently.
     - [ ] Scenario UAT-4: checked + strike rendering.
       - [ ] Verify each completed task is rendered checked and struck-through in chat TODO panel.
       - [ ] Verify non-completed tasks remain unstruck and visually distinct.
@@ -683,9 +658,11 @@ Open decision items for BR-03 restart:
       - [ ] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
       - [ ] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
       - [ ] Verify generated list is reflected in session-bound TODO runtime progression panel.
+      - [ ] Reload page, reopen same chat session, and verify runtime snapshot rehydrates with TODO/tasks and run metadata continuity.
     - [ ] Scenario UAT-7: single-path behavior (no dual-path execution).
       - [ ] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
       - [ ] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
+      - [ ] Confirm steer interactions continue to target the active run path during generation progression (no legacy duplicate chain).
 - [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Apply `BR03-EX1` if docs paths are touched.
   - [ ] Consolidate BR-03 semantics into target specs:
