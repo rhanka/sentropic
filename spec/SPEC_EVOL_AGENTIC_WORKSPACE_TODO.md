@@ -154,11 +154,35 @@ Context rule:
   - sticky container at the bottom of the conversation,
   - full-width layout,
   - collapsible panel,
-  - max-height with internal scroll (consistent with existing chat components).
+  - reduced max-height with internal scroll (about 70% of previous opened height),
+  - panel title label is simply `TODO` (no technical runtime wording in the primary title),
+  - technical metadata (`status`, `plan id`, `todo id`, `run id`, `run status`, `run task id`) is hidden by default and exposed on-demand via an info (`i`) menu in expanded mode.
+- Typography contract:
+  - checklist item font size aligns with the panel subtitle scale (no oversized task rows),
+  - completed tasks remain rendered as checked + struck-through.
 - At most one active TODO per chat session in BR-03 v1.1.
-- The user can ask the AI to update plan progression (task/todo status updates) from chat.
 - Collaborative manual edition of TODO content is out of scope for BR-03 and deferred.
-- Completed tasks must be rendered as checked + struck-through in chat surfaces.
+
+### 9.1.2 Steering UX contract (Lot 4 target)
+- Steering is in-flight guidance on the active execution run; it is not a second chat thread.
+- Steering input is performed from the main chat composer when the assistant is actively running and a steerable run is available.
+- Composer behavior:
+  - send action switches to steering mode while run execution is active,
+  - steering submission uses `POST /api/v1/runs/:runId/steer`,
+  - steering does not interrupt currently running tools/execution.
+- Message behavior:
+  - steering message is appended as a normal user bubble in the conversation timeline (same session, no side-thread),
+  - the reasoning/tool strip immediately shows an acknowledgment state equivalent to "new user message taken into account",
+  - if the assistant already started a final response, an additional assistant continuation bubble may be produced (additive behavior, no cancellation).
+- Dedicated standalone steer input block inside the TODO runtime panel is out of scope for this target behavior.
+
+### 9.1.3 Execution handshake for TODO progression (Lot 4 target)
+- TODO in chat is an executable AI plan, not a static checklist.
+- After `todo_create`, assistant asks for explicit user confirmation (`go`) before autonomous progression actions.
+- After confirmation, assistant must use progression tools to reflect concrete execution:
+  - `todo_update` for TODO-level progression,
+  - `task_update` for task-level progression.
+- Progression must be incremental and stateful (checklist updates during execution, not bulk end-state only).
 
 ### 9.2 Basic Agent Configuration section
 - Configure generation agents (currently prompt-backed).
@@ -213,7 +237,8 @@ Supported automation triggers:
 - task completed,
 - todo completed,
 - guardrail violation,
-- steer message received.
+- steer message received,
+- user steer acknowledgment surfaced in runtime stream state.
 
 Supported v1 actions:
 - enqueue next task,
@@ -254,7 +279,9 @@ Configuration APIs:
 
 Chat tool contract (BR-03):
 - `todo_create` is required for AI-created TODO bootstrap from chat.
-- TODO progression updates from chat (task/todo status mutation) are required in Lot 4 (`todo_update` / `task_update` contract to finalize in branch plan).
+- TODO progression updates from chat (task/todo status mutation) are required in Lot 4 (`todo_update` / `task_update`) and must be operational in normal assistant turns.
+- Steering must stay on the same run path (`POST /api/v1/runs/:runId/steer`) and remain non-interrupting for in-flight tool execution.
+- Execution handshake requires explicit user confirmation before automatic TODO progression (`go` semantics).
 
 ### 12.1 AI use-case generation workflow runtime migration (Lot 4 mandatory)
 
