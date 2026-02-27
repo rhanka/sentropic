@@ -407,8 +407,8 @@ Open decision items for BR-03 restart:
   - [x] **Lot 3 UAT checklist (remaining, operator runbook)**
     - [x] Legacy Lot 3 UAT checklist is archived; canonical human UAT source is now `Lot N-2` only.
 
-- [x] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
-  - [x] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S6` before executing any TEST slice `L4-S7` to `L4-S10`.
+- [ ] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
+  - [ ] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S14` before executing any TEST slice `L4-S15` to `L4-S18`.
   - [x] Baseline decisions for this lot:
     - [x] Migration policy is strict: no permanent dual execution path between legacy hardcoded generation and workflow runtime.
     - [x] Target workflow key is `ai_usecase_generation_v1` (context -> matrix optional -> usecase list -> TODO sync -> usecase details fanout -> executive summary).
@@ -417,7 +417,7 @@ Open decision items for BR-03 restart:
     - [x] Chat progression tools target: add runtime support for `todo_update` and `task_update` (aligned with `spec/TOOLS.md`).
     - [x] Session rule target: one active TODO max per chat session (deterministic conflict behavior for second create attempt in same session).
     - [!] Collaborative manual editing stays explicitly deferred for BR03 (multi-user actor markers, avatar-like overlays, concurrent editing conflict UX).
-  - [x] **DEV slices (implementation first, no tests in this block)**
+  - [ ] **DEV slices (implementation first, no tests in this block)**
     - [x] `L4-S1` DEV - API chat progression tooling + one-active-TODO-per-session guard.
       - API files impacted:
         - `api/src/services/tools.ts` (`todo_update`, `task_update` tool definitions).
@@ -545,7 +545,47 @@ Open decision items for BR-03 restart:
           - `2026-02-27` pass signature: `✓ tests/09-todo-steering-core.spec.ts:12:3` ; `1 passed (8.9s)`.
           - `2026-02-27` intermediate failure signatures before stabilization: `expect(locator('h1')).toContainText(/Dossiers|Folders/i) failed`, `TypeError: request.newContext is not a function`, `expect(getByTestId('todo-runtime-steer-submit')).toBeEnabled() received disabled`.
           - Mandatory triage executed on each red run (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification: `test bug` in scoped spec flow (not API product regression).
-  - [x] **TEST slices (execute only after DEV slices are complete)**
+    - [ ] `L4-S11` DEV - TODO runtime panel UX polish from UAT feedback.
+      - Scope:
+        - Rename runtime panel title to `TODO`.
+        - Move technical metadata behind an on-demand info menu (`i`) in expanded panel state.
+        - Reduce opened panel max-height by ~30% versus previous runtime implementation.
+        - Align checklist task typography with subtitle scale.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+    - [ ] `L4-S12` DEV - Steering UX migration to composer action (remove runtime sidecar steer form).
+      - Scope:
+        - Steering action lives in main composer while assistant run is active.
+        - Runtime panel no longer exposes a dedicated steer form block.
+        - Send/steer action remains single-thread and session-bound.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/lib/utils/todo-runtime-steer.ts`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+    - [ ] `L4-S13` DEV - In-flight steer acknowledgment and conversation continuity semantics.
+      - Scope:
+        - On steer submit, reasoning/tool strip shows immediate acknowledgment message.
+        - User steer message is appended as a regular user bubble in current conversation timeline.
+        - If assistant already started final response emission, allow additive assistant continuation bubble.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/lib/components/StreamMessage.svelte`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+    - [ ] `L4-S14` DEV - Progression reliability contract (`go` handshake + actionable updates).
+      - Scope:
+        - Assistant asks explicit `go` before progressing a freshly created TODO.
+        - Ensure `todo_update` / `task_update` are available and effectively used for checklist progression.
+      - Files expected:
+        - `api/src/services/chat-service.ts`
+        - `api/src/services/tools.ts`
+        - `api/src/services/todo-orchestration.ts`
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `spec/TOOLS.md` (state sync if checklist status changes)
+  - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
         - `api/tests/api/chat-tools.test.ts`
@@ -667,28 +707,32 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-1: one TODO max per session.
       - [x] Ask AI to create a first TODO with at least 3 tasks; verify creation success.
       - [x] In the same session, ask AI to create a second TODO; verify deterministic conflict behavior (no second active TODO created, conflict message references current active TODO).
-    - [ ] Scenario UAT-2: sticky bottom panel UX.
-      - [x] Verify TODO panel is sticky at bottom of conversation and spans full available width.
-      - [x] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
-      - [x] Verify max-height constraint and internal scroll when task list exceeds visible space.
+    - [ ] Scenario UAT-2: sticky bottom panel UX + readability polish.
+      - [ ] Verify TODO panel is sticky at bottom of conversation and spans full available width.
+      - [ ] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
+      - [ ] Verify max-height constraint and internal scroll when task list exceeds visible space.
+      - [ ] Verify title is `TODO` and no technical runtime label remains in the main header.
+      - [ ] Verify metadata is hidden by default and visible only via info (`i`) menu in expanded mode.
+      - [ ] Verify checklist item typography is reduced to subtitle-equivalent size.
     - [ ] Scenario UAT-3: progression via AI.
       - [!] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
         Feedback: once created the chat says he has no access to the list
       - [!] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
         Feedback: KO since chat has no access to tool to do that
       - [!] Start one task execution so runtime panel displays active run metadata (`runId` + `runStatus`).
-      - [!] Submit one steer message from runtime panel and verify feedback block shows submitted message + updated run status.
-        Feeback: this is absolutely not what i asked for steering function
-      - [!] Submit a second steer message while run is active and verify no duplicate run is created.
-        Feedback: to be retested
-      - [!] When run reaches terminal status, verify steer submit/input becomes unavailable (disabled) coherently.
-        Feedback: no interes in that function, delete that
+      - [ ] Verify assistant asks for explicit `go` before autonomous checklist progression starts.
+      - [ ] While assistant run is active, submit one steering message from main composer (not runtime panel) and verify:
+        - user steer appears as a normal user bubble in same conversation timeline,
+        - reasoning/tool strip immediately shows acknowledgment of new user message intake,
+        - no run interruption is observed.
+      - [ ] Submit a second steering message while same run is active and verify no duplicate run is created.
+      - [ ] If assistant has already started final response generation, verify additive assistant continuation (second assistant bubble) is possible without cancelling current run.
     - [ ] Scenario UAT-4: checked + strike rendering.
       - [!] Verify each completed task is rendered checked and struck-through in chat TODO panel.
       - [!] Verify non-completed tasks remain unstruck and visually distinct.
     - [ ] Scenario UAT-5: session persistence.
-      - [x] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
-        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
+      - [ ] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
+        Feedback: status progression was not testable due to missing update capability in prior build; collapse state persistence to revalidate.
       - [!] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
         Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
       - [!] Reload page and reopen same chat session; verify persisted state is rehydrated.
