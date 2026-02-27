@@ -532,6 +532,11 @@
     </div>
   {/if}
 
+  <div class="rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+    <div class="font-medium">{$_('settings.runtime.scopeBoundary.title')}</div>
+    <p class="mt-1">{$_('settings.runtime.scopeBoundary.description')}</p>
+  </div>
+
   {#if isLoading}
     <p class="text-sm text-slate-600">{$_('settings.runtime.loading')}</p>
   {:else}
@@ -625,33 +630,45 @@
                 {#if editingAgentId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`agent-name-${item.id}`}
+                      >
                         {$_('settings.runtime.nameLabel')}
                       </label>
                       <input
+                        id={`agent-name-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                         bind:value={agentDraftById[item.id].name}
                       />
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`agent-description-${item.id}`}
+                      >
                         {$_('settings.runtime.descriptionLabel')}
                       </label>
                       <textarea
+                        id={`agent-description-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                         rows={2}
                         bind:value={agentDraftById[item.id].description}
-                      />
+                      ></textarea>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`agent-config-json-${item.id}`}
+                      >
                         {$_('settings.runtime.configJsonLabel')}
                       </label>
                       <textarea
+                        id={`agent-config-json-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs"
                         rows={8}
                         bind:value={agentDraftById[item.id].configText}
-                      />
+                      ></textarea>
                     </div>
                     <div class="flex flex-wrap gap-2">
                       <button
@@ -752,12 +769,11 @@
 
                 <div class="mt-2 text-xs text-slate-700">
                   <div class="font-medium">{$_('settings.runtime.workflow.placeholdersLabel')}</div>
-                  {@const tokens = getWorkflowPlaceholderTokens(item)}
-                  {#if tokens.length === 0}
+                  {#if getWorkflowPlaceholderTokens(item).length === 0}
                     <div class="text-slate-500">{$_('settings.runtime.workflow.placeholdersNone')}</div>
                   {:else}
                     <div class="mt-1 flex flex-wrap gap-1.5">
-                      {#each tokens as token}
+                      {#each getWorkflowPlaceholderTokens(item) as token}
                         <span class="rounded bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700">
                           {token}
                         </span>
@@ -799,33 +815,45 @@
                 {#if editingWorkflowId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`workflow-name-${item.id}`}
+                      >
                         {$_('settings.runtime.nameLabel')}
                       </label>
                       <input
+                        id={`workflow-name-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                         bind:value={workflowDraftById[item.id].name}
                       />
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`workflow-description-${item.id}`}
+                      >
                         {$_('settings.runtime.descriptionLabel')}
                       </label>
                       <textarea
+                        id={`workflow-description-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                         rows={2}
                         bind:value={workflowDraftById[item.id].description}
-                      />
+                      ></textarea>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-slate-700">
+                      <label
+                        class="mb-1 block text-xs font-medium text-slate-700"
+                        for={`workflow-config-json-${item.id}`}
+                      >
                         {$_('settings.runtime.configJsonLabel')}
                       </label>
                       <textarea
+                        id={`workflow-config-json-${item.id}`}
                         class="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs"
                         rows={8}
                         bind:value={workflowDraftById[item.id].configText}
-                      />
+                      ></textarea>
                     </div>
                     <div class="flex flex-wrap gap-2">
                       <button
