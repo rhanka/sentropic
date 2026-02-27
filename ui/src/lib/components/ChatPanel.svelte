@@ -74,9 +74,17 @@
     FolderOpen,
     Trash2,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    ChevronDown
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import {
+    isTodoRuntimeRunSteerable,
+    normalizeTodoRuntimeRunState,
+    postTodoRuntimeSteer,
+    type TodoRuntimeRunState,
+    type TodoRuntimeSteerFeedback,
+  } from '$lib/utils/todo-runtime-steer';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
@@ -120,6 +128,29 @@
     data: any;
     sequence: number;
     createdAt?: string;
+  };
+  type TodoRuntimeTask = {
+    id?: string;
+    title: string;
+    status?: string;
+  };
+  type TodoRuntimePanelState = {
+    todoId: string;
+    planId: string | null;
+    title: string;
+    status: string;
+    runId: string | null;
+    runStatus: string | null;
+    runTaskId: string | null;
+    tasks: TodoRuntimeTask[];
+    conflictMessage: string | null;
+    sourceTool: 'todo_create' | 'todo_update' | 'task_update';
+    updatedAtMs: number;
+  };
+  type TodoRuntimeToolResultEvent = {
+    toolCallId: string;
+    toolName: 'todo_create' | 'todo_update' | 'task_update';
+    result: Record<string, unknown>;
   };
   type LocalToolStreamState = {
     streamId: string;
@@ -965,6 +996,12 @@
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
+  let todoRuntimePanel: TodoRuntimePanelState | null = null;
+  let todoRuntimeCollapsed = false;
+  let todoRuntimeSteerMessage = '';
+  let todoRuntimeSteerSubmitting = false;
+  let todoRuntimeSteerError: string | null = null;
+  let todoRuntimeLastSteer: TodoRuntimeSteerFeedback | null = null;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
@@ -1083,7 +1120,7 @@
       id: 'todo_create',
       label: $_('chat.tools.todoCreate.label'),
       description: $_('chat.tools.todoCreate.description'),
-      toolIds: ['todo_create'],
+      toolIds: ['todo_create', 'todo_update', 'task_update'],
       icon: List,
     },
     {
@@ -2206,6 +2243,224 @@
     return fallback;
   };
 
+  const asRuntimeRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  };
+
+  const normalizeRuntimeStatus = (
+    value: unknown,
+    fallback = 'todo',
+  ): string => {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : fallback;
+  };
+
+  const toTodoRuntimeTask = (value: unknown): TodoRuntimeTask | null => {
+    const task = asRuntimeRecord(value);
+    if (!task) return null;
+    const title = String(task.title ?? '').trim();
+    if (!title) return null;
+    const id = String(task.id ?? '').trim();
+    const status = normalizeRuntimeStatus(
+      task.status ?? task.derivedStatus,
+      'todo',
+    );
+    return id
+      ? { id, title, status }
+      : { title, status };
+  };
+
+  const mergeTodoRuntimeTask = (
+    tasks: TodoRuntimeTask[],
+    incoming: TodoRuntimeTask,
+  ): TodoRuntimeTask[] => {
+    const idKey = incoming.id ? incoming.id : null;
+    const titleKey = incoming.title.trim().toLowerCase();
+    const index = tasks.findIndex((task) => {
+      if (idKey && task.id === idKey) return true;
+      if (!idKey) return task.title.trim().toLowerCase() === titleKey;
+      return false;
+    });
+    if (index === -1) {
+      return [...tasks, incoming];
+    }
+    const next = [...tasks];
+    next[index] = {
+      ...next[index],
+      ...incoming,
+    };
+    return next;
+  };
+
+  const isRuntimeTaskDone = (status: string | undefined): boolean =>
+    normalizeRuntimeStatus(status, 'todo') === 'done';
+
+  const canSubmitTodoRuntimeSteer = (
+    panel: TodoRuntimePanelState | null,
+  ): boolean => {
+    if (!panel) return false;
+    if (!todoRuntimeSteerMessage.trim()) return false;
+    const runState: TodoRuntimeRunState = {
+      runId: panel.runId,
+      runStatus: panel.runStatus,
+      runTaskId: panel.runTaskId,
+    };
+    return isTodoRuntimeRunSteerable(runState);
+  };
+
+  const isTodoRuntimePanelSteerable = (
+    panel: TodoRuntimePanelState | null,
+  ): boolean => {
+    if (!panel) return false;
+    const runState: TodoRuntimeRunState = {
+      runId: panel.runId,
+      runStatus: panel.runStatus,
+      runTaskId: panel.runTaskId,
+    };
+    return isTodoRuntimeRunSteerable(runState);
+  };
+
+  const resetTodoRuntimePanel = () => {
+    todoRuntimePanel = null;
+    todoRuntimeCollapsed = false;
+    todoRuntimeSteerMessage = '';
+    todoRuntimeSteerSubmitting = false;
+    todoRuntimeSteerError = null;
+    todoRuntimeLastSteer = null;
+  };
+
+  const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
+    const result = asRuntimeRecord(update.result) ?? {};
+    const runtime = asRuntimeRecord(result.todoRuntime) ?? result;
+    const activeTodo = asRuntimeRecord(runtime.activeTodo);
+    const todo = asRuntimeRecord(runtime.todo);
+    const task = asRuntimeRecord(runtime.task);
+
+    const todoIdCandidate =
+      String(
+        runtime.todoId ??
+          todo?.id ??
+          activeTodo?.id ??
+          todoRuntimePanel?.todoId ??
+          '',
+      ).trim();
+    if (!todoIdCandidate) return;
+
+    const reusingCurrent = todoRuntimePanel?.todoId === todoIdCandidate;
+    const next: TodoRuntimePanelState = reusingCurrent && todoRuntimePanel
+      ? { ...todoRuntimePanel }
+      : {
+          todoId: todoIdCandidate,
+          planId: null,
+          title: '',
+          status: 'todo',
+          runId: null,
+          runStatus: null,
+          runTaskId: null,
+          tasks: [],
+          conflictMessage: null,
+          sourceTool: update.toolName,
+          updatedAtMs: Date.now(),
+        };
+    const previousRunState: TodoRuntimeRunState = {
+      runId: next.runId,
+      runStatus: next.runStatus,
+      runTaskId: next.runTaskId,
+    };
+
+    next.todoId = todoIdCandidate;
+    next.sourceTool = update.toolName;
+    next.updatedAtMs = Date.now();
+
+    const planIdValue = runtime.planId ?? todo?.planId ?? activeTodo?.planId;
+    if (typeof planIdValue === 'string') {
+      next.planId = planIdValue;
+    } else if (planIdValue === null) {
+      next.planId = null;
+    }
+
+    const titleValue = todo?.title ?? activeTodo?.title;
+    if (typeof titleValue === 'string' && titleValue.trim().length > 0) {
+      next.title = titleValue.trim();
+    }
+
+    const statusValue =
+      runtime.todoStatus ??
+      todo?.derivedStatus ??
+      activeTodo?.derivedStatus ??
+      runtime.status ??
+      result.status;
+    next.status = normalizeRuntimeStatus(statusValue, next.status || 'todo');
+
+    const runtimeTasks = Array.isArray(runtime.tasks) ? runtime.tasks : null;
+    const directTasks = Array.isArray(result.tasks) ? result.tasks : null;
+    const incomingTaskList = runtimeTasks ?? directTasks;
+    if (incomingTaskList) {
+      next.tasks = incomingTaskList
+        .map((entry) => toTodoRuntimeTask(entry))
+        .filter((entry): entry is TodoRuntimeTask => entry !== null);
+    }
+
+    const normalizedTask = toTodoRuntimeTask(task);
+    if (normalizedTask) {
+      next.tasks = mergeTodoRuntimeTask(next.tasks, normalizedTask);
+    }
+
+    const conflictMessage =
+      typeof runtime.message === 'string'
+        ? runtime.message
+        : typeof result.message === 'string'
+          ? result.message
+          : null;
+    next.conflictMessage =
+      normalizeRuntimeStatus(runtime.status ?? result.status, '') === 'conflict'
+        ? conflictMessage
+        : null;
+    const nextRunState = normalizeTodoRuntimeRunState(runtime, previousRunState);
+    next.runId = nextRunState.runId;
+    next.runStatus = nextRunState.runStatus;
+    next.runTaskId = nextRunState.runTaskId;
+
+    if (!reusingCurrent) {
+      todoRuntimeSteerMessage = '';
+      todoRuntimeSteerError = null;
+      todoRuntimeLastSteer = null;
+    }
+
+    todoRuntimePanel = next;
+  };
+
+  const submitTodoRuntimeSteer = async () => {
+    if (!todoRuntimePanel?.runId) return;
+    if (!canSubmitTodoRuntimeSteer(todoRuntimePanel)) return;
+
+    todoRuntimeSteerSubmitting = true;
+    todoRuntimeSteerError = null;
+    try {
+      const feedback = await postTodoRuntimeSteer(
+        apiPost,
+        todoRuntimePanel.runId,
+        todoRuntimeSteerMessage,
+      );
+      todoRuntimeLastSteer = feedback;
+      todoRuntimePanel = {
+        ...todoRuntimePanel,
+        runId: feedback.runId,
+        runStatus: feedback.status,
+      };
+      todoRuntimeSteerMessage = '';
+    } catch (e) {
+      todoRuntimeSteerError = formatApiError(
+        e,
+        $_('chat.todoRuntimePanel.steer.error'),
+      );
+    } finally {
+      todoRuntimeSteerSubmitting = false;
+    }
+  };
+
   const loadSessions = async () => {
     loadingSessions = true;
     errorMsg = null;
@@ -2230,7 +2485,11 @@
     if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessionId: string; messages: ChatMessage[] }>(
+      const res = await apiGet<{
+        sessionId: string;
+        messages: ChatMessage[];
+        todoRuntime?: Record<string, unknown> | null;
+      }>(
         `/chat/sessions/${id}/messages`,
       );
       const raw = res.messages ?? [];
@@ -2239,6 +2498,16 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined,
       }));
+      const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
+      if (runtimeSnapshot) {
+        handleTodoRuntimeToolResult({
+          toolCallId: `session-runtime:${id}`,
+          toolName: 'todo_update',
+          result: { todoRuntime: runtimeSnapshot },
+        });
+      } else if (!opts?.silent) {
+        resetTodoRuntimePanel();
+      }
       const lastAssistantModel = [...raw]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
@@ -2290,6 +2559,7 @@
 
   export const selectSession = async (id: string) => {
     sessionId = id;
+    resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     await loadMessages(id, { scrollToBottom: true });
   };
@@ -2305,6 +2575,7 @@
     sessionId = null;
     messages = [];
     initialEventsByMessageId = new Map();
+    resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     selectedProviderId = defaultProviderIdForNewSession;
     selectedModelId = defaultModelIdForNewSession;
@@ -2321,6 +2592,7 @@
       sessionId = null;
       messages = [];
       initialEventsByMessageId = new Map();
+      resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
       await loadSessions();
     } catch (e) {
@@ -3321,6 +3593,7 @@
                     initialEvents={initEvents}
                     historyPending={showDetailWaiter}
                     onStreamEvent={() => scheduleScrollToBottom()}
+                    onTodoRuntime={handleTodoRuntimeToolResult}
                     onTerminal={(t) => void handleAssistantTerminal(sid, t)}
                   />
                   {#if isTerminal}
@@ -3466,6 +3739,186 @@
       {/if}
     </div>
   </div>
+
+  {#if mode === 'ai' && todoRuntimePanel}
+    <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
+      <div class="px-3 py-2">
+        <button
+          type="button"
+          class="w-full flex items-center justify-between gap-2 text-left"
+          on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
+          aria-label={todoRuntimeCollapsed
+            ? $_('chat.todoRuntimePanel.expand')
+            : $_('chat.todoRuntimePanel.collapse')}
+          title={todoRuntimeCollapsed
+            ? $_('chat.todoRuntimePanel.expand')
+            : $_('chat.todoRuntimePanel.collapse')}
+        >
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-700">
+              {$_('chat.todoRuntimePanel.title')}
+            </div>
+            <div class="text-[11px] text-slate-500 truncate">
+              {todoRuntimePanel.title ||
+                `${$_('chat.todoRuntimePanel.todoIdLabel')}: ${todoRuntimePanel.todoId}`}
+            </div>
+          </div>
+          <ChevronDown
+            class={`w-4 h-4 text-slate-500 transition-transform duration-150 ${
+              todoRuntimeCollapsed ? '' : 'rotate-180'
+            }`}
+          />
+        </button>
+        {#if !todoRuntimeCollapsed}
+          <div class="mt-2 max-h-52 overflow-y-auto slim-scroll space-y-2 text-xs text-slate-700">
+            {#if todoRuntimePanel.conflictMessage}
+              <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                {todoRuntimePanel.conflictMessage}
+              </div>
+            {/if}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <span class="font-medium">{$_('chat.todoRuntimePanel.statusLabel')}:</span>
+                {todoRuntimePanel.status}
+              </div>
+              {#if todoRuntimePanel.planId}
+                <div>
+                  <span class="font-medium">{$_('chat.todoRuntimePanel.planIdLabel')}:</span>
+                  {todoRuntimePanel.planId}
+                </div>
+              {/if}
+              <div>
+                <span class="font-medium">{$_('chat.todoRuntimePanel.todoIdLabel')}:</span>
+                {todoRuntimePanel.todoId}
+              </div>
+              {#if todoRuntimePanel.runId}
+                <div>
+                  <span class="font-medium">{$_('chat.todoRuntimePanel.runIdLabel')}:</span>
+                  {todoRuntimePanel.runId}
+                </div>
+              {/if}
+              {#if todoRuntimePanel.runStatus}
+                <div>
+                  <span class="font-medium">{$_('chat.todoRuntimePanel.runStatusLabel')}:</span>
+                  {todoRuntimePanel.runStatus}
+                </div>
+              {/if}
+              {#if todoRuntimePanel.runTaskId}
+                <div>
+                  <span class="font-medium">{$_('chat.todoRuntimePanel.runTaskIdLabel')}:</span>
+                  {todoRuntimePanel.runTaskId}
+                </div>
+              {/if}
+            </div>
+            <div>
+              <div class="font-medium">
+                {$_('chat.todoRuntimePanel.tasksLabel')} ({todoRuntimePanel.tasks.length})
+              </div>
+              {#if todoRuntimePanel.tasks.length === 0}
+                <div class="mt-1 text-[11px] text-slate-500">
+                  {$_('chat.todoRuntimePanel.noTasks')}
+                </div>
+              {:else}
+                <ul class="mt-1 space-y-1">
+                  {#each todoRuntimePanel.tasks as task, index (task.id ?? `${todoRuntimePanel.todoId}-${index}`)}
+                    {@const done = isRuntimeTaskDone(task.status)}
+                    <li class="flex items-center gap-2">
+                      <span
+                        class={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none ${
+                          done
+                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                            : 'border-slate-400 text-transparent'
+                        }`}
+                      >{done ? '✓' : ''}</span
+                      >
+                      <span
+                        class={`truncate ${
+                          done ? 'line-through text-slate-400' : 'text-slate-700'
+                        }`}
+                      >
+                        {task.title}
+                      </span>
+                      <span class="sr-only">
+                        {done
+                          ? $_('chat.todoRuntimePanel.completedTaskLabel')
+                          : $_('chat.todoRuntimePanel.pendingTaskLabel')}
+                      </span>
+                      <span class="ml-auto text-[10px] uppercase text-slate-500">
+                        {task.status ?? 'todo'}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+            <div class="rounded border border-slate-200 bg-white/80 p-2 space-y-2">
+              <div class="text-[11px] font-medium text-slate-700">
+                {$_('chat.todoRuntimePanel.steer.title')}
+              </div>
+              {#if todoRuntimePanel.runId}
+                <form
+                  class="space-y-2"
+                  on:submit|preventDefault={() => void submitTodoRuntimeSteer()}
+                >
+                  <input
+                    type="text"
+                    class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-800 focus:border-slate-500 focus:outline-none"
+                    placeholder={$_('chat.todoRuntimePanel.steer.placeholder')}
+                    bind:value={todoRuntimeSteerMessage}
+                    disabled={!isTodoRuntimePanelSteerable(todoRuntimePanel) || todoRuntimeSteerSubmitting}
+                    data-testid="todo-runtime-steer-input"
+                  />
+                  <button
+                    type="submit"
+                    class="inline-flex items-center rounded border border-slate-300 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canSubmitTodoRuntimeSteer(todoRuntimePanel) || todoRuntimeSteerSubmitting}
+                    data-testid="todo-runtime-steer-submit"
+                  >
+                    {#if todoRuntimeSteerSubmitting}
+                      {$_('chat.todoRuntimePanel.steer.submitting')}
+                    {:else}
+                      {$_('chat.todoRuntimePanel.steer.submit')}
+                    {/if}
+                  </button>
+                </form>
+                {#if !isTodoRuntimePanelSteerable(todoRuntimePanel)}
+                  <div class="text-[11px] text-slate-500">
+                    {$_('chat.todoRuntimePanel.steer.inactive')}
+                  </div>
+                {/if}
+              {:else}
+                <div class="text-[11px] text-slate-500">
+                  {$_('chat.todoRuntimePanel.steer.unavailable')}
+                </div>
+              {/if}
+              {#if todoRuntimeSteerError}
+                <div
+                  class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                  data-testid="todo-runtime-steer-feedback"
+                >
+                  {todoRuntimeSteerError}
+                </div>
+              {:else if todoRuntimeLastSteer}
+                <div
+                  class="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 space-y-0.5"
+                  data-testid="todo-runtime-steer-feedback"
+                >
+                  <div>
+                    <span class="font-medium">{$_('chat.todoRuntimePanel.steer.lastMessageLabel')}:</span>
+                    {todoRuntimeLastSteer.message}
+                  </div>
+                  <div>
+                    <span class="font-medium">{$_('chat.todoRuntimePanel.steer.lastStatusLabel')}:</span>
+                    {todoRuntimeLastSteer.status}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <div class="p-2 border-t border-slate-200">
     <div>

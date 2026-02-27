@@ -973,7 +973,7 @@
       },
       "todoCreate": {
         "label": "TODO runtime",
-        "description": "Create executable TODO lists from chat"
+        "description": "Create and progress executable TODO lists from chat"
       },
       "webSearch": {
         "label": "Web search",
@@ -1007,6 +1007,32 @@
       "todoIdLabel": "TODO",
       "taskCountLabel": "Tasks",
       "tasksLabel": "Task checklist"
+    },
+    "todoRuntimePanel": {
+      "title": "Session TODO runtime",
+      "collapse": "Collapse panel",
+      "expand": "Expand panel",
+      "statusLabel": "Status",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "runIdLabel": "Run",
+      "runStatusLabel": "Run status",
+      "runTaskIdLabel": "Active task",
+      "tasksLabel": "Task checklist",
+      "noTasks": "No task in this TODO yet.",
+      "completedTaskLabel": "Completed task",
+      "pendingTaskLabel": "Pending task",
+      "steer": {
+        "title": "Steer active run",
+        "placeholder": "Refocus this run on...",
+        "submit": "Send steer",
+        "submitting": "Sending...",
+        "unavailable": "No active run available for steer yet.",
+        "inactive": "This run is no longer steerable in its current status.",
+        "lastMessageLabel": "Last steer",
+        "lastStatusLabel": "Run status",
+        "error": "Unable to send steer message"
+      }
     },
     "comments": {
       "chooseThread": "Comments list",
