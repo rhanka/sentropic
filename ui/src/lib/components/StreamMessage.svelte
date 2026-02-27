@@ -194,7 +194,7 @@
 
     const tasks = Array.isArray(result.tasks)
       ? result.tasks
-          .map((entry) => {
+          .map((entry): TodoToolTask | null => {
             const item =
               entry && typeof entry === 'object'
                 ? (entry as Record<string, unknown>)
@@ -202,12 +202,9 @@
             const title = String(item?.title ?? '').trim();
             if (!title) return null;
             const id = String(item?.id ?? '').trim();
-            return {
-              id: id || undefined,
-              title,
-            };
+            return id ? { id, title } : { title };
           })
-          .filter((entry): entry is TodoToolTask => Boolean(entry))
+          .filter((entry): entry is TodoToolTask => entry !== null)
       : [];
 
     return {

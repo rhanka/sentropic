@@ -650,6 +650,10 @@
       "refresh": "Actualiser la config runtime",
       "refreshing": "Actualisation…",
       "readonlyHint": "Mode lecture seule : les rôles viewer/commenter peuvent consulter la configuration runtime mais ne peuvent pas éditer, forker ou détacher.",
+      "scopeBoundary": {
+        "title": "Limite de périmètre BR-03",
+        "description": "Cette page couvre uniquement la configuration Agent et Workflow. Le panneau opérationnel complet Plan/Comments/Chat/Jobs et un designer visuel de workflow sont volontairement reportés."
+      },
       "empty": "Aucun élément de configuration runtime trouvé.",
       "source": "Source",
       "parent": "Parent",
