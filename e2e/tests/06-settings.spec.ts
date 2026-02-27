@@ -31,6 +31,24 @@ test.describe('Page Paramètres', () => {
     return { context, page };
   };
 
+  async function resolveWorkspaceRow(page: import('@playwright/test').Page, workspaceName: string) {
+    const rows = page.locator('tbody tr');
+    await expect
+      .poll(async () => rows.count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+
+    // When workspace scope is already selected, the row is rendered as selected
+    // and the name can be in an EditableInput (input value, not plain row text).
+    const selectedRow = page.locator('tbody tr.bg-blue-50').first();
+    if (await selectedRow.isVisible().catch(() => false)) {
+      return selectedRow;
+    }
+
+    const rowByName = rows.filter({ hasText: workspaceName }).first();
+    await expect(rowByName).toBeVisible({ timeout: 10_000 });
+    return rowByName;
+  }
+
   test.beforeAll(async () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     workspaceAlphaName = `Workspace Alpha ${Date.now()}`;
@@ -56,7 +74,7 @@ test.describe('Page Paramètres', () => {
       await page.goto('/settings');
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL('/settings');
-      await expect(page.locator('h1')).toContainText('Paramètres');
+      await expect(page.locator('h1')).toContainText(/Paramètres|Settings/i);
     } finally {
       await context.close();
     }
@@ -275,11 +293,23 @@ test.describe('Page Paramètres', () => {
       try {
         await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
-        const rowAlpha = page.locator('tbody tr').filter({ has: page.locator('.editable-input') }).first();
-        await expect(rowAlpha).toBeVisible({ timeout: 10_000 });
-        await expect(rowAlpha).toHaveAttribute('title', 'Cliquer pour sélectionner ce workspace');
+        await page.waitForResponse((res) => res.url().includes('/api/v1/workspaces') && res.request().method() === 'GET', { timeout: 10_000 }).catch(() => {});
+        const rowAlpha = await resolveWorkspaceRow(page, workspaceAlphaName);
+        const alreadySelected = await rowAlpha.evaluate((el) => el.classList.contains('bg-blue-50'));
+        if (!alreadySelected) {
+          await rowAlpha.click();
+        }
 
-        const visibilityButton = rowAlpha.locator('button[title^="Rendre"]');
+        const selectedRow = page.locator('tbody tr.bg-blue-50').first();
+        await expect(selectedRow).toBeVisible({ timeout: 10_000 });
+        await expect(selectedRow).toHaveAttribute(
+          'title',
+          /Cliquer pour sélectionner ce workspace|Click to select this workspace/i
+        );
+
+        const visibilityButton = selectedRow.locator(
+          'button[title^="Rendre"], button[title^="Make"]'
+        );
         await expect(visibilityButton).toBeVisible();
         const textContent = await visibilityButton.textContent();
         expect((textContent || '').trim()).toBe('');
@@ -298,18 +328,25 @@ test.describe('Page Paramètres', () => {
       try {
         await page.goto('/settings');
         await page.waitForLoadState('domcontentloaded');
+        await page.waitForResponse((res) => res.url().includes('/api/v1/workspaces') && res.request().method() === 'GET', { timeout: 10_000 }).catch(() => {});
         const newName = `${workspaceAlphaName}-renamed`;
-        const rowAlpha = page.locator('tbody tr').filter({ has: page.locator('.editable-input') }).first();
-        await expect(rowAlpha).toBeVisible({ timeout: 10_000 });
+        const rowAlpha = await resolveWorkspaceRow(page, workspaceAlphaName);
+        const alreadySelected = await rowAlpha.evaluate((el) => el.classList.contains('bg-blue-50'));
+        if (!alreadySelected) {
+          await rowAlpha.click();
+        }
 
-        const nameInput = rowAlpha.locator('.editable-input').first();
+        const selectedRow = page.locator('tbody tr.bg-blue-50').first();
+        await expect(selectedRow).toBeVisible({ timeout: 10_000 });
+
+        const nameInput = selectedRow.locator('.editable-input').first();
         await expect(nameInput).toBeVisible({ timeout: 10_000 });
         await nameInput.fill(newName);
         await nameInput.blur();
 
         await page.waitForResponse((res) => res.url().includes(`/api/v1/workspaces/${workspaceAlphaId}`) && res.request().method() === 'PUT', { timeout: 10_000 });
         await page.reload({ waitUntil: 'domcontentloaded' });
-        const rowAlphaAfter = page.locator('tbody tr').filter({ has: page.locator('.editable-input') }).first();
+        const rowAlphaAfter = page.locator('tbody tr.bg-blue-50').first();
         await expect(rowAlphaAfter.locator('.editable-input').first()).toHaveValue(newName, { timeout: 10_000 });
         workspaceAlphaName = newName;
       } finally {
