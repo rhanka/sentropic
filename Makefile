@@ -71,7 +71,7 @@ cloc: ## Count lines of code (whole repo)
 	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$'
 
 .PHONY: conductor-agent-report agent-conductor-report conductor-agent-status agent-conductor-status agent-conductore-status
-conductor-agent-report: ## Conductor report with done/treated %, SLOC and heartbeat/stall for BR03/04/05/06
+conductor-agent-report: ## Conductor report with done/treated % (UAT-excluded), SLOC and heartbeat/stall for BR03/04/05/06
 	@set -euo pipefail; \
 	now="$$(date +%s)"; \
 	ts="$$(date '+%Y-%m-%d %H:%M:%S %z')"; \
@@ -92,9 +92,25 @@ conductor-agent-report: ## Conductor report with done/treated %, SLOC and heartb
 		head="$$(git -C "$$dir" rev-parse --short HEAD 2>/dev/null || echo '?')"; \
 		dirty="$$(git -C "$$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"; \
 		if [ -f "$$file" ]; then \
-			done_count="$$(grep -E '^[[:space:]]*- \[x\]' -c "$$file" || true)"; \
-			defer_count="$$(grep -E '^[[:space:]]*- \[!\]' -c "$$file" || true)"; \
-			total_count="$$(grep -E '^[[:space:]]*- \[( |x|!)\]' -c "$$file" || true)"; \
+			counts="$$(awk '\
+				BEGIN { IGNORECASE=1; in_uat=0; done=0; defer=0; total=0 } \
+				function is_checkbox(s) { return s ~ /^[[:space:]]*-[[:space:]]*\[( |x|!)\]/ } \
+				function is_lot_header(s) { return s ~ /^[[:space:]]*-[[:space:]]*\[( |x|!)\][[:space:]]*\*\*Lot/ } \
+				{ \
+					line=$$0; \
+					if (is_lot_header(line)) { \
+						if (line ~ /UAT/) in_uat=1; else in_uat=0; \
+					} \
+					if (!is_checkbox(line)) next; \
+					if (in_uat) next; \
+					if (line ~ /UAT/) next; \
+					total++; \
+					if (line ~ /\[x\]/) done++; \
+					else if (line ~ /\[!\]/) defer++; \
+				} \
+				END { printf "%d|%d|%d", done, defer, total } \
+			' "$$file")"; \
+			IFS='|' read -r done_count defer_count total_count <<< "$$counts"; \
 			mtime="$$(stat -c %Y "$$file" 2>/dev/null || echo 0)"; \
 		else \
 			done_count=0; defer_count=0; total_count=0; mtime=0; \
