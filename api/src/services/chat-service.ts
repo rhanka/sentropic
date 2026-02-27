@@ -34,7 +34,9 @@ import {
   matrixUpdateTool,
   documentsTool,
   commentAssistantTool,
-  todoCreateTool
+  todoCreateTool,
+  todoUpdateTool,
+  taskUpdateTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
@@ -107,6 +109,102 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 };
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+type TodoRuntimeToolName = 'todo_create' | 'todo_update' | 'task_update';
+
+const normalizeTodoRuntimeToolResult = (
+  toolName: TodoRuntimeToolName,
+  toolCallId: string,
+  rawResult: unknown,
+): Record<string, unknown> => {
+  const base = asRecord(rawResult) ?? {};
+  const normalized: Record<string, unknown> = { ...base };
+  const todoRuntime: Record<string, unknown> = {
+    tool: toolName,
+    toolCallId,
+    status: typeof base.status === 'string' ? base.status : 'completed',
+  };
+
+  if (toolName === 'todo_create') {
+    if (typeof base.todoId === 'string' && base.todoId.trim().length > 0) {
+      todoRuntime.todoId = base.todoId;
+    }
+    if (typeof base.planId === 'string') {
+      todoRuntime.planId = base.planId;
+    } else if (base.planId === null) {
+      todoRuntime.planId = null;
+    }
+    if (Array.isArray(base.tasks)) {
+      todoRuntime.tasks = base.tasks;
+    }
+    if (typeof base.taskCount === 'number') {
+      todoRuntime.taskCount = base.taskCount;
+    }
+    if (typeof base.code === 'string') {
+      todoRuntime.code = base.code;
+    }
+    if (typeof base.message === 'string') {
+      todoRuntime.message = base.message;
+    }
+    const activeTodo = asRecord(base.activeTodo);
+    if (activeTodo) {
+      todoRuntime.activeTodo = activeTodo;
+      if (typeof activeTodo.id === 'string') {
+        todoRuntime.todoId = activeTodo.id;
+      }
+      if (
+        typeof activeTodo.derivedStatus === 'string' &&
+        !todoRuntime.todoStatus
+      ) {
+        todoRuntime.todoStatus = activeTodo.derivedStatus;
+      }
+    }
+  } else if (toolName === 'todo_update') {
+    const todo = asRecord(base.todo);
+    if (todo) {
+      todoRuntime.todo = todo;
+      if (typeof todo.id === 'string') {
+        todoRuntime.todoId = todo.id;
+      }
+      if (typeof todo.planId === 'string') {
+        todoRuntime.planId = todo.planId;
+      } else if (todo.planId === null) {
+        todoRuntime.planId = null;
+      }
+      if (typeof todo.derivedStatus === 'string') {
+        todoRuntime.todoStatus = todo.derivedStatus;
+      }
+    }
+  } else if (toolName === 'task_update') {
+    const task = asRecord(base.task);
+    if (task) {
+      todoRuntime.task = task;
+      if (typeof task.todoId === 'string') {
+        todoRuntime.todoId = task.todoId;
+      }
+    }
+    if (typeof base.todoStatus === 'string') {
+      todoRuntime.todoStatus = base.todoStatus;
+    }
+    if (typeof base.planStatus === 'string') {
+      todoRuntime.planStatus = base.planStatus;
+    } else if (base.planStatus === null) {
+      todoRuntime.planStatus = null;
+    }
+    if (typeof base.runId === 'string') {
+      todoRuntime.runId = base.runId;
+    }
+    if (typeof base.runStatus === 'string') {
+      todoRuntime.runStatus = base.runStatus;
+    }
+    if (typeof base.runTaskId === 'string') {
+      todoRuntime.runTaskId = base.runTaskId;
+    }
+  }
+
+  normalized.todoRuntime = todoRuntime;
+  return normalized;
+};
 
 export class ChatService {
   private normalizeMessageContexts(
@@ -489,7 +587,7 @@ export class ChatService {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');
 
-    return await db
+    const messages = await db
       .select({
         id: chatMessages.id,
         sessionId: chatMessages.sessionId,
@@ -513,6 +611,24 @@ export class ChatService {
       )
       .where(eq(chatMessages.sessionId, sessionId))
       .orderBy(asc(chatMessages.sequence));
+
+    let todoRuntime: Record<string, unknown> | null = null;
+    const sessionWorkspaceId =
+      typeof session.workspaceId === 'string' && session.workspaceId.trim().length > 0
+        ? session.workspaceId
+        : (await ensureWorkspaceForUser(userId, { createIfMissing: false })).workspaceId;
+    if (sessionWorkspaceId) {
+      const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
+      todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
+        { userId, role, workspaceId: sessionWorkspaceId },
+        sessionId,
+      );
+    }
+
+    return {
+      messages,
+      todoRuntime,
+    };
   }
 
   async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
@@ -1210,6 +1326,12 @@ export class ChatService {
     }
     if (requestedTools.has('todo_create')) {
       addTools([todoCreateTool]);
+    }
+    if (requestedTools.has('todo_update')) {
+      addTools([todoUpdateTool]);
+    }
+    if (requestedTools.has('task_update')) {
+      addTools([taskUpdateTool]);
     }
     if (hasDocuments) {
       addTools([documentsTool]);
@@ -2131,14 +2253,138 @@ Règles :
                 planId,
                 planTitle,
                 tasks,
-                metadata
+                metadata,
+                sessionId: options.sessionId
               }
             );
-            result = todoResult;
+            const normalizedTodoResult = normalizeTodoRuntimeToolResult(
+              'todo_create',
+              toolCall.id,
+              todoResult,
+            );
+            result = normalizedTodoResult;
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',
-              { tool_call_id: toolCall.id, result: todoResult },
+              { tool_call_id: toolCall.id, result: normalizedTodoResult },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'todo_update') {
+            if (readOnly) {
+              throw new Error('Read-only workspace: todo_update is disabled');
+            }
+            const todoId =
+              typeof args.todoId === 'string' && args.todoId.trim().length > 0
+                ? args.todoId.trim()
+                : '';
+            if (!todoId) {
+              throw new Error('todo_update: todoId is required');
+            }
+            const title =
+              typeof args.title === 'string' && args.title.trim().length > 0
+                ? args.title.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string'
+                ? args.description
+                : undefined;
+            const ownerUserId =
+              typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
+                ? args.ownerUserId.trim()
+                : undefined;
+            const status =
+              typeof args.status === 'string' && args.status.trim().length > 0
+                ? args.status.trim()
+                : undefined;
+            const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
+            const metadata = asRecord(args.metadata) ?? undefined;
+
+            const updateResult = await todoOrchestrationService.updateTodoFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                todoId,
+                title,
+                description,
+                ownerUserId,
+                status,
+                closed,
+                metadata
+              }
+            );
+            const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
+              'todo_update',
+              toolCall.id,
+              updateResult,
+            );
+            result = normalizedTodoUpdateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'task_update') {
+            if (readOnly) {
+              throw new Error('Read-only workspace: task_update is disabled');
+            }
+            const taskId =
+              typeof args.taskId === 'string' && args.taskId.trim().length > 0
+                ? args.taskId.trim()
+                : '';
+            if (!taskId) {
+              throw new Error('task_update: taskId is required');
+            }
+            const title =
+              typeof args.title === 'string' && args.title.trim().length > 0
+                ? args.title.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string'
+                ? args.description
+                : undefined;
+            const assigneeUserId =
+              typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
+                ? args.assigneeUserId.trim()
+                : undefined;
+            const status =
+              typeof args.status === 'string' && args.status.trim().length > 0
+                ? args.status.trim()
+                : undefined;
+            const metadata = asRecord(args.metadata) ?? undefined;
+
+            const updateResult = await todoOrchestrationService.updateTaskFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                taskId,
+                title,
+                description,
+                assigneeUserId,
+                status,
+                metadata
+              }
+            );
+            const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
+              'task_update',
+              toolCall.id,
+              updateResult,
+            );
+            result = normalizedTaskUpdateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
               streamSeq,
               options.assistantMessageId
             );

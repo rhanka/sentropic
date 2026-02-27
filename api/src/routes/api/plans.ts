@@ -32,6 +32,7 @@ const createTodoSchema = z.object({
   position: z.number().int().optional(),
   ownerUserId: z.string().optional().nullable(),
   parentTodoId: z.string().optional().nullable(),
+  sessionId: z.string().optional().nullable(),
   metadata: metadataSchema.optional(),
 });
 

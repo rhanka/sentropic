@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   agentDefinitions,
+  entityLinks,
   executionEvents,
   executionRuns,
   guardrails,
@@ -42,7 +43,54 @@ export class TodoOrchestrationError extends Error {
 const RUN_MODES = new Set(["manual", "sub_agentic", "full_auto"]);
 const RUN_TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const RUN_RESUMABLE_STATUSES = new Set(["paused", "blocked"]);
+const RUN_ACTIVE_STATUSES = ["pending", "in_progress", "paused", "blocked"] as const;
+const CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE = "plan";
 const GUARDRAIL_CATEGORIES = new Set<GuardrailCategory>(["scope", "quality", "safety", "approval"]);
+const USE_CASE_GENERATION_WORKFLOW_KEY = "ai_usecase_generation_v1";
+
+const USE_CASE_GENERATION_WORKFLOW_TASKS: Array<{
+  taskKey: UseCaseGenerationWorkflowTaskKey;
+  title: string;
+  description: string;
+  orderIndex: number;
+}> = [
+  {
+    taskKey: "generation_context_prepare",
+    title: "Generation context preparation",
+    description: "Normalize request payload and folder context before generation runtime starts.",
+    orderIndex: 0,
+  },
+  {
+    taskKey: "generation_matrix_prepare",
+    title: "Matrix preparation",
+    description: "Generate matrix configuration when matrix mode requires dynamic generation.",
+    orderIndex: 1,
+  },
+  {
+    taskKey: "generation_usecase_list",
+    title: "Use-case list generation",
+    description: "Generate draft use-case list from normalized context.",
+    orderIndex: 2,
+  },
+  {
+    taskKey: "generation_todo_sync",
+    title: "TODO synchronization",
+    description: "Synchronize generated items with chat session TODO runtime projection.",
+    orderIndex: 3,
+  },
+  {
+    taskKey: "generation_usecase_detail",
+    title: "Use-case detail generation",
+    description: "Generate detail payload for each draft use case.",
+    orderIndex: 4,
+  },
+  {
+    taskKey: "generation_executive_summary",
+    title: "Executive synthesis generation",
+    description: "Generate executive summary once all use cases are completed.",
+    orderIndex: 5,
+  },
+];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -89,6 +137,7 @@ export interface CreateTodoInput {
   position?: number;
   ownerUserId?: string | null;
   parentTodoId?: string | null;
+  sessionId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -124,6 +173,39 @@ export interface TaskExecutionInput {
   metadata?: Record<string, unknown>;
   violatedGuardrailIds?: string[];
   approvalGrantedGuardrailIds?: string[];
+}
+
+export type UseCaseGenerationWorkflowTaskKey =
+  | "generation_context_prepare"
+  | "generation_matrix_prepare"
+  | "generation_usecase_list"
+  | "generation_todo_sync"
+  | "generation_usecase_detail"
+  | "generation_executive_summary";
+
+export interface UseCaseGenerationWorkflowTaskAssignments {
+  contextPrepareAgentId: string | null;
+  matrixPrepareAgentId: string | null;
+  usecaseListAgentId: string | null;
+  todoSyncAgentId: string | null;
+  usecaseDetailAgentId: string | null;
+  executiveSummaryAgentId: string | null;
+}
+
+export interface UseCaseGenerationWorkflowRuntime {
+  workflowRunId: string;
+  workflowDefinitionId: string;
+  taskAssignments: UseCaseGenerationWorkflowTaskAssignments;
+}
+
+export interface StartUseCaseGenerationWorkflowInput {
+  folderId: string;
+  organizationId?: string;
+  matrixMode: "organization" | "generate" | "default";
+  input: string;
+  model: string;
+  useCaseCount?: number;
+  locale: string;
 }
 
 interface TaskBundle {
@@ -199,6 +281,105 @@ export class TodoOrchestrationService {
       todo: row.todo,
       planId: row.planId,
     };
+  }
+
+  private async getActiveSessionTodo(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<typeof todos.$inferSelect | null> {
+    const [row] = await db
+      .select({ todo: todos })
+      .from(entityLinks)
+      .innerJoin(
+        todos,
+        and(
+          eq(entityLinks.targetObjectId, todos.id),
+          eq(entityLinks.workspaceId, todos.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(entityLinks.workspaceId, workspaceId),
+          eq(entityLinks.sourceEntityType, CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE),
+          eq(entityLinks.sourceEntityId, sessionId),
+          eq(entityLinks.targetObjectType, "todo"),
+          eq(todos.workspaceId, workspaceId),
+          isNull(todos.closedAt),
+        ),
+      )
+      .orderBy(desc(todos.createdAt), desc(todos.updatedAt))
+      .limit(1);
+
+    return row?.todo ?? null;
+  }
+
+  private async getLatestSessionTodo(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<typeof todos.$inferSelect | null> {
+    const [row] = await db
+      .select({ todo: todos })
+      .from(entityLinks)
+      .innerJoin(
+        todos,
+        and(
+          eq(entityLinks.targetObjectId, todos.id),
+          eq(entityLinks.workspaceId, todos.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(entityLinks.workspaceId, workspaceId),
+          eq(entityLinks.sourceEntityType, CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE),
+          eq(entityLinks.sourceEntityId, sessionId),
+          eq(entityLinks.targetObjectType, "todo"),
+          eq(todos.workspaceId, workspaceId),
+        ),
+      )
+      .orderBy(
+        sql<number>`CASE WHEN ${todos.closedAt} IS NULL THEN 0 ELSE 1 END`,
+        desc(todos.updatedAt),
+        desc(todos.createdAt),
+      )
+      .limit(1);
+
+    return row?.todo ?? null;
+  }
+
+  private async linkTodoToSession(workspaceId: string, sessionId: string, todoId: string): Promise<void> {
+    await db
+      .insert(entityLinks)
+      .values({
+        id: createId(),
+        workspaceId,
+        // entity_links constraint currently accepts plan/todo/task only.
+        sourceEntityType: CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE,
+        sourceEntityId: sessionId,
+        targetObjectType: "todo",
+        targetObjectId: todoId,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+  }
+
+  private async getLatestTodoRun(
+    workspaceId: string,
+    todoId: string,
+  ): Promise<typeof executionRuns.$inferSelect | null> {
+    const [run] = await db
+      .select()
+      .from(executionRuns)
+      .where(
+        and(
+          eq(executionRuns.workspaceId, workspaceId),
+          eq(executionRuns.todoId, todoId),
+          inArray(executionRuns.status, [...RUN_ACTIVE_STATUSES]),
+        ),
+      )
+      .orderBy(desc(executionRuns.updatedAt), desc(executionRuns.startedAt), desc(executionRuns.createdAt))
+      .limit(1);
+
+    return run ?? null;
   }
 
   private async getRunOrThrow(runId: string, workspaceId: string): Promise<typeof executionRuns.$inferSelect> {
@@ -468,6 +649,10 @@ export class TodoOrchestrationService {
       createdAt: now,
       updatedAt: now,
     });
+
+    if (input.sessionId) {
+      await this.linkTodoToSession(actor.workspaceId, input.sessionId, id);
+    }
 
     const created = await this.getTodoOrThrow(id, actor.workspaceId);
     const derivedStatus = await this.deriveTodoStatus(actor.workspaceId, id);
@@ -1434,6 +1619,218 @@ export class TodoOrchestrationService {
     return updated;
   }
 
+  private async getUseCaseGenerationWorkflowTaskAssignments(
+    workspaceId: string,
+    workflowDefinitionId: string,
+  ): Promise<UseCaseGenerationWorkflowTaskAssignments> {
+    const workflowTasks = await db
+      .select({
+        taskKey: workflowDefinitionTasks.taskKey,
+        agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+      })
+      .from(workflowDefinitionTasks)
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workspaceId, workspaceId),
+          eq(workflowDefinitionTasks.workflowDefinitionId, workflowDefinitionId),
+        ),
+      )
+      .orderBy(asc(workflowDefinitionTasks.orderIndex), asc(workflowDefinitionTasks.createdAt));
+
+    const byTaskKey = new Map<string, string | null>();
+    for (const task of workflowTasks) {
+      byTaskKey.set(task.taskKey, task.agentDefinitionId ?? null);
+    }
+
+    return {
+      contextPrepareAgentId: byTaskKey.get("generation_context_prepare") ?? null,
+      matrixPrepareAgentId: byTaskKey.get("generation_matrix_prepare") ?? null,
+      usecaseListAgentId: byTaskKey.get("generation_usecase_list") ?? null,
+      todoSyncAgentId: byTaskKey.get("generation_todo_sync") ?? null,
+      usecaseDetailAgentId: byTaskKey.get("generation_usecase_detail") ?? null,
+      executiveSummaryAgentId: byTaskKey.get("generation_executive_summary") ?? null,
+    };
+  }
+
+  private async ensureUseCaseGenerationWorkflowDefinition(
+    actor: TodoActor,
+  ): Promise<{ workflowDefinitionId: string; taskAssignments: UseCaseGenerationWorkflowTaskAssignments }> {
+    const [existingWorkflow] = await db
+      .select()
+      .from(workflowDefinitions)
+      .where(
+        and(
+          eq(workflowDefinitions.workspaceId, actor.workspaceId),
+          eq(workflowDefinitions.key, USE_CASE_GENERATION_WORKFLOW_KEY),
+        ),
+      )
+      .limit(1);
+
+    const workflowDefinitionId = existingWorkflow?.id ?? createId();
+    const now = new Date();
+
+    if (!existingWorkflow) {
+      await db.insert(workflowDefinitions).values({
+        id: workflowDefinitionId,
+        workspaceId: actor.workspaceId,
+        key: USE_CASE_GENERATION_WORKFLOW_KEY,
+        name: "AI use-case generation workflow",
+        description: "Workflow runtime for use-case generation requests.",
+        config: normalizeMetadata({
+          route: "POST /api/v1/use-cases/generate",
+          migration: "lot4-runtime",
+        }),
+        sourceLevel: "code",
+        lineageRootId: workflowDefinitionId,
+        parentId: null,
+        isDetached: false,
+        lastParentSyncAt: now,
+        createdByUserId: actor.userId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const workflowTaskRows = await db
+      .select({ taskKey: workflowDefinitionTasks.taskKey })
+      .from(workflowDefinitionTasks)
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workspaceId, actor.workspaceId),
+          eq(workflowDefinitionTasks.workflowDefinitionId, workflowDefinitionId),
+        ),
+      );
+    const existingTaskKeys = new Set(workflowTaskRows.map((row) => row.taskKey));
+    const missingWorkflowTasks = USE_CASE_GENERATION_WORKFLOW_TASKS.filter(
+      (taskDefinition) => !existingTaskKeys.has(taskDefinition.taskKey),
+    );
+
+    if (missingWorkflowTasks.length > 0) {
+      await db.insert(workflowDefinitionTasks).values(
+        missingWorkflowTasks.map((taskDefinition) => ({
+          id: createId(),
+          workspaceId: actor.workspaceId,
+          workflowDefinitionId,
+          taskKey: taskDefinition.taskKey,
+          title: taskDefinition.title,
+          description: taskDefinition.description,
+          orderIndex: taskDefinition.orderIndex,
+          agentDefinitionId: null,
+          schemaFormat: "json_schema",
+          inputSchema: {},
+          outputSchema: {},
+          sectionKey: null,
+          metadata: {},
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+    }
+
+    const taskAssignments = await this.getUseCaseGenerationWorkflowTaskAssignments(
+      actor.workspaceId,
+      workflowDefinitionId,
+    );
+
+    return { workflowDefinitionId, taskAssignments };
+  }
+
+  async startUseCaseGenerationWorkflow(
+    actor: TodoActor,
+    input: StartUseCaseGenerationWorkflowInput,
+  ): Promise<UseCaseGenerationWorkflowRuntime> {
+    const { workflowDefinitionId, taskAssignments } = await this.ensureUseCaseGenerationWorkflowDefinition(actor);
+
+    const workflowRunId = createId();
+    const now = new Date();
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: actor.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId,
+      agentDefinitionId: taskAssignments.contextPrepareAgentId,
+      mode: "full_auto",
+      status: "in_progress",
+      startedByUserId: actor.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: normalizeMetadata({
+        workflowKey: USE_CASE_GENERATION_WORKFLOW_KEY,
+        folderId: input.folderId,
+        organizationId: input.organizationId ?? null,
+        matrixMode: input.matrixMode,
+        model: input.model,
+        useCaseCount: input.useCaseCount,
+        locale: input.locale,
+        input: input.input,
+      }),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionEvents).values({
+      id: createId(),
+      workspaceId: actor.workspaceId,
+      runId: workflowRunId,
+      eventType: "workflow_generation_started",
+      actorType: "user",
+      actorId: actor.userId,
+      payload: {
+        workflowKey: USE_CASE_GENERATION_WORKFLOW_KEY,
+        workflowDefinitionId,
+        folderId: input.folderId,
+        organizationId: input.organizationId ?? null,
+        matrixMode: input.matrixMode,
+        model: input.model,
+        useCaseCount: input.useCaseCount,
+      },
+      sequence: 1,
+      createdAt: now,
+    });
+
+    return {
+      workflowRunId,
+      workflowDefinitionId,
+      taskAssignments,
+    };
+  }
+
+  async getSessionTodoRuntime(actor: TodoActor, sessionId: string) {
+    const todo = await this.getLatestSessionTodo(actor.workspaceId, sessionId);
+    if (!todo) {
+      return null;
+    }
+
+    const todoStatus = await this.deriveTodoStatus(actor.workspaceId, todo.id);
+    const taskRows = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, actor.workspaceId), eq(tasks.todoId, todo.id)))
+      .orderBy(asc(tasks.position), asc(tasks.createdAt));
+    const activeRun = await this.getLatestTodoRun(actor.workspaceId, todo.id);
+
+    return {
+      status: todoStatus,
+      todoId: todo.id,
+      planId: todo.planId ?? null,
+      todo: this.toTodoPayload(todo, todoStatus),
+      tasks: taskRows.map((row) => mapTask(row)),
+      taskCount: taskRows.length,
+      activeRun: activeRun
+        ? {
+            id: activeRun.id,
+            status: activeRun.status,
+            taskId: activeRun.taskId ?? null,
+          }
+        : null,
+      runId: activeRun?.id ?? null,
+      runStatus: activeRun?.status ?? null,
+      runTaskId: activeRun?.taskId ?? null,
+    };
+  }
+
   async createTodoFromChat(
     actor: TodoActor,
     input: {
@@ -1443,8 +1840,22 @@ export class TodoOrchestrationService {
       planTitle?: string;
       tasks?: Array<{ title: string; description?: string }>;
       metadata?: Record<string, unknown>;
+      sessionId?: string;
     },
   ) {
+    if (input.sessionId) {
+      const activeSessionTodo = await this.getActiveSessionTodo(actor.workspaceId, input.sessionId);
+      if (activeSessionTodo) {
+        const activeTodoStatus = await this.deriveTodoStatus(actor.workspaceId, activeSessionTodo.id);
+        return {
+          status: "conflict" as const,
+          code: "active_todo_exists" as const,
+          message: "An active TODO already exists for this chat session.",
+          activeTodo: this.toTodoPayload(activeSessionTodo, activeTodoStatus),
+        };
+      }
+    }
+
     let planId = input.planId ?? null;
 
     if (!planId && input.planTitle) {
@@ -1461,6 +1872,10 @@ export class TodoOrchestrationService {
       description: input.description,
       metadata: input.metadata,
     });
+
+    if (input.sessionId) {
+      await this.linkTodoToSession(actor.workspaceId, input.sessionId, todo.id);
+    }
 
     const createdTasks: Array<{ id: string; title: string }> = [];
 
@@ -1481,6 +1896,94 @@ export class TodoOrchestrationService {
       todoId: todo.id,
       taskCount: createdTasks.length,
       tasks: createdTasks,
+    };
+  }
+
+  async updateTodoFromChat(
+    actor: TodoActor,
+    input: {
+      todoId: string;
+      title?: string;
+      description?: string | null;
+      ownerUserId?: string | null;
+      status?: string;
+      closed?: boolean;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    const normalizedStatus = typeof input.status === "string" ? input.status.trim() : undefined;
+    if (normalizedStatus !== undefined && !isTaskStatus(normalizedStatus)) {
+      throw new TodoOrchestrationError(400, "Invalid todo status");
+    }
+
+    const closed =
+      input.closed !== undefined
+        ? input.closed
+        : normalizedStatus !== undefined
+          ? normalizedStatus === "done"
+          : undefined;
+
+    const todo = await this.patchTodo(actor, input.todoId, {
+      title: input.title,
+      description: input.description,
+      ownerUserId: input.ownerUserId,
+      metadata: input.metadata,
+      closed,
+    });
+
+    return {
+      status: "completed" as const,
+      todo,
+    };
+  }
+
+  async updateTaskFromChat(
+    actor: TodoActor,
+    input: {
+      taskId: string;
+      title?: string;
+      description?: string | null;
+      assigneeUserId?: string | null;
+      status?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    const normalizedStatus = typeof input.status === "string" ? input.status.trim() : undefined;
+    if (normalizedStatus !== undefined && !isTaskStatus(normalizedStatus)) {
+      throw new TodoOrchestrationError(400, "Invalid task status");
+    }
+
+    const taskResult = await this.patchTask(actor, input.taskId, {
+      title: input.title,
+      description: input.description,
+      assigneeUserId: input.assigneeUserId,
+      status: normalizedStatus,
+      metadata: input.metadata,
+    });
+    const [latestRun] = await db
+      .select({
+        id: executionRuns.id,
+        status: executionRuns.status,
+        taskId: executionRuns.taskId,
+      })
+      .from(executionRuns)
+      .where(
+        and(
+          eq(executionRuns.workspaceId, actor.workspaceId),
+          eq(executionRuns.taskId, taskResult.task.id),
+        ),
+      )
+      .orderBy(desc(executionRuns.updatedAt), desc(executionRuns.startedAt), desc(executionRuns.createdAt))
+      .limit(1);
+
+    return {
+      status: "completed" as const,
+      task: taskResult.task,
+      todoStatus: taskResult.todoStatus,
+      planStatus: taskResult.planStatus,
+      runId: latestRun?.id ?? null,
+      runStatus: latestRun?.status ?? null,
+      runTaskId: latestRun?.taskId ?? null,
     };
   }
 }
