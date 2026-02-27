@@ -28,11 +28,22 @@
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
+  // eslint-disable-next-line no-unused-vars
+  export let onTodoRuntime:
+    | ((
+        update: {
+          toolCallId: string;
+          toolName: 'todo_create' | 'todo_update' | 'task_update';
+          result: Record<string, unknown>;
+        },
+      ) => void)
+    | undefined = undefined;
 
   type Step = { title: string; body?: string; kind?: 'reasoning' | 'tool' | 'status' | 'content' | 'startup' | 'other' };
   type TodoToolTask = {
     id?: string;
     title: string;
+    status?: string;
   };
   type TodoToolCard = {
     toolCallId: string;
@@ -202,7 +213,8 @@
             const title = String(item?.title ?? '').trim();
             if (!title) return null;
             const id = String(item?.id ?? '').trim();
-            return id ? { id, title } : { title };
+            const status = String(item?.status ?? item?.derivedStatus ?? '').trim();
+            return id ? { id, title, status } : { title, status };
           })
           .filter((entry): entry is TodoToolTask => entry !== null)
       : [];
@@ -228,6 +240,84 @@
     }
     st.todoCards[existingIndex] = card;
     st.todoCards = [...st.todoCards];
+  };
+
+  const isTodoRuntimeToolName = (
+    value: string | undefined,
+  ): value is 'todo_create' | 'todo_update' | 'task_update' =>
+    value === 'todo_create' || value === 'todo_update' || value === 'task_update';
+
+  const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  };
+
+  const normalizeTaskStatus = (value: unknown): string =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : 'todo';
+
+  const asTaskList = (value: unknown): TodoToolTask[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry): TodoToolTask | null => {
+        const item = asRecord(entry);
+        if (!item) return null;
+        const title = String(item.title ?? '').trim();
+        if (!title) return null;
+        const id = String(item.id ?? '').trim();
+        const status = normalizeTaskStatus(item.status ?? item.derivedStatus);
+        return id ? { id, title, status } : { title, status };
+      })
+      .filter((entry): entry is TodoToolTask => entry !== null);
+  };
+
+  const escapeMarkdownText = (value: string): string =>
+    value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');
+
+  const buildTodoRuntimeChecklist = (
+    toolName: 'todo_create' | 'todo_update' | 'task_update',
+    rawResult: unknown,
+  ): string | null => {
+    const result = asRecord(rawResult) ?? {};
+    const runtime = asRecord(result.todoRuntime) ?? result;
+    const todo = asRecord(runtime.todo);
+    const activeTodo = asRecord(runtime.activeTodo);
+    const task = asRecord(runtime.task);
+
+    const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
+    const todoId = String(runtime.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
+    const headerLabel = todoTitle
+      ? `TODO ${todoTitle}`
+      : todoId
+        ? `TODO ${todoId}`
+        : 'TODO';
+
+    const tasksFromRuntime = asTaskList(runtime.tasks);
+    const tasksFromResult = asTaskList(result.tasks);
+    let taskItems = tasksFromRuntime.length > 0 ? tasksFromRuntime : tasksFromResult;
+
+    if (taskItems.length === 0 && task) {
+      const taskTitle = String(task.title ?? '').trim();
+      if (taskTitle) {
+        taskItems = [{
+          id: String(task.id ?? '').trim() || undefined,
+          title: taskTitle,
+          status: normalizeTaskStatus(task.status ?? task.derivedStatus),
+        }];
+      }
+    }
+
+    if (taskItems.length === 0) return null;
+
+    const lines = [headerLabel];
+    for (const item of taskItems) {
+      const done = normalizeTaskStatus(item.status) === 'done';
+      const safeTitle = escapeMarkdownText(item.title);
+      lines.push(done ? `- [x] ~~${safeTitle}~~` : `- [ ] ${safeTitle}`);
+    }
+    if (toolName === 'task_update' && taskItems.length === 1) {
+      lines.push(`_Task status: ${normalizeTaskStatus(taskItems[0].status)}_`);
+    }
+    return lines.join('\n');
   };
 
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
@@ -316,11 +406,42 @@
       const err = data?.result?.error;
       const toolId = String(data?.tool_call_id ?? '').trim();
       const toolName = toolId ? st.toolNameById[toolId] : undefined;
+      const runtimeToolName = (() => {
+        const runtime = asRecord(data?.result?.todoRuntime);
+        const candidate = typeof runtime?.tool === 'string' ? runtime.tool : '';
+        return isTodoRuntimeToolName(candidate) ? candidate : undefined;
+      })();
       const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
       st.stepKind = 'tool';
       st.stepTitle = $_('stream.tool', { values: { name: label } });
-      if (err) st.auxText = String(err);
-      upsertStep(st.stepTitle, err ? String(err) : undefined);
+      st.auxText = '';
+      let toolResultBody: string | undefined;
+      if (err) {
+        st.auxText = String(err);
+        toolResultBody = String(err);
+      } else {
+        const checklist = buildTodoRuntimeChecklist(
+          (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) ?? 'todo_create',
+          data?.result,
+        );
+        if (checklist) {
+          st.auxText = checklist;
+          toolResultBody = checklist;
+        }
+      }
+      upsertStep(st.stepTitle, toolResultBody);
+      if (toolId && (isTodoRuntimeToolName(toolName) || runtimeToolName)) {
+        const resultRecord =
+          data?.result && typeof data.result === 'object' && !Array.isArray(data.result)
+            ? (data.result as Record<string, unknown>)
+            : {};
+        onTodoRuntime?.({
+          toolCallId: toolId,
+          toolName: (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) as
+            'todo_create' | 'todo_update' | 'task_update',
+          result: resultRecord,
+        });
+      }
       if (toolId && toolName === 'todo_create') {
         const todoCard = parseTodoToolCard(toolId, data?.result);
         if (todoCard) {
@@ -559,7 +680,7 @@
                     class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
                     use:scrollToEnd
                   >
-                    {#if step.kind === 'reasoning'}
+                    {#if step.kind === 'reasoning' || step.kind === 'tool'}
                       <Streamdown content={step.body} />
                     {:else}
                       {step.body}
@@ -592,7 +713,7 @@
               class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
               use:scrollToEnd
             >
-              {#if st.stepKind === 'reasoning'}
+              {#if st.stepKind === 'reasoning' || st.stepKind === 'tool'}
                 <Streamdown content={st.auxText} />
               {:else}
                 {st.auxText}
@@ -600,46 +721,6 @@
             </div>
           {/if}
         {/if}
-      {/if}
-      {#if st.todoCards.length > 0}
-        <div class="mt-2 space-y-2">
-          {#each st.todoCards as todoCard (todoCard.toolCallId)}
-            <div class="rounded border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-xs text-emerald-900">
-              <div class="font-semibold">{$_('chat.todoCard.title')}</div>
-              <div class="mt-1 space-y-0.5">
-                <div>
-                  <span class="font-medium">{$_('chat.todoCard.statusLabel')}:</span>
-                  {todoCard.status}
-                </div>
-                {#if todoCard.planId}
-                  <div>
-                    <span class="font-medium">{$_('chat.todoCard.planIdLabel')}:</span>
-                    {todoCard.planId}
-                  </div>
-                {/if}
-                <div>
-                  <span class="font-medium">{$_('chat.todoCard.todoIdLabel')}:</span>
-                  {todoCard.todoId}
-                </div>
-                <div>
-                  <span class="font-medium">{$_('chat.todoCard.taskCountLabel')}:</span>
-                  {todoCard.taskCount}
-                </div>
-              </div>
-              {#if todoCard.tasks.length > 0}
-                <div class="mt-2 font-medium">{$_('chat.todoCard.tasksLabel')}</div>
-                <ul class="mt-1 space-y-1">
-                  {#each todoCard.tasks as task, index (task.id ?? `${todoCard.toolCallId}-${index}`)}
-                    <li class="flex items-start gap-2">
-                      <span class="mt-0.5 inline-block h-3 w-3 rounded border border-emerald-500"></span>
-                      <span>{task.title}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-          {/each}
-        </div>
       {/if}
     {:else}
       <!-- job -->
