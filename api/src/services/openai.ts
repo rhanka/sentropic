@@ -953,12 +953,12 @@ export async function* callOpenAIResponseStream(
   // Mapper les tools "Chat Completions" -> "Responses" (format plat)
   const responseTools: OpenAI.Responses.ResponseCreateParamsStreaming['tools'] | undefined = filteredTools
     ? (filteredTools
-        .filter((t) => t.type === 'function')
+        .filter((t): t is OpenAI.Chat.Completions.ChatCompletionFunctionTool => t.type === 'function')
         .map((t) => ({
           type: 'function' as const,
-          name: t.function?.name || '',
-          description: t.function?.description,
-          parameters: t.function?.parameters ?? null,
+          name: t.function.name || '',
+          description: t.function.description,
+          parameters: t.function.parameters ?? null,
           // IMPORTANT: en mode strict, OpenAI exige un sous-ensemble JSON Schema (ex: additionalProperties:false).
           // Pour éviter de "sur-valider" nos tools (web_search/web_extract) à ce stade, on désactive strict.
           strict: false
