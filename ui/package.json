@@ -17,6 +17,8 @@
     "client:generate": "echo 'Client generation placeholder'"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.4",
+    "@eslint/js": "^10.0.1",
     "@simplewebauthn/types": "^12.0.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.43.5",
@@ -27,13 +29,13 @@
     "@types/d3": "^7.4.3",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^20.14.2",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "autoprefixer": "^10.4.17",
     "dompurify": "^3.3.0",
-    "eslint": "^8.57.0",
+    "eslint": "^10.0.2",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-svelte": "^2.39.0",
+    "eslint-plugin-svelte": "^3.15.0",
     "jsdom": "^24.0.0",
     "postcss": "^8.4.38",
     "prettier": "^3.2.5",
@@ -42,8 +44,8 @@
     "svelte-check": "^3.8.4",
     "svelte-i18n": "^4.0.0",
     "tailwindcss": "^3.4.4",
-    "typescript": "^5.4.5",
-    "vite": "^6.3.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
     "vitest": "^1.5.0"
   },
   "dependencies": {
@@ -58,8 +60,5 @@
     "marked": "^12.0.0",
     "svelte-streamdown": "^3.0.1",
     "tiptap-markdown": "^0.9.0"
-  },
-  "overrides": {
-    "minimatch": "^10.2.1"
   }
 }
