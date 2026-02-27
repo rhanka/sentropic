@@ -650,6 +650,10 @@
       "refresh": "Refresh runtime config",
       "refreshing": "Refreshing…",
       "readonlyHint": "Read-only scope: viewer/commenter roles can inspect runtime configuration but cannot edit, fork, or detach.",
+      "scopeBoundary": {
+        "title": "BR-03 scope boundary",
+        "description": "This page only covers Agent and Workflow configuration. Full Plan/Comments/Chat/Jobs operations and a visual workflow designer are intentionally deferred."
+      },
       "empty": "No runtime configuration item found.",
       "source": "Source",
       "parent": "Parent",
