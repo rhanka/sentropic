@@ -568,6 +568,56 @@ export const commentAssistantTool: OpenAI.Chat.Completions.ChatCompletionTool = 
   }
 };
 
+/**
+ * TODO runtime tool (chat orchestration -> plan/todo/task entities).
+ */
+export const todoCreateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'todo_create',
+    description:
+      'Create an executable TODO item (optionally inside a plan) with optional tasks. Use this tool when the user asks to create a TODO checklist from chat.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'TODO title (required).'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional TODO description.'
+        },
+        planId: {
+          type: 'string',
+          description: 'Optional existing plan ID to attach the TODO to.'
+        },
+        planTitle: {
+          type: 'string',
+          description: 'Optional plan title; creates a new plan when planId is not provided.'
+        },
+        tasks: {
+          type: 'array',
+          description: 'Optional initial tasks to create under the TODO.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Task title (required).' },
+              description: { type: 'string', description: 'Optional task description.' }
+            },
+            required: ['title']
+          }
+        },
+        metadata: {
+          type: 'object',
+          description: 'Optional TODO metadata object.'
+        }
+      },
+      required: ['title']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

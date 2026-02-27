@@ -33,9 +33,11 @@ import {
   matrixGetTool,
   matrixUpdateTool,
   documentsTool,
-  commentAssistantTool
+  commentAssistantTool,
+  todoCreateTool
 } from './tools';
 import { toolService } from './tool-service';
+import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { getWorkspaceRole, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
@@ -1206,6 +1208,9 @@ export class ChatService {
     if (requestedTools.has('web_extract')) {
       addTools([webExtractTool]);
     }
+    if (requestedTools.has('todo_create')) {
+      addTools([todoCreateTool]);
+    }
     if (hasDocuments) {
       addTools([documentsTool]);
     }
@@ -2072,6 +2077,68 @@ Règles :
               options.assistantMessageId,
               'tool_call_result',
               { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'todo_create') {
+            if (readOnly) {
+              throw new Error('Read-only workspace: todo_create is disabled');
+            }
+            const title = typeof args.title === 'string' ? args.title.trim() : '';
+            if (!title) {
+              throw new Error('todo_create: title is required');
+            }
+            const planId =
+              typeof args.planId === 'string' && args.planId.trim().length > 0
+                ? args.planId.trim()
+                : undefined;
+            const planTitle =
+              typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
+                ? args.planTitle.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string' && args.description.trim().length > 0
+                ? args.description
+                : undefined;
+            const taskDrafts: unknown[] = Array.isArray(args.tasks)
+              ? (args.tasks as unknown[])
+              : [];
+            const tasks: Array<{ title: string; description?: string }> =
+              taskDrafts
+              .map((item: unknown): { title: string; description?: string } => {
+                const draft = asRecord(item);
+                return {
+                  title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+                  description:
+                    typeof draft?.description === 'string'
+                      ? draft.description
+                      : undefined
+                };
+              })
+              .filter((item) => item.title.length > 0);
+            const metadata = asRecord(args.metadata) ?? undefined;
+
+            const todoResult = await todoOrchestrationService.createTodoFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                title,
+                description,
+                planId,
+                planTitle,
+                tasks,
+                metadata
+              }
+            );
+            result = todoResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: todoResult },
               streamSeq,
               options.assistantMessageId
             );
