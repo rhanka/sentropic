@@ -146,7 +146,19 @@ Context rule:
 
 ### 9.1 In-chat TODO display and creation
 - If AI decides to create/use a TODO, chat renders a TODO card/list inline.
-- Chat/agent can create TODO and tasks via `plan` tool APIs.
+- Chat/agent can create TODO and tasks via `todo_create` chat tool orchestration.
+
+### 9.1.1 Session-bound TODO runtime follow-up (Lot 4 target)
+- A TODO created from chat is attached to the chat session.
+- v1.1 UI behavior:
+  - sticky container at the bottom of the conversation,
+  - full-width layout,
+  - collapsible panel,
+  - max-height with internal scroll (consistent with existing chat components).
+- At most one active TODO per chat session in BR-03 v1.1.
+- The user can ask the AI to update plan progression (task/todo status updates) from chat.
+- Collaborative manual edition of TODO content is out of scope for BR-03 and deferred.
+- Completed tasks must be rendered as checked + struck-through in chat surfaces.
 
 ### 9.2 Basic Agent Configuration section
 - Configure generation agents (currently prompt-backed).
@@ -240,6 +252,50 @@ Configuration APIs:
 - `POST /api/v1/workflow-config/:id/fork`
 - `POST /api/v1/workflow-config/:id/detach`
 
+Chat tool contract (BR-03):
+- `todo_create` is required for AI-created TODO bootstrap from chat.
+- TODO progression updates from chat (task/todo status mutation) are required in Lot 4 (`todo_update` / `task_update` contract to finalize in branch plan).
+
+### 12.1 AI use-case generation workflow runtime migration (Lot 4 mandatory)
+
+Goal:
+- Replace the full AI use-case generation hardcoded treatment by workflow runtime definitions and agents.
+- No data migration is required: generation remains a treatment that produces existing artifacts.
+- Keep zero dual-path in production behavior (no permanent legacy hardcoded chain kept in parallel).
+
+Legacy hardcoded chain (to replace):
+1. `POST /api/v1/use-cases/generate` enqueues `matrix_generate` (optional) and `usecase_list`.
+2. `usecase_list` processing creates draft use cases then auto-enqueues one `usecase_detail` per use case.
+3. `usecase_detail` processing auto-enqueues `executive_summary` once all use cases are completed.
+
+Target workflow definition:
+- workflow key: `ai_usecase_generation_v1`
+- trigger: `POST /api/v1/use-cases/generate` starts one workflow run instance bound to this definition.
+- execution records must carry workflow/agent lineage for each task run (`workflowDefinitionId`, `agentDefinitionId`).
+
+Target mapping (legacy -> workflow tasks):
+
+| Legacy behavior | Target `taskKey` | Target agent key | Minimum input contract | Minimum output contract |
+|---|---|---|---|---|
+| Request normalization in route + folder context setup | `generation_context_prepare` | `generation_orchestrator` | `workspaceId`, `folderId`, `organizationId?`, `input`, `matrixMode`, `model`, `useCaseCount`, `locale` | normalized generation context |
+| Optional matrix generation (`matrix_generate`) | `generation_matrix_prepare` | `matrix_generation_agent` | normalized context + organization payload | persisted matrix config + matrix metadata |
+| Use-case list generation (`usecase_list`) | `generation_usecase_list` | `usecase_list_agent` | context + matrix state + docs context | draft use-case list with stable identifiers |
+| New TODO synchronization from generated list | `generation_todo_sync` | `todo_projection_agent` | generated list + session context | session TODO updated (tasks/ordering/progression baseline) |
+| Use-case detail generation fanout (`usecase_detail` for each item) | `generation_usecase_detail` | `usecase_detail_agent` | one draft use-case + matrix + organization + docs context | completed use-case payload + validated scores |
+| Executive synthesis (`executive_summary`) | `generation_executive_summary` | `executive_synthesis_agent` | completed use cases + thresholds + folder context | persisted executive summary payload |
+
+Migration constraints:
+- Runtime route contract stays stable (`POST /api/v1/use-cases/generate`), but internal dispatch must go through workflow runtime.
+- The direct legacy enqueue chain from route-level generation (`matrix_generate`, `usecase_list`, downstream chaining) must be removed from the route path once Lot 4 is complete.
+- Queue workers may remain as low-level executors, but they must be invoked through workflow task orchestration (not through legacy hardcoded orchestration branching).
+- No fallback mode that silently runs both legacy and workflow chains for the same request.
+
+Migration acceptance checkpoints:
+- `execution_runs.workflow_definition_id` is non-null for generation workflow task runs.
+- `execution_runs.agent_definition_id` is non-null when task assignment is defined in workflow configuration.
+- Generated artifacts (matrix, use-case list/detail, executive summary) remain functionally equivalent at API/UI level.
+- BR-03 TODO runtime progression (`todo_update` / `task_update`) is available in the same lot so generated plans are actionable in chat.
+
 ## 13) Branch Dependencies and Sequencing
 
 - BR-03 provides core runtime contracts.
@@ -297,3 +353,8 @@ This spec iteration is ready to instantiate BR-03 only when:
 - API surface v1 is accepted,
 - migration scope v1 is accepted,
 - BR-03/BR-04/BR-05/BR-14 boundaries are accepted.
+
+## 18) Future To-Be (outside BR-03)
+
+- Collaborative TODO boards (multi-user + multi-AI) are deferred.
+- Future UX should expose actor identity in TODO/task history and assignment surfaces (e.g., avatar/logo markers per actor).

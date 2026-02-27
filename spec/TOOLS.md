@@ -36,6 +36,11 @@ This document is the single checklist for **chat tools**: what is already implem
   - Actions: close thread, reassign, add note (batch-enabled)
   - Traceability: comments created by the tool include `tool_call_id`
 
+### TODO runtime tools
+- [x] `todo_create` (creates plan/todo/tasks from chat)
+- [ ] `todo_update` (update TODO status/ownership/progression from chat)
+- [ ] `task_update` (update task status/assignee/progression from chat)
+
 ## Implemented wiring / behavior ✅
 
 ### Contexts enabled in API (tool availability)
@@ -103,5 +108,4 @@ This document is the single checklist for **chat tools**: what is already implem
 - [ ] Organization AI populate / enrich batch from chat tools
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
-
 
