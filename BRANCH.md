@@ -551,9 +551,10 @@ Open decision items for BR-03 restart:
           - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
         - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-27` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-          - `2026-02-27` latest failure signatures: `expect(locator('h1')).toContainText(/Dossiers|Folders/i) failed` then retries timing out on `page.waitForRequest` for `/api/v1/runs/:runId/steer`.
-          - Mandatory triage executed each failure (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification: `test bug` in scoped spec flow (not API product regression).
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-27` pass signature: `✓ tests/09-todo-steering-core.spec.ts:12:3` ; `1 passed (8.9s)`.
+          - `2026-02-27` intermediate failure signatures before stabilization: `expect(locator('h1')).toContainText(/Dossiers|Folders/i) failed`, `TypeError: request.newContext is not a function`, `expect(getByTestId('todo-runtime-steer-submit')).toBeEnabled() received disabled`.
+          - Mandatory triage executed on each red run (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification: `test bug` in scoped spec flow (not API product regression).
   - [x] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
