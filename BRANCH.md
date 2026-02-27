@@ -660,31 +660,39 @@ Open decision items for BR-03 restart:
 
 - [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
   - [ ] Web app
-    - [ ] UAT setup:
-      - [ ] Execute only after `L4-S1` to `L4-S11` are completed.
-      - [ ] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
-      - [ ] Open chat widget in a fresh session with TODO tooling enabled.
+    - [x] UAT setup:
+      - [x] Execute only after `L4-S1` to `L4-S11` are completed.
+      - [x] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
+      - [x] Open chat widget in a fresh session with TODO tooling enabled.
     - [ ] Scenario UAT-1: one TODO max per session.
-      - [ ] Ask AI to create a first TODO with at least 3 tasks; verify creation success.
-      - [ ] In the same session, ask AI to create a second TODO; verify deterministic conflict behavior (no second active TODO created, conflict message references current active TODO).
+      - [x] Ask AI to create a first TODO with at least 3 tasks; verify creation success.
+      - [x] In the same session, ask AI to create a second TODO; verify deterministic conflict behavior (no second active TODO created, conflict message references current active TODO).
     - [ ] Scenario UAT-2: sticky bottom panel UX.
-      - [ ] Verify TODO panel is sticky at bottom of conversation and spans full available width.
-      - [ ] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
-      - [ ] Verify max-height constraint and internal scroll when task list exceeds visible space.
+      - [x] Verify TODO panel is sticky at bottom of conversation and spans full available width.
+      - [x] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
+      - [x] Verify max-height constraint and internal scroll when task list exceeds visible space.
     - [ ] Scenario UAT-3: progression via AI.
-      - [ ] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
-      - [ ] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
-      - [ ] Start one task execution so runtime panel displays active run metadata (`runId` + `runStatus`).
-      - [ ] Submit one steer message from runtime panel and verify feedback block shows submitted message + updated run status.
-      - [ ] Submit a second steer message while run is active and verify no duplicate run is created.
-      - [ ] When run reaches terminal status, verify steer submit/input becomes unavailable (disabled) coherently.
+      - [!] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
+        Feedback: once created the chat says he has no access to the list
+      - [!] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
+        Feedback: KO since chat has no access to tool to do that
+      - [!] Start one task execution so runtime panel displays active run metadata (`runId` + `runStatus`).
+      - [!] Submit one steer message from runtime panel and verify feedback block shows submitted message + updated run status.
+        Feeback: this is absolutely not what i asked for steering function
+      - [!] Submit a second steer message while run is active and verify no duplicate run is created.
+        Feedback: to be retested
+      - [!] When run reaches terminal status, verify steer submit/input becomes unavailable (disabled) coherently.
+        Feedback: no interes in that function, delete that
     - [ ] Scenario UAT-4: checked + strike rendering.
-      - [ ] Verify each completed task is rendered checked and struck-through in chat TODO panel.
-      - [ ] Verify non-completed tasks remain unstruck and visually distinct.
+      - [!] Verify each completed task is rendered checked and struck-through in chat TODO panel.
+      - [!] Verify non-completed tasks remain unstruck and visually distinct.
     - [ ] Scenario UAT-5: session persistence.
-      - [ ] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
-      - [ ] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
-      - [ ] Reload page and reopen same chat session; verify persisted state is rehydrated.
+      - [x] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
+        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
+      - [!] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
+        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
+      - [!] Reload page and reopen same chat session; verify persisted state is rehydrated.
+        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
     - [ ] Scenario UAT-6: generation workflow end-to-end runtime migration validation.
       - [ ] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
       - [ ] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
