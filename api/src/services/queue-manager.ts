@@ -72,6 +72,81 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
   }
 }
 
+function isGenerationWorkflowTaskKey(value: unknown): value is GenerationWorkflowTaskKey {
+  return (
+    value === 'generation_context_prepare' ||
+    value === 'generation_matrix_prepare' ||
+    value === 'generation_usecase_list' ||
+    value === 'generation_todo_sync' ||
+    value === 'generation_usecase_detail' ||
+    value === 'generation_executive_summary'
+  );
+}
+
+function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.workflowRunId !== 'string' || typeof record.workflowDefinitionId !== 'string') {
+    return null;
+  }
+  if (!isGenerationWorkflowTaskKey(record.taskKey)) {
+    return null;
+  }
+  const assignments = record.taskAssignments;
+  if (!assignments || typeof assignments !== 'object') {
+    return null;
+  }
+  const parsedAssignments = assignments as Record<string, unknown>;
+  const toNullableString = (candidate: unknown): string | null =>
+    typeof candidate === 'string' && candidate.trim() ? candidate : null;
+  return {
+    workflowRunId: record.workflowRunId,
+    workflowDefinitionId: record.workflowDefinitionId,
+    taskKey: record.taskKey,
+    agentDefinitionId: toNullableString(record.agentDefinitionId),
+    taskAssignments: {
+      contextPrepareAgentId: toNullableString(parsedAssignments.contextPrepareAgentId),
+      matrixPrepareAgentId: toNullableString(parsedAssignments.matrixPrepareAgentId),
+      usecaseListAgentId: toNullableString(parsedAssignments.usecaseListAgentId),
+      todoSyncAgentId: toNullableString(parsedAssignments.todoSyncAgentId),
+      usecaseDetailAgentId: toNullableString(parsedAssignments.usecaseDetailAgentId),
+      executiveSummaryAgentId: toNullableString(parsedAssignments.executiveSummaryAgentId),
+    },
+  };
+}
+
+function cloneGenerationWorkflowRuntimeContextForTask(
+  workflow: GenerationWorkflowRuntimeContext,
+  taskKey: GenerationWorkflowTaskKey
+): GenerationWorkflowRuntimeContext {
+  const agentDefinitionId = (() => {
+    switch (taskKey) {
+      case 'generation_context_prepare':
+        return workflow.taskAssignments.contextPrepareAgentId;
+      case 'generation_matrix_prepare':
+        return workflow.taskAssignments.matrixPrepareAgentId;
+      case 'generation_usecase_list':
+        return workflow.taskAssignments.usecaseListAgentId;
+      case 'generation_todo_sync':
+        return workflow.taskAssignments.todoSyncAgentId;
+      case 'generation_usecase_detail':
+        return workflow.taskAssignments.usecaseDetailAgentId;
+      case 'generation_executive_summary':
+        return workflow.taskAssignments.executiveSummaryAgentId;
+      default:
+        return null;
+    }
+  })();
+
+  return {
+    workflowRunId: workflow.workflowRunId,
+    workflowDefinitionId: workflow.workflowDefinitionId,
+    taskKey,
+    agentDefinitionId,
+    taskAssignments: { ...workflow.taskAssignments },
+  };
+}
+
 function sanitizeJobResultForPublic(result: unknown): unknown {
   if (!result || typeof result !== 'object') return result;
   const copy = { ...(result as Record<string, unknown>) };
@@ -152,6 +227,31 @@ export type JobType =
 
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
+export type GenerationWorkflowTaskKey =
+  | 'generation_context_prepare'
+  | 'generation_matrix_prepare'
+  | 'generation_usecase_list'
+  | 'generation_todo_sync'
+  | 'generation_usecase_detail'
+  | 'generation_executive_summary';
+
+export interface GenerationWorkflowTaskAssignments {
+  contextPrepareAgentId: string | null;
+  matrixPrepareAgentId: string | null;
+  usecaseListAgentId: string | null;
+  todoSyncAgentId: string | null;
+  usecaseDetailAgentId: string | null;
+  executiveSummaryAgentId: string | null;
+}
+
+export interface GenerationWorkflowRuntimeContext {
+  workflowRunId: string;
+  workflowDefinitionId: string;
+  taskKey: GenerationWorkflowTaskKey;
+  agentDefinitionId?: string | null;
+  taskAssignments: GenerationWorkflowTaskAssignments;
+}
+
 export interface OrganizationEnrichJobData {
   organizationId: string;
   organizationName: string;
@@ -166,6 +266,7 @@ export interface MatrixGenerateJobData {
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
 }
 
 export interface UseCaseListJobData {
@@ -177,6 +278,7 @@ export interface UseCaseListJobData {
   useCaseCount?: number;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
 }
 
 export interface UseCaseDetailJobData {
@@ -187,6 +289,7 @@ export interface UseCaseDetailJobData {
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
 }
 
 export interface ExecutiveSummaryJobData {
@@ -196,6 +299,7 @@ export interface ExecutiveSummaryJobData {
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
 }
 
 export interface ChatMessageJobData {
@@ -1698,6 +1802,7 @@ export class QueueManager {
    */
   private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, input, organizationId, matrixMode, model, useCaseCount, initiatedByUserId, locale } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
       .select({
@@ -1870,22 +1975,28 @@ export class QueueManager {
       .where(eq(folders.id, folderId));
     await this.notifyFolderEvent(folderId);
 
-    // Auto-déclencher le détail de tous les cas d'usage (sauf si pause/cancel en cours)
+    if (!workflow) {
+      console.log(`ℹ️ Generated ${draftUseCases.length} use cases (no workflow runtime metadata, no auto-detail enqueue)`);
+      return;
+    }
+
+    // Workflow runtime chain: detail fanout is triggered from workflow metadata only.
     if (this.cancelAllInProgress || this.paused) {
-      console.warn('⏸️ Skipping auto-enqueue of usecase_detail due to pause/cancel');
+      console.warn('⏸️ Skipping workflow detail fanout due to pause/cancel');
     } else {
+      const detailWorkflow = cloneGenerationWorkflowRuntimeContextForTask(workflow, 'generation_usecase_detail');
       for (const useCase of draftUseCases) {
         try {
-          // Extraire name depuis data
           const useCaseName = (useCase.data as UseCaseData)?.name || 'Cas d\'usage sans nom';
           await this.addJob('usecase_detail', {
             useCaseId: useCase.id,
-            useCaseName: useCaseName,
-            folderId: folderId,
+            useCaseName,
+            folderId,
             matrixMode,
             model: selectedModel,
             initiatedByUserId,
-            locale
+            locale,
+            workflow: detailWorkflow,
           }, { workspaceId, maxRetries: 1 });
         } catch (e) {
           console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
@@ -1893,7 +2004,7 @@ export class QueueManager {
       }
     }
 
-    console.log(`📋 Generated ${draftUseCases.length} use cases and queued for detailing`);
+    console.log(`📋 Generated ${draftUseCases.length} use cases and scheduled workflow detailing`);
   }
 
   private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
@@ -1939,6 +2050,7 @@ export class QueueManager {
    */
   private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
     const { useCaseId, useCaseName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -2105,18 +2217,27 @@ export class QueueManager {
           .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
         await this.notifyFolderEvent(folderId);
 
-        // Ajouter le job de génération de synthèse exécutive
+        if (!workflow) {
+          console.log('ℹ️ Workflow metadata missing on usecase_detail; executive summary enqueue skipped');
+          return;
+        }
+
+        const executiveSummaryWorkflow = cloneGenerationWorkflowRuntimeContextForTask(
+          workflow,
+          'generation_executive_summary'
+        );
         try {
           await this.addJob('executive_summary', {
             folderId,
             model: selectedModel,
             initiatedByUserId,
-            locale
+            locale,
+            workflow: executiveSummaryWorkflow,
           }, { workspaceId: folder.workspaceId });
-          console.log(`📝 Job executive_summary ajouté pour le dossier ${folderId}`);
+          console.log(`📝 Workflow executive_summary job added for folder ${folderId}`);
         } catch (error) {
-          console.error(`❌ Erreur lors de l'ajout du job executive_summary:`, error);
-          // Ne pas faire échouer le job usecase_detail si l'ajout du job executive_summary échoue
+          console.error(`❌ Failed to enqueue workflow executive_summary job:`, error);
+          // Keep usecase_detail completion even if summary enqueue fails.
         }
       } else {
         console.log(`ℹ️ Le dossier ${folderId} a déjà une synthèse exécutive, pas de régénération automatique`);
