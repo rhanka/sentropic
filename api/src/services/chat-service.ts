@@ -112,6 +112,108 @@ const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test
 
 type TodoRuntimeToolName = 'todo_create' | 'todo_update' | 'task_update';
 
+const TODO_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
+
+type SessionTodoRuntimeTask = {
+  id: string;
+  title: string;
+  status: string;
+};
+
+type SessionTodoRuntimeSnapshot = {
+  todoId: string;
+  todoTitle: string;
+  status: string;
+  tasks: SessionTodoRuntimeTask[];
+};
+
+const normalizeTodoRuntimeStatus = (value: unknown): string =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : 'todo';
+
+const normalizeIntentText = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const matchesAnyPattern = (text: string, patterns: RegExp[]): boolean =>
+  patterns.some((pattern) => pattern.test(text));
+
+const TODO_REPLACEMENT_PATTERNS = [
+  /\b(new|another|fresh)\s+(todo|checklist|list)\b/,
+  /\b(replace|replacement|restart|reset)\b.*\b(todo|checklist|list)\b/,
+  /\b(nouveau|nouvelle|autre)\s+(todo|liste|checklist)\b/,
+  /\b(remplace|remplacer|remplacement|recommence|recommencer|reset)\b.*\b(todo|liste|checklist)\b/,
+];
+
+const TODO_PROGRESSION_PATTERNS = [
+  /\b(go|continue|next|advance|progress|check|mark)\b/,
+  /\b(coche|cocher|avance|avancer|progression|progresser|termine|terminer|marque|marquer)\b/,
+];
+
+const TODO_GO_SIGNAL_PATTERNS = [
+  /^(go|ok|okay|yes|oui|vas y|vas-y|continue)$/i,
+  /\b(go ahead|on y va|vas y|vas-y)\b/i,
+];
+
+const isExplicitTodoReplacementRequest = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return matchesAnyPattern(normalized, TODO_REPLACEMENT_PATTERNS);
+};
+
+const isTodoProgressionIntent = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized || isExplicitTodoReplacementRequest(message)) return false;
+  return matchesAnyPattern(normalized, TODO_PROGRESSION_PATTERNS);
+};
+
+const isTodoGoSignal = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return matchesAnyPattern(normalized, TODO_GO_SIGNAL_PATTERNS);
+};
+
+const toSessionTodoRuntimeSnapshot = (value: unknown): SessionTodoRuntimeSnapshot | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const todo = asRecord(record.todo);
+  const activeTodo = asRecord(record.activeTodo);
+  const todoId = String(record.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
+  if (!todoId) return null;
+
+  const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
+  const status = normalizeTodoRuntimeStatus(
+    record.status ?? record.todoStatus ?? todo?.derivedStatus ?? activeTodo?.derivedStatus,
+  );
+  const tasksRaw = Array.isArray(record.tasks) ? record.tasks : [];
+  const tasks: SessionTodoRuntimeTask[] = tasksRaw
+    .map((entry) => {
+      const task = asRecord(entry);
+      if (!task) return null;
+      const title = String(task.title ?? '').trim();
+      const id = String(task.id ?? '').trim();
+      if (!title && !id) return null;
+      return {
+        id,
+        title: title || '(untitled task)',
+        status: normalizeTodoRuntimeStatus(task.status ?? task.derivedStatus),
+      };
+    })
+    .filter((entry): entry is SessionTodoRuntimeTask => entry !== null);
+
+  return {
+    todoId,
+    todoTitle,
+    status,
+    tasks,
+  };
+};
+
 const normalizeTodoRuntimeToolResult = (
   toolName: TodoRuntimeToolName,
   toolCallId: string,
@@ -1150,12 +1252,10 @@ export class ChatService {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? ''
       }));
+    const lastUserMessage =
+      [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
 
     if (!session.title) {
-      const lastUserMessage =
-        [...messages]
-          .filter((m) => m.sequence < assistantRow.sequence && m.role === 'user')
-          .pop()?.content ?? '';
       if (lastUserMessage.trim()) {
         const safeContextType =
           focusContext?.contextType || (isChatContextType(session.primaryContextType) ? session.primaryContextType : null);
@@ -1254,6 +1354,36 @@ export class ChatService {
       }
     })();
 
+    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
+    const todoToolRequested =
+      requestedTools.has('todo_create') ||
+      requestedTools.has('todo_update') ||
+      requestedTools.has('task_update');
+    const sessionTodoRuntimeSnapshot = todoToolRequested
+      ? toSessionTodoRuntimeSnapshot(
+          await todoOrchestrationService.getSessionTodoRuntime(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'viewer',
+              workspaceId: sessionWorkspaceId,
+            },
+            options.sessionId,
+          ),
+        )
+      : null;
+    const hasActiveSessionTodo = Boolean(
+      sessionTodoRuntimeSnapshot &&
+      !TODO_TERMINAL_STATUSES.has(sessionTodoRuntimeSnapshot.status),
+    );
+    const explicitTodoReplacementRequest =
+      hasActiveSessionTodo && isExplicitTodoReplacementRequest(lastUserMessage);
+    const enforceTodoUpdateMode =
+      todoToolRequested && hasActiveSessionTodo && !explicitTodoReplacementRequest;
+    const todoProgressionIntent =
+      enforceTodoUpdateMode && isTodoProgressionIntent(lastUserMessage);
+    const todoGoSignal = enforceTodoUpdateMode && isTodoGoSignal(lastUserMessage);
+    const todoProgressionFocusMode = Boolean(todoProgressionIntent || todoGoSignal);
+
     // Prepare tools based on the active contexts (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
@@ -1317,20 +1447,29 @@ export class ChatService {
         webExtractTool
       ]);
     }
-    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
-    if (requestedTools.has('web_search')) {
+    const effectiveRequestedTools = new Set(requestedTools);
+    if (enforceTodoUpdateMode) {
+      effectiveRequestedTools.delete('todo_create');
+      effectiveRequestedTools.add('todo_update');
+      effectiveRequestedTools.add('task_update');
+    }
+    if (todoProgressionFocusMode) {
+      effectiveRequestedTools.delete('web_search');
+      effectiveRequestedTools.delete('web_extract');
+    }
+    if (effectiveRequestedTools.has('web_search')) {
       addTools([webSearchTool]);
     }
-    if (requestedTools.has('web_extract')) {
+    if (effectiveRequestedTools.has('web_extract')) {
       addTools([webExtractTool]);
     }
-    if (requestedTools.has('todo_create')) {
+    if (effectiveRequestedTools.has('todo_create') && !enforceTodoUpdateMode) {
       addTools([todoCreateTool]);
     }
-    if (requestedTools.has('todo_update')) {
+    if (effectiveRequestedTools.has('todo_update') || enforceTodoUpdateMode) {
       addTools([todoUpdateTool]);
     }
-    if (requestedTools.has('task_update')) {
+    if (effectiveRequestedTools.has('task_update') || enforceTodoUpdateMode) {
       addTools([taskUpdateTool]);
     }
     if (hasDocuments) {
@@ -1355,7 +1494,7 @@ export class ChatService {
 
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
       const allowed = new Set<string>([
-        ...options.tools,
+        ...effectiveRequestedTools,
         ...Array.from(localToolNames)
       ]);
       tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
@@ -1530,6 +1669,57 @@ Règles :
 
     if (hasCommentContexts) {
       contextBlock += `\n\nComment resolution tool:\n- \`comment_assistant\` (mode=suggest) to analyze comment threads and propose actions.\n- Always present the proposal as French markdown with a clear confirmation question.\n- Require an explicit user confirmation ("Confirmer" or "Annuler").\n- Only after confirmation, call \`comment_assistant\` with mode=resolve, include the same actions, and pass confirmation="yes".\n- If the user response is not an explicit confirmation, ask again with the fixed options.`;
+    }
+    if (todoToolRequested) {
+      const todoLines: string[] = ['TODO runtime session constraints:'];
+      if (sessionTodoRuntimeSnapshot) {
+        todoLines.push(`- Active TODO id: ${sessionTodoRuntimeSnapshot.todoId}`);
+        todoLines.push(`- Active TODO status: ${sessionTodoRuntimeSnapshot.status}`);
+        if (sessionTodoRuntimeSnapshot.todoTitle) {
+          todoLines.push(`- Active TODO title: ${sessionTodoRuntimeSnapshot.todoTitle}`);
+        }
+        if (sessionTodoRuntimeSnapshot.tasks.length > 0) {
+          todoLines.push('- Ordered tasks (deterministic progression order):');
+          for (const [index, task] of sessionTodoRuntimeSnapshot.tasks.slice(0, 20).entries()) {
+            const taskId = task.id || '(no-id)';
+            todoLines.push(`  ${index + 1}. taskId=${taskId} status=${task.status} title=${task.title}`);
+          }
+        } else {
+          todoLines.push('- No tasks currently attached to this TODO.');
+        }
+      } else {
+        todoLines.push('- No active session TODO found.');
+      }
+      todoLines.push('');
+      todoLines.push('Mandatory TODO orchestration rules:');
+      if (enforceTodoUpdateMode) {
+        todoLines.push(
+          '- A session TODO is already active: do NOT call `todo_create` unless the user explicitly asks for a replacement/new list.',
+        );
+        todoLines.push('- Use `task_update` and `todo_update` to progress the existing TODO.');
+      } else {
+        todoLines.push('- Use `todo_create` only when the user explicitly asks to create a TODO list.');
+      }
+      if (explicitTodoReplacementRequest) {
+        todoLines.push('- The user explicitly asked for a replacement/new list: `todo_create` is allowed.');
+      }
+      if (todoProgressionFocusMode) {
+        todoLines.push(
+          '- Progression intent detected: execute the required TODO updates immediately in this answer (multiple tool calls if needed).',
+        );
+        todoLines.push(
+          '- Deterministic progression: update tasks in listed order, continue until a real blocker (`blocked`, permission/guardrail error, or missing required input).',
+        );
+        if (todoGoSignal) {
+          todoLines.push(
+            '- User said "go": continue autonomously through next feasible tasks; ask one concise blocker question only if blocked.',
+          );
+        }
+      }
+      todoLines.push(
+        '- When all tasks are terminal (`done`/`cancelled`), finalize the TODO with `todo_update` (`status: "done"` or `closed: true`).',
+      );
+      contextBlock += `\n\n${todoLines.join('\n')}`;
     }
 
     const activeToolNames = (tools ?? [])
@@ -1715,6 +1905,8 @@ Règles :
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
+      const pass1ToolChoice: 'auto' | 'required' =
+        todoProgressionFocusMode && iteration === 1 ? 'required' : 'auto';
 
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
@@ -1726,7 +1918,7 @@ Règles :
         phase: 'pass1',
         iteration,
         model: selectedModel || null,
-        toolChoice: 'auto',
+        toolChoice: pass1ToolChoice,
         // IMPORTANT: tracer les tools au complet (description + schema) pour debug.
         tools: tools ?? null,
         openaiMessages: {
@@ -1757,6 +1949,7 @@ Règles :
         // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
         reasoningSummary: 'detailed',
         reasoningEffort: reasoningEffortForThisMessage,
+        toolChoice: pass1ToolChoice,
         previousResponseId: previousResponseId ?? undefined,
         rawInput: pendingResponsesRawInput ?? undefined,
         signal: options.signal
@@ -2633,7 +2826,7 @@ Règles :
         phase: 'pass1',
         iteration,
         model: selectedModel || null,
-        toolChoice: 'auto',
+        toolChoice: pass1ToolChoice,
         tools: tools ?? null,
         openaiMessages: {
           kind: 'executed_tools',
