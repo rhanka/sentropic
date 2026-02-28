@@ -1009,7 +1009,8 @@
       "tasksLabel": "Checklist des tâches"
     },
     "todoRuntimePanel": {
-      "title": "TODO runtime de session",
+      "title": "TODO",
+      "subtitle": "Checklist en cours",
       "collapse": "Réduire le panneau",
       "expand": "Déployer le panneau",
       "statusLabel": "Statut",

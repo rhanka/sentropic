@@ -79,11 +79,8 @@
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
-    isTodoRuntimeRunSteerable,
     normalizeTodoRuntimeRunState,
-    postTodoRuntimeSteer,
     type TodoRuntimeRunState,
-    type TodoRuntimeSteerFeedback,
   } from '$lib/utils/todo-runtime-steer';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
@@ -998,10 +995,6 @@
   let streamDetailsLoading = false;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
-  let todoRuntimeSteerMessage = '';
-  let todoRuntimeSteerSubmitting = false;
-  let todoRuntimeSteerError: string | null = null;
-  let todoRuntimeLastSteer: TodoRuntimeSteerFeedback | null = null;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
@@ -2297,38 +2290,9 @@
   const isRuntimeTaskDone = (status: string | undefined): boolean =>
     normalizeRuntimeStatus(status, 'todo') === 'done';
 
-  const canSubmitTodoRuntimeSteer = (
-    panel: TodoRuntimePanelState | null,
-  ): boolean => {
-    if (!panel) return false;
-    if (!todoRuntimeSteerMessage.trim()) return false;
-    const runState: TodoRuntimeRunState = {
-      runId: panel.runId,
-      runStatus: panel.runStatus,
-      runTaskId: panel.runTaskId,
-    };
-    return isTodoRuntimeRunSteerable(runState);
-  };
-
-  const isTodoRuntimePanelSteerable = (
-    panel: TodoRuntimePanelState | null,
-  ): boolean => {
-    if (!panel) return false;
-    const runState: TodoRuntimeRunState = {
-      runId: panel.runId,
-      runStatus: panel.runStatus,
-      runTaskId: panel.runTaskId,
-    };
-    return isTodoRuntimeRunSteerable(runState);
-  };
-
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
-    todoRuntimeSteerMessage = '';
-    todoRuntimeSteerSubmitting = false;
-    todoRuntimeSteerError = null;
-    todoRuntimeLastSteer = null;
   };
 
   const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
@@ -2423,42 +2387,7 @@
     next.runStatus = nextRunState.runStatus;
     next.runTaskId = nextRunState.runTaskId;
 
-    if (!reusingCurrent) {
-      todoRuntimeSteerMessage = '';
-      todoRuntimeSteerError = null;
-      todoRuntimeLastSteer = null;
-    }
-
     todoRuntimePanel = next;
-  };
-
-  const submitTodoRuntimeSteer = async () => {
-    if (!todoRuntimePanel?.runId) return;
-    if (!canSubmitTodoRuntimeSteer(todoRuntimePanel)) return;
-
-    todoRuntimeSteerSubmitting = true;
-    todoRuntimeSteerError = null;
-    try {
-      const feedback = await postTodoRuntimeSteer(
-        apiPost,
-        todoRuntimePanel.runId,
-        todoRuntimeSteerMessage,
-      );
-      todoRuntimeLastSteer = feedback;
-      todoRuntimePanel = {
-        ...todoRuntimePanel,
-        runId: feedback.runId,
-        runStatus: feedback.status,
-      };
-      todoRuntimeSteerMessage = '';
-    } catch (e) {
-      todoRuntimeSteerError = formatApiError(
-        e,
-        $_('chat.todoRuntimePanel.steer.error'),
-      );
-    } finally {
-      todoRuntimeSteerSubmitting = false;
-    }
   };
 
   const loadSessions = async () => {
@@ -3759,8 +3688,7 @@
               {$_('chat.todoRuntimePanel.title')}
             </div>
             <div class="text-[11px] text-slate-500 truncate">
-              {todoRuntimePanel.title ||
-                `${$_('chat.todoRuntimePanel.todoIdLabel')}: ${todoRuntimePanel.todoId}`}
+              {todoRuntimePanel.title || $_('chat.todoRuntimePanel.subtitle')}
             </div>
           </div>
           <ChevronDown
@@ -3776,40 +3704,6 @@
                 {todoRuntimePanel.conflictMessage}
               </div>
             {/if}
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <span class="font-medium">{$_('chat.todoRuntimePanel.statusLabel')}:</span>
-                {todoRuntimePanel.status}
-              </div>
-              {#if todoRuntimePanel.planId}
-                <div>
-                  <span class="font-medium">{$_('chat.todoRuntimePanel.planIdLabel')}:</span>
-                  {todoRuntimePanel.planId}
-                </div>
-              {/if}
-              <div>
-                <span class="font-medium">{$_('chat.todoRuntimePanel.todoIdLabel')}:</span>
-                {todoRuntimePanel.todoId}
-              </div>
-              {#if todoRuntimePanel.runId}
-                <div>
-                  <span class="font-medium">{$_('chat.todoRuntimePanel.runIdLabel')}:</span>
-                  {todoRuntimePanel.runId}
-                </div>
-              {/if}
-              {#if todoRuntimePanel.runStatus}
-                <div>
-                  <span class="font-medium">{$_('chat.todoRuntimePanel.runStatusLabel')}:</span>
-                  {todoRuntimePanel.runStatus}
-                </div>
-              {/if}
-              {#if todoRuntimePanel.runTaskId}
-                <div>
-                  <span class="font-medium">{$_('chat.todoRuntimePanel.runTaskIdLabel')}:</span>
-                  {todoRuntimePanel.runTaskId}
-                </div>
-              {/if}
-            </div>
             <div>
               <div class="font-medium">
                 {$_('chat.todoRuntimePanel.tasksLabel')} ({todoRuntimePanel.tasks.length})
@@ -3843,75 +3737,9 @@
                           ? $_('chat.todoRuntimePanel.completedTaskLabel')
                           : $_('chat.todoRuntimePanel.pendingTaskLabel')}
                       </span>
-                      <span class="ml-auto text-[10px] uppercase text-slate-500">
-                        {task.status ?? 'todo'}
-                      </span>
                     </li>
                   {/each}
                 </ul>
-              {/if}
-            </div>
-            <div class="rounded border border-slate-200 bg-white/80 p-2 space-y-2">
-              <div class="text-[11px] font-medium text-slate-700">
-                {$_('chat.todoRuntimePanel.steer.title')}
-              </div>
-              {#if todoRuntimePanel.runId}
-                <form
-                  class="space-y-2"
-                  on:submit|preventDefault={() => void submitTodoRuntimeSteer()}
-                >
-                  <input
-                    type="text"
-                    class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-800 focus:border-slate-500 focus:outline-none"
-                    placeholder={$_('chat.todoRuntimePanel.steer.placeholder')}
-                    bind:value={todoRuntimeSteerMessage}
-                    disabled={!isTodoRuntimePanelSteerable(todoRuntimePanel) || todoRuntimeSteerSubmitting}
-                    data-testid="todo-runtime-steer-input"
-                  />
-                  <button
-                    type="submit"
-                    class="inline-flex items-center rounded border border-slate-300 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canSubmitTodoRuntimeSteer(todoRuntimePanel) || todoRuntimeSteerSubmitting}
-                    data-testid="todo-runtime-steer-submit"
-                  >
-                    {#if todoRuntimeSteerSubmitting}
-                      {$_('chat.todoRuntimePanel.steer.submitting')}
-                    {:else}
-                      {$_('chat.todoRuntimePanel.steer.submit')}
-                    {/if}
-                  </button>
-                </form>
-                {#if !isTodoRuntimePanelSteerable(todoRuntimePanel)}
-                  <div class="text-[11px] text-slate-500">
-                    {$_('chat.todoRuntimePanel.steer.inactive')}
-                  </div>
-                {/if}
-              {:else}
-                <div class="text-[11px] text-slate-500">
-                  {$_('chat.todoRuntimePanel.steer.unavailable')}
-                </div>
-              {/if}
-              {#if todoRuntimeSteerError}
-                <div
-                  class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
-                  data-testid="todo-runtime-steer-feedback"
-                >
-                  {todoRuntimeSteerError}
-                </div>
-              {:else if todoRuntimeLastSteer}
-                <div
-                  class="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 space-y-0.5"
-                  data-testid="todo-runtime-steer-feedback"
-                >
-                  <div>
-                    <span class="font-medium">{$_('chat.todoRuntimePanel.steer.lastMessageLabel')}:</span>
-                    {todoRuntimeLastSteer.message}
-                  </div>
-                  <div>
-                    <span class="font-medium">{$_('chat.todoRuntimePanel.steer.lastStatusLabel')}:</span>
-                    {todoRuntimeLastSteer.status}
-                  </div>
-                </div>
               {/if}
             </div>
           </div>
