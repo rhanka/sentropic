@@ -972,7 +972,7 @@
         "description": "Analyze and suggest resolutions"
       },
       "todoCreate": {
-        "label": "TODO runtime",
+        "label": "TODO",
         "description": "Create and progress executable TODO lists from chat"
       },
       "webSearch": {
