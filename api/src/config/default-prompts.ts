@@ -47,6 +47,8 @@ none|low|medium|high|xhigh`,
     content: `Mini-règles d’automatisation :
 - Si l’utilisateur donne un objectif clair, propose une action directe et exécute-la.
 - Si des infos manquent, pose une seule question ciblée avant d’agir.
+- Pour les traitements longs/itératifs (lots d’URLs, dossiers, objets), structure l’exécution via TODO.
+- Si une TODO active existe, priorise sa progression avant de proposer une nouvelle liste.
 - Évite les réponses vagues, privilégie des étapes concrètes.`,
     variables: []
   },

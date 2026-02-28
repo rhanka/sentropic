@@ -995,6 +995,7 @@
   let streamDetailsLoading = false;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
+  let todoRuntimeDeleteInFlight = false;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
@@ -2293,6 +2294,22 @@
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
+  };
+
+  const handleDeleteTodoRuntime = async () => {
+    if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
+    if (!confirm($_('chat.todoRuntimePanel.confirmDelete'))) return;
+    todoRuntimeDeleteInFlight = true;
+    try {
+      await apiPatch(`/todos/${encodeURIComponent(todoRuntimePanel.todoId)}`, {
+        closed: true,
+      });
+      resetTodoRuntimePanel();
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.deleteError'));
+    } finally {
+      todoRuntimeDeleteInFlight = false;
+    }
   };
 
   const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
@@ -3679,17 +3696,7 @@
   {#if mode === 'ai' && todoRuntimePanel}
     <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
       <div class="px-3 py-2">
-        <button
-          type="button"
-          class="w-full flex items-center justify-between gap-2 text-left"
-          on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
-          aria-label={todoRuntimeCollapsed
-            ? $_('chat.todoRuntimePanel.expand')
-            : $_('chat.todoRuntimePanel.collapse')}
-          title={todoRuntimeCollapsed
-            ? $_('chat.todoRuntimePanel.expand')
-            : $_('chat.todoRuntimePanel.collapse')}
-        >
+        <div class="w-full flex items-center justify-between gap-2">
           <div class="min-w-0">
             <div class="text-xs font-semibold text-slate-700">
               {$_('chat.todoRuntimePanel.title')}
@@ -3698,12 +3705,36 @@
               {todoRuntimePanel.title || $_('chat.todoRuntimePanel.subtitle')}
             </div>
           </div>
-          <ChevronDown
-            class={`w-4 h-4 text-slate-500 transition-transform duration-150 ${
-              todoRuntimeCollapsed ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
+          <div class="flex items-center gap-1">
+            <button
+              class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+              type="button"
+              disabled={todoRuntimeDeleteInFlight}
+              on:click={() => void handleDeleteTodoRuntime()}
+              aria-label={$_('chat.todoRuntimePanel.delete')}
+              title={$_('chat.todoRuntimePanel.delete')}
+            >
+              <Trash2 class="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+              on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
+              aria-label={todoRuntimeCollapsed
+                ? $_('chat.todoRuntimePanel.expand')
+                : $_('chat.todoRuntimePanel.collapse')}
+              title={todoRuntimeCollapsed
+                ? $_('chat.todoRuntimePanel.expand')
+                : $_('chat.todoRuntimePanel.collapse')}
+            >
+              <ChevronDown
+                class={`w-4 h-4 transition-transform duration-150 ${
+                  todoRuntimeCollapsed ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+          </div>
+        </div>
         {#if !todoRuntimeCollapsed}
           <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
             {#if todoRuntimePanel.conflictMessage}

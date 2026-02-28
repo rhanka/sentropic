@@ -1878,7 +1878,6 @@ export class TodoOrchestrationService {
         return {
           status: "conflict" as const,
           code: "active_todo_exists" as const,
-          message: "An active TODO already exists for this chat session.",
           activeTodo: this.toTodoPayload(activeSessionTodo, activeTodoStatus),
         };
       }
