@@ -183,6 +183,27 @@ Open decision items for BR-03 restart:
     - Progression intent (`advance/check/go`) now narrows active tools to TODO progression tools and requires first-pass tool call for deterministic execution.
     - Chat task status updates now support deterministic multi-step transitions in one request (`deferred/planned/todo/blocked -> ... -> done`) to remove partial slow progression.
   - `Blocker threshold`: closed.
+- `ID`: `BR03-FL10`
+  - `Branch`: `BR-03`
+  - `Owner`: product + conductor
+  - `Severity`: high
+  - `Status`: `acknowledge`
+  - `Repro steps`:
+    - In chat session with active TODO panel, expand the panel body.
+  - `Expected`:
+    - No technical runtime metadata is visible in the default panel body.
+    - No dedicated steering input/button/feedback block is visible in the panel.
+    - Steering remains available via main composer flow only.
+  - `Actual`:
+    - Technical metadata lines were visible (`status`, `plan id`, `todo id`, `run id`, `run status`, `run task id`).
+    - Dedicated runtime steering form block was visible in panel body.
+  - `Evidence`: product regression report for BR03 TODO runtime panel UX (2026-02-28).
+  - `Resolution (2026-02-28)`:
+    - Removed metadata grid from TODO panel body (no visible status/id/runtime lines).
+    - Removed dedicated runtime steering form block from panel body (input/button/feedback card).
+    - Kept panel title as `TODO` and checklist UX (`checkbox + strike-through` on completed tasks).
+    - Preserved steering path via main composer (no composer-path regression introduced in this slice).
+  - `Blocker threshold`: closed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -545,26 +566,34 @@ Open decision items for BR-03 restart:
           - `2026-02-27` pass signature: `✓ tests/09-todo-steering-core.spec.ts:12:3` ; `1 passed (8.9s)`.
           - `2026-02-27` intermediate failure signatures before stabilization: `expect(locator('h1')).toContainText(/Dossiers|Folders/i) failed`, `TypeError: request.newContext is not a function`, `expect(getByTestId('todo-runtime-steer-submit')).toBeEnabled() received disabled`.
           - Mandatory triage executed on each red run (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`), classification: `test bug` in scoped spec flow (not API product regression).
-    - [ ] `L4-S11` DEV - TODO runtime panel UX polish from UAT feedback.
+    - [x] `L4-S11` DEV - TODO runtime panel UX polish from UAT feedback.
       - Scope:
         - Rename runtime panel title to `TODO`.
-        - Move technical metadata behind an on-demand info menu (`i`) in expanded panel state.
-        - Reduce opened panel max-height by ~30% versus previous runtime implementation.
-        - Align checklist task typography with subtitle scale.
+        - Remove visible technical metadata from default panel body (`status`, `plan id`, `todo id`, `run id`, `run status`, `run task id`).
+        - Do not expose metadata through an info menu in this branch.
+        - Keep checklist UX with checkbox + strike-through for completed tasks.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-    - [ ] `L4-S12` DEV - Steering UX migration to composer action (remove runtime sidecar steer form).
+    - [x] `L4-S12` DEV - Steering UX migration to composer action (remove runtime sidecar steer form).
       - Scope:
         - Steering action lives in main composer while assistant run is active.
         - Runtime panel no longer exposes a dedicated steer form block.
         - Send/steer action remains single-thread and session-bound.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
-        - `ui/src/lib/utils/todo-runtime-steer.ts`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
+      - Scoped make commands:
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
     - [ ] `L4-S13` DEV - In-flight steer acknowledgment and conversation continuity semantics.
       - Scope:
         - On steer submit, reasoning/tool strip shows immediate acknowledgment message.
@@ -712,14 +741,14 @@ Open decision items for BR-03 restart:
       - [ ] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
       - [ ] Verify max-height constraint and internal scroll when task list exceeds visible space.
       - [ ] Verify title is `TODO` and no technical runtime label remains in the main header.
-      - [ ] Verify metadata is hidden by default and visible only via info (`i`) menu in expanded mode.
+      - [ ] Verify runtime metadata is not visible in panel body (no info menu entry for metadata in this branch).
       - [ ] Verify checklist item typography is reduced to subtitle-equivalent size.
     - [ ] Scenario UAT-3: progression via AI.
       - [!] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
         Feedback: once created the chat says he has no access to the list
       - [!] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
         Feedback: KO since chat has no access to tool to do that
-      - [!] Start one task execution so runtime panel displays active run metadata (`runId` + `runStatus`).
+      - [!] Start one task execution and verify steering remains available from main composer while runtime metadata stays hidden in panel body.
       - [ ] Verify assistant asks for explicit `go` before autonomous checklist progression starts.
       - [ ] While assistant run is active, submit one steering message from main composer (not runtime panel) and verify:
         - user steer appears as a normal user bubble in same conversation timeline,
