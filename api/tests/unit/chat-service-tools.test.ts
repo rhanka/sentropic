@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
-import { chatMessages, chatSessions, chatStreamEvents, folders, users, workspaces } from '../../src/db/schema';
+import {
+  chatMessages,
+  chatSessions,
+  chatStreamEvents,
+  executionEvents,
+  executionRuns,
+  folders,
+  plans,
+  tasks,
+  todos,
+  users,
+  workspaces,
+  workspaceMemberships,
+} from '../../src/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { todoOrchestrationService } from '../../src/services/todo-orchestration';
 
 // Mock OpenAI streaming to keep unit tests deterministic and fast.
 // IMPORTANT: this must be declared before importing chatService.
@@ -67,9 +81,16 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
+    await db.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
+    await db.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
+    await db.delete(tasks).where(eq(tasks.workspaceId, workspaceId));
+    await db.delete(todos).where(eq(todos.workspaceId, workspaceId));
+    await db.delete(plans).where(eq(plans.workspaceId, workspaceId));
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    vi.clearAllMocks();
   });
 
   it('should enable expected tools per primaryContextType and always include web_search/web_extract', async () => {
@@ -507,5 +528,91 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect((resultEvent as any).data?.result?.status).toBe('completed');
     expect(typeof (resultEvent as any).data?.result?.todoId).toBe('string');
     expect((resultEvent as any).data?.result?.taskCount).toBe(2);
+  });
+
+  it('should prefer todo_update/task_update over todo_create when an active session TODO exists', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      return stream([
+        { type: 'content_delta', data: { delta: 'Progress applied.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue and check the TODO progression now',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Active runtime TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'First task' }, { title: 'Second task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('todo_update');
+    expect(names).toContain('task_update');
+    expect(names).not.toContain('todo_create');
+    expect(calls[0]?.toolChoice).toBe('required');
+  });
+
+  it('should keep todo_create available when user explicitly asks to replace with a new TODO list', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      return stream([
+        { type: 'content_delta', data: { delta: 'Replacement TODO prepared.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Create a new TODO list and replace the current one',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Current TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Legacy task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('todo_create');
+    expect(calls[0]?.toolChoice).toBe('auto');
   });
 });
