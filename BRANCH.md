@@ -168,7 +168,7 @@ Open decision items for BR-03 restart:
   - `Branch`: `BR-03`
   - `Owner`: product + conductor
   - `Severity`: high
-  - `Status`: `attention`
+  - `Status`: `acknowledge`
   - `Repro steps`:
     - In UAT on `uat/br03-local`, open chat with TODO toggle enabled.
     - Ask progression question like "tu as coche la todo ?".
@@ -176,8 +176,13 @@ Open decision items for BR-03 restart:
   - `Actual`: AI reports that `todo_create` can create plan/TODO/tasks but cannot mark existing tasks/TODO as done.
   - `Evidence`: user screenshot (2026-02-27) with assistant response: no tool available to "cocher / marquer comme fait" existing TODO/task.
   - `Product-vs-test conclusion`: `product gap` (missing tool/runtime capability), not a test bug.
-  - `Decision`: create and prioritize Lot 4 for session-bound TODO progression runtime + sticky UI behavior.
-  - `Blocker threshold`: blocking for BR03 TODO-runtime functional intent completion.
+  - `Decision`: keep Lot 4 follow-up prioritized with a dedicated closure slice (`L4-S11`) for runtime progression behavior.
+  - `Resolution (2026-02-28)`:
+    - Chat tool menu label changed to `TODO` (no `TODO runtime` wording in the user-facing tool list).
+    - Active-session TODO mode now forces update/progression tools (`todo_update` / `task_update`) and suppresses `todo_create` unless the user explicitly asks for a new/replacement list.
+    - Progression intent (`advance/check/go`) now narrows active tools to TODO progression tools and requires first-pass tool call for deterministic execution.
+    - Chat task status updates now support deterministic multi-step transitions in one request (`deferred/planned/todo/blocked -> ... -> done`) to remove partial slow progression.
+  - `Blocker threshold`: closed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -622,6 +627,32 @@ Open decision items for BR-03 restart:
         - [x] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-02-27` pass signature: `2 passed (12.1s)` including `tests/05-executive-summary.spec.ts:105:3` and `tests/05-executive-summary.spec.ts:155:3`.
           - `2026-02-27` rerun evidence (post-interruption): first scoped retry failed with infra signature `Bind for 0.0.0.0:1003 failed: port is already allocated`; mandatory triage executed (`make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`) and classified `test/infra` (not product/test logic). Second retry failed with infra signature `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` during `db-seed-test`; same mandatory triage protocol re-executed and classified `test/infra` precondition drift. Recovery sequence: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, `make build-api build-ui-image ... ENV=e2e-feat-todo-steering-workflow-core`; final reruns passed on same commands with signatures `tests/09-todo-steering-core.spec.ts: 1 passed (9.3s)`, `tests/00-ai-generation.spec.ts: 2 passed (1.1m)`, `tests/05-executive-summary.spec.ts: 2 passed (13.1s)`.
+    - [x] `L4-S11` TEST - UAT closure pack for TODO runtime label + progression reliability.
+      - Files impacted:
+        - `api/src/services/chat-service.ts`
+        - `api/src/services/todo-orchestration.ts`
+        - `api/tests/unit/chat-service-tools.test.ts`
+        - `api/tests/unit/todo-orchestration-chat-progression.test.ts`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+      - Closure scope:
+        - [x] `A` Tool menu label set to `TODO` in chat user-facing tool list.
+        - [x] `B` Active TODO session ambiguity removed (`todo_create` disabled unless explicit replacement/new-list request).
+        - [x] `C` Task progression path made deterministic for chat updates (multi-step transitions applied in one request).
+        - [x] `D` Proactive progression behavior for `go` intent (required first tool call, update-only tool focus, blocker-only concise questioning).
+      - Scoped make commands:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`).
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/unit/chat-service-tools.test.ts (9 tests)`; `Test Files 1 passed`, `Tests 9 passed`.
+        - [x] `make test-api-unit SCOPE=tests/unit/todo-orchestration-chat-progression.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/unit/todo-orchestration-chat-progression.test.ts (1 test)`; `Test Files 1 passed`, `Tests 1 passed`.
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
   - [x] **Lot 4 UAT checklist**
     - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
@@ -630,7 +661,7 @@ Open decision items for BR-03 restart:
 - [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
   - [ ] Web app
     - [ ] UAT setup:
-      - [ ] Execute only after `L4-S1` to `L4-S10` are completed.
+      - [ ] Execute only after `L4-S1` to `L4-S11` are completed.
       - [ ] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
       - [ ] Open chat widget in a fresh session with TODO tooling enabled.
     - [ ] Scenario UAT-1: one TODO max per session.
