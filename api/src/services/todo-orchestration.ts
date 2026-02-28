@@ -19,6 +19,7 @@ import {
   canPerformTodoAction,
   classifyGuardrailDecision,
   deriveAggregateStatus,
+  getAllowedTaskStatusTransitions,
   isTaskStatus,
   type GuardrailCategory,
   type TaskStatus,
@@ -47,6 +48,33 @@ const RUN_ACTIVE_STATUSES = ["pending", "in_progress", "paused", "blocked"] as c
 const CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE = "plan";
 const GUARDRAIL_CATEGORIES = new Set<GuardrailCategory>(["scope", "quality", "safety", "approval"]);
 const USE_CASE_GENERATION_WORKFLOW_KEY = "ai_usecase_generation_v1";
+
+const computeTaskStatusPath = (fromStatus: TaskStatus, toStatus: TaskStatus): TaskStatus[] | null => {
+  if (fromStatus === toStatus) {
+    return [fromStatus];
+  }
+
+  const queue: TaskStatus[][] = [[fromStatus]];
+  const visited = new Set<TaskStatus>([fromStatus]);
+
+  while (queue.length > 0) {
+    const path = queue.shift();
+    if (!path) break;
+
+    const current = path[path.length - 1];
+    for (const next of getAllowedTaskStatusTransitions(current)) {
+      if (visited.has(next)) continue;
+      const nextPath = [...path, next];
+      if (next === toStatus) {
+        return nextPath;
+      }
+      visited.add(next);
+      queue.push(nextPath);
+    }
+  }
+
+  return null;
+};
 
 const USE_CASE_GENERATION_WORKFLOW_TASKS: Array<{
   taskKey: UseCaseGenerationWorkflowTaskKey;
@@ -1953,13 +1981,55 @@ export class TodoOrchestrationService {
       throw new TodoOrchestrationError(400, "Invalid task status");
     }
 
-    const taskResult = await this.patchTask(actor, input.taskId, {
-      title: input.title,
-      description: input.description,
-      assigneeUserId: input.assigneeUserId,
-      status: normalizedStatus,
-      metadata: input.metadata,
-    });
+    let taskResult: Awaited<ReturnType<TodoOrchestrationService["patchTask"]>>;
+    if (normalizedStatus !== undefined) {
+      const bundle = await this.getTaskBundleOrThrow(input.taskId, actor.workspaceId);
+      const currentStatus = bundle.task.status as TaskStatus;
+      const targetStatus = normalizedStatus as TaskStatus;
+      const path = computeTaskStatusPath(currentStatus, targetStatus);
+
+      if (!path) {
+        throw new TodoOrchestrationError(
+          409,
+          `Task status cannot transition from ${currentStatus} to ${targetStatus}`,
+        );
+      }
+
+      if (path.length === 1) {
+        taskResult = await this.patchTask(actor, input.taskId, {
+          title: input.title,
+          description: input.description,
+          assigneeUserId: input.assigneeUserId,
+          status: targetStatus,
+          metadata: input.metadata,
+        });
+      } else {
+        let isFirstStep = true;
+        let rollingResult: Awaited<ReturnType<TodoOrchestrationService["patchTask"]>> | null = null;
+        for (const stepStatus of path.slice(1)) {
+          rollingResult = await this.patchTask(actor, input.taskId, {
+            title: isFirstStep ? input.title : undefined,
+            description: isFirstStep ? input.description : undefined,
+            assigneeUserId: isFirstStep ? input.assigneeUserId : undefined,
+            status: stepStatus,
+            metadata: isFirstStep ? input.metadata : undefined,
+          });
+          isFirstStep = false;
+        }
+        if (!rollingResult) {
+          throw new TodoOrchestrationError(500, "Task progression failed");
+        }
+        taskResult = rollingResult;
+      }
+    } else {
+      taskResult = await this.patchTask(actor, input.taskId, {
+        title: input.title,
+        description: input.description,
+        assigneeUserId: input.assigneeUserId,
+        status: undefined,
+        metadata: input.metadata,
+      });
+    }
     const [latestRun] = await db
       .select({
         id: executionRuns.id,
