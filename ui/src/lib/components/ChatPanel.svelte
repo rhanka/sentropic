@@ -3713,6 +3713,7 @@
               on:click={() => void handleDeleteTodoRuntime()}
               aria-label={$_('chat.todoRuntimePanel.delete')}
               title={$_('chat.todoRuntimePanel.delete')}
+              data-testid="todo-runtime-delete-button"
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -3726,6 +3727,7 @@
               title={todoRuntimeCollapsed
                 ? $_('chat.todoRuntimePanel.expand')
                 : $_('chat.todoRuntimePanel.collapse')}
+              data-testid="todo-runtime-toggle-button"
             >
               <ChevronDown
                 class={`w-4 h-4 transition-transform duration-150 ${
